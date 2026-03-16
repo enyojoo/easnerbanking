@@ -1,6 +1,8 @@
 import { PublicHeader } from "@/components/layout/public-header"
 import { PublicFooter } from "@/components/layout/public-footer"
 
+export const metadata = { title: "Business Banking" }
+
 export default function BusinessBankingPage() {
   return (
     <div className="min-h-screen bg-white">

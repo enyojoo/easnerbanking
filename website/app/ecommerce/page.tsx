@@ -1,6 +1,8 @@
 import { PublicHeader } from "@/components/layout/public-header"
 import { PublicFooter } from "@/components/layout/public-footer"
 
+export const metadata = { title: "E-commerce" }
+
 export default function EcommercePage() {
   return (
     <div className="min-h-screen bg-white">

@@ -5,7 +5,7 @@ import { BLOG_TOPICS } from "@easner/shared"
 import { BlogIndex } from "@/components/blog/blog-index"
 
 export const metadata = {
-  title: "Blog - Easner",
+  title: "Blog",
   description:
     "Insights on the future of banking. The latest updates on Easner, the world of stablecoins and finance.",
 }

@@ -13,7 +13,10 @@ const unbounded = Unbounded({
 })
 
 export const metadata: Metadata = {
-  title: "Stablecoin business banking | Accounts, Cards & Invoicing - Easner",
+  title: {
+    default: "Stablecoin Business Banking | Accounts, Cards & Invoicing - Easner",
+    template: "%s - Easner",
+  },
   description:
     "Stablecoin banking for global businesses. API-first cross-border payment infrastructure with built-in KYC/AML. For individuals and businesses.",
   keywords:
@@ -27,7 +30,7 @@ export const metadata: Metadata = {
     apple: "https://seeqjiebmrnolcyydewj.supabase.co/storage/v1/object/public/brand/Easner%20Favicon.svg",
   },
   openGraph: {
-    title: "Stablecoin business banking | Accounts, Cards & Invoicing - Easner",
+    title: "Stablecoin Business Banking | Accounts, Cards & Invoicing - Easner",
     description: "API-first cross-border payment infrastructure for US and EU businesses.",
     url: "https://www.easner.com",
     siteName: "Easner",
@@ -44,7 +47,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Stablecoin business banking | Accounts, Cards & Invoicing - Easner",
+    title: "Stablecoin Business Banking | Accounts, Cards & Invoicing - Easner",
     description: "API-first cross-border payment infrastructure for US and EU businesses.",
     creator: "@easnerbanking",
     images: ["https://seeqjiebmrnolcyydewj.supabase.co/storage/v1/object/public/brand/easner%20seo%20cover.png"],
