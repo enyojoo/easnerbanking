@@ -19,7 +19,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
-import { bridgeService } from '../../lib/bridgeService'
+import { noahService } from '../../lib/noahService'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import QRCode from 'react-native-qrcode-svg'
@@ -54,14 +54,14 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const [initialCheckComplete, setInitialCheckComplete] = useState(false)
   const [dataLoadedFromCache, setDataLoadedFromCache] = useState(false)
   
-  // Get KYC status from userProfile (Bridge KYC status)
-  // Map Bridge status values to our display logic
+  // Get KYC status from userProfile (Noah KYC status)
+  // Map Noah status values to our display logic
   const getKycStatus = (): string | null => {
-    const bridgeStatus = userProfile?.bridge_kyc_status || userProfile?.profile?.bridge_kyc_status
-    if (!bridgeStatus) return null
-    
-    // Map Bridge status to our display status
-    switch (bridgeStatus) {
+    const noahKycStatus = userProfile?.noah_kyc_status || userProfile?.profile?.noah_kyc_status
+    if (!noahKycStatus) return null
+
+    // Map Noah KYC status to our display status
+    switch (noahKycStatus) {
       case 'approved':
         return 'approved'
       case 'rejected':
@@ -181,20 +181,20 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
           try {
             const { data: userProfileData } = await supabase
               .from('users')
-              .select('bridge_wallet_id, bridge_usd_virtual_account_id, bridge_eur_virtual_account_id, bridge_kyc_status')
+              .select('noah_wallet_id, noah_usd_virtual_account_id, noah_eur_virtual_account_id, noah_kyc_status')
               .eq('id', userId)
               .single()
             
             if (userProfileData) {
             
             // Check if wallet exists in database
-            if (userProfileData.bridge_wallet_id) {
+            if (userProfileData.noah_wallet_id) {
               setHasWalletInDb(true)
               // Try to get wallet address from database
               const { data: wallet } = await supabase
-                .from('bridge_wallets')
+                .from('noah_wallets')
                 .select('address')
-                .eq('bridge_wallet_id', userProfileData.bridge_wallet_id)
+                .eq('noah_wallet_id', userProfileData.noah_wallet_id)
                 .single()
               if (wallet?.address) {
                 setWalletAddress(wallet.address)
@@ -203,14 +203,14 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
             
             // Check if virtual account exists in database
             const accountId = currencyLower === 'usd' 
-              ? userProfileData.bridge_usd_virtual_account_id 
-              : userProfileData.bridge_eur_virtual_account_id
+              ? userProfileData.noah_usd_virtual_account_id 
+              : userProfileData.noah_eur_virtual_account_id
             if (accountId) {
               // Try to get account details from database
               const { data: account } = await supabase
-                .from('bridge_virtual_accounts')
+                .from('noah_virtual_accounts')
                 .select('account_number, routing_number, iban, bic, bank_name, bank_address, account_holder_name')
-                .eq('bridge_virtual_account_id', accountId)
+                .eq('noah_virtual_account_id', accountId)
                 .single()
               if (account) {
                 // Set account data immediately from database - this prevents "in progress" flash
@@ -234,7 +234,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                 dataLoadedRef.current = true
                 // Backfill account holder name and bank address from Bridge API if missing (e.g. EUR accounts created before fix)
                 if (!account.account_holder_name || !account.bank_address) {
-                  bridgeService.getVirtualAccount(currencyLower).then((apiAccount) => {
+                  noahService.getVirtualAccount(currencyLower).then((apiAccount) => {
                     if (apiAccount?.hasAccount) {
                       const updates: Record<string, string> = {}
                       if (apiAccount.accountHolderName && !account.account_holder_name) updates.accountHolderName = apiAccount.accountHolderName
@@ -274,7 +274,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
             
             let account: any
             try {
-              account = await bridgeService.getVirtualAccount(currencyLower)
+              account = await noahService.getVirtualAccount(currencyLower)
               clearTimeout(timeoutId)
             } catch (fetchError: any) {
               clearTimeout(timeoutId)
@@ -325,7 +325,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
           // Try to fetch liquidation address first
           if (!liquidationAddress) {
             try {
-              const liquidationAddr = await bridgeService.getLiquidationAddress(stablecoinCurrency, 'solana')
+              const liquidationAddr = await noahService.getLiquidationAddress(stablecoinCurrency, 'solana')
               if (liquidationAddr.hasAddress && liquidationAddr.address) {
                 setLiquidationAddress(liquidationAddr.address)
                 if (liquidationAddr.memo) {
@@ -336,7 +336,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                 // Liquidation address doesn't exist, try to create it
                 console.log('[ReceiveMoney] Liquidation address not found, attempting to create...')
                 try {
-                  const created = await bridgeService.createLiquidationAddress(stablecoinCurrency, 'solana')
+                  const created = await noahService.createLiquidationAddress(stablecoinCurrency, 'solana')
                   if (created.hasAddress && created.address) {
                     setLiquidationAddress(created.address)
                     if (created.memo) {
@@ -363,7 +363,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
             
             let walletsResponse: Response
             try {
-              walletsResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'}/api/bridge/wallets`, {
+              walletsResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'}/api/noah/wallets`, {
                 headers: {
                   'Authorization': `Bearer ${session?.access_token}`,
                 },
@@ -478,7 +478,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
             dataLoadedRef.current = true
             // Backfill missing EUR fields (accountHolderName, bankAddress) from API - cache may be stale
             if (currencyLower === 'eur' && cachedAccount.data && (!cachedAccount.data.accountHolderName || !cachedAccount.data.bankAddress)) {
-              bridgeService.getVirtualAccount(currencyLower).then((apiAccount) => {
+              noahService.getVirtualAccount(currencyLower).then((apiAccount) => {
                 if (apiAccount?.hasAccount) {
                   const updates: Record<string, string> = {}
                   if (apiAccount.accountHolderName && !cachedAccount.data.accountHolderName) updates.accountHolderName = apiAccount.accountHolderName
@@ -500,7 +500,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
             dataLoadedRef.current = true
             // Backfill missing EUR fields when cache is stale
             if (currencyLower === 'eur' && cachedAccount.data && (!cachedAccount.data.accountHolderName || !cachedAccount.data.bankAddress)) {
-              bridgeService.getVirtualAccount(currencyLower).then((apiAccount) => {
+              noahService.getVirtualAccount(currencyLower).then((apiAccount) => {
                 if (apiAccount?.hasAccount) {
                   const updates: Record<string, string> = {}
                   if (apiAccount.accountHolderName && !cachedAccount.data.accountHolderName) updates.accountHolderName = apiAccount.accountHolderName
@@ -546,21 +546,21 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
         // Load account data from database (either no cache or force refresh)
         const { data: userProfileData } = await supabase
           .from('users')
-          .select('bridge_wallet_id, bridge_usd_virtual_account_id, bridge_eur_virtual_account_id')
+          .select('noah_wallet_id, noah_usd_virtual_account_id, noah_eur_virtual_account_id')
           .eq('id', userId)
           .single()
 
         if (userProfileData) {
           // Load virtual account from database
           const accountId = currencyLower === 'usd' 
-            ? userProfileData.bridge_usd_virtual_account_id 
-            : userProfileData.bridge_eur_virtual_account_id
+            ? userProfileData.noah_usd_virtual_account_id 
+            : userProfileData.noah_eur_virtual_account_id
           
           if (accountId) {
             const { data: account } = await supabase
-              .from('bridge_virtual_accounts')
+              .from('noah_virtual_accounts')
               .select('account_number, routing_number, iban, bic, bank_name, bank_address, account_holder_name')
-              .eq('bridge_virtual_account_id', accountId)
+              .eq('noah_virtual_account_id', accountId)
               .single()
             
             if (account) {
@@ -586,7 +586,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
               await setCachedDataLocal(CACHE_KEY_ACCOUNT, accountData)
               // Backfill account holder name and bank address from Bridge API if missing (e.g. EUR accounts created before fix)
               if (!account.account_holder_name || !account.bank_address) {
-                bridgeService.getVirtualAccount(currencyLower).then((apiAccount) => {
+                noahService.getVirtualAccount(currencyLower).then((apiAccount) => {
                   if (apiAccount?.hasAccount) {
                     const updates: Record<string, string> = {}
                     if (apiAccount.accountHolderName && !account.account_holder_name) updates.accountHolderName = apiAccount.accountHolderName
@@ -608,14 +608,14 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
           }
 
           // Load liquidation address from database (preferred) or wallet address (fallback)
-          if (userProfileData.bridge_wallet_id) {
+          if (userProfileData.noah_wallet_id) {
             const stablecoinCurrency = currencyLower === 'usd' ? 'usdc' : 'eurc'
             
             // Load wallet with liquidation address fields
             const { data: wallet } = await supabase
-              .from('bridge_wallets')
+              .from('noah_wallets')
               .select('address, usdc_liquidation_address, usdc_liquidation_memo, eurc_liquidation_address, eurc_liquidation_memo')
-              .eq('bridge_wallet_id', userProfileData.bridge_wallet_id)
+              .eq('noah_wallet_id', userProfileData.noah_wallet_id)
               .single()
             
             if (wallet) {
@@ -728,22 +728,22 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
         
         const { data: userProfileData } = await supabase
           .from('users')
-          .select('bridge_wallet_id, bridge_usd_virtual_account_id, bridge_eur_virtual_account_id, bridge_kyc_status')
+          .select('noah_wallet_id, noah_usd_virtual_account_id, noah_eur_virtual_account_id, noah_kyc_status')
           .eq('id', session.user.id)
           .single()
         
         if (userProfileData) {
           const currencyLower = currency.toLowerCase() as 'usd' | 'eur'
           const accountId = currencyLower === 'usd' 
-            ? userProfileData.bridge_usd_virtual_account_id 
-            : userProfileData.bridge_eur_virtual_account_id
+            ? userProfileData.noah_usd_virtual_account_id 
+            : userProfileData.noah_eur_virtual_account_id
           
           // If accounts don't exist, trigger sync-status which will create them
-          if (!userProfileData.bridge_wallet_id || !accountId) {
+          if (!userProfileData.noah_wallet_id || !accountId) {
             accountCreationTriggeredRef.current = true
             console.log('[RECEIVE-MONEY] KYC approved but accounts missing, triggering sync-status to create accounts...')
             try {
-              const syncResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'}/api/bridge/sync-status`, {
+              const syncResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'}/api/noah/sync-status`, {
                 method: 'POST',
                 headers: {
                   'Authorization': `Bearer ${session.access_token}`,
@@ -977,7 +977,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
       
       let response: Response
       try {
-        response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'}/api/bridge/create-accounts`, {
+        response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'}/api/noah/create-accounts`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${session.access_token}`,
@@ -1031,7 +1031,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                   
                   // Refresh virtual account
                   try {
-                    const account = await bridgeService.getVirtualAccount(currencyLower)
+                    const account = await noahService.getVirtualAccount(currencyLower)
                     setVirtualAccount(account)
                     if (account?.hasAccount) {
                       setHasAccountInDb(true)
@@ -1042,7 +1042,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
 
                   // Refresh wallet
                   try {
-                    const walletsResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'}/api/bridge/wallets`, {
+                    const walletsResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'}/api/noah/wallets`, {
                       headers: {
                         'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
                       },

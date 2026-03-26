@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react'
 import { AppState, AppStateStatus } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { bridgeService } from '../lib/bridgeService'
+import { noahService } from '../lib/noahService'
 import { useAuth } from './AuthContext'
 import { supabase } from '../lib/supabase'
 
@@ -111,7 +111,7 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
 
     try {
       const walletBalances = await Promise.race([
-        bridgeService.getWalletBalances(),
+        noahService.getWalletBalances(),
         new Promise<{ USD: string; EUR: string }>((resolve) => 
           setTimeout(() => resolve({ USD: '0', EUR: '0' }), 10000)
         )
@@ -252,7 +252,7 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
             {
               event: '*',
               schema: 'public',
-              table: 'bridge_transactions',
+              table: 'noah_transactions',
               filter: `user_id=eq.${user.id}`,
             },
             async (payload: any) => {

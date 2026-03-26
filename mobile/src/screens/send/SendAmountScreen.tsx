@@ -30,6 +30,7 @@ import { useUserData } from '../../contexts/UserDataContext'
 import { mobileFxEngine } from '../../lib/fxEngine'
 import { generateTransactionId } from '../../lib/transactionId'
 import { useBalance } from '../../contexts/BalanceContext'
+import { noahService } from '../../lib/noahService'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 const KEYPAD_BUTTON_WIDTH = 113
@@ -708,7 +709,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 // Use Bridge transfer API to send from wallet to external bank account
                 try {
                   // Get user's Bridge wallet
-                  const walletsResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'}/api/bridge/wallets`, {
+                  const walletsResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'}/api/noah/wallets`, {
                     headers: {
                       'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
                     },
@@ -732,11 +733,11 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   // This would typically be created when adding a recipient
                   
                   // Create Bridge transfer FIRST (transaction ID needed for optimistic update tracking)
-                  const transfer = await bridgeService.createTransfer({
+                  const transfer = await noahService.createTransfer({
                     amount: calculatedTotalAmount.toString(),
                     currency: selectedBalanceCurrency.toLowerCase() as 'usd' | 'eur',
                     sourceWalletId: wallet.walletId,
-                    destinationExternalAccountId: recipient.bridge_external_account_id || '', // This needs to be set when creating recipient
+                    destinationExternalAccountId: recipient.noah_external_account_id || '', // This needs to be set when creating recipient
                   })
                   
                   // Optimistic balance update AFTER transfer created (like CashApp/Revolut - instant UI feedback)
@@ -761,7 +762,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   receiveCurrency: recipient.currency,
                   recipient: recipient,
                   paymentMethod: 'balance',
-                    bridgeTransferId: transfer.id,
+                    noahTransferId: transfer.id,
                   feeAmount: calculatedFeeAmount,
                   totalAmount: calculatedTotalAmount,
                 } as never)

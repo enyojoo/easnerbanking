@@ -1,8 +1,21 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState } from "react"
-import type { User } from "@supabase/supabase-js"
+import type { Session, User } from "@supabase/supabase-js"
 import { supabase } from "./supabase"
+
+/** Office admin access is DB-backed (public.admin_users), not JWT metadata. */
+async function resolveOfficeAdmin(session: Session | null): Promise<boolean> {
+  const id = session?.user?.id
+  if (!id) return false
+  const { data, error } = await supabase
+    .from("admin_users")
+    .select("status")
+    .eq("id", id)
+    .maybeSingle()
+  if (error || !data) return false
+  return data.status === "active"
+}
 
 interface AuthContextType {
   user: User | null
@@ -32,23 +45,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
+    let cancelled = false
+
+    const syncSession = async (session: Session | null) => {
+      setLoading(true)
+      const u = session?.user ?? null
+      setUser(u)
+      if (!u) {
+        setIsAdmin(false)
+        if (!cancelled) setLoading(false)
+        return
+      }
+      const admin = await resolveOfficeAdmin(session)
+      if (cancelled) return
+      setIsAdmin(admin)
+      setLoading(false)
+    }
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        const u = session?.user ?? null
-        setUser(u)
-        setIsAdmin(!!(u?.user_metadata?.isAdmin || (u as any)?.isAdmin))
-        setLoading(false)
+      (_event, session) => {
+        void syncSession(session)
       }
     )
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const u = session?.user ?? null
-      setUser(u)
-      setIsAdmin(!!(u?.user_metadata?.isAdmin || (u as any)?.isAdmin))
-      setLoading(false)
-    })
+    void supabase.auth.getSession().then(({ data: { session } }) => syncSession(session))
 
-    return () => subscription.unsubscribe()
+    return () => {
+      cancelled = true
+      subscription.unsubscribe()
+    }
   }, [])
 
   const signOut = async () => {

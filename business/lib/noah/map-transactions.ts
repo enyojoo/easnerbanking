@@ -1,0 +1,85 @@
+/** Map Noah `Transaction` objects (see https://docs.noah.com/) to the mobile transaction list/detail shape. */
+
+function mapNoahTxStatus(s: string): string {
+  const lower = s.toLowerCase()
+  if (lower === "settled") return "completed"
+  if (lower === "pending") return "pending"
+  if (lower === "failed") return "failed"
+  return lower || "unknown"
+}
+
+function inferSourceType(tx: Record<string, unknown>): string | undefined {
+  const direction = String(tx.Direction ?? "")
+  if (direction !== "In") return undefined
+  const net = String(tx.Network ?? "")
+  const crypto = String(tx.CryptoCurrency ?? "").toUpperCase()
+  if (net && net !== "OffNetwork" && (crypto.includes("USDC") || crypto.includes("EURC") || crypto.includes("BTC") || crypto.includes("ETH"))) {
+    return "liquidation_address"
+  }
+  return "virtual_account"
+}
+
+export function pickTxAmountAndCurrency(tx: Record<string, unknown>): { amount: number; currency: string } {
+  const fp = tx.FiatPayment as Record<string, unknown> | undefined
+  if (fp && fp.Amount != null) {
+    return {
+      amount: Math.abs(parseFloat(String(fp.Amount)) || 0),
+      currency: String(fp.FiatCurrency || "USD"),
+    }
+  }
+  return {
+    amount: Math.abs(parseFloat(String(tx.Amount ?? "0")) || 0),
+    currency: String(tx.CryptoCurrency || "USD"),
+  }
+}
+
+export function mapNoahTransactionToMobileItem(tx: Record<string, unknown>): Record<string, unknown> {
+  const id = String(tx.ID ?? "")
+  const direction = String(tx.Direction ?? "")
+  const transaction_type = direction === "In" ? "receive" : "send"
+  const { amount, currency } = pickTxAmountAndCurrency(tx)
+  const status = mapNoahTxStatus(String(tx.Status ?? ""))
+  const created = String(tx.Created ?? new Date().toISOString())
+  const source_type = inferSourceType(tx)
+  const name =
+    direction === "In"
+      ? source_type === "liquidation_address"
+        ? "Stablecoin Deposit"
+        : "Bank Deposit"
+      : "Sent"
+
+  return {
+    id,
+    transaction_id: id,
+    type: transaction_type,
+    transaction_type,
+    amount,
+    currency,
+    status,
+    created_at: created,
+    noah_created_at: created,
+    name,
+    direction: direction === "In" ? "credit" : "debit",
+    source_type,
+    metadata: { noah: tx },
+  }
+}
+
+export function mapNoahTransactionToMobileDetail(tx: Record<string, unknown>): Record<string, unknown> {
+  const base = mapNoahTransactionToMobileItem(tx)
+  const id = String(tx.ID ?? "")
+  const direction = String(tx.Direction ?? "")
+  const st = String(tx.Status ?? "")
+  const created = String(tx.Created ?? new Date().toISOString())
+  return {
+    ...base,
+    id,
+    transaction_id: id,
+    noah_transaction_id: id,
+    final_amount: base.amount,
+    updated_at: created,
+    completed_at: st === "Settled" ? created : undefined,
+    source_payment_rail: "ach",
+    destination_payment_rail: direction === "In" ? "bank" : "crypto",
+  }
+}

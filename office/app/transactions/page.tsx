@@ -85,7 +85,7 @@ interface CombinedTransaction {
   }
   // Card funding fields
   destination_type?: "bank" | "card"
-  bridge_card_account_id?: string
+  noah_card_account_id?: string
   // Receipt fields
   receipt_url?: string
   receipt_filename?: string
@@ -126,7 +126,7 @@ export default function AdminTransactionsPage() {
           blockchain_tx_hash: tx.blockchain_tx_hash,
           crypto_wallet: tx.crypto_wallet,
           destination_type: tx.destination_type,
-          bridge_card_account_id: tx.bridge_card_account_id,
+          noah_card_account_id: tx.noah_card_account_id,
           // Receipt fields
           receipt_url: tx.receipt_url,
           receipt_filename: tx.receipt_filename,
@@ -135,7 +135,7 @@ export default function AdminTransactionsPage() {
       }
       // Otherwise, determine type from transaction structure
       const isReceive = tx.crypto_amount || tx.fiat_amount
-      const isCardFunding = tx.destination_type === "card" || tx.bridge_card_account_id
+      const isCardFunding = tx.destination_type === "card" || tx.noah_card_account_id
       return {
         id: tx.id,
         transaction_id: tx.transaction_id || tx.id,
@@ -160,7 +160,7 @@ export default function AdminTransactionsPage() {
         blockchain_tx_hash: tx.blockchain_tx_hash,
         crypto_wallet: tx.crypto_wallet,
         destination_type: tx.destination_type,
-        bridge_card_account_id: tx.bridge_card_account_id,
+        noah_card_account_id: tx.noah_card_account_id,
         // Receipt fields
         receipt_url: tx.receipt_url,
         receipt_filename: tx.receipt_filename,
@@ -240,7 +240,7 @@ export default function AdminTransactionsPage() {
             blockchain_tx_hash: tx.blockchain_tx_hash,
             crypto_wallet: tx.crypto_wallet,
             destination_type: tx.destination_type,
-            bridge_card_account_id: tx.bridge_card_account_id,
+            noah_card_account_id: tx.noah_card_account_id,
             // Receipt fields
             receipt_url: tx.receipt_url,
             receipt_filename: tx.receipt_filename,
@@ -249,7 +249,7 @@ export default function AdminTransactionsPage() {
         }
         // Otherwise, determine type from transaction structure
         const isReceive = tx.crypto_amount || tx.fiat_amount
-        const isCardFunding = tx.destination_type === "card" || tx.bridge_card_account_id
+        const isCardFunding = tx.destination_type === "card" || tx.noah_card_account_id
         return {
           id: tx.id,
           transaction_id: tx.transaction_id || tx.id,
@@ -274,7 +274,7 @@ export default function AdminTransactionsPage() {
           blockchain_tx_hash: tx.blockchain_tx_hash,
           crypto_wallet: tx.crypto_wallet,
           destination_type: tx.destination_type,
-          bridge_card_account_id: tx.bridge_card_account_id,
+          noah_card_account_id: tx.noah_card_account_id,
           // Receipt fields
           receipt_url: tx.receipt_url,
           receipt_filename: tx.receipt_filename,

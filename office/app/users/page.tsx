@@ -50,12 +50,12 @@ interface UserData {
   date_of_birth?: string
   address?: string
   country_code?: string
-  bridge_kyc_metadata?: any
+  noah_kyc_metadata?: any
   status: string
-  // verification_status removed - use bridge_kyc_status for KYC status
-  bridge_kyc_status?: string
-  bridge_customer_id?: string
-  bridge_kyc_rejection_reasons?: any
+  // verification_status removed - use noah_kyc_status for KYC status
+  noah_kyc_status?: string
+  noah_customer_id?: string
+  noah_kyc_rejection_reasons?: any
   email_confirmed_at?: string
   base_currency: string
   created_at: string
@@ -210,17 +210,17 @@ export default function AdminUsersPage() {
     const totalVolume = calculateUserVolume(userTransactions, baseCurrency, userExchangeRates)
     const completedTransactions = userTransactions.filter((t: any) => t.status === "completed")
 
-    // Use bridge_kyc_status for KYC verification status
-    // Map bridge_kyc_status to display values: approved -> verified, others -> pending
-    const bridgeKycStatus = user.bridge_kyc_status || "not_started"
-    const verificationStatus = bridgeKycStatus === "approved" ? "verified" : "pending"
+    // Use noah_kyc_status for KYC verification status
+    // Map noah_kyc_status to display values: approved -> verified, others -> pending
+    const noahKycStatus = user.noah_kyc_status || "not_started"
+    const verificationStatus = noahKycStatus === "approved" ? "verified" : "pending"
 
     return {
       ...user,
       totalTransactions: completedTransactions.length,
       totalVolume,
       verificationStatus,
-      bridgeKycStatus, // Include for filtering
+      noahKycStatus, // Include for filtering
     }
   })
 
@@ -230,18 +230,18 @@ export default function AdminUsersPage() {
       fullName.includes(searchTerm.toLowerCase()) || user.email.toLowerCase().includes(searchTerm.toLowerCase())
 
     const matchesStatus = statusFilter === "all" || user.status === statusFilter
-    // Filter by bridge_kyc_status: map filter values to bridge status
-    const bridgeKycStatus = user.bridgeKycStatus || user.bridge_kyc_status || "not_started"
+    // Filter by noah_kyc_status
+    const noahKycStatus = user.noahKycStatus || user.noah_kyc_status || "not_started"
     let matchesVerification = true
     if (verificationFilter !== "all") {
       if (verificationFilter === "verified") {
-        matchesVerification = bridgeKycStatus === "approved"
+        matchesVerification = noahKycStatus === "approved"
       } else if (verificationFilter === "pending") {
-        matchesVerification = bridgeKycStatus !== "approved" && bridgeKycStatus !== "rejected"
+        matchesVerification = noahKycStatus !== "approved" && noahKycStatus !== "rejected"
       } else if (verificationFilter === "rejected") {
-        matchesVerification = bridgeKycStatus === "rejected"
+        matchesVerification = noahKycStatus === "rejected"
       } else if (verificationFilter === "in_review") {
-        matchesVerification = bridgeKycStatus === "under_review" || bridgeKycStatus === "in_review"
+        matchesVerification = noahKycStatus === "under_review" || noahKycStatus === "in_review"
       }
     }
 
@@ -266,10 +266,10 @@ export default function AdminUsersPage() {
   }
 
 
-  const getVerificationBadge = (user: UserData & { bridge_kyc_status?: string }) => {
-    // Use bridge_kyc_status for KYC verification
-    const bridgeKycStatus = user.bridge_kyc_status || "not_started"
-    const status = bridgeKycStatus === "approved" ? "verified" : bridgeKycStatus === "rejected" ? "rejected" : bridgeKycStatus === "under_review" ? "in_review" : "pending"
+  const getVerificationBadge = (user: UserData & { noah_kyc_status?: string }) => {
+    // Use noah_kyc_status for KYC verification
+    const noahKycStatus = user.noah_kyc_status || "not_started"
+    const status = noahKycStatus === "approved" ? "verified" : noahKycStatus === "rejected" ? "rejected" : noahKycStatus === "under_review" ? "in_review" : "pending"
     
     const statusConfig = {
       verified: { color: "bg-green-100 text-green-700", text: "Verified" },
@@ -319,15 +319,15 @@ export default function AdminUsersPage() {
       await officeDataStore.updateUserVerification(userId, newStatus)
       if (selectedUser?.id === userId) {
         setSelectedUser((prev) => {
-          // Map old verification_status to bridge_kyc_status
+          // Map old verification_status to noah_kyc_status
           const statusMap: Record<string, string> = {
             "verified": "approved",
             "pending": "not_started",
             "rejected": "rejected",
             "unverified": "not_started",
           }
-          const bridgeKycStatus = statusMap[newStatus] || newStatus
-          return prev ? { ...prev, bridge_kyc_status: bridgeKycStatus } : null
+          const noahKycStatus = statusMap[newStatus] || newStatus
+          return prev ? { ...prev, noah_kyc_status: noahKycStatus } : null
         })
       }
     } catch (err) {
@@ -818,30 +818,30 @@ export default function AdminUsersPage() {
                             </DialogHeader>
                             {selectedUser && (
                               <div className="space-y-6">
-                                {/* Bridge KYC Status */}
+                                {/* Noah KYC Status */}
                                 <div className="border-t pt-6">
-                                  <h3 className="text-lg font-semibold mb-4">Bridge KYC Status</h3>
-                                  {selectedUser.bridge_kyc_status ? (
+                                  <h3 className="text-lg font-semibold mb-4">Noah KYC Status</h3>
+                                  {selectedUser.noah_kyc_status ? (
                                     <div className="space-y-3">
                                       <div className="flex items-center gap-2">
                                         <span className="text-sm text-gray-600">Status:</span>
-                                        {getVerificationBadge(selectedUser.bridge_kyc_status)}
+                                        {getVerificationBadge(selectedUser.noah_kyc_status)}
                                       </div>
-                                      {selectedUser.bridge_customer_id && (
+                                      {selectedUser.noah_customer_id && (
                                         <div className="flex items-center gap-2">
-                                          <span className="text-sm text-gray-600">Bridge Customer ID:</span>
-                                          <span className="text-sm font-mono">{selectedUser.bridge_customer_id}</span>
+                                          <span className="text-sm text-gray-600">Noah Customer ID:</span>
+                                          <span className="text-sm font-mono">{selectedUser.noah_customer_id}</span>
                                         </div>
                                       )}
-                                      {selectedUser.bridge_kyc_status === "rejected" && selectedUser.bridge_kyc_rejection_reasons && (
+                                      {selectedUser.noah_kyc_status === "rejected" && selectedUser.noah_kyc_rejection_reasons && (
                                         <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                                           <p className="text-sm font-medium text-red-800 mb-1">Rejection Reasons:</p>
                                           <p className="text-sm text-red-700">
-                                            {Array.isArray(selectedUser.bridge_kyc_rejection_reasons) 
-                                              ? selectedUser.bridge_kyc_rejection_reasons.join(", ")
-                                              : typeof selectedUser.bridge_kyc_rejection_reasons === "string"
-                                              ? selectedUser.bridge_kyc_rejection_reasons
-                                              : JSON.stringify(selectedUser.bridge_kyc_rejection_reasons)}
+                                            {Array.isArray(selectedUser.noah_kyc_rejection_reasons) 
+                                              ? selectedUser.noah_kyc_rejection_reasons.join(", ")
+                                              : typeof selectedUser.noah_kyc_rejection_reasons === "string"
+                                              ? selectedUser.noah_kyc_rejection_reasons
+                                              : JSON.stringify(selectedUser.noah_kyc_rejection_reasons)}
                                           </p>
                                         </div>
                                       )}
@@ -853,8 +853,8 @@ export default function AdminUsersPage() {
                                   )}
                                 </div>
 
-                                {/* Identity Verification - Show only if Bridge KYC is approved */}
-                                {selectedUser.bridge_kyc_status === "approved" && (
+                                {/* Identity Verification - Show only if Noah KYC is approved */}
+                                {selectedUser.noah_kyc_status === "approved" && (
                                   <>
                                     {/* Identity Verification */}
                                     {selectedUser.first_name || selectedUser.date_of_birth ? (
@@ -901,24 +901,24 @@ export default function AdminUsersPage() {
                                               </div>
                                             </div>
                                             <div className="space-y-4">
-                                              {selectedUser.bridge_kyc_metadata && (
+                                              {selectedUser.noah_kyc_metadata && (
                                                 <>
-                                                  {selectedUser.bridge_kyc_metadata.ssn && (
+                                                  {selectedUser.noah_kyc_metadata.ssn && (
                                                     <div className="flex justify-between">
                                                       <span className="text-sm text-gray-600">SSN:</span>
-                                                      <span className="text-sm">***-**-{selectedUser.bridge_kyc_metadata.ssn.slice(-4)}</span>
+                                                      <span className="text-sm">***-**-{selectedUser.noah_kyc_metadata.ssn.slice(-4)}</span>
                                                     </div>
                                                   )}
-                                                  {selectedUser.bridge_kyc_metadata.passportNumber && (
+                                                  {selectedUser.noah_kyc_metadata.passportNumber && (
                                                     <div className="flex justify-between">
                                                       <span className="text-sm text-gray-600">Passport:</span>
-                                                      <span className="text-sm">{selectedUser.bridge_kyc_metadata.passportNumber}</span>
+                                                      <span className="text-sm">{selectedUser.noah_kyc_metadata.passportNumber}</span>
                                                     </div>
                                                   )}
-                                                  {selectedUser.bridge_kyc_metadata.nationalIdNumber && (
+                                                  {selectedUser.noah_kyc_metadata.nationalIdNumber && (
                                                     <div className="flex justify-between">
                                                       <span className="text-sm text-gray-600">National ID:</span>
-                                                      <span className="text-sm">{selectedUser.bridge_kyc_metadata.nationalIdNumber}</span>
+                                                      <span className="text-sm">{selectedUser.noah_kyc_metadata.nationalIdNumber}</span>
                                                     </div>
                                                   )}
                                                 </>
@@ -958,20 +958,20 @@ export default function AdminUsersPage() {
                                                 <span className="text-sm text-gray-600">Address:</span>
                                                 <span className="text-sm text-right">{selectedUser.address}</span>
                                               </div>
-                                              {selectedUser.bridge_kyc_metadata?.address && (
+                                              {selectedUser.noah_kyc_metadata?.address && (
                                                 <div className="pt-2 border-t">
                                                   <p className="text-xs text-gray-500 mb-1">Structured Address:</p>
                                                   <div className="text-xs text-gray-700 space-y-0.5">
-                                                    <div>{selectedUser.bridge_kyc_metadata.address.line1}</div>
-                                                    {selectedUser.bridge_kyc_metadata.address.line2 && (
-                                                      <div>{selectedUser.bridge_kyc_metadata.address.line2}</div>
+                                                    <div>{selectedUser.noah_kyc_metadata.address.line1}</div>
+                                                    {selectedUser.noah_kyc_metadata.address.line2 && (
+                                                      <div>{selectedUser.noah_kyc_metadata.address.line2}</div>
                                                     )}
                                                     <div>
-                                                      {selectedUser.bridge_kyc_metadata.address.city}
-                                                      {selectedUser.bridge_kyc_metadata.address.state && `, ${selectedUser.bridge_kyc_metadata.address.state}`}
-                                                      {selectedUser.bridge_kyc_metadata.address.postal_code && ` ${selectedUser.bridge_kyc_metadata.address.postal_code}`}
+                                                      {selectedUser.noah_kyc_metadata.address.city}
+                                                      {selectedUser.noah_kyc_metadata.address.state && `, ${selectedUser.noah_kyc_metadata.address.state}`}
+                                                      {selectedUser.noah_kyc_metadata.address.postal_code && ` ${selectedUser.noah_kyc_metadata.address.postal_code}`}
                                                     </div>
-                                                    <div>{selectedUser.bridge_kyc_metadata.address.country}</div>
+                                                    <div>{selectedUser.noah_kyc_metadata.address.country}</div>
                                                   </div>
                                                 </div>
                                               )}

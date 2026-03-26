@@ -48,7 +48,7 @@ interface CombinedTransaction {
   transaction_type?: 'send' | 'receive' // Bridge transactions use transaction_type
   status: string
   created_at: string
-  bridge_created_at?: string
+  noah_created_at?: string
   send_amount?: number
   send_currency?: string
   receive_amount?: number
@@ -223,7 +223,7 @@ function TransactionItem({
             {getTransactionName(item, transactionType)}
           </Text>
           <Text style={styles.transactionDate}>
-            {formatDate(item.bridge_created_at || item.created_at)}
+            {formatDate(item.noah_created_at || item.created_at)}
           </Text>
         </View>
         <View style={styles.transactionAmountContainer}>
@@ -365,7 +365,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
       params.append('limit', '100')
 
       // Try bridge transactions API first, fallback to combined transactions
-      let response = await apiGet(`/api/bridge/transactions?${params.toString()}`)
+      let response = await apiGet(`/api/noah/transactions?${params.toString()}`)
       if (!response.ok || (response as any).isNetworkError) {
         // Fallback to combined transactions API
         response = await apiGet(`/api/transactions?${params.toString()}`)
@@ -456,11 +456,11 @@ function TransactionsContent({ navigation }: NavigationProps) {
         
         pollingInterval = setTimeout(async () => {
           try {
-            const response = await apiGet(`/api/bridge/transactions?limit=1`)
+            const response = await apiGet(`/api/noah/transactions?limit=1`)
             if (response.ok) {
               const data = await response.json()
               const latestTx = data.transactions?.[0]
-              const currentTimestamp = latestTx?.created_at || latestTx?.bridge_created_at
+              const currentTimestamp = latestTx?.created_at || latestTx?.noah_created_at
               
               if (currentTimestamp && currentTimestamp !== lastTransactionTimestamp) {
                 console.log('[TRANSACTIONS] 🔄 Polling detected transaction change, refreshing...')
@@ -498,13 +498,13 @@ function TransactionsContent({ navigation }: NavigationProps) {
 
       try {
         channel = supabase
-          .channel(`user-bridge-transactions-${userProfile.id}-${Date.now()}`) // Unique channel name
+          .channel(`user-noah-transactions-${userProfile.id}-${Date.now()}`) // Unique channel name
           .on(
             'postgres_changes',
             {
               event: '*',
               schema: 'public',
-              table: 'bridge_transactions',
+              table: 'noah_transactions',
               filter: `user_id=eq.${userProfile.id}`,
             } as any,
               async (payload: any) => {
@@ -617,7 +617,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
     try {
       // Trigger sync to update transaction table in Supabase
       // This ensures any missing transactions are synced from Bridge API
-      const syncPromise = apiPost('/api/bridge/sync-transactions').catch((error) => {
+      const syncPromise = apiPost('/api/noah/sync-transactions').catch((error) => {
         console.warn('[TRANSACTIONS] Sync failed on pull-to-refresh:', error)
         // Don't block refresh if sync fails
       })

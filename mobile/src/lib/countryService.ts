@@ -190,12 +190,12 @@ const countriesList: Country[] = [
   { code: "MH", name: "Marshall Islands", flag_emoji: "🇲🇭" },
 ].sort((a, b) => a.name.localeCompare(b.name))
 
-import { filterBridgeSupportedCountries } from './bridgeSupportedCountries'
+import { filterNoahSupportedCountries } from './noahSupportedCountries'
 
 export const countryService = {
   async getAll(): Promise<Country[]> {
-    // Filter to only include Bridge-supported countries
-    return filterBridgeSupportedCountries(countriesList)
+    // Filter to only include Noah-supported countries
+    return filterNoahSupportedCountries(countriesList)
   },
   
   /**

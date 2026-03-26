@@ -7,7 +7,7 @@ import "./globals.css"
 
 export const metadata: Metadata = {
   title: "Easner Office",
-  description: "Easner back office",
+  description: "Easner Office",
   metadataBase: new URL("https://bk.easner.com"),
   icons: {
     icon: "https://seeqjiebmrnolcyydewj.supabase.co/storage/v1/object/public/brand/Easner%20Favicon.svg",

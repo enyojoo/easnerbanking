@@ -25,7 +25,7 @@ import { useUserData } from '../../contexts/UserDataContext'
 interface BridgeTransaction {
   id: string
   transaction_id: string
-  bridge_transaction_id?: string
+  noah_transaction_id?: string
   transaction_type: 'send' | 'receive'
   direction: 'credit' | 'debit'
   amount: number
@@ -45,7 +45,7 @@ interface BridgeTransaction {
   created_at: string
   updated_at: string
   completed_at?: string
-  bridge_created_at?: string
+  noah_created_at?: string
 }
 
 export default function BridgeTransactionDetailsScreen({ navigation, route }: NavigationProps) {
@@ -148,7 +148,7 @@ export default function BridgeTransactionDetailsScreen({ navigation, route }: Na
       setError(null)
 
       // Try bridge transactions API first
-      let response = await apiGet(`/api/bridge/transactions/${transactionId}`)
+      let response = await apiGet(`/api/noah/transactions/${transactionId}`)
       if (!response.ok || (response as any).isNetworkError) {
         // Fallback to combined transactions API
         response = await apiGet(`/api/transactions/${transactionId}`)
@@ -711,7 +711,7 @@ export default function BridgeTransactionDetailsScreen({ navigation, route }: Na
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>When</Text>
                       <Text style={styles.summaryValue}>
-                        {formatTimestamp(transaction.bridge_created_at || transaction.created_at)}
+                        {formatTimestamp(transaction.noah_created_at || transaction.created_at)}
                       </Text>
                     </View>
                   </>
@@ -732,7 +732,7 @@ export default function BridgeTransactionDetailsScreen({ navigation, route }: Na
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>When</Text>
                       <Text style={styles.summaryValue}>
-                        {formatTimestamp(transaction.bridge_created_at || transaction.created_at)}
+                        {formatTimestamp(transaction.noah_created_at || transaction.created_at)}
                       </Text>
                     </View>
                   </>
@@ -762,7 +762,7 @@ export default function BridgeTransactionDetailsScreen({ navigation, route }: Na
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>Created</Text>
                       <Text style={styles.summaryValue}>
-                        {formatTimestamp(transaction.bridge_created_at || transaction.created_at)}
+                        {formatTimestamp(transaction.noah_created_at || transaction.created_at)}
                       </Text>
                     </View>
 

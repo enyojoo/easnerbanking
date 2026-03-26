@@ -28,12 +28,11 @@ interface ComplianceUser {
   date_of_birth?: string
   address?: string
   country_code?: string
-  bridge_kyc_metadata?: any
-  bridge_customer_id?: string
-  bridge_signed_agreement_id?: string
-  bridge_kyc_status?: string
-  bridge_kyc_rejection_reasons?: any
-  bridge_endorsements?: any
+  noah_kyc_metadata?: any
+  noah_customer_id?: string
+  noah_signed_agreement_id?: string
+  noah_kyc_status?: string
+  noah_kyc_rejection_reasons?: any
 }
 
 export default function OfficeCompliancePage() {
@@ -76,7 +75,7 @@ export default function OfficeCompliancePage() {
   const [selectedUser, setSelectedUser] = useState<ComplianceUser | null>(null)
   const [userDetailsDialogOpen, setUserDetailsDialogOpen] = useState(false)
   const [countries, setCountries] = useState<any[]>([])
-  // Removed deleting, approving, sendingToBridge states - no longer needed for manual KYC approval
+  // Removed deleting, approving, sendingToNoah states - no longer needed for manual KYC approval
   const [initialized, setInitialized] = useState(false)
   const channelRef = useRef<any>(null)
   const [noticeDialog, setNoticeDialog] = useState<{ open: boolean; title: string; message: string; type: 'success' | 'error' }>({ open: false, title: '', message: '', type: 'success' })
@@ -97,7 +96,7 @@ export default function OfficeCompliancePage() {
       // Get all users with KYC data from users table
       const { data: usersData, error: usersError } = await supabase
         .from("users")
-        .select("id, email, first_name, middle_name, last_name, phone, date_of_birth, address, country_code, bridge_kyc_metadata, bridge_customer_id, bridge_signed_agreement_id, bridge_kyc_status, bridge_kyc_rejection_reasons, bridge_endorsements")
+        .select("id, email, first_name, middle_name, last_name, phone, date_of_birth, address, country_code, noah_kyc_metadata, noah_customer_id, noah_signed_agreement_id, noah_kyc_status, noah_kyc_rejection_reasons")
         .order("created_at", { ascending: false })
 
       if (usersError) throw usersError
@@ -114,12 +113,11 @@ export default function OfficeCompliancePage() {
           date_of_birth: user.date_of_birth,
           address: user.address,
           country_code: user.country_code,
-          bridge_kyc_metadata: user.bridge_kyc_metadata,
-          bridge_customer_id: user.bridge_customer_id,
-          bridge_signed_agreement_id: user.bridge_signed_agreement_id,
-          bridge_kyc_status: user.bridge_kyc_status,
-          bridge_kyc_rejection_reasons: user.bridge_kyc_rejection_reasons,
-          bridge_endorsements: user.bridge_endorsements,
+          noah_kyc_metadata: user.noah_kyc_metadata,
+          noah_customer_id: user.noah_customer_id,
+          noah_signed_agreement_id: user.noah_signed_agreement_id,
+          noah_kyc_status: user.noah_kyc_status,
+          noah_kyc_rejection_reasons: user.noah_kyc_rejection_reasons,
         }
       })
 
@@ -185,23 +183,23 @@ export default function OfficeCompliancePage() {
           table: 'users',
         },
         async (payload) => {
-          // Only process if Bridge-related fields changed
+          // Only process if Noah-related fields changed
           const oldData = payload.old as any
           const newData = payload.new as any
           
-          const bridgeStatusChanged = 
-            oldData?.bridge_kyc_status !== newData?.bridge_kyc_status ||
-            oldData?.bridge_customer_id !== newData?.bridge_customer_id ||
-            JSON.stringify(oldData?.bridge_kyc_rejection_reasons) !== JSON.stringify(newData?.bridge_kyc_rejection_reasons) ||
+          const noahStatusChanged = 
+            oldData?.noah_kyc_status !== newData?.noah_kyc_status ||
+            oldData?.noah_customer_id !== newData?.noah_customer_id ||
+            JSON.stringify(oldData?.noah_kyc_rejection_reasons) !== JSON.stringify(newData?.noah_kyc_rejection_reasons) ||
             oldData?.full_name !== newData?.full_name ||
             oldData?.date_of_birth !== newData?.date_of_birth ||
             oldData?.address !== newData?.address ||
-            JSON.stringify(oldData?.bridge_kyc_metadata) !== JSON.stringify(newData?.bridge_kyc_metadata)
+            JSON.stringify(oldData?.noah_kyc_metadata) !== JSON.stringify(newData?.noah_kyc_metadata)
           
-          if (bridgeStatusChanged) {
-            console.log('Admin compliance: User Bridge status update received via Realtime')
+          if (noahStatusChanged) {
+            console.log('Admin compliance: User Noah status update received via Realtime')
             try {
-              // Reload data to get updated Bridge status (silent refresh, no loading state)
+              // Reload data to get updated Noah status (silent refresh, no loading state)
               const updatedUsers = await loadData(false)
               
               // Update selected user if dialog is open and this update affects them
@@ -212,7 +210,7 @@ export default function OfficeCompliancePage() {
                 }
               }
             } catch (error) {
-              console.error("Error handling real-time Bridge status update:", error)
+              console.error("Error handling real-time Noah status update:", error)
             }
           }
         }
@@ -339,97 +337,6 @@ export default function OfficeCompliancePage() {
     }
   }
 
-  // Removed canSendToBridge - users now do KYC directly through Bridge
-  const _canSendToBridge = (user: ComplianceUser): boolean => {
-    return false // Always false - users do KYC directly through Bridge
-  }
-
-  // Removed handleSendToBridge - users now do KYC directly through Bridge
-  const _handleSendToBridge = async (userId: string) => {
-    if (!confirm("Send this user's KYC data to Bridge? This will create their Bridge customer account.")) {
-      return
-    }
-
-    try {
-      setSendingToBridge(userId)
-      
-      const response = await officeFetch("/api/admin/kyc/send-to-bridge", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to send to Bridge")
-      }
-
-      // Show success dialog with full customer ID
-      setNoticeDialog({
-        open: true,
-        title: "Successfully sent to Bridge!",
-        message: `Customer ID: ${data.customerId || 'N/A'}`,
-        type: 'success'
-      })
-      
-      // Immediately update selectedUser with the new bridge_customer_id from response
-      // This ensures the UI updates instantly without waiting for database reload
-      if (data.customerId) {
-        setSelectedUser(prev => {
-          if (prev?.id === userId) {
-            return {
-              ...prev,
-              bridge_customer_id: data.customerId,
-              bridge_kyc_status: data.kycStatus,
-              bridge_kyc_rejection_reasons: data.rejectionReasons,
-            }
-          }
-          return prev
-        })
-        
-        // Also update the users list immediately
-        setUsers(prevUsers => 
-          prevUsers.map(user => 
-            user.id === userId 
-              ? {
-                  ...user,
-                  bridge_customer_id: data.customerId,
-                  bridge_kyc_status: data.kycStatus,
-                  bridge_kyc_rejection_reasons: data.rejectionReasons,
-                }
-              : user
-          )
-        )
-      }
-      
-      // Reload data in background to ensure everything is in sync
-      // This will update the users list and refresh any other data
-      setTimeout(async () => {
-        const updatedUsers = await loadData(false)
-        setUsers(updatedUsers)
-        // Update selected user again with fresh data from database
-        setSelectedUser(prev => {
-          if (prev?.id === userId) {
-            const updatedUser = updatedUsers.find(u => u.id === userId)
-            return updatedUser || prev
-          }
-          return prev
-        })
-      }, 500)
-    } catch (error: any) {
-      console.error("Error sending to Bridge:", error)
-      setNoticeDialog({
-        open: true,
-        title: "Failed to Send to Bridge",
-        message: error.message || "An unknown error occurred",
-        type: 'error'
-      })
-    } finally {
-      setSendingToBridge(null)
-    }
-  }
-
   const handleViewFile = async (filePathOrUrl: string) => {
     if (!filePathOrUrl) return
     
@@ -481,9 +388,9 @@ export default function OfficeCompliancePage() {
     }
   }
 
-  // Removed getVerificationStatus - now using bridge_kyc_status directly
+  // Removed getVerificationStatus - now using noah_kyc_status directly
 
-  const getBridgeStatusColor = (status: string) => {
+  const getNoahStatusColor = (status: string) => {
     switch (status) {
       case "approved":
         return "bg-green-100 text-green-800"
@@ -500,7 +407,7 @@ export default function OfficeCompliancePage() {
     }
   }
 
-  const getBridgeKycStatusBadge = (status?: string) => {
+  const getNoahKycStatusBadge = (status?: string) => {
     if (!status) return null
     
     const statusLabels: Record<string, string> = {
@@ -514,7 +421,7 @@ export default function OfficeCompliancePage() {
     const label = statusLabels[status] || status
     
     return (
-      <Badge className={getBridgeStatusColor(status)}>
+      <Badge className={getNoahStatusColor(status)}>
         {label}
       </Badge>
     )
@@ -533,19 +440,19 @@ export default function OfficeCompliancePage() {
     
     if (statusFilter === "all") return matchesSearch
     
-    // Filter by bridge_kyc_status
-    const bridgeKycStatus = user.bridge_kyc_status || "not_started"
+    // Filter by noah_kyc_status
+    const noahKycStatus = user.noah_kyc_status || "not_started"
     if (statusFilter === "verified") {
-      return matchesSearch && bridgeKycStatus === "approved"
+      return matchesSearch && noahKycStatus === "approved"
     }
     if (statusFilter === "pending") {
-      return matchesSearch && (bridgeKycStatus === "not_started" || bridgeKycStatus === "incomplete")
+      return matchesSearch && (noahKycStatus === "not_started" || noahKycStatus === "incomplete")
     }
     if (statusFilter === "in_review") {
-      return matchesSearch && (bridgeKycStatus === "under_review" || bridgeKycStatus === "in_review")
+      return matchesSearch && (noahKycStatus === "under_review" || noahKycStatus === "in_review")
     }
     if (statusFilter === "rejected") {
-      return matchesSearch && bridgeKycStatus === "rejected"
+      return matchesSearch && noahKycStatus === "rejected"
     }
     
     return matchesSearch
@@ -605,7 +512,7 @@ export default function OfficeCompliancePage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
-                    <TableHead>Bridge KYC Status</TableHead>
+                    <TableHead>Noah KYC Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -616,7 +523,7 @@ export default function OfficeCompliancePage() {
                         {user.first_name} {user.last_name}
                       </TableCell>
                       <TableCell>
-                        {user.bridge_kyc_status ? getBridgeKycStatusBadge(user.bridge_kyc_status) : <Badge className="bg-gray-100 text-gray-700">Not Started</Badge>}
+                        {user.noah_kyc_status ? getNoahKycStatusBadge(user.noah_kyc_status) : <Badge className="bg-gray-100 text-gray-700">Not Started</Badge>}
                       </TableCell>
                       <TableCell className="text-right">
                         <Button
@@ -637,13 +544,13 @@ export default function OfficeCompliancePage() {
 
         {/* User Details Dialog */}
         <Dialog open={userDetailsDialogOpen} onOpenChange={setUserDetailsDialogOpen}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" key={selectedUser?.bridge_customer_id || selectedUser?.id}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" key={selectedUser?.noah_customer_id || selectedUser?.id}>
             <DialogHeader>
               <div className="flex items-center justify-between">
               <DialogTitle>
                 Compliance Details - {selectedUser?.first_name} {selectedUser?.last_name}
               </DialogTitle>
-                {/* Removed "Send to Bridge" button - users now do KYC directly through Bridge */}
+                {/* Removed "Send to Noah" button - users now do KYC directly through Noah */}
               </div>
             </DialogHeader>
             {selectedUser && (
@@ -677,30 +584,30 @@ export default function OfficeCompliancePage() {
                   )}
                 </div>
 
-                {/* Bridge KYC Status - Show prominently */}
+                {/* Noah KYC Status - Show prominently */}
                 <div className="border-t pt-6">
-                  <h3 className="text-lg font-semibold mb-4">Bridge KYC Status</h3>
+                  <h3 className="text-lg font-semibold mb-4">Noah KYC Status</h3>
                   <div className="space-y-3">
-                    {selectedUser.bridge_kyc_status ? (
+                    {selectedUser.noah_kyc_status ? (
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-gray-600">Status:</span>
-                        {getBridgeKycStatusBadge(selectedUser.bridge_kyc_status)}
+                        {getNoahKycStatusBadge(selectedUser.noah_kyc_status)}
                       </div>
                     ) : (
                       <Badge className="bg-gray-100 text-gray-700">Not Started</Badge>
                     )}
-                    {selectedUser.bridge_customer_id && (
+                    {selectedUser.noah_customer_id && (
                       <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-600">Bridge Customer ID:</span>
-                        <span className="text-sm font-mono">{selectedUser.bridge_customer_id}</span>
+                        <span className="text-sm text-gray-600">Noah Customer ID:</span>
+                        <span className="text-sm font-mono">{selectedUser.noah_customer_id}</span>
                       </div>
                     )}
-                    {selectedUser.bridge_kyc_status === "rejected" && selectedUser.bridge_kyc_rejection_reasons && (
+                    {selectedUser.noah_kyc_status === "rejected" && selectedUser.noah_kyc_rejection_reasons && (
                       <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                         <p className="text-sm font-medium text-red-800 mb-2">Rejection Reasons:</p>
                         <div className="space-y-2">
-                          {Array.isArray(selectedUser.bridge_kyc_rejection_reasons) && selectedUser.bridge_kyc_rejection_reasons.length > 0 ? (
-                            selectedUser.bridge_kyc_rejection_reasons.map((reasonObj: any, index: number) => (
+                          {Array.isArray(selectedUser.noah_kyc_rejection_reasons) && selectedUser.noah_kyc_rejection_reasons.length > 0 ? (
+                            selectedUser.noah_kyc_rejection_reasons.map((reasonObj: any, index: number) => (
                               <div key={index} className="border-l-2 border-red-300 pl-3">
                                 {typeof reasonObj === 'object' && reasonObj !== null ? (
                                   <>
@@ -721,10 +628,10 @@ export default function OfficeCompliancePage() {
                                 )}
                               </div>
                             ))
-                          ) : typeof selectedUser.bridge_kyc_rejection_reasons === "string" ? (
-                            <p className="text-sm text-red-700">{selectedUser.bridge_kyc_rejection_reasons}</p>
+                          ) : typeof selectedUser.noah_kyc_rejection_reasons === "string" ? (
+                            <p className="text-sm text-red-700">{selectedUser.noah_kyc_rejection_reasons}</p>
                           ) : (
-                            <p className="text-sm text-red-700">{JSON.stringify(selectedUser.bridge_kyc_rejection_reasons)}</p>
+                            <p className="text-sm text-red-700">{JSON.stringify(selectedUser.noah_kyc_rejection_reasons)}</p>
                           )}
                         </div>
                       </div>
@@ -732,8 +639,8 @@ export default function OfficeCompliancePage() {
                   </div>
                 </div>
 
-                {/* Identity Verification - Show only if Bridge KYC is approved */}
-                {selectedUser.bridge_kyc_status === "approved" && (
+                {/* Identity Verification - Show only if Noah KYC is approved */}
+                {selectedUser.noah_kyc_status === "approved" && (
                 <div className="border-t pt-6">
                   <h3 className="text-lg font-semibold mb-4">Identity Verification</h3>
                   {selectedUser.first_name || selectedUser.date_of_birth ? (
@@ -775,24 +682,24 @@ export default function OfficeCompliancePage() {
                                 <span className="text-gray-900 font-medium text-xs">{getCountryName(selectedUser.country_code)}</span>
                             </div>
                             )}
-                            {selectedUser.bridge_kyc_metadata && (
+                            {selectedUser.noah_kyc_metadata && (
                               <>
-                                {selectedUser.bridge_kyc_metadata.ssn && (
+                                {selectedUser.noah_kyc_metadata.ssn && (
                             <div className="flex items-start gap-2">
                                     <span className="text-gray-500 min-w-[90px] text-xs">SSN:</span>
-                                    <span className="text-gray-900 text-xs">***-**-{selectedUser.bridge_kyc_metadata.ssn.slice(-4)}</span>
+                                    <span className="text-gray-900 text-xs">***-**-{selectedUser.noah_kyc_metadata.ssn.slice(-4)}</span>
                             </div>
                                 )}
-                                {selectedUser.bridge_kyc_metadata.passportNumber && (
+                                {selectedUser.noah_kyc_metadata.passportNumber && (
                                   <div className="flex items-start gap-2">
                                     <span className="text-gray-500 min-w-[90px] text-xs">Passport:</span>
-                                    <span className="text-gray-900 text-xs">{selectedUser.bridge_kyc_metadata.passportNumber}</span>
+                                    <span className="text-gray-900 text-xs">{selectedUser.noah_kyc_metadata.passportNumber}</span>
                               </div>
                             )}
-                                {selectedUser.bridge_kyc_metadata.nationalIdNumber && (
+                                {selectedUser.noah_kyc_metadata.nationalIdNumber && (
                                   <div className="flex items-start gap-2">
                                     <span className="text-gray-500 min-w-[90px] text-xs">National ID:</span>
-                                    <span className="text-gray-900 text-xs">{selectedUser.bridge_kyc_metadata.nationalIdNumber}</span>
+                                    <span className="text-gray-900 text-xs">{selectedUser.noah_kyc_metadata.nationalIdNumber}</span>
                           </div>
                                 )}
                               </>
@@ -809,21 +716,21 @@ export default function OfficeCompliancePage() {
                 </div>
                 )}
 
-                {/* Address Verification - Show only if Bridge KYC is approved */}
-                {selectedUser.bridge_kyc_status === "approved" && (
+                {/* Address Verification - Show only if Noah KYC is approved */}
+                {selectedUser.noah_kyc_status === "approved" && (
                   <>
-                    {/* Bridge Integration Details */}
+                    {/* Noah integration details */}
                   <div className="border-t pt-6">
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-lg font-semibold">Bridge Integration Details</h3>
+                      <h3 className="text-lg font-semibold">Noah Integration Details</h3>
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={async () => {
                           setCheckingWebhooks(true)
                           try {
-                            const url = selectedUser.bridge_customer_id
-                              ? `/api/admin/webhooks/check?userId=${selectedUser.id}&customerId=${selectedUser.bridge_customer_id}&eventType=kyc`
+                            const url = selectedUser.noah_customer_id
+                              ? `/api/admin/webhooks/check?userId=${selectedUser.id}&customerId=${selectedUser.noah_customer_id}&eventType=kyc`
                               : `/api/admin/webhooks/check?userId=${selectedUser.id}&eventType=kyc`
                             const response = await officeFetch(url)
                             const data = await response.json()
@@ -857,31 +764,31 @@ export default function OfficeCompliancePage() {
                       </Button>
                     </div>
                     <div className="space-y-3">
-                      {selectedUser.bridge_customer_id ? (
+                      {selectedUser.noah_customer_id ? (
                         <div className="space-y-2">
                           <div className="flex items-center gap-2">
                             <Badge className="bg-green-100 text-green-700">
                               <CheckCircle className="h-3 w-3 mr-1" />
-                              Sent to Bridge
+                              Sent to Noah
                             </Badge>
                           </div>
                           <div className="flex items-center gap-2">
                             <p className="text-sm text-gray-600">
-                              Bridge Customer ID: {selectedUser.bridge_customer_id}
+                              Noah Customer ID: {selectedUser.noah_customer_id}
                             </p>
                           </div>
-                          {selectedUser.bridge_kyc_status && (
+                          {selectedUser.noah_kyc_status && (
                             <div className="flex items-center gap-2">
                               <span className="text-sm text-gray-600">KYC Status:</span>
-                              {getBridgeKycStatusBadge(selectedUser.bridge_kyc_status)}
+                              {getNoahKycStatusBadge(selectedUser.noah_kyc_status)}
                             </div>
                           )}
-                          {selectedUser.bridge_kyc_status === "rejected" && selectedUser.bridge_kyc_rejection_reasons && (
+                          {selectedUser.noah_kyc_status === "rejected" && selectedUser.noah_kyc_rejection_reasons && (
                             <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                               <p className="text-sm font-medium text-red-800 mb-2">Rejection Reasons:</p>
                               <div className="space-y-2">
-                                {Array.isArray(selectedUser.bridge_kyc_rejection_reasons) && selectedUser.bridge_kyc_rejection_reasons.length > 0 ? (
-                                  selectedUser.bridge_kyc_rejection_reasons.map((reasonObj: any, index: number) => (
+                                {Array.isArray(selectedUser.noah_kyc_rejection_reasons) && selectedUser.noah_kyc_rejection_reasons.length > 0 ? (
+                                  selectedUser.noah_kyc_rejection_reasons.map((reasonObj: any, index: number) => (
                                     <div key={index} className="border-l-2 border-red-300 pl-3">
                                       {typeof reasonObj === 'object' && reasonObj !== null ? (
                                         <>
@@ -902,10 +809,10 @@ export default function OfficeCompliancePage() {
                                       )}
                                     </div>
                                   ))
-                                ) : typeof selectedUser.bridge_kyc_rejection_reasons === "string" ? (
-                                  <p className="text-sm text-red-700">{selectedUser.bridge_kyc_rejection_reasons}</p>
+                                ) : typeof selectedUser.noah_kyc_rejection_reasons === "string" ? (
+                                  <p className="text-sm text-red-700">{selectedUser.noah_kyc_rejection_reasons}</p>
                                 ) : (
-                                  <p className="text-sm text-red-700">{JSON.stringify(selectedUser.bridge_kyc_rejection_reasons)}</p>
+                                  <p className="text-sm text-red-700">{JSON.stringify(selectedUser.noah_kyc_rejection_reasons)}</p>
                                 )}
                               </div>
                             </div>
@@ -917,7 +824,7 @@ export default function OfficeCompliancePage() {
                             <Clock className="h-3 w-3 mr-1" />
                             Not Started
                           </Badge>
-                          <p className="text-sm text-gray-600">User needs to complete Bridge KYC verification through the mobile app.</p>
+                          <p className="text-sm text-gray-600">User needs to complete Noah KYC verification through the mobile app.</p>
                         </div>
                       )}
                       {webhookData && (
@@ -930,11 +837,11 @@ export default function OfficeCompliancePage() {
                             <p className="text-blue-700">
                               KYC Events: {webhookData.summary?.kycEvents || 0}
                             </p>
-                            {webhookData.bridgeStatus && (
+                            {(webhookData.noahStatus ?? webhookData.bridgeStatus) && (
                               <div className="mt-2 pt-2 border-t border-blue-300">
-                                <p className="text-blue-800 font-medium">Bridge API Status:</p>
+                                <p className="text-blue-800 font-medium">Noah API Status:</p>
                                 <p className="text-blue-700">
-                                  KYC Status: {webhookData.bridgeStatus.kyc_status || "N/A"}
+                                  KYC Status: {(webhookData.noahStatus ?? webhookData.bridgeStatus).kyc_status || "N/A"}
                                 </p>
                               </div>
                             )}
@@ -942,13 +849,13 @@ export default function OfficeCompliancePage() {
                               <div className="mt-2 pt-2 border-t border-blue-300">
                                 <p className="text-blue-800 font-medium">User Status:</p>
                                 <p className="text-blue-700">
-                                  KYC Status: {webhookData.userStatus.bridge_kyc_status || "N/A"}
+                                  KYC Status: {webhookData.userStatus.noah_kyc_status || "N/A"}
                                 </p>
-                                {webhookData.userStatus.bridge_kyc_rejection_reasons && (
+                                {webhookData.userStatus.noah_kyc_rejection_reasons && (
                                   <div className="mt-1">
                                     <p className="text-blue-800 font-medium mb-1">Rejection Reasons:</p>
-                                    {Array.isArray(webhookData.userStatus.bridge_kyc_rejection_reasons) && webhookData.userStatus.bridge_kyc_rejection_reasons.length > 0 ? (
-                                      webhookData.userStatus.bridge_kyc_rejection_reasons.map((reasonObj: any, index: number) => (
+                                    {Array.isArray(webhookData.userStatus.noah_kyc_rejection_reasons) && webhookData.userStatus.noah_kyc_rejection_reasons.length > 0 ? (
+                                      webhookData.userStatus.noah_kyc_rejection_reasons.map((reasonObj: any, index: number) => (
                                         <div key={index} className="text-blue-700 text-xs mb-1">
                                           {typeof reasonObj === 'object' && reasonObj !== null ? (
                                             <>
@@ -961,7 +868,7 @@ export default function OfficeCompliancePage() {
                                         </div>
                                       ))
                                     ) : (
-                                      <p className="text-blue-700 text-xs">{String(webhookData.userStatus.bridge_kyc_rejection_reasons)}</p>
+                                      <p className="text-blue-700 text-xs">{String(webhookData.userStatus.noah_kyc_rejection_reasons)}</p>
                                     )}
                                   </div>
                           )}
@@ -1010,20 +917,20 @@ export default function OfficeCompliancePage() {
                               <span className="text-gray-500 min-w-[90px] text-xs pt-0.5">Address:</span>
                               <span className="text-gray-900 text-xs flex-1">{selectedUser.address}</span>
                             </div>
-                            {selectedUser.bridge_kyc_metadata?.address && (
+                            {selectedUser.noah_kyc_metadata?.address && (
                               <div className="mt-2 pt-2 border-t border-gray-200">
                                 <p className="text-xs text-gray-500 mb-1">Structured Address:</p>
                                 <div className="text-xs text-gray-700 space-y-0.5">
-                                  <div>{selectedUser.bridge_kyc_metadata.address.line1}</div>
-                                  {selectedUser.bridge_kyc_metadata.address.line2 && (
-                                    <div>{selectedUser.bridge_kyc_metadata.address.line2}</div>
+                                  <div>{selectedUser.noah_kyc_metadata.address.line1}</div>
+                                  {selectedUser.noah_kyc_metadata.address.line2 && (
+                                    <div>{selectedUser.noah_kyc_metadata.address.line2}</div>
                                   )}
                                   <div>
-                                    {selectedUser.bridge_kyc_metadata.address.city}
-                                    {selectedUser.bridge_kyc_metadata.address.state && `, ${selectedUser.bridge_kyc_metadata.address.state}`}
-                                    {selectedUser.bridge_kyc_metadata.address.postal_code && ` ${selectedUser.bridge_kyc_metadata.address.postal_code}`}
+                                    {selectedUser.noah_kyc_metadata.address.city}
+                                    {selectedUser.noah_kyc_metadata.address.state && `, ${selectedUser.noah_kyc_metadata.address.state}`}
+                                    {selectedUser.noah_kyc_metadata.address.postal_code && ` ${selectedUser.noah_kyc_metadata.address.postal_code}`}
                               </div>
-                                  <div>{selectedUser.bridge_kyc_metadata.address.country}</div>
+                                  <div>{selectedUser.noah_kyc_metadata.address.country}</div>
                           </div>
                         </div>
                             )}

@@ -1,0 +1,25 @@
+import { NextResponse } from "next/server"
+import { noahFetch } from "@/lib/noah/http"
+import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
+import { requireAuth, requireNoahEnv, resolveNoahContext } from "../_helpers"
+
+export async function POST(request: Request) {
+  const mis = requireNoahEnv()
+  if (mis) return mis
+  const auth = await requireAuth(request)
+  if ("error" in auth) return auth.error
+  const { user } = auth
+  const ctx = resolveNoahContext(user.id, request)
+
+  try {
+    const customer = await noahFetch<Record<string, unknown>>({
+      method: "GET",
+      path: `/customers/${encodeURIComponent(ctx.noahCustomerId)}`,
+    })
+    await syncNoahCustomerToSupabase(user.id, customer, ctx.noahCustomerId, ctx.scope)
+    return NextResponse.json({ success: true, noahScope: ctx.scope })
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return NextResponse.json({ error: msg }, { status: 400 })
+  }
+}

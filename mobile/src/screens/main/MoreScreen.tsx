@@ -104,13 +104,13 @@ function MoreContent({ navigation }: NavigationProps) {
 
   const getVerificationStatus = (): "approved" | "in_review" | "take_action" => {
     // Check Bridge KYC status first (primary source of truth)
-    const bridgeKycStatus = userProfile?.bridge_kyc_status
+    const noahKycStatus = userProfile?.noah_kyc_status
     
-    if (bridgeKycStatus === 'approved') {
+    if (noahKycStatus === 'approved') {
       return "approved"
     }
     
-    if (bridgeKycStatus === 'pending' || bridgeKycStatus === 'in_review' || bridgeKycStatus === 'under_review') {
+    if (noahKycStatus === 'pending' || noahKycStatus === 'in_review' || noahKycStatus === 'under_review') {
       return "in_review"
     }
 

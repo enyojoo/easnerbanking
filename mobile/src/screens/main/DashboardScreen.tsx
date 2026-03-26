@@ -56,7 +56,7 @@ interface DashboardTransaction {
   name?: string
   status: string
   created_at: string
-  bridge_created_at?: string
+  noah_created_at?: string
   source_type?: string // 'virtual_account', 'liquidation_address', etc.
   source_liquidation_address_id?: string
   metadata?: any
@@ -160,7 +160,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
       const params = new URLSearchParams()
       params.append('limit', '5') // Only fetch 5 most recent for dashboard
 
-      const response = await apiGet(`/api/bridge/transactions?${params.toString()}`)
+      const response = await apiGet(`/api/noah/transactions?${params.toString()}`)
       
       if (response.ok && !(response as any).isNetworkError) {
         const data = await response.json()
@@ -173,7 +173,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
           name: tx.name,
           status: tx.status,
           created_at: tx.created_at,
-          bridge_created_at: tx.bridge_created_at,
+          noah_created_at: tx.noah_created_at,
           source_type: tx.source_type,
           source_liquidation_address_id: tx.source_liquidation_address_id,
           metadata: tx.metadata,
@@ -279,7 +279,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
       try {
         lastSyncTimeRef.current = now
         // Sync in background - don't block UI
-        apiPost('/api/bridge/sync-transactions').catch(() => {
+        apiPost('/api/noah/sync-transactions').catch(() => {
           // Silently fail - webhooks/real-time handle new transactions
         })
       } catch (error) {
@@ -347,11 +347,11 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
         
         pollingInterval = setTimeout(async () => {
           try {
-            const response = await apiGet(`/api/bridge/transactions?limit=1`)
+            const response = await apiGet(`/api/noah/transactions?limit=1`)
             if (response.ok) {
               const data = await response.json()
               const latestTx = data.transactions?.[0]
-              const currentTimestamp = latestTx?.created_at || latestTx?.bridge_created_at
+              const currentTimestamp = latestTx?.created_at || latestTx?.noah_created_at
               
               if (currentTimestamp && currentTimestamp !== lastTransactionTimestamp) {
                 console.log('[DASHBOARD] 🔄 Polling detected transaction change, refreshing...')
@@ -402,7 +402,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
             {
               event: '*',
               schema: 'public',
-              table: 'bridge_transactions',
+              table: 'noah_transactions',
               filter: `user_id=eq.${userProfile.id}`,
             } as any,
             async (payload: any) => {
@@ -830,7 +830,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
               try {
                 // Trigger sync to update transaction table in Supabase
                 // This ensures any missing transactions are synced from Bridge API
-                const syncPromise = apiPost('/api/bridge/sync-transactions').catch((error) => {
+                const syncPromise = apiPost('/api/noah/sync-transactions').catch((error) => {
                   console.warn('[DASHBOARD] Sync failed on pull-to-refresh:', error)
                   // Don't block refresh if sync fails
                 })
@@ -1018,7 +1018,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                       {getTransactionName(transaction)}
                     </Text>
                     <Text style={styles.transactionDate}>
-                      {formatTransactionDate(transaction.bridge_created_at || transaction.created_at)}
+                      {formatTransactionDate(transaction.noah_created_at || transaction.created_at)}
                     </Text>
                   </View>
                   <View style={styles.transactionAmountContainer}>

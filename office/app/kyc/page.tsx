@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Search, Download, Check, X, Eye, Send, Loader2 } from "lucide-react"
+import { Search, Download, Check, X, Eye } from "lucide-react"
 import { KYCSubmission } from "@/lib/kyc-service"
 import { officeFetch } from "@/lib/api-client"
 import { getIdTypeLabel } from "@/lib/country-id-types"
@@ -26,10 +26,10 @@ interface UserKYCData {
   identitySubmission: KYCSubmission | null
   addressSubmission: KYCSubmission | null
   hasTOS: boolean
-  hasBridgeCustomer: boolean
-  bridgeCustomerId?: string
-  bridgeKycStatus?: string
-  bridgeKycRejectionReasons?: any
+  hasNoahCustomer: boolean
+  noahCustomerId?: string
+  noahKycStatus?: string
+  noahKycRejectionReasons?: any
 }
 
 export default function OfficeKYCPage() {
@@ -43,12 +43,11 @@ export default function OfficeKYCPage() {
   const [reviewStatus, setReviewStatus] = useState<"approved" | "rejected">("approved")
   const [rejectionReason, setRejectionReason] = useState("")
   const [updating, setUpdating] = useState(false)
-  const [sendingToBridge, setSendingToBridge] = useState<string | null>(null) // userId being sent
 
   useEffect(() => {
     loadSubmissions()
     
-    // Auto-refresh every 30 seconds to get Bridge status updates
+    // Auto-refresh every 30 seconds to get Noah status updates
     const interval = setInterval(() => {
       loadSubmissions()
     }, 30000)
@@ -91,11 +90,11 @@ export default function OfficeKYCPage() {
                 email: userData?.email,
                 identitySubmission,
                 addressSubmission,
-                hasTOS: !!userData?.bridge_signed_agreement_id,
-                hasBridgeCustomer: !!userData?.bridge_customer_id,
-                bridgeCustomerId: userData?.bridge_customer_id,
-                bridgeKycStatus: userData?.bridge_kyc_status,
-                bridgeKycRejectionReasons: userData?.bridge_kyc_rejection_reasons,
+                hasTOS: !!userData?.noah_signed_agreement_id,
+                hasNoahCustomer: !!userData?.noah_customer_id,
+                noahCustomerId: userData?.noah_customer_id,
+                noahKycStatus: userData?.noah_kyc_status,
+                noahKycRejectionReasons: userData?.noah_kyc_rejection_reasons,
               })
             } catch (error) {
               console.error(`Error fetching user data for ${userId}:`, error)
@@ -106,7 +105,7 @@ export default function OfficeKYCPage() {
                 identitySubmission: userSubmissions.find((s: KYCSubmission) => s.type === "identity") || null,
                 addressSubmission: userSubmissions.find((s: KYCSubmission) => s.type === "address") || null,
                 hasTOS: false,
-                hasBridgeCustomer: false,
+                hasNoahCustomer: false,
               })
             }
           })
@@ -153,35 +152,6 @@ export default function OfficeKYCPage() {
     }
   }
 
-  const handleSendToBridge = async (userId: string) => {
-    if (!confirm("Send this user's KYC data to Bridge? This will create a Bridge customer account.")) {
-      return
-    }
-
-    setSendingToBridge(userId)
-    try {
-      const response = await officeFetch("/api/admin/kyc/send-to-bridge", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        alert(`Successfully sent KYC to Bridge!\n\nCustomer ID: ${data.customerId}\nKYC Status: ${data.kycStatus}`)
-        await loadSubmissions() // Reload to update user data
-      } else {
-        const error = await response.json()
-        alert(error.error || "Failed to send KYC to Bridge")
-      }
-    } catch (error: any) {
-      console.error("Error sending KYC to Bridge:", error)
-      alert("Failed to send KYC to Bridge: " + (error.message || "Unknown error"))
-    } finally {
-      setSendingToBridge(null)
-    }
-  }
-
   const getStatusColor = (status: string) => {
     switch (status) {
       case "approved":
@@ -195,7 +165,7 @@ export default function OfficeKYCPage() {
     }
   }
 
-  const getBridgeKycStatusBadge = (status?: string) => {
+  const getNoahKycStatusBadge = (status?: string) => {
     if (!status) return null
     
     const statusLabels: Record<string, string> = {
@@ -210,7 +180,7 @@ export default function OfficeKYCPage() {
     
     return (
       <Badge className={getStatusColor(status)}>
-        Bridge: {label}
+        Noah: {label}
       </Badge>
     )
   }
@@ -228,22 +198,14 @@ export default function OfficeKYCPage() {
     )
   })
 
-  // Check if user is ready to send to Bridge
-  const canSendToBridge = (userData: UserKYCData): boolean => {
-    return !!(
-      userData.identitySubmission &&
-      userData.addressSubmission &&
-      userData.hasTOS &&
-      !userData.hasBridgeCustomer
-    )
-  }
-
   return (
     <OfficeDashboardLayout>
       <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">KYC Submissions</h1>
-        <p className="text-sm text-gray-600 mt-1">Review and manage user verification submissions</p>
+        <p className="text-sm text-gray-600 mt-1">
+          Review Easner KYC document submissions. Noah identity verification runs in hosted onboarding in the mobile app — no admin “send to Noah” step.
+        </p>
       </div>
 
       {/* Filters */}
@@ -275,7 +237,7 @@ export default function OfficeKYCPage() {
         <div className="text-center py-12">
           <p className="text-gray-600">Loading submissions...</p>
         </div>
-      ) : filteredSubmissions.length === 0 ? (
+      ) : groupedByUser.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center">
             <p className="text-gray-600">No submissions found</p>
@@ -294,46 +256,32 @@ export default function OfficeKYCPage() {
                         {userData.email || userData.userId}
                       </h3>
                       <p className="text-sm text-gray-600">User ID: {userData.userId}</p>
-                      {userData.hasBridgeCustomer && (
+                      {userData.hasNoahCustomer && (
                         <div className="mt-1 space-y-1">
                           <p className="text-sm text-green-600">
-                            ✓ Bridge Customer: {userData.bridgeCustomerId?.slice(0, 8)}...
+                            ✓ Noah customer: {userData.noahCustomerId?.slice(0, 8)}...
                           </p>
-                          {userData.bridgeKycStatus && getBridgeKycStatusBadge(userData.bridgeKycStatus)}
-                          {userData.bridgeKycStatus === "rejected" && userData.bridgeKycRejectionReasons && (
+                          {userData.noahKycStatus && getNoahKycStatusBadge(userData.noahKycStatus)}
+                          {userData.noahKycStatus === "rejected" && userData.noahKycRejectionReasons && (
                             <p className="text-sm text-red-600 mt-1">
-                              Rejection: {Array.isArray(userData.bridgeKycRejectionReasons) 
-                                ? userData.bridgeKycRejectionReasons.join(", ")
-                                : JSON.stringify(userData.bridgeKycRejectionReasons)}
+                              Rejection: {Array.isArray(userData.noahKycRejectionReasons) 
+                                ? userData.noahKycRejectionReasons.join(", ")
+                                : JSON.stringify(userData.noahKycRejectionReasons)}
                             </p>
                           )}
                         </div>
                       )}
                     </div>
-                    {canSendToBridge(userData) && (
-                      <Button
-                        onClick={() => handleSendToBridge(userData.userId)}
-                        disabled={sendingToBridge === userData.userId}
-                        className="bg-primary hover:bg-primary/90"
-                      >
-                        {sendingToBridge === userData.userId ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Sending...
-                          </>
-                        ) : (
-                          <>
-                            <Send className="h-4 w-4 mr-2" />
-                            Send to Bridge
-                          </>
-                        )}
-                      </Button>
-                    )}
-                    {!userData.hasTOS && canSendToBridge(userData) && (
-                      <p className="text-sm text-yellow-600">⚠ User must accept TOS first</p>
-                    )}
-                    {userData.hasBridgeCustomer && (
-                      <Badge className="bg-green-100 text-green-800">Already in Bridge</Badge>
+                    {!userData.hasTOS &&
+                      userData.identitySubmission &&
+                      userData.addressSubmission &&
+                      !userData.hasNoahCustomer && (
+                        <p className="text-sm text-yellow-600 max-w-md text-right">
+                          User must accept Terms of Service in the app before Noah hosted KYC can complete.
+                        </p>
+                      )}
+                    {userData.hasNoahCustomer && (
+                      <Badge className="bg-green-100 text-green-800">Already in Noah</Badge>
                     )}
                   </div>
 

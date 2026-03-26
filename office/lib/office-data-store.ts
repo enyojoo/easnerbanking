@@ -489,9 +489,9 @@ class OfficeDataStore {
   private async calculateStats(users: any[], transactions: any[], baseCurrency: string, exchangeRates: any[] = []) {
     const totalUsers = users.length
     const activeUsers = users.filter((u) => u.status === "active").length
-    // Count users with approved Bridge KYC or email verified
+    // Count users with approved Noah KYC or email verified
     const verifiedUsers = users.filter((u) => 
-      u.bridge_kyc_status === "approved" || u.email_confirmed_at
+      u.noah_kyc_status === "approved" || u.email_confirmed_at
     ).length
 
     const totalTransactions = transactions.length
@@ -583,9 +583,8 @@ class OfficeDataStore {
           }
         }
       }
-      // Note: Card funding and card spending are not included in admin volume
-      // Card funding is just moving money to card, not actual spending
-      // Card spending would need to be fetched from Bridge Cards API separately
+      // Note: Noah “card_funding” / card destination volume is excluded here by design.
+      // Easner Cards UI has no DB-backed spend yet; do not conflate with Noah settlement.
     }
 
     return totalVolume
@@ -616,7 +615,8 @@ class OfficeDataStore {
     return transactions.map((tx) => {
       // Determine transaction type
       const txType = tx.type || (tx.send_amount ? "send" : tx.crypto_amount ? "receive" : null)
-      const isCardFunding = txType === "card_funding" || (tx.destination_type === "card" || tx.bridge_card_account_id)
+      // Noah money movement: funding a card settlement destination (not Easner Cards product)
+      const isCardFunding = txType === "card_funding" || (tx.destination_type === "card" || tx.noah_card_account_id)
       
       // Format amount based on transaction type
       let amount = ""
@@ -1163,21 +1163,21 @@ class OfficeDataStore {
 
   async updateUserVerification(userId: string, newStatus: string) {
     try {
-      console.log(`OfficeDataStore: Updating user ${userId} Bridge KYC status to ${newStatus}`)
+      console.log(`OfficeDataStore: Updating user ${userId} Noah KYC status to ${newStatus}`)
       
-      // Map old verification_status values to bridge_kyc_status
+      // Map old verification_status values to noah_kyc_status
       const statusMap: Record<string, string> = {
         "verified": "approved",
         "pending": "not_started",
         "rejected": "rejected",
         "unverified": "not_started",
       }
-      const bridgeKycStatus = statusMap[newStatus] || newStatus
+      const noahKycStatus = statusMap[newStatus] || newStatus
       
       const { error } = await supabase
         .from("users")
         .update({
-          bridge_kyc_status: bridgeKycStatus,
+          noah_kyc_status: noahKycStatus,
           updated_at: new Date().toISOString(),
         })
         .eq("id", userId)
@@ -1190,7 +1190,7 @@ class OfficeDataStore {
       // Update local data
       if (this.data) {
         this.data.users = this.data.users.map((user) => 
-          user.id === userId ? { ...user, bridge_kyc_status: bridgeKycStatus, updated_at: new Date().toISOString() } : user
+          user.id === userId ? { ...user, noah_kyc_status: noahKycStatus, updated_at: new Date().toISOString() } : user
         )
         this.data.stats = await this.calculateStats(this.data.users, this.data.transactions, this.data.baseCurrency)
         this.notify()
@@ -1672,8 +1672,7 @@ export function calculateUserVolume(
           totalVolume += convertCurrency(amount, tx.fiat_currency)
         }
       }
-      // Note: Card funding is not included in volume (it's just moving money to card)
-      // Card spending would need to be fetched from Bridge Cards API separately
+      // Card funding leg excluded from volume; Easner Cards UI spend is not stored in DB yet
     }
   }
 

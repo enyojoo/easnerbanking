@@ -6,8 +6,6 @@ import { OfficeAuthLoadingSkeleton } from "@/components/office-auth-loading-skel
 
 const PROTECTED_PATHS = [
   "/dashboard",
-  "/blog",
-  "/bridge",
   "/rates",
   "/kyc",
   "/compliance",

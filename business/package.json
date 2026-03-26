@@ -1,5 +1,6 @@
 {
-  "name": "easner",
+  "name": "easner-business",
+  "description": "Easner Banking for businesses (Next.js)",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,6 +10,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.57.2",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "1.2.2",
     "@radix-ui/react-alert-dialog": "1.1.4",
@@ -48,6 +50,7 @@
     "embla-carousel-react": "8.5.1",
     "geist": "latest",
     "input-otp": "1.4.1",
+    "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.454.0",
     "next": "^16.1.6",
     "next-themes": "^0.4.6",
@@ -66,6 +69,7 @@
     "zod": "3.25.67"
   },
   "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.5",
     "@tailwindcss/postcss": "^4.1.9",
     "@types/node": "^22",
     "@types/react": "^19",

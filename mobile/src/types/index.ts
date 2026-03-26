@@ -106,12 +106,11 @@ export interface User {
   base_currency: string
   easetag?: string
   status: "active" | "inactive"
-  // verification_status removed - use bridge_kyc_status for KYC status
-  bridge_kyc_status?: string
-  bridge_customer_id?: string
-  bridge_kyc_rejection_reasons?: any
-  bridge_endorsements?: any
-  bridge_signed_agreement_id?: string
+  // verification_status removed - use noah_kyc_status for KYC status
+  noah_kyc_status?: string
+  noah_customer_id?: string
+  noah_kyc_rejection_reasons?: any
+  noah_signed_agreement_id?: string
   date_of_birth?: string
   address?: string
   residential_address?: {
@@ -123,7 +122,7 @@ export interface User {
     country?: string
   }
   country_code?: string
-  bridge_kyc_metadata?: any
+  noah_kyc_metadata?: any
   created_at: string
   updated_at: string
 }
@@ -134,12 +133,11 @@ export interface AuthUser {
   email: string
   isAdmin: boolean
   profile: User
-  // Bridge KYC fields - also available at top level for easier access
-  bridge_kyc_status?: string
-  bridge_customer_id?: string
-  bridge_kyc_rejection_reasons?: any
-  bridge_endorsements?: any
-  bridge_signed_agreement_id?: string
+  // Noah KYC fields - also available at top level for easier access
+  noah_kyc_status?: string
+  noah_customer_id?: string
+  noah_kyc_rejection_reasons?: any
+  noah_signed_agreement_id?: string
   // Additional fields that may be available at top level
   middle_name?: string
   easetag?: string
@@ -169,7 +167,7 @@ export interface KYCSubmission {
   reviewed_by?: string
   reviewed_at?: string
   rejection_reason?: string
-  metadata?: any // Bridge-specific KYC fields
+  metadata?: any // App-specific KYC fields
   created_at: string
   updated_at: string
 }
