@@ -15,13 +15,7 @@ import { mockBeneficiaries } from "@/lib/mock-data"
 import type { Beneficiary } from "@/lib/mock-data"
 import { Label } from "@/components/ui/label"
 import { Search, Plus, User, ChevronDown } from "lucide-react"
-
-const currencyFlags: Record<string, string> = {
-  USD: "🇺🇸",
-  EUR: "🇪🇺",
-  GBP: "🇬🇧",
-  NGN: "🇳🇬",
-}
+import { CurrencyFlag } from "@easner/shared"
 
 function maskAccount(accountNumber: string): string {
   if (!accountNumber || accountNumber.length < 4) return "****"
@@ -89,8 +83,11 @@ export function SendRecipientPicker({
             </div>
             <div>
               <p className="font-medium">{selected.name}</p>
-              <p className="text-sm text-muted-foreground">
-                {currencyFlags[selected.currency] || ""} {selected.currency} • {maskAccount(selected.fullAccountNumber)}
+              <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                <CurrencyFlag currency={selected.currency} size={16} className="rounded-sm shrink-0" />
+                <span>
+                  {selected.currency} • {maskAccount(selected.fullAccountNumber)}
+                </span>
               </p>
             </div>
           </div>
@@ -129,8 +126,11 @@ export function SendRecipientPicker({
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="font-medium truncate">{b.name}</p>
-                    <p className="text-sm text-muted-foreground truncate">
-                      {b.bankName} • {currencyFlags[b.currency] || ""} {b.currency}
+                    <p className="text-sm text-muted-foreground flex items-center gap-1.5 min-w-0">
+                      <CurrencyFlag currency={b.currency} size={16} className="rounded-sm shrink-0" />
+                      <span className="truncate">
+                        {b.bankName} • {b.currency}
+                      </span>
                     </p>
                   </div>
                 </button>

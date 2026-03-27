@@ -23,13 +23,7 @@ import {
 } from "@/components/ui/dialog"
 import { RecipientForm } from "@/components/recipient-form"
 import { mockBeneficiaries } from "@/lib/mock-data"
-
-const currencyFlags: Record<string, string> = {
-  USD: "🇺🇸",
-  EUR: "🇪🇺",
-  GBP: "🇬🇧",
-  NGN: "🇳🇬",
-}
+import { CurrencyFlag } from "@easner/shared"
 
 export default function RecipientsPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -137,8 +131,9 @@ export default function RecipientsPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="text-xs">
-                        {currencyFlags[recipient.currency]} {recipient.currency}
+                      <Badge variant="secondary" className="text-xs gap-1.5 pr-2">
+                        <CurrencyFlag currency={recipient.currency} size={14} className="rounded-sm" />
+                        {recipient.currency}
                       </Badge>
                       <Button variant="outline" size="sm" className="gap-1">
                         <Send className="h-3 w-3" />

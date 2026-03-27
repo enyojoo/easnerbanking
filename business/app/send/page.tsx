@@ -27,6 +27,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { generateTransactionId } from "@/lib/transaction-id"
+import { CurrencyFlag } from "@easner/shared"
 
 const SEND_FLOW_STATE_KEY = "send_flow_state"
 
@@ -79,16 +80,6 @@ function formatAmountForDisplay(raw: string): string {
 
 function parseAmountFromDisplay(display: string): number {
   return Number.parseFloat(display.replace(/,/g, "")) || 0
-}
-
-const currencyFlags: Record<string, string> = {
-  USD: "🇺🇸",
-  EUR: "🇪🇺",
-  GBP: "🇬🇧",
-  NGN: "🇳🇬",
-  KES: "🇰🇪",
-  GHS: "🇬🇭",
-  RUB: "🇷🇺",
 }
 
 export default function SendPage() {
@@ -339,13 +330,17 @@ export default function SendPage() {
           >
             <div className="flex items-center gap-2">
               <span className="flex items-center">
-                {paymentMethod === "balance" && sourceAccount
-                  ? (currencyFlags[sourceAccount.currency] ?? "💳")
-                  : paymentMethod === "usdc" || paymentMethod === "usdt"
-                    ? <Coins className="h-5 w-5" />
-                    : otherCurrency
-                      ? (currencyFlags[otherCurrency] ?? "💳")
-                      : "💳"}
+                {paymentMethod === "balance" && sourceAccount ? (
+                  <CurrencyFlag currency={sourceAccount.currency} size={22} className="rounded-sm" />
+                ) : paymentMethod === "usdc" || paymentMethod === "usdt" ? (
+                  <Coins className="h-5 w-5" />
+                ) : otherCurrency === "STABLECOIN" ? (
+                  <Coins className="h-5 w-5" />
+                ) : otherCurrency ? (
+                  <CurrencyFlag currency={otherCurrency} size={22} className="rounded-sm" />
+                ) : (
+                  <Landmark className="h-5 w-5 text-muted-foreground" />
+                )}
               </span>
               <div>
                 <p className="font-medium">{getSourceDisplayLabel()}</p>
@@ -425,7 +420,7 @@ export default function SendPage() {
                           isSelected ? "bg-muted" : ""
                         }`}
                       >
-                        <span className="text-xl">{currencyFlags[acc.currency] ?? "💳"}</span>
+                        <CurrencyFlag currency={acc.currency} size={24} className="rounded-sm" />
                         <div className="flex-1 min-w-0">
                           <p className="font-medium">{acc.currency} Balance</p>
                           <p className={`text-sm ${sufficient ? "text-muted-foreground" : "text-destructive"}`}>
@@ -483,7 +478,7 @@ export default function SendPage() {
                         className="flex w-full items-center justify-between rounded-lg px-4 py-3 text-left transition-colors hover:bg-muted/50"
                       >
                         <div className="flex items-center gap-3">
-                          <span className="text-xl">{currencyFlags[currency.code] ?? "💳"}</span>
+                          <CurrencyFlag currency={currency.code} size={24} className="rounded-sm" />
                           <p className="font-medium">{currency.name}</p>
                         </div>
                         <ChevronRight className="h-4 w-4 text-muted-foreground" />

@@ -15,13 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { CurrencyDepositDialog } from "@/components/currency-deposit-dialog"
 import { FXConvertDialog } from "@/components/fx-convert-dialog"
-
-const currencyFlags: Record<string, string> = {
-  USD: "🇺🇸",
-  EUR: "🇪🇺",
-  GBP: "🇬🇧",
-  NGN: "🇳🇬",
-}
+import { CurrencyFlag } from "@easner/shared"
 
 export default function AccountsPage() {
   const [copiedField, setCopiedField] = useState<string | null>(null)
@@ -55,7 +49,7 @@ export default function AccountsPage() {
                   <div className="flex-1 space-y-4">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="text-4xl">{currencyFlags[account.currency]}</div>
+                        <CurrencyFlag currency={account.currency} size={40} className="rounded-md" />
                         <div>
                           <h3 className="text-lg font-semibold">{account.currency}</h3>
                         </div>

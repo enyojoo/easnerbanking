@@ -15,6 +15,7 @@ import { Plus, MoreHorizontal, Edit, Pause, Trash2, Loader2 } from "lucide-react
 import { useOfficeData } from "@/hooks/use-office-data"
 import { officeDataStore } from "@/lib/office-data-store"
 import { OfficeRatesSkeleton } from "@/components/office-rates-skeleton"
+import { CurrencyFlag } from "@easner/shared"
 
 const AdminRatesPage = () => {
   const { data, loading } = useOfficeData()
@@ -343,7 +344,11 @@ const AdminRatesPage = () => {
                   <TableRow key={currency.id}>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <div dangerouslySetInnerHTML={{ __html: currency.flag_svg }} />
+                        <CurrencyFlag
+                          currency={currency.code}
+                          size={22}
+                          fallbackSvg={currency.flag_svg?.trim() ? currency.flag_svg : undefined}
+                        />
                         <span className="font-medium">{currency.name}</span>
                       </div>
                     </TableCell>

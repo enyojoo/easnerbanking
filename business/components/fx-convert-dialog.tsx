@@ -20,13 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-
-const currencyFlags: Record<string, string> = {
-  USD: "🇺🇸",
-  EUR: "🇪🇺",
-  GBP: "🇬🇧",
-  NGN: "🇳🇬",
-}
+import { CurrencyFlag } from "@easner/shared"
 
 function formatAmountForDisplay(raw: string): string {
   if (!raw || raw === ".") return raw || ""
@@ -122,7 +116,10 @@ export function FXConvertDialog({ account }: FXConvertDialogProps) {
                   .filter((acc) => acc.currency !== fromCurrency)
                   .map((acc) => (
                     <SelectItem key={acc.id} value={acc.currency}>
-                      {currencyFlags[acc.currency]} {acc.currency}
+                      <span className="flex items-center gap-2">
+                        <CurrencyFlag currency={acc.currency} size={18} />
+                        {acc.currency}
+                      </span>
                     </SelectItem>
                   ))}
               </SelectContent>

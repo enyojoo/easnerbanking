@@ -13,6 +13,7 @@ import { BusinessLogoField } from "@/components/business-logo-field"
 import { countries } from "@/lib/countries"
 import { getKybFields } from "@/lib/kyb-by-country"
 import { updateBusinessProfile, useBusinessProfile } from "@/lib/use-business-profile"
+import { CountryFlag } from "@easner/shared"
 
 function getCountryFromCode(code: string) {
   return countries.find((c) => c.code === code)
@@ -317,7 +318,7 @@ export function SettingsBusinessTab() {
                   >
                     {selectedCountry ? (
                       <div className="flex items-center gap-2">
-                        <span className="text-lg">{selectedCountry.flag}</span>
+                        <CountryFlag code={selectedCountry.code} size={22} />
                         <span>{selectedCountry.name}</span>
                       </div>
                     ) : (
@@ -339,7 +340,7 @@ export function SettingsBusinessTab() {
                             onSelect={() => handleCountryChange(c.code)}
                           >
                             <div className="flex items-center gap-2 w-full">
-                              <span className="text-lg">{c.flag}</span>
+                              <CountryFlag code={c.code} size={22} />
                               <span className="flex-1">{c.name}</span>
                             </div>
                           </CommandItem>
@@ -353,7 +354,7 @@ export function SettingsBusinessTab() {
               <div className="flex items-center gap-2 h-10 px-3 py-2 rounded-md border bg-muted/30">
                 {selectedCountry && (
                   <>
-                    <span className="text-lg">{selectedCountry.flag}</span>
+                    <CountryFlag code={selectedCountry.code} size={22} />
                     <span>{selectedCountry.name}</span>
                   </>
                 )}

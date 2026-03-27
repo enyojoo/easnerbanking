@@ -21,6 +21,7 @@ import { Eye, EyeOff, Info, MapPin, ChevronDown } from "lucide-react"
 import Link from "next/link"
 import { countries } from "@/lib/countries"
 import { setOnboarding } from "@/lib/onboarding-store"
+import { CountryFlag } from "@easner/shared"
 
 const TERMS_URL = "https://www.easner.com/terms?from=register"
 
@@ -130,7 +131,7 @@ export default function SignupPage() {
                   >
                     {selectedCountry ? (
                       <div className="flex items-center gap-2">
-                        <span className="text-lg">{selectedCountry.flag}</span>
+                        <CountryFlag code={selectedCountry.code} size={22} />
                         <span className="text-sm">{selectedCountry.name}</span>
                       </div>
                     ) : (
@@ -165,7 +166,7 @@ export default function SignupPage() {
                             className="text-sm"
                           >
                             <div className="flex items-center gap-2 w-full">
-                              <span className="text-lg">{country.flag}</span>
+                              <CountryFlag code={country.code} size={22} />
                               <span className="flex-1">{country.name}</span>
                             </div>
                           </CommandItem>

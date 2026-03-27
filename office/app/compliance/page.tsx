@@ -14,7 +14,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Search, Eye, CheckCircle, Clock, XCircle, User, Mail, Phone, Trash2, Check, FileText, ExternalLink, RotateCcw, Send, Loader2 } from "lucide-react"
 import { kycService, KYCSubmission } from "@/lib/kyc-service"
 import { getIdTypeLabel } from "@/lib/country-id-types"
-import { countryService, getCountryFlag } from "@/lib/country-service"
+import { countryService } from "@/lib/country-service"
+import { CountryFlag } from "@easner/shared"
 import { supabase } from "@/lib/supabase"
 import { officeFetch } from "@/lib/api-client"
 import { OfficeComplianceSkeleton } from "@/components/office-compliance-skeleton"
@@ -468,10 +469,15 @@ function OfficeCompliancePage() {
     return matchesSearch
   })
 
-  const getCountryName = (code?: string) => {
-    if (!code) return "-"
-    const country = countries.find(c => c.code === code)
-    return country ? `${country.flag_emoji} ${country.name}` : code
+  const renderCountryLabel = (code?: string) => {
+    if (!code) return <span>-</span>
+    const country = countries.find((c) => c.code === code)
+    return (
+      <span className="inline-flex items-center gap-2">
+        <CountryFlag code={code} size={18} title={country?.name ?? code} />
+        <span>{country?.name ?? code}</span>
+      </span>
+    )
   }
 
   // Only show skeleton if we're truly loading and have no cached data
@@ -695,7 +701,7 @@ function OfficeCompliancePage() {
                             {selectedUser.country_code && (
                             <div className="flex items-start gap-2">
                               <span className="text-gray-500 min-w-[90px] text-xs">Country:</span>
-                                <span className="text-gray-900 font-medium text-xs">{getCountryName(selectedUser.country_code)}</span>
+                                <div className="text-gray-900 font-medium text-xs inline-flex items-center">{renderCountryLabel(selectedUser.country_code)}</div>
                             </div>
                             )}
                             {selectedUser.noah_kyc_metadata && (
@@ -926,7 +932,7 @@ function OfficeCompliancePage() {
                             {selectedUser.country_code && (
                             <div className="flex items-start gap-2">
                               <span className="text-gray-500 min-w-[90px] text-xs">Country:</span>
-                                <span className="text-gray-900 font-medium text-xs">{getCountryName(selectedUser.country_code)}</span>
+                                <div className="text-gray-900 font-medium text-xs inline-flex items-center">{renderCountryLabel(selectedUser.country_code)}</div>
                             </div>
                             )}
                             <div className="flex items-start gap-2">

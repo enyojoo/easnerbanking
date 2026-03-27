@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { ArrowLeftRight, Landmark, User, Mail, Phone, CreditCard, MapPin, ChevronDown } from "lucide-react"
 import type { Beneficiary } from "@/lib/mock-data"
+import { CountryFlag } from "@easner/shared"
 
 interface RecipientFormProps {
   recipient?: any
@@ -18,15 +19,15 @@ interface RecipientFormProps {
 }
 
 const countries = [
-  { name: "United States", currency: "USD", flag: "🇺🇸" },
-  { name: "United Kingdom", currency: "GBP", flag: "🇬🇧" },
-  { name: "Germany", currency: "EUR", flag: "🇩🇪" },
-  { name: "France", currency: "EUR", flag: "🇫🇷" },
-  { name: "Spain", currency: "EUR", flag: "🇪🇸" },
-  { name: "Italy", currency: "EUR", flag: "🇮🇹" },
-  { name: "Nigeria", currency: "NGN", flag: "🇳🇬" },
-  { name: "Canada", currency: "CAD", flag: "🇨🇦" },
-  { name: "Australia", currency: "AUD", flag: "🇦🇺" },
+  { name: "United States", currency: "USD", code: "US" },
+  { name: "United Kingdom", currency: "GBP", code: "GB" },
+  { name: "Germany", currency: "EUR", code: "DE" },
+  { name: "France", currency: "EUR", code: "FR" },
+  { name: "Spain", currency: "EUR", code: "ES" },
+  { name: "Italy", currency: "EUR", code: "IT" },
+  { name: "Nigeria", currency: "NGN", code: "NG" },
+  { name: "Canada", currency: "CAD", code: "CA" },
+  { name: "Australia", currency: "AUD", code: "AU" },
 ]
 
 export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessWithData }: RecipientFormProps) {
@@ -229,7 +230,7 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
               <button className={`flex h-12 w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${errors.country ? "border-red-500" : ""}`}>
                 {selectedCountry ? (
                   <div className="flex items-center gap-2">
-                    <span className="text-lg">{selectedCountry.flag}</span>
+                    <CountryFlag code={selectedCountry.code} size={22} />
                     <span>{selectedCountry.name}</span>
                   </div>
                 ) : (
@@ -254,7 +255,7 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
                         }}
                       >
                         <div className="flex items-center gap-2 w-full">
-                          <span className="text-lg">{country.flag}</span>
+                          <CountryFlag code={country.code} size={22} />
                           <span className="flex-1">{country.name}</span>
                           <span className="text-xs text-muted-foreground">({country.currency})</span>
                         </div>

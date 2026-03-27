@@ -14,13 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Copy, Check, Plus, Share2 } from "lucide-react"
 import { mockStablecoinAccounts, type Account } from "@/lib/mock-data"
 import { QRCodeSVG } from "qrcode.react"
-
-const currencyFlags: Record<string, string> = {
-  USD: "🇺🇸",
-  EUR: "🇪🇺",
-  GBP: "🇬🇧",
-  NGN: "🇳🇬",
-}
+import { CurrencyFlag } from "@easner/shared"
 
 interface CopyableFieldProps {
   label: string
@@ -157,7 +151,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <span className="text-2xl">{currencyFlags[account.currency]}</span>
+            <CurrencyFlag currency={account.currency} size={28} className="rounded-md" />
             {account.currency} Deposit
           </DialogTitle>
           <DialogDescription>

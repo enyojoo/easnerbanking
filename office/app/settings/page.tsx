@@ -36,6 +36,7 @@ import {
   validateField,
   formatFieldValue,
 } from "@/lib/currency-account-types"
+import { CurrencyFlag } from "@easner/shared"
 
 interface SystemSetting {
   id: string
@@ -579,9 +580,15 @@ export default function AdminSettingsPage() {
     return type === "qr_code" ? <QrCode className="h-4 w-4" /> : <Building2 className="h-4 w-4" />
   }
 
-  const getCurrencyFlag = (currencyCode: string) => {
+  const renderCurrencyFlag = (currencyCode: string) => {
     const currency = currencies.find((c) => c.code === currencyCode)
-    return currency?.flag_svg ? <div dangerouslySetInnerHTML={{ __html: currency.flag_svg }} /> : null
+    return (
+      <CurrencyFlag
+        currency={currencyCode}
+        size={20}
+        fallbackSvg={currency?.flag_svg?.trim() ? currency.flag_svg : undefined}
+      />
+    )
   }
 
 
@@ -672,7 +679,11 @@ export default function AdminSettingsPage() {
                           .map((currency) => (
                             <SelectItem key={currency.code} value={currency.code}>
                               <div className="flex items-center gap-3">
-                                <div dangerouslySetInnerHTML={{ __html: currency.flag_svg }} />
+                                <CurrencyFlag
+                                  currency={currency.code}
+                                  size={20}
+                                  fallbackSvg={currency.flag_svg?.trim() ? currency.flag_svg : undefined}
+                                />
                                 <div className="font-medium">{currency.code}</div>
                               </div>
                             </SelectItem>
@@ -726,7 +737,11 @@ export default function AdminSettingsPage() {
                                   .map((currency) => (
                                     <SelectItem key={currency.code} value={currency.code}>
                                       <div className="flex items-center gap-3">
-                                        <div dangerouslySetInnerHTML={{ __html: currency.flag_svg }} />
+                                        <CurrencyFlag
+                                          currency={currency.code}
+                                          size={20}
+                                          fallbackSvg={currency.flag_svg?.trim() ? currency.flag_svg : undefined}
+                                        />
                                         <div className="font-medium">
                                           {currency.code} - {currency.name}
                                         </div>
@@ -1159,7 +1174,11 @@ export default function AdminSettingsPage() {
                                     .map((currency) => (
                                       <SelectItem key={currency.code} value={currency.code}>
                                         <div className="flex items-center gap-3">
-                                          <div dangerouslySetInnerHTML={{ __html: currency.flag_svg }} />
+                                          <CurrencyFlag
+                                            currency={currency.code}
+                                            size={20}
+                                            fallbackSvg={currency.flag_svg?.trim() ? currency.flag_svg : undefined}
+                                          />
                                           <div className="font-medium">
                                             {currency.code} - {currency.name}
                                           </div>
@@ -1631,7 +1650,7 @@ export default function AdminSettingsPage() {
                       <TableRow key={method.id}>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            {getCurrencyFlag(method.currency)}
+                            {renderCurrencyFlag(method.currency)}
                             <span className="font-medium">{method.currency}</span>
                           </div>
                         </TableCell>
