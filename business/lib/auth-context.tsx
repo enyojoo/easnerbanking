@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [supabase])
 
   useEffect(() => {
-    if (!user) return
+    if (!user?.id) return
 
     const bootstrap = async () => {
       const { data } = await supabase.auth.getSession()
@@ -58,6 +58,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const onboarding = getOnboarding()
       const countryCode = onboarding?.countryCode || "US"
       const role = "business"
+      const fullNameFromMeta =
+        typeof user.user_metadata?.name === "string"
+          ? user.user_metadata.name
+          : [user.user_metadata?.first_name, user.user_metadata?.last_name].filter(Boolean).join(" ")
 
       try {
         await fetch("/api/auth/bootstrap", {
@@ -66,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ countryCode, role }),
+          body: JSON.stringify({ countryCode, role, fullName: fullNameFromMeta || null }),
         })
       } catch (error) {
         console.error("auth bootstrap failed", error)
@@ -74,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     void bootstrap()
-  }, [supabase, user])
+  }, [supabase, user?.id])
 
   const login = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({

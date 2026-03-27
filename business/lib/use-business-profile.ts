@@ -12,8 +12,15 @@ function subscribe(callback: () => void) {
   }
 }
 
+let cachedSnapshot: { name: string; logoUrl: string | null } | null = null
+
 function getSnapshot() {
-  return getResolvedBusinessProfile()
+  const next = getResolvedBusinessProfile()
+  if (cachedSnapshot && cachedSnapshot.name === next.name && cachedSnapshot.logoUrl === next.logoUrl) {
+    return cachedSnapshot
+  }
+  cachedSnapshot = next
+  return next
 }
 
 function getServerSnapshot() {

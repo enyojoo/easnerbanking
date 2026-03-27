@@ -5,6 +5,7 @@ import { countries } from "@/lib/countries"
 type BootstrapBody = {
   countryCode?: string
   role?: "business" | "individual"
+  fullName?: string | null
 }
 
 function normalizeCountryCode(value: unknown): string | null {
@@ -32,6 +33,17 @@ function defaultOrgName(email: string | undefined, fallbackId: string): string {
   return `Business ${fallbackId.slice(0, 8)}`
 }
 
+function parseName(fullName: string | null | undefined): { firstName: string | null; lastName: string | null; fullName: string | null } {
+  const trimmed = typeof fullName === "string" ? fullName.trim() : ""
+  if (!trimmed) return { firstName: null, lastName: null, fullName: null }
+  const parts = trimmed.split(/\s+/)
+  return {
+    firstName: parts[0] ?? null,
+    lastName: parts.length > 1 ? parts.slice(1).join(" ") : null,
+    fullName: trimmed,
+  }
+}
+
 export async function POST(request: Request) {
   const user = await getUserFromBearer(request)
   if (!user) {
@@ -48,6 +60,7 @@ export async function POST(request: Request) {
   const role: "business" | "individual" = body.role === "individual" ? "individual" : "business"
   const countryCode = normalizeCountryCode(body.countryCode)
   const country = countryNameFromCode(countryCode)
+  const name = parseName(body.fullName ?? (typeof user.user_metadata?.name === "string" ? user.user_metadata.name : null))
   const admin = createSupabaseAdmin()
 
   const { data: userRow } = await admin
@@ -59,6 +72,9 @@ export async function POST(request: Request) {
   const baseUserPayload = {
     id: user.id,
     email: user.email ?? null,
+    first_name: name.firstName,
+    last_name: name.lastName,
+    full_name: name.fullName,
     updated_at: new Date().toISOString(),
   }
 
@@ -67,7 +83,19 @@ export async function POST(request: Request) {
     .from("users")
     .upsert({ ...baseUserPayload, easner_role: role }, { onConflict: "id" })
   if (upsertErrWithRole) {
-    await admin.from("users").upsert(baseUserPayload, { onConflict: "id" })
+    const { error: upsertErrNoRole } = await admin.from("users").upsert(baseUserPayload, { onConflict: "id" })
+    if (upsertErrNoRole) {
+      await admin
+        .from("users")
+        .upsert(
+          {
+            id: user.id,
+            email: user.email ?? null,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "id" },
+        )
+    }
   }
 
   if (role === "individual") {
@@ -114,6 +142,9 @@ export async function POST(request: Request) {
   const userLinkPayload = {
     id: user.id,
     email: user.email ?? null,
+    first_name: name.firstName,
+    last_name: name.lastName,
+    full_name: name.fullName,
     easner_organization_id: organizationId,
     updated_at: new Date().toISOString(),
   }
@@ -122,7 +153,20 @@ export async function POST(request: Request) {
     .from("users")
     .upsert({ ...userLinkPayload, easner_role: "business" }, { onConflict: "id" })
   if (linkErrWithRole) {
-    await admin.from("users").upsert(userLinkPayload, { onConflict: "id" })
+    const { error: linkErrNoRole } = await admin.from("users").upsert(userLinkPayload, { onConflict: "id" })
+    if (linkErrNoRole) {
+      await admin
+        .from("users")
+        .upsert(
+          {
+            id: user.id,
+            email: user.email ?? null,
+            easner_organization_id: organizationId,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "id" },
+        )
+    }
   }
 
   return NextResponse.json({
