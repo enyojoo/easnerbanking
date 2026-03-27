@@ -83,7 +83,25 @@ export function SettingsBusinessTab() {
       zipCode: profile.postalCode || prev.zipCode,
       country: profile.country || prev.country,
     }))
-  }, [profile])
+  }, [
+    profile.isLoading,
+    profile.countryCode,
+    profile.name,
+    profile.logoUrl,
+    profile.businessType,
+    profile.registrationNumber,
+    profile.taxId,
+    profile.baseCurrency,
+    profile.description,
+    profile.website,
+    profile.supportEmail,
+    profile.supportPhone,
+    profile.addressLine1,
+    profile.city,
+    profile.state,
+    profile.postalCode,
+    profile.country,
+  ])
 
   const handleEdit = (section: string) => setEditingSection(section)
   const handleCancel = () => setEditingSection(null)
