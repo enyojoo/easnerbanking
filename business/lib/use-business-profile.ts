@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { useAuth } from "@/lib/auth-context"
 import { countries } from "@/lib/countries"
-import { businessInfo } from "@/lib/business-info"
 
 export type BusinessProfile = {
   organizationId: string | null
@@ -31,13 +30,13 @@ export type BusinessProfile = {
 
 const DEFAULT_PROFILE: BusinessProfile = {
   organizationId: null,
-  name: businessInfo.name,
+  name: "",
   logoUrl: null,
-  businessType: "Financial Services",
+  businessType: "",
   registrationNumber: "",
   taxId: "",
   baseCurrency: "USD",
-  description: "A modern digital banking platform providing seamless financial services.",
+  description: "",
   website: "",
   supportEmail: "",
   supportPhone: "",
@@ -45,11 +44,11 @@ const DEFAULT_PROFILE: BusinessProfile = {
   city: "",
   state: "",
   postalCode: "",
-  country: businessInfo.country,
-  countryCode: "US",
-  onboardingComplete: true,
+  country: null,
+  countryCode: null,
+  onboardingComplete: false,
   role: "business",
-  ownerName: "Admin",
+  ownerName: "",
 }
 
 function countryCodeFromName(name: string | null | undefined): string | null {

@@ -22,11 +22,9 @@ export function BusinessOnboardingDialog() {
   const [open, setOpen] = useState(false)
   const [businessName, setBusinessName] = useState("")
   const [businessLogo, setBusinessLogo] = useState<string | null>(null)
-  const [businessType, setBusinessType] = useState("Financial Services")
+  const [businessType, setBusinessType] = useState("")
   const [baseCurrency, setBaseCurrency] = useState("USD")
-  const [businessDescription, setBusinessDescription] = useState(
-    "A modern digital banking platform providing seamless financial services.",
-  )
+  const [businessDescription, setBusinessDescription] = useState("")
   const [error, setError] = useState("")
   const [saving, setSaving] = useState(false)
 
@@ -36,7 +34,7 @@ export function BusinessOnboardingDialog() {
       setOpen(true)
       setBusinessName(profile.name || "")
       setBusinessLogo(profile.logoUrl ?? null)
-      setBusinessType(profile.businessType || "Financial Services")
+      setBusinessType(profile.businessType || "")
       setBaseCurrency(profile.baseCurrency || "USD")
       setBusinessDescription(profile.description || "")
       return

@@ -167,13 +167,13 @@ export async function GET(request: Request) {
   return NextResponse.json({
     profile: {
       organizationId: org?.id ?? userRow?.easner_organization_id ?? null,
-      name: org?.name ?? generatedOrgName,
+      name: (org?.name ?? "").trim() || generatedOrgName,
       logoUrl: org?.logo_url ?? null,
-      businessType: org?.business_type ?? "Financial Services",
+      businessType: org?.business_type ?? "",
       registrationNumber: org?.registration_number ?? "",
       taxId: org?.tax_id ?? "",
       baseCurrency: org?.base_currency ?? "USD",
-      description: org?.description ?? "A modern digital banking platform providing seamless financial services.",
+      description: org?.description ?? "",
       website: org?.website ?? "",
       supportEmail: org?.support_email ?? "",
       supportPhone: org?.support_phone ?? "",

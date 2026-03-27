@@ -44,9 +44,9 @@ export function SettingsBusinessTab() {
   const [formData, setFormData] = useState<BusinessSettingsForm>({
     businessName: "",
     businessLogo: null,
-    businessType: "Financial Services",
-    registrationNumber: "123456789",
-    taxId: "12-3456789",
+    businessType: "",
+    registrationNumber: "",
+    taxId: "",
     website: "",
     email: "",
     phone: "",
@@ -56,8 +56,7 @@ export function SettingsBusinessTab() {
     zipCode: "",
     country: "",
     baseCurrency: "USD",
-    description:
-      "A modern digital banking platform providing seamless financial services.",
+    description: "",
   })
 
   useEffect(() => {

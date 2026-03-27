@@ -76,7 +76,6 @@ export function SettingsPersonalTab() {
       },
       body: JSON.stringify({
         fullName: formData.fullName,
-        email: formData.email,
         phone: formData.phone,
         dateOfBirth: formData.dateOfBirth,
       }),
@@ -134,8 +133,8 @@ export function SettingsPersonalTab() {
                 id="email"
                 type="email"
                 value={formData.email}
-                onChange={(e) => handleInputChange("email", e.target.value)}
-                disabled={editingSection !== "personal"}
+                readOnly
+                disabled
               />
             </div>
           </div>

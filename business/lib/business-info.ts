@@ -5,15 +5,15 @@ import { getOnboarding } from "@/lib/onboarding-store"
  * In production, this would come from settings/API.
  */
 export const businessInfo = {
-  name: "Amazon, Inc",
-  address: "410 Terry Avenue North",
-  city: "Seattle",
-  state: "WA",
-  zipCode: "98109",
+  name: "Your Business",
+  address: "",
+  city: "",
+  state: "",
+  zipCode: "",
   country: "United States",
-  email: "business@amazon.com",
-  phone: "+1 (206) 266-1000",
-  website: "https://amazon.com",
+  email: "support@easner.com",
+  phone: "",
+  website: "https://easner.com",
 } as const
 
 /** Display name and logo from onboarding when set (client only). */

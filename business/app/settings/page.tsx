@@ -18,7 +18,11 @@ function SettingsContent() {
   const validTab = TABS.includes(tab) ? tab : "personal"
 
   const handleTabChange = (value: string) => {
-    router.push(`/settings?tab=${value}`)
+    if (!TABS.includes(value as TabValue)) return
+    if (value === validTab) return
+    const next = new URLSearchParams(searchParams.toString())
+    next.set("tab", value)
+    router.replace(`/settings?${next.toString()}`)
   }
 
   return (

@@ -57,7 +57,7 @@ export const mockAccounts: Account[] = [
   {
     id: "acc_usd",
     currency: "USD",
-    accountName: "Amazon, Inc",
+    accountName: "Easner Business",
     bankName: "Column Bank",
     accountNumber: "****1234",
     fullAccountNumber: "1234567891234",
@@ -70,7 +70,7 @@ export const mockAccounts: Account[] = [
   {
     id: "acc_eur",
     currency: "EUR",
-    accountName: "Amazon, Inc",
+    accountName: "Easner Business",
     bankName: "Solaris Bank",
     accountNumber: "****3000",
     fullAccountNumber: "DE89370400440532013000",
@@ -84,7 +84,7 @@ export const mockAccounts: Account[] = [
   {
     id: "acc_gbp",
     currency: "GBP",
-    accountName: "Amazon, Inc",
+    accountName: "Easner Business",
     bankName: "ClearBank",
     accountNumber: "****6819",
     fullAccountNumber: "31926819",
@@ -97,7 +97,7 @@ export const mockAccounts: Account[] = [
   {
     id: "acc_ngn",
     currency: "NGN",
-    accountName: "Amazon, Inc",
+    accountName: "Easner Business",
     bankName: "Providus Bank",
     accountNumber: "****3456",
     fullAccountNumber: "1234567893456",
