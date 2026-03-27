@@ -102,6 +102,22 @@ async function ensureOrganizationId(
   return org.id
 }
 
+async function fetchOrganizationProfile(admin: ReturnType<typeof createSupabaseAdmin>, organizationId: string) {
+  const richSelect =
+    "id,name,logo_url,business_type,registration_number,tax_id,base_currency,description,website,support_email,support_phone,address_line1,city,state,postal_code,country"
+  const baseSelect = "id,name,logo_url,business_type,base_currency,description,country"
+  const minimalSelect = "id,name,country"
+
+  const rich = await admin.from("easner_organizations").select(richSelect).eq("id", organizationId).maybeSingle()
+  if (!rich.error && rich.data) return rich.data
+
+  const base = await admin.from("easner_organizations").select(baseSelect).eq("id", organizationId).maybeSingle()
+  if (!base.error && base.data) return base.data
+
+  const minimal = await admin.from("easner_organizations").select(minimalSelect).eq("id", organizationId).maybeSingle()
+  return minimal.data ?? null
+}
+
 export async function GET(request: Request) {
   const user = await getUserFromBearer(request)
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -147,12 +163,7 @@ export async function GET(request: Request) {
   }
 
   if (userRow?.easner_organization_id) {
-    const { data } = await admin
-      .from("easner_organizations")
-      .select("id,name,logo_url,business_type,registration_number,tax_id,base_currency,description,website,support_email,support_phone,address_line1,city,state,postal_code,country")
-      .eq("id", userRow.easner_organization_id)
-      .maybeSingle()
-    org = data
+    org = (await fetchOrganizationProfile(admin, userRow.easner_organization_id)) as typeof org
   }
 
   const onboardingComplete = Boolean(org && org.business_type && org.base_currency && org.description)
@@ -232,7 +243,21 @@ export async function PUT(request: Request) {
   if (country !== null) updates.country = country
 
   const { error } = await admin.from("easner_organizations").update(updates).eq("id", organizationId)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    // Fallback for older schemas that don't yet include all optional settings columns.
+    const minimalUpdates: Record<string, unknown> = {
+      updated_at: updates.updated_at,
+    }
+    if (updates.name !== undefined) minimalUpdates.name = updates.name
+    if (updates.country !== undefined) minimalUpdates.country = updates.country
+    if (updates.logo_url !== undefined) minimalUpdates.logo_url = updates.logo_url
+    if (updates.business_type !== undefined) minimalUpdates.business_type = updates.business_type
+    if (updates.base_currency !== undefined) minimalUpdates.base_currency = updates.base_currency
+    if (updates.description !== undefined) minimalUpdates.description = updates.description
+
+    const retry = await admin.from("easner_organizations").update(minimalUpdates).eq("id", organizationId)
+    if (retry.error) return NextResponse.json({ error: retry.error.message }, { status: 500 })
+  }
 
   return GET(request)
 }
