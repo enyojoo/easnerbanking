@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
 import type { User } from "@supabase/supabase-js"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
+import { getOnboarding } from "@/lib/onboarding-store"
 
 interface AuthContextType {
   user: User | null
@@ -45,6 +46,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       sub.subscription.unsubscribe()
     }
   }, [supabase])
+
+  useEffect(() => {
+    if (!user) return
+
+    const bootstrap = async () => {
+      const { data } = await supabase.auth.getSession()
+      const token = data.session?.access_token
+      if (!token) return
+
+      const onboarding = getOnboarding()
+      const countryCode = onboarding?.countryCode || "US"
+      const role = "business"
+
+      try {
+        await fetch("/api/auth/bootstrap", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ countryCode, role }),
+        })
+      } catch (error) {
+        console.error("auth bootstrap failed", error)
+      }
+    }
+
+    void bootstrap()
+  }, [supabase, user])
 
   const login = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
