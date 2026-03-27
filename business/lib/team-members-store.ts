@@ -1,0 +1,149 @@
+"use client"
+
+import { createSupabaseBrowser } from "@/lib/supabase/browser"
+import { dataCache, CACHE_KEYS } from "@/lib/cache"
+
+export type TeamMember = {
+  id: string
+  membershipId?: string
+  fullName: string
+  email: string
+  role: "Owner" | "Admin" | "Member" | "Viewer"
+  status?: "active" | "invited"
+  isSelf?: boolean
+  initials?: string
+}
+
+type StoreData = {
+  members: TeamMember[]
+  canManageMembers: boolean
+  lastUpdated: number
+}
+
+const CACHE_TTL_MS = 5 * 60 * 1000
+
+function cacheKey(userId: string) {
+  return `team_members_cache_${userId}`
+}
+
+function safeParse<T>(raw: string): T | null {
+  try {
+    return JSON.parse(raw) as T
+  } catch {
+    return null
+  }
+}
+
+class TeamMembersStore {
+  private data: StoreData | null = null
+  private currentUserId: string | null = null
+  private loadingPromise: Promise<StoreData> | null = null
+  private listeners = new Set<() => void>()
+
+  subscribe(cb: () => void) {
+    this.listeners.add(cb)
+    return () => this.listeners.delete(cb)
+  }
+
+  private notify() {
+    this.listeners.forEach((cb) => {
+      try {
+        cb()
+      } catch (e) {
+        console.error("TeamMembersStore listener error:", e)
+      }
+    })
+  }
+
+  getData() {
+    return this.data
+  }
+
+  isFresh(): boolean {
+    if (!this.data) return false
+    return Date.now() - this.data.lastUpdated < CACHE_TTL_MS
+  }
+
+  private loadFromLocalStorage(userId: string): StoreData | null {
+    if (typeof window === "undefined") return null
+    const raw = localStorage.getItem(cacheKey(userId))
+    if (!raw) return null
+    const parsed = safeParse<{ data: StoreData; timestamp: number }>(raw)
+    if (!parsed) return null
+    if (Date.now() - parsed.timestamp > CACHE_TTL_MS) return null
+    return parsed.data
+  }
+
+  private saveToLocalStorage(userId: string, data: StoreData) {
+    if (typeof window === "undefined") return
+    try {
+      localStorage.setItem(cacheKey(userId), JSON.stringify({ data, timestamp: Date.now() }))
+    } catch {
+      // ignore
+    }
+  }
+
+  private async refresh(userId: string): Promise<StoreData> {
+    const supabase = createSupabaseBrowser()
+    const { data } = await supabase.auth.getSession()
+    const token = data.session?.access_token
+    if (!token) throw new Error("No session")
+
+    const res = await fetch("/api/settings/team", { headers: { Authorization: `Bearer ${token}` } })
+    if (!res.ok) throw new Error("Failed to load team members")
+
+    const json = (await res.json()) as { members?: TeamMember[]; canManageMembers?: boolean }
+    const next: StoreData = {
+      members: json.members ?? [],
+      canManageMembers: Boolean(json.canManageMembers),
+      lastUpdated: Date.now(),
+    }
+    this.data = next
+    this.saveToLocalStorage(userId, next)
+    this.notify()
+    return next
+  }
+
+  async initialize(userId: string) {
+    const cached = dataCache.getWithRefresh(CACHE_KEYS.TEAM_MEMBERS(userId), () => this.refresh(userId))
+    if (cached && (!this.data || this.currentUserId !== userId)) {
+      this.data = cached
+      this.currentUserId = userId
+      this.notify()
+    }
+
+    if (this.currentUserId === userId && this.isFresh()) return this.data
+    if (this.loadingPromise && this.currentUserId === userId) return this.loadingPromise
+
+    this.currentUserId = userId
+
+    if (!this.data) {
+      const ls = this.loadFromLocalStorage(userId)
+      if (ls) {
+        this.data = ls
+        dataCache.set(CACHE_KEYS.TEAM_MEMBERS(userId), ls, CACHE_TTL_MS)
+        this.notify()
+      }
+    }
+
+    const refreshFn = async () => {
+      const fresh = await this.refresh(userId)
+      dataCache.set(CACHE_KEYS.TEAM_MEMBERS(userId), fresh, CACHE_TTL_MS)
+      return fresh
+    }
+
+    this.loadingPromise = refreshFn().finally(() => {
+      this.loadingPromise = null
+    })
+
+    return this.loadingPromise
+  }
+
+  invalidate(userId: string) {
+    dataCache.invalidate(CACHE_KEYS.TEAM_MEMBERS(userId))
+    if (this.currentUserId === userId && this.data) this.data.lastUpdated = 0
+  }
+}
+
+export const teamMembersStore = new TeamMembersStore()
+

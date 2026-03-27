@@ -109,6 +109,11 @@ class OfficeDataStore {
     return Date.now() - this.data.lastUpdated < fiveMinutes
   }
 
+  // Public freshness check (used by hooks/pages to avoid flicker)
+  checkDataFreshness(): boolean {
+    return this.isDataFresh()
+  }
+
   private saveToCache() {
     if (typeof window === 'undefined' || !this.data) return
     try {

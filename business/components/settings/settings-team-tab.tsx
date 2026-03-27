@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Users } from "lucide-react"
@@ -9,6 +9,7 @@ import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
+import { teamMembersStore } from "@/lib/team-members-store"
 
 type TeamMember = {
   id: string
@@ -30,54 +31,54 @@ type InviteDraft = {
 export function SettingsTeamTab() {
   const { isLoading, user } = useAuth()
   const supabase = useMemo(() => createSupabaseBrowser(), [])
-  const [loadingMembers, setLoadingMembers] = useState(true)
-  const [members, setMembers] = useState<TeamMember[]>([])
+  const [loadingMembers, setLoadingMembers] = useState(() => {
+    const d = user?.id ? teamMembersStore.getData() : null
+    return !d || d.lastUpdated === 0 || !teamMembersStore.isFresh()
+  })
+  const [members, setMembers] = useState<TeamMember[]>(() => teamMembersStore.getData()?.members ?? [])
   const [inviteOpen, setInviteOpen] = useState(false)
   const [submittingInvites, setSubmittingInvites] = useState(false)
   const [inviteRows, setInviteRows] = useState<InviteDraft[]>([{ fullName: "", email: "", role: "Member" }])
   const [inviteError, setInviteError] = useState("")
   const [membersError, setMembersError] = useState("")
-  const [canManageMembers, setCanManageMembers] = useState(false)
+  const [canManageMembers, setCanManageMembers] = useState(() => Boolean(teamMembersStore.getData()?.canManageMembers))
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const mountedRef = useRef(true)
 
-  const loadMembers = async () => {
+  const loadMembers = useCallback(async () => {
     setLoadingMembers(true)
     setMembersError("")
-    const { data } = await supabase.auth.getSession()
-    const token = data.session?.access_token
-    if (!token) {
+    if (!user?.id) {
       setLoadingMembers(false)
       return
     }
-    const res = await fetch("/api/settings/team", {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (!res.ok) {
-      const json = (await res.json().catch(() => ({ error: "Failed to load team members" }))) as { error?: string }
-      setMembersError(json.error || "Failed to load team members")
+    try {
+      await teamMembersStore.initialize(user.id)
+    } catch (e) {
+      setMembersError(e instanceof Error ? e.message : "Failed to load team members")
+    } finally {
       setLoadingMembers(false)
-      return
     }
-    const json = (await res.json()) as { members?: TeamMember[]; canManageMembers?: boolean }
-    setMembers(json.members ?? [])
-    setCanManageMembers(Boolean(json.canManageMembers))
-    setLoadingMembers(false)
-  }
+  }, [user?.id])
 
   useEffect(() => {
     if (!user?.id) return
-    let active = true
+    mountedRef.current = true
 
-    const safeLoad = async () => {
-      if (!active) return
-      await loadMembers()
-    }
+    const unsubscribe = teamMembersStore.subscribe(() => {
+      if (!mountedRef.current) return
+      const d = teamMembersStore.getData()
+      if (!d) return
+      setMembers(d.members)
+      setCanManageMembers(Boolean(d.canManageMembers))
+    })
 
-    void safeLoad()
+    void loadMembers()
     return () => {
-      active = false
+      mountedRef.current = false
+      unsubscribe()
     }
-  }, [supabase, user?.id])
+  }, [user?.id, loadMembers])
 
   const addInviteRow = () => setInviteRows((prev) => [...prev, { fullName: "", email: "", role: "Member" }])
   const removeInviteRow = (idx: number) =>
@@ -125,6 +126,7 @@ export function SettingsTeamTab() {
       return
     }
 
+    if (user?.id) teamMembersStore.invalidate(user.id)
     await loadMembers()
     setSubmittingInvites(false)
     setInviteRows([{ fullName: "", email: "", role: "Member" }])
@@ -158,6 +160,7 @@ export function SettingsTeamTab() {
       setUpdatingId(null)
       return
     }
+    if (user?.id) teamMembersStore.invalidate(user.id)
     await loadMembers()
     setUpdatingId(null)
   }
@@ -183,6 +186,7 @@ export function SettingsTeamTab() {
       setUpdatingId(null)
       return
     }
+    if (user?.id) teamMembersStore.invalidate(user.id)
     await loadMembers()
     setUpdatingId(null)
   }

@@ -8,6 +8,7 @@ export function useOfficeData() {
   const { user, isAdmin } = useAuth()
   const initialData = officeDataStore.getData()
   const [data, setData] = useState<any>(initialData)
+  // Only treat as loading when there is no renderable snapshot yet (stale cached data still renders).
   const [loading, setLoading] = useState(!initialData)
   const [error, setError] = useState<string | null>(null)
 
@@ -19,7 +20,10 @@ export function useOfficeData() {
         if (!mounted) return
 
         try {
-          if (!initialData) {
+          const existing = officeDataStore.getData()
+          const hasData = Boolean(existing)
+          // Only show loading when we don't have fresh data (prevents flicker)
+          if (!hasData) {
             setLoading(true)
           }
           setError(null)

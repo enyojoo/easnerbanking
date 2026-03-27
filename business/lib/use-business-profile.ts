@@ -1,9 +1,10 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { useAuth } from "@/lib/auth-context"
 import { countries } from "@/lib/countries"
+import { businessProfileStore } from "@/lib/business-profile-store"
 
 export type BusinessProfile = {
   organizationId: string | null
@@ -89,57 +90,71 @@ export async function updateBusinessProfile(payload: {
   })
   if (!res.ok) return null
   const json = (await res.json()) as { profile?: BusinessProfile }
-  if (json.profile) window.dispatchEvent(new Event("business-profile-updated"))
+  if (json.profile) {
+    // invalidate store cache so pages don't flicker but do revalidate
+    // (store will keep last renderable data until fresh arrives)
+    const { data: session } = await supabase.auth.getUser()
+    if (session?.user?.id) businessProfileStore.invalidate(session.user.id)
+    window.dispatchEvent(new Event("business-profile-updated"))
+  }
   return json.profile ?? null
 }
 
 export function useBusinessProfile() {
   const { user } = useAuth()
-  const supabase = useMemo(() => createSupabaseBrowser(), [])
-  const [profile, setProfile] = useState<BusinessProfile>(DEFAULT_PROFILE)
-  const [isLoading, setIsLoading] = useState(true)
+  const [profile, setProfile] = useState<BusinessProfile>(() => businessProfileStore.getData()?.profile ?? DEFAULT_PROFILE)
+  const [isLoading, setIsLoading] = useState(() => {
+    const d = businessProfileStore.getData()
+    return !d || d.lastUpdated === 0 || !businessProfileStore.isFresh()
+  })
+  const mountedRef = useRef(true)
 
   useEffect(() => {
+    mountedRef.current = true
+
     if (!user?.id) {
       setProfile(DEFAULT_PROFILE)
       setIsLoading(false)
       return
     }
 
-    let active = true
-    const loadProfile = async () => {
-      setIsLoading(true)
+    const initialize = async () => {
+      const existing = businessProfileStore.getData()
+      const hasData = Boolean(existing && existing.lastUpdated > 0)
+      const fresh = businessProfileStore.isFresh()
+
+      if (!hasData || !fresh) setIsLoading(true)
+
       try {
-        const { data } = await supabase.auth.getSession()
-        const token = data.session?.access_token
-        if (!token) return
-        const res = await fetch("/api/business/profile", {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (!res.ok) return
-        const json = (await res.json()) as { profile?: BusinessProfile }
-        if (active && json.profile) {
-          setProfile({
-            ...json.profile,
-            countryCode: json.profile.countryCode ?? countryCodeFromName(json.profile.country),
-          })
-        }
+        await businessProfileStore.initialize(user.id)
       } finally {
-        if (active) setIsLoading(false)
+        if (mountedRef.current) setIsLoading(false)
       }
     }
 
+    const unsubscribe = businessProfileStore.subscribe(() => {
+      if (!mountedRef.current) return
+      const d = businessProfileStore.getData()
+      if (!d) return
+      setProfile({
+        ...d.profile,
+        countryCode: d.profile.countryCode ?? countryCodeFromName(d.profile.country),
+      })
+    })
+
     const onUpdate = () => {
-      void loadProfile()
+      if (user.id) businessProfileStore.invalidate(user.id)
+      void initialize()
     }
 
-    void loadProfile()
+    void initialize()
     window.addEventListener("business-profile-updated", onUpdate)
     return () => {
-      active = false
+      mountedRef.current = false
+      unsubscribe()
       window.removeEventListener("business-profile-updated", onUpdate)
     }
-  }, [supabase, user?.id])
+  }, [user?.id])
 
   return {
     ...profile,

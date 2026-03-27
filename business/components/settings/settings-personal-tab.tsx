@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -8,59 +8,58 @@ import { Label } from "@/components/ui/label"
 import { User, Mail, Phone, Calendar, Edit, X, Check, Key, Smartphone } from "lucide-react"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { useAuth } from "@/lib/auth-context"
+import { personalSettingsStore } from "@/lib/personal-settings-store"
 
 export function SettingsPersonalTab() {
   const { user } = useAuth()
   const supabase = useMemo(() => createSupabaseBrowser(), [])
   const [editingSection, setEditingSection] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [formData, setFormData] = useState({
-    fullName: "",
-    email: "",
-    phone: "",
-    dateOfBirth: "",
+  const [loading, setLoading] = useState(() => {
+    const d = user?.id ? personalSettingsStore.getData() : null
+    return !d || d.lastUpdated === 0 || !personalSettingsStore.isFresh()
   })
+  const [formData, setFormData] = useState({
+    fullName: personalSettingsStore.getData()?.personal.fullName ?? "",
+    email: personalSettingsStore.getData()?.personal.email ?? "",
+    phone: personalSettingsStore.getData()?.personal.phone ?? "",
+    dateOfBirth: personalSettingsStore.getData()?.personal.dateOfBirth ?? "",
+  })
+  const mountedRef = useRef(true)
 
   useEffect(() => {
     if (!user?.id) return
-    let active = true
+    mountedRef.current = true
 
-    const load = async () => {
-      setLoading(true)
-      const { data } = await supabase.auth.getSession()
-      const token = data.session?.access_token
-      if (!token) {
-        if (active) setLoading(false)
-        return
+    const initialize = async () => {
+      const existing = personalSettingsStore.getData()
+      const hasData = Boolean(existing && existing.lastUpdated > 0)
+      const fresh = personalSettingsStore.isFresh()
+      if (!hasData || !fresh) setLoading(true)
+      try {
+        await personalSettingsStore.initialize(user.id)
+      } finally {
+        if (mountedRef.current) setLoading(false)
       }
-      const res = await fetch("/api/settings/personal", {
-        headers: { Authorization: `Bearer ${token}` },
+    }
+
+    const unsubscribe = personalSettingsStore.subscribe(() => {
+      if (!mountedRef.current) return
+      const d = personalSettingsStore.getData()
+      if (!d) return
+      setFormData({
+        fullName: d.personal.fullName,
+        email: d.personal.email,
+        phone: d.personal.phone,
+        dateOfBirth: d.personal.dateOfBirth,
       })
-      if (!res.ok) {
-        if (active) setLoading(false)
-        return
-      }
-      const json = (await res.json()) as {
-        personal?: { fullName?: string; email?: string; phone?: string; dateOfBirth?: string }
-      }
-      if (active) {
-        if (json.personal) {
-          setFormData({
-            fullName: json.personal.fullName ?? "",
-            email: json.personal.email ?? "",
-            phone: json.personal.phone ?? "",
-            dateOfBirth: json.personal.dateOfBirth ?? "",
-          })
-        }
-        setLoading(false)
-      }
-    }
+    })
 
-    void load()
+    void initialize()
     return () => {
-      active = false
+      mountedRef.current = false
+      unsubscribe()
     }
-  }, [supabase, user?.id])
+  }, [user?.id])
 
   const handleEdit = (section: string) => setEditingSection(section)
   const handleCancel = () => setEditingSection(null)
@@ -80,6 +79,7 @@ export function SettingsPersonalTab() {
         dateOfBirth: formData.dateOfBirth,
       }),
     })
+    if (user?.id) personalSettingsStore.invalidate(user.id)
     setEditingSection(null)
   }
   const handleInputChange = (field: string, value: string) => {
