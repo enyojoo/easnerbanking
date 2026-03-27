@@ -6,8 +6,17 @@ type UpdateBody = {
   businessName?: string
   businessLogo?: string | null
   businessType?: string
+  registrationNumber?: string
+  taxId?: string
   baseCurrency?: string
   businessDescription?: string
+  website?: string
+  supportEmail?: string
+  supportPhone?: string
+  addressLine1?: string
+  city?: string
+  state?: string
+  postalCode?: string
   countryCode?: string
 }
 
@@ -42,11 +51,38 @@ function defaultOrgName(email: string | undefined, fallbackId: string): string {
   return `Business ${fallbackId.slice(0, 8)}`
 }
 
-async function ensureOrganizationId(admin: ReturnType<typeof createSupabaseAdmin>, userId: string, email?: string) {
-  const { data: userRow } = await admin.from("users").select("easner_organization_id").eq("id", userId).maybeSingle()
+function firstNameFromFullName(fullName: string | null | undefined): string | null {
+  if (!fullName) return null
+  const trimmed = fullName.trim()
+  if (!trimmed) return null
+  return trimmed.split(/\s+/)[0] ?? null
+}
+
+function possessiveBusinessName(firstName: string): string {
+  const clean = firstName.replace(/[^a-zA-Z0-9'-]/g, "").trim()
+  const base = clean || "Owner"
+  return `${base}'s Business`
+}
+
+function ownerNameFromAuthUser(user: { user_metadata?: Record<string, unknown> | null; email?: string | null }) {
+  const meta = user.user_metadata ?? {}
+  const directName = typeof meta.name === "string" ? meta.name.trim() : ""
+  if (directName) return directName
+
+  return user.email ?? "Admin"
+}
+
+async function ensureOrganizationId(
+  admin: ReturnType<typeof createSupabaseAdmin>,
+  userId: string,
+  email?: string,
+  fullName?: string | null,
+) {
+  const { data: userRow } = await admin.from("users").select("easner_organization_id,full_name").eq("id", userId).maybeSingle()
   if (userRow?.easner_organization_id) return userRow.easner_organization_id
 
-  const orgName = defaultOrgName(email, userId)
+  const first = firstNameFromFullName(fullName ?? userRow?.full_name ?? null)
+  const orgName = first ? possessiveBusinessName(first) : defaultOrgName(email, userId)
   const slug = `${slugify(orgName) || `business-${userId.slice(0, 8)}`}-${userId.slice(0, 8)}`
   const { data: org, error } = await admin.from("easner_organizations").insert({ name: orgName, slug }).select("id").single()
   if (error) throw new Error(error.message)
@@ -71,25 +107,23 @@ export async function GET(request: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const admin = createSupabaseAdmin()
-  const { data: userRowWithNames, error: userRowErr } = await admin
+  const { data: userRowWithName, error: userRowErr } = await admin
     .from("users")
-    .select("id,easner_role,easner_organization_id,full_name,first_name,last_name")
+    .select("id,easner_role,easner_organization_id,full_name")
     .eq("id", user.id)
     .maybeSingle()
   const { data: userRowFallback } = userRowErr
     ? await admin.from("users").select("id,easner_role,easner_organization_id").eq("id", user.id).maybeSingle()
     : { data: null as { id: string; easner_role: string | null; easner_organization_id: string | null } | null }
-  const userRow = (userRowWithNames ??
+  const userRow = (userRowWithName ??
     (userRowFallback
-      ? { ...userRowFallback, full_name: null, first_name: null, last_name: null }
+      ? { ...userRowFallback, full_name: null }
       : null)) as
     | {
         id: string
         easner_role: string | null
         easner_organization_id: string | null
         full_name: string | null
-        first_name: string | null
-        last_name: string | null
       }
     | null
 
@@ -98,32 +132,55 @@ export async function GET(request: Request) {
     name: string | null
     logo_url: string | null
     business_type: string | null
+    registration_number: string | null
+    tax_id: string | null
     base_currency: string | null
     description: string | null
+    website: string | null
+    support_email: string | null
+    support_phone: string | null
+    address_line1: string | null
+    city: string | null
+    state: string | null
+    postal_code: string | null
     country: string | null
   }
 
   if (userRow?.easner_organization_id) {
     const { data } = await admin
       .from("easner_organizations")
-      .select("id,name,logo_url,business_type,base_currency,description,country")
+      .select("id,name,logo_url,business_type,registration_number,tax_id,base_currency,description,website,support_email,support_phone,address_line1,city,state,postal_code,country")
       .eq("id", userRow.easner_organization_id)
       .maybeSingle()
     org = data
   }
 
   const onboardingComplete = Boolean(org && org.business_type && org.base_currency && org.description)
-  const ownerName =
-    userRow?.full_name || [userRow?.first_name, userRow?.last_name].filter(Boolean).join(" ").trim() || user.email || "Admin"
+  const ownerNameFromAuth = ownerNameFromAuthUser(user)
+  const ownerName = userRow?.full_name || ownerNameFromAuth
+  const generatedOrgName = (() => {
+    const first = firstNameFromFullName(ownerName)
+    if (first) return possessiveBusinessName(first)
+    return defaultOrgName(user.email, user.id)
+  })()
 
   return NextResponse.json({
     profile: {
       organizationId: org?.id ?? userRow?.easner_organization_id ?? null,
-      name: org?.name ?? defaultOrgName(user.email, user.id),
+      name: org?.name ?? generatedOrgName,
       logoUrl: org?.logo_url ?? null,
       businessType: org?.business_type ?? "Financial Services",
+      registrationNumber: org?.registration_number ?? "",
+      taxId: org?.tax_id ?? "",
       baseCurrency: org?.base_currency ?? "USD",
       description: org?.description ?? "A modern digital banking platform providing seamless financial services.",
+      website: org?.website ?? "",
+      supportEmail: org?.support_email ?? "",
+      supportPhone: org?.support_phone ?? "",
+      addressLine1: org?.address_line1 ?? "",
+      city: org?.city ?? "",
+      state: org?.state ?? "",
+      postalCode: org?.postal_code ?? "",
       country: org?.country ?? null,
       countryCode: countryCodeFromName(org?.country),
       onboardingComplete,
@@ -145,7 +202,12 @@ export async function PUT(request: Request) {
   }
 
   const admin = createSupabaseAdmin()
-  const organizationId = await ensureOrganizationId(admin, user.id, user.email)
+  const organizationId = await ensureOrganizationId(
+    admin,
+    user.id,
+    user.email,
+    typeof user.user_metadata?.name === "string" ? user.user_metadata.name : null,
+  )
 
   const countryCode = normalizeCountryCode(body.countryCode)
   const country = countryNameFromCode(countryCode)
@@ -156,8 +218,17 @@ export async function PUT(request: Request) {
   if (body.businessName !== undefined) updates.name = body.businessName?.trim() || null
   if (body.businessLogo !== undefined) updates.logo_url = body.businessLogo
   if (body.businessType !== undefined) updates.business_type = body.businessType?.trim() || null
+  if (body.registrationNumber !== undefined) updates.registration_number = body.registrationNumber?.trim() || null
+  if (body.taxId !== undefined) updates.tax_id = body.taxId?.trim() || null
   if (body.baseCurrency !== undefined) updates.base_currency = body.baseCurrency?.trim() || null
   if (body.businessDescription !== undefined) updates.description = body.businessDescription?.trim() || null
+  if (body.website !== undefined) updates.website = body.website?.trim() || null
+  if (body.supportEmail !== undefined) updates.support_email = body.supportEmail?.trim() || null
+  if (body.supportPhone !== undefined) updates.support_phone = body.supportPhone?.trim() || null
+  if (body.addressLine1 !== undefined) updates.address_line1 = body.addressLine1?.trim() || null
+  if (body.city !== undefined) updates.city = body.city?.trim() || null
+  if (body.state !== undefined) updates.state = body.state?.trim() || null
+  if (body.postalCode !== undefined) updates.postal_code = body.postalCode?.trim() || null
   if (country !== null) updates.country = country
 
   const { error } = await admin.from("easner_organizations").update(updates).eq("id", organizationId)

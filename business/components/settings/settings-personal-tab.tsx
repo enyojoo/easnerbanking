@@ -1,26 +1,86 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { User, Mail, Phone, Calendar, Edit, X, Check, Key, Smartphone } from "lucide-react"
+import { createSupabaseBrowser } from "@/lib/supabase/browser"
+import { useAuth } from "@/lib/auth-context"
 
 export function SettingsPersonalTab() {
+  const { user } = useAuth()
+  const supabase = useMemo(() => createSupabaseBrowser(), [])
   const [editingSection, setEditingSection] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
   const [formData, setFormData] = useState({
-    firstName: "John",
-    lastName: "Doe",
-    email: "john.doe@example.com",
-    phone: "+1 (555) 123-4567",
-    dateOfBirth: "1990-01-01",
+    fullName: "",
+    email: "",
+    phone: "",
+    dateOfBirth: "",
   })
+
+  useEffect(() => {
+    if (!user?.id) return
+    let active = true
+
+    const load = async () => {
+      setLoading(true)
+      const { data } = await supabase.auth.getSession()
+      const token = data.session?.access_token
+      if (!token) {
+        if (active) setLoading(false)
+        return
+      }
+      const res = await fetch("/api/settings/personal", {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        if (active) setLoading(false)
+        return
+      }
+      const json = (await res.json()) as {
+        personal?: { fullName?: string; email?: string; phone?: string; dateOfBirth?: string }
+      }
+      if (active) {
+        if (json.personal) {
+          setFormData({
+            fullName: json.personal.fullName ?? "",
+            email: json.personal.email ?? "",
+            phone: json.personal.phone ?? "",
+            dateOfBirth: json.personal.dateOfBirth ?? "",
+          })
+        }
+        setLoading(false)
+      }
+    }
+
+    void load()
+    return () => {
+      active = false
+    }
+  }, [supabase, user?.id])
 
   const handleEdit = (section: string) => setEditingSection(section)
   const handleCancel = () => setEditingSection(null)
-  const handleSave = (section: string) => {
-    console.log(`Saving ${section}:`, formData)
+  const handleSave = async (section: string) => {
+    const { data } = await supabase.auth.getSession()
+    const token = data.session?.access_token
+    if (!token) return
+    await fetch("/api/settings/personal", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        fullName: formData.fullName,
+        email: formData.email,
+        phone: formData.phone,
+        dateOfBirth: formData.dateOfBirth,
+      }),
+    })
     setEditingSection(null)
   }
   const handleInputChange = (field: string, value: string) => {
@@ -29,6 +89,7 @@ export function SettingsPersonalTab() {
 
   return (
     <div className="space-y-6">
+      {loading ? <div className="h-24 animate-pulse rounded-md bg-muted" /> : null}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -42,7 +103,7 @@ export function SettingsPersonalTab() {
                   <X className="h-4 w-4 mr-1" />
                   Cancel
                 </Button>
-                <Button size="sm" onClick={() => handleSave("personal")}>
+                <Button size="sm" onClick={() => void handleSave("personal")}>
                   <Check className="h-4 w-4 mr-1" />
                   Save
                 </Button>
@@ -56,25 +117,14 @@ export function SettingsPersonalTab() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="firstName">First Name</Label>
-              <Input
-                id="firstName"
-                value={formData.firstName}
-                onChange={(e) => handleInputChange("firstName", e.target.value)}
-                disabled={editingSection !== "personal"}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="lastName">Last Name</Label>
-              <Input
-                id="lastName"
-                value={formData.lastName}
-                onChange={(e) => handleInputChange("lastName", e.target.value)}
-                disabled={editingSection !== "personal"}
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="fullName">Full Name</Label>
+            <Input
+              id="fullName"
+              value={formData.fullName}
+              onChange={(e) => handleInputChange("fullName", e.target.value)}
+              disabled={editingSection !== "personal"}
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="email">Email Address</Label>

@@ -33,15 +33,23 @@ function defaultOrgName(email: string | undefined, fallbackId: string): string {
   return `Business ${fallbackId.slice(0, 8)}`
 }
 
-function parseName(fullName: string | null | undefined): { firstName: string | null; lastName: string | null; fullName: string | null } {
+function firstNameFromFullName(fullName: string | null | undefined): string | null {
+  if (!fullName) return null
+  const trimmed = fullName.trim()
+  if (!trimmed) return null
+  return trimmed.split(/\s+/)[0] ?? null
+}
+
+function possessiveBusinessName(firstName: string): string {
+  const clean = firstName.replace(/[^a-zA-Z0-9'-]/g, "").trim()
+  const base = clean || "Owner"
+  return `${base}'s Business`
+}
+
+function parseName(fullName: string | null | undefined): { fullName: string | null } {
   const trimmed = typeof fullName === "string" ? fullName.trim() : ""
-  if (!trimmed) return { firstName: null, lastName: null, fullName: null }
-  const parts = trimmed.split(/\s+/)
-  return {
-    firstName: parts[0] ?? null,
-    lastName: parts.length > 1 ? parts.slice(1).join(" ") : null,
-    fullName: trimmed,
-  }
+  if (!trimmed) return { fullName: null }
+  return { fullName: trimmed }
 }
 
 export async function POST(request: Request) {
@@ -72,8 +80,6 @@ export async function POST(request: Request) {
   const baseUserPayload = {
     id: user.id,
     email: user.email ?? null,
-    first_name: name.firstName,
-    last_name: name.lastName,
     full_name: name.fullName,
     updated_at: new Date().toISOString(),
   }
@@ -105,7 +111,8 @@ export async function POST(request: Request) {
   let organizationId = userRow?.easner_organization_id ?? null
 
   if (!organizationId) {
-    const orgName = defaultOrgName(user.email, user.id)
+    const first = firstNameFromFullName(name.fullName)
+    const orgName = first ? possessiveBusinessName(first) : defaultOrgName(user.email, user.id)
     const slugBase = slugify(orgName) || `business-${user.id.slice(0, 8)}`
     const orgPayloadWithCountry = {
       name: orgName,
@@ -142,8 +149,6 @@ export async function POST(request: Request) {
   const userLinkPayload = {
     id: user.id,
     email: user.email ?? null,
-    first_name: name.firstName,
-    last_name: name.lastName,
     full_name: name.fullName,
     easner_organization_id: organizationId,
     updated_at: new Date().toISOString(),

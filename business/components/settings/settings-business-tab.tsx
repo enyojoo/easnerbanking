@@ -9,22 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Building2, Globe, FileText, MapPin, Edit, X, Check, ChevronDown } from "lucide-react"
-import { businessInfo } from "@/lib/business-info"
-import { getOnboarding, mergeOnboarding } from "@/lib/onboarding-store"
 import { BusinessLogoField } from "@/components/business-logo-field"
 import { countries } from "@/lib/countries"
 import { getKybFields } from "@/lib/kyb-by-country"
+import { updateBusinessProfile, useBusinessProfile } from "@/lib/use-business-profile"
 
 function getCountryFromCode(code: string) {
   return countries.find((c) => c.code === code)
-}
-
-function getInitialCountryCode(): string {
-  if (typeof window === "undefined") return "US"
-  const onboarding = getOnboarding()
-  if (onboarding?.countryCode) return onboarding.countryCode
-  const match = countries.find((c) => c.name === businessInfo.country)
-  return match?.code ?? "US"
 }
 
 type BusinessSettingsForm = {
@@ -46,63 +37,90 @@ type BusinessSettingsForm = {
 }
 
 export function SettingsBusinessTab() {
+  const profile = useBusinessProfile()
   const [countryCode, setCountryCode] = useState("US")
   const [countryOpen, setCountryOpen] = useState(false)
   const [editingSection, setEditingSection] = useState<string | null>(null)
   const [formData, setFormData] = useState<BusinessSettingsForm>({
-    businessName: businessInfo.name,
+    businessName: "",
     businessLogo: null,
     businessType: "Financial Services",
     registrationNumber: "123456789",
     taxId: "12-3456789",
-    website: businessInfo.website,
-    email: businessInfo.email,
-    phone: businessInfo.phone,
-    address: businessInfo.address,
-    city: businessInfo.city,
-    state: businessInfo.state,
-    zipCode: businessInfo.zipCode,
-    country: businessInfo.country,
+    website: "",
+    email: "",
+    phone: "",
+    address: "",
+    city: "",
+    state: "",
+    zipCode: "",
+    country: "",
     baseCurrency: "USD",
     description:
       "A modern digital banking platform providing seamless financial services.",
   })
 
   useEffect(() => {
-    const code = getInitialCountryCode()
+    if (profile.isLoading) return
+    const code = profile.countryCode ?? "US"
     setCountryCode(code)
     const c = getCountryFromCode(code)
     if (c) setFormData((prev) => ({ ...prev, country: c.name }))
-    const o = getOnboarding()
-    if (o) {
-      setFormData((prev) => ({
-        ...prev,
-        businessName: o.businessName ?? prev.businessName,
-        businessLogo: o.businessLogo !== undefined ? o.businessLogo : prev.businessLogo,
-        businessType: o.businessType ?? prev.businessType,
-        baseCurrency: o.baseCurrency ?? prev.baseCurrency,
-        description: o.businessDescription ?? prev.description,
-      }))
-    }
-  }, [])
+    setFormData((prev) => ({
+      ...prev,
+      businessName: profile.name || prev.businessName,
+      businessLogo: profile.logoUrl ?? prev.businessLogo,
+      businessType: profile.businessType || prev.businessType,
+      registrationNumber: profile.registrationNumber || prev.registrationNumber,
+      taxId: profile.taxId || prev.taxId,
+      baseCurrency: profile.baseCurrency || prev.baseCurrency,
+      description: profile.description || prev.description,
+      website: profile.website || prev.website,
+      email: profile.supportEmail || prev.email,
+      phone: profile.supportPhone || prev.phone,
+      address: profile.addressLine1 || prev.address,
+      city: profile.city || prev.city,
+      state: profile.state || prev.state,
+      zipCode: profile.postalCode || prev.zipCode,
+      country: profile.country || prev.country,
+    }))
+  }, [profile])
 
   const handleEdit = (section: string) => setEditingSection(section)
   const handleCancel = () => setEditingSection(null)
-  const handleSave = (section: string) => {
-    console.log(`Saving ${section}:`, formData)
+  const handleSave = async (section: string) => {
     if (section === "business") {
-      mergeOnboarding({
+      await updateBusinessProfile({
         businessName: formData.businessName,
         businessLogo: formData.businessLogo,
         businessType: formData.businessType,
+        registrationNumber: formData.registrationNumber,
+        taxId: formData.taxId,
         baseCurrency: formData.baseCurrency,
         businessDescription: formData.description,
       })
     }
     if (section === "legal") {
-      mergeOnboarding({
+      await updateBusinessProfile({
         countryCode,
-        businessName: formData.businessName,
+        registrationNumber: formData.registrationNumber,
+        taxId: formData.taxId,
+      })
+    }
+    if (section === "address") {
+      await updateBusinessProfile({
+        addressLine1: formData.address,
+        city: formData.city,
+        state: formData.state,
+        postalCode: formData.zipCode,
+        countryCode,
+      })
+    }
+    if (section === "public") {
+      await updateBusinessProfile({
+        website: formData.website,
+        supportEmail: formData.email,
+        supportPhone: formData.phone,
       })
     }
     setEditingSection(null)
@@ -136,7 +154,7 @@ export function SettingsBusinessTab() {
                   <X className="h-4 w-4 mr-1" />
                   Cancel
                 </Button>
-                <Button size="sm" onClick={() => handleSave("business")}>
+                <Button size="sm" onClick={() => void handleSave("business")}>
                   <Check className="h-4 w-4 mr-1" />
                   Save
                 </Button>
@@ -227,7 +245,7 @@ export function SettingsBusinessTab() {
                   <X className="h-4 w-4 mr-1" />
                   Cancel
                 </Button>
-                <Button size="sm" onClick={() => handleSave("legal")}>
+                <Button size="sm" onClick={() => void handleSave("legal")}>
                   <Check className="h-4 w-4 mr-1" />
                   Save
                 </Button>
@@ -327,7 +345,7 @@ export function SettingsBusinessTab() {
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <MapPin className="h-5 w-5" />
-              Address Information
+              Registered Address
             </CardTitle>
             {editingSection === "address" ? (
               <div className="flex items-center gap-2">
@@ -335,7 +353,7 @@ export function SettingsBusinessTab() {
                   <X className="h-4 w-4 mr-1" />
                   Cancel
                 </Button>
-                <Button size="sm" onClick={() => handleSave("address")}>
+                <Button size="sm" onClick={() => void handleSave("address")}>
                   <Check className="h-4 w-4 mr-1" />
                   Save
                 </Button>
@@ -387,15 +405,6 @@ export function SettingsBusinessTab() {
               />
             </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="country">Country</Label>
-            <Input
-              id="country"
-              value={formData.country}
-              onChange={(e) => handleInputChange("country", e.target.value)}
-              disabled={editingSection !== "address"}
-            />
-          </div>
         </CardContent>
       </Card>
 
@@ -412,7 +421,7 @@ export function SettingsBusinessTab() {
                   <X className="h-4 w-4 mr-1" />
                   Cancel
                 </Button>
-                <Button size="sm" onClick={() => handleSave("public")}>
+                <Button size="sm" onClick={() => void handleSave("public")}>
                   <Check className="h-4 w-4 mr-1" />
                   Save
                 </Button>

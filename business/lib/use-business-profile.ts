@@ -11,8 +11,17 @@ export type BusinessProfile = {
   name: string
   logoUrl: string | null
   businessType: string
+  registrationNumber: string
+  taxId: string
   baseCurrency: string
   description: string
+  website: string
+  supportEmail: string
+  supportPhone: string
+  addressLine1: string
+  city: string
+  state: string
+  postalCode: string
   country: string | null
   countryCode: string | null
   onboardingComplete: boolean
@@ -25,8 +34,17 @@ const DEFAULT_PROFILE: BusinessProfile = {
   name: businessInfo.name,
   logoUrl: null,
   businessType: "Financial Services",
+  registrationNumber: "",
+  taxId: "",
   baseCurrency: "USD",
   description: "A modern digital banking platform providing seamless financial services.",
+  website: "",
+  supportEmail: "",
+  supportPhone: "",
+  addressLine1: "",
+  city: "",
+  state: "",
+  postalCode: "",
   country: businessInfo.country,
   countryCode: "US",
   onboardingComplete: true,
@@ -44,8 +62,17 @@ export async function updateBusinessProfile(payload: {
   businessName?: string
   businessLogo?: string | null
   businessType?: string
+  registrationNumber?: string
+  taxId?: string
   baseCurrency?: string
   businessDescription?: string
+  website?: string
+  supportEmail?: string
+  supportPhone?: string
+  addressLine1?: string
+  city?: string
+  state?: string
+  postalCode?: string
   countryCode?: string
 }) {
   const supabase = createSupabaseBrowser()
