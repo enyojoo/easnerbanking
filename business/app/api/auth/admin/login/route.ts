@@ -7,9 +7,9 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
  */
 export async function POST(request: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!url || !anon) {
-    return NextResponse.json({ error: "Server misconfigured (Supabase URL/anon key)" }, { status: 500 })
+  const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+  if (!url || !publishableKey) {
+    return NextResponse.json({ error: "Server misconfigured (Supabase URL/publishable key)" }, { status: 500 })
   }
 
   let body: { email?: string; password?: string }
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Email and password required" }, { status: 400 })
   }
 
-  const supabase = createClient(url, anon)
+  const supabase = createClient(url, publishableKey)
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
   if (error || !data.session) {
     return NextResponse.json({ error: error?.message || "Invalid credentials" }, { status: 401 })

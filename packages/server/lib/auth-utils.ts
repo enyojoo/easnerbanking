@@ -12,12 +12,12 @@ export interface AuthenticatedUser {
 
 /**
  * Get authenticated user from request - uses same pattern as admin-auth-utils
- * First gets user from session using anon key, then checks users/admin_users with service role
+ * First gets user from session using the publishable key, then checks users/admin_users with service role
  */
 export async function getAuthenticatedUser(request: NextRequest): Promise<AuthenticatedUser | null> {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    const supabasePublishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
     
     // Get access token from cookies (same as admin-auth-utils)
     const token = getAccessTokenFromRequest(request)
@@ -31,8 +31,8 @@ export async function getAuthenticatedUser(request: NextRequest): Promise<Authen
       return null
     }
 
-    // Create anon client to verify token and get user (same as admin-auth-utils)
-    const anonClient = createClient(supabaseUrl, supabaseAnonKey)
+    // Create client with publishable key to verify token and get user (same as admin-auth-utils)
+    const anonClient = createClient(supabaseUrl, supabasePublishableKey)
     const { data: { user }, error: userError } = await anonClient.auth.getUser(token)
     
     if (userError || !user) {

@@ -3,10 +3,11 @@ import * as SecureStore from 'expo-secure-store'
 import Constants from 'expo-constants'
 
 const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl || process.env.EXPO_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = Constants.expoConfig?.extra?.supabaseAnonKey || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!
+const supabasePublishableKey =
+  Constants.expoConfig?.extra?.supabasePublishableKey ||
+  process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
 
-
-if (!supabaseUrl || !supabaseAnonKey) {
+if (!supabaseUrl || !supabasePublishableKey) {
   throw new Error('Missing Supabase environment variables')
 }
 
@@ -91,7 +92,7 @@ const ExpoSecureStoreAdapter = {
 }
 
 // Client-side Supabase client (singleton pattern)
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
   auth: {
     storage: ExpoSecureStoreAdapter,
     persistSession: true,

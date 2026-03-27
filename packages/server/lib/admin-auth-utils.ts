@@ -13,12 +13,12 @@ export interface AdminUser {
 
 /**
  * Get admin user from request - checks admin_users table
- * First gets user from session using anon key, then checks admin_users with service role
+ * First gets user from session using the publishable key, then checks admin_users with service role
  */
 export async function getAdminUser(request: NextRequest): Promise<AdminUser | null> {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    const supabasePublishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
     
     // Get access token from cookies
     const token = getAccessTokenFromRequest(request)
@@ -30,8 +30,8 @@ export async function getAdminUser(request: NextRequest): Promise<AdminUser | nu
       return null
     }
 
-    // Create anon client to verify token and get user
-    const anonClient = createClient(supabaseUrl, supabaseAnonKey)
+    // Create client with publishable key to verify token and get user
+    const anonClient = createClient(supabaseUrl, supabasePublishableKey)
     const { data: { user }, error: userError } = await anonClient.auth.getUser(token)
     
     if (userError || !user) {

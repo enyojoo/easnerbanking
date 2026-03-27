@@ -56,11 +56,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
           id: regularUser.id,
           email: regularUser.email,
           isAdmin: false,
-          // Noah KYC fields at top level for easier access
-          noah_kyc_status: regularUser.noah_kyc_status,
-          noah_customer_id: regularUser.noah_customer_id,
-          noah_kyc_rejection_reasons: regularUser.noah_kyc_rejection_reasons,
-          noah_signed_agreement_id: regularUser.noah_signed_agreement_id,
+          // Bridge KYC fields at top level for easier access
+          bridge_kyc_status: regularUser.bridge_kyc_status,
+          bridge_customer_id: regularUser.bridge_customer_id,
+          bridge_kyc_rejection_reasons: regularUser.bridge_kyc_rejection_reasons,
+          bridge_endorsements: regularUser.bridge_endorsements,
+          bridge_signed_agreement_id: regularUser.bridge_signed_agreement_id,
           email_confirmed_at: emailConfirmedAt,
           profile: {
             id: regularUser.id,
@@ -73,11 +74,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
             easetag: regularUser.easetag,
             date_of_birth: regularUser.date_of_birth,
             status: regularUser.status,
-            // verification_status removed - use noah_kyc_status for KYC, email_confirmed_at for email verification
-            noah_kyc_status: regularUser.noah_kyc_status,
-            noah_customer_id: regularUser.noah_customer_id,
-            noah_kyc_rejection_reasons: regularUser.noah_kyc_rejection_reasons,
-            noah_signed_agreement_id: regularUser.noah_signed_agreement_id,
+            // verification_status removed - use bridge_kyc_status for KYC, email_confirmed_at for email verification
+            bridge_kyc_status: regularUser.bridge_kyc_status,
+            bridge_customer_id: regularUser.bridge_customer_id,
+            bridge_kyc_rejection_reasons: regularUser.bridge_kyc_rejection_reasons,
+            bridge_endorsements: regularUser.bridge_endorsements,
+            bridge_signed_agreement_id: regularUser.bridge_signed_agreement_id,
             created_at: regularUser.created_at,
             updated_at: regularUser.updated_at,
           } as User,
@@ -141,7 +143,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             phone: session.user.phone || undefined,
             base_currency: session.user.user_metadata?.base_currency || 'NGN',
             status: 'active',
-            // verification_status removed - use noah_kyc_status for KYC, email_confirmed_at for email verification
+            // verification_status removed - use bridge_kyc_status for KYC, email_confirmed_at for email verification
             created_at: session.user.created_at,
             updated_at: session.user.updated_at || session.user.created_at
           }
@@ -182,7 +184,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             phone: session.user.phone || undefined,
             base_currency: session.user.user_metadata?.base_currency || 'NGN',
             status: 'active',
-            // verification_status removed - use noah_kyc_status for KYC, email_confirmed_at for email verification
+            // verification_status removed - use bridge_kyc_status for KYC, email_confirmed_at for email verification
             created_at: session.user.created_at,
             updated_at: session.user.updated_at || session.user.created_at
           }
