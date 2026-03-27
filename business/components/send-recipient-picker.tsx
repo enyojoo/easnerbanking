@@ -74,7 +74,7 @@ export function SendRecipientPicker({
       <button
         type="button"
         onClick={() => setIsPickerOpen(true)}
-        className="flex w-full items-center justify-between rounded-lg border border-input bg-background px-4 py-3 text-left transition-colors hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+        className="flex w-full items-center justify-between rounded-lg border border-input bg-background px-4 py-3 text-left transition-colors hover:bg-muted/50 focus:outline-none focus:ring-0 focus:ring-offset-0 focus:border-ring"
       >
         {selected ? (
           <div className="flex items-center gap-3">

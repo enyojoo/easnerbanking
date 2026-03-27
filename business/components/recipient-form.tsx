@@ -227,7 +227,7 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
           </label>
           <Popover open={countryOpen} onOpenChange={setCountryOpen}>
             <PopoverTrigger asChild>
-              <button className={`flex h-12 w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${errors.country ? "border-red-500" : ""}`}>
+              <button className={`flex h-12 w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus:outline-none focus:ring-0 focus:ring-offset-0 focus:border-ring disabled:cursor-not-allowed disabled:opacity-50 transition-[border-color] ${errors.country ? "border-red-500" : ""}`}>
                 {selectedCountry ? (
                   <div className="flex items-center gap-2">
                     <CountryFlag code={selectedCountry.code} size={22} />

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,27 +14,41 @@ export function SettingsPersonalTab() {
   const { user } = useAuth()
   const supabase = useMemo(() => createSupabaseBrowser(), [])
   const [editingSection, setEditingSection] = useState<string | null>(null)
-  const [loading, setLoading] = useState(() => {
-    const d = user?.id ? personalSettingsStore.getData() : null
-    return !d || d.lastUpdated === 0 || !personalSettingsStore.isFresh()
-  })
+  const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
-    fullName: personalSettingsStore.getData()?.personal.fullName ?? "",
-    email: personalSettingsStore.getData()?.personal.email ?? "",
-    phone: personalSettingsStore.getData()?.personal.phone ?? "",
-    dateOfBirth: personalSettingsStore.getData()?.personal.dateOfBirth ?? "",
+    fullName: "",
+    email: "",
+    phone: "",
+    dateOfBirth: "",
   })
   const mountedRef = useRef(true)
+
+  useLayoutEffect(() => {
+    if (!user?.id) {
+      setFormData({ fullName: "", email: "", phone: "", dateOfBirth: "" })
+      setLoading(false)
+      return
+    }
+    personalSettingsStore.hydrateSync(user.id)
+    const d = personalSettingsStore.getData()
+    if (d) {
+      setFormData({
+        fullName: d.personal.fullName,
+        email: d.personal.email,
+        phone: d.personal.phone,
+        dateOfBirth: d.personal.dateOfBirth,
+      })
+      setLoading(false)
+    } else {
+      setLoading(true)
+    }
+  }, [user?.id])
 
   useEffect(() => {
     if (!user?.id) return
     mountedRef.current = true
 
     const initialize = async () => {
-      const existing = personalSettingsStore.getData()
-      const hasData = Boolean(existing && existing.lastUpdated > 0)
-      const fresh = personalSettingsStore.isFresh()
-      if (!hasData || !fresh) setLoading(true)
       try {
         await personalSettingsStore.initialize(user.id)
       } finally {

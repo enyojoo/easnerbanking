@@ -16,6 +16,7 @@ type StoreData = {
 }
 
 const CACHE_TTL_MS = 5 * 60 * 1000
+const LS_DISPLAY_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 
 function cacheKey(userId: string) {
   return `personal_settings_cache_${userId}`
@@ -65,7 +66,7 @@ class PersonalSettingsStore {
     if (!raw) return null
     const parsed = safeParse<{ data: StoreData; timestamp: number }>(raw)
     if (!parsed) return null
-    if (Date.now() - parsed.timestamp > CACHE_TTL_MS) return null
+    if (Date.now() - parsed.timestamp > LS_DISPLAY_MAX_AGE_MS) return null
     return parsed.data
   }
 
@@ -106,36 +107,41 @@ class PersonalSettingsStore {
   }
 
   async initialize(userId: string) {
-    const cached = dataCache.getWithRefresh(CACHE_KEYS.PERSONAL_SETTINGS(userId), () => this.refresh(userId))
-    if (cached && (!this.data || this.currentUserId !== userId)) {
-      this.data = cached
-      this.currentUserId = userId
-      this.notify()
+    this.hydrateSync(userId)
+
+    if (this.data && this.isFresh()) {
+      return this.data
     }
 
-    if (this.currentUserId === userId && this.isFresh()) return this.data
-    if (this.loadingPromise && this.currentUserId === userId) return this.loadingPromise
-
-    this.currentUserId = userId
-
-    if (!this.data) {
-      const ls = this.loadFromLocalStorage(userId)
-      if (ls) {
-        this.data = ls
-        dataCache.set(CACHE_KEYS.PERSONAL_SETTINGS(userId), ls, CACHE_TTL_MS)
-        this.notify()
+    if (this.data && !this.isFresh()) {
+      if (!this.loadingPromise) {
+        this.loadingPromise = this.refresh(userId)
+          .then((fresh) => {
+            dataCache.set(CACHE_KEYS.PERSONAL_SETTINGS(userId), fresh, CACHE_TTL_MS)
+            return fresh
+          })
+          .catch((err) => {
+            console.error("Personal settings background refresh failed:", err)
+          })
+          .finally(() => {
+            this.loadingPromise = null
+          })
       }
+      return this.data
     }
 
-    const refreshFn = async () => {
-      const fresh = await this.refresh(userId)
-      dataCache.set(CACHE_KEYS.PERSONAL_SETTINGS(userId), fresh, CACHE_TTL_MS)
-      return fresh
+    if (this.loadingPromise && this.currentUserId === userId) {
+      return this.loadingPromise
     }
 
-    this.loadingPromise = refreshFn().finally(() => {
-      this.loadingPromise = null
-    })
+    this.loadingPromise = this.refresh(userId)
+      .then((fresh) => {
+        dataCache.set(CACHE_KEYS.PERSONAL_SETTINGS(userId), fresh, CACHE_TTL_MS)
+        return fresh
+      })
+      .finally(() => {
+        this.loadingPromise = null
+      })
 
     return this.loadingPromise
   }
@@ -143,6 +149,21 @@ class PersonalSettingsStore {
   invalidate(userId: string) {
     dataCache.invalidate(CACHE_KEYS.PERSONAL_SETTINGS(userId))
     if (this.currentUserId === userId && this.data) this.data.lastUpdated = 0
+  }
+
+  hydrateSync(userId: string): void {
+    if (typeof window === "undefined" || !userId) return
+    if (this.currentUserId !== userId) {
+      this.data = null
+    }
+    this.currentUserId = userId
+    if (this.data) return
+    const ls = this.loadFromLocalStorage(userId)
+    if (ls) {
+      this.data = ls
+      dataCache.set(CACHE_KEYS.PERSONAL_SETTINGS(userId), ls, CACHE_TTL_MS)
+      this.notify()
+    }
   }
 }
 

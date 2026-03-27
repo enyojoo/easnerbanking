@@ -9,7 +9,11 @@ type StoreData = {
   lastUpdated: number
 }
 
+/** After this age we still show cached profile in the UI but revalidate in the background */
 const CACHE_TTL_MS = 5 * 60 * 1000
+
+/** Drop localStorage snapshots older than this (avoid stale forever) */
+const LS_DISPLAY_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 
 function cacheKey(userId: string) {
   return `business_profile_cache_${userId}`
@@ -60,7 +64,7 @@ class BusinessProfileStore {
     const parsed = safeParse<{ data: StoreData; timestamp: number }>(raw)
     if (!parsed) return null
     const age = Date.now() - parsed.timestamp
-    if (age > CACHE_TTL_MS) return null
+    if (age > LS_DISPLAY_MAX_AGE_MS) return null
     return parsed.data
   }
 
@@ -93,45 +97,41 @@ class BusinessProfileStore {
   }
 
   async initialize(userId: string) {
-    // Seed from memory cache if available (SWR behavior).
-    const cached = dataCache.getWithRefresh(CACHE_KEYS.BUSINESS_PROFILE(userId), () => this.refresh(userId))
-    if (cached && (!this.data || this.currentUserId !== userId)) {
-      this.data = cached
-      this.currentUserId = userId
-      this.notify()
-    }
+    this.hydrateSync(userId)
 
-    // Fresh in-memory data for the same user: return immediately.
-    if (this.currentUserId === userId && this.isFresh()) {
+    if (this.data && this.isFresh()) {
       return this.data
     }
 
-    // Dedupe concurrent loads for the same user.
+    if (this.data && !this.isFresh()) {
+      if (!this.loadingPromise) {
+        this.loadingPromise = this.refresh(userId)
+          .then((fresh) => {
+            dataCache.set(CACHE_KEYS.BUSINESS_PROFILE(userId), fresh, CACHE_TTL_MS)
+            return fresh
+          })
+          .catch((err) => {
+            console.error("Business profile background refresh failed:", err)
+          })
+          .finally(() => {
+            this.loadingPromise = null
+          })
+      }
+      return this.data
+    }
+
     if (this.loadingPromise && this.currentUserId === userId) {
       return this.loadingPromise
     }
 
-    this.currentUserId = userId
-
-    // Seed from localStorage instantly (stale OK) before fetching.
-    if (!this.data) {
-      const ls = this.loadFromLocalStorage(userId)
-      if (ls) {
-        this.data = ls
-        dataCache.set(CACHE_KEYS.BUSINESS_PROFILE(userId), ls, CACHE_TTL_MS)
-        this.notify()
-      }
-    }
-
-    const refreshFn = async () => {
-      const fresh = await this.refresh(userId)
-      dataCache.set(CACHE_KEYS.BUSINESS_PROFILE(userId), fresh, CACHE_TTL_MS)
-      return fresh
-    }
-
-    this.loadingPromise = refreshFn().finally(() => {
-      this.loadingPromise = null
-    })
+    this.loadingPromise = this.refresh(userId)
+      .then((fresh) => {
+        dataCache.set(CACHE_KEYS.BUSINESS_PROFILE(userId), fresh, CACHE_TTL_MS)
+        return fresh
+      })
+      .finally(() => {
+        this.loadingPromise = null
+      })
 
     return this.loadingPromise
   }
@@ -143,6 +143,26 @@ class BusinessProfileStore {
       if (this.data) this.data.lastUpdated = 0
     }
   }
+
+  /**
+   * Synchronously restore profile from localStorage before paint (full reload / new tab).
+   * Safe to call multiple times.
+   */
+  hydrateSync(userId: string): void {
+    if (typeof window === "undefined" || !userId) return
+    if (this.currentUserId !== userId) {
+      this.data = null
+    }
+    this.currentUserId = userId
+    if (this.data) return
+    const ls = this.loadFromLocalStorage(userId)
+    if (ls) {
+      this.data = ls
+      dataCache.set(CACHE_KEYS.BUSINESS_PROFILE(userId), ls, CACHE_TTL_MS)
+      this.notify()
+    }
+  }
+
 }
 
 export const businessProfileStore = new BusinessProfileStore()

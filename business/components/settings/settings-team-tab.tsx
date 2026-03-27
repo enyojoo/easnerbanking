@@ -1,9 +1,9 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Users } from "lucide-react"
+import { Trash2, Users } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -28,24 +28,28 @@ type InviteDraft = {
   role: "Admin" | "Member" | "Viewer"
 }
 
+/** Membership row id for API calls; invited rows may omit `membershipId` in cached payloads but `id` is the row id when `user_id` is null. */
+function membershipIdForRow(member: TeamMember): string | undefined {
+  if (member.membershipId) return member.membershipId
+  if (member.status === "invited" && member.id) return member.id
+  return undefined
+}
+
 export function SettingsTeamTab() {
   const { isLoading, user } = useAuth()
   const supabase = useMemo(() => createSupabaseBrowser(), [])
-  const [loadingMembers, setLoadingMembers] = useState(() => {
-    const d = user?.id ? teamMembersStore.getData() : null
-    return !d || d.lastUpdated === 0 || !teamMembersStore.isFresh()
-  })
-  const [members, setMembers] = useState<TeamMember[]>(() => teamMembersStore.getData()?.members ?? [])
+  const [loadingMembers, setLoadingMembers] = useState(false)
+  const [members, setMembers] = useState<TeamMember[]>([])
   const [inviteOpen, setInviteOpen] = useState(false)
   const [submittingInvites, setSubmittingInvites] = useState(false)
   const [inviteRows, setInviteRows] = useState<InviteDraft[]>([{ fullName: "", email: "", role: "Member" }])
   const [inviteError, setInviteError] = useState("")
   const [membersError, setMembersError] = useState("")
-  const [canManageMembers, setCanManageMembers] = useState(() => Boolean(teamMembersStore.getData()?.canManageMembers))
+  const [canManageMembers, setCanManageMembers] = useState(false)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const mountedRef = useRef(true)
 
-  const loadMembers = useCallback(async () => {
+  const reloadTeamFromServer = useCallback(async () => {
     setLoadingMembers(true)
     setMembersError("")
     if (!user?.id) {
@@ -61,6 +65,24 @@ export function SettingsTeamTab() {
     }
   }, [user?.id])
 
+  useLayoutEffect(() => {
+    if (!user?.id) {
+      setMembers([])
+      setCanManageMembers(false)
+      setLoadingMembers(false)
+      return
+    }
+    teamMembersStore.hydrateSync(user.id)
+    const d = teamMembersStore.getData()
+    if (d) {
+      setMembers(d.members)
+      setCanManageMembers(Boolean(d.canManageMembers))
+      setLoadingMembers(false)
+    } else {
+      setLoadingMembers(true)
+    }
+  }, [user?.id])
+
   useEffect(() => {
     if (!user?.id) return
     mountedRef.current = true
@@ -73,12 +95,21 @@ export function SettingsTeamTab() {
       setCanManageMembers(Boolean(d.canManageMembers))
     })
 
-    void loadMembers()
+    const run = async () => {
+      try {
+        await teamMembersStore.initialize(user.id)
+      } catch (e) {
+        setMembersError(e instanceof Error ? e.message : "Failed to load team members")
+      } finally {
+        if (mountedRef.current) setLoadingMembers(false)
+      }
+    }
+    void run()
     return () => {
       mountedRef.current = false
       unsubscribe()
     }
-  }, [user?.id, loadMembers])
+  }, [user?.id])
 
   const addInviteRow = () => setInviteRows((prev) => [...prev, { fullName: "", email: "", role: "Member" }])
   const removeInviteRow = (idx: number) =>
@@ -127,7 +158,7 @@ export function SettingsTeamTab() {
     }
 
     if (user?.id) teamMembersStore.invalidate(user.id)
-    await loadMembers()
+    await reloadTeamFromServer()
     setSubmittingInvites(false)
     setInviteRows([{ fullName: "", email: "", role: "Member" }])
     setInviteOpen(false)
@@ -136,8 +167,9 @@ export function SettingsTeamTab() {
   const showLoading = isLoading || loadingMembers
 
   const updateMemberRole = async (member: TeamMember, role: InviteDraft["role"]) => {
-    if (!member.membershipId) return
-    setUpdatingId(member.membershipId)
+    const mid = membershipIdForRow(member)
+    if (!mid) return
+    setUpdatingId(mid)
     setMembersError("")
     const { data } = await supabase.auth.getSession()
     const token = data.session?.access_token
@@ -152,7 +184,7 @@ export function SettingsTeamTab() {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ membershipId: member.membershipId, role }),
+      body: JSON.stringify({ membershipId: mid, role }),
     })
     if (!res.ok) {
       const json = (await res.json().catch(() => ({ error: "Failed to update role" }))) as { error?: string }
@@ -161,13 +193,14 @@ export function SettingsTeamTab() {
       return
     }
     if (user?.id) teamMembersStore.invalidate(user.id)
-    await loadMembers()
+    await reloadTeamFromServer()
     setUpdatingId(null)
   }
 
   const removeMember = async (member: TeamMember) => {
-    if (!member.membershipId) return
-    setUpdatingId(member.membershipId)
+    const mid = membershipIdForRow(member)
+    if (!mid) return
+    setUpdatingId(mid)
     setMembersError("")
     const { data } = await supabase.auth.getSession()
     const token = data.session?.access_token
@@ -176,7 +209,7 @@ export function SettingsTeamTab() {
       setUpdatingId(null)
       return
     }
-    const res = await fetch(`/api/settings/team?membershipId=${encodeURIComponent(member.membershipId)}`, {
+    const res = await fetch(`/api/settings/team?membershipId=${encodeURIComponent(mid)}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -187,7 +220,7 @@ export function SettingsTeamTab() {
       return
     }
     if (user?.id) teamMembersStore.invalidate(user.id)
-    await loadMembers()
+    await reloadTeamFromServer()
     setUpdatingId(null)
   }
 
@@ -214,52 +247,62 @@ export function SettingsTeamTab() {
           ) : (
             <div className="space-y-4">
               {membersError ? <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{membersError}</div> : null}
-              {members.map((member) => (
-                <div key={member.id} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                      <span className="text-sm font-medium">{member.initials || "U"}</span>
+              {members.map((member) => {
+                const rowMembershipId = membershipIdForRow(member)
+                return (
+                  <div key={member.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                        <span className="text-sm font-medium">{member.initials || "U"}</span>
+                      </div>
+                      <div>
+                        <p className="font-medium">{member.fullName}</p>
+                        <p className="text-sm text-muted-foreground">{member.email || "—"}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium">{member.fullName}</p>
-                      <p className="text-sm text-muted-foreground">{member.email || "—"}</p>
+                    <div className="flex items-center gap-2">
+                      {canManageMembers && member.role !== "Owner" && rowMembershipId ? (
+                        <Select
+                          value={member.role}
+                          onValueChange={(v) => void updateMemberRole(member, v as InviteDraft["role"])}
+                          disabled={updatingId === rowMembershipId}
+                        >
+                          <SelectTrigger className="h-8 w-[110px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Admin">Admin</SelectItem>
+                            <SelectItem value="Member">Member</SelectItem>
+                            <SelectItem value="Viewer">Viewer</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <span className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full">{member.role}</span>
+                      )}
+                      {member.status === "invited" ? (
+                        <span className="px-2 py-1 bg-amber-100 text-amber-700 text-xs rounded-full">Invited</span>
+                      ) : null}
+                      {canManageMembers && member.role !== "Owner" && rowMembershipId ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          className="shrink-0 text-muted-foreground hover:text-destructive"
+                          onClick={() => void removeMember(member)}
+                          disabled={updatingId === rowMembershipId}
+                          aria-label={
+                            member.status === "invited"
+                              ? `Delete invitation for ${member.email || member.fullName}`
+                              : `Remove ${member.fullName} from team`
+                          }
+                        >
+                          <Trash2 className="size-4" aria-hidden />
+                        </Button>
+                      ) : null}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {canManageMembers && member.role !== "Owner" && member.membershipId ? (
-                      <Select
-                        value={member.role}
-                        onValueChange={(v) => void updateMemberRole(member, v as InviteDraft["role"])}
-                        disabled={updatingId === member.membershipId}
-                      >
-                        <SelectTrigger className="h-8 w-[110px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Admin">Admin</SelectItem>
-                          <SelectItem value="Member">Member</SelectItem>
-                          <SelectItem value="Viewer">Viewer</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <span className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full">{member.role}</span>
-                    )}
-                    {member.status === "invited" ? (
-                      <span className="px-2 py-1 bg-amber-100 text-amber-700 text-xs rounded-full">Invited</span>
-                    ) : null}
-                    {canManageMembers && member.role !== "Owner" && member.membershipId ? (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => void removeMember(member)}
-                        disabled={updatingId === member.membershipId}
-                      >
-                        Remove
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
-              ))}
+                )
+              })}
               <div className="mt-4 pt-4 border-t">
                 <Button variant="outline" className="w-full" onClick={() => setInviteOpen(true)} disabled={!canManageMembers}>
                   Invite Team Members
@@ -305,9 +348,17 @@ export function SettingsTeamTab() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="md:col-span-1">
-                  <Button variant="ghost" size="sm" onClick={() => removeInviteRow(idx)} disabled={inviteRows.length === 1}>
-                    Remove
+                <div className="md:col-span-1 flex justify-end md:justify-center">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => removeInviteRow(idx)}
+                    disabled={inviteRows.length === 1}
+                    aria-label="Remove invite row"
+                  >
+                    <Trash2 className="size-4" />
                   </Button>
                 </div>
               </div>

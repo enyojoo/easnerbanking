@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { useAuth } from "@/lib/auth-context"
 import { countries } from "@/lib/countries"
@@ -100,31 +100,46 @@ export async function updateBusinessProfile(payload: {
   return json.profile ?? null
 }
 
+function profileFromStore(): BusinessProfile {
+  const d = businessProfileStore.getData()
+  if (!d) return DEFAULT_PROFILE
+  return {
+    ...d.profile,
+    countryCode: d.profile.countryCode ?? countryCodeFromName(d.profile.country),
+  }
+}
+
 export function useBusinessProfile() {
   const { user } = useAuth()
-  const [profile, setProfile] = useState<BusinessProfile>(() => businessProfileStore.getData()?.profile ?? DEFAULT_PROFILE)
-  const [isLoading, setIsLoading] = useState(() => {
-    const d = businessProfileStore.getData()
-    return !d || d.lastUpdated === 0 || !businessProfileStore.isFresh()
-  })
+  const [profile, setProfile] = useState<BusinessProfile>(DEFAULT_PROFILE)
+  const [isLoading, setIsLoading] = useState(false)
   const mountedRef = useRef(true)
 
-  useEffect(() => {
-    mountedRef.current = true
-
+  // Hydrate from localStorage before paint so header/nav avoid skeleton + skip redundant fetch when fresh.
+  useLayoutEffect(() => {
     if (!user?.id) {
       setProfile(DEFAULT_PROFILE)
       setIsLoading(false)
       return
     }
+    businessProfileStore.hydrateSync(user.id)
+    const d = businessProfileStore.getData()
+    if (d) {
+      setProfile(profileFromStore())
+      setIsLoading(false)
+    } else {
+      setIsLoading(true)
+    }
+  }, [user?.id])
+
+  useEffect(() => {
+    mountedRef.current = true
+
+    if (!user?.id) {
+      return
+    }
 
     const initialize = async () => {
-      const existing = businessProfileStore.getData()
-      const hasData = Boolean(existing && existing.lastUpdated > 0)
-      const fresh = businessProfileStore.isFresh()
-
-      if (!hasData || !fresh) setIsLoading(true)
-
       try {
         await businessProfileStore.initialize(user.id)
       } finally {
