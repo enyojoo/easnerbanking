@@ -13,7 +13,7 @@ import { useBusinessProfile } from "@/lib/use-business-profile"
 export function DashboardNav() {
   const { user, logout } = useAuth()
   const pathname = usePathname()
-  const { name: businessName } = useBusinessProfile()
+  const { name: businessName, isLoading: businessProfileLoading } = useBusinessProfile()
   
   // Auto-open groups that contain the current page
   const getInitialOpenGroups = () => {
@@ -82,7 +82,11 @@ export function DashboardNav() {
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
           <Building2 className="h-5 w-5 text-primary" />
         </div>
-        <span className="text-sm font-semibold truncate">{businessName}</span>
+        {businessProfileLoading ? (
+          <div className="h-4 w-28 animate-pulse rounded bg-muted" />
+        ) : (
+          <span className="text-sm font-semibold truncate">{businessName}</span>
+        )}
       </div>
 
       <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">

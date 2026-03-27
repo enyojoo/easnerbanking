@@ -20,7 +20,7 @@ interface DashboardShellProps {
 export function DashboardShell({ children, mainClassName = "", constrained = false }: DashboardShellProps) {
   const { user, isLoading, logout } = useAuth()
   const router = useRouter()
-  const { name: businessName, logoUrl: businessLogoUrl, ownerName } = useBusinessProfile()
+  const { name: businessName, logoUrl: businessLogoUrl, ownerName, isLoading: profileLoading } = useBusinessProfile()
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -38,14 +38,21 @@ export function DashboardShell({ children, mainClassName = "", constrained = fal
       <DashboardNav />
       <div className="ml-64 flex flex-col min-h-screen">
         <header className="fixed top-0 left-64 right-0 z-30 flex h-16 min-h-16 items-center justify-end gap-4 border-b bg-background px-6">
-          <BusinessDropdown
-            businessName={businessName}
-            businessLogoUrl={businessLogoUrl}
-            adminName={ownerName || "Admin"}
-            adminEmail={user?.email || ""}
-            onSignOut={logout}
-            variant="header"
-          />
+          {profileLoading ? (
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 animate-pulse rounded-full bg-muted" />
+              <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+            </div>
+          ) : (
+            <BusinessDropdown
+              businessName={businessName}
+              businessLogoUrl={businessLogoUrl}
+              adminName={ownerName || "Admin"}
+              adminEmail={user?.email || ""}
+              onSignOut={logout}
+              variant="header"
+            />
+          )}
         </header>
         <main
           className={`flex-1 pt-20 px-6 pb-8 ${constrained ? "w-full max-w-6xl mx-auto" : "w-full"} ${mainClassName}`}

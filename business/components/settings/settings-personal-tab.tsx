@@ -88,7 +88,6 @@ export function SettingsPersonalTab() {
 
   return (
     <div className="space-y-6">
-      {loading ? <div className="h-24 animate-pulse rounded-md bg-muted" /> : null}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -96,7 +95,9 @@ export function SettingsPersonalTab() {
               <User className="h-5 w-5" />
               Personal Information
             </CardTitle>
-            {editingSection === "personal" ? (
+            {loading ? (
+              <div className="h-9 w-24 animate-pulse rounded-md bg-muted" />
+            ) : editingSection === "personal" ? (
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={handleCancel}>
                   <X className="h-4 w-4 mr-1" />
@@ -118,50 +119,66 @@ export function SettingsPersonalTab() {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="fullName">Full Name</Label>
-            <Input
-              id="fullName"
-              value={formData.fullName}
-              onChange={(e) => handleInputChange("fullName", e.target.value)}
-              disabled={editingSection !== "personal"}
-            />
+            {loading ? (
+              <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
+            ) : (
+              <Input
+                id="fullName"
+                value={formData.fullName}
+                onChange={(e) => handleInputChange("fullName", e.target.value)}
+                disabled={editingSection !== "personal"}
+              />
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="email">Email Address</Label>
             <div className="flex items-center gap-2">
               <Mail className="h-4 w-4 text-muted-foreground" />
-              <Input
-                id="email"
-                type="email"
-                value={formData.email}
-                readOnly
-                disabled
-              />
+              {loading ? (
+                <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
+              ) : (
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  readOnly
+                  disabled
+                />
+              )}
             </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="phone">Phone Number</Label>
             <div className="flex items-center gap-2">
               <Phone className="h-4 w-4 text-muted-foreground" />
-              <Input
-                id="phone"
-                type="tel"
-                value={formData.phone}
-                onChange={(e) => handleInputChange("phone", e.target.value)}
-                disabled={editingSection !== "personal"}
-              />
+              {loading ? (
+                <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
+              ) : (
+                <Input
+                  id="phone"
+                  type="tel"
+                  value={formData.phone}
+                  onChange={(e) => handleInputChange("phone", e.target.value)}
+                  disabled={editingSection !== "personal"}
+                />
+              )}
             </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="dateOfBirth">Date of Birth</Label>
             <div className="flex items-center gap-2">
               <Calendar className="h-4 w-4 text-muted-foreground" />
-              <Input
-                id="dateOfBirth"
-                type="date"
-                value={formData.dateOfBirth}
-                onChange={(e) => handleInputChange("dateOfBirth", e.target.value)}
-                disabled={editingSection !== "personal"}
-              />
+              {loading ? (
+                <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
+              ) : (
+                <Input
+                  id="dateOfBirth"
+                  type="date"
+                  value={formData.dateOfBirth}
+                  onChange={(e) => handleInputChange("dateOfBirth", e.target.value)}
+                  disabled={editingSection !== "personal"}
+                />
+              )}
             </div>
           </div>
         </CardContent>

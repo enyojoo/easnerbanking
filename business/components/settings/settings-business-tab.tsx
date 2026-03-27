@@ -38,6 +38,7 @@ type BusinessSettingsForm = {
 
 export function SettingsBusinessTab() {
   const profile = useBusinessProfile()
+  const loading = profile.isLoading
   const [countryCode, setCountryCode] = useState("US")
   const [countryOpen, setCountryOpen] = useState(false)
   const [editingSection, setEditingSection] = useState<string | null>(null)
@@ -165,7 +166,9 @@ export function SettingsBusinessTab() {
               <Building2 className="h-5 w-5" />
               Business Information
             </CardTitle>
-            {editingSection === "business" ? (
+            {loading ? (
+              <div className="h-9 w-24 animate-pulse rounded-md bg-muted" />
+            ) : editingSection === "business" ? (
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={handleCancel}>
                   <X className="h-4 w-4 mr-1" />
@@ -185,6 +188,17 @@ export function SettingsBusinessTab() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {loading ? (
+            <div className="space-y-4">
+              <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
+                <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
+              </div>
+              <div className="h-28 w-full animate-pulse rounded-md bg-muted" />
+            </div>
+          ) : (
+          <>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_auto] md:items-start">
             <div className="min-w-0 space-y-2">
               <Label htmlFor="businessName">Business Name</Label>
@@ -246,6 +260,8 @@ export function SettingsBusinessTab() {
               disabled={editingSection !== "business"}
             />
           </div>
+          </>
+          )}
         </CardContent>
       </Card>
 
@@ -256,7 +272,9 @@ export function SettingsBusinessTab() {
               <FileText className="h-5 w-5" />
               Legal Entity
             </CardTitle>
-            {editingSection === "legal" ? (
+            {loading ? (
+              <div className="h-9 w-24 animate-pulse rounded-md bg-muted" />
+            ) : editingSection === "legal" ? (
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={handleCancel}>
                   <X className="h-4 w-4 mr-1" />
@@ -276,6 +294,16 @@ export function SettingsBusinessTab() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {loading ? (
+            <div className="space-y-4">
+              <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
+                <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
+              </div>
+            </div>
+          ) : (
+          <>
           <div className="space-y-2">
             <Label>Country</Label>
             {editingSection === "legal" ? (
@@ -354,6 +382,8 @@ export function SettingsBusinessTab() {
               </div>
             </div>
           )}
+          </>
+          )}
         </CardContent>
       </Card>
 
@@ -364,7 +394,9 @@ export function SettingsBusinessTab() {
               <MapPin className="h-5 w-5" />
               Registered Address
             </CardTitle>
-            {editingSection === "address" ? (
+            {loading ? (
+              <div className="h-9 w-24 animate-pulse rounded-md bg-muted" />
+            ) : editingSection === "address" ? (
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={handleCancel}>
                   <X className="h-4 w-4 mr-1" />
@@ -384,6 +416,17 @@ export function SettingsBusinessTab() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {loading ? (
+            <div className="space-y-4">
+              <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
+                <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
+                <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
+              </div>
+            </div>
+          ) : (
+          <>
           <div className="space-y-2">
             <Label htmlFor="street">Street Address</Label>
             <Input
@@ -422,6 +465,8 @@ export function SettingsBusinessTab() {
               />
             </div>
           </div>
+          </>
+          )}
         </CardContent>
       </Card>
 
@@ -432,7 +477,9 @@ export function SettingsBusinessTab() {
               <Globe className="h-5 w-5" />
               Public Information
             </CardTitle>
-            {editingSection === "public" ? (
+            {loading ? (
+              <div className="h-9 w-24 animate-pulse rounded-md bg-muted" />
+            ) : editingSection === "public" ? (
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={handleCancel}>
                   <X className="h-4 w-4 mr-1" />
@@ -452,6 +499,14 @@ export function SettingsBusinessTab() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {loading ? (
+            <div className="space-y-4">
+              <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
+              <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
+              <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
+            </div>
+          ) : (
+          <>
           <div className="space-y-2">
             <Label htmlFor="website">Website</Label>
             <Input
@@ -481,6 +536,8 @@ export function SettingsBusinessTab() {
               disabled={editingSection !== "public"}
             />
           </div>
+          </>
+          )}
         </CardContent>
       </Card>
     </div>

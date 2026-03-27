@@ -52,6 +52,32 @@ function parseName(fullName: string | null | undefined): { fullName: string | nu
   return { fullName: trimmed }
 }
 
+async function ensureOwnerMembership(params: {
+  admin: ReturnType<typeof createSupabaseAdmin>
+  organizationId: string
+  userId: string
+  fullName: string | null
+  email: string | null
+}) {
+  const { admin, organizationId, userId, fullName, email } = params
+  if (!email) return
+
+  // Best-effort: if memberships table is not migrated yet, bootstrap should still succeed.
+  await admin.from("easner_organization_memberships").upsert(
+    {
+      organization_id: organizationId,
+      user_id: userId,
+      full_name: fullName?.trim() || "Account Owner",
+      email: email.trim().toLowerCase(),
+      role: "owner",
+      status: "active",
+      invited_by: userId,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "organization_id,email" },
+  )
+}
+
 export async function POST(request: Request) {
   const user = await getUserFromBearer(request)
   if (!user) {
@@ -173,6 +199,14 @@ export async function POST(request: Request) {
         )
     }
   }
+
+  await ensureOwnerMembership({
+    admin,
+    organizationId,
+    userId: user.id,
+    fullName: name.fullName,
+    email: user.email ?? null,
+  })
 
   return NextResponse.json({
     ok: true,
