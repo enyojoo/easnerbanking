@@ -5,7 +5,6 @@ import {
   Users,
   ShieldCheck,
   Building2,
-  FileText,
   UsersRound,
   Receipt,
   TrendingUp,
@@ -13,6 +12,7 @@ import {
   Activity,
   ClipboardCheck,
   Radio,
+  ScrollText,
 } from "lucide-react"
 
 export type NavItem = {
