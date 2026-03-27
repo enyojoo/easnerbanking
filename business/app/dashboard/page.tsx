@@ -66,10 +66,6 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
-      </div>
-
       <Card>
         <CardHeader className="pb-4">
           <div className="flex items-start justify-between gap-6">

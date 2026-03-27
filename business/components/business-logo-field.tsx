@@ -2,7 +2,7 @@
 
 import { useRef } from "react"
 import { Button } from "@/components/ui/button"
-import { Upload, X } from "lucide-react"
+import { X, Building2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const MAX_BYTES = 2 * 1024 * 1024
@@ -47,7 +47,7 @@ export function BusinessLogoField({
           {value ? (
             <img src={value} alt="" className="h-full w-full object-cover" />
           ) : (
-            <Upload className="h-4 w-4 text-muted-foreground" />
+            <Building2 className="h-4 w-4 text-muted-foreground" />
           )}
         </div>
         <div className={cn("flex gap-1", compact ? "shrink-0" : "")}>

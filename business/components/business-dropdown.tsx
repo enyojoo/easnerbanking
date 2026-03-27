@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { ChevronUp, ChevronDown, Settings, LogOut, HelpCircle } from "lucide-react"
+import { ChevronUp, ChevronDown, Settings, LogOut, HelpCircle, Building2 } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,8 +45,8 @@ export function BusinessDropdown({
           >
             <Avatar className="h-8 w-8 shrink-0">
               {businessLogoUrl ? <AvatarImage src={businessLogoUrl} alt="" /> : null}
-              <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                {adminName.slice(0, 2).toUpperCase()}
+              <AvatarFallback className="bg-primary/10 text-primary">
+                <Building2 className="h-4 w-4" />
               </AvatarFallback>
             </Avatar>
             <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
@@ -59,8 +59,8 @@ export function BusinessDropdown({
             <div className="flex items-center gap-3 flex-1 min-w-0">
               <Avatar className="h-8 w-8">
                 {businessLogoUrl ? <AvatarImage src={businessLogoUrl} alt="" /> : null}
-                <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                  {businessName.slice(0, 2).toUpperCase()}
+                <AvatarFallback className="bg-primary/10 text-primary">
+                  <Building2 className="h-4 w-4" />
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0 text-left">
@@ -101,8 +101,8 @@ export function BusinessDropdown({
               <div className="flex items-center gap-3">
                 <Avatar className="h-8 w-8">
                   {businessLogoUrl ? <AvatarImage src={businessLogoUrl} alt="" /> : null}
-                  <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                    {businessName.slice(0, 2).toUpperCase()}
+                  <AvatarFallback className="bg-primary/10 text-primary">
+                    <Building2 className="h-4 w-4" />
                   </AvatarFallback>
                 </Avatar>
                 <div>

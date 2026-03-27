@@ -14,10 +14,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Building2 } from "lucide-react"
-import { getOnboarding, mergeOnboarding } from "@/lib/onboarding-store"
+import { updateBusinessProfile, useBusinessProfile } from "@/lib/use-business-profile"
 import { BusinessLogoField } from "@/components/business-logo-field"
 
 export function BusinessOnboardingDialog() {
+  const profile = useBusinessProfile()
   const [open, setOpen] = useState(false)
   const [businessName, setBusinessName] = useState("")
   const [businessLogo, setBusinessLogo] = useState<string | null>(null)
@@ -27,39 +28,61 @@ export function BusinessOnboardingDialog() {
     "A modern digital banking platform providing seamless financial services.",
   )
   const [error, setError] = useState("")
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    const o = getOnboarding()
-    if (o?.businessOnboardingComplete === false) {
+    if (profile.isLoading) return
+    if (!profile.onboardingComplete) {
       setOpen(true)
-      if (o.businessName) setBusinessName(o.businessName)
-      if (o.businessLogo !== undefined) setBusinessLogo(o.businessLogo ?? null)
-      if (o.businessType) setBusinessType(o.businessType)
-      if (o.baseCurrency) setBaseCurrency(o.baseCurrency)
-      if (o.businessDescription) setBusinessDescription(o.businessDescription)
+      setBusinessName(profile.name || "")
+      setBusinessLogo(profile.logoUrl ?? null)
+      setBusinessType(profile.businessType || "Financial Services")
+      setBaseCurrency(profile.baseCurrency || "USD")
+      setBusinessDescription(profile.description || "")
+      return
     }
-  }, [])
+    setOpen(false)
+  }, [
+    profile.isLoading,
+    profile.onboardingComplete,
+    profile.name,
+    profile.logoUrl,
+    profile.businessType,
+    profile.baseCurrency,
+    profile.description,
+  ])
 
-  const finishLater = () => {
-    mergeOnboarding({ businessOnboardingComplete: true })
+  const finishLater = async () => {
+    setSaving(true)
+    await updateBusinessProfile({
+      businessName: businessName.trim() || profile.name,
+      businessLogo,
+      businessType,
+      baseCurrency,
+      businessDescription,
+      countryCode: profile.countryCode ?? undefined,
+    })
+    setSaving(false)
     setOpen(false)
   }
 
-  const save = () => {
+  const save = async () => {
     const trimmed = businessName.trim()
     if (!trimmed) {
       setError("Enter your business name to continue.")
       return
     }
     setError("")
-    mergeOnboarding({
+    setSaving(true)
+    await updateBusinessProfile({
       businessName: trimmed,
       businessLogo,
       businessType,
       baseCurrency,
       businessDescription,
-      businessOnboardingComplete: true,
+      countryCode: profile.countryCode ?? undefined,
     })
+    setSaving(false)
     setOpen(false)
   }
 
@@ -135,10 +158,10 @@ export function BusinessOnboardingDialog() {
         </div>
 
         <DialogFooter className="gap-2 sm:justify-between">
-          <Button type="button" variant="ghost" onClick={finishLater}>
+          <Button type="button" variant="ghost" onClick={() => void finishLater()} disabled={saving}>
             I&apos;ll do this later
           </Button>
-          <Button type="button" onClick={save}>
+          <Button type="button" onClick={() => void save()} disabled={saving}>
             Save &amp; continue
           </Button>
         </DialogFooter>

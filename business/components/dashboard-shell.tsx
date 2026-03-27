@@ -20,7 +20,7 @@ interface DashboardShellProps {
 export function DashboardShell({ children, mainClassName = "", constrained = false }: DashboardShellProps) {
   const { user, isLoading, logout } = useAuth()
   const router = useRouter()
-  const { name: businessName, logoUrl: businessLogoUrl } = useBusinessProfile()
+  const { name: businessName, logoUrl: businessLogoUrl, ownerName } = useBusinessProfile()
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -41,7 +41,7 @@ export function DashboardShell({ children, mainClassName = "", constrained = fal
           <BusinessDropdown
             businessName={businessName}
             businessLogoUrl={businessLogoUrl}
-            adminName={user?.name || "Admin"}
+            adminName={ownerName || "Admin"}
             adminEmail={user?.email || ""}
             onSignOut={logout}
             variant="header"

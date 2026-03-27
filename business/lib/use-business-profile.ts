@@ -1,32 +1,122 @@
 "use client"
 
-import { useSyncExternalStore } from "react"
-import { businessInfo, getResolvedBusinessProfile } from "@/lib/business-info"
+import { useEffect, useMemo, useState } from "react"
+import { createSupabaseBrowser } from "@/lib/supabase/browser"
+import { useAuth } from "@/lib/auth-context"
+import { countries } from "@/lib/countries"
+import { businessInfo } from "@/lib/business-info"
 
-function subscribe(callback: () => void) {
-  window.addEventListener("business-profile-updated", callback)
-  window.addEventListener("storage", callback)
-  return () => {
-    window.removeEventListener("business-profile-updated", callback)
-    window.removeEventListener("storage", callback)
-  }
+export type BusinessProfile = {
+  organizationId: string | null
+  name: string
+  logoUrl: string | null
+  businessType: string
+  baseCurrency: string
+  description: string
+  country: string | null
+  countryCode: string | null
+  onboardingComplete: boolean
+  role: "business" | "individual"
+  ownerName: string
 }
 
-let cachedSnapshot: { name: string; logoUrl: string | null } | null = null
-
-function getSnapshot() {
-  const next = getResolvedBusinessProfile()
-  if (cachedSnapshot && cachedSnapshot.name === next.name && cachedSnapshot.logoUrl === next.logoUrl) {
-    return cachedSnapshot
-  }
-  cachedSnapshot = next
-  return next
+const DEFAULT_PROFILE: BusinessProfile = {
+  organizationId: null,
+  name: businessInfo.name,
+  logoUrl: null,
+  businessType: "Financial Services",
+  baseCurrency: "USD",
+  description: "A modern digital banking platform providing seamless financial services.",
+  country: businessInfo.country,
+  countryCode: "US",
+  onboardingComplete: true,
+  role: "business",
+  ownerName: "Admin",
 }
 
-function getServerSnapshot() {
-  return { name: businessInfo.name, logoUrl: null as string | null }
+function countryCodeFromName(name: string | null | undefined): string | null {
+  if (!name) return null
+  const found = countries.find((c) => c.name.toLowerCase() === name.toLowerCase())
+  return found?.code ?? null
+}
+
+export async function updateBusinessProfile(payload: {
+  businessName?: string
+  businessLogo?: string | null
+  businessType?: string
+  baseCurrency?: string
+  businessDescription?: string
+  countryCode?: string
+}) {
+  const supabase = createSupabaseBrowser()
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token
+  if (!token) return null
+
+  const res = await fetch("/api/business/profile", {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) return null
+  const json = (await res.json()) as { profile?: BusinessProfile }
+  if (json.profile) window.dispatchEvent(new Event("business-profile-updated"))
+  return json.profile ?? null
 }
 
 export function useBusinessProfile() {
-  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+  const { user } = useAuth()
+  const supabase = useMemo(() => createSupabaseBrowser(), [])
+  const [profile, setProfile] = useState<BusinessProfile>(DEFAULT_PROFILE)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    if (!user?.id) {
+      setProfile(DEFAULT_PROFILE)
+      setIsLoading(false)
+      return
+    }
+
+    let active = true
+    const loadProfile = async () => {
+      setIsLoading(true)
+      try {
+        const { data } = await supabase.auth.getSession()
+        const token = data.session?.access_token
+        if (!token) return
+        const res = await fetch("/api/business/profile", {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) return
+        const json = (await res.json()) as { profile?: BusinessProfile }
+        if (active && json.profile) {
+          setProfile({
+            ...json.profile,
+            countryCode: json.profile.countryCode ?? countryCodeFromName(json.profile.country),
+          })
+        }
+      } finally {
+        if (active) setIsLoading(false)
+      }
+    }
+
+    const onUpdate = () => {
+      void loadProfile()
+    }
+
+    void loadProfile()
+    window.addEventListener("business-profile-updated", onUpdate)
+    return () => {
+      active = false
+      window.removeEventListener("business-profile-updated", onUpdate)
+    }
+  }, [supabase, user?.id])
+
+  return {
+    ...profile,
+    isLoading,
+  }
 }
