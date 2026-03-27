@@ -5,6 +5,7 @@ import {
   useContext,
   useState,
   useCallback,
+  useEffect,
   type ReactNode,
 } from "react"
 import { mockCustomers, type Customer } from "@/lib/mock-data"
@@ -20,6 +21,26 @@ const CustomersContext = createContext<CustomersContextValue | null>(null)
 
 export function CustomersProvider({ children }: { children: ReactNode }) {
   const [customers, setCustomers] = useState<Customer[]>(mockCustomers)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch("/api/b2b/demo")
+      .then((r) => r.json())
+      .then((d: { customers?: Customer[] }) => {
+        if (cancelled || !d.customers?.length) return
+        setCustomers((prev) => {
+          const byId = new Map(prev.map((c) => [c.id, c]))
+          for (const c of d.customers!) {
+            byId.set(c.id, c)
+          }
+          return Array.from(byId.values())
+        })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const addCustomer = useCallback((customer: Customer) => {
     setCustomers((prev) => [customer, ...prev])

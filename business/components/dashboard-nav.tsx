@@ -8,11 +8,12 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { BusinessLogo } from "@/components/brand/business-logo"
-import { businessInfo } from "@/lib/business-info"
+import { useBusinessProfile } from "@/lib/use-business-profile"
 
 export function DashboardNav() {
   const { user, logout } = useAuth()
   const pathname = usePathname()
+  const { name: businessName } = useBusinessProfile()
   
   // Auto-open groups that contain the current page
   const getInitialOpenGroups = () => {
@@ -81,7 +82,7 @@ export function DashboardNav() {
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
           <Building2 className="h-5 w-5 text-primary" />
         </div>
-        <span className="text-sm font-semibold truncate">{businessInfo.name}</span>
+        <span className="text-sm font-semibold truncate">{businessName}</span>
       </div>
 
       <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">

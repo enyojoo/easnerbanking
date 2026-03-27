@@ -28,35 +28,48 @@ export default function SignupPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [name, setName] = useState("")
-  const [businessName, setBusinessName] = useState("")
   const [country, setCountry] = useState("")
   const [countryOpen, setCountryOpen] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
   const [dropdownWidth, setDropdownWidth] = useState<number | undefined>(undefined)
   const triggerRef = useRef<HTMLButtonElement>(null)
-  const { signup } = useAuth()
+  const { signup, signInWithGoogle } = useAuth()
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
-    if (!country || !businessName.trim()) {
-      setError("Please select your country and enter your business name")
+    if (!country) {
+      setError("Please select your country")
       return
     }
     try {
-      setOnboarding({ countryCode: country, businessName: businessName.trim() })
-      await signup(email, password, name)
-      router.push("/dashboard")
-    } catch (err) {
-      setError("Failed to create account")
+      setOnboarding({ countryCode: country, businessOnboardingComplete: false })
+      const result = await signup(email, password, name)
+      if (result.needsEmailConfirmation) {
+        router.push("/auth/login?message=Check your email to confirm your account, then sign in.")
+      } else {
+        router.push("/dashboard")
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to create account"
+      setError(message)
     }
   }
 
-  const handleGoogleSignIn = () => {
-    // Mock Google sign-in
-    console.log("Google sign-in clicked")
+  const handleGoogleSignUp = async () => {
+    setError("")
+    if (!country) {
+      setError("Please select your country")
+      return
+    }
+    try {
+      setOnboarding({ countryCode: country, businessOnboardingComplete: false })
+      await signInWithGoogle()
+    } catch {
+      setError("Unable to continue with Google. Please try again.")
+    }
   }
 
   const handleCountryOpenChange = (open: boolean) => {
@@ -164,25 +177,12 @@ export default function SignupPage() {
               </Popover>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="business-name" className="text-sm font-medium">Business name</Label>
-              <Input
-                id="business-name"
-                type="text"
-                placeholder="Acme Inc."
-                value={businessName}
-                onChange={(e) => setBusinessName(e.target.value)}
-                required
-                className="h-10 text-sm"
-              />
-            </div>
-
             <Button
               type="button"
               variant="outline"
               className="w-full"
-              onClick={handleGoogleSignIn}
-              disabled={!country || !businessName.trim()}
+              onClick={handleGoogleSignUp}
+              disabled={!country}
             >
               <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
                 <path
@@ -269,7 +269,7 @@ export default function SignupPage() {
             <Button 
               type="submit" 
               className="w-full"
-              disabled={!name || !email || !password || !country || !businessName.trim()}
+              disabled={!name || !email || !password || !country}
             >
               Create account
             </Button>

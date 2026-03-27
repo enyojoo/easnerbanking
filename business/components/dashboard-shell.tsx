@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation"
 import { useEffect } from "react"
 import { DashboardNav } from "@/components/dashboard-nav"
 import { BusinessDropdown } from "@/components/business-dropdown"
-import { businessInfo } from "@/lib/business-info"
+import { BusinessOnboardingDialog } from "@/components/business-onboarding-dialog"
+import { useBusinessProfile } from "@/lib/use-business-profile"
 
 interface DashboardShellProps {
   children: React.ReactNode
@@ -19,6 +20,7 @@ interface DashboardShellProps {
 export function DashboardShell({ children, mainClassName = "", constrained = false }: DashboardShellProps) {
   const { user, isLoading, logout } = useAuth()
   const router = useRouter()
+  const { name: businessName, logoUrl: businessLogoUrl } = useBusinessProfile()
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -32,11 +34,13 @@ export function DashboardShell({ children, mainClassName = "", constrained = fal
 
   return (
     <div className="min-h-screen bg-background">
+      <BusinessOnboardingDialog />
       <DashboardNav />
       <div className="ml-64 flex flex-col min-h-screen">
         <header className="fixed top-0 left-64 right-0 z-30 flex h-16 min-h-16 items-center justify-end gap-4 border-b bg-background px-6">
           <BusinessDropdown
-            businessName={businessInfo.name}
+            businessName={businessName}
+            businessLogoUrl={businessLogoUrl}
             adminName={user?.name || "Admin"}
             adminEmail={user?.email || ""}
             onSignOut={logout}

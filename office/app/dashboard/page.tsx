@@ -1,11 +1,27 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Users, CreditCard, TrendingUp, AlertCircle, Activity, Clock, CheckCircle, XCircle } from "lucide-react"
+import {
+  Users,
+  CreditCard,
+  TrendingUp,
+  AlertCircle,
+  Activity,
+  Clock,
+  CheckCircle,
+  XCircle,
+  Smartphone,
+  Building2,
+  Server,
+} from "lucide-react"
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useOfficeData } from "@/hooks/use-office-data"
+import { officeFetch } from "@/lib/api-client"
 
 function OfficeDashboardSkeleton() {
   return (
@@ -79,6 +95,26 @@ function OfficeDashboardSkeleton() {
 
 export default function AdminDashboardPage() {
   const { data, loading } = useOfficeData()
+  const [b2bSummary, setB2bSummary] = useState<{
+    organizationCount: number
+    b2bCustomerCount: number
+    invoiceCount: number
+  } | null>(null)
+
+  useEffect(() => {
+    officeFetch("/api/admin/business/summary")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.error && typeof d.organizationCount === "number") {
+          setB2bSummary({
+            organizationCount: d.organizationCount,
+            b2bCustomerCount: d.b2bCustomerCount,
+            invoiceCount: d.invoiceCount,
+          })
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   // Only show skeleton if we're truly loading and have no cached data
   if (loading && !data) {
@@ -144,8 +180,13 @@ export default function AdminDashboardPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Dashboard Overview</h1>
-            <p className="text-gray-600">Monitor your platform's performance and key metrics</p>
+            <p className="text-gray-600">Mobile consumer, Business (B2B), and Platform metrics</p>
           </div>
+        </div>
+
+        <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+          <Smartphone className="h-4 w-4" />
+          Mobile (consumer)
         </div>
 
         {/* Stats Cards */}
@@ -195,6 +236,67 @@ export default function AdminDashboardPage() {
               <p className="text-xs text-orange-600">Awaiting processing</p>
             </CardContent>
           </Card>
+        </div>
+
+        <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 pt-2">
+          <Building2 className="h-4 w-4" />
+          Business (B2B)
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">Organizations</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-gray-900">
+                {b2bSummary ? b2bSummary.organizationCount : "—"}
+              </div>
+              <p className="text-xs text-gray-500 mt-1">Organizations in Supabase</p>
+              <Button variant="outline" size="sm" className="mt-3" asChild>
+                <Link href="/business">Open Business</Link>
+              </Button>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">B2B customers</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-gray-900">
+                {b2bSummary ? b2bSummary.b2bCustomerCount : "—"}
+              </div>
+              <p className="text-xs text-gray-500 mt-1">Per-merchant customers</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">Invoices</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-gray-900">
+                {b2bSummary ? b2bSummary.invoiceCount : "—"}
+              </div>
+              <p className="text-xs text-gray-500 mt-1">All invoice rows</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/40 px-4 py-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+            <Server className="h-4 w-4" />
+            Platform
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" size="sm" asChild>
+              <Link href="/rates">Rates</Link>
+            </Button>
+            <Button variant="secondary" size="sm" asChild>
+              <Link href="/settings">Settings</Link>
+            </Button>
+            <Button variant="secondary" size="sm" asChild>
+              <Link href="/platform/health">Integrations & health</Link>
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

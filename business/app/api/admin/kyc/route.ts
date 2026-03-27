@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireOfficeAdmin } from "@/lib/api/admin-auth"
+import { logAdminAction } from "@/lib/admin-audit"
 
 export async function GET(request: Request) {
   const auth = await requireOfficeAdmin(request)
@@ -61,6 +62,8 @@ export async function PATCH(request: Request) {
     console.error("admin kyc patch:", error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  await logAdminAction(auth.ctx.userId, "kyc.submission_update", submissionId, { status })
 
   return NextResponse.json({ submission: data })
 }

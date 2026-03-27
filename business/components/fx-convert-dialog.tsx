@@ -34,7 +34,7 @@ interface FXConvertDialogProps {
 }
 
 export function FXConvertDialog({ account }: FXConvertDialogProps) {
-  const [fromCurrency, setFromCurrency] = useState(account.currency)
+  const fromCurrency = account.currency
   const [toCurrency, setToCurrency] = useState<string>(
     account.currency === "USD" ? "EUR" : "USD"
   )
@@ -51,49 +51,31 @@ export function FXConvertDialog({ account }: FXConvertDialogProps) {
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="gap-2">
           <Repeat className="h-4 w-4" />
-          Convert
+          Move
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Convert currency</DialogTitle>
+          <DialogTitle>Move funds</DialogTitle>
           <DialogDescription>
-            Check FX rates and convert between your accounts. This is a preview — actual conversion is done when you confirm.
+            Move funds from this account to another currency account. This is a preview and does not execute a transfer yet.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-6 pt-4">
           <div className="space-y-2">
             <Label>From</Label>
-            <div className="flex gap-2">
-              <Select value={fromCurrency} onValueChange={setFromCurrency}>
-                <SelectTrigger className="flex-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {mockAccounts.map((acc) => (
-                    <SelectItem key={acc.id} value={acc.currency}>
-                      {currencyFlags[acc.currency]} {acc.currency}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input
-                type="number"
-                placeholder="0.00"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="w-32"
-              />
+            <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm font-medium">
+              {currencyFlags[fromCurrency]} {fromCurrency} account (auto-selected)
             </div>
           </div>
           <div className="space-y-2">
-            <Label>To</Label>
+            <Label>To account currency</Label>
             <Select
               value={toCurrency === fromCurrency ? "" : toCurrency}
               onValueChange={setToCurrency}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select currency" />
+                <SelectValue placeholder="Select destination currency" />
               </SelectTrigger>
               <SelectContent>
                 {mockAccounts
@@ -106,19 +88,33 @@ export function FXConvertDialog({ account }: FXConvertDialogProps) {
               </SelectContent>
             </Select>
           </div>
+          <div className="space-y-2">
+            <Label>Amount to move ({fromCurrency})</Label>
+            <Input
+              type="number"
+              placeholder="0.00"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+          </div>
           <div className="rounded-lg bg-muted p-4 space-y-2">
             <p className="text-sm text-muted-foreground">Rate</p>
             <p className="text-lg font-semibold">
               1 {fromCurrency} = {(currencyRates[toCurrency] / currencyRates[fromCurrency]).toFixed(4)} {toCurrency}
             </p>
-            <p className="text-sm text-muted-foreground pt-2">You receive</p>
+            <p className="text-sm text-muted-foreground pt-2">Amount deducted from source</p>
+            <p className="text-lg font-semibold">
+              {currencySymbols[fromCurrency]}
+              {amountNum.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {fromCurrency}
+            </p>
+            <p className="text-sm text-muted-foreground pt-2">Amount credited to destination</p>
             <p className="text-2xl font-bold">
               {currencySymbols[toCurrency]}
-              {result.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {result.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {toCurrency}
             </p>
           </div>
           <Button className="w-full" disabled={!amount || amountNum <= 0}>
-            Convert (Preview only)
+            Move (Preview only)
           </Button>
         </div>
       </DialogContent>

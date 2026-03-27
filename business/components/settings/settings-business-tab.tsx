@@ -10,7 +10,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Building2, Globe, FileText, MapPin, Edit, X, Check, ChevronDown } from "lucide-react"
 import { businessInfo } from "@/lib/business-info"
-import { getOnboarding, setOnboarding } from "@/lib/onboarding-store"
+import { getOnboarding, mergeOnboarding } from "@/lib/onboarding-store"
+import { BusinessLogoField } from "@/components/business-logo-field"
 import { countries } from "@/lib/countries"
 import { getKybFields } from "@/lib/kyb-by-country"
 
@@ -26,12 +27,31 @@ function getInitialCountryCode(): string {
   return match?.code ?? "US"
 }
 
+type BusinessSettingsForm = {
+  businessName: string
+  businessLogo: string | null
+  businessType: string
+  registrationNumber: string
+  taxId: string
+  website: string
+  email: string
+  phone: string
+  address: string
+  city: string
+  state: string
+  zipCode: string
+  country: string
+  baseCurrency: string
+  description: string
+}
+
 export function SettingsBusinessTab() {
   const [countryCode, setCountryCode] = useState("US")
   const [countryOpen, setCountryOpen] = useState(false)
   const [editingSection, setEditingSection] = useState<string | null>(null)
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<BusinessSettingsForm>({
     businessName: businessInfo.name,
+    businessLogo: null,
     businessType: "Financial Services",
     registrationNumber: "123456789",
     taxId: "12-3456789",
@@ -44,6 +64,8 @@ export function SettingsBusinessTab() {
     zipCode: businessInfo.zipCode,
     country: businessInfo.country,
     baseCurrency: "USD",
+    description:
+      "A modern digital banking platform providing seamless financial services.",
   })
 
   useEffect(() => {
@@ -51,22 +73,41 @@ export function SettingsBusinessTab() {
     setCountryCode(code)
     const c = getCountryFromCode(code)
     if (c) setFormData((prev) => ({ ...prev, country: c.name }))
+    const o = getOnboarding()
+    if (o) {
+      setFormData((prev) => ({
+        ...prev,
+        businessName: o.businessName ?? prev.businessName,
+        businessLogo: o.businessLogo !== undefined ? o.businessLogo : prev.businessLogo,
+        businessType: o.businessType ?? prev.businessType,
+        baseCurrency: o.baseCurrency ?? prev.baseCurrency,
+        description: o.businessDescription ?? prev.description,
+      }))
+    }
   }, [])
 
   const handleEdit = (section: string) => setEditingSection(section)
   const handleCancel = () => setEditingSection(null)
   const handleSave = (section: string) => {
     console.log(`Saving ${section}:`, formData)
+    if (section === "business") {
+      mergeOnboarding({
+        businessName: formData.businessName,
+        businessLogo: formData.businessLogo,
+        businessType: formData.businessType,
+        baseCurrency: formData.baseCurrency,
+        businessDescription: formData.description,
+      })
+    }
     if (section === "legal") {
-      const onboarding = getOnboarding()
-      setOnboarding({
+      mergeOnboarding({
         countryCode,
-        businessName: onboarding?.businessName ?? formData.businessName,
+        businessName: formData.businessName,
       })
     }
     setEditingSection(null)
   }
-  const handleInputChange = (field: string, value: string) => {
+  const handleInputChange = <K extends keyof BusinessSettingsForm>(field: K, value: BusinessSettingsForm[K]) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
@@ -109,13 +150,22 @@ export function SettingsBusinessTab() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="businessName">Business Name</Label>
-            <Input
-              id="businessName"
-              value={formData.businessName}
-              onChange={(e) => handleInputChange("businessName", e.target.value)}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_auto] md:items-start">
+            <div className="min-w-0 space-y-2">
+              <Label htmlFor="businessName">Business Name</Label>
+              <Input
+                id="businessName"
+                value={formData.businessName}
+                onChange={(e) => handleInputChange("businessName", e.target.value)}
+                disabled={editingSection !== "business"}
+              />
+            </div>
+            <BusinessLogoField
+              value={formData.businessLogo}
+              onChange={(v) => handleInputChange("businessLogo", v)}
               disabled={editingSection !== "business"}
+              compact
+              className="md:max-w-[220px]"
             />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -156,7 +206,7 @@ export function SettingsBusinessTab() {
             <textarea
               id="description"
               className="w-full min-h-[100px] px-3 py-2 border border-input rounded-md resize-none disabled:opacity-50"
-              value="A modern digital banking platform providing seamless financial services."
+              value={formData.description}
               onChange={(e) => handleInputChange("description", e.target.value)}
               disabled={editingSection !== "business"}
             />
@@ -258,7 +308,9 @@ export function SettingsBusinessTab() {
                     <Input
                       id={field.id}
                       value={formData[field.id as keyof typeof formData] as string}
-                      onChange={(e) => handleInputChange(field.id, e.target.value)}
+                      onChange={(e) =>
+                        handleInputChange(field.id as keyof BusinessSettingsForm, e.target.value)
+                      }
                       placeholder={field.placeholder}
                       disabled={editingSection !== "legal"}
                     />

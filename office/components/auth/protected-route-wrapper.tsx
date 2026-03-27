@@ -11,8 +11,9 @@ const PROTECTED_PATHS = [
   "/compliance",
   "/users",
   "/settings",
-  "/early-access",
   "/transactions",
+  "/business",
+  "/platform",
 ]
 
 function isProtectedPath(pathname: string | null): boolean {

@@ -5,6 +5,7 @@ import {
   useContext,
   useState,
   useCallback,
+  useEffect,
   type ReactNode,
 } from "react"
 import { mockInvoices, type Invoice } from "@/lib/mock-data"
@@ -21,6 +22,26 @@ const InvoicesContext = createContext<InvoicesContextValue | null>(null)
 
 export function InvoicesProvider({ children }: { children: ReactNode }) {
   const [invoices, setInvoices] = useState<Invoice[]>(mockInvoices)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch("/api/b2b/demo")
+      .then((r) => r.json())
+      .then((d: { invoices?: Invoice[] }) => {
+        if (cancelled || !d.invoices?.length) return
+        setInvoices((prev) => {
+          const byId = new Map(prev.map((i) => [i.id, i]))
+          for (const inv of d.invoices!) {
+            byId.set(inv.id, inv)
+          }
+          return Array.from(byId.values())
+        })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const addInvoice = useCallback((invoice: Invoice) => {
     addInvoiceToStore(invoice)

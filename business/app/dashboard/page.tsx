@@ -12,10 +12,8 @@ import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { TransactionDetailsDialog } from "@/components/transaction-details-dialog"
 import { DateRangeFilter, type TimePeriod } from "@/components/date-range-filter"
-import { useAuth } from "@/lib/auth-context"
 
 export default function DashboardPage() {
-  const { user } = useAuth()
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
   const [transactionDetailsOpen, setTransactionDetailsOpen] = useState(false)
   const [timePeriod, setTimePeriod] = useState<TimePeriod>("all")
@@ -69,9 +67,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold text-foreground">
-          Welcome{user?.name ? `, ${user.name.split(' ')[0].charAt(0).toUpperCase() + user.name.split(' ')[0].slice(1)}` : ''}
-        </h1>
+        <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
       </div>
 
       <Card>

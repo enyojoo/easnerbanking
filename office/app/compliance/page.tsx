@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, Suspense } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
 import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -17,6 +18,8 @@ import { countryService, getCountryFlag } from "@/lib/country-service"
 import { supabase } from "@/lib/supabase"
 import { officeFetch } from "@/lib/api-client"
 import { OfficeComplianceSkeleton } from "@/components/office-compliance-skeleton"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { KycSubmissionsQueue } from "@/components/kyc-submissions-queue"
 
 interface ComplianceUser {
   id: string
@@ -35,7 +38,14 @@ interface ComplianceUser {
   noah_kyc_rejection_reasons?: any
 }
 
-export default function OfficeCompliancePage() {
+function OfficeCompliancePage() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const complianceTab = searchParams.get("tab") === "documents" ? "documents" : "noah"
+  const setComplianceTab = (v: string) => {
+    router.replace(v === "documents" ? "/compliance?tab=documents" : "/compliance")
+  }
+
   // Initialize from cache synchronously to prevent flicker
   // Use cached data even if expired to prevent skeleton flash
   const getInitialUsers = (): ComplianceUser[] => {
@@ -475,10 +485,16 @@ export default function OfficeCompliancePage() {
 
   return (
     <OfficeDashboardLayout>
-      <div className="p-6">
+      <div className="p-6 space-y-4">
+        <Tabs value={complianceTab} onValueChange={setComplianceTab}>
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="noah">Noah & users</TabsTrigger>
+            <TabsTrigger value="documents">Document submissions</TabsTrigger>
+          </TabsList>
+          <TabsContent value="noah" className="mt-4 space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle>Compliance</CardTitle>
+            <CardTitle>KYC & Compliance</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-4 mb-6">
@@ -969,8 +985,27 @@ export default function OfficeCompliancePage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+          </TabsContent>
+          <TabsContent value="documents" className="mt-4">
+            <KycSubmissionsQueue />
+          </TabsContent>
+        </Tabs>
       </div>
     </OfficeDashboardLayout>
+  )
+}
+
+export default function CompliancePage() {
+  return (
+    <Suspense
+      fallback={
+        <OfficeDashboardLayout>
+          <OfficeComplianceSkeleton />
+        </OfficeDashboardLayout>
+      }
+    >
+      <OfficeCompliancePage />
+    </Suspense>
   )
 }
 

@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ChevronUp, ChevronDown, Settings, LogOut, HelpCircle } from "lucide-react"
 import {
   DropdownMenu,
@@ -16,6 +16,8 @@ import { cn } from "@/lib/utils"
 
 interface BusinessDropdownProps {
   businessName: string
+  /** Optional logo (e.g. data URL) shown on the business avatar */
+  businessLogoUrl?: string | null
   adminName: string
   adminEmail: string
   onSignOut: () => void
@@ -23,7 +25,14 @@ interface BusinessDropdownProps {
   variant?: "sidebar" | "header"
 }
 
-export function BusinessDropdown({ businessName, adminName, adminEmail, onSignOut, variant = "sidebar" }: BusinessDropdownProps) {
+export function BusinessDropdown({
+  businessName,
+  businessLogoUrl,
+  adminName,
+  adminEmail,
+  onSignOut,
+  variant = "sidebar",
+}: BusinessDropdownProps) {
   const [isOpen, setIsOpen] = useState(false)
 
   return (
@@ -35,6 +44,7 @@ export function BusinessDropdown({ businessName, adminName, adminEmail, onSignOu
             className="gap-2 px-2 py-1.5 h-auto hover:bg-muted/50"
           >
             <Avatar className="h-8 w-8 shrink-0">
+              {businessLogoUrl ? <AvatarImage src={businessLogoUrl} alt="" /> : null}
               <AvatarFallback className="bg-primary text-primary-foreground text-xs">
                 {adminName.slice(0, 2).toUpperCase()}
               </AvatarFallback>
@@ -48,6 +58,7 @@ export function BusinessDropdown({ businessName, adminName, adminEmail, onSignOu
           >
             <div className="flex items-center gap-3 flex-1 min-w-0">
               <Avatar className="h-8 w-8">
+                {businessLogoUrl ? <AvatarImage src={businessLogoUrl} alt="" /> : null}
                 <AvatarFallback className="bg-primary text-primary-foreground text-xs">
                   {businessName.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
@@ -89,6 +100,7 @@ export function BusinessDropdown({ businessName, adminName, adminEmail, onSignOu
             <div className="px-3 py-2">
               <div className="flex items-center gap-3">
                 <Avatar className="h-8 w-8">
+                  {businessLogoUrl ? <AvatarImage src={businessLogoUrl} alt="" /> : null}
                   <AvatarFallback className="bg-primary text-primary-foreground text-xs">
                     {businessName.slice(0, 2).toUpperCase()}
                   </AvatarFallback>
