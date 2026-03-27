@@ -1,7 +1,7 @@
 "use client"
 
-import { useSearchParams, useRouter } from "next/navigation"
-import { Suspense } from "react"
+import { useSearchParams } from "next/navigation"
+import { Suspense, useEffect, useState } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SettingsPersonalTab } from "@/components/settings/settings-personal-tab"
 import { SettingsBusinessTab } from "@/components/settings/settings-business-tab"
@@ -13,16 +13,23 @@ type TabValue = (typeof TABS)[number]
 
 function SettingsContent() {
   const searchParams = useSearchParams()
-  const router = useRouter()
   const tab = (searchParams.get("tab") || "personal") as TabValue
   const validTab = TABS.includes(tab) ? tab : "personal"
+  const [activeTab, setActiveTab] = useState<TabValue>(validTab)
+
+  useEffect(() => {
+    setActiveTab(validTab)
+  }, [validTab])
 
   const handleTabChange = (value: string) => {
     if (!TABS.includes(value as TabValue)) return
-    if (value === validTab) return
+    if (value === activeTab) return
+    setActiveTab(value as TabValue)
     const next = new URLSearchParams(searchParams.toString())
     next.set("tab", value)
-    router.replace(`/settings?${next.toString()}`)
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", `/settings?${next.toString()}`)
+    }
   }
 
   return (
@@ -32,7 +39,7 @@ function SettingsContent() {
         <p className="text-muted-foreground mt-2">Manage your account settings and preferences</p>
       </div>
 
-      <Tabs value={validTab} onValueChange={handleTabChange} className="w-full">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
         <TabsList className="w-full justify-start flex-wrap h-auto gap-1 p-1">
           <TabsTrigger value="personal">Personal</TabsTrigger>
           <TabsTrigger value="business">Business</TabsTrigger>
