@@ -445,6 +445,7 @@ export function SettingsPersonalTab() {
             <Button
               variant="outline"
               size="sm"
+              className={!mfaVerifiedOn ? "relative min-w-[5.5rem]" : undefined}
               disabled={!mfaStatusKnown || mfaSetupPreparing}
               onClick={() => {
                 if (mfaVerifiedOn) {
@@ -456,7 +457,12 @@ export function SettingsPersonalTab() {
               aria-label={!mfaVerifiedOn && mfaSetupPreparing ? "Preparing MFA setup" : undefined}
             >
               {!mfaVerifiedOn && mfaSetupPreparing ? (
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                <>
+                  <span className="invisible">Set up</span>
+                  <span className="absolute inset-0 flex items-center justify-center">
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  </span>
+                </>
               ) : mfaVerifiedOn ? (
                 "Turn off 2FA"
               ) : (

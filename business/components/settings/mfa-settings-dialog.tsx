@@ -296,7 +296,7 @@ export function MfaSettingsDialog({
                   </p>
                   <Button
                     type="button"
-                    className="min-w-[11.5rem]"
+                    className="relative min-w-[11.5rem]"
                     onClick={() => {
                       enrollGenRef.current += 1
                       void startEnroll(enrollGenRef.current)
@@ -305,7 +305,12 @@ export function MfaSettingsDialog({
                     aria-label={enrollFetching ? "Preparing MFA setup" : undefined}
                   >
                     {enrollFetching ? (
-                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                      <>
+                        <span className="invisible">Set up</span>
+                        <span className="absolute inset-0 flex items-center justify-center">
+                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                        </span>
+                      </>
                     ) : (
                       "Set up"
                     )}
