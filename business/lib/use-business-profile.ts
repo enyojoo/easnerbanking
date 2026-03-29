@@ -122,6 +122,8 @@ export function useBusinessProfile() {
   const { user } = useAuth()
   const [profile, setProfile] = useState<BusinessProfile>(DEFAULT_PROFILE)
   const [isLoading, setIsLoading] = useState(false)
+  const [isFresh, setIsFresh] = useState(false)
+  const [hasData, setHasData] = useState(false)
   const mountedRef = useRef(true)
 
   // Hydrate from localStorage before paint so header/nav avoid skeleton + skip redundant fetch when fresh.
@@ -129,6 +131,8 @@ export function useBusinessProfile() {
     if (!user?.id) {
       setProfile(DEFAULT_PROFILE)
       setIsLoading(false)
+      setIsFresh(false)
+      setHasData(false)
       return
     }
     businessProfileStore.hydrateSync(user.id)
@@ -136,8 +140,12 @@ export function useBusinessProfile() {
     if (d) {
       setProfile(profileFromStore())
       setIsLoading(false)
+      setIsFresh(businessProfileStore.isFresh())
+      setHasData(true)
     } else {
       setIsLoading(true)
+      setIsFresh(false)
+      setHasData(false)
     }
   }, [user?.id])
 
@@ -145,6 +153,8 @@ export function useBusinessProfile() {
     mountedRef.current = true
 
     if (!user?.id) {
+      setIsFresh(false)
+      setHasData(false)
       return
     }
 
@@ -164,6 +174,8 @@ export function useBusinessProfile() {
         ...d.profile,
         countryCode: d.profile.countryCode ?? countryCodeFromName(d.profile.country),
       })
+      setIsFresh(businessProfileStore.isFresh())
+      setHasData(true)
     })
 
     const onUpdate = () => {
@@ -183,5 +195,7 @@ export function useBusinessProfile() {
   return {
     ...profile,
     isLoading,
+    isFresh,
+    hasData,
   }
 }
