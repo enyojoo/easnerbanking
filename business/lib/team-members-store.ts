@@ -1,6 +1,7 @@
 "use client"
 
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
+import { fetchWithSession } from "@/lib/fetch-with-session"
 import { dataCache, CACHE_KEYS } from "@/lib/cache"
 
 export type TeamMember = {
@@ -89,7 +90,7 @@ class TeamMembersStore {
     const { data } = await supabase.auth.getSession()
     if (!data.session) throw new Error("No session")
 
-    const res = await fetch("/api/settings/team")
+    const res = await fetchWithSession("/api/settings/team")
     if (!res.ok) throw new Error("Failed to load team members")
 
     const json = (await res.json()) as { members?: TeamMember[]; canManageMembers?: boolean }

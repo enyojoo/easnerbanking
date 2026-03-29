@@ -1,6 +1,7 @@
 "use client"
 
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
+import { fetchWithSession } from "@/lib/fetch-with-session"
 import { dataCache, CACHE_KEYS } from "@/lib/cache"
 import type { BusinessProfile } from "@/lib/use-business-profile"
 
@@ -82,7 +83,7 @@ class BusinessProfileStore {
     const { data } = await supabase.auth.getSession()
     if (!data.session) throw new Error("No session")
 
-    const res = await fetch("/api/business/profile")
+    const res = await fetchWithSession("/api/business/profile")
     if (!res.ok) throw new Error("Failed to load profile")
 
     const json = (await res.json()) as { profile?: BusinessProfile }

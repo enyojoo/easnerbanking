@@ -23,9 +23,10 @@ export async function getUserFromBearer(request: Request): Promise<User | null> 
 }
 
 /**
- * Prefer the Supabase session from cookies so we do not duplicate the JWT in
- * `Authorization` + cookie headers (can exceed edge limits → HTTP 494).
- * Falls back to `Authorization: Bearer` when no cookie session (Office, scripts, etc.).
+ * Prefer the Supabase session from cookies (SSR / `@supabase/ssr` browser client).
+ * The default `createClient` in the business app uses **localStorage**, so there is
+ * often no session cookie — same-origin requests must send `Authorization: Bearer`
+ * (see `fetchWithSession`). Falls back to Bearer when cookie session is missing.
  */
 export async function getUserFromApiRequest(request: Request): Promise<User | null> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL

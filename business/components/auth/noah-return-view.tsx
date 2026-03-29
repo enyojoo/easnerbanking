@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import Link from "next/link"
 import { LayoutDashboard, Smartphone } from "lucide-react"
+import { fetchWithSession } from "@/lib/fetch-with-session"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 
 /** Universal link / app link target — aligns with `mobile` `DeepLinkService` (`/user/dashboard` on easner.com). */
@@ -29,7 +30,7 @@ export function NoahReturnView({ variant }: { variant: NoahReturnVariant }) {
         return
       }
       try {
-        await fetch("/api/noah/sync-status", {
+        await fetchWithSession("/api/noah/sync-status", {
           method: "GET",
           headers: {
             "X-Easner-Noah-Scope": variant === "kyb" ? "business" : "individual",

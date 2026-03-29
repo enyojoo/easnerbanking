@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
 import type { User } from "@supabase/supabase-js"
+import { fetchWithSession } from "@/lib/fetch-with-session"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { getOnboarding } from "@/lib/onboarding-store"
 
@@ -63,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           : [user.user_metadata?.first_name, user.user_metadata?.last_name].filter(Boolean).join(" ")
 
       try {
-        await fetch("/api/auth/bootstrap", {
+        await fetchWithSession("/api/auth/bootstrap", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ countryCode, role, fullName: fullNameFromMeta || null }),

@@ -1,6 +1,7 @@
 "use client"
 
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
+import { fetchWithSession } from "@/lib/fetch-with-session"
 import { dataCache, CACHE_KEYS } from "@/lib/cache"
 
 export type PersonalSettings = {
@@ -86,7 +87,7 @@ class PersonalSettingsStore {
     const { data } = await supabase.auth.getSession()
     if (!data.session) throw new Error("No session")
 
-    const res = await fetch("/api/settings/personal")
+    const res = await fetchWithSession("/api/settings/personal")
     if (!res.ok) throw new Error("Failed to load personal settings")
 
     const json = (await res.json()) as {

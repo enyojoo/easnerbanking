@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { User, Mail, Phone, Calendar, Edit, X, Check, Key, Smartphone } from "lucide-react"
+import { fetchWithSession } from "@/lib/fetch-with-session"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { useAuth } from "@/lib/auth-context"
 import { CACHE_KEYS, dataCache } from "@/lib/cache"
@@ -194,7 +195,7 @@ export function SettingsPersonalTab() {
   const handleSave = async (section: string) => {
     const { data } = await supabase.auth.getSession()
     if (!data.session) return
-    await fetch("/api/settings/personal", {
+    await fetchWithSession("/api/settings/personal", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

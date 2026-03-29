@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Trash2, Users } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
+import { fetchWithSession } from "@/lib/fetch-with-session"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -140,7 +141,7 @@ export function SettingsTeamTab() {
       setSubmittingInvites(false)
       return
     }
-    const res = await fetch("/api/settings/team", {
+    const res = await fetchWithSession("/api/settings/team", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ invites: cleaned }),
@@ -173,7 +174,7 @@ export function SettingsTeamTab() {
       setUpdatingId(null)
       return
     }
-    const res = await fetch("/api/settings/team", {
+    const res = await fetchWithSession("/api/settings/team", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ membershipId: mid, role }),
@@ -200,9 +201,10 @@ export function SettingsTeamTab() {
       setUpdatingId(null)
       return
     }
-    const res = await fetch(`/api/settings/team?membershipId=${encodeURIComponent(mid)}`, {
-      method: "DELETE",
-    })
+    const res = await fetchWithSession(
+      `/api/settings/team?membershipId=${encodeURIComponent(mid)}`,
+      { method: "DELETE" },
+    )
     if (!res.ok) {
       const json = (await res.json().catch(() => ({ error: "Failed to remove member" }))) as { error?: string }
       setMembersError(json.error || "Failed to remove member")

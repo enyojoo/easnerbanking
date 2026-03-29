@@ -5,6 +5,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { fetchWithSession } from "@/lib/fetch-with-session"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { Button } from "@/components/ui/button"
@@ -64,7 +65,7 @@ export function BusinessVerificationSection() {
         setError("You need to be signed in.")
         return
       }
-      const res = await fetch("/api/noah/kyc-links", {
+      const res = await fetchWithSession("/api/noah/kyc-links", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "business" }),

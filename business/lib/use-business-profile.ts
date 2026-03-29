@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import { fetchWithSession } from "@/lib/fetch-with-session"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { useAuth } from "@/lib/auth-context"
 import { countries } from "@/lib/countries"
@@ -91,7 +92,7 @@ export async function updateBusinessProfile(payload: {
   const { data } = await supabase.auth.getSession()
   if (!data.session) return null
 
-  const res = await fetch("/api/business/profile", {
+  const res = await fetchWithSession("/api/business/profile", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

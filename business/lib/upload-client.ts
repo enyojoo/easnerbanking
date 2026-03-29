@@ -1,5 +1,6 @@
 "use client"
 
+import { fetchWithSession } from "@/lib/fetch-with-session"
 import { UPLOAD_MAX_BYTES } from "@/lib/upload-constants"
 
 export type UploadProfileAvatarResult = { url: string } | { error: string }
@@ -11,7 +12,7 @@ export async function uploadProfileAvatar(file: File): Promise<UploadProfileAvat
   }
   const form = new FormData()
   form.append("file", file)
-  const res = await fetch("/api/upload/profile-avatar", {
+  const res = await fetchWithSession("/api/upload/profile-avatar", {
     method: "POST",
     body: form,
   })
@@ -27,7 +28,7 @@ export async function uploadOrganizationLogo(file: File): Promise<UploadOrgLogoR
   }
   const form = new FormData()
   form.append("file", file)
-  const res = await fetch("/api/upload/organization-logo", {
+  const res = await fetchWithSession("/api/upload/organization-logo", {
     method: "POST",
     body: form,
   })
