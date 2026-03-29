@@ -12,6 +12,12 @@ export type TotpFactorLike = {
   friendly_name?: string
 }
 
+export type TotpEnrollSetup = {
+  factorId: string
+  qrDataUrl: string
+  secret: string | null
+}
+
 /** `listFactors().totp` may omit unverified factors; use `all` filtered by type. */
 export function totpFactorsFromListResponse(data: {
   all?: Array<{ factor_type: string; id: string; status: string; friendly_name?: string }>
@@ -52,6 +58,49 @@ export async function unenrollUnverifiedTotpFactors(client: SupabaseClient): Pro
 export function isDuplicateMfaFriendlyNameError(message: string): boolean {
   const m = message.toLowerCase()
   return m.includes("already exists") && m.includes("friendly")
+}
+
+/** Name shown in authenticator apps from the otpauth URI / factor metadata. */
+export const MFA_TOTP_ISSUER = "Easner Banking"
+
+export async function beginTotpEnrollment(client: SupabaseClient): Promise<TotpEnrollSetup> {
+  await unenrollUnverifiedTotpFactors(client)
+
+  const {
+    data: { session },
+  } = await client.auth.getSession()
+  const email = session?.user?.email?.trim() ?? null
+  const enrollParams = {
+    factorType: "totp" as const,
+    issuer: MFA_TOTP_ISSUER,
+    friendlyName: email ? `${MFA_TOTP_ISSUER} (${email})` : MFA_TOTP_ISSUER,
+  }
+
+  let { data, error: enErr } = await client.auth.mfa.enroll(enrollParams)
+  if (enErr && isDuplicateMfaFriendlyNameError(enErr.message)) {
+    await unenrollUnverifiedTotpFactors(client)
+    const second = await client.auth.mfa.enroll(enrollParams)
+    data = second.data
+    enErr = second.error
+  }
+
+  if (enErr || !data) {
+    throw new Error(enErr?.message || "Could not start enrollment. Is TOTP enabled in your project?")
+  }
+  if (data.type !== "totp" || !data.totp) {
+    throw new Error("Unexpected response from the server.")
+  }
+
+  const { qr_code, secret } = data.totp
+  const qrDataUrl = qr_code.startsWith("data:")
+    ? qr_code
+    : `data:image/svg+xml;utf-8,${encodeURIComponent(qr_code)}`
+
+  return {
+    factorId: data.id,
+    qrDataUrl,
+    secret: secret ?? null,
+  }
 }
 
 /** After password sign-in, true when GoTrue requires MFA (TOTP) to reach AAL2. */

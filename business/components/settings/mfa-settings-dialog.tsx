@@ -15,8 +15,9 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import {
+  beginTotpEnrollment,
   getVerifiedTotpFactorId,
-  isDuplicateMfaFriendlyNameError,
+  type TotpEnrollSetup,
   type TotpFactorLike,
   totpFactorsFromListResponse,
   unenrollUnverifiedTotpFactors,
@@ -32,12 +33,11 @@ interface MfaSettingsDialogProps {
   mfaStatusKnown?: boolean
   /** When true (e.g. user tapped "Set up" on the card), open straight into the QR step and start enroll immediately. */
   autoStartEnroll?: boolean
+  /** Prefetched QR/secret so the dialog can render fully populated on open. */
+  initialEnrollSetup?: TotpEnrollSetup | null
 }
 
 type View = "list" | "enroll"
-
-/** Passed to GoTrue as `issuer` — appears in the otpauth URI / authenticator app (e.g. “Easner Banking”). */
-const MFA_TOTP_ISSUER = "Easner Banking"
 
 /** Must match `duration-300` on `DialogOverlay` / `DialogContent` in `dialog.tsx`. */
 const DIALOG_EXIT_ANIMATION_MS = 300
@@ -49,6 +49,7 @@ export function MfaSettingsDialog({
   initialTotpVerified = false,
   mfaStatusKnown = true,
   autoStartEnroll = false,
+  initialEnrollSetup = null,
 }: MfaSettingsDialogProps) {
   const [view, setView] = useState<View>("list")
   const [factors, setFactors] = useState<TotpFactorLike[]>([])
@@ -90,44 +91,15 @@ export function MfaSettingsDialog({
     setEnrollFetching(true)
     try {
       const supabase = createSupabaseBrowser()
-      await unenrollUnverifiedTotpFactors(supabase)
-
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      const email = session?.user?.email?.trim() ?? null
-      const enrollParams = {
-        factorType: "totp" as const,
-        /** Shown in authenticator apps from the otpauth URI (replaces default project/site name). */
-        issuer: MFA_TOTP_ISSUER,
-        /** Stored on the factor and helps avoid duplicate-name clashes; email distinguishes accounts. */
-        friendlyName: email ? `${MFA_TOTP_ISSUER} (${email})` : MFA_TOTP_ISSUER,
-      }
-
-      let { data, error: enErr } = await supabase.auth.mfa.enroll(enrollParams)
-      if (enErr && isDuplicateMfaFriendlyNameError(enErr.message)) {
-        await unenrollUnverifiedTotpFactors(supabase)
-        const second = await supabase.auth.mfa.enroll(enrollParams)
-        data = second.data
-        enErr = second.error
-      }
+      const setup = await beginTotpEnrollment(supabase)
       if (generation !== enrollGenRef.current) return
-      if (enErr || !data) {
-        setError(enErr?.message || "Could not start enrollment. Is TOTP enabled in your project?")
-        return
-      }
-      if (data.type !== "totp" || !data.totp) {
-        setError("Unexpected response from the server.")
-        return
-      }
-      const { qr_code, secret: sec } = data.totp
-      const qrSrc = qr_code.startsWith("data:")
-        ? qr_code
-        : `data:image/svg+xml;utf-8,${encodeURIComponent(qr_code)}`
-      setEnrollFactorId(data.id)
-      setQrDataUrl(qrSrc)
-      setSecret(sec ?? null)
+      setEnrollFactorId(setup.factorId)
+      setQrDataUrl(setup.qrDataUrl)
+      setSecret(setup.secret)
       setView("enroll")
+    } catch (error) {
+      if (generation !== enrollGenRef.current) return
+      setError(error instanceof Error ? error.message : "Could not start enrollment.")
     } finally {
       if (generation === enrollGenRef.current) {
         setEnrollFetching(false)
@@ -156,10 +128,18 @@ export function MfaSettingsDialog({
       setView("list")
       return
     }
+    if (initialEnrollSetup) {
+      setEnrollFactorId(initialEnrollSetup.factorId)
+      setQrDataUrl(initialEnrollSetup.qrDataUrl)
+      setSecret(initialEnrollSetup.secret)
+      setView("enroll")
+      void loadFactors()
+      return
+    }
     setView("enroll")
     void loadFactors()
     void startEnroll(generation)
-  }, [open, autoStartEnroll, initialTotpVerified, mfaStatusKnown, loadFactors, startEnroll])
+  }, [open, autoStartEnroll, initialTotpVerified, mfaStatusKnown, initialEnrollSetup, loadFactors, startEnroll])
 
   /** Open dialog without auto-start, or rare “card said On” edge: confirm factors from API. */
   useEffect(() => {
@@ -323,7 +303,14 @@ export function MfaSettingsDialog({
                     }}
                     disabled={enrollFetching}
                   >
-                    Set up
+                    {enrollFetching ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                        Preparing…
+                      </>
+                    ) : (
+                      "Set up"
+                    )}
                   </Button>
                 </>
               )}

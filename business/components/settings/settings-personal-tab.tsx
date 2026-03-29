@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { User, Mail, Phone, Calendar, Edit, X, Check, Key, Smartphone } from "lucide-react"
+import { User, Mail, Phone, Calendar, Edit, X, Check, Key, Smartphone, Loader2 } from "lucide-react"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { useAuth } from "@/lib/auth-context"
@@ -25,14 +25,49 @@ import {
 import { ChangePasswordDialog } from "@/components/settings/change-password-dialog"
 import { MfaSettingsDialog } from "@/components/settings/mfa-settings-dialog"
 import {
+  beginTotpEnrollment,
   getVerifiedTotpFactorId,
   hasEmailPasswordIdentity,
+  type TotpEnrollSetup,
   totpFactorsFromListResponse,
   unenrollUnverifiedTotpFactors,
 } from "@/lib/auth-mfa"
 
 /** Aligns with personal settings store / dataCache freshness window. */
 const MFA_STATUS_CACHE_TTL_MS = 5 * 60 * 1000
+/** Keep local MFA snapshot long enough to avoid flicker after reload / new tab. */
+const MFA_STATUS_LS_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
+
+type MfaStatusSnapshot = {
+  statusLine: string
+}
+
+function mfaStatusCacheKey(userId: string) {
+  return `mfa_security_cache_${userId}`
+}
+
+function loadMfaStatusFromLocalStorage(userId: string): MfaStatusSnapshot | null {
+  if (typeof window === "undefined") return null
+  const raw = localStorage.getItem(mfaStatusCacheKey(userId))
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as { data?: MfaStatusSnapshot; timestamp?: number }
+    if (!parsed?.data || typeof parsed.timestamp !== "number") return null
+    if (Date.now() - parsed.timestamp > MFA_STATUS_LS_MAX_AGE_MS) return null
+    return parsed.data
+  } catch {
+    return null
+  }
+}
+
+function saveMfaStatusToLocalStorage(userId: string, data: MfaStatusSnapshot) {
+  if (typeof window === "undefined") return
+  try {
+    localStorage.setItem(mfaStatusCacheKey(userId), JSON.stringify({ data, timestamp: Date.now() }))
+  } catch {
+    // ignore
+  }
+}
 
 export function SettingsPersonalTab() {
   const { user } = useAuth()
@@ -53,6 +88,9 @@ export function SettingsPersonalTab() {
   const [turnOffMfaOpen, setTurnOffMfaOpen] = useState(false)
   const [turnOffMfaSubmitting, setTurnOffMfaSubmitting] = useState(false)
   const [mfaStatusLine, setMfaStatusLine] = useState<string>("")
+  const [mfaStatusKnown, setMfaStatusKnown] = useState(false)
+  const [mfaSetupPreparing, setMfaSetupPreparing] = useState(false)
+  const [initialMfaEnrollSetup, setInitialMfaEnrollSetup] = useState<TotpEnrollSetup | null>(null)
   const mfaDialogOpenRef = useRef(false)
 
   const canUsePassword = hasEmailPasswordIdentity(user)
@@ -62,9 +100,20 @@ export function SettingsPersonalTab() {
     mfaDialogOpenRef.current = mfaDialogOpen
   }, [mfaDialogOpen])
 
-  const openMfaSetupFlow = () => {
+  const openMfaSetupFlow = async () => {
     setMfaAutoStartEnroll(true)
-    setMfaDialogOpen(true)
+    setMfaSetupPreparing(true)
+    setInitialMfaEnrollSetup(null)
+    try {
+      const setup = await beginTotpEnrollment(supabase)
+      setInitialMfaEnrollSetup(setup)
+      setMfaDialogOpen(true)
+    } catch {
+      setInitialMfaEnrollSetup(null)
+      setMfaDialogOpen(true)
+    } finally {
+      setMfaSetupPreparing(false)
+    }
   }
 
   const confirmTurnOffMfa = async () => {
@@ -96,6 +145,7 @@ export function SettingsPersonalTab() {
   const refreshMfaStatus = useCallback((options?: { force?: boolean }) => {
     if (!user?.id) {
       setMfaStatusLine("")
+      setMfaStatusKnown(false)
       return
     }
     const key = CACHE_KEYS.MFA_SECURITY(user.id)
@@ -103,6 +153,7 @@ export function SettingsPersonalTab() {
       const cached = dataCache.get<{ statusLine: string }>(key)
       if (cached != null && !dataCache.isStale(key)) {
         setMfaStatusLine(cached.statusLine)
+        setMfaStatusKnown(true)
         return
       }
     }
@@ -123,14 +174,42 @@ export function SettingsPersonalTab() {
           statusLine = "Off"
         }
       }
-      dataCache.set(key, { statusLine }, MFA_STATUS_CACHE_TTL_MS)
+      const snapshot = { statusLine }
+      dataCache.set(key, snapshot, MFA_STATUS_CACHE_TTL_MS)
+      saveMfaStatusToLocalStorage(user.id, snapshot)
       setMfaStatusLine(statusLine)
+      setMfaStatusKnown(true)
     })()
   }, [supabase, user?.id])
+
+  useLayoutEffect(() => {
+    if (!user?.id) {
+      setMfaStatusLine("")
+      setMfaStatusKnown(false)
+      return
+    }
+    const key = CACHE_KEYS.MFA_SECURITY(user.id)
+    const cached = dataCache.get<{ statusLine: string }>(key)
+    if (cached != null) {
+      setMfaStatusLine(cached.statusLine)
+      setMfaStatusKnown(true)
+      return
+    }
+    const local = loadMfaStatusFromLocalStorage(user.id)
+    if (local) {
+      dataCache.set(key, local, MFA_STATUS_CACHE_TTL_MS)
+      setMfaStatusLine(local.statusLine)
+      setMfaStatusKnown(true)
+      return
+    }
+    setMfaStatusLine("")
+    setMfaStatusKnown(false)
+  }, [user?.id])
 
   useEffect(() => {
     if (!user?.id) {
       setMfaStatusLine("")
+      setMfaStatusKnown(false)
       return
     }
     void refreshMfaStatus()
@@ -356,15 +435,35 @@ export function SettingsPersonalTab() {
               <Smartphone className="h-5 w-5 text-muted-foreground" />
               <div>
                 <p className="font-medium">Two-Factor Authentication</p>
-                <p className="text-sm text-muted-foreground">{mfaStatusLine || "—"}</p>
+                {mfaStatusKnown ? (
+                  <p className="text-sm text-muted-foreground">{mfaStatusLine}</p>
+                ) : (
+                  <div className="mt-1 h-4 w-12 animate-pulse rounded bg-muted" aria-hidden />
+                )}
               </div>
             </div>
             <Button
               variant="outline"
               size="sm"
-              onClick={() => (mfaVerifiedOn ? setTurnOffMfaOpen(true) : openMfaSetupFlow())}
+              disabled={!mfaStatusKnown || mfaSetupPreparing}
+              onClick={() => {
+                if (mfaVerifiedOn) {
+                  setTurnOffMfaOpen(true)
+                  return
+                }
+                void openMfaSetupFlow()
+              }}
             >
-              {mfaVerifiedOn ? "Turn off 2FA" : "Set up"}
+              {!mfaVerifiedOn && mfaSetupPreparing ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  Preparing…
+                </>
+              ) : mfaVerifiedOn ? (
+                "Turn off 2FA"
+              ) : (
+                "Set up"
+              )}
             </Button>
           </div>
         </CardContent>
@@ -375,12 +474,16 @@ export function SettingsPersonalTab() {
         open={mfaDialogOpen}
         onOpenChange={(o) => {
           setMfaDialogOpen(o)
-          if (!o) setMfaAutoStartEnroll(false)
+          if (!o) {
+            setMfaAutoStartEnroll(false)
+            setInitialMfaEnrollSetup(null)
+          }
         }}
         onFactorsChanged={() => void refreshMfaStatus({ force: true })}
         initialTotpVerified={mfaStatusLine === "On"}
-        mfaStatusKnown={Boolean(user?.id)}
+        mfaStatusKnown={mfaStatusKnown}
         autoStartEnroll={mfaAutoStartEnroll}
+        initialEnrollSetup={initialMfaEnrollSetup}
       />
 
       <AlertDialog open={turnOffMfaOpen} onOpenChange={setTurnOffMfaOpen}>
