@@ -3,10 +3,16 @@
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 
 /**
- * Same-origin `/api/*` calls with the Supabase session **cookies** (no `Authorization`
- * header — avoids HTTP 494 on Vercel when Bearer + cookies exceed edge header limits).
+ * Authenticated same-origin `/api/*` calls for the business app:
+ * - **`Authorization: Bearer`** from `getSession()` (session in localStorage).
+ * - **`credentials: "omit"`** so the browser does **not** send the `Cookie` header.
+ *   Legacy `sb-*` Supabase cookies from older deploys can exceed Vercel’s
+ *   `REQUEST_HEADER_TOO_LARGE` limit when combined with other headers.
  *
- * On **401**, refresh the session once and retry (expired access token, etc.).
+ * Routes that rely on **cookies** (e.g. `easner_business_owner_ip`) must use plain
+ * `fetch` with default credentials, not this helper.
+ *
+ * On **401**, refresh the session once and retry.
  */
 export async function fetchWithSession(
   input: RequestInfo | URL,
@@ -14,18 +20,26 @@ export async function fetchWithSession(
 ): Promise<Response> {
   const supabase = createSupabaseBrowser()
 
-  const doFetch = () => fetch(input, { ...init, credentials: "include" })
+  const doFetch = (accessToken: string | undefined) => {
+    const headers = new Headers(init.headers)
+    if (accessToken) {
+      headers.set("Authorization", `Bearer ${accessToken}`)
+    }
+    return fetch(input, { ...init, headers, credentials: "omit" })
+  }
 
-  let res = await doFetch()
+  const { data } = await supabase.auth.getSession()
+  let res = await doFetch(data.session?.access_token)
 
   if (res.status !== 401) {
     return res
   }
 
   const { data: refreshed } = await supabase.auth.refreshSession()
-  if (!refreshed.session) {
+  const next = refreshed.session?.access_token
+  if (!next) {
     return res
   }
 
-  return doFetch()
+  return doFetch(next)
 }

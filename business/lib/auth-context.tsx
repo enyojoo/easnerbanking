@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
 import type { User } from "@supabase/supabase-js"
 import { fetchWithSession } from "@/lib/fetch-with-session"
+import { clearLegacySupabaseAuthCookiesOnce } from "@/lib/supabase/clear-legacy-auth-cookies"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { getOnboarding } from "@/lib/onboarding-store"
 
@@ -25,6 +26,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     setMounted(true)
+    clearLegacySupabaseAuthCookiesOnce()
     let active = true
 
     supabase.auth

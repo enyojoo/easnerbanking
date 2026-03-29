@@ -23,11 +23,14 @@ export async function getUserFromBearer(request: Request): Promise<User | null> 
 }
 
 /**
- * Prefer the Supabase session from cookies (`createBrowserClient` in the business app).
- * Falls back to `Authorization: Bearer` for cross-origin callers (e.g. Easner Office)
- * that cannot send Easner session cookies.
+ * Resolves the user for Route Handlers. Prefer **`Authorization: Bearer`** (business app
+ * uses localStorage + `fetchWithSession` with `credentials: "omit"` to avoid oversized
+ * `Cookie` headers on Vercel). Falls back to Supabase cookies (SSR / cross-origin flows).
  */
 export async function getUserFromApiRequest(request: Request): Promise<User | null> {
+  const bearerUser = await getUserFromBearer(request)
+  if (bearerUser) return bearerUser
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
   if (url && key) {
@@ -58,5 +61,5 @@ export async function getUserFromApiRequest(request: Request): Promise<User | nu
       // cookies() unavailable outside a request context
     }
   }
-  return getUserFromBearer(request)
+  return null
 }
