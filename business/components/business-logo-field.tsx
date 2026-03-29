@@ -36,12 +36,11 @@ export function BusinessLogoField({
     try {
       const supabase = createSupabaseBrowser()
       const { data } = await supabase.auth.getSession()
-      const token = data.session?.access_token
-      if (!token) {
+      if (!data.session) {
         setUploadError("Sign in to upload.")
         return
       }
-      const result = await uploadOrganizationLogo(f, token)
+      const result = await uploadOrganizationLogo(f)
       if ("error" in result) {
         setUploadError(result.error)
         return

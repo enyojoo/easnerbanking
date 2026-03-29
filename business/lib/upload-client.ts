@@ -5,10 +5,7 @@ import { UPLOAD_MAX_BYTES } from "@/lib/upload-constants"
 export type UploadProfileAvatarResult = { url: string } | { error: string }
 export type UploadOrgLogoResult = { url: string } | { error: string }
 
-export async function uploadProfileAvatar(
-  file: File,
-  accessToken: string,
-): Promise<UploadProfileAvatarResult> {
+export async function uploadProfileAvatar(file: File): Promise<UploadProfileAvatarResult> {
   if (file.size > UPLOAD_MAX_BYTES) {
     return { error: `Image must be ${UPLOAD_MAX_BYTES / (1024 * 1024)}MB or smaller.` }
   }
@@ -16,7 +13,6 @@ export async function uploadProfileAvatar(
   form.append("file", file)
   const res = await fetch("/api/upload/profile-avatar", {
     method: "POST",
-    headers: { Authorization: `Bearer ${accessToken}` },
     body: form,
   })
   const json = (await res.json()) as { url?: string; error?: string }
@@ -25,10 +21,7 @@ export async function uploadProfileAvatar(
   return { url: json.url }
 }
 
-export async function uploadOrganizationLogo(
-  file: File,
-  accessToken: string,
-): Promise<UploadOrgLogoResult> {
+export async function uploadOrganizationLogo(file: File): Promise<UploadOrgLogoResult> {
   if (file.size > UPLOAD_MAX_BYTES) {
     return { error: `Image must be ${UPLOAD_MAX_BYTES / (1024 * 1024)}MB or smaller.` }
   }
@@ -36,7 +29,6 @@ export async function uploadOrganizationLogo(
   form.append("file", file)
   const res = await fetch("/api/upload/organization-logo", {
     method: "POST",
-    headers: { Authorization: `Bearer ${accessToken}` },
     body: form,
   })
   const json = (await res.json()) as { url?: string; error?: string }

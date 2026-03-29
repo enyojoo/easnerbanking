@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getUserFromBearer } from "@/lib/supabase/admin"
+import { getUserFromApiRequest } from "@/lib/supabase/admin"
 import { noahCustomerIdFromUserId, type NoahCustomerScope } from "@/lib/noah/customer-id"
 import { isNoahConfigured } from "@/lib/noah/config"
 
@@ -40,7 +40,7 @@ export function resolveNoahContext(
 }
 
 export async function requireAuth(request: Request) {
-  const user = await getUserFromBearer(request)
+  const user = await getUserFromApiRequest(request)
   if (!user) {
     return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) }
   }

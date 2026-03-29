@@ -130,8 +130,7 @@ export function SettingsTeamTab() {
 
     setSubmittingInvites(true)
     const { data } = await supabase.auth.getSession()
-    const token = data.session?.access_token
-    if (!token) {
+    if (!data.session) {
       setInviteError("Session expired. Please sign in again.")
       setSubmittingInvites(false)
       return
@@ -143,10 +142,7 @@ export function SettingsTeamTab() {
     }
     const res = await fetch("/api/settings/team", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ invites: cleaned }),
     })
 
@@ -172,18 +168,14 @@ export function SettingsTeamTab() {
     setUpdatingId(mid)
     setMembersError("")
     const { data } = await supabase.auth.getSession()
-    const token = data.session?.access_token
-    if (!token) {
+    if (!data.session) {
       setMembersError("Session expired. Please sign in again.")
       setUpdatingId(null)
       return
     }
     const res = await fetch("/api/settings/team", {
       method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ membershipId: mid, role }),
     })
     if (!res.ok) {
@@ -203,15 +195,13 @@ export function SettingsTeamTab() {
     setUpdatingId(mid)
     setMembersError("")
     const { data } = await supabase.auth.getSession()
-    const token = data.session?.access_token
-    if (!token) {
+    if (!data.session) {
       setMembersError("Session expired. Please sign in again.")
       setUpdatingId(null)
       return
     }
     const res = await fetch(`/api/settings/team?membershipId=${encodeURIComponent(mid)}`, {
       method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
     })
     if (!res.ok) {
       const json = (await res.json().catch(() => ({ error: "Failed to remove member" }))) as { error?: string }

@@ -89,15 +89,11 @@ export async function updateBusinessProfile(payload: {
 }) {
   const supabase = createSupabaseBrowser()
   const { data } = await supabase.auth.getSession()
-  const token = data.session?.access_token
-  if (!token) return null
+  if (!data.session) return null
 
   const res = await fetch("/api/business/profile", {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   })
   if (!res.ok) return null

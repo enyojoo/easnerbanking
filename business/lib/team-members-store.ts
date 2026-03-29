@@ -87,10 +87,9 @@ class TeamMembersStore {
   private async refresh(userId: string): Promise<StoreData> {
     const supabase = createSupabaseBrowser()
     const { data } = await supabase.auth.getSession()
-    const token = data.session?.access_token
-    if (!token) throw new Error("No session")
+    if (!data.session) throw new Error("No session")
 
-    const res = await fetch("/api/settings/team", { headers: { Authorization: `Bearer ${token}` } })
+    const res = await fetch("/api/settings/team")
     if (!res.ok) throw new Error("Failed to load team members")
 
     const json = (await res.json()) as { members?: TeamMember[]; canManageMembers?: boolean }

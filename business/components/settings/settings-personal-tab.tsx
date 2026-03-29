@@ -193,14 +193,10 @@ export function SettingsPersonalTab() {
   const handleCancel = () => setEditingSection(null)
   const handleSave = async (section: string) => {
     const { data } = await supabase.auth.getSession()
-    const token = data.session?.access_token
-    if (!token) return
+    if (!data.session) return
     await fetch("/api/settings/personal", {
       method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         fullName: formData.fullName,
         phone: formData.phone,

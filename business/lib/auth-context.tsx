@@ -52,8 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const bootstrap = async () => {
       const { data } = await supabase.auth.getSession()
-      const token = data.session?.access_token
-      if (!token) return
+      if (!data.session) return
 
       const onboarding = getOnboarding()
       const countryCode = onboarding?.countryCode || "US"
@@ -66,10 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         await fetch("/api/auth/bootstrap", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ countryCode, role, fullName: fullNameFromMeta || null }),
         })
       } catch (error) {

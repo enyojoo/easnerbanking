@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto"
 import { NextResponse } from "next/server"
-import { getUserFromBearer } from "@/lib/supabase/admin"
+import { getUserFromApiRequest } from "@/lib/supabase/admin"
 import { extensionForMime, uploadPublicImage, validateImageFile } from "@/lib/supabase/storage-server"
 
 export const runtime = "nodejs"
 
 export async function POST(request: Request) {
-  const user = await getUserFromBearer(request)
+  const user = await getUserFromApiRequest(request)
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   let form: FormData

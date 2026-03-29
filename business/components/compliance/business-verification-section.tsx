@@ -60,17 +60,13 @@ export function BusinessVerificationSection() {
     try {
       const supabase = createSupabaseBrowser()
       const { data } = await supabase.auth.getSession()
-      const token = data.session?.access_token
-      if (!token) {
+      if (!data.session) {
         setError("You need to be signed in.")
         return
       }
       const res = await fetch("/api/noah/kyc-links", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "business" }),
       })
       const text = await res.text()

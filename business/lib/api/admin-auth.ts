@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { createSupabaseAdmin, getUserFromBearer } from "@/lib/supabase/admin"
+import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 
 export type OfficeAdminContext = {
   userId: string
@@ -12,7 +12,7 @@ export type OfficeAdminContext = {
 export async function requireOfficeAdmin(request: Request): Promise<
   { ok: true; ctx: OfficeAdminContext } | { ok: false; response: NextResponse }
 > {
-  const user = await getUserFromBearer(request)
+  const user = await getUserFromApiRequest(request)
   if (!user) {
     return { ok: false, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) }
   }

@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server"
-import { createSupabaseAdmin, getUserFromBearer } from "@/lib/supabase/admin"
+import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 
 /**
  * GET — smoke test for Phase 0: Bearer token resolves to a Supabase user; optional admin_users check.
  */
 export async function GET(request: Request) {
-  const user = await getUserFromBearer(request)
+  const user = await getUserFromApiRequest(request)
   if (!user) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 })
   }

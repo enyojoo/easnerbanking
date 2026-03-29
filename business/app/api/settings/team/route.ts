@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { createSupabaseAdmin, getUserFromBearer } from "@/lib/supabase/admin"
+import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 
 type TeamMember = {
   id: string
@@ -67,7 +67,7 @@ async function requireOwner(admin: ReturnType<typeof createSupabaseAdmin>, userI
 }
 
 export async function GET(request: Request) {
-  const user = await getUserFromBearer(request)
+  const user = await getUserFromApiRequest(request)
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const admin = createSupabaseAdmin()
@@ -149,7 +149,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const user = await getUserFromBearer(request)
+  const user = await getUserFromApiRequest(request)
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   let body: { invites?: InviteRow[] } = {}
@@ -195,7 +195,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const user = await getUserFromBearer(request)
+  const user = await getUserFromApiRequest(request)
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   let body: { membershipId?: string; role?: "Admin" | "Member" | "Viewer" } = {}
@@ -236,7 +236,7 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const user = await getUserFromBearer(request)
+  const user = await getUserFromApiRequest(request)
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const url = new URL(request.url)

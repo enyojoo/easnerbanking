@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { createSupabaseAdmin, getUserFromBearer } from "@/lib/supabase/admin"
+import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { countries } from "@/lib/countries"
 
 type BootstrapBody = {
@@ -79,7 +79,7 @@ async function ensureOwnerMembership(params: {
 }
 
 export async function POST(request: Request) {
-  const user = await getUserFromBearer(request)
+  const user = await getUserFromApiRequest(request)
   if (!user) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 })
   }

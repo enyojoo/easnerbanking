@@ -84,10 +84,9 @@ class PersonalSettingsStore {
   private async refresh(userId: string): Promise<StoreData> {
     const supabase = createSupabaseBrowser()
     const { data } = await supabase.auth.getSession()
-    const token = data.session?.access_token
-    if (!token) throw new Error("No session")
+    if (!data.session) throw new Error("No session")
 
-    const res = await fetch("/api/settings/personal", { headers: { Authorization: `Bearer ${token}` } })
+    const res = await fetch("/api/settings/personal")
     if (!res.ok) throw new Error("Failed to load personal settings")
 
     const json = (await res.json()) as {

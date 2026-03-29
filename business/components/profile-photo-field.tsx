@@ -33,12 +33,11 @@ export function ProfilePhotoField({
     try {
       const supabase = createSupabaseBrowser()
       const { data } = await supabase.auth.getSession()
-      const token = data.session?.access_token
-      if (!token) {
+      if (!data.session) {
         setUploadError("Sign in to upload.")
         return
       }
-      const result = await uploadProfileAvatar(f, token)
+      const result = await uploadProfileAvatar(f)
       if ("error" in result) {
         setUploadError(result.error)
         return

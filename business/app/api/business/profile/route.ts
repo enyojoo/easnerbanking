@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { countries } from "@/lib/countries"
-import { createSupabaseAdmin, getUserFromBearer } from "@/lib/supabase/admin"
+import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 
 type UpdateBody = {
   businessName?: string
@@ -182,7 +182,7 @@ async function fetchOrganizationProfile(admin: ReturnType<typeof createSupabaseA
 }
 
 export async function GET(request: Request) {
-  const user = await getUserFromBearer(request)
+  const user = await getUserFromApiRequest(request)
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const admin = createSupabaseAdmin()
@@ -291,7 +291,7 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const user = await getUserFromBearer(request)
+  const user = await getUserFromApiRequest(request)
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   let body: UpdateBody = {}

@@ -24,8 +24,7 @@ export function NoahReturnView({ variant }: { variant: NoahReturnVariant }) {
     ;(async () => {
       const supabase = createSupabaseBrowser()
       const { data } = await supabase.auth.getSession()
-      const token = data.session?.access_token
-      if (!token || cancelled) {
+      if (!data.session?.access_token || cancelled) {
         window.dispatchEvent(new Event("business-profile-updated"))
         return
       }
@@ -33,7 +32,6 @@ export function NoahReturnView({ variant }: { variant: NoahReturnVariant }) {
         await fetch("/api/noah/sync-status", {
           method: "GET",
           headers: {
-            Authorization: `Bearer ${token}`,
             "X-Easner-Noah-Scope": variant === "kyb" ? "business" : "individual",
           },
         })
