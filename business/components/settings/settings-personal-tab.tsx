@@ -424,7 +424,7 @@ export function SettingsPersonalTab() {
             <Button
               variant="outline"
               size="sm"
-              className="min-w-[5.5rem]"
+              className="w-[9.5rem] justify-center"
               disabled={!canUsePassword}
               onClick={() => setChangePasswordOpen(true)}
             >
@@ -446,7 +446,7 @@ export function SettingsPersonalTab() {
             <Button
               variant="outline"
               size="sm"
-              className={!mfaVerifiedOn ? "relative min-w-[5.5rem]" : undefined}
+              className="relative w-[9.5rem] justify-center"
               disabled={!mfaStatusKnown || mfaSetupPreparing}
               onClick={() => {
                 if (mfaVerifiedOn) {
