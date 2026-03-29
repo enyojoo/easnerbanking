@@ -424,7 +424,6 @@ export function SettingsPersonalTab() {
             <Button
               variant="outline"
               size="sm"
-              className="w-[9.5rem] justify-center"
               disabled={!canUsePassword}
               onClick={() => setChangePasswordOpen(true)}
             >
@@ -444,9 +443,9 @@ export function SettingsPersonalTab() {
               </div>
             </div>
             <Button
+              className="w-[5.75rem]"
               variant="outline"
               size="sm"
-              className="relative w-[9.5rem] justify-center"
               disabled={!mfaStatusKnown || mfaSetupPreparing}
               onClick={() => {
                 if (mfaVerifiedOn) {
@@ -458,14 +457,9 @@ export function SettingsPersonalTab() {
               aria-label={!mfaVerifiedOn && mfaSetupPreparing ? "Preparing MFA setup" : undefined}
             >
               {!mfaVerifiedOn && mfaSetupPreparing ? (
-                <>
-                  <span className="invisible">Set up</span>
-                  <span className="absolute inset-0 flex items-center justify-center">
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                  </span>
-                </>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
               ) : mfaVerifiedOn ? (
-                "Turn off 2FA"
+                "Disable"
               ) : (
                 "Set up"
               )}
@@ -494,7 +488,7 @@ export function SettingsPersonalTab() {
       <AlertDialog open={turnOffMfaOpen} onOpenChange={setTurnOffMfaOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Turn off two-factor authentication?</AlertDialogTitle>
+            <AlertDialogTitle>Disable two-factor authentication?</AlertDialogTitle>
             <AlertDialogDescription>
               You will only need your password to sign in. You can turn 2FA back on anytime.
             </AlertDialogDescription>
@@ -508,7 +502,7 @@ export function SettingsPersonalTab() {
               }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Turn off
+              Yes, Disable
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
