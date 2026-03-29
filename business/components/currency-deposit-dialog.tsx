@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import Link from "next/link"
 import {
   Dialog,
   DialogContent,
@@ -15,6 +15,8 @@ import { Copy, Check, Plus, Share2 } from "lucide-react"
 import { mockStablecoinAccounts, type Account } from "@/lib/mock-data"
 import { QRCodeSVG } from "qrcode.react"
 import { CurrencyFlag } from "@easner/shared"
+import { useBusinessProfile } from "@/lib/use-business-profile"
+import { TIER2_COMPLETE_PLACEHOLDER } from "@/lib/compliance-placeholders"
 
 interface CopyableFieldProps {
   label: string
@@ -103,8 +105,14 @@ interface CurrencyDepositDialogProps {
 }
 
 export function CurrencyDepositDialog({ account, copiedField, onCopy }: CurrencyDepositDialogProps) {
+  const { tier1Complete } = useBusinessProfile()
   const stablecoinAccount = mockStablecoinAccounts.find((s) => s.currency === account.currency)
   const hasStablecoin = stablecoinAccount !== undefined
+
+  const isNgn = account.currency === "NGN"
+  const blockedByAfricanTier = isNgn && !TIER2_COMPLETE_PLACEHOLDER
+  const blockedByGlobalTier = !isNgn && !tier1Complete
+  const depositDetailsBlocked = blockedByAfricanTier || blockedByGlobalTier
 
   const handleShare = async (type: "bank" | "stablecoin") => {
     const bankDetails = type === "bank"
@@ -155,10 +163,26 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
             {account.currency} Deposit
           </DialogTitle>
           <DialogDescription>
-            Deposit funds via bank transfer or stablecoin. Both methods credit your {account.currency} balance.
+            {depositDetailsBlocked
+              ? blockedByAfricanTier
+                ? "African banking verification is required for NGN pay-in details."
+                : "Complete business verification to see deposit instructions."
+              : `Deposit funds via bank transfer or stablecoin. Both methods credit your ${account.currency} balance.`}
           </DialogDescription>
         </DialogHeader>
 
+        {depositDetailsBlocked ? (
+          <div className="rounded-lg border border-amber-200/80 bg-amber-50/60 p-4 space-y-3 text-sm text-foreground/90">
+            <p>
+              {blockedByAfricanTier
+                ? "Please complete African banking setup for your organization to receive NGN pay-in details and local pay-in/pay-out. This is separate from global account verification."
+                : "Please complete your business verification to receive bank and stablecoin deposit information."}
+            </p>
+            <Button asChild className="w-full sm:w-auto">
+              <Link href="/settings?tab=business">Business verification</Link>
+            </Button>
+          </div>
+        ) : (
         <Tabs defaultValue="bank" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="bank">
@@ -296,6 +320,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
             )}
           </TabsContent>
         </Tabs>
+        )}
       </DialogContent>
     </Dialog>
   )

@@ -5,9 +5,9 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "dev": "next dev --turbo",
+    "dev": "NODE_OPTIONS='--max-http-header-size=1048576' next dev --turbo",
     "lint": "eslint .",
-    "start": "next start"
+    "start": "NODE_OPTIONS='--max-http-header-size=1048576' next start"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

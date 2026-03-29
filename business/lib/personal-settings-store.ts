@@ -8,6 +8,8 @@ export type PersonalSettings = {
   email: string
   phone: string
   dateOfBirth: string
+  /** Data URL or URL from auth user_metadata */
+  avatarUrl: string | null
 }
 
 type StoreData = {
@@ -88,7 +90,16 @@ class PersonalSettingsStore {
     const res = await fetch("/api/settings/personal", { headers: { Authorization: `Bearer ${token}` } })
     if (!res.ok) throw new Error("Failed to load personal settings")
 
-    const json = (await res.json()) as { personal?: Partial<PersonalSettings> }
+    const json = (await res.json()) as {
+      personal?: Partial<PersonalSettings>
+      sessionRefreshSuggested?: boolean
+    }
+    if (json.sessionRefreshSuggested) {
+      await supabase.auth.refreshSession()
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("business-profile-updated"))
+      }
+    }
     const p = json.personal ?? {}
     const next: StoreData = {
       personal: {
@@ -96,6 +107,7 @@ class PersonalSettingsStore {
         email: p.email ?? "",
         phone: p.phone ?? "",
         dateOfBirth: p.dateOfBirth ?? "",
+        avatarUrl: typeof p.avatarUrl === "string" && p.avatarUrl.trim() ? p.avatarUrl : null,
       },
       lastUpdated: Date.now(),
     }

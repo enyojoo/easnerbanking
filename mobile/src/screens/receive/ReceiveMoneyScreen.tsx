@@ -1295,12 +1295,12 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                       {kycStatus === 'in_review'
                         ? 'Your verification is currently being reviewed. Once approved, your account information will appear here automatically.'
                         : !kycStatus
-                        ? 'Complete your identity verification to receive your bank account details. Once approved, your account information will appear here automatically.'
+                        ? 'Please complete your identity verification to receive bank and stablecoin deposit information. Once approved, your account information will appear here automatically.'
                         : kycStatus === 'rejected'
                         ? 'Your verification was not approved. Please complete identity verification again to receive your account details.'
                         : kycStatus === 'approved'
                         ? 'Your account is being set up. This may take a few moments. Please check back shortly.'
-                        : 'Complete your identity verification to receive your bank account details.'}
+                        : 'Please complete your identity verification to receive bank and stablecoin deposit information.'}
                     </Text>
                     {kycStatus !== 'approved' && kycStatus !== 'in_review' && (
                     <TouchableOpacity
@@ -1434,12 +1434,12 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                       {kycStatus === 'in_review'
                         ? 'Your verification is currently being reviewed. Once approved, your wallet information will appear here automatically.'
                         : !kycStatus
-                        ? `Complete your identity verification to receive your wallet address. Once approved, your wallet information will appear here automatically.`
+                        ? `Please complete your identity verification to receive bank and stablecoin deposit information. Once approved, your wallet information will appear here automatically.`
                         : kycStatus === 'rejected'
                         ? 'Your verification was not approved. Please complete identity verification again to receive your wallet address.'
                         : kycStatus === 'approved'
                         ? 'Your wallet is being set up. This may take a few moments. Please check back shortly.'
-                        : 'Complete your identity verification to receive your wallet address.'}
+                        : 'Please complete your identity verification to receive bank and stablecoin deposit information.'}
                     </Text>
                     {kycStatus !== 'approved' && kycStatus !== 'in_review' && (
                     <TouchableOpacity

@@ -23,6 +23,7 @@ import { noahService } from '../../lib/noahService'
 import { supabase } from '../../lib/supabase'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
+import { ComplianceTierLadder } from '../../components/ComplianceTierLadder'
 
 function AccountVerificationContent({ navigation }: NavigationProps) {
   const { userProfile, refreshUserProfile } = useAuth()
@@ -53,7 +54,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
   const tosProcessedRef = useRef(false)
   // Ref to prevent duplicate loadTOSStatus calls
   const loadingTosStatusRef = useRef(false)
-  // Ref to prevent multiple simultaneous Bridge status fetches
+  // Ref to prevent multiple simultaneous Noah / verification status fetches
   const fetchingNoahStatusRef = useRef(false)
   // Ref to track the last noah_signed_agreement_id we processed
   const lastProcessedTosAgreementIdRef = useRef<string | null>(null)
@@ -109,7 +110,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     }, [userProfile?.id, userProfile?.noah_kyc_status]) // Only refresh if status is missing
   )
 
-  // Sync Bridge status function - fetches from Bridge and updates database
+  // Sync Noah customer status — fetches from the verification API and updates the database
   const syncNoahStatus = useCallback(async (silent: boolean = false, force: boolean = false) => {
       if (!userProfile?.id || !userProfile?.noah_customer_id) return
       
@@ -185,7 +186,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     syncingRef.current = true
     try {
       if (!silent) {
-        console.log('[SYNC-STATUS] Syncing Bridge status...')
+        console.log('[SYNC-STATUS] Syncing Noah customer status...')
       }
       
       const result = await noahService.syncStatus()
@@ -228,7 +229,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     }
   }, [userProfile?.id, userProfile?.noah_customer_id, userProfile?.noah_kyc_status, userProfile?.noah_kyc_rejection_reasons, userProfile?.updated_at, refreshUserProfile])
 
-  // Sync Bridge status on mount - check if sync is needed based on data freshness
+  // Sync Noah status on mount — check if sync is needed based on data freshness
   // Use a ref to track if we've checked for initial sync
   const initialSyncCheckedRef = useRef(false)
   useEffect(() => {
@@ -354,12 +355,12 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     loadSubmissions()
   }, [userProfile?.id])
 
-  // Check if Bridge KYC is approved
+  // Check if individual KYC (Noah) is approved
   const noahKycApproved = userProfile?.noah_kyc_status === 'approved'
   const noahKycInReview = userProfile?.noah_kyc_status === 'under_review'
   const noahKycRejected = userProfile?.noah_kyc_status === 'rejected'
   
-  // TOS should appear when Bridge KYC is approved
+  // TOS should appear when KYC is approved
   const bothSubmitted = noahKycApproved
 
   // Load TOS status only if noah_signed_agreement_id is empty
@@ -513,7 +514,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
         // Update cache with database value (ensures cache matches database)
         await updateTosStatusInCache(true, userData.noah_signed_agreement_id, linkId)
         
-        // Don't fetch TOS link from Bridge API - not needed if already signed
+        // Don't fetch TOS link from verification API - not needed if already signed
         return
       }
       
@@ -528,8 +529,8 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
         await updateTosStatusInCache(false, null, null)
       }
       
-      // Only fetch from Bridge API if noah_signed_agreement_id is empty
-      // This should be rare - only if Bridge requires TOS again
+      // Only fetch from verification API if noah_signed_agreement_id is empty
+      // This should be rare — only if the host requires TOS again
       // First try to get TOS link (for cases where customer doesn't exist yet or needs new TOS)
       try {
         const response = await noahService.getTOSLink(userProfile.email!, 'individual')
@@ -540,7 +541,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
           setTosLink(link)
           setTosLinkId(linkId)
           
-          // Only check Bridge API status if we have a customer_id (to avoid unnecessary calls)
+          // Only check verification API status if we have a customer_id (to avoid unnecessary calls)
           if (userData?.noah_customer_id && linkId) {
             try {
               const status = await noahService.checkTOSStatus(linkId)
@@ -564,12 +565,12 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
               // The link is available for the user to sign
               setTosSigned(false)
               if (!silent) {
-                console.warn('[TOS-LOAD] Could not check TOS status from Bridge:', statusError.message)
+                console.warn('[TOS-LOAD] Could not check TOS status from Noah:', statusError.message)
               }
             }
           }
         } else if ((response as any).alreadyAccepted) {
-          // Bridge says TOS is already accepted but we don't have it in database
+          // Provider says TOS is already accepted but we don't have it in database
           // This shouldn't happen, but handle it gracefully
           setTosSigned(true)
           setTosLinkId(linkId)
@@ -761,7 +762,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
           if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
             Alert.alert(
               'TOS Link Unavailable',
-              'Unable to create Terms of Service link. This may be because:\n\n• TOS is already accepted\n• Bridge API key permission issue\n\nIf TOS is already accepted, you can ignore this error.'
+              'Unable to create Terms of Service link. This may be because:\n\n• TOS is already accepted\n• A temporary API permission issue\n\nIf TOS is already accepted, you can ignore this error.'
             )
           } else {
             Alert.alert(
@@ -825,25 +826,25 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     setTosCompleted(false)
     
     try {
-      // Always sync latest Bridge customer status before opening KYC
+      // Always sync latest Noah customer status before opening KYC
       // This ensures we have the current status and rejection_reasons even if database is outdated
       if (userProfile?.noah_customer_id) {
         try {
-          console.log('[KYC-OPEN] Syncing Bridge status before opening KYC...')
+          console.log('[KYC-OPEN] Syncing Noah status before opening KYC...')
           await syncNoahStatus(false, true) // Not silent, forced - always sync when customer_id is first discovered
         } catch (statusError: any) {
-          console.warn('[KYC-OPEN] Could not sync Bridge status:', statusError.message)
+          console.warn('[KYC-OPEN] Could not sync Noah status:', statusError.message)
           // Continue with KYC link creation even if sync fails
         }
       } else {
-        // No customer_id yet, but try to check if Bridge has a customer for this email
+        // No customer_id yet, but try to check if Noah has a customer for this email
         // This handles the case where customer_id wasn't stored properly
         try {
-          console.log('[KYC-OPEN] No noah_customer_id, checking Bridge API for existing customer...')
+          console.log('[KYC-OPEN] No noah_customer_id, checking verification API for existing customer...')
           const customerStatus = await noahService.getCustomerStatus()
           if (customerStatus && customerStatus.customerId) {
             // Found a customer! Store it in the database
-            console.log('[KYC-OPEN] Found customer in Bridge:', customerStatus.customerId)
+            console.log('[KYC-OPEN] Found customer in Noah:', customerStatus.customerId)
             const { error: updateError } = await supabase
               .from('users')
               .update({
@@ -867,7 +868,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
             }
           }
         } catch (checkError: any) {
-          console.log('[KYC-OPEN] No existing customer found in Bridge (this is expected for new users)')
+          console.log('[KYC-OPEN] No existing customer found in Noah (this is expected for new users)')
           // This is expected for new users, continue with KYC link creation
         }
       }
@@ -885,9 +886,9 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
       try {
         response = await noahService.getKycLink(fullName, userProfile.email, 'individual')
       } catch (error: any) {
-        // Handle case where Bridge returns existing KYC link in error
+        // Handle case where Noah returns existing KYC link in error
         if (error.message && error.message.includes('kyc link has already been created')) {
-          console.log('[KYC-OPEN] KYC link already exists, Bridge should include it in response')
+          console.log('[KYC-OPEN] KYC link already exists; response should include it')
           // The error might contain the existing link - check if we can extract it
           // If not, try to get it via customer lookup
           if (userProfile?.noah_customer_id) {
@@ -919,7 +920,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
       setKycStatus(response.kyc_status || 'not_started')
       setTosStatus(response.tos_status || 'pending')
       
-      // If customer_id is returned, store it in database and fetch current status from Bridge
+      // If customer_id is returned, store it in database and fetch current status from Noah
       if (response.customer_id && userProfile?.id) {
         try {
           // First, store customer_id immediately
@@ -937,13 +938,13 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
             console.log('[KYC-OPEN] Stored noah_customer_id:', response.customer_id)
           }
           
-          // Sync latest status from Bridge to ensure we have current data including rejection_reasons
+          // Sync latest status from Noah to ensure we have current data including rejection_reasons
           // This handles cases where database has old/missing status
           try {
-            console.log('[KYC-OPEN] Syncing latest customer status from Bridge...')
+            console.log('[KYC-OPEN] Syncing latest customer status from Noah...')
             await syncNoahStatus(false, true) // Not silent, forced - always sync when customer_id is first discovered
           } catch (statusError: any) {
-            console.warn('[KYC-OPEN] Could not sync status from Bridge:', statusError.message)
+            console.warn('[KYC-OPEN] Could not sync status from Noah:', statusError.message)
             // Fallback: use status from response if sync failed
             if (response.kyc_status) {
               await supabase
@@ -1013,7 +1014,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
 
   // TOS polling removed - relying on:
   // 1. PostMessage from WebView (immediate)
-  // 2. Bridge webhooks (automatic)
+  // 2. Noah webhooks (automatic)
   // 3. sync-status when screen loads (fallback)
 
   const createNoahCustomer = async (signedAgreementId: string) => {
@@ -1040,11 +1041,11 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
         setSubmissions(data || [])
       }
     } catch (error: any) {
-      console.error('Error creating Bridge customer:', error)
-      setCustomerError(error.message || 'Failed to create Bridge account')
+      console.error('Error creating Noah customer:', error)
+      setCustomerError(error.message || 'Failed to create Easner account')
       Alert.alert(
         'Account Setup Error',
-        error.message || 'Failed to create your Bridge account. Please try again later.'
+        error.message || 'Failed to create your Easner account. Please try again later.'
       )
     } finally {
       setCreatingCustomer(false)
@@ -1149,8 +1150,8 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
               <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
             </TouchableOpacity>
             <View style={styles.headerContent}>
-              <Text style={styles.title}>Account Verification</Text>
-              <Text style={styles.subtitle}>Complete your KYC verification</Text>
+              <Text style={styles.title}>Verify your identity</Text>
+              <Text style={styles.subtitle}>Tier 1 — Global banking for your personal account</Text>
             </View>
           </Animated.View>
 
@@ -1168,6 +1169,11 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
               }
             ]}
           >
+            {userProfile ? (
+              <View style={{ marginBottom: spacing[4] }}>
+                <ComplianceTierLadder userProfile={userProfile} />
+              </View>
+            ) : null}
             {/* Status Notice - Always shown until approved */}
             {!noahKycApproved && (
               <View style={styles.infoCard}>
@@ -1228,7 +1234,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
 
             {/* Cards Container */}
             <View style={styles.cardsContainer}>
-              {/* Bridge KYC Link Card - Show only if KYC is NOT approved */}
+              {/* Identity verification — show only if KYC is NOT approved */}
               {!noahKycApproved && (
                 <TouchableOpacity
                   onPress={async () => {
@@ -1277,7 +1283,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                 </TouchableOpacity>
               )}
 
-              {/* Bridge TOS Acceptance Card - Show only if noah_signed_agreement_id is empty */}
+              {/* Terms of Service — show only if noah_signed_agreement_id is empty */}
               {!tosSigned && !userProfile?.noah_signed_agreement_id && !userProfile?.profile?.noah_signed_agreement_id && (
                 <TouchableOpacity
                   onPress={async () => {
@@ -1373,7 +1379,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                     }}
                     onNavigationStateChange={(navState) => {
                       // Check if user navigated away (might indicate acceptance)
-                      // Bridge TOS pages typically redirect after acceptance
+                      // Hosted TOS pages typically redirect after acceptance
                       console.log('[TOS-WEBVIEW] Navigation changed:', {
                         url: navState.url,
                         originalUrl: tosLink,
@@ -1389,7 +1395,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                       }
                     }}
                     onMessage={async (event) => {
-                      // Handle messages from WebView if Bridge sends any
+                      // Handle messages from WebView if the host sends any
                       console.log('[TOS-WEBVIEW] 📨 Message received from WebView:', {
                         data: event.nativeEvent.data,
                         type: typeof event.nativeEvent.data,
@@ -1434,7 +1440,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                           
                           console.log(`[TOS-WEBVIEW] ✅ TOS signed_agreement_id stored in database`)
                           
-                          // Check if Bridge customer exists before trying to update
+                          // Check if Noah customer exists before trying to update
                           const { data: userData } = await supabase
                             .from('users')
                             .select('noah_customer_id')
@@ -1469,7 +1475,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                               // Non-critical error - TOS is already stored, just show warning
                               Alert.alert(
                                 'Terms Accepted',
-                                'Your Terms of Service have been accepted. There was an issue updating your Bridge account, but this will be resolved when your account is set up.',
+                                'Your Terms of Service have been accepted. There was an issue updating your Easner account, but this will be resolved when your account is set up.',
                                 [{ 
                                   text: 'OK',
                                   onPress: () => {
@@ -1481,8 +1487,8 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                             }
                           } else {
                             // Customer doesn't exist yet - this is expected if KYC is still in_review
-                            // The admin will create the customer via "Send to Bridge" button
-                            console.log(`[TOS-WEBVIEW] ℹ️ Customer doesn't exist yet. TOS signed_agreement_id stored. Admin will create customer via "Send to Bridge".`)
+                            // The admin will create the customer via "Send to Noah" button
+                            console.log(`[TOS-WEBVIEW] ℹ️ Customer doesn't exist yet. TOS signed_agreement_id stored. Admin will create customer via "Send to Noah".`)
                             
                             // Show success message
                             Alert.alert(
@@ -1588,10 +1594,10 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                           setKycCompleted(true)
                           setKycStatus(data.kyc_status || 'approved')
                           
-                          // Sync KYC data from Bridge to our database
+                          // Sync KYC data from Noah to our database
                           if (data.customer_id && userProfile?.id) {
                             try {
-                              console.log('[KYC-WEBVIEW] Syncing KYC data from Bridge to database...')
+                              console.log('[KYC-WEBVIEW] Syncing KYC data from Noah to database...')
                               const { data: { session } } = await supabase.auth.getSession()
                               if (session) {
                                 await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'}/api/noah/sync-kyc`, {

@@ -27,6 +27,14 @@ export type BusinessProfile = {
   onboardingComplete: boolean
   role: "business" | "individual"
   ownerName: string
+  /** Org-level Tier 1: Owner's business KYB approved (`noah_kyb_status === 'approved'`). */
+  tier1Complete: boolean
+  /** Owner's `noah_kyb_status` (provider-backed; Easner-facing label via UI copy). */
+  tier1VerificationStatus: string | null
+  /** Internal reference on Owner's user row; not shown to customers in UI. */
+  noahKybCustomerId: string | null
+  /** Whether the signed-in user may start or refresh hosted business verification. */
+  canManageBusinessVerification: boolean
 }
 
 const DEFAULT_PROFILE: BusinessProfile = {
@@ -50,6 +58,10 @@ const DEFAULT_PROFILE: BusinessProfile = {
   onboardingComplete: false,
   role: "business",
   ownerName: "",
+  tier1Complete: false,
+  tier1VerificationStatus: null,
+  noahKybCustomerId: null,
+  canManageBusinessVerification: true,
 }
 
 function countryCodeFromName(name: string | null | undefined): string | null {

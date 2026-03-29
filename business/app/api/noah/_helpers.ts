@@ -7,7 +7,7 @@ export type { NoahCustomerScope }
 
 /**
  * Resolve Noah customer id + API `CustomerType` for this request.
- * - Default: **individual** (mobile KYC) — `easner_{userId}`.
+ * - Default: **individual** (mobile KYC) — `eind_{userId}` (compact UUID hex).
  * - **business** (KYB): header `X-Easner-Noah-Scope: business`, query `?noahScope=business`, or JSON `type: "business"`.
  */
 export function resolveNoahContext(

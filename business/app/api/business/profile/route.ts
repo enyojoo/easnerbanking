@@ -72,6 +72,69 @@ function ownerNameFromAuthUser(user: { user_metadata?: Record<string, unknown> |
   return user.email ?? "Admin"
 }
 
+/** Aligns with team API role normalization. */
+function normalizeMembershipRole(role: string | null | undefined): "Owner" | "Admin" | "Member" | "Viewer" {
+  const value = (role ?? "").toLowerCase()
+  if (value === "owner") return "Owner"
+  if (value === "admin") return "Admin"
+  if (value === "viewer") return "Viewer"
+  return "Member"
+}
+
+/**
+ * Organization Tier 1 (KYB) is stored on the org Owner's `users` row (`noah_kyb_*`).
+ * Resolve Owner from memberships; fall back to earliest org user when memberships are absent (legacy).
+ */
+async function resolveOrgOwnerUserId(
+  admin: ReturnType<typeof createSupabaseAdmin>,
+  orgId: string,
+  fallbackUserId: string,
+): Promise<string> {
+  const { data: rows, error } = await admin
+    .from("easner_organization_memberships")
+    .select("user_id,role,status,created_at")
+    .eq("organization_id", orgId)
+    .order("created_at", { ascending: true })
+
+  if (!error && rows?.length) {
+    const owner = rows.find(
+      (r) => normalizeMembershipRole(r.role) === "Owner" && r.status !== "invited" && r.user_id,
+    )
+    if (owner?.user_id) return owner.user_id as string
+  }
+
+  const { data: orgUsers } = await admin
+    .from("users")
+    .select("id")
+    .eq("easner_organization_id", orgId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+
+  return orgUsers?.[0]?.id ?? fallbackUserId
+}
+
+async function resolveCanManageBusinessVerification(
+  admin: ReturnType<typeof createSupabaseAdmin>,
+  orgId: string | null,
+  userId: string,
+  orgOwnerUserId: string,
+): Promise<boolean> {
+  if (!orgId) return true
+
+  const { data: row, error } = await admin
+    .from("easner_organization_memberships")
+    .select("role,status")
+    .eq("organization_id", orgId)
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  if (!error && row && row.status !== "invited") {
+    return normalizeMembershipRole(row.role) === "Owner"
+  }
+
+  return userId === orgOwnerUserId
+}
+
 async function ensureOrganizationId(
   admin: ReturnType<typeof createSupabaseAdmin>,
   userId: string,
@@ -175,6 +238,28 @@ export async function GET(request: Request) {
     return defaultOrgName(user.email, user.id)
   })()
 
+  const orgId = userRow?.easner_organization_id ?? null
+  let tier1Complete = false
+  let tier1VerificationStatus: string | null = null
+  /** Internal: org Owner's Noah KYB customer id (same row as tier1VerificationStatus). */
+  let noahKybCustomerId: string | null = null
+  let canManageBusinessVerification = true
+
+  if (orgId) {
+    const orgOwnerUserId = await resolveOrgOwnerUserId(admin, orgId, user.id)
+    canManageBusinessVerification = await resolveCanManageBusinessVerification(admin, orgId, user.id, orgOwnerUserId)
+
+    const { data: ownerKyb } = await admin
+      .from("users")
+      .select("noah_kyb_status,noah_kyb_customer_id")
+      .eq("id", orgOwnerUserId)
+      .maybeSingle()
+
+    tier1VerificationStatus = (ownerKyb?.noah_kyb_status as string | null | undefined) ?? null
+    noahKybCustomerId = (ownerKyb?.noah_kyb_customer_id as string | null | undefined) ?? null
+    tier1Complete = tier1VerificationStatus === "approved"
+  }
+
   return NextResponse.json({
     profile: {
       organizationId: org?.id ?? userRow?.easner_organization_id ?? null,
@@ -197,6 +282,10 @@ export async function GET(request: Request) {
       onboardingComplete,
       role: userRow?.easner_role ?? "business",
       ownerName,
+      tier1Complete,
+      tier1VerificationStatus,
+      noahKybCustomerId,
+      canManageBusinessVerification,
     },
   })
 }

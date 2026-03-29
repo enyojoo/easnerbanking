@@ -22,6 +22,7 @@ import { NavigationProps, KYCSubmission } from '../../types'
 import { kycService } from '../../lib/kycService'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
+import { ComplianceTierLadder } from '../../components/ComplianceTierLadder'
 
 function MoreContent({ navigation }: NavigationProps) {
   const { userProfile, signOut } = useAuth()
@@ -103,18 +104,17 @@ function MoreContent({ navigation }: NavigationProps) {
   }, [userProfile?.id, navigation])
 
   const getVerificationStatus = (): "approved" | "in_review" | "take_action" => {
-    // Check Bridge KYC status first (primary source of truth)
-    const bridgeKycStatus = userProfile?.bridge_kyc_status
-    
-    if (bridgeKycStatus === 'approved') {
+    const noahStatus =
+      userProfile?.noah_kyc_status ?? (userProfile as { profile?: { noah_kyc_status?: string } })?.profile?.noah_kyc_status
+
+    if (noahStatus === "approved") {
       return "approved"
     }
-    
-    if (bridgeKycStatus === 'pending' || bridgeKycStatus === 'in_review' || bridgeKycStatus === 'under_review') {
+
+    if (noahStatus === "pending" || noahStatus === "in_review" || noahStatus === "under_review") {
       return "in_review"
     }
 
-    // If no Bridge customer or status is not_started/rejected/null, user needs to take action
     return "take_action"
   }
 
@@ -210,6 +210,11 @@ function MoreContent({ navigation }: NavigationProps) {
               }
             ]}
           >
+          {userProfile ? (
+            <View style={{ paddingHorizontal: spacing[5], marginBottom: spacing[2] }}>
+              <ComplianceTierLadder userProfile={userProfile} />
+            </View>
+          ) : null}
           {/* Account Section */}
           <View style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Account</Text>
@@ -234,9 +239,7 @@ function MoreContent({ navigation }: NavigationProps) {
                 activeOpacity={isVerificationComplete ? 1 : 0.7}
                 disabled={isVerificationComplete}
               >
-                <Text style={styles.menuItemText}>
-                  Account Verification
-                </Text>
+                <Text style={styles.menuItemText}>Identity verification (Tier 1)</Text>
                 <View style={styles.menuItemRight}>
                   {verificationStatus === "approved" ? (
                   <View style={styles.badgeGreen}>

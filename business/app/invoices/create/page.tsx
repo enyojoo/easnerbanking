@@ -47,6 +47,7 @@ import { useCustomers } from "@/lib/customers-context"
 import { generateInvoiceId } from "@/lib/invoice-id"
 import type { Invoice } from "@/lib/mock-data"
 import { AddEditCustomerDialog } from "@/components/add-edit-customer-dialog"
+import { InvoiceDepositNoticeBanner } from "@/components/invoices/invoice-deposit-notice-banner"
 
 interface LineItem {
   id: string
@@ -293,6 +294,7 @@ export default function CreateInvoicePage() {
         </div>
       </div>
 
+      <InvoiceDepositNoticeBanner />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Form */}

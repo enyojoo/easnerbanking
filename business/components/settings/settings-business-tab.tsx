@@ -14,6 +14,7 @@ import { countries } from "@/lib/countries"
 import { getKybFields } from "@/lib/kyb-by-country"
 import { updateBusinessProfile, useBusinessProfile } from "@/lib/use-business-profile"
 import { CountryFlag } from "@easner/shared"
+import { BusinessVerificationSection } from "@/components/compliance/business-verification-section"
 
 function getCountryFromCode(code: string) {
   return countries.find((c) => c.code === code)
@@ -160,6 +161,7 @@ export function SettingsBusinessTab() {
 
   return (
     <div className="space-y-6">
+      <BusinessVerificationSection />
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">

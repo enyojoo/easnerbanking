@@ -7,11 +7,23 @@ import {
   getTotalBalanceInDefaultCurrency,
   type Transaction,
 } from "@/lib/mock-data"
-import { ArrowDownLeft, ArrowUpRight, TrendingUp, TrendingDown, Send, ArrowDownCircle, Plus, CreditCard } from "lucide-react"
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  TrendingUp,
+  TrendingDown,
+  Send,
+  ArrowDownCircle,
+  Plus,
+  CreditCard,
+  Eye,
+  EyeOff,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { TransactionDetailsDialog } from "@/components/transaction-details-dialog"
 import { DateRangeFilter, type TimePeriod } from "@/components/date-range-filter"
+import { cn } from "@/lib/utils"
 
 export default function DashboardPage() {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
@@ -21,6 +33,9 @@ export default function DashboardPage() {
     from: undefined,
     to: undefined,
   })
+  const [balancesVisible, setBalancesVisible] = useState(true)
+
+  const MASK = "******"
 
   const totalBalance = getTotalBalanceInDefaultCurrency()
   const recentTransactions = mockTransactions.slice(0, 6)
@@ -70,12 +85,43 @@ export default function DashboardPage() {
         <CardHeader className="pb-4">
           <div className="flex items-start justify-between gap-6">
             <div>
-              <p className="text-sm font-medium text-muted-foreground mb-2">Total Balance</p>
+              <div className="flex items-center gap-2 mb-2">
+                <p className="text-sm font-medium text-muted-foreground">Total Balance</p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+                  onClick={() => setBalancesVisible((v) => !v)}
+                  aria-pressed={balancesVisible}
+                  aria-label={balancesVisible ? "Hide balances" : "Show balances"}
+                >
+                  {balancesVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
               <div className="flex items-baseline gap-3">
                 <h2 className="text-6xl font-bold tracking-tight text-foreground">
-                  ${totalBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  <span className="inline-flex items-center gap-1 leading-none">
+                    <span className="shrink-0 self-center">$</span>
+                    <span
+                      className={cn(
+                        "inline-flex min-w-[12rem] items-center justify-start tabular-nums leading-none",
+                        !balancesVisible && "tracking-[0.2em]",
+                      )}
+                    >
+                      {balancesVisible
+                        ? totalBalance.toLocaleString("en-US", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })
+                        : MASK}
+                    </span>
+                  </span>
                 </h2>
-                <div className="flex items-center gap-1 text-green-600">
+                <div
+                  className={`flex items-center gap-1 text-green-600 ${!balancesVisible ? "invisible" : ""}`}
+                  aria-hidden={!balancesVisible}
+                >
                   <TrendingUp className="h-4 w-4" />
                   <span className="text-sm font-medium">+2.4%</span>
                 </div>
@@ -122,7 +168,19 @@ export default function DashboardPage() {
                 <div>
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Money in</p>
                   <p className="text-lg font-bold text-green-600">
-                    ${moneyIn.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                    <span className="inline-flex items-center gap-0.5 leading-none">
+                      <span className="shrink-0 self-center">$</span>
+                      <span
+                        className={cn(
+                          "inline-flex min-w-[9.5rem] items-center justify-start tabular-nums leading-none self-center",
+                          !balancesVisible && "tracking-wider",
+                        )}
+                      >
+                        {balancesVisible
+                          ? moneyIn.toLocaleString("en-US", { minimumFractionDigits: 2 })
+                          : MASK}
+                      </span>
+                    </span>
                   </p>
                 </div>
               </div>
@@ -133,7 +191,19 @@ export default function DashboardPage() {
                 <div>
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Money out</p>
                   <p className="text-lg font-bold text-red-600">
-                    -${moneyOut.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                    <span className="inline-flex items-center gap-0.5 leading-none">
+                      <span className="shrink-0 self-center">-$</span>
+                      <span
+                        className={cn(
+                          "inline-flex min-w-[9.5rem] items-center justify-start tabular-nums leading-none",
+                          !balancesVisible && "tracking-wider",
+                        )}
+                      >
+                        {balancesVisible
+                          ? moneyOut.toLocaleString("en-US", { minimumFractionDigits: 2 })
+                          : MASK}
+                      </span>
+                    </span>
                   </p>
                 </div>
               </div>

@@ -16,17 +16,20 @@ import { cn } from "@/lib/utils"
 
 interface BusinessDropdownProps {
   businessName: string
-  /** Optional logo (e.g. data URL) shown on the business avatar */
+  /** User profile photo (Personal tab) — header trigger */
+  profileImageUrl?: string | null
+  /** Organization logo — sidebar dropdown variant only */
   businessLogoUrl?: string | null
   adminName: string
   adminEmail: string
   onSignOut: () => void
-  /** Compact trigger for header (avatar + name) */
+  /** Compact trigger for header (avatar + chevron) */
   variant?: "sidebar" | "header"
 }
 
 export function BusinessDropdown({
   businessName,
+  profileImageUrl,
   businessLogoUrl,
   adminName,
   adminEmail,
@@ -34,6 +37,8 @@ export function BusinessDropdown({
   variant = "sidebar",
 }: BusinessDropdownProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const hasProfileImage = Boolean(profileImageUrl?.trim())
+  const hasBusinessLogo = Boolean(businessLogoUrl?.trim())
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
@@ -41,15 +46,23 @@ export function BusinessDropdown({
         {variant === "header" ? (
           <Button
             variant="ghost"
-            className="gap-2 px-2 py-1.5 h-auto hover:bg-muted/50"
+            className="max-w-full gap-2 px-2 py-1.5 h-auto hover:bg-muted/50"
           >
-            <Avatar className="h-8 w-8 shrink-0">
-              {businessLogoUrl ? <AvatarImage src={businessLogoUrl} alt="" /> : null}
+            <Avatar
+              key={hasProfileImage ? "profile-img" : "profile-placeholder"}
+              className="h-9 w-9 shrink-0 border-2 border-border"
+            >
+              {hasProfileImage ? <AvatarImage src={profileImageUrl!} alt="" /> : null}
               <AvatarFallback className="bg-primary/10 text-primary">
-                <User className="h-4 w-4" />
+                <User className="h-[1.125rem] w-[1.125rem]" />
               </AvatarFallback>
             </Avatar>
-            <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
+            <ChevronDown
+              className={cn(
+                "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                isOpen && "rotate-180",
+              )}
+            />
           </Button>
         ) : (
           <Button
@@ -57,8 +70,8 @@ export function BusinessDropdown({
             className="w-full justify-between p-3 h-auto hover:bg-muted/50"
           >
             <div className="flex items-center gap-3 flex-1 min-w-0">
-              <Avatar className="h-8 w-8">
-                {businessLogoUrl ? <AvatarImage src={businessLogoUrl} alt="" /> : null}
+              <Avatar key={hasBusinessLogo ? "biz-logo" : "biz-placeholder"} className="h-8 w-8">
+                {hasBusinessLogo ? <AvatarImage src={businessLogoUrl!} alt="" /> : null}
                 <AvatarFallback className="bg-primary/10 text-primary">
                   <Building2 className="h-4 w-4" />
                 </AvatarFallback>
@@ -99,8 +112,8 @@ export function BusinessDropdown({
           <>
             <div className="px-3 py-2">
               <div className="flex items-center gap-3">
-                <Avatar className="h-8 w-8">
-                  {businessLogoUrl ? <AvatarImage src={businessLogoUrl} alt="" /> : null}
+                <Avatar key={hasBusinessLogo ? "menu-biz-logo" : "menu-biz-placeholder"} className="h-8 w-8">
+                  {hasBusinessLogo ? <AvatarImage src={businessLogoUrl!} alt="" /> : null}
                   <AvatarFallback className="bg-primary/10 text-primary">
                     <Building2 className="h-4 w-4" />
                   </AvatarFallback>

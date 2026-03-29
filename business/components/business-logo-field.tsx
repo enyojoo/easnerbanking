@@ -1,11 +1,11 @@
 "use client"
 
-import { useRef } from "react"
+import { useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { X, Building2 } from "lucide-react"
 import { cn } from "@/lib/utils"
-
-const MAX_BYTES = 2 * 1024 * 1024
+import { createSupabaseBrowser } from "@/lib/supabase/browser"
+import { uploadOrganizationLogo } from "@/lib/upload-client"
 
 export function BusinessLogoField({
   value,
@@ -22,30 +22,49 @@ export function BusinessLogoField({
   compact?: boolean
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const hasLogo = Boolean(value?.trim())
 
-  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
-    if (!f) return
-    if (!f.type.startsWith("image/")) return
-    if (f.size > MAX_BYTES) return
-    const reader = new FileReader()
-    reader.onload = () => onChange(reader.result as string)
-    reader.readAsDataURL(f)
     e.target.value = ""
+    if (!f || disabled) return
+
+    setUploadError(null)
+    setUploading(true)
+    try {
+      const supabase = createSupabaseBrowser()
+      const { data } = await supabase.auth.getSession()
+      const token = data.session?.access_token
+      if (!token) {
+        setUploadError("Sign in to upload.")
+        return
+      }
+      const result = await uploadOrganizationLogo(f, token)
+      if ("error" in result) {
+        setUploadError(result.error)
+        return
+      }
+      onChange(result.url)
+    } finally {
+      setUploading(false)
+    }
   }
 
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       <span className="text-sm font-medium leading-none">Logo</span>
-      <div className={cn("flex items-center gap-2", compact && "flex-1 min-w-0 justify-end")}>
+      <div className={cn("flex flex-wrap items-center gap-2", compact && "flex-1 min-w-0 justify-end")}>
         <div
+          key={hasLogo ? "logo" : "logo-empty"}
           className={cn(
             "relative flex shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted/30",
             compact ? "h-10 w-10" : "h-14 w-14",
           )}
         >
-          {value ? (
-            <img src={value} alt="" className="h-full w-full object-cover" />
+          {hasLogo ? (
+            <img src={value!} alt="" className="h-full w-full object-cover" />
           ) : (
             <Building2 className="h-4 w-4 text-muted-foreground" />
           )}
@@ -56,18 +75,18 @@ export function BusinessLogoField({
             variant="outline"
             size="sm"
             className="h-9"
-            disabled={disabled}
+            disabled={disabled || uploading}
             onClick={() => inputRef.current?.click()}
           >
-            {value ? "Change" : "Upload"}
+            {uploading ? "Uploading…" : hasLogo ? "Change" : "Upload"}
           </Button>
-          {value ? (
+          {hasLogo ? (
             <Button
               type="button"
               variant="ghost"
               size="icon"
               className="h-9 w-9 shrink-0"
-              disabled={disabled}
+              disabled={disabled || uploading}
               onClick={() => onChange(null)}
               aria-label="Remove logo"
             >
@@ -78,12 +97,13 @@ export function BusinessLogoField({
         <input
           ref={inputRef}
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp,image/gif"
           className="sr-only"
-          disabled={disabled}
-          onChange={onFile}
+          disabled={disabled || uploading}
+          onChange={(ev) => void onFile(ev)}
         />
       </div>
+      {uploadError ? <p className="text-sm text-destructive">{uploadError}</p> : null}
     </div>
   )
 }

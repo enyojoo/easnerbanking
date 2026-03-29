@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { useBusinessProfile } from "@/lib/use-business-profile"
 import { Card, CardContent } from "@/components/ui/card"
 import { PinDialog } from "@/components/pin-dialog"
 import { mockAccounts, currencySymbols } from "@/lib/mock-data"
@@ -50,6 +51,7 @@ function getFee(method: string): string {
 
 export default function SendConfirmPage() {
   const router = useRouter()
+  const { tier1Complete, isLoading: profileLoading } = useBusinessProfile()
   const [state, setState] = useState<SendFlowState | null>(null)
   const [showPinDialog, setShowPinDialog] = useState(false)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
@@ -85,6 +87,13 @@ export default function SendConfirmPage() {
       router.replace("/send")
     }
   }, [router])
+
+  useEffect(() => {
+    if (profileLoading) return
+    if (state && !tier1Complete) {
+      router.replace("/send")
+    }
+  }, [profileLoading, tier1Complete, state, router])
 
   const handlePinConfirm = () => {
     if (!state) return

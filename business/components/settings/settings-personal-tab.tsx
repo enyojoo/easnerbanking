@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,6 +9,25 @@ import { User, Mail, Phone, Calendar, Edit, X, Check, Key, Smartphone } from "lu
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { useAuth } from "@/lib/auth-context"
 import { personalSettingsStore } from "@/lib/personal-settings-store"
+import { ProfilePhotoField } from "@/components/profile-photo-field"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { ChangePasswordDialog } from "@/components/settings/change-password-dialog"
+import { MfaSettingsDialog } from "@/components/settings/mfa-settings-dialog"
+import {
+  getVerifiedTotpFactorId,
+  hasEmailPasswordIdentity,
+  totpFactorsFromListResponse,
+  unenrollUnverifiedTotpFactors,
+} from "@/lib/auth-mfa"
 
 export function SettingsPersonalTab() {
   const { user } = useAuth()
@@ -20,12 +39,81 @@ export function SettingsPersonalTab() {
     email: "",
     phone: "",
     dateOfBirth: "",
+    avatarUrl: null as string | null,
   })
   const mountedRef = useRef(true)
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false)
+  const [mfaDialogOpen, setMfaDialogOpen] = useState(false)
+  const [mfaAutoStartEnroll, setMfaAutoStartEnroll] = useState(false)
+  const [turnOffMfaOpen, setTurnOffMfaOpen] = useState(false)
+  const [turnOffMfaSubmitting, setTurnOffMfaSubmitting] = useState(false)
+  const [mfaStatusLine, setMfaStatusLine] = useState<string>("")
+
+  const canUsePassword = hasEmailPasswordIdentity(user)
+  const mfaVerifiedOn = mfaStatusLine === "On"
+
+  const openMfaSetupFlow = () => {
+    setMfaAutoStartEnroll(true)
+    setMfaDialogOpen(true)
+  }
+
+  const confirmTurnOffMfa = async () => {
+    setTurnOffMfaSubmitting(true)
+    try {
+      const { data, error } = await supabase.auth.mfa.listFactors()
+      if (error) {
+        setTurnOffMfaOpen(false)
+        void refreshMfaStatus()
+        return
+      }
+      const totp = totpFactorsFromListResponse(data)
+      const id = getVerifiedTotpFactorId(totp)
+      if (!id) {
+        setTurnOffMfaOpen(false)
+        void refreshMfaStatus()
+        return
+      }
+      const { error: uErr } = await supabase.auth.mfa.unenroll({ factorId: id })
+      if (!uErr) {
+        setTurnOffMfaOpen(false)
+        void refreshMfaStatus()
+      }
+    } finally {
+      setTurnOffMfaSubmitting(false)
+    }
+  }
+
+  const refreshMfaStatus = useCallback(() => {
+    if (!user?.id) {
+      setMfaStatusLine("")
+      return
+    }
+    void (async () => {
+      const { data, error } = await supabase.auth.mfa.listFactors()
+      if (error) {
+        setMfaStatusLine("Unable to load status")
+        return
+      }
+      const totp = totpFactorsFromListResponse(data)
+      const id = getVerifiedTotpFactorId(totp)
+      if (id) {
+        setMfaStatusLine("On")
+        return
+      }
+      if (totp.some((f) => f.status === "unverified") && !mfaDialogOpen) {
+        await unenrollUnverifiedTotpFactors(supabase)
+      }
+      setMfaStatusLine("Off")
+    })()
+  }, [supabase, user?.id, mfaDialogOpen])
+
+  useEffect(() => {
+    refreshMfaStatus()
+  }, [refreshMfaStatus])
 
   useLayoutEffect(() => {
     if (!user?.id) {
-      setFormData({ fullName: "", email: "", phone: "", dateOfBirth: "" })
+      setFormData({ fullName: "", email: "", phone: "", dateOfBirth: "", avatarUrl: null })
       setLoading(false)
       return
     }
@@ -37,6 +125,7 @@ export function SettingsPersonalTab() {
         email: d.personal.email,
         phone: d.personal.phone,
         dateOfBirth: d.personal.dateOfBirth,
+        avatarUrl: d.personal.avatarUrl ?? null,
       })
       setLoading(false)
     } else {
@@ -65,6 +154,7 @@ export function SettingsPersonalTab() {
         email: d.personal.email,
         phone: d.personal.phone,
         dateOfBirth: d.personal.dateOfBirth,
+        avatarUrl: d.personal.avatarUrl ?? null,
       })
     })
 
@@ -91,12 +181,16 @@ export function SettingsPersonalTab() {
         fullName: formData.fullName,
         phone: formData.phone,
         dateOfBirth: formData.dateOfBirth,
+        avatarUrl: formData.avatarUrl,
       }),
     })
-    if (user?.id) personalSettingsStore.invalidate(user.id)
+    if (user?.id) {
+      personalSettingsStore.invalidate(user.id)
+      await personalSettingsStore.initialize(user.id)
+    }
     setEditingSection(null)
   }
-  const handleInputChange = (field: string, value: string) => {
+  const handleInputChange = (field: string, value: string | null) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
@@ -131,6 +225,18 @@ export function SettingsPersonalTab() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {loading ? (
+            <div className="flex gap-2">
+              <div className="h-14 w-14 shrink-0 animate-pulse rounded-full bg-muted" />
+              <div className="h-9 w-24 animate-pulse rounded-md bg-muted" />
+            </div>
+          ) : (
+            <ProfilePhotoField
+              value={formData.avatarUrl}
+              onChange={(v) => handleInputChange("avatarUrl", v)}
+              disabled={editingSection !== "personal"}
+            />
+          )}
           <div className="space-y-2">
             <Label htmlFor="fullName">Full Name</Label>
             {loading ? (
@@ -208,10 +314,19 @@ export function SettingsPersonalTab() {
               <Key className="h-5 w-5 text-muted-foreground" />
               <div>
                 <p className="font-medium">Password</p>
-                <p className="text-sm text-muted-foreground">Last changed 30 days ago</p>
+                <p className="text-sm text-muted-foreground">
+                  {canUsePassword
+                    ? "Use a strong password that you do not reuse elsewhere."
+                    : "Password is managed by Google for this account."}
+                </p>
               </div>
             </div>
-            <Button variant="outline" size="sm">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!canUsePassword}
+              onClick={() => setChangePasswordOpen(true)}
+            >
               Change
             </Button>
           </div>
@@ -220,16 +335,55 @@ export function SettingsPersonalTab() {
               <Smartphone className="h-5 w-5 text-muted-foreground" />
               <div>
                 <p className="font-medium">Two-Factor Authentication</p>
-                <p className="text-sm text-muted-foreground">Enabled via authenticator app</p>
+                <p className="text-sm text-muted-foreground">{mfaStatusLine || "—"}</p>
               </div>
             </div>
-            <Button variant="outline" size="sm">
-              Manage
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => (mfaVerifiedOn ? setTurnOffMfaOpen(true) : openMfaSetupFlow())}
+            >
+              {mfaVerifiedOn ? "Turn off 2FA" : "Set up"}
             </Button>
           </div>
         </CardContent>
       </Card>
 
+      <ChangePasswordDialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
+      <MfaSettingsDialog
+        open={mfaDialogOpen}
+        onOpenChange={(o) => {
+          setMfaDialogOpen(o)
+          if (!o) setMfaAutoStartEnroll(false)
+        }}
+        onFactorsChanged={refreshMfaStatus}
+        initialTotpVerified={mfaStatusLine === "On"}
+        mfaStatusKnown={Boolean(user?.id)}
+        autoStartEnroll={mfaAutoStartEnroll}
+      />
+
+      <AlertDialog open={turnOffMfaOpen} onOpenChange={setTurnOffMfaOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Turn off two-factor authentication?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You will only need your password to sign in. You can turn 2FA back on anytime.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={turnOffMfaSubmitting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault()
+                void confirmTurnOffMfa()
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Turn off
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

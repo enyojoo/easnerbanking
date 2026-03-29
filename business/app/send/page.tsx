@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -28,6 +29,12 @@ import {
 } from "@/components/ui/dialog"
 import { generateTransactionId } from "@/lib/transaction-id"
 import { CurrencyFlag } from "@easner/shared"
+import { useBusinessProfile } from "@/lib/use-business-profile"
+import {
+  TIER2_COMPLETE_PLACEHOLDER,
+  sendFlowUsesTier2Rail,
+  isTier2AfricanSendCurrency,
+} from "@/lib/compliance-placeholders"
 
 const SEND_FLOW_STATE_KEY = "send_flow_state"
 
@@ -84,6 +91,7 @@ function parseAmountFromDisplay(display: string): number {
 
 export default function SendPage() {
   const router = useRouter()
+  const { tier1Complete } = useBusinessProfile()
   const [recipient, setRecipient] = useState<Beneficiary | null>(null)
   const [amountStr, setAmountStr] = useState("")
   const [sourceAccountId, setSourceAccountId] = useState<string | null>(null)
@@ -174,15 +182,17 @@ export default function SendPage() {
     sourceAccountId !== null &&
     sourceAccount &&
     sourceAccount.availableBalance >= sendAmount &&
-    isBalanceSource
+    isBalanceSource &&
+    tier1Complete
 
   const canContinueStablecoin =
-    recipient !== null && amount > 0 && hasValidStablecoinSelection
+    recipient !== null && amount > 0 && hasValidStablecoinSelection && tier1Complete
 
   const canContinueOtherCurrency =
     recipient !== null &&
     amount > 0 &&
-    hasValidOtherCurrencySelection
+    hasValidOtherCurrencySelection &&
+    TIER2_COMPLETE_PLACEHOLDER
 
   const canContinue =
     isBalanceSource
@@ -190,6 +200,16 @@ export default function SendPage() {
       : isStablecoinSource
         ? canContinueStablecoin
         : canContinueOtherCurrency
+
+  const showTier1SendNotice =
+    !tier1Complete && recipient && amount > 0 && (isBalanceSource || isStablecoinSource)
+
+  const showTier2SendNotice =
+    !TIER2_COMPLETE_PLACEHOLDER &&
+    recipient &&
+    amount > 0 &&
+    hasValidOtherCurrencySelection &&
+    sendFlowUsesTier2Rail(paymentMethod, otherCurrency ?? undefined)
   const isAuthorizeFlow = !isBalanceSource
 
   const hasInsufficientBalance =
@@ -268,6 +288,40 @@ export default function SendPage() {
           Select recipient, amount, and how you&apos;d like to send
         </p>
       </div>
+
+      {showTier1SendNotice ? (
+        <div
+          className="rounded-lg border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-sm text-amber-950"
+          role="status"
+        >
+          Please complete your business verification to send from your balances or pay with stablecoin.{" "}
+          <Link href="/settings?tab=business" className="font-semibold underline underline-offset-2">
+            Business verification
+          </Link>
+        </div>
+      ) : null}
+
+      {showTier2SendNotice ? (
+        <div className="rounded-lg border border-violet-200/80 bg-violet-50/50 px-4 py-3 text-sm text-foreground/90" role="status">
+          {isTier2AfricanSendCurrency(otherCurrency ?? undefined) ? (
+            <>
+              Please complete your business verification to access African banking, pay-in/pay-out, and local rails such as
+              mobile money (where available).{" "}
+              <Link href="/settings?tab=business" className="font-semibold underline underline-offset-2">
+                Verification
+              </Link>
+            </>
+          ) : (
+            <>
+              Please complete your business verification to access this payment route when it is enabled for your
+              organization.{" "}
+              <Link href="/settings?tab=business" className="font-semibold underline underline-offset-2">
+                Verification
+              </Link>
+            </>
+          )}
+        </div>
+      ) : null}
 
       <SendRecipientPicker
         selected={recipient}
@@ -399,6 +453,11 @@ export default function SendPage() {
             <div className="space-y-4 px-4 pb-6">
               <div>
                 <p className="text-sm font-medium text-muted-foreground mb-2">From Balance</p>
+                {!tier1Complete && amount > 0 ? (
+                  <p className="text-xs text-muted-foreground mb-2 px-1">
+                    Please complete your business verification to send from your organization balances.
+                  </p>
+                ) : null}
                 <div className="space-y-1">
                   {mockAccounts.map((acc) => {
                     const sufficient = acc.availableBalance >= sendAmount
@@ -447,6 +506,12 @@ export default function SendPage() {
 
               <div>
                 <p className="text-sm font-medium text-muted-foreground mb-2">Through Another Currency</p>
+                {!TIER2_COMPLETE_PLACEHOLDER && amount > 0 ? (
+                  <p className="text-xs text-muted-foreground mb-2 px-1">
+                    Please complete your business verification to access African banking and local send methods when
+                    they are available for your organization.
+                  </p>
+                ) : null}
                 {!otherCurrency ? (
                   <div className="space-y-1">
                     <button

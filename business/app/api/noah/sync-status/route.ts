@@ -4,7 +4,7 @@ import { mapNoahVerificationToKycStatus } from "@/lib/noah/map-kyc"
 import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
 import { requireAuth, requireNoahEnv, resolveNoahContext } from "../_helpers"
 
-export async function POST(request: Request) {
+async function runSyncStatus(request: Request) {
   const mis = requireNoahEnv()
   if (mis) return mis
   const auth = await requireAuth(request)
@@ -32,4 +32,12 @@ export async function POST(request: Request) {
     const msg = e instanceof Error ? e.message : String(e)
     return NextResponse.json({ error: msg }, { status: 400 })
   }
+}
+
+export async function GET(request: Request) {
+  return runSyncStatus(request)
+}
+
+export async function POST(request: Request) {
+  return runSyncStatus(request)
 }

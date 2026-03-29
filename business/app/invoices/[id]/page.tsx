@@ -58,6 +58,12 @@ import { downloadInvoicePdf } from "@/lib/use-invoice-pdf"
 import { downloadInvoiceReceiptPdf } from "@/lib/use-invoice-receipt-pdf"
 import { getPaymentRecordDisplay } from "@/lib/deposits"
 import type { Invoice } from "@/lib/mock-data"
+import { useBusinessProfile } from "@/lib/use-business-profile"
+import {
+  TIER2_COMPLETE_PLACEHOLDER,
+  canProvisionInvoiceDepositInstructions,
+} from "@/lib/compliance-placeholders"
+import { InvoiceDepositNoticeBanner } from "@/components/invoices/invoice-deposit-notice-banner"
 
 const STATUS_ACTIVITY_DESCRIPTIONS: Record<string, string> = {
   sent: "Invoice was sent to customer",
@@ -145,6 +151,7 @@ const getActivityIcon = (type: string) => {
 export default function InvoiceDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const { tier1Complete } = useBusinessProfile()
   const { invoices, updateInvoice, addInvoice } = useInvoices()
   const invoice = invoices.find((i) => i.id === params.id)
   const [showMoreActivities, setShowMoreActivities] = useState(false)
@@ -160,6 +167,10 @@ export default function InvoiceDetailPage() {
 
   const bankAccount = invoice ? mockAccounts.find((a) => a.currency === invoice.currency) : undefined
   const stablecoinAccount = invoice ? mockStablecoinAccounts.find((s) => s.currency === invoice.currency) : undefined
+
+  const canProvisionDepositInstructions = invoice
+    ? canProvisionInvoiceDepositInstructions(invoice.currency, tier1Complete, TIER2_COMPLETE_PLACEHOLDER)
+    : false
 
   useEffect(() => {
     if (!invoice?.id) return
@@ -297,6 +308,8 @@ export default function InvoiceDetailPage() {
 
   return (
     <div className="space-y-6">
+      <InvoiceDepositNoticeBanner />
+
       {/* Header */}
       <div className="flex items-center gap-4">
         <Link href="/invoices">
@@ -400,7 +413,11 @@ export default function InvoiceDetailPage() {
                 if (!invoice) return
                 setIsDownloading(true)
                 try {
-                  await downloadInvoicePdf(invoice, bankAccount, stablecoinAccount)
+                  await downloadInvoicePdf(
+                    invoice,
+                    canProvisionDepositInstructions ? bankAccount : undefined,
+                    canProvisionDepositInstructions ? stablecoinAccount : undefined,
+                  )
                 } catch (err) {
                   console.error("Failed to download PDF:", err)
                 } finally {
@@ -581,18 +598,36 @@ export default function InvoiceDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Invoice payment options */}
+          {/* Invoice payment options — only when deposit instructions are provisioned for this currency/tier */}
           {!invoice.archived &&
             invoice.status !== "draft" &&
             invoice.status !== "paid" &&
-            bankAccount && (
+            bankAccount &&
+            (canProvisionDepositInstructions ? (
               <InvoicePaymentOptions
                 invoice={invoice}
                 bankAccount={bankAccount}
                 stablecoinAccount={stablecoinAccount}
                 audience="business"
               />
-            )}
+            ) : (
+              <Card className="border-dashed bg-muted/20">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Customer payment instructions</CardTitle>
+                </CardHeader>
+                <CardContent className="text-sm text-muted-foreground space-y-2">
+                  <p>
+                    Bank and stablecoin deposit details for this invoice are not provisioned yet. Complete the
+                    verification steps required for your organization so pay-in instructions can appear here and on PDFs.
+                  </p>
+                  <p>
+                    <Link href="/settings?tab=business" className="font-semibold text-primary underline underline-offset-2">
+                      Business verification
+                    </Link>
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
 
           {/* Invoice receipt - when paid */}
           {!invoice.archived && invoice.status === "paid" && (() => {

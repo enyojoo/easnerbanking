@@ -27,6 +27,8 @@ import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
 import { supabase } from '../../lib/supabase'
 import { Alert } from 'react-native'
 import { useUserData } from '../../contexts/UserDataContext'
+import { useAuth } from '../../contexts/AuthContext'
+import { isTier1Complete, TIER2_COMPLETE_PLACEHOLDER } from '../../lib/compliance'
 import { mobileFxEngine } from '../../lib/fxEngine'
 import { generateTransactionId } from '../../lib/transactionId'
 import { useBalance } from '../../contexts/BalanceContext'
@@ -70,6 +72,7 @@ function LandmarkIcon({ size = 24, color = '#000' }: { size?: number; color?: st
 
 export default function SendAmountScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
+  const { userProfile } = useAuth()
   const { exchangeRates: exchangeRatesFromContext } = useUserData()
   const { balances, updateBalanceOptimistically } = useBalance()
   // Ensure exchangeRates is always an array (fallback to empty array if undefined)
@@ -352,6 +355,27 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     sendingAmount = receiveAmount / exchangeRate
   }
 
+  const tier1Ok = isTier1Complete(userProfile)
+  const tier2Ok = TIER2_COMPLETE_PLACEHOLDER
+  const verificationBlocksSend =
+    receiveAmount > 0 &&
+    (selectedPaymentMethod === 'balance' ||
+    selectedPaymentMethod === 'linkBank' ||
+    selectedPaymentMethod === 'virtualBank'
+      ? !tier1Ok
+      : selectedPaymentMethod === 'otherCurrency'
+        ? !tier2Ok
+        : false)
+
+  const sendButtonDisabled =
+    !sendAmount ||
+    sendAmount === '0.00' ||
+    Number.parseFloat(sendAmount.replace(/,/g, '')) <= 0 ||
+    !recipient ||
+    !selectedPaymentMethod ||
+    (selectedPaymentMethod === 'otherCurrency' && (!selectedOtherCurrency || !selectedOtherPaymentMethod)) ||
+    verificationBlocksSend
+
   return (
     <ScreenWrapper>
       <View style={styles.container}>
@@ -403,6 +427,45 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 }
               ]}
             >
+              {receiveAmount > 0 &&
+              !tier1Ok &&
+              (selectedPaymentMethod === 'balance' ||
+                selectedPaymentMethod === 'linkBank' ||
+                selectedPaymentMethod === 'virtualBank') ? (
+                <View
+                  style={{
+                    marginHorizontal: spacing[5],
+                    marginBottom: spacing[3],
+                    backgroundColor: '#FFF8E6',
+                    padding: spacing[3],
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: '#F5E6C8',
+                  }}
+                >
+                  <Text style={{ ...textStyles.bodySmall, color: colors.text.primary }}>
+                    Please complete your identity verification to send from your balance or use linked bank options.
+                  </Text>
+                </View>
+              ) : null}
+              {receiveAmount > 0 && selectedPaymentMethod === 'otherCurrency' && !tier2Ok ? (
+                <View
+                  style={{
+                    marginHorizontal: spacing[5],
+                    marginBottom: spacing[3],
+                    backgroundColor: '#F3F0FF',
+                    padding: spacing[3],
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: '#E4E0F7',
+                  }}
+                >
+                  <Text style={{ ...textStyles.bodySmall, color: colors.text.primary }}>
+                    Please complete African banking setup to use mobile money and local transfers when available.
+                  </Text>
+                </View>
+              ) : null}
+
               {/* Recipient Section */}
               {recipient ? (
                 // Selected Recipient View
@@ -652,23 +715,35 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         {/* Send/Authorize Button */}
         <View style={[styles.bottomContainer, { paddingTop: 25, paddingBottom: Math.max(insets.bottom, 20) }]}>
           <TouchableOpacity
-            style={[
-              styles.sendButton,
-              (
-                !sendAmount || 
-                sendAmount === '0.00' || 
-                Number.parseFloat(sendAmount.replace(/,/g, '')) <= 0 || 
-                !recipient || 
-                !selectedPaymentMethod ||
-                (selectedPaymentMethod === 'otherCurrency' && (!selectedOtherCurrency || !selectedOtherPaymentMethod))
-              ) && styles.sendButtonDisabled
-            ]}
+            style={[styles.sendButton, sendButtonDisabled && styles.sendButtonDisabled]}
             onPress={async () => {
               const receiveAmountValue = Number.parseFloat(sendAmount.replace(/,/g, ''))
               if (!sendAmount || sendAmount === '0.00' || receiveAmountValue <= 0 || !recipient || !selectedPaymentMethod) return
               
               // For otherCurrency, require both currency and payment method selection
               if (selectedPaymentMethod === 'otherCurrency' && (!selectedOtherCurrency || !selectedOtherPaymentMethod)) return
+
+              if (verificationBlocksSend) {
+                if (
+                  !tier1Ok &&
+                  (selectedPaymentMethod === 'balance' ||
+                    selectedPaymentMethod === 'linkBank' ||
+                    selectedPaymentMethod === 'virtualBank')
+                ) {
+                  Alert.alert(
+                    'Verification required',
+                    'Please complete your identity verification to send from your balance or use linked bank options.',
+                  )
+                  return
+                }
+                if (!tier2Ok && selectedPaymentMethod === 'otherCurrency') {
+                  Alert.alert(
+                    'Verification required',
+                    'Please complete African banking setup to use mobile money and local transfers when available.',
+                  )
+                  return
+                }
+              }
               
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
               
@@ -847,26 +922,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 }
               }
             }}
-            disabled={
-              !sendAmount || 
-              sendAmount === '0.00' || 
-              Number.parseFloat(sendAmount.replace(/,/g, '')) <= 0 || 
-              !recipient || 
-              !selectedPaymentMethod ||
-              (selectedPaymentMethod === 'otherCurrency' && (!selectedOtherCurrency || !selectedOtherPaymentMethod))
-            }
+            disabled={sendButtonDisabled}
           >
             <LinearGradient
-              colors={(
-                !sendAmount || 
-                sendAmount === '0.00' || 
-                Number.parseFloat(sendAmount.replace(/,/g, '')) <= 0 || 
-                !recipient || 
-                !selectedPaymentMethod ||
-                (selectedPaymentMethod === 'otherCurrency' && (!selectedOtherCurrency || !selectedOtherPaymentMethod))
-              ) 
-                ? [colors.neutral[400], colors.neutral[400]] 
-                : colors.primary.gradient}
+              colors={sendButtonDisabled ? [colors.neutral[400], colors.neutral[400]] : colors.primary.gradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.sendButtonGradient}

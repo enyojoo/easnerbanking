@@ -7,12 +7,24 @@
  */
 export type NoahCustomerScope = "individual" | "business"
 
+/** Business scope — must keep total ID ≤ 42 chars (Noah onboarding UI / Zodios). `ebiz_` (5) + UUID hex (32) = 37. */
+export const EASNER_NOAH_BUSINESS_CUSTOMER_PREFIX = "ebiz_" as const
+
+/** Individual (mobile KYC) — `eind_` (5) + UUID hex (32) = 37; aligns naming with `ebiz_`. */
+export const EASNER_NOAH_INDIVIDUAL_CUSTOMER_PREFIX = "eind_" as const
+
+/** Legacy business prefix (43 chars); still parsed for webhooks and old Noah rows. */
+const LEGACY_EASNER_BUSINESS_PREFIX = "easner_biz_"
+
+/** Legacy individual prefix; still parsed for webhooks and old Noah rows. */
+const LEGACY_EASNER_INDIVIDUAL_PREFIX = "easner_"
+
 export function noahCustomerIdFromUserId(userId: string, scope: NoahCustomerScope = "individual"): string {
   const compact = userId.replace(/-/g, "")
   if (scope === "business") {
-    return `easner_biz_${compact}`
+    return `${EASNER_NOAH_BUSINESS_CUSTOMER_PREFIX}${compact}`
   }
-  return `easner_${compact}`
+  return `${EASNER_NOAH_INDIVIDUAL_CUSTOMER_PREFIX}${compact}`
 }
 
 /** Which Noah customer id matches this path segment, if any (for :customerId routes). */
@@ -29,17 +41,29 @@ function compactUuidToUuid(hex32: string): string | null {
 }
 
 /**
- * Reverse deterministic CustomerIDs from hosted onboarding (`easner_*` / `easner_biz_*`).
+ * Reverse deterministic CustomerIDs from hosted onboarding (`eind_*`, `ebiz_*`, legacy `easner_*`, `easner_biz_*`).
  */
 export function parseEasnerUserIdFromNoahCustomerId(customerId: string): { userId: string; scope: NoahCustomerScope } | null {
-  if (customerId.startsWith("easner_biz_")) {
-    const hex = customerId.slice("easner_biz_".length)
+  if (customerId.startsWith(LEGACY_EASNER_BUSINESS_PREFIX)) {
+    const hex = customerId.slice(LEGACY_EASNER_BUSINESS_PREFIX.length)
     const userId = compactUuidToUuid(hex)
     if (!userId) return null
     return { userId, scope: "business" }
   }
-  if (customerId.startsWith("easner_")) {
-    const hex = customerId.slice("easner_".length)
+  if (customerId.startsWith(EASNER_NOAH_BUSINESS_CUSTOMER_PREFIX)) {
+    const hex = customerId.slice(EASNER_NOAH_BUSINESS_CUSTOMER_PREFIX.length)
+    const userId = compactUuidToUuid(hex)
+    if (!userId) return null
+    return { userId, scope: "business" }
+  }
+  if (customerId.startsWith(EASNER_NOAH_INDIVIDUAL_CUSTOMER_PREFIX)) {
+    const hex = customerId.slice(EASNER_NOAH_INDIVIDUAL_CUSTOMER_PREFIX.length)
+    const userId = compactUuidToUuid(hex)
+    if (!userId) return null
+    return { userId, scope: "individual" }
+  }
+  if (customerId.startsWith(LEGACY_EASNER_INDIVIDUAL_PREFIX)) {
+    const hex = customerId.slice(LEGACY_EASNER_INDIVIDUAL_PREFIX.length)
     const userId = compactUuidToUuid(hex)
     if (!userId) return null
     return { userId, scope: "individual" }

@@ -44,10 +44,17 @@ import { downloadInvoicePdf } from "@/lib/use-invoice-pdf"
 import { mockAccounts, mockStablecoinAccounts } from "@/lib/mock-data"
 import { toast } from "sonner"
 import type { Invoice } from "@/lib/mock-data"
+import { useBusinessProfile } from "@/lib/use-business-profile"
+import {
+  TIER2_COMPLETE_PLACEHOLDER,
+  canProvisionInvoiceDepositInstructions,
+} from "@/lib/compliance-placeholders"
+import { InvoiceDepositNoticeBanner } from "@/components/invoices/invoice-deposit-notice-banner"
 
 export default function InvoicesPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { tier1Complete } = useBusinessProfile()
   const { invoices, updateInvoice, addInvoice, deleteInvoice } = useInvoices()
   const [activeTab, setActiveTab] = useState("all")
 
@@ -159,9 +166,18 @@ export default function InvoicesPage() {
     e.stopPropagation()
     const bankAccount = mockAccounts.find((a) => a.currency === invoice.currency)
     const stablecoinAccount = mockStablecoinAccounts.find((s) => s.currency === invoice.currency)
+    const canProvision = canProvisionInvoiceDepositInstructions(
+      invoice.currency,
+      tier1Complete,
+      TIER2_COMPLETE_PLACEHOLDER,
+    )
     setDownloadingId(invoice.id)
     try {
-      await downloadInvoicePdf(invoice, bankAccount, stablecoinAccount)
+      await downloadInvoicePdf(
+        invoice,
+        canProvision ? bankAccount : undefined,
+        canProvision ? stablecoinAccount : undefined,
+      )
     } catch (err) {
       console.error("Failed to download PDF:", err)
       toast.error("Failed to download PDF")
@@ -240,6 +256,8 @@ export default function InvoicesPage() {
           ))}
         </div>
       </div>
+
+      <InvoiceDepositNoticeBanner />
 
       {/* Invoices Table - fixed min-height for consistent view when switching tabs */}
       <Card className="flex flex-col min-h-[400px]">

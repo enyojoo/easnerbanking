@@ -5,6 +5,7 @@ import Link from "next/link"
 import { mockCards, type Transaction } from "@/lib/mock-data"
 import { getDateRange, getTransactionsFiltered } from "@/lib/transactions"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Plus, Eye, Settings, Snowflake, ArrowUpRight, ArrowDownLeft, AlertCircle } from "lucide-react"
 import { CardCarousel } from "@/components/card-carousel"
 import { CardSettingsDialog } from "@/components/card-settings-dialog"
@@ -53,11 +54,27 @@ export default function CardsPage() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-9rem)] min-h-[500px] overflow-hidden">
+      <Card className="mb-6 shrink-0 border-violet-200/80 bg-violet-50/50">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Corporate cards (Tier 3)</CardTitle>
+          <CardDescription className="text-sm text-foreground/85">
+            Final Easner compliance will include a company card program: corporate credit cards, spend controls, and
+            cardholder management for your organization. Debit or prepaid programs may apply where credit is not
+            available. This section is a preview until your issuer program is connected.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <p className="text-xs text-muted-foreground">
+            Complete Tier 1 business verification before relying on production spend workflows.
+          </p>
+        </CardContent>
+      </Card>
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6 flex-shrink-0">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">My Cards</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage your virtual debit and credit cards</p>
+          <p className="text-sm text-muted-foreground mt-1">Preview: virtual debit and credit cards</p>
         </div>
         <Button className="gap-2">
           <Plus className="h-4 w-4" />
