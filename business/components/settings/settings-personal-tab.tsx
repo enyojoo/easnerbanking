@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { User, Mail, Phone, Calendar, Edit, X, Check, Key, Smartphone } from "lucide-react"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { useAuth } from "@/lib/auth-context"
+import { CACHE_KEYS, dataCache } from "@/lib/cache"
 import { personalSettingsStore } from "@/lib/personal-settings-store"
 import { ProfilePhotoField } from "@/components/profile-photo-field"
 import {
@@ -29,6 +30,9 @@ import {
   unenrollUnverifiedTotpFactors,
 } from "@/lib/auth-mfa"
 
+/** Aligns with personal settings store / dataCache freshness window. */
+const MFA_STATUS_CACHE_TTL_MS = 5 * 60 * 1000
+
 export function SettingsPersonalTab() {
   const { user } = useAuth()
   const supabase = useMemo(() => createSupabaseBrowser(), [])
@@ -48,9 +52,14 @@ export function SettingsPersonalTab() {
   const [turnOffMfaOpen, setTurnOffMfaOpen] = useState(false)
   const [turnOffMfaSubmitting, setTurnOffMfaSubmitting] = useState(false)
   const [mfaStatusLine, setMfaStatusLine] = useState<string>("")
+  const mfaDialogOpenRef = useRef(false)
 
   const canUsePassword = hasEmailPasswordIdentity(user)
   const mfaVerifiedOn = mfaStatusLine === "On"
+
+  useLayoutEffect(() => {
+    mfaDialogOpenRef.current = mfaDialogOpen
+  }, [mfaDialogOpen])
 
   const openMfaSetupFlow = () => {
     setMfaAutoStartEnroll(true)
@@ -63,53 +72,68 @@ export function SettingsPersonalTab() {
       const { data, error } = await supabase.auth.mfa.listFactors()
       if (error) {
         setTurnOffMfaOpen(false)
-        void refreshMfaStatus()
+        void refreshMfaStatus({ force: true })
         return
       }
       const totp = totpFactorsFromListResponse(data)
       const id = getVerifiedTotpFactorId(totp)
       if (!id) {
         setTurnOffMfaOpen(false)
-        void refreshMfaStatus()
+        void refreshMfaStatus({ force: true })
         return
       }
       const { error: uErr } = await supabase.auth.mfa.unenroll({ factorId: id })
       if (!uErr) {
         setTurnOffMfaOpen(false)
-        void refreshMfaStatus()
+        void refreshMfaStatus({ force: true })
       }
     } finally {
       setTurnOffMfaSubmitting(false)
     }
   }
 
-  const refreshMfaStatus = useCallback(() => {
+  const refreshMfaStatus = useCallback((options?: { force?: boolean }) => {
     if (!user?.id) {
       setMfaStatusLine("")
       return
     }
+    const key = CACHE_KEYS.MFA_SECURITY(user.id)
+    if (!options?.force) {
+      const cached = dataCache.get<{ statusLine: string }>(key)
+      if (cached != null && !dataCache.isStale(key)) {
+        setMfaStatusLine(cached.statusLine)
+        return
+      }
+    }
     void (async () => {
       const { data, error } = await supabase.auth.mfa.listFactors()
+      let statusLine: string
       if (error) {
-        setMfaStatusLine("Unable to load status")
-        return
+        statusLine = "Unable to load status"
+      } else {
+        const totp = totpFactorsFromListResponse(data)
+        const id = getVerifiedTotpFactorId(totp)
+        if (id) {
+          statusLine = "On"
+        } else {
+          if (totp.some((f) => f.status === "unverified") && !mfaDialogOpenRef.current) {
+            await unenrollUnverifiedTotpFactors(supabase)
+          }
+          statusLine = "Off"
+        }
       }
-      const totp = totpFactorsFromListResponse(data)
-      const id = getVerifiedTotpFactorId(totp)
-      if (id) {
-        setMfaStatusLine("On")
-        return
-      }
-      if (totp.some((f) => f.status === "unverified") && !mfaDialogOpen) {
-        await unenrollUnverifiedTotpFactors(supabase)
-      }
-      setMfaStatusLine("Off")
+      dataCache.set(key, { statusLine }, MFA_STATUS_CACHE_TTL_MS)
+      setMfaStatusLine(statusLine)
     })()
-  }, [supabase, user?.id, mfaDialogOpen])
+  }, [supabase, user?.id])
 
   useEffect(() => {
-    refreshMfaStatus()
-  }, [refreshMfaStatus])
+    if (!user?.id) {
+      setMfaStatusLine("")
+      return
+    }
+    void refreshMfaStatus()
+  }, [user?.id, refreshMfaStatus])
 
   useLayoutEffect(() => {
     if (!user?.id) {
@@ -356,7 +380,7 @@ export function SettingsPersonalTab() {
           setMfaDialogOpen(o)
           if (!o) setMfaAutoStartEnroll(false)
         }}
-        onFactorsChanged={refreshMfaStatus}
+        onFactorsChanged={() => void refreshMfaStatus({ force: true })}
         initialTotpVerified={mfaStatusLine === "On"}
         mfaStatusKnown={Boolean(user?.id)}
         autoStartEnroll={mfaAutoStartEnroll}

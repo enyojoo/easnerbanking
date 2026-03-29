@@ -132,7 +132,7 @@ export default function LoginPage() {
     <Card className="w-full max-w-md">
       <CardHeader>
         <CardTitle className="text-2xl font-bold">
-          {step === "password" ? "Welcome back" : "Sign in using your authenticator app"}
+          {step === "password" ? "Welcome back" : "Two-Factor Authentication"}
         </CardTitle>
       </CardHeader>
       <CardContent>
