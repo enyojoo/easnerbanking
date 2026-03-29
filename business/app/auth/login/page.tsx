@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Eye, EyeOff } from "lucide-react"
+import { Eye, EyeOff, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { OtpCodeInput } from "@/components/otp-code-input"
@@ -35,10 +35,12 @@ export default function LoginPage() {
   const [mfaFactorId, setMfaFactorId] = useState<string | null>(null)
   const [mfaCode, setMfaCode] = useState("")
   const [mfaSubmitting, setMfaSubmitting] = useState(false)
+  const [passwordSigningIn, setPasswordSigningIn] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
+    setPasswordSigningIn(true)
     try {
       await login(email, password)
       const supabase = createSupabaseBrowser()
@@ -73,6 +75,8 @@ export default function LoginPage() {
       } else {
         setError("Invalid credentials")
       }
+    } finally {
+      setPasswordSigningIn(false)
     }
   }
 
@@ -237,9 +241,16 @@ export default function LoginPage() {
                 <Button
                   type="submit"
                   className="w-full h-10"
-                  disabled={!email || !password}
+                  disabled={!email || !password || passwordSigningIn}
                 >
-                  Sign in
+                  {passwordSigningIn ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                      Signing in…
+                    </>
+                  ) : (
+                    "Sign in"
+                  )}
                 </Button>
               </form>
 
@@ -268,7 +279,14 @@ export default function LoginPage() {
                 className="w-full h-10"
                 disabled={mfaSubmitting || mfaCode.replace(/\D/g, "").length !== 6}
               >
-                {mfaSubmitting ? "Verifying…" : "Continue"}
+                {mfaSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    Verifying…
+                  </>
+                ) : (
+                  "Continue"
+                )}
               </Button>
               <Button
                 type="button"
