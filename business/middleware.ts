@@ -1,3 +1,4 @@
+import { createServerClient, type CookieOptions } from "@supabase/ssr"
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { applyCorsHeaders, corsPreflightResponse, getCorsAllowedOrigins } from "@/lib/cors"
@@ -10,7 +11,7 @@ function getClientIp(request: NextRequest): string {
   return request.headers.get("x-real-ip") ?? "unknown"
 }
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
   // Browser calls from Easner Office (different origin) need CORS on API responses.
@@ -18,11 +19,36 @@ export function middleware(request: NextRequest) {
     const allowed = getCorsAllowedOrigins()
     const preflight = corsPreflightResponse(request, allowed)
     if (preflight) return preflight
-    const response = NextResponse.next()
-    return applyCorsHeaders(response, request, allowed)
   }
 
-  const response = NextResponse.next()
+  let response = NextResponse.next({ request })
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+  if (url && key) {
+    const supabase = createServerClient(url, key, {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          try {
+            for (const { name, value, options } of cookiesToSet) {
+              response.cookies.set(name, value, options as CookieOptions)
+            }
+          } catch {
+            // ignore when cookies cannot be written
+          }
+        },
+      },
+    })
+    await supabase.auth.getUser()
+  }
+
+  if (pathname.startsWith("/api/")) {
+    const allowed = getCorsAllowedOrigins()
+    return applyCorsHeaders(response, request, allowed)
+  }
 
   // Set business owner IP when they visit the invoices section
   if (pathname.startsWith("/invoices")) {
@@ -38,5 +64,8 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/invoices/:path*", "/api/:path*"],
+  matcher: [
+    // Supabase session refresh on navigations + API; exclude static assets.
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 }

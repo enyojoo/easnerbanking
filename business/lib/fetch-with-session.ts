@@ -3,11 +3,10 @@
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 
 /**
- * Same-origin `/api/*` calls: attach Supabase JWT (`createClient` uses localStorage, so
- * Route Handlers need `Authorization: Bearer`; `getUserFromApiRequest` falls back to it).
+ * Same-origin `/api/*` calls with the Supabase session **cookies** (no `Authorization`
+ * header — avoids HTTP 494 on Vercel when Bearer + cookies exceed edge header limits).
  *
- * - `credentials: "include"` so any Supabase cookies are sent on Vercel/production.
- * - On **401**, refresh the session once and retry (expired access token after tab idle, etc.).
+ * On **401**, refresh the session once and retry (expired access token, etc.).
  */
 export async function fetchWithSession(
   input: RequestInfo | URL,
@@ -15,26 +14,18 @@ export async function fetchWithSession(
 ): Promise<Response> {
   const supabase = createSupabaseBrowser()
 
-  const doFetch = (accessToken: string | undefined) => {
-    const headers = new Headers(init.headers)
-    if (accessToken) {
-      headers.set("Authorization", `Bearer ${accessToken}`)
-    }
-    return fetch(input, { ...init, headers, credentials: "include" })
-  }
+  const doFetch = () => fetch(input, { ...init, credentials: "include" })
 
-  const { data } = await supabase.auth.getSession()
-  let res = await doFetch(data.session?.access_token)
+  let res = await doFetch()
 
   if (res.status !== 401) {
     return res
   }
 
   const { data: refreshed } = await supabase.auth.refreshSession()
-  const next = refreshed.session?.access_token
-  if (!next) {
+  if (!refreshed.session) {
     return res
   }
 
-  return doFetch(next)
+  return doFetch()
 }

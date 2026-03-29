@@ -23,10 +23,9 @@ export async function getUserFromBearer(request: Request): Promise<User | null> 
 }
 
 /**
- * Prefer the Supabase session from cookies (SSR / `@supabase/ssr` browser client).
- * The default `createClient` in the business app uses **localStorage**, so there is
- * often no session cookie — same-origin requests must send `Authorization: Bearer`
- * (see `fetchWithSession`). Falls back to Bearer when cookie session is missing.
+ * Prefer the Supabase session from cookies (`createBrowserClient` in the business app).
+ * Falls back to `Authorization: Bearer` for cross-origin callers (e.g. Easner Office)
+ * that cannot send Easner session cookies.
  */
 export async function getUserFromApiRequest(request: Request): Promise<User | null> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
