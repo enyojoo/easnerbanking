@@ -424,6 +424,7 @@ export function SettingsPersonalTab() {
             <Button
               variant="outline"
               size="sm"
+              className="min-w-[5.5rem]"
               disabled={!canUsePassword}
               onClick={() => setChangePasswordOpen(true)}
             >
