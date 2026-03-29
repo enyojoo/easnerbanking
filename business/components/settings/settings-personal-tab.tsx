@@ -453,12 +453,10 @@ export function SettingsPersonalTab() {
                 }
                 void openMfaSetupFlow()
               }}
+              aria-label={!mfaVerifiedOn && mfaSetupPreparing ? "Preparing MFA setup" : undefined}
             >
               {!mfaVerifiedOn && mfaSetupPreparing ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                  Preparing…
-                </>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
               ) : mfaVerifiedOn ? (
                 "Turn off 2FA"
               ) : (

@@ -302,12 +302,10 @@ export function MfaSettingsDialog({
                       void startEnroll(enrollGenRef.current)
                     }}
                     disabled={enrollFetching}
+                    aria-label={enrollFetching ? "Preparing MFA setup" : undefined}
                   >
                     {enrollFetching ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                        Preparing…
-                      </>
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
                     ) : (
                       "Set up"
                     )}
