@@ -1,13 +1,12 @@
 "use client"
 
+import { ensureBusinessAppSession } from "@/lib/app-session-client"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 
 /**
  * Authenticated same-origin `/api/*` calls for the business app:
- * - **`Authorization: Bearer`** from `getSession()` (session in localStorage).
- * - **`credentials: "omit"`** so the browser does **not** send the `Cookie` header.
- *   Legacy `sb-*` Supabase cookies from older deploys can exceed Vercel’s
- *   `REQUEST_HEADER_TOO_LARGE` limit when combined with other headers.
+ * - Mint a **small app session cookie** from the Supabase access token.
+ * - Send only that lightweight cookie to `/api/*` requests.
  *
  * Routes that rely on **cookies** (e.g. `easner_business_owner_ip`) must use plain
  * `fetch` with default credentials, not this helper.
@@ -19,27 +18,23 @@ export async function fetchWithSession(
   init: RequestInit = {},
 ): Promise<Response> {
   const supabase = createSupabaseBrowser()
+  await ensureBusinessAppSession()
 
-  const doFetch = (accessToken: string | undefined) => {
-    const headers = new Headers(init.headers)
-    if (accessToken) {
-      headers.set("Authorization", `Bearer ${accessToken}`)
-    }
-    return fetch(input, { ...init, headers, credentials: "omit" })
-  }
+  const doFetch = () => fetch(input, { ...init, credentials: "same-origin" })
 
-  const { data } = await supabase.auth.getSession()
-  let res = await doFetch(data.session?.access_token)
+  let res = await doFetch()
 
   if (res.status !== 401) {
     return res
   }
 
-  const { data: refreshed } = await supabase.auth.refreshSession()
-  const next = refreshed.session?.access_token
-  if (!next) {
+  const { data: refreshed, error } = await supabase.auth.refreshSession()
+  if (error || !refreshed.session) {
     return res
   }
 
-  return doFetch(next)
+  const ok = await ensureBusinessAppSession(true)
+  if (!ok) return res
+
+  return doFetch()
 }

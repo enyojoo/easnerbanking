@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
 import type { User } from "@supabase/supabase-js"
+import { clearBusinessAppSessionCookie } from "@/lib/app-session-client"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { clearLegacySupabaseAuthCookiesOnce } from "@/lib/supabase/clear-legacy-auth-cookies"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
@@ -42,6 +43,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
+      if (!session) {
+        clearBusinessAppSessionCookie()
+      }
     })
 
     return () => {
@@ -113,6 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = async () => {
+    clearBusinessAppSessionCookie()
     await supabase.auth.signOut()
   }
 

@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr"
 import { cookies } from "next/headers"
 import { createClient, type User } from "@supabase/supabase-js"
+import { BUSINESS_APP_SESSION_COOKIE, getBusinessAppSessionUser } from "@/lib/app-session"
 
 export function createSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -23,11 +24,21 @@ export async function getUserFromBearer(request: Request): Promise<User | null> 
 }
 
 /**
- * Resolves the user for Route Handlers. Prefer **`Authorization: Bearer`** (business app
- * uses localStorage + `fetchWithSession` with `credentials: "omit"` to avoid oversized
- * `Cookie` headers on Vercel). Falls back to Supabase cookies (SSR / cross-origin flows).
+ * Resolves the user for Route Handlers. Prefer the lightweight Easner app session cookie,
+ * then Bearer for cross-origin callers, then Supabase SSR cookies as a final fallback.
  */
 export async function getUserFromApiRequest(request: Request): Promise<User | null> {
+  try {
+    const cookieStore = await cookies()
+    const appSession = cookieStore.get(BUSINESS_APP_SESSION_COOKIE)?.value
+    if (appSession) {
+      const user = getBusinessAppSessionUser(appSession)
+      if (user) return user
+    }
+  } catch {
+    // cookies() unavailable outside a request context
+  }
+
   const bearerUser = await getUserFromBearer(request)
   if (bearerUser) return bearerUser
 
