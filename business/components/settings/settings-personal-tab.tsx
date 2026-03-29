@@ -422,6 +422,7 @@ export function SettingsPersonalTab() {
               </div>
             </div>
             <Button
+              className="w-[5.75rem]"
               variant="outline"
               size="sm"
               disabled={!canUsePassword}
