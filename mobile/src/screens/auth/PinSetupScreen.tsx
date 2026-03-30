@@ -165,7 +165,12 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
   const filledCount = currentPin.filter(d => d !== '').length
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View
+      style={[
+        styles.container,
+        { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, spacing[3]) + spacing[2] },
+      ]}
+    >
       <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -262,7 +267,7 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
           {/* Bottom Text */}
           {!isMandatory && (
             <TouchableOpacity
-              style={[styles.logoutLink, { paddingBottom: spacing[6] + insets.bottom }]}
+              style={[styles.logoutLink, { paddingBottom: spacing[4] }]}
               onPress={() => {
                 Alert.alert(
                   'Log Out',
@@ -330,8 +335,8 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     alignItems: 'center',
     paddingHorizontal: spacing[5],
-    paddingTop: spacing[3],
-    paddingBottom: spacing[2],
+    paddingTop: spacing[2],
+    paddingBottom: spacing[1],
   },
   headerSpacer: {
     flex: 1,
@@ -352,14 +357,14 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: spacing[5],
-    paddingTop: spacing[6],
+    paddingTop: spacing[2],
     justifyContent: 'space-between',
   },
   titleBlock: {
     width: '100%',
     alignItems: 'center',
     paddingHorizontal: spacing[4],
-    marginBottom: spacing[8],
+    marginBottom: spacing[4],
     gap: spacing[3],
   },
   title: {
@@ -383,7 +388,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: spacing[4],
-    marginBottom: spacing[16],
+    marginBottom: spacing[6],
   },
   pinDot: {
     width: 14,
@@ -399,7 +404,7 @@ const styles = StyleSheet.create({
   },
   keypadContainer: {
     width: '100%',
-    marginBottom: spacing[8],
+    marginBottom: spacing[4],
   },
   keypadGrid: {
     flexDirection: 'row',

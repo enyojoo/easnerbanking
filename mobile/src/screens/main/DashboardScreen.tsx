@@ -43,6 +43,7 @@ import { supabase } from '../../lib/supabase'
 import { ShimmerLoader } from '../../components/premium'
 import { getTransactionStatusDisplay } from '../../utils/formatters'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
+import { isTier1Complete } from '../../lib/compliance'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
@@ -778,7 +779,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
 
   return (
     <View style={styles.container}>
-      {/* Header: avatar + support */}
+      {/* Header: avatar | verify banner (if needed) | support */}
       <View style={[styles.headerWrapper, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           {/* Header Content */}
@@ -802,6 +803,28 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                 )}
               </TouchableOpacity>
             </View>
+
+            {!isTier1Complete(userProfile) ? (
+              <View style={styles.verifyAccountBannerSlot}>
+                <TouchableOpacity
+                  style={styles.verifyAccountBanner}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                    navigation.navigate('AccountVerification' as never)
+                  }}
+                  activeOpacity={0.88}
+                  accessibilityRole="button"
+                  accessibilityLabel="Verify account to unlock banking. Begin."
+                >
+                  <View style={styles.verifyAccountBannerTextWrap}>
+                    <Text style={styles.verifyAccountBannerTitle} numberOfLines={2}>
+                      Verify account to unlock banking
+                    </Text>
+                  </View>
+                  <Text style={styles.verifyAccountBannerCta}>Begin</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
 
             <TouchableOpacity
               style={styles.supportHeaderButton}
@@ -1078,6 +1101,46 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
+    flexShrink: 0,
+  },
+  verifyAccountBannerSlot: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  verifyAccountBanner: {
+    alignSelf: 'center',
+    maxWidth: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 0,
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[2],
+    backgroundColor: colors.frame.background,
+    borderRadius: borderRadius.lg,
+    borderWidth: 0.5,
+    borderColor: colors.frame.border,
+    gap: spacing[1],
+    ...shadows.xs,
+  },
+  verifyAccountBannerTextWrap: {
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  verifyAccountBannerTitle: {
+    ...textStyles.bodySmall,
+    color: colors.text.primary,
+    fontWeight: '600',
+    fontFamily: 'Outfit-SemiBold',
+  },
+  verifyAccountBannerCta: {
+    ...textStyles.bodySmall,
+    color: colors.primary.main,
+    fontFamily: 'Outfit-SemiBold',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+    flexShrink: 0,
   },
   supportHeaderButton: {
     width: 40,
@@ -1088,6 +1151,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.frame.background,
     borderWidth: 0.5,
     borderColor: colors.frame.border,
+    flexShrink: 0,
   },
   scrollView: {
     flex: 1,

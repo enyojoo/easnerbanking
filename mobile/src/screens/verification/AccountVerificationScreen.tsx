@@ -1179,7 +1179,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                     <>
                       <Ionicons name="information-circle-outline" size={20} color={colors.primary.main} />
                       <Text style={styles.infoText}>
-                        Complete identity verification below to unlock USD and EUR bank accounts, pay-in and pay-out, and stablecoin features.
+                        Complete identity verification below to unlock bank accounts, cards, stablecoin and other banking features
                       </Text>
                     </>
                   )}

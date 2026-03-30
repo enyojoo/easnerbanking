@@ -171,7 +171,12 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
   const filledCount = pin.filter(d => d !== '').length
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View
+      style={[
+        styles.container,
+        { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, spacing[3]) + spacing[2] },
+      ]}
+    >
       <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -208,32 +213,29 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
               <Text style={styles.greeting}>{appPinStrings.lockWelcome(getUserName())}</Text>
             </View>
 
-            {/* PIN dots + verifying spinner in the same band (no extra row / layout shift) */}
+            {/* PIN dots, or centered spinner only while verifying (no dots under spinner) */}
             <View style={styles.pinDotsWrapper}>
-              <Animated.View
-                style={[
-                  styles.pinDotsContainer,
-                  loading && !error ? styles.pinDotsDimmed : null,
-                  { transform: [{ translateX: shakeAnim }] },
-                ]}
-              >
-                {pin.map((digit, index) => (
-                  <View
-                    key={index}
-                    style={[
-                      styles.pinDot,
-                      digit !== '' && styles.pinDotFilled,
-                      error && styles.pinDotError,
-                      locked && styles.pinDotDisabled,
-                    ]}
-                  />
-                ))}
-              </Animated.View>
               {loading && !error ? (
-                <View style={styles.pinDotsLoadingOverlay} pointerEvents="none">
+                <View style={styles.pinDotsLoadingOnly}>
                   <ActivityIndicator size="small" color={colors.primary.main} />
                 </View>
-              ) : null}
+              ) : (
+                <Animated.View
+                  style={[styles.pinDotsContainer, { transform: [{ translateX: shakeAnim }] }]}
+                >
+                  {pin.map((digit, index) => (
+                    <View
+                      key={index}
+                      style={[
+                        styles.pinDot,
+                        digit !== '' && styles.pinDotFilled,
+                        error && styles.pinDotError,
+                        locked && styles.pinDotDisabled,
+                      ]}
+                    />
+                  ))}
+                </Animated.View>
+              )}
             </View>
 
             {/* Same line as “Enter your 4-digit PIN”: errors replace that hint here */}
@@ -300,7 +302,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
 
           {/* Bottom Text */}
           <TouchableOpacity
-            style={[styles.logoutLink, { paddingBottom: spacing[6] + insets.bottom }]}
+            style={[styles.logoutLink, { paddingBottom: spacing[4] }]}
             onPress={() => {
               Alert.alert(appPinStrings.logOutTitle, appPinStrings.logOutBody, [
                 { text: appPinStrings.dialogCancel, style: 'cancel' },
@@ -339,8 +341,8 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     alignItems: 'center',
     paddingHorizontal: spacing[5],
-    paddingTop: spacing[3],
-    paddingBottom: spacing[2],
+    paddingTop: spacing[2],
+    paddingBottom: spacing[1],
   },
   headerSpacer: {
     flex: 1,
@@ -361,7 +363,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: spacing[5],
-    paddingTop: spacing[6],
+    paddingTop: spacing[2],
   },
   topBlock: {
     alignItems: 'center',
@@ -369,7 +371,7 @@ const styles = StyleSheet.create({
   },
   greetingContainer: {
     alignItems: 'center',
-    marginBottom: spacing[6],
+    marginBottom: spacing[4],
   },
   greeting: {
     fontSize: 32,
@@ -386,7 +388,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   pinDotsWrapper: {
-    position: 'relative',
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 56,
+  },
+  pinDotsLoadingOnly: {
+    minHeight: 56,
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
@@ -398,23 +406,11 @@ const styles = StyleSheet.create({
     gap: spacing[6],
     marginBottom: 0,
   },
-  pinDotsDimmed: {
-    opacity: 0.35,
-  },
-  pinDotsLoadingOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   hintSlot: {
     width: '100%',
     minHeight: 48,
-    marginTop: spacing[6],
-    marginBottom: spacing[6],
+    marginTop: spacing[4],
+    marginBottom: spacing[4],
     paddingHorizontal: spacing[4],
     justifyContent: 'center',
     alignItems: 'center',
@@ -445,7 +441,7 @@ const styles = StyleSheet.create({
   keypadContainer: {
     width: '100%',
     marginTop: 'auto',
-    marginBottom: spacing[8],
+    marginBottom: spacing[4],
   },
   keypadGrid: {
     flexDirection: 'row',
