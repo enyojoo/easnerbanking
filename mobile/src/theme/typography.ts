@@ -141,6 +141,21 @@ export const textStyles: Record<string, TextStyle> = {
     lineHeight: fontSize.xs * lineHeight.relaxed,
   },
 
+  /**
+   * Single-line TextInput — intentionally no `lineHeight`.
+   * Body styles’ relaxed lineHeight shifts caret/text vertically on iOS and Android.
+   */
+  textInputSingleLine: {
+    fontFamily: fontFamily.regular,
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.regular,
+  },
+  textInputMedium: {
+    fontFamily: fontFamily.regular,
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.regular,
+  },
+
   // Labels
   labelLarge: {
     fontFamily: fontFamily.medium,

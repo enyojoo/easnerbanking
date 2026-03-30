@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import type { User } from "@supabase/supabase-js"
 import { getLockoutState, verifyPin, type VerifyPinResult } from "@/lib/login-pin"
 import { appPinStrings } from "@/lib/i18n/app-pin-en"
+import { usePersonalProfileAvatar } from "@/lib/use-personal-profile-avatar"
 import { PinEntryBlock } from "./pin-entry-block"
 import { PinUserAvatar } from "./pin-user-avatar"
 
@@ -44,6 +45,7 @@ export function PinUnlockScreen({
   const [shake, setShake] = useState(false)
   const lock = getLockoutState(user.id)
   const lastAttemptRef = useRef<string>("")
+  const { avatarUrl } = usePersonalProfileAvatar()
 
   const runVerify = useCallback(
     async (code: string) => {
@@ -80,7 +82,7 @@ export function PinUnlockScreen({
   return (
     <div className="flex min-h-screen flex-col items-center bg-background px-6 pb-10 pt-16">
       <div className="flex w-full max-w-sm flex-col items-center gap-8">
-        <PinUserAvatar initials={initials(user)} />
+        <PinUserAvatar initials={initials(user)} avatarUrl={avatarUrl} />
         <div className="space-y-1 text-center">
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">{appPinStrings.lockWelcome(name)}</h1>
           <p className="text-sm text-muted-foreground">{appPinStrings.lockEnterPin}</p>

@@ -38,6 +38,7 @@ import { supabase } from '../../lib/supabase'
 import { splitFullNameForForm, initialsFromFullName, joinFullName } from '../../lib/userProfileHelpers'
 import * as ImagePicker from 'expo-image-picker'
 import { uploadProfileAvatar, PROFILE_AVATAR_MAX_BYTES } from '../../lib/profileAvatarUpload'
+import { getApiBaseUrl } from '../../lib/apiClient'
 
 function ProfileEditContent({ navigation }: NavigationProps) {
   const { user, userProfile, refreshUserProfile } = useAuth()
@@ -236,7 +237,8 @@ function ProfileEditContent({ navigation }: NavigationProps) {
       if (!session) return
 
       const cleanTag = easetag.replace(/^@/, "").toLowerCase()
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'
+      const apiUrl = getApiBaseUrl()
+      if (!apiUrl) return
       const response = await fetch(
         `${apiUrl}/api/username/check?easetag=${encodeURIComponent(cleanTag)}`,
         {
@@ -950,11 +952,16 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: '#E2E2E2',
     borderRadius: borderRadius.xl,
-    padding: spacing[2],
-    ...textStyles.bodyLarge,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[3],
+    minHeight: 48,
+    ...textStyles.textInputSingleLine,
     color: colors.text.primary,
     backgroundColor: colors.background.primary,
-    fontFamily: 'Outfit-Regular',
+    ...Platform.select({
+      android: { includeFontPadding: false, textAlignVertical: 'center' },
+      ios: { paddingVertical: 12 },
+    }),
   },
   fieldValue: {
     ...textStyles.bodyLarge,
@@ -1002,9 +1009,13 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: spacing[3],
     paddingRight: spacing[3],
-    ...textStyles.bodyLarge,
+    minHeight: 48,
+    ...textStyles.textInputSingleLine,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Regular',
+    ...Platform.select({
+      android: { includeFontPadding: false, textAlignVertical: 'center' },
+      ios: { paddingVertical: 12 },
+    }),
   },
   easetagSpinnerContainer: {
     paddingRight: spacing[3],

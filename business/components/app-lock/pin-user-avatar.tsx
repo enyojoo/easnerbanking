@@ -1,17 +1,44 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 
-export function PinUserAvatar({ initials, className }: { initials: string; className?: string }) {
+export function PinUserAvatar({
+  initials,
+  avatarUrl,
+  className,
+}: {
+  initials: string
+  avatarUrl?: string | null
+  className?: string
+}) {
   const safe = initials.slice(0, 2).toUpperCase() || "?"
+  const trimmed = avatarUrl?.trim() ?? ""
+  const [imgFailed, setImgFailed] = useState(false)
+
+  useEffect(() => {
+    setImgFailed(false)
+  }, [trimmed])
+
+  const showImage = trimmed.length > 0 && !imgFailed
+
   return (
     <div
       className={cn(
-        "flex h-16 w-16 items-center justify-center rounded-full bg-muted text-lg font-semibold text-foreground",
+        "relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-lg font-semibold text-foreground",
         className,
       )}
     >
-      {safe}
+      {showImage ? (
+        <img
+          src={trimmed}
+          alt=""
+          className="h-full w-full object-cover"
+          onError={() => setImgFailed(true)}
+        />
+      ) : (
+        safe
+      )}
     </div>
   )
 }

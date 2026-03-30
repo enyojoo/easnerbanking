@@ -310,14 +310,16 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
-    ...textStyles.bodyMedium,
+    ...textStyles.textInputMedium,
     color: colors.text.primary,
     fontSize: 13,
-    lineHeight: 18,
     textAlignVertical: 'center',
     ...Platform.select({
       android: {
         includeFontPadding: false,
+      },
+      ios: {
+        paddingVertical: 11,
       },
     }),
   },

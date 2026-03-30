@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import {
   View,
   Text,
+  Image,
   StyleSheet,
   TouchableOpacity,
   Alert,
@@ -14,12 +15,12 @@ import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { NavigationProps } from '../../types'
-import { colors, textStyles, borderRadius, spacing } from '../../theme'
+import { colors, textStyles, borderRadius, spacing, userAvatarStyles } from '../../theme'
 import { verifyPin, getPinLockTimeRemaining, updateSessionActivity, setAppLocked } from '../../lib/pinAuth'
 import { emitAppLocked } from '../../lib/app-lock-bus'
 import { useAuth } from '../../contexts/AuthContext'
 import { appPinStrings } from '../../constants/app-pin-en'
-import { displayFirstNameFromFullName } from '../../lib/userProfileHelpers'
+import { displayFirstNameFromFullName, initialsFromFullName } from '../../lib/userProfileHelpers'
 
 export default function PinEntryScreen({ navigation: navigationProp }: NavigationProps) {
   const { user, userProfile, signOut } = useAuth()
@@ -28,9 +29,26 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
   const [error, setError] = useState('')
   const [locked, setLocked] = useState(false)
   const [lockedUntil, setLockedUntil] = useState<number | null>(null)
+  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false)
   const shakeAnim = useRef(new Animated.Value(0)).current
   const insets = useSafeAreaInsets()
 
+  const displayFull =
+    userProfile?.profile?.full_name ||
+    [userProfile?.profile?.first_name, userProfile?.profile?.last_name].filter(Boolean).join(' ') ||
+    user?.full_name ||
+    [user?.first_name, user?.last_name].filter(Boolean).join(' ') ||
+    user?.email ||
+    ''
+
+  const headerAvatarUrl =
+    typeof userProfile?.profile?.avatar_url === 'string' && userProfile.profile.avatar_url.trim()
+      ? userProfile.profile.avatar_url.trim()
+      : null
+
+  useEffect(() => {
+    setAvatarLoadFailed(false)
+  }, [headerAvatarUrl])
 
   useEffect(() => {
     checkLockStatus()
@@ -175,30 +193,48 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
         {/* Content */}
         <View style={styles.content}>
           <View style={styles.topBlock}>
-            {/* Greeting */}
+            <View style={userAvatarStyles.pinEntryCircle}>
+              {headerAvatarUrl && !avatarLoadFailed ? (
+                <Image
+                  source={{ uri: headerAvatarUrl }}
+                  style={userAvatarStyles.image}
+                  onError={() => setAvatarLoadFailed(true)}
+                />
+              ) : (
+                <Text style={userAvatarStyles.pinEntryInitials}>{initialsFromFullName(displayFull)}</Text>
+              )}
+            </View>
             <View style={styles.greetingContainer}>
               <Text style={styles.greeting}>{appPinStrings.lockWelcome(getUserName())}</Text>
             </View>
 
-            {/* PIN Dots - Light gray circles */}
-            <Animated.View
-              style={[
-                styles.pinDotsContainer,
-                { transform: [{ translateX: shakeAnim }] },
-              ]}
-            >
-              {pin.map((digit, index) => (
-                <View
-                  key={index}
-                  style={[
-                    styles.pinDot,
-                    digit !== '' && styles.pinDotFilled,
-                    error && styles.pinDotError,
-                    locked && styles.pinDotDisabled,
-                  ]}
-                />
-              ))}
-            </Animated.View>
+            {/* PIN dots + verifying spinner in the same band (no extra row / layout shift) */}
+            <View style={styles.pinDotsWrapper}>
+              <Animated.View
+                style={[
+                  styles.pinDotsContainer,
+                  loading && !error ? styles.pinDotsDimmed : null,
+                  { transform: [{ translateX: shakeAnim }] },
+                ]}
+              >
+                {pin.map((digit, index) => (
+                  <View
+                    key={index}
+                    style={[
+                      styles.pinDot,
+                      digit !== '' && styles.pinDotFilled,
+                      error && styles.pinDotError,
+                      locked && styles.pinDotDisabled,
+                    ]}
+                  />
+                ))}
+              </Animated.View>
+              {loading && !error ? (
+                <View style={styles.pinDotsLoadingOverlay} pointerEvents="none">
+                  <ActivityIndicator size="small" color={colors.primary.main} />
+                </View>
+              ) : null}
+            </View>
 
             {/* Same line as “Enter your 4-digit PIN”: errors replace that hint here */}
             <View style={styles.hintSlot}>
@@ -214,13 +250,6 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
                 </Text>
               )}
             </View>
-
-            {/* Loading Indicator */}
-            {loading && !error ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="small" color={colors.primary.main} />
-              </View>
-            ) : null}
           </View>
 
           {/* Numeric Keypad - 3x3 grid + 0 and backspace */}
@@ -271,7 +300,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
 
           {/* Bottom Text */}
           <TouchableOpacity
-            style={styles.logoutLink}
+            style={[styles.logoutLink, { paddingBottom: spacing[6] + insets.bottom }]}
             onPress={() => {
               Alert.alert(appPinStrings.logOutTitle, appPinStrings.logOutBody, [
                 { text: appPinStrings.dialogCancel, style: 'cancel' },
@@ -356,10 +385,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '600',
   },
-  loadingContainer: {
+  pinDotsWrapper: {
+    position: 'relative',
+    width: '100%',
     alignItems: 'center',
-    marginTop: spacing[2],
-    marginBottom: spacing[2],
+    justifyContent: 'center',
   },
   pinDotsContainer: {
     flexDirection: 'row',
@@ -367,6 +397,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing[6],
     marginBottom: 0,
+  },
+  pinDotsDimmed: {
+    opacity: 0.35,
+  },
+  pinDotsLoadingOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   hintSlot: {
     width: '100%',
@@ -444,7 +486,6 @@ const styles = StyleSheet.create({
   },
   logoutLink: {
     alignItems: 'center',
-    paddingBottom: spacing[6],
   },
   logoutText: {
     fontSize: 14,

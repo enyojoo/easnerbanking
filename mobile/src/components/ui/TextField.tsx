@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
-    ...textStyles.bodyLarge,
+    ...textStyles.textInputSingleLine,
     color: colors.semantic.foreground,
     backgroundColor: colors.semantic.background,
     minHeight: AUTH_FIELD_MIN_HEIGHT,
@@ -100,13 +100,16 @@ const styles = StyleSheet.create({
       android: {
         includeFontPadding: false,
       },
+      ios: {
+        paddingVertical: 11,
+      },
     }),
   },
   inputInRow: {
     flex: 1,
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
-    ...textStyles.bodyLarge,
+    ...textStyles.textInputSingleLine,
     color: colors.semantic.foreground,
     borderWidth: 0,
     minHeight: AUTH_FIELD_MIN_HEIGHT - 2,
@@ -115,6 +118,9 @@ const styles = StyleSheet.create({
     ...Platform.select({
       android: {
         includeFontPadding: false,
+      },
+      ios: {
+        paddingVertical: 11,
       },
     }),
   },

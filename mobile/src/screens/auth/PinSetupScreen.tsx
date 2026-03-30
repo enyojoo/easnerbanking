@@ -262,7 +262,7 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
           {/* Bottom Text */}
           {!isMandatory && (
             <TouchableOpacity
-              style={styles.logoutLink}
+              style={[styles.logoutLink, { paddingBottom: spacing[6] + insets.bottom }]}
               onPress={() => {
                 Alert.alert(
                   'Log Out',
@@ -440,7 +440,6 @@ const styles = StyleSheet.create({
   },
   logoutLink: {
     alignItems: 'center',
-    paddingBottom: spacing[6],
   },
   logoutText: {
     fontSize: 14,

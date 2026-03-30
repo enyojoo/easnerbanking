@@ -32,7 +32,7 @@ export const authScreenStyles = StyleSheet.create({
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
-    ...textStyles.bodyLarge,
+    ...textStyles.textInputSingleLine,
     color: colors.text.primary,
     backgroundColor: colors.semantic.background,
     minHeight: AUTH_FIELD_MIN_HEIGHT,
@@ -40,6 +40,9 @@ export const authScreenStyles = StyleSheet.create({
     ...Platform.select({
       android: {
         includeFontPadding: false,
+      },
+      ios: {
+        paddingVertical: 11,
       },
     }),
   },
@@ -57,7 +60,7 @@ export const authScreenStyles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
-    ...textStyles.bodyLarge,
+    ...textStyles.textInputSingleLine,
     color: colors.text.primary,
     borderWidth: 0,
     backgroundColor: 'transparent',
@@ -65,6 +68,9 @@ export const authScreenStyles = StyleSheet.create({
     ...Platform.select({
       android: {
         includeFontPadding: false,
+      },
+      ios: {
+        paddingVertical: 11,
       },
     }),
   },

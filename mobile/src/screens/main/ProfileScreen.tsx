@@ -11,6 +11,7 @@ import {
   FlatList,
   Keyboard,
   ActivityIndicator,
+  Platform,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -747,9 +748,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#d1d5db',
     borderRadius: 6,
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    minHeight: 48,
     fontSize: 16,
     backgroundColor: '#ffffff',
+    ...Platform.select({
+      android: { includeFontPadding: false, textAlignVertical: 'center' },
+      ios: { paddingVertical: 12 },
+    }),
   },
   fieldValue: {
     fontSize: 16,
@@ -813,8 +820,13 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     paddingRight: 12,
+    minHeight: 48,
     fontSize: 16,
     color: '#111827',
+    ...Platform.select({
+      android: { includeFontPadding: false, textAlignVertical: 'center' },
+      ios: { paddingVertical: 12 },
+    }),
   },
   easetagSpinnerContainer: {
     paddingRight: 12,

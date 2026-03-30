@@ -10,6 +10,7 @@ import {
   Animated,
   ScrollView,
   Keyboard,
+  Platform,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { 
@@ -872,12 +873,14 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    ...textStyles.bodyMedium,
+    ...textStyles.textInputMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Regular',
     fontSize: 13,
-    lineHeight: 18,
     textAlignVertical: 'center',
+    ...Platform.select({
+      android: { includeFontPadding: false },
+      ios: { paddingVertical: 0 },
+    }),
   },
   
   // Transactions List

@@ -2,13 +2,12 @@
  * Upload profile photo via business app — same as web `POST /api/upload/profile-avatar`.
  */
 
+import * as ImageManipulator from 'expo-image-manipulator'
 import { supabase } from './supabase'
 import { getApiBaseUrl } from './apiClient'
 
 /** Aligned with `business/lib/upload-constants.ts` */
 export const PROFILE_AVATAR_MAX_BYTES = 2 * 1024 * 1024
-
-const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
 
 export type UploadProfileAvatarResult = { url: string } | { error: string }
 
@@ -32,14 +31,24 @@ export async function uploadProfileAvatar(file: {
     return { error: 'App API URL is not configured.' }
   }
 
-  const mime = file.mimeType && ALLOWED_MIME.has(file.mimeType) ? file.mimeType : 'image/jpeg'
-  const ext =
-    mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : mime === 'image/gif' ? 'gif' : 'jpg'
-  const filename = file.name?.replace(/[^\w.-]/g, '_') || `avatar.${ext}`
+  const mime = 'image/jpeg' as const
+  const filename = 'avatar.jpg'
+
+  let uploadUri = file.uri
+  try {
+    const normalized = await ImageManipulator.manipulateAsync(
+      file.uri,
+      [],
+      { compress: 0.88, format: ImageManipulator.SaveFormat.JPEG }
+    )
+    uploadUri = normalized.uri
+  } catch {
+    return { error: 'Could not process the image. Try another photo.' }
+  }
 
   const form = new FormData()
   form.append('file', {
-    uri: file.uri,
+    uri: uploadUri,
     name: filename,
     type: mime,
   } as unknown as Blob)
