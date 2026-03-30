@@ -63,8 +63,6 @@ import {
   TIER2_COMPLETE_PLACEHOLDER,
   canProvisionInvoiceDepositInstructions,
 } from "@/lib/compliance-placeholders"
-import { InvoiceDepositNoticeBanner } from "@/components/invoices/invoice-deposit-notice-banner"
-
 const STATUS_ACTIVITY_DESCRIPTIONS: Record<string, string> = {
   sent: "Invoice was sent to customer",
   paid: "Invoice was marked as paid",
@@ -308,8 +306,6 @@ export default function InvoiceDetailPage() {
 
   return (
     <div className="space-y-6">
-      <InvoiceDepositNoticeBanner />
-
       {/* Header */}
       <div className="flex items-center gap-4">
         <Link href="/invoices">

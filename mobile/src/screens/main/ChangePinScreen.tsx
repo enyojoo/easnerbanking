@@ -321,13 +321,13 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
             <Text style={styles.lockout}>{appPinStrings.lockLockedTryMinutes(lockMinutes)}</Text>
           ) : null}
 
-          {error ? (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          ) : null}
-
-          <Animated.View style={[styles.pinDotsContainer, { transform: [{ translateX: shakeAnim }] }]}>
+          <Animated.View
+            style={[
+              styles.pinDotsContainer,
+              error ? styles.pinDotsContainerWithHint : null,
+              { transform: [{ translateX: shakeAnim }] },
+            ]}
+          >
             {currentPinDisplay.map((digit, index) => (
               <View
                 key={index}
@@ -339,6 +339,13 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
               />
             ))}
           </Animated.View>
+
+          {/* Same as PinEntryScreen: incorrect PIN is plain text below dots, not in a tinted box */}
+          {error ? (
+            <View style={styles.verifyHintSlot}>
+              <Text style={styles.verifyErrorText}>{error}</Text>
+            </View>
+          ) : null}
 
           <View style={styles.keypadContainer}>
             <View style={styles.keypadGrid}>
@@ -477,17 +484,23 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing[2],
   },
-  errorBox: {
-    backgroundColor: colors.error.light,
-    borderRadius: borderRadius.md,
-    padding: spacing[3],
-    marginBottom: spacing[2],
-    marginHorizontal: spacing[2],
+  pinDotsContainerWithHint: {
+    marginBottom: 0,
   },
-  errorText: {
-    ...textStyles.bodySmall,
-    color: colors.error.main,
+  verifyHintSlot: {
+    width: '100%',
+    minHeight: 48,
+    marginTop: spacing[6],
+    marginBottom: spacing[16],
+    paddingHorizontal: spacing[4],
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  verifyErrorText: {
+    ...textStyles.bodyMedium,
+    color: colors.error.dark,
     textAlign: 'center',
+    fontWeight: '600',
   },
   pinDotsContainer: {
     flexDirection: 'row',

@@ -49,8 +49,6 @@ import {
   TIER2_COMPLETE_PLACEHOLDER,
   canProvisionInvoiceDepositInstructions,
 } from "@/lib/compliance-placeholders"
-import { InvoiceDepositNoticeBanner } from "@/components/invoices/invoice-deposit-notice-banner"
-
 export default function InvoicesPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -256,8 +254,6 @@ export default function InvoicesPage() {
           ))}
         </div>
       </div>
-
-      <InvoiceDepositNoticeBanner />
 
       {/* Invoices Table - fixed min-height for consistent view when switching tabs */}
       <Card className="flex flex-col min-h-[400px]">
