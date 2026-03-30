@@ -201,7 +201,7 @@ export function DashboardNav() {
       </nav>
 
       <div className="px-4 py-4 border-t border-sidebar-border flex items-center justify-center">
-        <BusinessLogo size="sm" href="/" />
+        <BusinessLogo size="md" href="/" />
       </div>
     </div>
   )
