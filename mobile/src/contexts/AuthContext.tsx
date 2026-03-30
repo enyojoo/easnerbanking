@@ -1,17 +1,52 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
+import * as Linking from 'expo-linking'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '../lib/supabase'
 import { User, AuthUser } from '../types'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 import { analytics } from '../lib/analytics'
+import { ensureBusinessAppUserBootstrap } from '../lib/apiClient'
 import { clearPinAuth, updateSessionActivity, markFirstLoginAfterVerification } from '../lib/pinAuth'
+import { AUTH_INITIAL_MODE_KEY } from '../constants/auth'
+import {
+  getVerifiedTotpFactorId,
+  isMfaStepRequired,
+  totpFactorsFromListResponse,
+} from '../lib/auth-mfa'
+import { mapUsersRowToUser } from '../lib/userProfileHelpers'
+
+function mapNameFromMetadata(meta: Record<string, unknown> | undefined): {
+  first_name: string
+  last_name: string
+} {
+  const nameStr = typeof meta?.name === 'string' ? meta.name.trim() : ''
+  if (!nameStr) {
+    return {
+      first_name: typeof meta?.first_name === 'string' ? meta.first_name : '',
+      last_name: typeof meta?.last_name === 'string' ? meta.last_name : '',
+    }
+  }
+  const parts = nameStr.split(/\s+/).filter(Boolean)
+  return {
+    first_name: parts[0] ?? '',
+    last_name: parts.slice(1).join(' ') ?? '',
+  }
+}
 
 interface AuthContextType {
   user: User | null
   userProfile: AuthUser | null
   loading: boolean
+  /** Set after password sign-in when AAL1→AAL2 is required; cleared after successful TOTP verify or sign-out. */
+  mfaPending: { factorId: string } | null
   signIn: (email: string, password: string, rememberMe?: boolean) => Promise<{ error: any }>
-  signUp: (email: string, password: string, userData: any) => Promise<{ error: any }>
+  verifyMfa: (code: string) => Promise<{ error: Error | null }>
+  cancelMfaSignIn: () => Promise<void>
+  signUp: (
+    email: string,
+    password: string,
+    name: string
+  ) => Promise<{ error: any; needsEmailConfirmation?: boolean }>
   signOut: () => Promise<void>
   refreshUserProfile: () => Promise<void>
 }
@@ -34,11 +69,90 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null)
   const [userProfile, setUserProfile] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
+  const [mfaPending, setMfaPending] = useState<{ factorId: string } | null>(null)
+
+  const syncMfaGateFromSession = useCallback(async (): Promise<'none' | 'pending' | 'missing_factor'> => {
+    const { data: aal, error: aalErr } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+    if (aalErr) {
+      console.warn('AuthContext: MFA AAL error', aalErr.message)
+      setMfaPending(null)
+      return 'none'
+    }
+    if (!isMfaStepRequired(aal)) {
+      setMfaPending(null)
+      return 'none'
+    }
+    const { data: factors, error: facErr } = await supabase.auth.mfa.listFactors()
+    if (facErr || !factors) {
+      setMfaPending(null)
+      return 'none'
+    }
+    const fid = getVerifiedTotpFactorId(totpFactorsFromListResponse(factors))
+    if (!fid) {
+      await supabase.auth.signOut()
+      setUser(null)
+      setUserProfile(null)
+      setMfaPending(null)
+      setLoading(false)
+      return 'missing_factor'
+    }
+    setMfaPending({ factorId: fid })
+    return 'pending'
+  }, [])
+
+  const verifyMfa = useCallback(
+    async (code: string): Promise<{ error: Error | null }> => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (!session?.user) {
+        return { error: new Error('Your session expired. Sign in again.') }
+      }
+      const digits = code.replace(/\D/g, '')
+      if (digits.length !== 6) {
+        return { error: new Error('Enter the 6-digit code from your authenticator app.') }
+      }
+      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+      if (!isMfaStepRequired(aal)) {
+        setMfaPending(null)
+        return { error: null }
+      }
+      const { data: factors, error: facErr } = await supabase.auth.mfa.listFactors()
+      if (facErr || !factors) {
+        return { error: new Error(facErr?.message || 'Could not load two-factor settings.') }
+      }
+      const factorId = getVerifiedTotpFactorId(totpFactorsFromListResponse(factors))
+      if (!factorId) {
+        return {
+          error: new Error(
+            'Additional verification is required, but no authenticator was found. Contact support.',
+          ),
+        }
+      }
+      const { data: ch, error: chErr } = await supabase.auth.mfa.challenge({ factorId })
+      if (chErr || !ch?.id) {
+        return { error: new Error(chErr?.message || 'Could not start verification.') }
+      }
+      const { error: vErr } = await supabase.auth.mfa.verify({
+        factorId,
+        challengeId: ch.id,
+        code: digits,
+      })
+      if (vErr) {
+        return { error: new Error(vErr.message || 'Invalid code.') }
+      }
+      setMfaPending(null)
+      return { error: null }
+    },
+    [],
+  )
 
   const fetchUserProfile = async (userId: string, user?: any) => {
     try {
       console.log('AuthContext: Fetching user profile for userId:', userId)
-      
+
+      await ensureBusinessAppUserBootstrap()
+
       // Get email_confirmed_at from Supabase auth user
       const { data: { session } } = await supabase.auth.getSession()
       const emailConfirmedAt = session?.user?.email_confirmed_at || undefined
@@ -50,41 +164,39 @@ export function AuthProvider({ children }: AuthProviderProps) {
         .eq('id', userId)
         .single()
 
+      if (regularUserError) {
+        console.warn(
+          'AuthContext: public.users query error (check RLS: users need SELECT for auth.uid() = id):',
+          regularUserError.message,
+          regularUserError.code ?? ''
+        )
+      }
+
       if (regularUser && !regularUserError) {
         console.log('AuthContext: Regular user found:', regularUser.email)
+        const row = regularUser as Record<string, unknown>
+        const profile = mapUsersRowToUser(row)
+        setUser(profile)
         setUserProfile({
           id: regularUser.id,
           email: regularUser.email,
           isAdmin: false,
-          // Bridge KYC fields at top level for easier access
-          bridge_kyc_status: regularUser.bridge_kyc_status,
-          bridge_customer_id: regularUser.bridge_customer_id,
-          bridge_kyc_rejection_reasons: regularUser.bridge_kyc_rejection_reasons,
-          bridge_endorsements: regularUser.bridge_endorsements,
-          bridge_signed_agreement_id: regularUser.bridge_signed_agreement_id,
           email_confirmed_at: emailConfirmedAt,
-          profile: {
-            id: regularUser.id,
-            email: regularUser.email,
-            first_name: regularUser.first_name,
-            middle_name: regularUser.middle_name,
-            last_name: regularUser.last_name,
-            phone: regularUser.phone,
-            base_currency: regularUser.base_currency,
-            easetag: regularUser.easetag,
-            date_of_birth: regularUser.date_of_birth,
-            status: regularUser.status,
-            // verification_status removed - use bridge_kyc_status for KYC, email_confirmed_at for email verification
-            bridge_kyc_status: regularUser.bridge_kyc_status,
-            bridge_customer_id: regularUser.bridge_customer_id,
-            bridge_kyc_rejection_reasons: regularUser.bridge_kyc_rejection_reasons,
-            bridge_endorsements: regularUser.bridge_endorsements,
-            bridge_signed_agreement_id: regularUser.bridge_signed_agreement_id,
-            created_at: regularUser.created_at,
-            updated_at: regularUser.updated_at,
-          } as User,
+          noah_customer_id: profile.noah_customer_id,
+          noah_kyc_status: profile.noah_kyc_status,
+          noah_kyc_rejection_reasons: profile.noah_kyc_rejection_reasons,
+          noah_signed_agreement_id: profile.noah_signed_agreement_id,
+          noah_kyb_status: profile.noah_kyb_status,
+          easner_role: profile.easner_role,
+          easner_organization_id: profile.easner_organization_id,
+          bridge_kyc_status: row.bridge_kyc_status as string | undefined,
+          bridge_customer_id: row.bridge_customer_id as string | undefined,
+          bridge_kyc_rejection_reasons: row.bridge_kyc_rejection_reasons,
+          bridge_endorsements: row.bridge_endorsements,
+          bridge_signed_agreement_id: row.bridge_signed_agreement_id as string | undefined,
+          updated_at: profile.updated_at,
+          profile,
         })
-        if (user) setUser(user) // Set user after profile is fetched
         return regularUser
       }
 
@@ -134,20 +246,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
         } = await supabase.auth.getSession()
 
         if (mounted && session?.user) {
-          // Set user immediately (map Supabase user to our User type)
+          const { first_name, last_name } = mapNameFromMetadata(session.user.user_metadata)
           const mappedUser: User = {
             id: session.user.id,
             email: session.user.email || '',
-            first_name: session.user.user_metadata?.first_name || '',
-            last_name: session.user.user_metadata?.last_name || '',
-            phone: session.user.phone || undefined,
-            base_currency: session.user.user_metadata?.base_currency || 'NGN',
+            full_name: [first_name, last_name].filter(Boolean).join(' ') || null,
+            first_name,
+            last_name,
+            phone: session.user.phone ?? undefined,
             status: 'active',
-            // verification_status removed - use bridge_kyc_status for KYC, email_confirmed_at for email verification
+            base_currency: 'USD',
+            enabled_extra_account_currencies: [],
             created_at: session.user.created_at,
-            updated_at: session.user.updated_at || session.user.created_at
+            updated_at: session.user.updated_at || session.user.created_at,
           }
           setUser(mappedUser)
+          void syncMfaGateFromSession()
           // Fetch profile in background
           fetchUserProfile(session.user.id, mappedUser).catch(error => {
             console.error('Initial profile fetch error:', error)
@@ -175,20 +289,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
       try {
         if (session?.user) {
           console.log('AuthContext: User session found, fetching profile')
-          // Set user immediately to prevent UI issues (map Supabase user to our User type)
+          const { first_name, last_name } = mapNameFromMetadata(session.user.user_metadata)
           const mappedUser: User = {
             id: session.user.id,
             email: session.user.email || '',
-            first_name: session.user.user_metadata?.first_name || '',
-            last_name: session.user.user_metadata?.last_name || '',
-            phone: session.user.phone || undefined,
-            base_currency: session.user.user_metadata?.base_currency || 'NGN',
+            full_name: [first_name, last_name].filter(Boolean).join(' ') || null,
+            first_name,
+            last_name,
+            phone: session.user.phone ?? undefined,
             status: 'active',
-            // verification_status removed - use bridge_kyc_status for KYC, email_confirmed_at for email verification
+            base_currency: 'USD',
+            enabled_extra_account_currencies: [],
             created_at: session.user.created_at,
-            updated_at: session.user.updated_at || session.user.created_at
+            updated_at: session.user.updated_at || session.user.created_at,
           }
           setUser(mappedUser)
+          void syncMfaGateFromSession()
           // Fetch profile in background
           fetchUserProfile(session.user.id, mappedUser).catch(error => {
             console.error('Background profile fetch error:', error)
@@ -198,6 +314,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           // This happens when user logs out via signOut() or session expires
           setUser(null)
           setUserProfile(null)
+          setMfaPending(null)
           setLoading(false) // Ensure loading is false so AppNavigator doesn't wait
         }
       } catch (error) {
@@ -221,7 +338,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
       mounted = false
       subscription.unsubscribe()
     }
-  }, [])
+  }, [syncMfaGateFromSession])
+
+  useEffect(() => {
+    if (user?.id) {
+      void updateSessionActivity()
+    }
+  }, [user?.id])
 
   const signIn = async (email: string, password: string, rememberMe: boolean = false) => {
     try {
@@ -262,6 +385,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
         })
       }
 
+      const gate = await syncMfaGateFromSession()
+      if (gate === 'missing_factor') {
+        return {
+          error: {
+            message:
+              'Additional verification is required, but no authenticator was found. Contact support.',
+          },
+        }
+      }
+
       // The auth state change handler will manage the loading state
       return { error: null }
     } catch (error) {
@@ -270,13 +403,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }
 
-  const signUp = async (email: string, password: string, userData: any) => {
+  const signUp = async (email: string, password: string, name: string) => {
     try {
+      const emailRedirectTo = Linking.createURL('auth/callback')
       const { data, error } = await supabase.auth.signUp({
-        email,
+        email: email.trim(),
         password,
         options: {
-          data: userData,
+          data: { name: name.trim() },
+          emailRedirectTo,
         },
       })
 
@@ -284,7 +419,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return { error }
       }
 
-      return { error: null }
+      return { error: null, needsEmailConfirmation: !data.session }
     } catch (error) {
       console.error('Sign up error:', error)
       return { error }
@@ -294,7 +429,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const signOut = async () => {
     try {
       console.log('AuthContext: Signing out user')
-      
+      setMfaPending(null)
+
       // Track sign out
       analytics.trackSignOut()
       
@@ -303,6 +439,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       
       // Clear from onboarding flag so back arrow doesn't show after logout
       await AsyncStorage.removeItem('@easner_from_onboarding')
+
+      await AsyncStorage.removeItem(AUTH_INITIAL_MODE_KEY)
       
       // Clear onboarding completion flag so user goes to onboarding screen on logout
       await AsyncStorage.removeItem('@easner_onboarding_completed')
@@ -325,11 +463,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }
 
+  const cancelMfaSignIn = useCallback(async () => {
+    await signOut()
+  }, [signOut])
+
   const value = {
     user,
     userProfile,
     loading,
+    mfaPending,
     signIn,
+    verifyMfa,
+    cancelMfaSignIn,
     signUp,
     signOut,
     refreshUserProfile,

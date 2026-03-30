@@ -23,7 +23,6 @@ import { NavigationProps, Recipient } from '../../types'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { useUserData } from '../../contexts/UserDataContext'
-import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { recipientService } from '../../lib/recipientService'
 import { getCountryFlag } from '../../utils/flagUtils'
@@ -62,7 +61,7 @@ const CACHE_TTL = 2 * 60 * 1000 // 2 minutes
 export default function SelectRecentRecipientScreen({ navigation }: NavigationProps) {
   const insets = useSafeAreaInsets()
   const { user, userProfile } = useAuth()
-  const { recipients, refreshRecipients, currencies } = useUserData()
+  const { recipients, refreshRecipients, currencies, transactions } = useUserData()
   const [recentRecipients, setRecentRecipients] = useState<Recipient[]>([])
   const [hasTransactions, setHasTransactions] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -108,10 +107,10 @@ export default function SelectRecentRecipientScreen({ navigation }: NavigationPr
     ]).start()
   }, [headerAnim, contentAnim])
 
-  // Get recent recipients with caching
+  // Recent recipients: newest saved recipients first (Noah has no `recipient_id` on ledger txs)
   useEffect(() => {
-    const getRecentRecipients = async () => {
-      if (!user || recipients.length === 0) {
+    const sync = async () => {
+      if (!user) {
         setRecentRecipients([])
         setHasTransactions(false)
         setIsLoading(false)
@@ -120,78 +119,53 @@ export default function SelectRecentRecipientScreen({ navigation }: NavigationPr
 
       setIsLoading(true)
       const cacheKey = `${CACHE_KEY_PREFIX}${user.id}`
-      
+
       try {
-        // Check cache first
         const cached = await AsyncStorage.getItem(cacheKey)
         if (cached) {
           const { data, timestamp } = JSON.parse(cached)
-          const now = Date.now()
-          if (now - timestamp < CACHE_TTL) {
+          if (Date.now() - timestamp < CACHE_TTL) {
             setRecentRecipients(data.recipients || [])
-            setHasTransactions(data.hasTransactions || false)
-            setIsLoading(false)
-            // Continue to fetch fresh data in background
+            setHasTransactions(!!data.hasTransactions)
           }
         }
-
-        // Get transactions with recipient_id, ordered by most recent
-        const { data: transactionData, error } = await supabase
-          .from('transactions')
-          .select('recipient_id, created_at')
-          .eq('user_id', user.id)
-          .not('recipient_id', 'is', null)
-          .order('created_at', { ascending: false })
-          .limit(50)
-
-        if (error) throw error
-
-        // Check if user has made any transactions
-        if (!transactionData || transactionData.length === 0) {
-          setRecentRecipients([])
-          setHasTransactions(false)
-          setIsLoading(false)
-          await AsyncStorage.setItem(cacheKey, JSON.stringify({
-            data: { recipients: [], hasTransactions: false },
-            timestamp: Date.now()
-          }))
-          return
-        }
-
-        setHasTransactions(true)
-
-        // Extract unique recipient IDs from most recent transactions
-        const recentRecipientIds = new Set<string>()
-        for (const tx of transactionData) {
-          if (tx.recipient_id && !recentRecipientIds.has(tx.recipient_id)) {
-            recentRecipientIds.add(tx.recipient_id)
-            if (recentRecipientIds.size >= 5) break
-          }
-        }
-
-        // Map recipient IDs to full recipient objects
-        const recentRecipientsList = Array.from(recentRecipientIds)
-          .map(id => recipients.find(r => r.id === id))
-          .filter((r): r is Recipient => r !== undefined)
-
-        setRecentRecipients(recentRecipientsList)
-        setIsLoading(false)
-        
-        // Update cache
-        await AsyncStorage.setItem(cacheKey, JSON.stringify({
-          data: { recipients: recentRecipientsList, hasTransactions: true },
-          timestamp: Date.now()
-        }))
-      } catch (error) {
-        console.error('Error fetching recent recipients:', error)
-        setRecentRecipients([])
-        setHasTransactions(false)
-        setIsLoading(false)
+      } catch {
+        /* ignore */
       }
+
+      const hasTx = transactions.length > 0
+      setHasTransactions(hasTx)
+
+      if (recipients.length === 0) {
+        setRecentRecipients([])
+        setIsLoading(false)
+        await AsyncStorage.setItem(
+          cacheKey,
+          JSON.stringify({
+            data: { recipients: [], hasTransactions: hasTx },
+            timestamp: Date.now(),
+          }),
+        )
+        return
+      }
+
+      const sorted = [...recipients].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      )
+      const recent = sorted.slice(0, 5)
+      setRecentRecipients(recent)
+      setIsLoading(false)
+      await AsyncStorage.setItem(
+        cacheKey,
+        JSON.stringify({
+          data: { recipients: recent, hasTransactions: hasTx },
+          timestamp: Date.now(),
+        }),
+      )
     }
 
-    getRecentRecipients()
-  }, [user, recipients])
+    void sync()
+  }, [user, recipients, transactions])
 
   const handleSelectRecipient = async (recipient: Recipient) => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)

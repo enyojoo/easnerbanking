@@ -1,15 +1,8 @@
 import React, { useState } from 'react'
-import {
-  View,
-  Text,
-  StyleSheet,
-  Modal,
-  TouchableOpacity,
-  ActivityIndicator,
-} from 'react-native'
+import { View, StyleSheet, Modal, ActivityIndicator } from 'react-native'
 import { WebView } from 'react-native-webview'
-import { Ionicons } from '@expo/vector-icons'
-import { colors, textStyles, spacing, borderRadius } from '../theme'
+import { colors, spacing } from '../theme'
+import { IframeWebViewModalHeader } from './IframeWebViewModalHeader'
 
 interface ExternalLinkModalProps {
   visible: boolean
@@ -34,19 +27,7 @@ export default function ExternalLinkModal({
       onRequestClose={onClose}
     >
       <View style={styles.modalContainer}>
-        <View style={styles.modalHeader}>
-          <TouchableOpacity
-            onPress={onClose}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.modalBackButton, { color: colors.primary.main }]}>Back</Text>
-          </TouchableOpacity>
-          {title && (
-            <Text style={styles.modalTitle} numberOfLines={1}>
-              {title}
-            </Text>
-          )}
-        </View>
+        <IframeWebViewModalHeader onClose={onClose} title={title} />
         {loading && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={colors.primary.main} />
@@ -75,25 +56,6 @@ const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
     backgroundColor: colors.background.primary,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing[5],
-    paddingTop: spacing[4],
-    paddingBottom: spacing[3],
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.light,
-  },
-  modalBackButton: {
-    ...textStyles.titleLarge,
-    fontWeight: '600',
-  },
-  modalTitle: {
-    ...textStyles.titleLarge,
-    color: colors.text.primary,
-    fontWeight: '600',
   },
   loadingContainer: {
     position: 'absolute',

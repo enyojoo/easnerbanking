@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { User, Mail, Phone, Calendar, Edit, X, Check, Key, Smartphone, Loader2 } from "lucide-react"
+import { User, Mail, Phone, Calendar, Edit, X, Check, Key, Smartphone, Loader2, Lock } from "lucide-react"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { useAuth } from "@/lib/auth-context"
@@ -32,6 +32,8 @@ import {
   totpFactorsFromListResponse,
   unenrollUnverifiedTotpFactors,
 } from "@/lib/auth-mfa"
+import { hasPin } from "@/lib/login-pin"
+import { PinSettingsDialog } from "@/components/app-lock/pin-settings-dialog"
 
 /** Aligns with personal settings store / dataCache freshness window. */
 const MFA_STATUS_CACHE_TTL_MS = 5 * 60 * 1000
@@ -92,6 +94,17 @@ export function SettingsPersonalTab() {
   const [mfaSetupPreparing, setMfaSetupPreparing] = useState(false)
   const [initialMfaEnrollSetup, setInitialMfaEnrollSetup] = useState<TotpEnrollSetup | null>(null)
   const mfaDialogOpenRef = useRef(false)
+  const [pinSettingsOpen, setPinSettingsOpen] = useState(false)
+  const [pinStatusVersion, setPinStatusVersion] = useState(0)
+  const [hasAppPin, setHasAppPin] = useState(false)
+
+  useEffect(() => {
+    if (!user?.id) {
+      setHasAppPin(false)
+      return
+    }
+    setHasAppPin(hasPin(user.id))
+  }, [user?.id, pinStatusVersion])
 
   const canUsePassword = hasEmailPasswordIdentity(user)
   const mfaVerifiedOn = mfaStatusLine === "On"
@@ -466,8 +479,36 @@ export function SettingsPersonalTab() {
               )}
             </Button>
           </div>
+          <div className="flex items-center justify-between rounded-lg border p-4">
+            <div className="flex items-center gap-3">
+              <Lock className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p className="font-medium">App PIN</p>
+                <p className="text-sm text-muted-foreground">
+                  {hasAppPin
+                    ? "Use your PIN to unlock the app after idle time and confirm sensitive actions."
+                    : "Your 4-digit PIN for quick login and more"}
+                </p>
+              </div>
+            </div>
+            <Button
+              className="w-[5.75rem]"
+              variant="outline"
+              size="sm"
+              onClick={() => setPinSettingsOpen(true)}
+            >
+              {hasAppPin ? "Change" : "Set up"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
+
+      <PinSettingsDialog
+        open={pinSettingsOpen}
+        onOpenChange={setPinSettingsOpen}
+        userId={user?.id ?? ""}
+        onSaved={() => setPinStatusVersion((v) => v + 1)}
+      />
 
       <ChangePasswordDialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
       <MfaSettingsDialog

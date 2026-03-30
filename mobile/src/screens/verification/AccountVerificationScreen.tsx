@@ -16,20 +16,33 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { WebView } from 'react-native-webview'
 import { useFocusEffect } from '@react-navigation/native'
 import ScreenWrapper from '../../components/ScreenWrapper'
+import {
+  IframeWebViewModalHeader,
+  iframeModalTitleTextStyle,
+} from '../../components/IframeWebViewModalHeader'
 import { useAuth } from '../../contexts/AuthContext'
-import { NavigationProps, KYCSubmission } from '../../types'
-import { kycService } from '../../lib/kycService'
+import { NavigationProps } from '../../types'
+import { getApiBaseUrl } from '../../lib/apiClient'
 import { noahService } from '../../lib/noahService'
 import { supabase } from '../../lib/supabase'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
-import { ComplianceTierLadder } from '../../components/ComplianceTierLadder'
+import { CONSUMER_TIER_LADDER } from '../../lib/compliance-tier-ladder-copy'
+
+const TIER_ICONS = {
+  1: 'globe-outline',
+  2: 'map-outline',
+  3: 'card-outline',
+} as const
+
+function tierTitleDisplay(title: string) {
+  return title.replace(/\b\w/g, (c) => c.toUpperCase())
+}
 
 function AccountVerificationContent({ navigation }: NavigationProps) {
   const { userProfile, refreshUserProfile } = useAuth()
   const insets = useSafeAreaInsets()
-  const [submissions, setSubmissions] = useState<KYCSubmission[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   
   // Check if verification is already complete - if so, redirect back
   useEffect(() => {
@@ -306,54 +319,6 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
       }
     }
   }, [userProfile?.noah_customer_id, userProfile?.noah_kyc_status, userProfile?.noah_kyc_rejection_reasons]) // Don't include syncNoahStatus to prevent loops
-
-  useEffect(() => {
-    if (!userProfile?.id) return
-
-    const loadSubmissions = async () => {
-      try {
-        // Check cache first
-        const CACHE_KEY = `easner_kyc_submissions_${userProfile.id}`
-        const cached = await AsyncStorage.getItem(CACHE_KEY)
-        
-        if (cached) {
-          const { value, timestamp } = JSON.parse(cached)
-          if (Date.now() - timestamp < 5 * 60 * 1000) { // 5 minute cache
-            setSubmissions(value || [])
-            setLoading(false)
-            // Fetch in background
-            fetchSubmissions()
-            return
-          }
-        }
-
-        await fetchSubmissions()
-      } catch (error) {
-        console.error('Error loading submissions:', error)
-        setLoading(false)
-      }
-    }
-
-    const fetchSubmissions = async () => {
-      try {
-        const data = await kycService.getByUserId(userProfile.id)
-        setSubmissions(data || [])
-        
-        // Update cache
-        const CACHE_KEY = `easner_kyc_submissions_${userProfile.id}`
-        await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({
-          value: data || [],
-          timestamp: Date.now()
-        }))
-      } catch (error) {
-        console.error('Error fetching submissions:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadSubmissions()
-  }, [userProfile?.id])
 
   // Check if individual KYC (Noah) is approved
   const noahKycApproved = userProfile?.noah_kyc_status === 'approved'
@@ -873,14 +838,12 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
         }
       }
       
-      // Construct full name from available fields, with fallback to email
-      // Note: first_name and last_name are set in Profile Screen (More → Profile → Edit)
-      // They are NOT set in Identity Verification screen
-      const firstName = userProfile?.profile?.first_name || userProfile?.first_name || ''
-      const lastName = userProfile?.profile?.last_name || userProfile?.last_name || ''
-      const fullName = firstName && lastName 
-        ? `${firstName} ${lastName}` 
-        : userProfile.email.split('@')[0] // Use email username as fallback
+      // `public.users.full_name` (set at sign-up / profile edit); fallback to email local-part
+      const fullName =
+        userProfile?.profile?.full_name?.trim() ||
+        [userProfile?.profile?.first_name, userProfile?.profile?.last_name].filter(Boolean).join(' ').trim() ||
+        userProfile.email.split('@')[0] ||
+        'Account holder'
       
       let response
       try {
@@ -1006,7 +969,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     // Replace /verify with /widget and add iframe-origin parameter
     const widgetUrl = link.replace('/verify', '/widget')
     // Use the API base URL as the origin (for React Native, we use the API URL)
-    const origin = process.env.EXPO_PUBLIC_API_URL || 'https://app.easner.com'
+    const origin = getApiBaseUrl() || process.env.EXPO_PUBLIC_API_URL || 'https://app.easner.com'
     // Check if URL already has query parameters
     const separator = widgetUrl.includes('?') ? '&' : '?'
     return `${widgetUrl}${separator}iframe-origin=${encodeURIComponent(origin)}`
@@ -1035,10 +998,8 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
         'Account setup in progress. You will receive USD and EUR account details once your verification is approved.'
       )
       
-      // Refresh submissions to show updated status
-      if (userProfile?.id) {
-        const data = await kycService.getByUserId(userProfile.id)
-        setSubmissions(data || [])
+      if (refreshUserProfile) {
+        await refreshUserProfile()
       }
     } catch (error: any) {
       console.error('Error creating Noah customer:', error)
@@ -1150,8 +1111,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
               <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
             </TouchableOpacity>
             <View style={styles.headerContent}>
-              <Text style={styles.title}>Verify your identity</Text>
-              <Text style={styles.subtitle}>Tier 1 — Global banking for your personal account</Text>
+              <Text style={styles.title}>Account verification</Text>
             </View>
           </Animated.View>
 
@@ -1169,11 +1129,6 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
               }
             ]}
           >
-            {userProfile ? (
-              <View style={{ marginBottom: spacing[4] }}>
-                <ComplianceTierLadder userProfile={userProfile} />
-              </View>
-            ) : null}
             {/* Status Notice - Always shown until approved */}
             {!noahKycApproved && (
               <View style={styles.infoCard}>
@@ -1204,27 +1159,27 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                                     : ''
                                   
                                   return reasonsText
-                                    ? `Please complete account verification again to receive your account details. ${reasonsText}.`
-                                    : 'Please complete account verification again to receive your account details.'
+                                    ? `We couldn’t approve your verification: ${reasonsText}. Tap Start below to try again.`
+                                    : 'We couldn’t approve your verification. Tap Start below to try again.'
                                 })()
                               : typeof userProfile.noah_kyc_rejection_reasons === 'string'
-                              ? `Please complete account verification again to receive your account details. ${userProfile.noah_kyc_rejection_reasons}.`
-                              : 'Please complete account verification again to receive your account details.')
-                          : 'Please complete account verification again to receive your account details.'}
+                              ? `We couldn’t approve your verification: ${userProfile.noah_kyc_rejection_reasons}. Tap Start below to try again.`
+                              : 'We couldn’t approve your verification. Tap Start below to try again.')
+                          : 'We couldn’t approve your verification. Tap Start below to try again.'}
                   </Text>
                     </>
                   ) : noahKycInReview ? (
                     <>
                       <Ionicons name="information-circle-outline" size={20} color={colors.warning.main} />
                       <Text style={[styles.infoText, { color: colors.warning.main }]}>
-                        Your KYC verification is under review. Please check your email for updates.
+                        Your verification is under review. We will email you when there is an update.
                       </Text>
                     </>
                   ) : (
                     <>
                       <Ionicons name="information-circle-outline" size={20} color={colors.primary.main} />
                       <Text style={styles.infoText}>
-                        Please complete account verification and accept Terms of Service to proceed.
+                        Complete identity verification below to unlock USD and EUR bank accounts, pay-in and pay-out, and stablecoin features.
                       </Text>
                     </>
                   )}
@@ -1232,9 +1187,8 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
               </View>
             )}
 
-            {/* Cards Container */}
+            {/* Tier cards: 1 = Noah KYC; 2–3 = roadmap */}
             <View style={styles.cardsContainer}>
-              {/* Identity verification — show only if KYC is NOT approved */}
               {!noahKycApproved && (
                 <TouchableOpacity
                   onPress={async () => {
@@ -1248,90 +1202,70 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                     <View style={styles.cardContent}>
                       <View style={styles.cardLeft}>
                         <View style={styles.iconContainer}>
-                          <Ionicons name="shield-checkmark-outline" size={24} color={colors.primary.main} />
+                          <Ionicons name={TIER_ICONS[1]} size={24} color={colors.primary.main} />
                         </View>
-                        <Text style={styles.cardTitle}>Identity Verification</Text>
+                        <Text style={styles.cardTitle}>
+                          {tierTitleDisplay(CONSUMER_TIER_LADDER.tiers[0].title)}
+                        </Text>
                         <Text style={styles.cardDescription}>
-                          Verify your identity to activate your account.
+                          {CONSUMER_TIER_LADDER.tiers[0].description}
                         </Text>
                       </View>
                       <View style={styles.cardRight}>
                         {loadingKyc ? (
-                          <View style={{ width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: spacing[3] }}>
-                            <View style={{ width: 70, alignItems: 'center' }}>
-                              <ActivityIndicator size="small" color={colors.primary.main} />
-                            </View>
-                          </View>
-                        ) : (
-                          <View style={{ width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: spacing[3] }}>
-                            {getStatusBadge(
-                              userProfile?.noah_kyc_status || userProfile?.profile?.noah_kyc_status || 'not_started',
-                              userProfile?.noah_kyc_status || userProfile?.profile?.noah_kyc_status || 'not_started'
-                            )}
-                          </View>
-                        )}
-                      </View>
-                    </View>
-                    {/* Start Badge - positioned at bottom right */}
-                    {!loadingKyc && (
-                      <View style={styles.startBadge}>
-                        <Text style={styles.startBadgeText}>Start</Text>
-                        <Ionicons name="chevron-forward" size={12} color="#FFFFFF" />
-                      </View>
-                    )}
-                  </View>
-                </TouchableOpacity>
-              )}
-
-              {/* Terms of Service — show only if noah_signed_agreement_id is empty */}
-              {!tosSigned && !userProfile?.noah_signed_agreement_id && !userProfile?.profile?.noah_signed_agreement_id && (
-                <TouchableOpacity
-                  onPress={async () => {
-                    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                    if (!tosLink) {
-                      // TOS link not loaded yet - try to generate it
-                      console.log('TOS link not available, attempting to generate...')
-                      try {
-                        await handleOpenTOS() // This will try to generate TOS link
-                      } catch (error: any) {
-                        Alert.alert(
-                          'TOS Link Error',
-                          `Unable to generate Terms of Service link: ${error.message || 'Unknown error'}. Please try again or contact support.`
-                        )
-                      }
-                    } else {
-                      await handleOpenTOS()
-                    }
-                  }}
-                  activeOpacity={0.7}
-                  disabled={loadingTos || creatingCustomer}
-                >
-                  <View style={styles.card}>
-                    <View style={styles.cardContent}>
-                      <View style={styles.cardLeft}>
-                        <View style={styles.iconContainer}>
-                          <Ionicons name="document-text-outline" size={24} color={colors.primary.main} />
-                        </View>
-                        <Text style={styles.cardTitle}>Partner Terms of Service</Text>
-                        <Text style={styles.cardDescription}>
-                          Accept terms to complete account setup.
-                        </Text>
-                      </View>
-                      <View style={styles.cardRight}>
-                        {loadingTos || creatingCustomer ? (
                           <ActivityIndicator size="small" color={colors.primary.main} />
                         ) : (
                           <>
-                            {getStatusBadge('pending')}
-                            <Ionicons name="chevron-forward" size={20} color={colors.neutral[400]} />
+                            <View style={styles.tierPill}>
+                              <Text style={styles.tierPillText}>Tier 1</Text>
+                            </View>
+                            {getStatusBadge(
+                              userProfile?.noah_kyc_status ||
+                                userProfile?.profile?.noah_kyc_status ||
+                                'not_started',
+                              userProfile?.noah_kyc_status ||
+                                userProfile?.profile?.noah_kyc_status ||
+                                'not_started',
+                            )}
                           </>
                         )}
                       </View>
                     </View>
+                    {!loadingKyc ? (
+                      <View style={styles.startBadge}>
+                        <Text style={styles.startBadgeText}>Start</Text>
+                        <Ionicons name="chevron-forward" size={12} color="#FFFFFF" />
+                      </View>
+                    ) : null}
                   </View>
                 </TouchableOpacity>
               )}
 
+              {CONSUMER_TIER_LADDER.tiers.slice(1).map((tier) => (
+                <View key={tier.tier} style={styles.card}>
+                  <View style={styles.cardContent}>
+                    <View style={styles.cardLeft}>
+                      <View style={styles.iconContainer}>
+                        <Ionicons
+                          name={TIER_ICONS[tier.tier]}
+                          size={24}
+                          color={colors.text.secondary}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>{tierTitleDisplay(tier.title)}</Text>
+                      <Text style={styles.cardDescription}>{tier.description}</Text>
+                    </View>
+                    <View style={styles.cardRight}>
+                      <View style={styles.tierPill}>
+                        <Text style={styles.tierPillText}>Tier {tier.tier}</Text>
+                      </View>
+                      <View style={styles.comingLaterPill}>
+                        <Text style={styles.comingLaterPillText}>Coming later</Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              ))}
             </View>
 
             {/* TOS WebView Modal */}
@@ -1342,15 +1276,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
               onRequestClose={handleTOSModalClose}
             >
               <View style={styles.modalContainer}>
-                <View style={styles.modalHeader}>
-                  <TouchableOpacity
-                    onPress={handleTOSModalClose}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.modalTitle, { color: colors.primary.main }]}>Back</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.modalTitle}>Partner Terms of Service</Text>
-                </View>
+                <IframeWebViewModalHeader onClose={handleTOSModalClose} title="Partner Terms of Service" />
                 {tosLink && (
                   <WebView
                     source={{ uri: tosLink }}
@@ -1527,17 +1453,22 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
               onRequestClose={handleKycModalClose}
             >
               <View style={styles.modalContainer}>
-                <View style={styles.modalHeader}>
-                  <TouchableOpacity
-                    onPress={handleKycModalClose}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.modalTitle, { color: colors.primary.main }]}>Back</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.modalTitle}>
-                    {currentKycFlow === 'kyc' ? 'Account Verification' : 'Partner Terms of Service'}
-                  </Text>
-                </View>
+                <IframeWebViewModalHeader onClose={handleKycModalClose}>
+                  {currentKycFlow === 'kyc' ? (
+                    <View style={styles.modalKycTitleRow}>
+                      <Text style={[iframeModalTitleTextStyle, styles.modalKycTitleText]} numberOfLines={2}>
+                        Verification for global banking
+                      </Text>
+                      <View style={styles.tierPill}>
+                        <Text style={styles.tierPillText}>Tier 1</Text>
+                      </View>
+                    </View>
+                  ) : (
+                    <Text style={iframeModalTitleTextStyle} numberOfLines={2}>
+                      Partner Terms of Service
+                    </Text>
+                  )}
+                </IframeWebViewModalHeader>
                 {currentKycFlow === 'kyc' && kycLink && (
                   <WebView
                     source={{ uri: buildKycIframeUrl(kycLink) }}
@@ -1594,24 +1525,14 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                           setKycCompleted(true)
                           setKycStatus(data.kyc_status || 'approved')
                           
-                          // Sync KYC data from Noah to our database
-                          if (data.customer_id && userProfile?.id) {
+                          // Sync KYC from Noah → Supabase (same POST /api/noah/sync-kyc as business hosted flow)
+                          if (userProfile?.id) {
                             try {
                               console.log('[KYC-WEBVIEW] Syncing KYC data from Noah to database...')
-                              const { data: { session } } = await supabase.auth.getSession()
-                              if (session) {
-                                await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'}/api/noah/sync-kyc`, {
-                                  method: 'POST',
-                                  headers: {
-                                    'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${session.access_token}`,
-                                  },
-                                  body: JSON.stringify({
-                                    customer_id: data.customer_id,
-                                    user_id: userProfile.id,
-                                  }),
-                                })
-                                console.log('[KYC-WEBVIEW] ✅ KYC data synced to database')
+                              await noahService.syncKyc()
+                              console.log('[KYC-WEBVIEW] ✅ KYC data synced to database')
+                              if (refreshUserProfile) {
+                                await refreshUserProfile()
                               }
                             } catch (syncError: any) {
                               console.error('[KYC-WEBVIEW] Error syncing KYC data:', syncError)
@@ -1788,10 +1709,6 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     marginBottom: 2,
   },
-  subtitle: {
-    ...textStyles.bodyMedium,
-    color: colors.text.secondary,
-  },
   content: {
     padding: spacing[5],
   },
@@ -1834,7 +1751,20 @@ const styles = StyleSheet.create({
   cardLeft: {
     flex: 1,
     marginRight: spacing[4],
-    minWidth: 0, // Prevent flex from causing layout shifts
+    minWidth: 0,
+  },
+  tierPill: {
+    paddingHorizontal: spacing[2],
+    paddingVertical: 2,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.frame.border,
+    backgroundColor: colors.background.primary,
+  },
+  tierPillText: {
+    fontSize: 11,
+    fontFamily: 'Outfit-Medium',
+    color: colors.text.secondary,
   },
   iconContainer: {
     width: 48,
@@ -1851,6 +1781,17 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     marginBottom: spacing[1],
   },
+  comingLaterPill: {
+    paddingHorizontal: spacing[2],
+    paddingVertical: 2,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.neutral[100],
+  },
+  comingLaterPillText: {
+    fontSize: 11,
+    fontFamily: 'Outfit-Medium',
+    color: colors.text.secondary,
+  },
   cardDescription: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
@@ -1860,61 +1801,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
-    width: 100, // Fixed width to prevent layout shift between spinner and badge+chevron
+    width: 100,
     justifyContent: 'flex-end',
-    flexShrink: 0, // Prevent shrinking
-  },
-  badgeGreen: {
-    backgroundColor: colors.success.background,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[1],
-    borderRadius: borderRadius.full,
-    minWidth: 70, // Fixed minimum width to prevent layout shifts
-    alignItems: 'center',
-  },
-  badgeTextGreen: {
-    ...textStyles.labelSmall,
-    fontWeight: '500',
-    color: colors.success.dark,
-  },
-  badgeYellow: {
-    backgroundColor: colors.warning.background,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[1],
-    borderRadius: borderRadius.full,
-    minWidth: 70, // Fixed minimum width to prevent layout shifts
-    alignItems: 'center',
-  },
-  badgeTextYellow: {
-    ...textStyles.labelSmall,
-    fontWeight: '500',
-    color: colors.warning.dark,
-  },
-  badgeRed: {
-    backgroundColor: colors.error.background,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[1],
-    borderRadius: borderRadius.full,
-    minWidth: 70, // Fixed minimum width to prevent layout shifts
-    alignItems: 'center',
-  },
-  badgeTextRed: {
-    ...textStyles.labelSmall,
-    fontWeight: '500',
-    color: colors.error.dark,
-  },
-  badgeGray: {
-    backgroundColor: colors.neutral[100],
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[1],
-    borderRadius: borderRadius.full,
-    minWidth: 70, // Fixed minimum width to prevent layout shifts
-    alignItems: 'center',
-  },
-  badgeTextGray: {
-    ...textStyles.labelSmall,
-    fontWeight: '500',
-    color: colors.neutral[600],
+    flexShrink: 0,
   },
   startBadge: {
     position: 'absolute',
@@ -1933,34 +1822,77 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
   },
+  badgeGreen: {
+    backgroundColor: colors.success.background,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1],
+    borderRadius: borderRadius.full,
+    minWidth: 70, // Fixed minimum width to prevent layout shifts
+    alignItems: 'center',
+  },
+  badgeTextGreen: {
+    ...textStyles.labelSmall,
+    fontWeight: '500',
+    color: colors.success.dark,
+    textTransform: 'none',
+  },
+  badgeYellow: {
+    backgroundColor: colors.warning.background,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1],
+    borderRadius: borderRadius.full,
+    minWidth: 70, // Fixed minimum width to prevent layout shifts
+    alignItems: 'center',
+  },
+  badgeTextYellow: {
+    ...textStyles.labelSmall,
+    fontWeight: '500',
+    color: colors.warning.dark,
+    textTransform: 'none',
+  },
+  badgeRed: {
+    backgroundColor: colors.error.background,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1],
+    borderRadius: borderRadius.full,
+    minWidth: 70, // Fixed minimum width to prevent layout shifts
+    alignItems: 'center',
+  },
+  badgeTextRed: {
+    ...textStyles.labelSmall,
+    fontWeight: '500',
+    color: colors.error.dark,
+    textTransform: 'none',
+  },
+  badgeGray: {
+    backgroundColor: colors.neutral[100],
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1],
+    borderRadius: borderRadius.full,
+    minWidth: 70, // Fixed minimum width to prevent layout shifts
+    alignItems: 'center',
+  },
+  badgeTextGray: {
+    ...textStyles.labelSmall,
+    fontWeight: '500',
+    color: colors.neutral[600],
+    textTransform: 'none',
+  },
   modalContainer: {
     flex: 1,
     backgroundColor: colors.background.primary,
   },
-  modalHeader: {
+  modalKycTitleRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing[5],
-    paddingTop: spacing[4],
-    paddingBottom: spacing[3],
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.light,
+    justifyContent: 'flex-start',
+    gap: spacing[2],
+    flexWrap: 'wrap',
+    maxWidth: '100%',
   },
-  modalTitle: {
-    ...textStyles.titleLarge,
-    color: colors.text.primary,
-    fontWeight: '600',
-  },
-  modalCloseButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+  modalKycTitleText: {
+    flexShrink: 1,
+    textAlign: 'left',
   },
   webView: {
     flex: 1,

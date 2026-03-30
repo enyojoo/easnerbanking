@@ -1,9 +1,18 @@
 // Noah — mobile API client (calls Easner backend under /api/noah/*).
 // Noah REST API: https://docs.noah.com/
 
+import * as FileSystem from 'expo-file-system/legacy'
+import { getApiBaseUrl } from './apiClient'
 import { supabase } from './supabase'
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'
+/** Next.js business app (`next dev` → :3000). Must match EXPO_PUBLIC_API_URL / app.config extra. */
+function apiUrl(): string {
+  return (
+    getApiBaseUrl() ||
+    process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, '') ||
+    (__DEV__ ? 'http://localhost:3000' : '')
+  )
+}
 
 interface NoahTOSLink {
   tosLink: string
@@ -64,7 +73,7 @@ export const noahService = {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) throw new Error('Not authenticated')
 
-    const response = await fetch(`${API_BASE_URL}/api/noah/customers/${customerId}`, {
+    const response = await fetch(`${apiUrl()}/api/noah/customers/${customerId}`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${session.access_token}`,
@@ -86,7 +95,7 @@ export const noahService = {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) throw new Error('Not authenticated')
 
-    const response = await fetch(`${API_BASE_URL}/api/noah/tos`, {
+    const response = await fetch(`${apiUrl()}/api/noah/tos`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -110,7 +119,7 @@ export const noahService = {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) throw new Error('Not authenticated')
 
-    const response = await fetch(`${API_BASE_URL}/api/noah/tos?tosLinkId=${tosLinkId}`, {
+    const response = await fetch(`${apiUrl()}/api/noah/tos?tosLinkId=${tosLinkId}`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${session.access_token}`,
@@ -132,7 +141,7 @@ export const noahService = {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) throw new Error('Not authenticated')
 
-    const response = await fetch(`${API_BASE_URL}/api/noah/kyc-links`, {
+    const response = await fetch(`${apiUrl()}/api/noah/kyc-links`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -157,7 +166,7 @@ export const noahService = {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) throw new Error('Not authenticated')
 
-    const response = await fetch(`${API_BASE_URL}/api/noah/customers/update-tos`, {
+    const response = await fetch(`${apiUrl()}/api/noah/customers/update-tos`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -184,7 +193,7 @@ export const noahService = {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) throw new Error('Not authenticated')
 
-    const response = await fetch(`${API_BASE_URL}/api/noah/customers`, {
+    const response = await fetch(`${apiUrl()}/api/noah/customers`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -214,7 +223,7 @@ export const noahService = {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) throw new Error('Not authenticated')
 
-    const response = await fetch(`${API_BASE_URL}/api/noah/customers`, {
+    const response = await fetch(`${apiUrl()}/api/noah/customers`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -247,7 +256,7 @@ export const noahService = {
     const timeoutId = setTimeout(() => controller.abort(), 8000)
 
     try {
-    const response = await fetch(`${API_BASE_URL}/api/noah/customers`, {
+    const response = await fetch(`${apiUrl()}/api/noah/customers`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${session.access_token}`,
@@ -292,7 +301,7 @@ export const noahService = {
     const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/noah/sync-status`, {
+      const response = await fetch(`${apiUrl()}/api/noah/sync-status`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
@@ -319,13 +328,34 @@ export const noahService = {
   },
 
   /**
+   * Pull latest Noah customer (Individual scope) and upsert into Supabase — same route business uses after hosted KYB/KYC.
+   */
+  async syncKyc(): Promise<{ success: boolean; noahScope?: string }> {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) throw new Error('Not authenticated')
+
+    const response = await fetch(`${apiUrl()}/api/noah/sync-kyc`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error((data as { error?: string }).error || 'Failed to sync KYC')
+    }
+    return data as { success: boolean; noahScope?: string }
+  },
+
+  /**
    * Get customer KYC status (polling)
    */
   async getCustomerKYCStatus(customerId: string): Promise<{ kycStatus: string }> {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) throw new Error('Not authenticated')
 
-    const response = await fetch(`${API_BASE_URL}/api/noah/customers/${customerId}/status`, {
+    const response = await fetch(`${apiUrl()}/api/noah/customers/${customerId}/status`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${session.access_token}`,
@@ -343,7 +373,7 @@ export const noahService = {
   /**
    * Get virtual account details
    */
-  async getVirtualAccount(currency: 'usd' | 'eur'): Promise<NoahVirtualAccount> {
+  async getVirtualAccount(currency: 'usd' | 'eur' | 'gbp'): Promise<NoahVirtualAccount> {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) throw new Error('Not authenticated')
 
@@ -352,7 +382,7 @@ export const noahService = {
     const timeoutId = setTimeout(() => controller.abort(), 8000)
 
     try {
-    const response = await fetch(`${API_BASE_URL}/api/noah/virtual-accounts?currency=${currency}`, {
+    const response = await fetch(`${apiUrl()}/api/noah/virtual-accounts?currency=${currency}`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${session.access_token}`,
@@ -395,7 +425,7 @@ export const noahService = {
     const timeoutId = setTimeout(() => controller.abort(), 8000)
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/noah/liquidation-addresses?currency=${currency}&chain=${chain}`, {
+      const response = await fetch(`${apiUrl()}/api/noah/liquidation-addresses?currency=${currency}&chain=${chain}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
@@ -438,7 +468,7 @@ export const noahService = {
     const timeoutId = setTimeout(() => controller.abort(), 8000)
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/noah/liquidation-addresses`, {
+      const response = await fetch(`${apiUrl()}/api/noah/liquidation-addresses`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
@@ -477,7 +507,7 @@ export const noahService = {
 
     try {
       console.log('[NoahService] Fetching wallet balances from API...')
-      const response = await fetch(`${API_BASE_URL}/api/noah/wallets/balances`, {
+      const response = await fetch(`${apiUrl()}/api/noah/wallets/balances`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
@@ -488,8 +518,23 @@ export const noahService = {
 
       if (!response.ok) {
         const errorText = await response.text()
-        console.error(`[NoahService] API error ${response.status}:`, errorText)
-        // Return zero balances on error
+        let code: string | undefined
+        let msg: string | undefined
+        try {
+          const j = JSON.parse(errorText) as { code?: string; error?: string }
+          code = j.code
+          msg = typeof j.error === 'string' ? j.error : undefined
+        } catch {
+          /* plain text */
+        }
+        const verificationGate =
+          response.status === 403 &&
+          (code === 'NOAH_KYC_REQUIRED' ||
+            code === 'NOAH_KYB_REQUIRED' ||
+            (msg?.includes('verification must be approved') ?? false))
+        if (!verificationGate) {
+          console.error(`[NoahService] API error ${response.status}:`, errorText)
+        }
         return { USD: '0', EUR: '0' }
       }
 
@@ -516,7 +561,7 @@ export const noahService = {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) throw new Error('Not authenticated')
 
-    const response = await fetch(`${API_BASE_URL}/api/noah/transfers`, {
+    const response = await fetch(`${apiUrl()}/api/noah/transfers`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -540,7 +585,7 @@ export const noahService = {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) throw new Error('Not authenticated')
 
-    const response = await fetch(`${API_BASE_URL}/api/noah/transfers/${transferId}`, {
+    const response = await fetch(`${apiUrl()}/api/noah/transfers/${transferId}`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${session.access_token}`,
@@ -554,5 +599,170 @@ export const noahService = {
 
     return await response.json()
   },
+
+  /**
+   * List Noah transactions (via Easner `/api/noah/transactions`).
+   */
+  async listTransactions(limit = 20): Promise<Record<string, unknown>[]> {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) throw new Error('Not authenticated')
+
+    const safe = Math.min(100, Math.max(1, limit))
+    const response = await fetch(`${apiUrl()}/api/noah/transactions?limit=${safe}`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error((data as { error?: string }).error || 'Failed to list transactions')
+    }
+    return (data as { transactions?: Record<string, unknown>[] }).transactions ?? []
+  },
+
+  /**
+   * Single Noah transaction (via Easner `/api/noah/transactions/:id`).
+   */
+  async getTransactionDetail(transactionId: string): Promise<Record<string, unknown>> {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) throw new Error('Not authenticated')
+
+    const response = await fetch(
+      `${apiUrl()}/api/noah/transactions/${encodeURIComponent(transactionId)}`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      },
+    )
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error((data as { error?: string }).error || 'Transaction not found')
+    }
+    const tx = (data as { transaction?: Record<string, unknown> }).transaction
+    if (!tx) {
+      throw new Error('Transaction not found')
+    }
+    return tx
+  },
+
+  /**
+   * Noah GET /prices (via Easner) — USD/EUR stablecoin conversion quote.
+   */
+  async getFxQuote(params: {
+    sourceCurrency: string
+    destinationCurrency: string
+    sourceAmount: string
+  }): Promise<{
+    destinationAmount?: string
+    impliedRate?: number
+    error?: string
+  }> {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) throw new Error('Not authenticated')
+
+    const qs = new URLSearchParams({
+      sourceCurrency: params.sourceCurrency,
+      destinationCurrency: params.destinationCurrency,
+      sourceAmount: params.sourceAmount,
+    })
+    const response = await fetch(`${apiUrl()}/api/noah/prices?${qs.toString()}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error((data as { error?: string }).error || 'Failed to get quote')
+    }
+    return data as { destinationAmount?: string; impliedRate?: number }
+  },
+
+  /**
+   * Noah internal FX move execute — may return 501 until wired.
+   */
+  async postFxConvert(body: {
+    sourceCurrency: string
+    destinationCurrency: string
+    sourceAmount: string
+  }): Promise<{ ok?: boolean; error?: string }> {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) throw new Error('Not authenticated')
+
+    const response = await fetch(`${apiUrl()}/api/noah/fx/convert`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify(body),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (response.status === 501) {
+      return { error: (data as { error?: string }).error || 'Move is not available yet' }
+    }
+    if (!response.ok) {
+      throw new Error((data as { error?: string }).error || 'Move failed')
+    }
+    return { ok: true }
+  },
+
+  /**
+   * Download account statement PDF for a single account (date range).
+   */
+  async downloadStatementPdf(params: {
+    from: string
+    to: string
+    currency: 'USD' | 'EUR' | 'GBP'
+  }): Promise<{ uri: string; filename: string }> {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) throw new Error('Not authenticated')
+
+    const response = await fetch(`${apiUrl()}/api/noah/statements/pdf`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        from: params.from,
+        to: params.to,
+        currency: params.currency,
+      }),
+    })
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}))
+      throw new Error((err as { error?: string }).error || 'Failed to generate statement')
+    }
+
+    const arrayBuffer = await response.arrayBuffer()
+    const base64 = arrayBufferToBase64(arrayBuffer)
+    const filename = `easner-statement-${params.currency}-${params.from}-${params.to}.pdf`
+
+    const dir = FileSystem.documentDirectory
+    if (!dir) {
+      throw new Error('Document directory is not available')
+    }
+    const path = `${dir}${filename}`
+    await FileSystem.writeAsStringAsync(path, base64, {
+      encoding: 'base64',
+    })
+    return { uri: path, filename }
+  },
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]!)
+  }
+  if (typeof btoa === 'undefined') {
+    throw new Error('Base64 encoding is not available in this environment')
+  }
+  return btoa(binary)
 }
 

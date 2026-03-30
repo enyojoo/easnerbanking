@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Dimensions,
   TouchableOpacity,
+  Pressable,
   ScrollView,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -16,7 +17,8 @@ import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { NavigationProps } from '../../types'
-import { colors, textStyles, borderRadius, spacing } from '../../theme'
+import { colors, textStyles, borderRadius, spacing, fontSize, fontFamily, lineHeight } from '../../theme'
+import { AUTH_INITIAL_MODE_KEY } from '../../constants/auth'
 import GradientBackground from '../../components/GradientBackground'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
@@ -47,13 +49,17 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
   const scrollViewRef = useRef<ScrollView>(null)
   const insets = useSafeAreaInsets()
 
-  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+  /** Only sync index when paging settles — `onScroll` + Math.round caused label/dot flicker mid-animation. */
+  const handleMomentumScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const scrollPosition = event.nativeEvent.contentOffset.x
     const index = Math.round(scrollPosition / SCREEN_WIDTH)
-    if (index !== currentIndex) {
-      setCurrentIndex(index)
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    }
+    const clamped = Math.max(0, Math.min(ONBOARDING_DATA.length - 1, index))
+    setCurrentIndex((prev) => {
+      if (clamped !== prev) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+      }
+      return clamped
+    })
   }
 
   const handleNext = async () => {
@@ -80,6 +86,7 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
       await AsyncStorage.setItem(ONBOARDING_COMPLETED_KEY, 'true')
       // Mark that user is coming from onboarding to show back arrow on auth screen
       await AsyncStorage.setItem('@easner_from_onboarding', 'true')
+      await AsyncStorage.setItem(AUTH_INITIAL_MODE_KEY, 'signup')
       // Small delay to ensure AsyncStorage is saved before AppNavigator re-checks
       setTimeout(() => {
         // AppNavigator will automatically switch to AuthStack
@@ -123,8 +130,7 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
           horizontal
           pagingEnabled
           showsHorizontalScrollIndicator={false}
-          onScroll={handleScroll}
-          scrollEventThrottle={16}
+          onMomentumScrollEnd={handleMomentumScrollEnd}
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
         >
@@ -157,23 +163,25 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
 
         {/* Action Buttons on Dark Fade Area */}
         <View style={[styles.bottomActions, { paddingBottom: Math.max(insets.bottom, spacing[6]) }]}>
-          <TouchableOpacity
-            style={styles.skipButtonBottom}
+          <Pressable
+            style={({ pressed }) => [styles.skipButtonBottom, pressed && styles.skipButtonPressed]}
             onPress={handleSkip}
-            activeOpacity={0.8}
+            android_ripple={{ color: 'rgba(255,255,255,0.2)' }}
           >
             <Text style={styles.skipButtonText}>Skip</Text>
-          </TouchableOpacity>
+          </Pressable>
 
-          <TouchableOpacity
-            style={styles.nextButton}
+          <Pressable
+            style={({ pressed }) => [styles.nextButton, pressed && styles.nextButtonPressed]}
             onPress={handleNext}
-            activeOpacity={0.8}
+            android_ripple={{ color: 'rgba(255,255,255,0.25)' }}
           >
-            <Text style={styles.nextButtonText}>
-              {currentIndex === ONBOARDING_DATA.length - 1 ? 'Get Started' : 'Next'}
-            </Text>
-          </TouchableOpacity>
+            <View style={styles.nextButtonLabelWrap}>
+              <Text style={styles.nextButtonText}>
+                {currentIndex === ONBOARDING_DATA.length - 1 ? 'Get Started' : 'Next'}
+              </Text>
+            </View>
+          </Pressable>
         </View>
 
         {/* Login Link - Bottom */}
@@ -249,11 +257,12 @@ const styles = StyleSheet.create({
     paddingBottom: spacing[4],
   },
   title: {
-    fontSize: 42,
-    lineHeight: 50,
+    /** Hero headline — between `fontSize['4xl']` and `5xl` for marketing slides */
+    fontSize: fontSize['4xl'] + 2,
+    lineHeight: (fontSize['4xl'] + 2) * lineHeight.tight,
     color: colors.text.inverse,
     textAlign: 'center',
-    fontFamily: 'Outfit-Bold',
+    fontFamily: fontFamily.bold,
     fontWeight: '700',
     letterSpacing: -0.5,
   },
@@ -289,6 +298,7 @@ const styles = StyleSheet.create({
   },
   skipButtonBottom: {
     flex: 1,
+    overflow: 'hidden',
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
     borderRadius: borderRadius['3xl'],
     paddingVertical: spacing[4],
@@ -298,15 +308,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
+  skipButtonPressed: {
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+  },
   skipButtonText: {
-    ...textStyles.bodyMedium,
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.md,
+    lineHeight: fontSize.md * lineHeight.snug,
     color: colors.text.inverse,
     fontWeight: '600',
-    fontFamily: 'Outfit-SemiBold',
-    fontSize: 16,
   },
   nextButton: {
     flex: 1,
+    overflow: 'hidden',
     backgroundColor: colors.primary.main,
     borderRadius: borderRadius['3xl'],
     paddingVertical: spacing[4],
@@ -314,12 +328,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 56,
   },
+  nextButtonPressed: {
+    backgroundColor: colors.primary.dark,
+  },
+  /** Avoid width jump when label switches between “Next” and “Get Started”. */
+  nextButtonLabelWrap: {
+    minWidth: 128,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   nextButtonText: {
-    ...textStyles.bodyMedium,
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.md,
+    lineHeight: fontSize.md * lineHeight.snug,
     color: colors.text.inverse,
     fontWeight: '600',
-    fontFamily: 'Outfit-SemiBold',
-    fontSize: 16,
   },
   loginLink: {
     alignItems: 'center',
@@ -330,7 +353,7 @@ const styles = StyleSheet.create({
   loginText: {
     ...textStyles.bodySmall,
     color: colors.text.inverse,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
     opacity: 0.9,
   },
   loginLinkText: {
@@ -338,6 +361,6 @@ const styles = StyleSheet.create({
     color: colors.text.inverse,
     textDecorationLine: 'underline',
     fontWeight: '600',
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
 })

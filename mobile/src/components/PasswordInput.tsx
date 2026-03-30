@@ -1,6 +1,8 @@
 import React, { useState } from 'react'
-import { View, TextInput, TouchableOpacity, StyleSheet, Platform } from 'react-native'
+import { View, TextInput, TouchableOpacity, StyleSheet } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { colors } from '../theme'
+import { authScreenStyles } from '../theme/authScreen'
 
 interface PasswordInputProps {
   value: string
@@ -10,19 +12,19 @@ interface PasswordInputProps {
   containerStyle?: any
 }
 
-export default function PasswordInput({ 
-  value, 
-  onChangeText, 
-  placeholder = "Enter password",
+export default function PasswordInput({
+  value,
+  onChangeText,
+  placeholder = 'Enter password',
   style,
-  containerStyle 
+  containerStyle,
 }: PasswordInputProps) {
   const [showPassword, setShowPassword] = useState(false)
 
   return (
-    <View style={[styles.container, containerStyle]}>
+    <View style={[authScreenStyles.passwordOuter, containerStyle]}>
       <TextInput
-        style={[styles.input, style]}
+        style={[authScreenStyles.passwordInner, style]}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
@@ -33,8 +35,8 @@ export default function PasswordInput({
         passwordRules="minlength: 6;"
         importantForAutofill="yes"
         underlineColorAndroid="transparent"
-        selectionColor="#007ACC"
-        placeholderTextColor="#9ca3af"
+        selectionColor={colors.primary.main}
+        placeholderTextColor={colors.text.secondary}
         returnKeyType="done"
       />
       <TouchableOpacity
@@ -45,7 +47,7 @@ export default function PasswordInput({
         <Ionicons
           name={showPassword ? 'eye-off' : 'eye'}
           size={20}
-          color="#6b7280"
+          color={colors.text.secondary}
         />
       </TouchableOpacity>
     </View>
@@ -53,27 +55,6 @@ export default function PasswordInput({
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    backgroundColor: '#ffffff',
-  },
-  input: {
-    flex: 1,
-    padding: 12,
-    fontSize: 16,
-    borderWidth: 0,
-    includeFontPadding: false,
-    textAlignVertical: 'center',
-    color: '#1f2937',
-    minHeight: 20,
-    ...(Platform.OS === 'android' && {
-      paddingVertical: 12,
-    }),
-  },
   eyeButton: {
     padding: 12,
     justifyContent: 'center',

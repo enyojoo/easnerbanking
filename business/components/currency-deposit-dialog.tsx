@@ -47,7 +47,16 @@ function CopyableField({ label, value, copiedField, fieldId, onCopy }: CopyableF
   )
 }
 
-function PaymentInstructions({ currency, type }: { currency: string; type: "bank" | "stablecoin" }) {
+function PaymentInstructions({
+  currency,
+  type,
+  stablecoinToken,
+}: {
+  currency: string
+  type: "bank" | "stablecoin"
+  /** When set (e.g. live Noah wallet), overrides USD→USDC / EUR→EURC default. */
+  stablecoinToken?: string
+}) {
   if (type === "bank") {
     if (currency === "USD") {
       return (
@@ -85,7 +94,8 @@ function PaymentInstructions({ currency, type }: { currency: string; type: "bank
   }
 
   if (type === "stablecoin") {
-    const stablecoin = currency === "USD" ? "USDC" : "EURC"
+    const stablecoin =
+      stablecoinToken ?? (currency === "USD" ? "USDC" : currency === "EUR" ? "EURC" : "USDC")
     return (
       <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
         <li>Only send {stablecoin} on the supported network to this address</li>
@@ -106,7 +116,17 @@ interface CurrencyDepositDialogProps {
 
 export function CurrencyDepositDialog({ account, copiedField, onCopy }: CurrencyDepositDialogProps) {
   const { tier1Complete } = useBusinessProfile()
-  const stablecoinAccount = mockStablecoinAccounts.find((s) => s.currency === account.currency)
+  const mockStable = mockStablecoinAccounts.find((s) => s.currency === account.currency)
+  const stablecoinAccount =
+    account.stablecoinAddress && account.stablecoinToken
+      ? {
+          currency: account.currency,
+          stablecoin: account.stablecoinToken,
+          chain: account.stablecoinChain ?? "Solana",
+          address: account.stablecoinAddress,
+          memo: "",
+        }
+      : mockStable
   const hasStablecoin = stablecoinAccount !== undefined
 
   const isNgn = account.currency === "NGN"
@@ -308,7 +328,11 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
 
                 <div className="pt-4 border-t">
                   <p className="text-sm font-medium mb-2">Payment Instructions</p>
-                  <PaymentInstructions currency={account.currency} type="stablecoin" />
+                  <PaymentInstructions
+                    currency={account.currency}
+                    type="stablecoin"
+                    stablecoinToken={stablecoinAccount?.stablecoin}
+                  />
                 </div>
               </>
             ) : (

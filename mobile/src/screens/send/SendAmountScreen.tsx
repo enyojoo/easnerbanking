@@ -32,6 +32,7 @@ import { isTier1Complete, TIER2_COMPLETE_PLACEHOLDER } from '../../lib/complianc
 import { mobileFxEngine } from '../../lib/fxEngine'
 import { generateTransactionId } from '../../lib/transactionId'
 import { useBalance } from '../../contexts/BalanceContext'
+import { getApiBaseUrl } from '../../lib/apiClient'
 import { noahService } from '../../lib/noahService'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
@@ -784,7 +785,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 // Use Bridge transfer API to send from wallet to external bank account
                 try {
                   // Get user's Bridge wallet
-                  const walletsResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'}/api/noah/wallets`, {
+                  const walletsResponse = await fetch(`${getApiBaseUrl() || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/api/noah/wallets`, {
                     headers: {
                       'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
                     },

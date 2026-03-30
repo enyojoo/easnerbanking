@@ -15,7 +15,7 @@ export const CONSUMER_TIER_LADDER: { tiers: TierLadderTier[] } = {
       tier: 1,
       title: "Global banking",
       description:
-        "USD and EUR accounts, pay-in and pay-out, and stablecoin flows, plus other currency accounts where supported for your account.",
+        "USD and EUR bank accounts, pay-in and pay-out, and stablecoin flows.",
     },
     {
       tier: 2,
@@ -27,7 +27,7 @@ export const CONSUMER_TIER_LADDER: { tiers: TierLadderTier[] } = {
       tier: 3,
       title: "Cards",
       description:
-        "Personal credit cards when you finish the steps for your card program. Debit or prepaid if credit is not offered in your market.",
+        "Your access to personal debit/credit cards for your online and physical payments.",
     },
   ],
 }

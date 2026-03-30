@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
-import { Loader2, Smartphone } from "lucide-react"
+import { Check, Copy, Loader2, Smartphone } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { OtpCodeInput } from "@/components/otp-code-input"
@@ -62,9 +62,11 @@ export function MfaSettingsDialog({
   /** Fetching QR / enroll from API — keep UI calm (no spinners on the card path). */
   const [enrollFetching, setEnrollFetching] = useState(false)
   const [verifySubmitting, setVerifySubmitting] = useState(false)
+  const [secretJustCopied, setSecretJustCopied] = useState(false)
   /** Dedupes Strict Mode double layout + ignores stale enroll completions after reopen. */
   const enrollGenRef = useRef(0)
   const closeResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const secretCopiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const loadFactors = useCallback(async (): Promise<TotpFactorLike[] | null> => {
     setError(null)
@@ -205,6 +207,38 @@ export function MfaSettingsDialog({
     }
   }, [])
 
+  useEffect(() => {
+    if (!secret) {
+      setSecretJustCopied(false)
+    }
+  }, [secret])
+
+  useEffect(() => {
+    return () => {
+      if (secretCopiedTimerRef.current) {
+        clearTimeout(secretCopiedTimerRef.current)
+        secretCopiedTimerRef.current = null
+      }
+    }
+  }, [])
+
+  const copySecretToClipboard = useCallback(() => {
+    if (!secret) return
+    void (async () => {
+      try {
+        await navigator.clipboard.writeText(secret)
+        setSecretJustCopied(true)
+        if (secretCopiedTimerRef.current) clearTimeout(secretCopiedTimerRef.current)
+        secretCopiedTimerRef.current = setTimeout(() => {
+          secretCopiedTimerRef.current = null
+          setSecretJustCopied(false)
+        }, 2000)
+      } catch {
+        // clipboard unavailable
+      }
+    })()
+  }, [secret])
+
   const handleDialogOpenChange = (next: boolean) => {
     if (closeResetTimerRef.current) {
       clearTimeout(closeResetTimerRef.current)
@@ -270,11 +304,16 @@ export function MfaSettingsDialog({
               <Smartphone className="h-5 w-5" />
               Two-factor authentication
             </DialogTitle>
-            <DialogDescription>
-              {view === "enroll"
-                ? "Scan this QR code to set up your account using your preferred authenticator app. Popular choices include Google Authenticator, Microsoft Authenticator, and Authy."
-                : "Use an authenticator app for a second sign-in step after your password."}
-            </DialogDescription>
+            {view === "enroll" ? (
+              <DialogDescription>
+                Scan this QR code to set up your account using your preferred authenticator app. Popular choices
+                include Google Authenticator, Microsoft Authenticator, and Authy.
+              </DialogDescription>
+            ) : !showEnrolledCard ? (
+              <DialogDescription>
+                Use an authenticator app for a second sign-in step after your password.
+              </DialogDescription>
+            ) : null}
           </DialogHeader>
 
           {error && (
@@ -330,13 +369,29 @@ export function MfaSettingsDialog({
               <div className="space-y-2">
                 <Label>Secret key</Label>
                 <div
-                  className="rounded-md border bg-muted/40 p-3 text-xs leading-normal"
+                  className="flex items-center gap-1.5 rounded-md border bg-muted/40 py-2 pl-2.5 pr-1 text-[11px] leading-snug"
                   aria-busy={!secret}
                 >
                   {secret ? (
-                    <code className="block w-full break-all">{secret}</code>
+                    <>
+                      <code className="block min-w-0 flex-1 break-all pr-0.5">{secret}</code>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 shrink-0 pr-0.5 text-muted-foreground hover:text-foreground"
+                        onClick={copySecretToClipboard}
+                        aria-label={secretJustCopied ? "Copied" : "Copy secret key"}
+                      >
+                        {secretJustCopied ? (
+                          <Check className="h-4 w-4 text-primary" aria-hidden />
+                        ) : (
+                          <Copy className="h-4 w-4" aria-hidden />
+                        )}
+                      </Button>
+                    </>
                   ) : (
-                    <Skeleton className="block h-[1lh] w-full rounded-sm" aria-hidden />
+                    <Skeleton className="block h-4 w-full rounded-sm" aria-hidden />
                   )}
                 </div>
               </div>
@@ -350,42 +405,20 @@ export function MfaSettingsDialog({
                   disabled={verifySubmitting || enrollFetching || !enrollFactorId}
                 />
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    void (async () => {
-                      const supabase = createSupabaseBrowser()
-                      await unenrollUnverifiedTotpFactors(supabase)
-                      setView("list")
-                      setEnrollFactorId(null)
-                      setQrDataUrl(null)
-                      setSecret(null)
-                      setVerifyCode("")
-                      setError(null)
-                      await loadFactors()
-                      onFactorsChanged?.()
-                    })()
-                  }}
-                >
-                  Back
-                </Button>
-                <Button
-                  type="submit"
-                  className="min-w-[11.5rem]"
-                  disabled={verifySubmitting || enrollFetching || !enrollFactorId}
-                >
-                  {verifySubmitting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                      Enabling…
-                    </>
-                  ) : (
-                    "Enable"
-                  )}
-                </Button>
-              </div>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={verifySubmitting || enrollFetching || !enrollFactorId}
+              >
+                {verifySubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    Enabling…
+                  </>
+                ) : (
+                  "Enable"
+                )}
+              </Button>
             </form>
           )}
         </DialogContent>

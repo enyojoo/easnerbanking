@@ -10,18 +10,20 @@ import {
   Animated,
   ActivityIndicator,
 } from 'react-native'
-import { CommonActions } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { NavigationProps } from '../../types'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
-import { verifyPin, getPinLockTimeRemaining, updateSessionActivity } from '../../lib/pinAuth'
+import { verifyPin, getPinLockTimeRemaining, updateSessionActivity, setAppLocked } from '../../lib/pinAuth'
+import { emitAppLocked } from '../../lib/app-lock-bus'
 import { useAuth } from '../../contexts/AuthContext'
+import { appPinStrings } from '../../constants/app-pin-en'
+import { displayFirstNameFromFullName } from '../../lib/userProfileHelpers'
 
 export default function PinEntryScreen({ navigation: navigationProp }: NavigationProps) {
   const { user, userProfile, signOut } = useAuth()
-  const [pin, setPin] = useState<string[]>(['', '', '', '', '', ''])
+  const [pin, setPin] = useState<string[]>(['', '', '', ''])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [locked, setLocked] = useState(false)
@@ -52,15 +54,14 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
     
     const filledCount = pin.filter(d => d !== '').length
     
-    if (filledCount >= 6) return
+    if (filledCount >= 4) return
 
     setError('')
     const newPin = [...pin]
     newPin[filledCount] = num
     setPin(newPin)
     
-    if (filledCount === 5) {
-      // All 6 digits entered, verify
+    if (filledCount === 3) {
       setTimeout(() => {
         handleVerifyPin(newPin.join(''))
       }, 300)
@@ -87,26 +88,20 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
   const handleVerifyPin = async (pinString?: string) => {
     const pinToVerify = pinString || pin.join('')
     
-    if (pinToVerify.length !== 6) {
+    if (pinToVerify.length !== 4) {
       return
     }
 
     setLoading(true)
     setError('') // Clear any previous errors
     
-    // Verify PIN - this is now instant (local cache check)
     const result = await verifyPin(pinToVerify, user?.id)
 
     if (result.success) {
-      // PIN verified successfully - trigger navigation IMMEDIATELY
-      // No delays, no waiting - instant like email/password login
-      try {
-        const triggerPinCheck = (global as any).triggerPinCheck
-        if (triggerPinCheck) {
-          triggerPinCheck() // Directly sets sessionValid=true for instant navigation
-        }
-      } catch (error) {
-        // Fallback: polling will catch it
+      if (user?.id) {
+        await setAppLocked(user.id, false)
+        await updateSessionActivity()
+        emitAppLocked()
       }
       
       // Haptic feedback (non-blocking, fire and forget)
@@ -116,7 +111,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
       // Loading state will clear when screen changes
     } else {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
-      setError(result.error || 'Incorrect PIN')
+      setError(result.error || appPinStrings.lockIncorrect)
       setLocked(result.locked || false)
       setLockedUntil(result.lockedUntil || null)
 
@@ -128,44 +123,31 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
         Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
       ]).start()
 
-      // Clear PIN on error
-      setPin(['', '', '', '', '', ''])
+      setPin(['', '', '', ''])
       setLoading(false) // Only set loading to false on error
     }
   }
 
   const handleForgotPin = () => {
-    Alert.alert(
-      'Forgot PIN?',
-      'You will need to login with your email and password to reset your PIN.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Login',
-          onPress: async () => {
-            // Sign out to go to login page
-            await signOut()
-          },
+    Alert.alert(appPinStrings.forgotPinTitle, appPinStrings.forgotPinBody, [
+      { text: appPinStrings.dialogCancel, style: 'cancel' },
+      {
+        text: appPinStrings.forgotPinSignIn,
+        onPress: async () => {
+          await signOut()
         },
-      ]
-    )
-  }
-
-  const formatLockTime = (lockedUntil: number) => {
-    const remaining = Math.ceil((lockedUntil - Date.now()) / 60000)
-    return `${remaining} minute(s)`
-  }
-
-  const getGreeting = () => {
-    const hour = new Date().getHours()
-    if (hour < 12) return 'Good Morning'
-    if (hour < 18) return 'Good Afternoon'
-    return 'Good Evening'
+      },
+    ])
   }
 
   const getUserName = () => {
-    // Check userProfile first (most up-to-date), then fallback to user object
-    return userProfile?.profile?.first_name || user?.first_name || ''
+    const full =
+      userProfile?.profile?.full_name ||
+      [userProfile?.profile?.first_name, userProfile?.profile?.last_name].filter(Boolean).join(' ') ||
+      user?.full_name ||
+      [user?.first_name, user?.last_name].filter(Boolean).join(' ') ||
+      ''
+    return displayFirstNameFromFullName(full, '')
   }
 
   const filledCount = pin.filter(d => d !== '').length
@@ -192,60 +174,54 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
 
         {/* Content */}
         <View style={styles.content}>
-          {/* Greeting */}
-          <View style={styles.greetingContainer}>
-            <Text style={styles.greeting}>
-              {getGreeting()}{getUserName() ? ',' : ''}
-            </Text>
-            {getUserName() ? (
-              <Text style={styles.greetingName}>
-                {getUserName()}!
-              </Text>
-            ) : (
-              <Text style={styles.greetingName}>!</Text>
-            )}
+          <View style={styles.topBlock}>
+            {/* Greeting */}
+            <View style={styles.greetingContainer}>
+              <Text style={styles.greeting}>{appPinStrings.lockWelcome(getUserName())}</Text>
+            </View>
+
+            {/* PIN Dots - Light gray circles */}
+            <Animated.View
+              style={[
+                styles.pinDotsContainer,
+                { transform: [{ translateX: shakeAnim }] },
+              ]}
+            >
+              {pin.map((digit, index) => (
+                <View
+                  key={index}
+                  style={[
+                    styles.pinDot,
+                    digit !== '' && styles.pinDotFilled,
+                    error && styles.pinDotError,
+                    locked && styles.pinDotDisabled,
+                  ]}
+                />
+              ))}
+            </Animated.View>
+
+            {/* Same line as “Enter your 4-digit PIN”: errors replace that hint here */}
+            <View style={styles.hintSlot}>
+              {error ? (
+                <Text style={styles.errorText}>{error}</Text>
+              ) : (
+                <Text style={styles.subtitle}>
+                  {locked && lockedUntil
+                    ? appPinStrings.lockLockedTryMinutes(
+                        Math.max(1, Math.ceil((lockedUntil - Date.now()) / 60000)),
+                      )
+                    : appPinStrings.lockEnterPin}
+                </Text>
+              )}
+            </View>
+
+            {/* Loading Indicator */}
+            {loading && !error ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color={colors.primary.main} />
+              </View>
+            ) : null}
           </View>
-
-          {/* Error Message */}
-          {error ? (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          ) : null}
-
-          {/* PIN Dots - Light gray circles */}
-          <Animated.View
-            style={[
-              styles.pinDotsContainer,
-              { transform: [{ translateX: shakeAnim }] },
-            ]}
-          >
-            {pin.map((digit, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.pinDot,
-                  digit !== '' && styles.pinDotFilled,
-                  error && styles.pinDotError,
-                  locked && styles.pinDotDisabled,
-                ]}
-              />
-            ))}
-          </Animated.View>
-
-          {/* Subtitle */}
-          <Text style={styles.subtitle}>
-            {locked && lockedUntil
-              ? `PIN is locked. Try again in ${formatLockTime(lockedUntil)}`
-              : 'Enter your 6-digit PIN to access your account'}
-          </Text>
-
-          {/* Loading Indicator */}
-          {loading && !error && (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color={colors.primary.main} />
-            </View>
-          )}
 
           {/* Numeric Keypad - 3x3 grid + 0 and backspace */}
           <View style={styles.keypadContainer}>
@@ -297,27 +273,22 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
           <TouchableOpacity
             style={styles.logoutLink}
             onPress={() => {
-              Alert.alert(
-                'Log Out',
-                'Are you sure you want to log out?',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  {
-                    text: 'Log Out',
-                    style: 'destructive',
-                    onPress: async () => {
-                      // Call signOut to properly clear session
-                      // AppNavigator will automatically show onboarding screen after logout
-                      await signOut()
-                    },
+              Alert.alert(appPinStrings.logOutTitle, appPinStrings.logOutBody, [
+                { text: appPinStrings.dialogCancel, style: 'cancel' },
+                {
+                  text: appPinStrings.lockLogOut,
+                  style: 'destructive',
+                  onPress: async () => {
+                    await signOut()
                   },
-                ]
-              )
+                },
+              ])
             }}
             activeOpacity={0.7}
           >
             <Text style={styles.logoutText}>
-              Not your account? <Text style={styles.logoutLinkText}>Log out</Text>
+              {appPinStrings.lockNotYourAccount}{' '}
+              <Text style={styles.logoutLinkText}>{appPinStrings.lockLogOut}</Text>
             </Text>
           </TouchableOpacity>
         </View>
@@ -362,7 +333,10 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: spacing[5],
     paddingTop: spacing[6],
-    justifyContent: 'space-between',
+  },
+  topBlock: {
+    alignItems: 'center',
+    width: '100%',
   },
   greetingContainer: {
     alignItems: 'center',
@@ -376,24 +350,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
   },
-  greetingName: {
-    fontSize: 32,
-    lineHeight: 40,
-    color: colors.text.primary,
-    fontFamily: 'Outfit-Bold',
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  errorContainer: {
-    backgroundColor: colors.error.light,
-    borderRadius: borderRadius.md,
-    padding: spacing[3],
-    marginBottom: spacing[4],
-  },
   errorText: {
-    ...textStyles.bodySmall,
-    color: colors.error.main,
+    ...textStyles.bodyMedium,
+    color: colors.error.dark,
     textAlign: 'center',
+    fontWeight: '600',
   },
   loadingContainer: {
     alignItems: 'center',
@@ -404,8 +365,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: spacing[4],
+    gap: spacing[6],
+    marginBottom: 0,
+  },
+  hintSlot: {
+    width: '100%',
+    minHeight: 48,
+    marginTop: spacing[6],
     marginBottom: spacing[6],
+    paddingHorizontal: spacing[4],
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   pinDot: {
     width: 14,
@@ -425,19 +395,14 @@ const styles = StyleSheet.create({
   pinDotDisabled: {
     opacity: 0.5,
   },
-  loadingContainer: {
-    alignItems: 'center',
-    marginTop: spacing[4],
-    marginBottom: spacing[2],
-  },
   subtitle: {
     ...textStyles.bodyMedium,
     color: colors.text.secondary,
     textAlign: 'center',
-    marginBottom: spacing[8],
   },
   keypadContainer: {
     width: '100%',
+    marginTop: 'auto',
     marginBottom: spacing[8],
   },
   keypadGrid: {

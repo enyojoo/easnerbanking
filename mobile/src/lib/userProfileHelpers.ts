@@ -1,0 +1,82 @@
+/**
+ * Helpers for `public.users.full_name` ↔ first/middle/last UI fields.
+ */
+
+import type { User } from '../types'
+
+export function splitFullNameForForm(full: string | null | undefined): {
+  firstName: string
+  middleName: string
+  lastName: string
+} {
+  const p = (full ?? '').trim().split(/\s+/).filter(Boolean)
+  if (p.length === 0) return { firstName: '', middleName: '', lastName: '' }
+  if (p.length === 1) return { firstName: p[0]!, middleName: '', lastName: '' }
+  if (p.length === 2) return { firstName: p[0]!, middleName: '', lastName: p[1]! }
+  return {
+    firstName: p[0]!,
+    middleName: p.slice(1, -1).join(' '),
+    lastName: p[p.length - 1]!,
+  }
+}
+
+export function joinFullName(parts: {
+  firstName: string
+  middleName?: string
+  lastName: string
+}): string {
+  return [parts.firstName, parts.middleName, parts.lastName]
+    .map((s) => (typeof s === 'string' ? s.trim() : ''))
+    .filter(Boolean)
+    .join(' ')
+    .trim()
+}
+
+/** First word of full name for greetings (e.g. dashboard “Hi {name}”). */
+export function displayFirstNameFromFullName(full: string | null | undefined, fallback = 'User'): string {
+  const w = (full ?? '').trim().split(/\s+/)[0]
+  return w || fallback
+}
+
+/** Up to two initials from full name (same rules as dashboard avatar). */
+export function initialsFromFullName(full: string | null | undefined): string {
+  const p = (full ?? '').trim().split(/\s+/).filter(Boolean)
+  if (p.length === 0) return 'US'
+  if (p.length === 1) return (p[0]!.slice(0, 2) || 'U').toUpperCase()
+  return `${p[0]![0] ?? ''}${p[p.length - 1]![0] ?? ''}`.toUpperCase()
+}
+
+/** Map a `public.users` row (Supabase `select('*')`) to app `User`. */
+export function mapUsersRowToUser(ru: Record<string, unknown>): User {
+  const fn = typeof ru.full_name === 'string' ? ru.full_name : null
+  const names = splitFullNameForForm(fn)
+  const extra = ru.enabled_extra_account_currencies
+  return {
+    id: String(ru.id),
+    email: typeof ru.email === 'string' ? ru.email : '',
+    full_name: fn,
+    first_name: names.firstName,
+    middle_name: names.middleName || undefined,
+    last_name: names.lastName,
+    phone: (ru.phone as string) ?? null,
+    date_of_birth: (ru.date_of_birth as string) ?? null,
+    avatar_url: (ru.avatar_url as string) ?? null,
+    easner_role: ru.easner_role === 'business' || ru.easner_role === 'individual' ? ru.easner_role : undefined,
+    easner_organization_id: (ru.easner_organization_id as string) ?? null,
+    enabled_extra_account_currencies: Array.isArray(extra) ? (extra as string[]) : [],
+    noah_customer_id: (ru.noah_customer_id as string) ?? null,
+    noah_kyc_status: (ru.noah_kyc_status as string) ?? null,
+    noah_kyc_rejection_reasons: ru.noah_kyc_rejection_reasons,
+    noah_kyc_metadata: ru.noah_kyc_metadata,
+    noah_signed_agreement_id: (ru.noah_signed_agreement_id as string) ?? null,
+    noah_wallet_id: (ru.noah_wallet_id as string) ?? null,
+    noah_usd_virtual_account_id: (ru.noah_usd_virtual_account_id as string) ?? null,
+    noah_eur_virtual_account_id: (ru.noah_eur_virtual_account_id as string) ?? null,
+    noah_kyb_customer_id: (ru.noah_kyb_customer_id as string) ?? null,
+    noah_kyb_status: (ru.noah_kyb_status as string) ?? null,
+    status: 'active',
+    base_currency: 'USD',
+    created_at: String(ru.created_at ?? ''),
+    updated_at: String(ru.updated_at ?? ''),
+  }
+}

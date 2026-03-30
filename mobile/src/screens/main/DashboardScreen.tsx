@@ -16,24 +16,23 @@ import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { 
-  Bell, 
-  ChevronDown, 
-  Plus, 
-  Eye, 
-  EyeOff, 
-  ArrowDownLeft, 
-  ArrowUpRight, 
-  Monitor, 
-  Apple, 
-  ShoppingBag, 
+import {
+  MessageCircle,
+  ChevronDown,
+  Plus,
+  Eye,
+  EyeOff,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Monitor,
+  Apple,
+  ShoppingBag,
   ArrowRight,
-  Check
+  Check,
 } from 'lucide-react-native'
 import { useAuth } from '../../contexts/AuthContext'
-import { useNotifications } from '../../contexts/NotificationsContext'
 import { NavigationProps } from '../../types'
-import { colors, textStyles, borderRadius, spacing, shadows } from '../../theme'
+import { colors, textStyles, borderRadius, spacing, shadows, userAvatarStyles } from '../../theme'
 import { useEffect } from 'react'
 import { useFocusRefreshAll } from '../../hooks/useFocusRefresh'
 import { useUserData } from '../../contexts/UserDataContext'
@@ -43,6 +42,7 @@ import { apiGet, apiPost } from '../../lib/apiClient'
 import { supabase } from '../../lib/supabase'
 import { ShimmerLoader } from '../../components/premium'
 import { getTransactionStatusDisplay } from '../../utils/formatters'
+import { initialsFromFullName } from '../../lib/userProfileHelpers'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
@@ -64,7 +64,6 @@ interface DashboardTransaction {
 
 export default function DashboardScreen({ navigation }: NavigationProps) {
   const { user, userProfile } = useAuth()
-  const { unreadCount } = useNotifications()
   const { refreshStaleData, refreshing: dataRefreshing } = useUserData()
   const { balances, refreshBalances } = useBalance()
   const insets = useSafeAreaInsets()
@@ -82,6 +81,8 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const lastSyncTimeRef = useRef(0) // Track last sync time to prevent frequent syncs
   const fetchRecentTransactionsRef = useRef<((force?: boolean, silent?: boolean) => Promise<void>) | null>(null)
   const refreshBalancesRef = useRef<((force?: boolean) => Promise<void>) | null>(null)
+  /** True while we are removing/replacing the channel on purpose — avoids treating `CLOSED` as a failure. */
+  const realtimeIntentionalCloseRef = useRef(false)
 
   // Available currencies for the dropdown (USD/EUR only)
   const availableCurrencies = [
@@ -388,8 +389,9 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
         return
       }
 
-      // Clean up existing channel if any
+      // Clean up existing channel if any (triggers `CLOSED`; must not log/retry as failure)
       if (channel) {
+        realtimeIntentionalCloseRef.current = true
         supabase.removeChannel(channel)
         channel = null
       }
@@ -442,6 +444,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
           )
           .subscribe((status) => {
             if (status === 'SUBSCRIBED') {
+              realtimeIntentionalCloseRef.current = false
               console.log('[DASHBOARD] ✅ Real-time subscription active')
               isRealTimeActive = true
               realtimeRetryCount = 0 // Reset retry count on success
@@ -453,9 +456,13 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                 hasLoggedPollingStartRef.current = false
               }
             } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-              console.warn(`[DASHBOARD] Real-time ${status}, will retry...`)
+              if (status === 'CLOSED' && realtimeIntentionalCloseRef.current) {
+                realtimeIntentionalCloseRef.current = false
+                return
+              }
               isRealTimeActive = false
-              
+              console.warn(`[DASHBOARD] Real-time ${status}, will retry...`)
+
               // Retry real-time setup if we haven't exceeded max retries
               if (realtimeRetryCount < MAX_REALTIME_RETRIES) {
                 realtimeRetryCount++
@@ -509,6 +516,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
         realtimeRetryTimeout = null
       }
       if (channel) {
+        realtimeIntentionalCloseRef.current = true
         supabase.removeChannel(channel)
         channel = null
       }
@@ -539,19 +547,17 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const balance = parseFloat(balances[selectedCurrency] || '0')
 
   // Get user's first name for greeting - use only the first word if multiple names exist
-  const getDisplayName = () => {
-    const fullFirstName = userProfile?.profile?.first_name || user?.first_name || 'User'
-    // Extract only the first word (e.g., "David Mark" -> "David")
-    return fullFirstName.split(' ')[0]
-  }
-  const displayName = getDisplayName()
-  
-  // Get user initials for avatar
-  const getInitials = () => {
-    const first = userProfile?.profile?.first_name?.[0] || user?.first_name?.[0] || 'U'
-    const last = userProfile?.profile?.last_name?.[0] || user?.last_name?.[0] || 'S'
-    return `${first}${last}`.toUpperCase()
-  }
+  const dashboardAvatarFullName =
+    userProfile?.profile?.full_name ||
+    [userProfile?.profile?.first_name, userProfile?.profile?.last_name].filter(Boolean).join(' ') ||
+    user?.full_name ||
+    [user?.first_name, user?.last_name].filter(Boolean).join(' ') ||
+    ''
+
+  const headerAvatarUrl =
+    typeof userProfile?.profile?.avatar_url === 'string' && userProfile.profile.avatar_url.trim()
+      ? userProfile.profile.avatar_url.trim()
+      : null
 
   const handleCurrencyChange = (currency: 'USD' | 'EUR') => {
     setSelectedCurrency(currency)
@@ -772,7 +778,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
 
   return (
     <View style={styles.container}>
-      {/* Header with Greeting and Notification */}
+      {/* Header: avatar + support */}
       <View style={[styles.headerWrapper, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           {/* Header Content */}
@@ -780,38 +786,34 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
             {/* User Greeting with Avatar */}
             <View style={styles.greetingContainer}>
               <TouchableOpacity
-                style={styles.avatar}
+                style={userAvatarStyles.circle}
                 onPress={async () => {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                   navigation.navigate('ProfileEdit' as any)
                 }}
                 activeOpacity={0.7}
               >
-                <Text style={styles.avatarText}>{getInitials()}</Text>
+                {headerAvatarUrl ? (
+                  <Image source={{ uri: headerAvatarUrl }} style={userAvatarStyles.image} />
+                ) : (
+                  <Text style={userAvatarStyles.initials}>
+                    {initialsFromFullName(dashboardAvatarFullName)}
+                  </Text>
+                )}
               </TouchableOpacity>
-              <View style={styles.greetingTextContainer}>
-                <Text style={styles.greetingText}>
-                  Hi {displayName} 👋
-                </Text>
-              </View>
             </View>
 
-            {/* Notification Bell */}
             <TouchableOpacity
-              style={styles.notificationButton}
+              style={styles.supportHeaderButton}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                navigation.navigate('InAppNotifications' as never)
+                navigation.navigate('Support' as never)
               }}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Support"
             >
-              <Bell size={22} color={colors.primary.main} strokeWidth={2} />
-              {/* Notification Badge - Show when there are unread notifications */}
-              {unreadCount > 0 && (
-                <View style={styles.notificationBadge}>
-                  <View style={styles.notificationBadgeDot} />
-                </View>
-              )}
+              <MessageCircle size={22} color={colors.primary.main} strokeWidth={2} />
             </TouchableOpacity>
           </View>
         </View>
@@ -1005,7 +1007,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                   style={[styles.transactionItem, isLast && styles.transactionItemLast]}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                    navigation.navigate('BridgeTransactionDetails' as never, { 
+                    navigation.navigate('TransactionDetails' as never, { 
                       transactionId: transaction.transaction_id,
                       fromScreen: 'Dashboard'
                     } as never)
@@ -1077,32 +1079,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing[3],
   },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.frame.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-  },
-  avatarText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.primary.main,
-    fontFamily: 'Outfit-Bold',
-  },
-  greetingTextContainer: {
-    justifyContent: 'center',
-  },
-  greetingText: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
-  },
-  notificationButton: {
+  supportHeaderButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -1111,24 +1088,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.frame.background,
     borderWidth: 0.5,
     borderColor: colors.frame.border,
-    position: 'relative',
-  },
-  notificationBadge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.background.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  notificationBadgeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.primary.main,
   },
   scrollView: {
     flex: 1,

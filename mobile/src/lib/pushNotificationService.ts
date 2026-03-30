@@ -1,87 +1,100 @@
-import * as Notifications from 'expo-notifications';
-import * as Device from 'expo-device';
-import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Device from 'expo-device'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import type {
+  Notification,
+  NotificationResponse,
+  Subscription,
+} from 'expo-notifications'
+import { isExpoGo } from './expoGo'
 
-// Configure how notifications are handled when the app is in the foreground
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+type NotificationsModule = typeof import('expo-notifications')
+
+let notificationsLazy: NotificationsModule | null = null
+
+function getNotifications(): NotificationsModule | null {
+  if (isExpoGo) return null
+  if (!notificationsLazy) {
+    // Load only outside Expo Go — avoids SDK 53+ noisy warnings when remote push is unavailable there.
+    notificationsLazy = require('expo-notifications') as NotificationsModule
+    notificationsLazy.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+      }),
+    })
+  }
+  return notificationsLazy
+}
+
+const noopSubscription = { remove: () => {} }
 
 export interface PushNotificationData {
-  title: string;
-  body: string;
+  title: string
+  body: string
   data?: {
-    transactionId?: string;
-    type?: 'transaction_update' | 'general';
-    [key: string]: any;
-  };
+    transactionId?: string
+    type?: 'transaction_update' | 'general'
+    [key: string]: unknown
+  }
 }
 
 class PushNotificationService {
-  private expoPushToken: string | null = null;
+  private expoPushToken: string | null = null
 
   /**
    * Register for push notifications and get the Expo push token
    */
   async registerForPushNotifications(): Promise<string | null> {
+    const Notifications = getNotifications()
+    if (!Notifications) return null
+
     try {
       if (!Device.isDevice) {
-        console.log('Must use physical device for Push Notifications');
-        return null;
+        console.log('Must use physical device for Push Notifications')
+        return null
       }
 
-      // Check if we already have a token stored
-      const storedToken = await AsyncStorage.getItem('expoPushToken');
+      const storedToken = await AsyncStorage.getItem('expoPushToken')
       if (storedToken) {
-        this.expoPushToken = storedToken;
-        return storedToken;
+        this.expoPushToken = storedToken
+        return storedToken
       }
 
-      // Request permissions
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus;
+      const { status: existingStatus } = await Notifications.getPermissionsAsync()
+      let finalStatus = existingStatus
 
       if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
+        const { status } = await Notifications.requestPermissionsAsync()
+        finalStatus = status
       }
 
       if (finalStatus !== 'granted') {
-        console.log('Failed to get push token for push notification!');
-        return null;
+        console.log('Failed to get push token for push notification!')
+        return null
       }
 
-      // Get the push token
-      const token = (await Notifications.getExpoPushTokenAsync()).data;
-      this.expoPushToken = token;
+      const token = (await Notifications.getExpoPushTokenAsync()).data
+      this.expoPushToken = token
 
-      // Store the token for future use
-      await AsyncStorage.setItem('expoPushToken', token);
+      await AsyncStorage.setItem('expoPushToken', token)
 
-      console.log('Expo push token:', token);
-      return token;
+      console.log('Expo push token:', token)
+      return token
     } catch (error) {
-      console.error('Error registering for push notifications:', error);
-      return null;
+      console.error('Error registering for push notifications:', error)
+      return null
     }
   }
 
-  /**
-   * Get the current push token
-   */
   getPushToken(): string | null {
-    return this.expoPushToken;
+    return this.expoPushToken
   }
 
-  /**
-   * Send a local notification
-   */
   async sendLocalNotification(notification: PushNotificationData): Promise<void> {
+    const Notifications = getNotifications()
+    if (!Notifications) return
+
     try {
       await Notifications.scheduleNotificationAsync({
         content: {
@@ -89,57 +102,52 @@ class PushNotificationService {
           body: notification.body,
           data: notification.data || {},
         },
-        trigger: null, // Show immediately
-      });
+        trigger: null,
+      })
     } catch (error) {
-      console.error('Error sending local notification:', error);
+      console.error('Error sending local notification:', error)
     }
   }
 
-  /**
-   * Clear all notifications
-   */
   async clearAllNotifications(): Promise<void> {
+    const Notifications = getNotifications()
+    if (!Notifications) return
+
     try {
-      await Notifications.dismissAllNotificationsAsync();
+      await Notifications.dismissAllNotificationsAsync()
     } catch (error) {
-      console.error('Error clearing notifications:', error);
+      console.error('Error clearing notifications:', error)
     }
   }
 
-  /**
-   * Set the notification badge count
-   */
   async setBadgeCount(count: number): Promise<void> {
+    const Notifications = getNotifications()
+    if (!Notifications) return
+
     try {
-      await Notifications.setBadgeCountAsync(count);
+      await Notifications.setBadgeCountAsync(count)
     } catch (error) {
-      console.error('Error setting badge count:', error);
+      console.error('Error setting badge count:', error)
     }
   }
 
-  /**
-   * Handle notification tap - this should be called from the app's main component
-   */
-  addNotificationReceivedListener(listener: (notification: Notifications.Notification) => void) {
-    return Notifications.addNotificationReceivedListener(listener);
+  addNotificationReceivedListener(listener: (notification: Notification) => void) {
+    const Notifications = getNotifications()
+    if (!Notifications) return noopSubscription as Subscription
+    return Notifications.addNotificationReceivedListener(listener)
   }
 
-  /**
-   * Handle notification tap - this should be called from the app's main component
-   */
-  addNotificationResponseReceivedListener(listener: (response: Notifications.NotificationResponse) => void) {
-    return Notifications.addNotificationResponseReceivedListener(listener);
+  addNotificationResponseReceivedListener(listener: (response: NotificationResponse) => void) {
+    const Notifications = getNotifications()
+    if (!Notifications) return noopSubscription as Subscription
+    return Notifications.addNotificationResponseReceivedListener(listener)
   }
 
-  /**
-   * Remove notification listeners
-   */
-  removeNotificationSubscription(subscription: Notifications.Subscription) {
+  removeNotificationSubscription(subscription: Subscription) {
     if (subscription && typeof subscription.remove === 'function') {
-      subscription.remove();
+      subscription.remove()
     }
   }
 }
 
-export const pushNotificationService = new PushNotificationService();
+export const pushNotificationService = new PushNotificationService()

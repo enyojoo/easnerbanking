@@ -53,7 +53,7 @@ const getFlagImageSource = (currency: string) => {
 }
 
 function RecipientsContent({ navigation }: NavigationProps) {
-  const { userProfile } = useAuth()
+  const { user, userProfile } = useAuth()
   const { recipients, loading, refreshRecipients, currencies } = useUserData()
   const insets = useSafeAreaInsets()
   const [searchTerm, setSearchTerm] = useState('')
@@ -246,7 +246,11 @@ function RecipientsContent({ navigation }: NavigationProps) {
       setIsSubmitting(true)
       setError('')
 
-      await recipientService.update(editingRecipient.id, {
+      if (!user?.id) {
+        setError('Not signed in')
+        return
+      }
+      await recipientService.update(editingRecipient.id, user.id, {
         fullName: newRecipient.fullName,
         accountNumber: newRecipient.accountNumber,
         bankName: newRecipient.bankName,
@@ -280,10 +284,10 @@ function RecipientsContent({ navigation }: NavigationProps) {
   }
 
   const confirmDelete = async () => {
-    if (!deleteConfirmation) return
+    if (!deleteConfirmation || !user?.id) return
     try {
       setDeletingId(deleteConfirmation.id)
-      await recipientService.delete(deleteConfirmation.id)
+      await recipientService.delete(deleteConfirmation.id, user.id)
       await refreshRecipients()
       showSuccess('Recipient deleted successfully')
     } catch (error: any) {

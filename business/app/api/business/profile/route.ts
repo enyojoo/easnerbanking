@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { countries } from "@/lib/countries"
+import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 
 type UpdateBody = {
@@ -79,38 +80,6 @@ function normalizeMembershipRole(role: string | null | undefined): "Owner" | "Ad
   if (value === "admin") return "Admin"
   if (value === "viewer") return "Viewer"
   return "Member"
-}
-
-/**
- * Organization Tier 1 (KYB) is stored on the org Owner's `users` row (`noah_kyb_*`).
- * Resolve Owner from memberships; fall back to earliest org user when memberships are absent (legacy).
- */
-async function resolveOrgOwnerUserId(
-  admin: ReturnType<typeof createSupabaseAdmin>,
-  orgId: string,
-  fallbackUserId: string,
-): Promise<string> {
-  const { data: rows, error } = await admin
-    .from("easner_organization_memberships")
-    .select("user_id,role,status,created_at")
-    .eq("organization_id", orgId)
-    .order("created_at", { ascending: true })
-
-  if (!error && rows?.length) {
-    const owner = rows.find(
-      (r) => normalizeMembershipRole(r.role) === "Owner" && r.status !== "invited" && r.user_id,
-    )
-    if (owner?.user_id) return owner.user_id as string
-  }
-
-  const { data: orgUsers } = await admin
-    .from("users")
-    .select("id")
-    .eq("easner_organization_id", orgId)
-    .order("created_at", { ascending: true })
-    .limit(1)
-
-  return orgUsers?.[0]?.id ?? fallbackUserId
 }
 
 async function resolveCanManageBusinessVerification(

@@ -1,9 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react'
-import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import { Currency, ExchangeRate, Recipient, Transaction, PaymentMethod } from '../types'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { AppState, AppStateStatus } from 'react-native'
+import { NOAH_CONTEXT_CURRENCIES } from '../lib/noahStaticData'
+import { noahService } from '../lib/noahService'
+import { mapNoahListItemToTransaction, buildExchangeRatesFromNoahQuotes } from '../lib/noahUserDataHelpers'
+import { recipientService } from '../lib/recipientService'
 
 interface UserDataContextType {
   currencies: Currency[]
@@ -45,6 +48,15 @@ const CACHE_TTL = {
   PAYMENT_METHODS: 10 * 60 * 1000, // 10 minutes
 }
 
+/** Noah tier guard (403) — normal until KYC/KYB is approved; not an unexpected failure. */
+function isNoahVerificationGateError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error)
+  return (
+    msg.includes('Identity verification must be approved') ||
+    msg.includes('Business verification must be approved')
+  )
+}
+
 export function UserDataProvider({ children }: UserDataProviderProps) {
   const { user } = useAuth()
   const [currencies, setCurrencies] = useState<Currency[]>([])
@@ -56,6 +68,7 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
   const [refreshing, setRefreshing] = useState(false) // Background refresh indicator
   const [dataInitialized, setDataInitialized] = useState(false)
   const [isClearing, setIsClearing] = useState(false)
+  const lastUserIdRef = useRef<string | null>(null)
 
   // Track last fetch times for stale-while-revalidate
   const lastFetchTimes = useRef<{
@@ -113,14 +126,7 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('currencies')
-        .select('*')
-        .eq('status', 'active')
-        .order('code')
-
-      if (error) throw error
-      const currenciesData = data || []
+      const currenciesData = [...NOAH_CONTEXT_CURRENCIES]
       setCurrencies(currenciesData)
       lastFetchTimes.current.currencies = Date.now()
       await setCachedData(CACHE_KEY, currenciesData)
@@ -146,33 +152,7 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('exchange_rates')
-        .select(`
-          *,
-          from_currency_info:currencies!exchange_rates_from_currency_fkey(id, code, name, symbol, flag_svg),
-          to_currency_info:currencies!exchange_rates_to_currency_fkey(id, code, name, symbol, flag_svg)
-        `)
-        .eq('status', 'active')
-
-      if (error) throw error
-
-      const formattedRates = data?.map((rate) => ({
-        ...rate,
-        from_currency_info: rate.from_currency_info
-          ? {
-              ...rate.from_currency_info,
-              flag: rate.from_currency_info.flag_svg,
-            }
-          : undefined,
-        to_currency_info: rate.to_currency_info
-          ? {
-              ...rate.to_currency_info,
-              flag: rate.to_currency_info.flag_svg,
-            }
-          : undefined,
-      })) || []
-
+      const formattedRates = await buildExchangeRatesFromNoahQuotes((p) => noahService.getFxQuote(p))
       setExchangeRates(formattedRates)
       lastFetchTimes.current.exchangeRates = Date.now()
       await setCachedData(CACHE_KEY, formattedRates)
@@ -201,14 +181,7 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('recipients')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
-      const recipientsData = data || []
+      const recipientsData = await recipientService.getByUserId(user.id)
       setRecipients(recipientsData)
       lastFetchTimes.current.recipients = Date.now()
       await setCachedData(CACHE_KEY, recipientsData)
@@ -237,18 +210,8 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('transactions')
-        .select(`
-          *,
-          recipient:recipients(*)
-        `)
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(20)
-
-      if (error) throw error
-      const transactionsData = data || []
+      const rows = await noahService.listTransactions(20)
+      const transactionsData = rows.map((r) => mapNoahListItemToTransaction(user.id, r))
       setTransactions(transactionsData)
       lastFetchTimes.current.transactions = Date.now()
       await setCachedData(CACHE_KEY, transactionsData)
@@ -283,18 +246,55 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('payment_methods')
-        .select('*')
-        .order('currency', { ascending: true })
-        .order('is_default', { ascending: false })
-
-      if (error) throw error
-      const paymentMethodsData = data || []
+      const [usd, eur] = await Promise.all([
+        noahService.getVirtualAccount('usd'),
+        noahService.getVirtualAccount('eur'),
+      ])
+      const t = new Date().toISOString()
+      const paymentMethodsData: PaymentMethod[] = []
+      if (usd?.hasAccount) {
+        paymentMethodsData.push({
+          id: 'noah-va-usd',
+          currency: 'USD',
+          type: 'bank_account',
+          name: 'USD receiving account',
+          account_name: usd.accountHolderName,
+          account_number: usd.accountNumber ?? '',
+          bank_name: usd.bankName ?? '',
+          routing_number: usd.routingNumber,
+          iban: usd.iban,
+          swift_bic: usd.bic,
+          is_default: true,
+          status: 'active',
+          created_at: t,
+          updated_at: t,
+        })
+      }
+      if (eur?.hasAccount) {
+        paymentMethodsData.push({
+          id: 'noah-va-eur',
+          currency: 'EUR',
+          type: 'bank_account',
+          name: 'EUR receiving account',
+          account_name: eur.accountHolderName,
+          account_number: eur.accountNumber ?? '',
+          bank_name: eur.bankName ?? '',
+          routing_number: eur.routingNumber,
+          iban: eur.iban,
+          swift_bic: eur.bic,
+          is_default: !usd?.hasAccount,
+          status: 'active',
+          created_at: t,
+          updated_at: t,
+        })
+      }
       setPaymentMethods(paymentMethodsData)
       lastFetchTimes.current.paymentMethods = Date.now()
       await setCachedData(CACHE_KEY, paymentMethodsData)
     } catch (error) {
+      if (isNoahVerificationGateError(error)) {
+        return
+      }
       console.error('Error fetching payment methods:', error)
     }
   }
@@ -389,6 +389,7 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
   // Initialize data on login
   useEffect(() => {
     if (user && user.id && !dataInitialized) {
+      lastUserIdRef.current = user.id
       setDataInitialized(true)
       setIsClearing(false)
       
@@ -417,14 +418,16 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
       setPaymentMethods([])
       lastFetchTimes.current = {}
       
-      // Clear cache
-      if (user?.id) {
+      // Clear cache (user is null here; use last known id)
+      const uid = lastUserIdRef.current
+      if (uid) {
+        lastUserIdRef.current = null
         AsyncStorage.multiRemove([
-          `easner_currencies_${user.id}`,
-          `easner_exchange_rates_${user.id}`,
-          `easner_recipients_${user.id}`,
-          `easner_transactions_${user.id}`,
-          `easner_payment_methods_${user.id}`,
+          `easner_currencies_${uid}`,
+          `easner_exchange_rates_${uid}`,
+          `easner_recipients_${uid}`,
+          `easner_transactions_${uid}`,
+          `easner_payment_methods_${uid}`,
         ]).catch(() => {})
       }
     }

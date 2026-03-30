@@ -11,6 +11,7 @@ import React, { useRef, useCallback } from 'react'
 import {
   TouchableOpacity,
   StyleSheet,
+  StyleProp,
   ViewStyle,
   TextStyle,
   Text,
@@ -30,7 +31,7 @@ interface HapticButtonProps {
   loading?: boolean
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost'
   size?: 'sm' | 'md' | 'lg'
-  style?: ViewStyle
+  style?: StyleProp<ViewStyle>
   textStyle?: TextStyle
   hapticStyle?: 'light' | 'medium' | 'heavy' | 'none'
   icon?: React.ReactNode

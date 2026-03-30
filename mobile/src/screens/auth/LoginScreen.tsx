@@ -2,28 +2,24 @@ import React, { useState, useEffect, useRef } from 'react'
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  ActivityIndicator,
   Animated,
   Keyboard,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '../../contexts/AuthContext'
 import { NavigationProps } from '../../types'
-import BrandLogo from '../../components/BrandLogo'
-import PasswordInput from '../../components/PasswordInput'
 import { analytics } from '../../lib/analytics'
-import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
-import { GradientCard, HapticButton } from '../../components/premium'
+import { colors, borderRadius, spacing } from '../../theme'
+import { authScreenStyles } from '../../theme/authScreen'
+import { Button, TextField } from '../../components/ui'
 
 export default function LoginScreen({ navigation }: NavigationProps) {
   const [email, setEmail] = useState('')
@@ -105,9 +101,8 @@ export default function LoginScreen({ navigation }: NavigationProps) {
               }
             ]}
           >
-            <BrandLogo size="lg" style={styles.logo} />
-            <Text style={styles.title}>Welcome Back!</Text>
-            <Text style={styles.subtitle}>Sign in to your account</Text>
+            <Text style={[authScreenStyles.screenTitle, { marginBottom: spacing[2] }]}>Welcome back</Text>
+            <Text style={authScreenStyles.subtitle}>Sign in to your account</Text>
           </Animated.View>
 
           <Animated.View
@@ -125,30 +120,31 @@ export default function LoginScreen({ navigation }: NavigationProps) {
             ]}
           >
             <View style={styles.form}>
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Email</Text>
-                <TextInput
-                  style={styles.input}
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="Enter your email"
-                  placeholderTextColor={colors.text.secondary}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="done"
-                  onSubmitEditing={() => Keyboard.dismiss()}
-                />
-              </View>
+              <TextField
+                label="Email"
+                value={email}
+                onChangeText={setEmail}
+                placeholder="Enter your email"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="done"
+                onSubmitEditing={() => Keyboard.dismiss()}
+                containerStyle={styles.fieldFlush}
+              />
 
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Password</Text>
-                <PasswordInput
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="Enter your password"
-                />
-              </View>
+              <TextField
+                label="Password"
+                value={password}
+                onChangeText={setPassword}
+                placeholder="Enter your password"
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="done"
+                onSubmitEditing={handleLogin}
+                containerStyle={styles.fieldFlush}
+              />
 
               {/* Remember Me Checkbox */}
               <View style={styles.rememberMeContainer}>
@@ -165,17 +161,18 @@ export default function LoginScreen({ navigation }: NavigationProps) {
                       <Ionicons name="checkmark" size={16} color={colors.text.inverse} />
                     )}
                   </View>
-                  <Text style={styles.rememberMeText}>Remember me</Text>
+                  <Text style={authScreenStyles.rememberMeText}>Remember me</Text>
                 </TouchableOpacity>
               </View>
 
-              <HapticButton
-                title={isLoading ? "Signing In..." : "Sign In"}
+              <Button
+                title={isLoading ? 'Signing in…' : 'Sign in'}
                 onPress={handleLogin}
                 disabled={isLoading}
                 loading={isLoading}
-                style={styles.button}
-                textStyle={styles.buttonText}
+                variant="default"
+                fullWidth
+                style={styles.primaryCta}
               />
 
               <TouchableOpacity
@@ -186,13 +183,13 @@ export default function LoginScreen({ navigation }: NavigationProps) {
                 }}
                 activeOpacity={0.7}
               >
-                <Text style={styles.linkText}>Forgot Password?</Text>
+                <Text style={authScreenStyles.linkText}>Forgot password?</Text>
               </TouchableOpacity>
             </View>
           </Animated.View>
 
           <View style={styles.footer}>
-            <Text style={styles.footerText}>Don't have an account? </Text>
+            <Text style={authScreenStyles.footerMuted}>{"Don't have an account? "}</Text>
             <TouchableOpacity 
               onPress={async () => {
                 await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -200,7 +197,7 @@ export default function LoginScreen({ navigation }: NavigationProps) {
               }}
               activeOpacity={0.7}
             >
-              <Text style={styles.footerLink}>Sign Up</Text>
+              <Text style={authScreenStyles.footerLink}>Sign up</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -212,7 +209,7 @@ export default function LoginScreen({ navigation }: NavigationProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background.primary,
+    backgroundColor: colors.semantic.background,
   },
   keyboardContainer: {
     flex: 1,
@@ -226,51 +223,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing[10],
   },
-  logo: {
-    marginBottom: spacing[5],
-  },
-  title: {
-    ...textStyles.headlineLarge,
-    color: colors.text.primary,
-    marginBottom: spacing[2],
-  },
-  subtitle: {
-    ...textStyles.bodyLarge,
-    color: colors.text.secondary,
-  },
   formContainer: {
     marginBottom: spacing[8],
   },
   form: {
     width: '100%',
   },
-  inputContainer: {
-    marginBottom: spacing[5],
+  fieldFlush: {
+    marginBottom: spacing[3],
   },
-  label: {
-    ...textStyles.bodySmall,
-    fontWeight: '600',
-    color: colors.text.primary,
-    marginBottom: spacing[2],
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: borderRadius.xl,
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
-    ...textStyles.bodyMedium,
-    backgroundColor: colors.background.primary,
-    color: colors.text.primary,
-    fontSize: 13,
-    minHeight: 48,
-    lineHeight: 18,
-    textAlignVertical: 'center',
-    ...Platform.select({
-      android: {
-        includeFontPadding: false,
-      },
-    }),
+  primaryCta: {
+    marginBottom: spacing[4],
   },
   rememberMeContainer: {
     marginBottom: spacing[5],
@@ -283,9 +246,9 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderWidth: 2,
-    borderColor: colors.border.light,
+    borderColor: colors.semantic.border,
     borderRadius: borderRadius.sm,
-    backgroundColor: colors.background.primary,
+    backgroundColor: colors.semantic.background,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing[3],
@@ -294,40 +257,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary.main,
     borderColor: colors.primary.main,
   },
-  rememberMeText: {
-    ...textStyles.bodyMedium,
-    color: colors.text.primary,
-    fontWeight: '500',
-  },
-  button: {
-    marginBottom: spacing[4],
-  },
-  buttonText: {
-    ...textStyles.bodyMedium,
-    color: colors.text.inverse,
-    fontWeight: '600',
-  },
   linkButton: {
     alignItems: 'center',
     paddingVertical: spacing[2],
-  },
-  linkText: {
-    ...textStyles.bodySmall,
-    color: colors.primary.main,
-    fontWeight: '500',
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  footerText: {
-    ...textStyles.bodySmall,
-    color: colors.text.secondary,
-  },
-  footerLink: {
-    ...textStyles.bodySmall,
-    color: colors.primary.main,
-    fontWeight: '600',
   },
 })

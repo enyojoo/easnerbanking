@@ -781,8 +781,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
             <>
               {filteredTransactions.map((item, index) => {
                 const isLast = index === filteredTransactions.length - 1
-                // Use BridgeTransactionDetails for all bridge transactions
-                const detailScreen = 'BridgeTransactionDetails'
+                const detailScreen = 'TransactionDetails'
                 
                 return (
                   <TransactionItem

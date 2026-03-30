@@ -1,0 +1,189 @@
+import React, { useState } from 'react'
+import {
+  Modal,
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  TextInput,
+  ActivityIndicator,
+  Alert,
+} from 'react-native'
+import * as Sharing from 'expo-sharing'
+import { Ionicons } from '@expo/vector-icons'
+import { noahService } from '../lib/noahService'
+import { colors, spacing, borderRadius, textStyles } from '../theme'
+
+const ISO_RE = /^\d{4}-\d{2}-\d{2}$/
+
+type AccountCurrency = 'USD' | 'EUR' | 'GBP'
+
+type Props = {
+  visible: boolean
+  onClose: () => void
+  /** Receive screen currency — statement is only for this account */
+  accountCurrency: AccountCurrency
+}
+
+function defaultFrom(): string {
+  const x = new Date()
+  x.setDate(x.getDate() - 30)
+  return x.toISOString().slice(0, 10)
+}
+
+export function StatementPdfModal({ visible, onClose, accountCurrency }: Props) {
+  const [fromStr, setFromStr] = useState(() => defaultFrom())
+  const [toStr, setToStr] = useState(() => new Date().toISOString().slice(0, 10))
+  const [loading, setLoading] = useState(false)
+
+  const download = async () => {
+    if (!ISO_RE.test(fromStr) || !ISO_RE.test(toStr)) {
+      Alert.alert('Invalid dates', 'Use YYYY-MM-DD format.')
+      return
+    }
+    if (fromStr > toStr) {
+      Alert.alert('Invalid range', 'From must be before to.')
+      return
+    }
+    setLoading(true)
+    try {
+      const { uri } = await noahService.downloadStatementPdf({
+        from: fromStr,
+        to: toStr,
+        currency: accountCurrency,
+      })
+      const can = await Sharing.isAvailableAsync()
+      if (can) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: 'Statement',
+          UTI: 'com.adobe.pdf',
+        })
+      } else {
+        Alert.alert('Saved', `Statement saved to:\n${uri}`)
+      }
+      onClose()
+    } catch (e: unknown) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Could not generate statement')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={styles.backdrop}>
+        <View style={styles.sheet}>
+          <View style={styles.sheetHeader}>
+            <Text style={styles.sheetTitle}>Download statement</Text>
+            <TouchableOpacity onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+              <Ionicons name="close" size={22} color={colors.text.primary} />
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.hint}>Export a PDF of your account statement for the selected period.</Text>
+          <Text style={styles.accountLine}>
+            Account: <Text style={styles.accountStrong}>{accountCurrency}</Text>
+          </Text>
+
+          <Text style={styles.label}>From (YYYY-MM-DD)</Text>
+          <TextInput
+            style={styles.input}
+            value={fromStr}
+            onChangeText={setFromStr}
+            placeholder="2026-01-01"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+
+          <Text style={styles.label}>To (YYYY-MM-DD)</Text>
+          <TextInput
+            style={styles.input}
+            value={toStr}
+            onChangeText={setToStr}
+            placeholder="2026-03-30"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+
+          <TouchableOpacity
+            style={[styles.primary, loading && styles.primaryDisabled]}
+            disabled={loading}
+            onPress={() => void download()}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.primaryText}>Download PDF</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
+const styles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: colors.background.primary,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    padding: spacing[6],
+    paddingBottom: spacing[10],
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing[2],
+  },
+  sheetTitle: {
+    ...textStyles.headlineSmall,
+    color: colors.text.primary,
+  },
+  hint: {
+    ...textStyles.bodyMedium,
+    color: colors.text.secondary,
+    marginBottom: spacing[2],
+  },
+  accountLine: {
+    ...textStyles.bodyMedium,
+    color: colors.text.secondary,
+    marginBottom: spacing[4],
+  },
+  accountStrong: {
+    fontFamily: 'Outfit-SemiBold',
+    color: colors.text.primary,
+  },
+  label: {
+    ...textStyles.labelMedium,
+    color: colors.text.secondary,
+    marginTop: spacing[3],
+    marginBottom: spacing[2],
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    borderRadius: borderRadius.md,
+    padding: spacing[3],
+    ...textStyles.titleMedium,
+    color: colors.text.primary,
+  },
+  primary: {
+    marginTop: spacing[6],
+    backgroundColor: colors.primary.main,
+    paddingVertical: spacing[4],
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+  },
+  primaryDisabled: { opacity: 0.6 },
+  primaryText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+})

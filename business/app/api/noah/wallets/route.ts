@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { requireAuth, requireNoahEnv, resolveNoahContext } from "../_helpers"
+import { requireAuth, requireNoahEnv } from "../_helpers"
+import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
+import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 
 /**
  * Wallet shape for send/receive flows. Easner stores optional address data in `noah_wallets`
@@ -12,15 +14,25 @@ export async function GET(request: Request) {
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
   const { user } = auth
-  const ctx = resolveNoahContext(user.id, request)
-  const { noahCustomerId } = ctx
+
+  const acc = await resolveNoahAccountContext(request, user.id)
+  if (!acc.ok) return acc.response
+
+  const guard = await requireNoahVerificationApproved(acc.ctx.subjectUserId, acc.ctx.scope)
+  if (guard) return guard
+
+  const { noahCustomerId, subjectUserId } = acc.ctx
 
   let address = ""
   let blockchain_memo: string | null = null
 
   try {
     const admin = createSupabaseAdmin()
-    const { data: userRow } = await admin.from("users").select("noah_wallet_id").eq("id", user.id).maybeSingle()
+    const { data: userRow } = await admin
+      .from("users")
+      .select("noah_wallet_id")
+      .eq("id", subjectUserId)
+      .maybeSingle()
     const wid = userRow?.noah_wallet_id as string | undefined
     if (wid) {
       const { data: w } = await admin

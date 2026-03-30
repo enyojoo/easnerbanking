@@ -65,7 +65,7 @@ export const shadows: Record<string, ShadowStyle> = {
 
   // Premium colored shadows
   primary: {
-    shadowColor: '#1D4FF3',
+    shadowColor: '#007ACC',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
@@ -82,7 +82,7 @@ export const shadows: Record<string, ShadowStyle> = {
 
   // Glow effects for premium cards
   glow: {
-    shadowColor: '#1D4FF3',
+    shadowColor: '#007ACC',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.4,
     shadowRadius: 20,

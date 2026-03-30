@@ -23,6 +23,7 @@ import { userService, UserProfileData, UserStats } from '../../lib/userService'
 import { getCountryFlag } from '../../utils/flagUtils'
 import { analytics } from '../../lib/analytics'
 import { supabase } from '../../lib/supabase'
+import { splitFullNameForForm } from '../../lib/userProfileHelpers'
 
 function ProfileContent({ navigation }: NavigationProps) {
   const { user, userProfile, signOut, refreshUserProfile } = useAuth()
@@ -58,13 +59,14 @@ function ProfileContent({ navigation }: NavigationProps) {
   // Load user profile data
   useEffect(() => {
     if (userProfile) {
+      const fromFull = splitFullNameForForm(userProfile.profile.full_name)
       const data = {
-        firstName: userProfile.profile.first_name || '',
-        middleName: userProfile.profile.middle_name || '',
-        lastName: userProfile.profile.last_name || '',
+        firstName: fromFull.firstName || userProfile.profile.first_name || '',
+        middleName: fromFull.middleName || userProfile.profile.middle_name || '',
+        lastName: fromFull.lastName || userProfile.profile.last_name || '',
         email: userProfile.profile.email || '',
         phone: userProfile.profile.phone || '',
-        baseCurrency: userProfile.profile.base_currency || 'NGN',
+        baseCurrency: userProfile.profile.base_currency || 'USD',
         easetag: userProfile.profile.easetag || '',
       }
       setProfileData(data)
@@ -77,7 +79,7 @@ function ProfileContent({ navigation }: NavigationProps) {
     if (!user || !transactions.length || !exchangeRates.length) return
 
     const calculateUserStats = async () => {
-      const baseCurrency = userProfile?.profile.base_currency || 'NGN'
+      const baseCurrency = userProfile?.profile.base_currency || 'USD'
       const stats = await userService.getUserStats(user.id, transactions, exchangeRates, baseCurrency, userProfile)
       setUserStats(stats)
     }
@@ -166,8 +168,6 @@ function ProfileContent({ navigation }: NavigationProps) {
         middleName: editProfileData.middleName,
         lastName: editProfileData.lastName,
         phone: editProfileData.phone,
-        baseCurrency: editProfileData.baseCurrency,
-        easetag: editProfileData.easetag,
       }
       console.log('[PROFILE-SAVE] Sending update payload:', updatePayload)
       console.log('[PROFILE-SAVE] middleName value:', editProfileData.middleName, 'type:', typeof editProfileData.middleName, 'undefined?', editProfileData.middleName === undefined)

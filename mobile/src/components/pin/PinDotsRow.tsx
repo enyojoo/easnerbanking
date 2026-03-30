@@ -1,0 +1,57 @@
+import React from 'react'
+import { View, StyleSheet, Animated, type StyleProp, type ViewStyle } from 'react-native'
+import { colors, spacing } from '../../theme'
+
+type Props = {
+  filledLength: number
+  hasError?: boolean
+  disabled?: boolean
+  shakeStyle?: StyleProp<Animated.WithAnimatedValue<ViewStyle>>
+}
+
+/** Four PIN indicator dots (same layout as unlock screen). */
+export function PinDotsRow({ filledLength, hasError, disabled, shakeStyle }: Props) {
+  return (
+    <Animated.View style={[styles.row, shakeStyle]}>
+      {[0, 1, 2, 3].map((i) => (
+        <View
+          key={i}
+          style={[
+            styles.dot,
+            i < filledLength && styles.dotFilled,
+            hasError && styles.dotError,
+            disabled && styles.dotDisabled,
+          ]}
+        />
+      ))}
+    </Animated.View>
+  )
+}
+
+const styles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: spacing[4],
+    marginBottom: spacing[4],
+  },
+  dot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: colors.background.secondary,
+    borderWidth: 1.5,
+    borderColor: colors.border.default,
+  },
+  dotFilled: {
+    backgroundColor: colors.primary.main,
+    borderColor: colors.primary.main,
+  },
+  dotError: {
+    borderColor: colors.error.main,
+  },
+  dotDisabled: {
+    opacity: 0.5,
+  },
+})

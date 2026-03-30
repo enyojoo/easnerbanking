@@ -2,14 +2,12 @@ import React, { useState, useEffect, useRef } from 'react'
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  ActivityIndicator,
   Animated,
   Keyboard,
 } from 'react-native'
@@ -17,31 +15,28 @@ import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
+import { GoogleOutlineButton, OrDivider } from '../../components/auth/AuthChrome'
 import ExternalLinkModal from '../../components/ExternalLinkModal'
 import { useExternalLink } from '../../hooks/useExternalLink'
 import { useAuth } from '../../contexts/AuthContext'
 import { NavigationProps } from '../../types'
-import BrandLogo from '../../components/BrandLogo'
 import { analytics } from '../../lib/analytics'
-import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
-import { GradientCard, HapticButton } from '../../components/premium'
+import { colors, spacing } from '../../theme'
+import { authScreenStyles } from '../../theme/authScreen'
+import { TERMS_URL } from '../../constants/auth'
+import { Button, TextField } from '../../components/ui'
 
 export default function RegisterScreen({ navigation }: NavigationProps) {
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
+    fullName: '',
     email: '',
     password: '',
-    confirmPassword: '',
   })
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  const [acceptTerms, setAcceptTerms] = useState(false)
   const { signUp } = useAuth()
   const insets = useSafeAreaInsets()
   const termsLink = useExternalLink()
-  const privacyLink = useExternalLink()
 
   // Animation refs
   const headerAnim = useRef(new Animated.Value(0)).current
@@ -73,31 +68,17 @@ export default function RegisterScreen({ navigation }: NavigationProps) {
   }
 
   const handleTermsPress = () => {
-    termsLink.openLink('https://www.easner.com/terms', 'Terms of Service')
-  }
-
-  const handlePrivacyPress = () => {
-    privacyLink.openLink('https://www.easner.com/privacy', 'Privacy Policy')
+    termsLink.openLink(TERMS_URL, 'Terms of Service')
   }
 
   const validateForm = () => {
-    if (!formData.firstName || !formData.lastName || !formData.email || !formData.password) {
+    if (!formData.fullName?.trim() || !formData.email || !formData.password) {
       Alert.alert('Error', 'Please fill in all required fields')
-      return false
-    }
-
-    if (formData.password !== formData.confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match')
       return false
     }
 
     if (formData.password.length < 6) {
       Alert.alert('Error', 'Password must be at least 6 characters long')
-      return false
-    }
-
-    if (!acceptTerms) {
-      Alert.alert('Error', 'Please accept the terms and conditions')
       return false
     }
 
@@ -110,15 +91,20 @@ export default function RegisterScreen({ navigation }: NavigationProps) {
     return true
   }
 
+  const handleGoogleSignUp = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    Alert.alert('Coming soon', 'Google sign-up will be available in a future update.')
+  }
+
   const handleRegister = async () => {
     if (!validateForm()) return
 
     setLoading(true)
-    const { error: signUpError } = await signUp(formData.email, formData.password, {
-      first_name: formData.firstName,
-      last_name: formData.lastName,
-      base_currency: 'USD',
-    })
+    const { error: signUpError, needsEmailConfirmation } = await signUp(
+      formData.email,
+      formData.password,
+      formData.fullName.trim()
+    )
 
     if (signUpError) {
       setLoading(false)
@@ -127,19 +113,26 @@ export default function RegisterScreen({ navigation }: NavigationProps) {
     }
 
     setLoading(false)
-    
-    // Show success message and navigate to login
-    Alert.alert(
-      'Registration Successful',
-      'Please check your email to verify your account. After verification, you can sign in to start sending money.',
-      [{ text: 'OK', onPress: () => {
-        // Navigate to login screen
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'Login' }],
-        })
-      }}]
-    )
+
+    if (needsEmailConfirmation) {
+      Alert.alert(
+        'Registration Successful',
+        'Please check your email to verify your account. After verification, you can sign in to start sending money.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Login' }],
+              })
+            },
+          },
+        ]
+      )
+    } else {
+      Alert.alert('Account ready', 'You are signed in. Continue in the app.', [{ text: 'OK' }])
+    }
   }
 
   return (
@@ -166,9 +159,7 @@ export default function RegisterScreen({ navigation }: NavigationProps) {
               }
             ]}
           >
-            <BrandLogo size="lg" style={styles.logo} />
-            <Text style={styles.title}>Create Account</Text>
-            <Text style={styles.subtitle}>To send money with Ease</Text>
+            <Text style={[authScreenStyles.screenTitle, { marginBottom: spacing[2] }]}>Open an account</Text>
           </Animated.View>
 
           <Animated.View
@@ -186,65 +177,58 @@ export default function RegisterScreen({ navigation }: NavigationProps) {
             ]}
           >
             <View style={styles.form}>
-              <View style={styles.row}>
-                <View style={[styles.inputContainer, styles.halfWidth]}>
-                  <Text style={styles.label}>First Name *</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={formData.firstName}
-                    onChangeText={(value) => handleInputChange('firstName', value)}
-                    placeholder="First name"
-                    placeholderTextColor={colors.text.secondary}
-                    autoCapitalize="words"
-                  />
-                </View>
-                <View style={[styles.inputContainer, styles.halfWidth]}>
-                  <Text style={styles.label}>Last Name *</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={formData.lastName}
-                    onChangeText={(value) => handleInputChange('lastName', value)}
-                    placeholder="Last name"
-                    placeholderTextColor={colors.text.secondary}
-                    autoCapitalize="words"
-                  />
-                </View>
-              </View>
+              <Text style={authScreenStyles.termsIntro}>
+                By creating an account you agree to our{' '}
+                <Text style={authScreenStyles.termsLink} onPress={handleTermsPress}>
+                  Terms
+                </Text>
+                .
+              </Text>
 
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Email *</Text>
-                <TextInput
-                  style={styles.input}
-                  value={formData.email}
-                  onChangeText={(value) => handleInputChange('email', value)}
-                  placeholder="Enter your email"
-                  placeholderTextColor={colors.text.secondary}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="done"
-                  onSubmitEditing={() => Keyboard.dismiss()}
-                />
-              </View>
+              <GoogleOutlineButton label="Sign up with Google" onPress={handleGoogleSignUp} disabled={loading} />
 
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Password *</Text>
-                <View style={styles.passwordContainer}>
-                  <TextInput
-                    style={styles.passwordInput}
-                    value={formData.password}
-                    onChangeText={(value) => handleInputChange('password', value)}
-                    placeholder="Create a password"
-                    placeholderTextColor={colors.text.secondary}
-                    secureTextEntry={!showPassword}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    textContentType="newPassword"
-                    passwordRules="minlength: 6;"
-                    importantForAutofill="yes"
-                    underlineColorAndroid="transparent"
-                    selectionColor={colors.primary.main}
-                  />
+              <OrDivider />
+
+              <TextField
+                label="Full name"
+                value={formData.fullName}
+                onChangeText={(value) => handleInputChange('fullName', value)}
+                placeholder="John Doe"
+                autoCapitalize="words"
+                editable={!loading}
+                containerStyle={styles.fieldFlush}
+              />
+
+              <TextField
+                label="Email"
+                value={formData.email}
+                onChangeText={(value) => handleInputChange('email', value)}
+                placeholder="you@example.com"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="done"
+                onSubmitEditing={() => Keyboard.dismiss()}
+                editable={!loading}
+                containerStyle={styles.fieldFlush}
+              />
+
+              <TextField
+                label="Password"
+                value={formData.password}
+                onChangeText={(value) => handleInputChange('password', value)}
+                placeholder="Create a password"
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                textContentType="newPassword"
+                passwordRules="minlength: 6;"
+                importantForAutofill="yes"
+                underlineColorAndroid="transparent"
+                selectionColor={colors.primary.main}
+                editable={!loading}
+                containerStyle={styles.fieldFlush}
+                rightAccessory={
                   <TouchableOpacity
                     style={styles.eyeButton}
                     onPress={async () => {
@@ -256,87 +240,27 @@ export default function RegisterScreen({ navigation }: NavigationProps) {
                     <Ionicons
                       name={showPassword ? 'eye-off' : 'eye'}
                       size={20}
-                      color={colors.text.secondary}
+                      color={colors.semantic.mutedForeground}
                     />
                   </TouchableOpacity>
-                </View>
-              </View>
+                }
+              />
 
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Confirm Password *</Text>
-                <View style={styles.passwordContainer}>
-                  <TextInput
-                    style={styles.passwordInput}
-                    value={formData.confirmPassword}
-                    onChangeText={(value) => handleInputChange('confirmPassword', value)}
-                    placeholder="Confirm your password"
-                    placeholderTextColor={colors.text.secondary}
-                    secureTextEntry={!showConfirmPassword}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    textContentType="newPassword"
-                    passwordRules="minlength: 6;"
-                    importantForAutofill="yes"
-                    underlineColorAndroid="transparent"
-                    selectionColor={colors.primary.main}
-                  />
-                  <TouchableOpacity
-                    style={styles.eyeButton}
-                    onPress={async () => {
-                      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                      setShowConfirmPassword(!showConfirmPassword)
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons
-                      name={showConfirmPassword ? 'eye-off' : 'eye'}
-                      size={20}
-                      color={colors.text.secondary}
-                    />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <View style={styles.termsContainer}>
-                <TouchableOpacity
-                  style={styles.checkboxContainer}
-                  onPress={async () => {
-                    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                    setAcceptTerms(!acceptTerms)
-                  }}
-                  disabled={loading}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.checkbox, acceptTerms && styles.checkboxChecked]}>
-                    {acceptTerms && (
-                      <Ionicons name="checkmark" size={16} color={colors.text.inverse} />
-                    )}
-                  </View>
-                </TouchableOpacity>
-                <View style={styles.termsTextContainer}>
-                  <Text style={styles.termsText}>
-                    I agree to the{' '}
-                    <Text style={styles.termsLink} onPress={handleTermsPress}>Terms</Text>
-                    {' '}and{' '}
-                    <Text style={styles.termsLink} onPress={handlePrivacyPress}>Privacy Policy</Text>
-                  </Text>
-                </View>
-              </View>
-
-              <HapticButton
-                title={loading ? "Creating Account..." : "Create Account"}
+              <Button
+                title={loading ? 'Creating account…' : 'Create account'}
                 onPress={handleRegister}
-                disabled={loading || !acceptTerms}
+                disabled={loading}
                 loading={loading}
-                style={styles.button}
-                textStyle={styles.buttonText}
+                variant="default"
+                fullWidth
+                style={styles.primaryCta}
               />
             </View>
           </Animated.View>
 
           <View style={[styles.footer, { marginTop: spacing[3] }]}>
-            <Text style={styles.footerText}>Already have an account? </Text>
-            <TouchableOpacity 
+            <Text style={authScreenStyles.footerMuted}>Already have an account? </Text>
+            <TouchableOpacity
               onPress={async () => {
                 await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                 navigation.reset({
@@ -346,7 +270,7 @@ export default function RegisterScreen({ navigation }: NavigationProps) {
               }}
               activeOpacity={0.7}
             >
-              <Text style={styles.footerLink}>Sign In</Text>
+              <Text style={authScreenStyles.footerLink}>Sign in</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -356,12 +280,6 @@ export default function RegisterScreen({ navigation }: NavigationProps) {
         url={termsLink.url}
         title={termsLink.title}
         onClose={termsLink.closeLink}
-      />
-      <ExternalLinkModal
-        visible={privacyLink.isVisible}
-        url={privacyLink.url}
-        title={privacyLink.title}
-        onClose={privacyLink.closeLink}
       />
     </ScreenWrapper>
   )
@@ -380,144 +298,24 @@ const styles = StyleSheet.create({
     marginBottom: spacing[5],
     marginTop: spacing[6],
   },
-  logo: {
-    marginBottom: spacing[3],
-  },
-  title: {
-    ...textStyles.headlineLarge,
-    color: colors.text.primary,
-    marginBottom: spacing[1],
-  },
-  subtitle: {
-    ...textStyles.bodyLarge,
-    color: colors.text.secondary,
-  },
   formContainer: {
     marginBottom: spacing[4],
   },
   form: {
     width: '100%',
   },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: spacing[3],
+  fieldFlush: {
+    marginBottom: spacing[3],
   },
-  inputContainer: {
-    marginBottom: spacing[4],
-  },
-  halfWidth: {
-    flex: 1,
-  },
-  label: {
-    ...textStyles.bodySmall,
-    fontWeight: '600',
-    color: colors.text.primary,
-    marginBottom: spacing[2],
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: borderRadius.xl,
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
-    ...textStyles.bodyMedium,
-    backgroundColor: colors.background.primary,
-    color: colors.text.primary,
-    fontSize: 13,
-    minHeight: 48,
-    lineHeight: 18,
-    textAlignVertical: 'center',
-    ...Platform.select({
-      android: {
-        includeFontPadding: false,
-      },
-    }),
-  },
-  passwordContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: borderRadius.xl,
-    backgroundColor: colors.background.primary,
-    minHeight: 48,
-  },
-  passwordInput: {
-    flex: 1,
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
-    ...textStyles.bodyMedium,
-    borderWidth: 0,
-    color: colors.text.primary,
-    fontSize: 13,
-    lineHeight: 18,
-    textAlignVertical: 'center',
-    ...Platform.select({
-      android: {
-        includeFontPadding: false,
-      },
-    }),
+  primaryCta: {
+    marginBottom: 0,
   },
   eyeButton: {
     padding: spacing[3],
-  },
-  termsContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: spacing[4],
-    marginTop: spacing[1],
-  },
-  checkboxContainer: {
-    padding: spacing[1],
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderWidth: 2,
-    borderColor: colors.border.light,
-    borderRadius: borderRadius.sm,
-    backgroundColor: colors.background.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxChecked: {
-    backgroundColor: colors.primary.main,
-    borderColor: colors.primary.main,
-  },
-  termsTextContainer: {
-    flex: 1,
-    marginLeft: spacing[2],
-  },
-  termsText: {
-    ...textStyles.bodySmall,
-    color: colors.text.secondary,
-    lineHeight: 20,
-  },
-  termsLink: {
-    color: colors.primary.main,
-    fontWeight: '600',
-  },
-  button: {
-    marginBottom: 0,
-  },
-  buttonText: {
-    ...textStyles.bodyMedium,
-    color: colors.text.inverse,
-    fontWeight: '600',
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  footerText: {
-    ...textStyles.bodySmall,
-    color: colors.text.secondary,
-  },
-  footerLink: {
-    ...textStyles.bodySmall,
-    color: colors.primary.main,
-    fontWeight: '600',
   },
 })

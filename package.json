@@ -29,12 +29,19 @@
     "start:office": "turbo run start --filter=office",
     "dev:business": "turbo run dev --filter=easner-business",
     "build:business": "turbo run build --filter=easner-business",
-    "start:business": "turbo run start --filter=easner-business"
+    "start:business": "turbo run start --filter=easner-business",
+    "test:login-pin-vectors": "node scripts/login-pin-test-vectors.mjs"
   },
   "devDependencies": {
     "turbo": "^2.8.12"
   },
   "dependencies": {
-    "next": "^16.1.6"
+    "next": "^16.1.6",
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
+  "overrides": {
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
   }
 }

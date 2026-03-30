@@ -31,6 +31,8 @@ export interface ExchangeRate {
 export interface Recipient {
   id: string
   user_id: string
+  /** When linked to Noah external account for payouts */
+  noah_external_account_id?: string
   full_name: string
   account_number: string
   bank_name: string
@@ -48,7 +50,8 @@ export interface Transaction {
   id: string
   transaction_id: string
   user_id: string
-  recipient_id: string
+  /** Legacy Bridge send flow; Noah ledger items may omit this. */
+  recipient_id?: string
   send_amount: number
   send_currency: string
   receive_amount: number
@@ -71,6 +74,39 @@ export interface Transaction {
     last_name: string
     email: string
   }
+  /** Noah raw payload / list metadata */
+  metadata?: Record<string, unknown>
+}
+
+/** Detail shape for transactionService + Noah API mapping */
+export interface TransactionData {
+  id: string
+  transaction_id: string
+  user_id: string
+  recipient_id?: string
+  send_amount: number
+  send_currency: string
+  receive_amount: number
+  receive_currency: string
+  exchange_rate: number
+  fee_amount: number
+  fee_type: string
+  total_amount: number
+  status: string
+  reference?: string
+  created_at: string
+  updated_at: string
+  completed_at?: string
+  receipt_url?: string
+  receipt_filename?: string
+  failure_reason?: string
+  recipient?: Recipient
+  user?: {
+    first_name: string
+    last_name: string
+    email: string
+  }
+  metadata?: Record<string, unknown>
 }
 
 export type AccountType = "us" | "uk" | "euro" | "generic"
@@ -96,23 +132,41 @@ export interface PaymentMethod {
   updated_at: string
 }
 
+/** Mirrors `public.users` (`select('*')`) plus derived name fields for forms. */
 export interface User {
   id: string
   email: string
+  /** `public.users.full_name` — source of truth for display name */
+  full_name: string | null
+  /** Derived from `full_name` for forms / greetings */
   first_name: string
   middle_name?: string
   last_name: string
-  phone?: string
-  base_currency: string
-  easetag?: string
+  phone?: string | null
+  date_of_birth?: string | null
+  avatar_url?: string | null
+  easner_role?: "individual" | "business"
+  easner_organization_id?: string | null
+  enabled_extra_account_currencies?: string[]
+  noah_customer_id?: string | null
+  noah_kyc_status?: string | null
+  noah_kyc_rejection_reasons?: unknown
+  noah_kyc_metadata?: unknown
+  noah_signed_agreement_id?: string | null
+  noah_wallet_id?: string | null
+  noah_usd_virtual_account_id?: string | null
+  noah_eur_virtual_account_id?: string | null
+  noah_kyb_customer_id?: string | null
+  noah_kyb_status?: string | null
   status: "active" | "inactive"
-  // verification_status removed - use bridge_kyc_status for KYC status
+  /** Legacy default for stats until preferences live on `users` */
+  base_currency?: string
+  easetag?: string
   bridge_kyc_status?: string
   bridge_customer_id?: string
-  bridge_kyc_rejection_reasons?: any
-  bridge_endorsements?: any
+  bridge_kyc_rejection_reasons?: unknown
+  bridge_endorsements?: unknown
   bridge_signed_agreement_id?: string
-  date_of_birth?: string
   address?: string
   residential_address?: {
     line1?: string
@@ -123,7 +177,7 @@ export interface User {
     country?: string
   }
   country_code?: string
-  bridge_kyc_metadata?: any
+  bridge_kyc_metadata?: unknown
   created_at: string
   updated_at: string
 }
@@ -134,16 +188,23 @@ export interface AuthUser {
   email: string
   isAdmin: boolean
   profile: User
-  // Bridge KYC fields - also available at top level for easier access
+  /** Noah / org fields (duplicate `profile` for screens that read `userProfile.noah_*`) */
+  noah_customer_id?: string | null
+  noah_kyc_status?: string | null
+  noah_kyc_rejection_reasons?: unknown
+  noah_signed_agreement_id?: string | null
+  noah_kyb_status?: string | null
+  easner_role?: "individual" | "business"
+  easner_organization_id?: string | null
   bridge_kyc_status?: string
   bridge_customer_id?: string
-  bridge_kyc_rejection_reasons?: any
-  bridge_endorsements?: any
+  bridge_kyc_rejection_reasons?: unknown
+  bridge_endorsements?: unknown
   bridge_signed_agreement_id?: string
-  // Additional fields that may be available at top level
   middle_name?: string
   easetag?: string
   email_confirmed_at?: string
+  updated_at?: string
 }
 
 export interface NavigationProps {

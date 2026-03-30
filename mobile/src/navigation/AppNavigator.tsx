@@ -9,16 +9,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useAuth } from '../contexts/AuthContext'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../theme'
-import { 
-  isPinSetup, 
-  isSessionValid, 
-  shouldUsePin, 
+import {
+  isPinSetup,
+  evaluateIdleLock,
+  isAppLocked,
   updateSessionActivity,
-  isFirstLoginAfterVerification,
-  isPinPromptDismissed,
   dismissPinPrompt,
-  clearSessionActivity,
 } from '../lib/pinAuth'
+import { emitAppLocked, registerAppLockListener } from '../lib/app-lock-bus'
 
 // Onboarding Screen
 import OnboardingScreen from '../screens/onboarding/OnboardingScreen'
@@ -29,6 +27,7 @@ import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen'
 import ResetPasswordScreen from '../screens/auth/ResetPasswordScreen'
 import PinSetupScreen from '../screens/auth/PinSetupScreen'
 import PinEntryScreen from '../screens/auth/PinEntryScreen'
+import MfaVerifyScreen from '../screens/auth/MfaVerifyScreen'
 
 // Components
 import PinSetupPrompt from '../components/PinSetupPrompt'
@@ -44,12 +43,14 @@ import SupportScreen from '../screens/main/SupportScreen'
 import CardScreen from '../screens/main/CardScreen'
 import TransactionCardScreen from '../screens/main/TransactionCardScreen'
 import ChangePasswordScreen from '../screens/main/ChangePasswordScreen'
+import ChangePinScreen from '../screens/main/ChangePinScreen'
+import MfaSetupScreen from '../screens/main/MfaSetupScreen'
 import NotificationsScreen from '../screens/main/NotificationsScreen'
 import InAppNotificationsScreen from '../screens/main/InAppNotificationsScreen'
 
 // Transaction Screens
 import TransactionDetailsScreen from '../screens/transactions/TransactionDetailsScreen'
-import BridgeTransactionDetailsScreen from '../screens/transactions/BridgeTransactionDetailsScreen'
+import LegacyTransactionDetailsScreen from '../screens/transactions/LegacyTransactionDetailsScreen'
 
 // Send Money Flow Screens
 import SendAmountScreen from '../screens/send/SendAmountScreen'
@@ -64,6 +65,7 @@ import MobileMoneyScreen from '../screens/send/MobileMoneyScreen'
 
 // Receive Money Flow Screens
 import ReceiveMoneyScreen from '../screens/receive/ReceiveMoneyScreen'
+import MoveFundsScreen from '../screens/receive/MoveFundsScreen'
 import ReceiveTransactionDetailsScreen from '../screens/receive/ReceiveTransactionDetailsScreen'
 
 // Verification Screens
@@ -253,6 +255,19 @@ function OnboardingStack() {
         name="Onboarding" 
         component={OnboardingScreen}
       />
+    </Stack.Navigator>
+  )
+}
+
+function MfaStack() {
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+        ...getTransitionConfig(),
+      }}
+    >
+      <Stack.Screen name="MfaVerify" component={MfaVerifyScreen} />
     </Stack.Navigator>
   )
 }
@@ -670,6 +685,14 @@ function MainStack() {
         }}
       />
       <Stack.Screen 
+        name="MoveFunds" 
+        component={MoveFundsScreen}
+        options={{ 
+          headerShown: false,
+          ...getTransitionConfig(),
+        }}
+      />
+      <Stack.Screen 
         name="TransactionDetails" 
         component={TransactionDetailsScreen}
         options={{ 
@@ -678,8 +701,8 @@ function MainStack() {
         }}
       />
       <Stack.Screen 
-        name="BridgeTransactionDetails" 
-        component={BridgeTransactionDetailsScreen}
+        name="LegacyTransactionDetails" 
+        component={LegacyTransactionDetailsScreen}
         options={{ 
           headerShown: false,
           ...getTransitionConfig(),
@@ -757,6 +780,22 @@ function MainStack() {
           ...getTransitionConfig(),
         }}
       />
+      <Stack.Screen
+        name="ChangePin"
+        component={ChangePinScreen}
+        options={{
+          headerShown: false,
+          ...getTransitionConfig(),
+        }}
+      />
+      <Stack.Screen
+        name="MfaSetup"
+        component={MfaSetupScreen}
+        options={{
+          headerShown: false,
+          ...getTransitionConfig(),
+        }}
+      />
       <Stack.Screen 
         name="Notifications" 
         component={NotificationsScreen}
@@ -779,8 +818,30 @@ function MainStack() {
 
 const ONBOARDING_COMPLETED_KEY = '@easner_onboarding_completed'
 
+function PinGateSetupStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen
+        name="PinSetupGate"
+        component={PinSetupScreen}
+        initialParams={{ mandatory: true }}
+      />
+    </Stack.Navigator>
+  )
+}
+
+function PinGateEntryStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="PinEntryGate" component={PinEntryScreen} />
+    </Stack.Navigator>
+  )
+}
+
 export default function AppNavigator() {
-  const { user, userProfile, loading } = useAuth()
+  const { user, userProfile, loading, mfaPending, signOut } = useAuth()
+  const [pinGate, setPinGate] = useState<'loading' | 'setup' | 'pin' | 'main'>('loading')
+  const [lockTick, setLockTick] = useState(0)
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null)
   // PIN TEMPORARILY DISABLED - keeping state variables for easy re-enable
   // const [pinSetup, setPinSetup] = useState<boolean | null>(null)
@@ -840,6 +901,57 @@ export default function AppNavigator() {
     // Check onboarding status on mount
     checkOnboardingState()
   }, [checkOnboardingState]) // Run on mount and when function changes
+
+  useEffect(() => {
+    return registerAppLockListener(() => setLockTick((t) => t + 1))
+  }, [])
+
+  useEffect(() => {
+    if (!user) {
+      setPinGate('loading')
+    }
+  }, [user])
+
+  useEffect(() => {
+    if (!user?.id || loading || mfaPending) return
+    let cancelled = false
+    void (async () => {
+      const setup = await isPinSetup(user.id)
+      if (cancelled) return
+      if (!setup) {
+        setPinGate('setup')
+        return
+      }
+      const idle = await evaluateIdleLock(user.id)
+      if (cancelled) return
+      if (idle === 'signed_out') {
+        await signOut()
+        return
+      }
+      const locked = await isAppLocked(user.id)
+      if (locked) {
+        setPinGate('pin')
+        return
+      }
+      setPinGate('main')
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id, loading, mfaPending, lockTick, signOut])
+
+  useEffect(() => {
+    if (!user?.id || pinGate !== 'main') return
+    const id = setInterval(async () => {
+      const r = await evaluateIdleLock(user.id)
+      if (r === 'signed_out') {
+        await signOut()
+        return
+      }
+      if (r === 'locked') emitAppLocked()
+    }, 60000)
+    return () => clearInterval(id)
+  }, [user?.id, pinGate, signOut])
   
   // Re-check onboarding when app comes to foreground (in case it was changed)
   useEffect(() => {
@@ -989,19 +1101,36 @@ export default function AppNavigator() {
     return <AuthStack key="auth-stack-logged-out" />
   }
 
+  // TOTP second step after password (AAL1 → AAL2)
+  if (user && mfaPending) {
+    return <MfaStack key="mfa-stack" />
+  }
+
   // Show loading while auth context is loading
   if (loading) {
     return null
   }
 
-  // PIN TEMPORARILY DISABLED - Go directly to main app after login
-  // If user is logged in, show main app (no PIN checks)
+  if (user && pinGate === 'loading') {
+    return null
+  }
+
+  if (user && pinGate === 'setup') {
+    return <PinGateSetupStack />
+  }
+
+  if (user && pinGate === 'pin') {
+    return <PinGateEntryStack />
+  }
+
+  if (user && pinGate === 'main') {
+    return <MainStack />
+  }
+
   if (user) {
     return <MainStack />
   }
 
-  // Fallback: If no user, show auth stack (Login)
-  // Use key to force remount
   return <AuthStack key="auth-stack-no-user" />
 }
 

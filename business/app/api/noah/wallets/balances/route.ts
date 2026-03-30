@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { noahFetch } from "@/lib/noah/http"
 import { mapNoahBalancesToMobile } from "@/lib/noah/balance-map"
 import { requireAuth, requireNoahEnv } from "../../_helpers"
+import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
+import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 
 type BalancesPayload = { Items?: Array<Record<string, unknown>>; PageToken?: string }
 
@@ -10,6 +12,13 @@ export async function GET(request: Request) {
   if (mis) return mis
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
+  const { user } = auth
+
+  const acc = await resolveNoahAccountContext(request, user.id)
+  if (!acc.ok) return acc.response
+
+  const guard = await requireNoahVerificationApproved(acc.ctx.subjectUserId, acc.ctx.scope)
+  if (guard) return guard
 
   try {
     const url = new URL(request.url)

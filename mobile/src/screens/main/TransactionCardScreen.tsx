@@ -293,7 +293,7 @@ export default function TransactionCardScreen({ navigation }: NavigationProps) {
                       item={item}
                       isLast={isLast}
                       onPress={() => {
-                        navigation.navigate('TransactionDetails', { 
+                        navigation.navigate('LegacyTransactionDetails', { 
                           transactionId: item.id,
                           fromScreen: 'TransactionCard'
                         })

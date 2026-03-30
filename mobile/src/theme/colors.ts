@@ -5,13 +5,13 @@
  */
 
 export const colors = {
-  // Primary Brand Colors
+  // Primary — matches business `app/globals.css` (--primary: #007acc)
   primary: {
-    main: '#1D4FF3',
-    light: '#4D7FF5',
-    dark: '#1547C7',
-    gradient: ['#1D4FF3', '#4D7FF5'] as const,
-    gradientDark: ['#1547C7', '#1D4FF3'] as const,
+    main: '#007ACC',
+    light: '#3399D6',
+    dark: '#005A94',
+    gradient: ['#007ACC', '#3399D6'] as const,
+    gradientDark: ['#005A94', '#007ACC'] as const,
   },
 
   // Success Colors
@@ -71,13 +71,13 @@ export const colors = {
     secondary: '#6B7280',
     tertiary: '#9CA3AF',
     inverse: '#FFFFFF',
-    link: '#1D4FF3',
+    link: '#007ACC',
   },
 
   // Card Gradients
   cardGradients: {
     premium: ['#1E293B', '#334155'] as const,
-    blue: ['#1D4FF3', '#4D7FF5'] as const,
+    blue: ['#007ACC', '#3399D6'] as const,
     purple: ['#7C3AED', '#A78BFA'] as const,
     green: ['#059669', '#10B981'] as const,
     gold: ['#D97706', '#F59E0B'] as const,
@@ -93,7 +93,7 @@ export const colors = {
   // Status Colors (for transactions)
   status: {
     pending: '#F59E0B',
-    processing: '#1D4FF3',
+    processing: '#007ACC',
     completed: '#10B981',
     failed: '#EF4444',
     cancelled: '#6B7280',
@@ -110,6 +110,36 @@ export const colors = {
   frame: {
     background: '#F9F9F9',
     border: '#E2E2E2',
+  },
+
+  /**
+   * Semantic roles aligned with business `app/globals.css` CSS variables (light mode).
+   * Use these for new UI instead of ad-hoc grays; enables a future dark theme swap.
+   * | Token | Business variable |
+   * |-------|-------------------|
+   * | background | --background |
+   * | foreground | --foreground |
+   * | muted | --muted / secondary surfaces |
+   * | mutedForeground | --muted-foreground |
+   * | border | --border |
+   * | input | --input |
+   * | card | --card |
+   * | cardForeground | --card-foreground |
+   * | destructive | --destructive |
+   * | ring | --ring |
+   */
+  semantic: {
+    background: '#FFFFFF',
+    foreground: '#111827',
+    muted: '#F1F5F9',
+    mutedForeground: '#64748B',
+    border: '#E2E8F0',
+    input: '#E2E8F0',
+    card: '#FFFFFF',
+    cardForeground: '#111827',
+    destructive: '#EF4444',
+    destructiveForeground: '#FFFFFF',
+    ring: '#007ACC',
   },
 }
 

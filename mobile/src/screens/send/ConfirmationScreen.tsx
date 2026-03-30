@@ -20,12 +20,15 @@ import { getCountryFlag } from '../../utils/flagUtils'
 import { analytics } from '../../lib/analytics'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
 import { generateTransactionId } from '../../lib/transactionId'
+import { hasPin } from '../../lib/pinAuth'
+import { PinChallengeModal } from '../../components/pin'
 
 export default function ConfirmationScreen({ navigation, route }: NavigationProps) {
-  const { userProfile } = useAuth()
+  const { userProfile, user } = useAuth()
   const { refreshTransactions } = useUserData()
   const insets = useSafeAreaInsets()
   const [isProcessing, setIsProcessing] = useState(false)
+  const [pinModalVisible, setPinModalVisible] = useState(false)
 
   // Animation refs
   const headerAnim = useRef(new Animated.Value(0)).current
@@ -62,6 +65,18 @@ export default function ConfirmationScreen({ navigation, route }: NavigationProp
   useEffect(() => {
     analytics.trackScreenView('Confirmation')
   }, [])
+
+  const requestConfirmTransfer = async () => {
+    if (!userProfile) {
+      Alert.alert('Error', 'User not authenticated')
+      return
+    }
+    if (user?.id && (await hasPin(user.id))) {
+      setPinModalVisible(true)
+      return
+    }
+    void handleConfirmTransaction()
+  }
 
   const handleConfirmTransaction = async () => {
     if (!userProfile) {
@@ -101,7 +116,7 @@ export default function ConfirmationScreen({ navigation, route }: NavigationProp
             text: 'View Details',
             onPress: () => {
               refreshTransactions()
-              navigation.navigate('TransactionDetails', { 
+              navigation.navigate('LegacyTransactionDetails', { 
                 transactionId,
                 fromScreen: 'SendFlow'
               })
@@ -333,7 +348,7 @@ export default function ConfirmationScreen({ navigation, route }: NavigationProp
         <Animated.View style={[styles.confirmButtonWrapper, { transform: [{ scale: scaleAnim }] }]}>
         <TouchableOpacity
             style={[styles.confirmButton, isProcessing && styles.confirmButtonDisabled]}
-          onPress={handleConfirmTransaction}
+          onPress={requestConfirmTransfer}
           disabled={isProcessing}
           >
             <LinearGradient
@@ -354,6 +369,18 @@ export default function ConfirmationScreen({ navigation, route }: NavigationProp
         </TouchableOpacity>
         </Animated.View>
       </View>
+
+      {user?.id ? (
+        <PinChallengeModal
+          visible={pinModalVisible}
+          userId={user.id}
+          onClose={() => setPinModalVisible(false)}
+          onVerified={() => {
+            setPinModalVisible(false)
+            void handleConfirmTransaction()
+          }}
+        />
+      ) : null}
     </View>
   )
 }

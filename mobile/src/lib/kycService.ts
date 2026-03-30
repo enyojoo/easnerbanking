@@ -50,8 +50,8 @@ export const kycService = {
       .order("created_at", { ascending: false })
 
     if (error) {
+      // Noah KYC is hosted; this legacy table is optional. Missing schema → empty list, no noise.
       if (error.code === 'PGRST205' || error.message?.includes('kyc_submissions')) {
-        console.warn("KYC submissions table not found. Please run the migration.")
         return []
       }
       throw error

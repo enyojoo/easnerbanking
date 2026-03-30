@@ -17,7 +17,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../../lib/supabase'
 import { NavigationProps } from '../../types'
 import { analytics } from '../../lib/analytics'
-import { colors, textStyles, borderRadius, spacing, shadows } from '../../theme'
+import { colors, textStyles, borderRadius, spacing } from '../../theme'
+import { authScreenStyles } from '../../theme/authScreen'
+import { Button, TextField } from '../../components/ui'
 
 export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
   const [step, setStep] = useState<'email' | 'otp'>('email')
@@ -228,11 +230,14 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
         style={styles.keyboardContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <ScrollView 
-          contentContainerStyle={[styles.scrollContainer, { 
-            paddingTop: insets.top + spacing[4],
-            paddingBottom: Math.max(insets.bottom, spacing[5]) 
-          }]}
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContainer,
+            {
+              paddingTop: insets.top + spacing[4],
+              paddingBottom: Math.max(insets.bottom, spacing[5]),
+            },
+          ]}
           showsVerticalScrollIndicator={false}
         >
           {/* Header with back and help buttons */}
@@ -256,12 +261,11 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
             </TouchableOpacity>
           </View>
 
-          {/* Title */}
-          <Text style={styles.title}>
-            {step === 'email' ? 'Forgot Password?' : 'Enter Verification Code'}
+          <Text style={authScreenStyles.screenTitle}>
+            {step === 'email' ? 'Forgot password?' : 'Enter verification code'}
           </Text>
 
-          {error ? (
+          {step === 'otp' && error ? (
             <View style={styles.errorContainer}>
               <Text style={styles.errorText}>{error}</Text>
             </View>
@@ -273,40 +277,39 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
             </View>
           ) : null}
 
-          {/* Form */}
           <View style={styles.form}>
             {step === 'email' ? (
               <>
-                <View style={styles.inputContainer}>
-                  <Text style={styles.label}>Email</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={email}
-                    onChangeText={setEmail}
-                    placeholder="Enter your email"
-                    placeholderTextColor={colors.text.secondary}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    editable={!loading}
-                  />
-                </View>
+                <TextField
+                  label="Email"
+                  value={email}
+                  onChangeText={(t) => {
+                    setEmail(t)
+                    setError('')
+                  }}
+                  placeholder="Enter your email"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!loading}
+                  error={error || undefined}
+                  containerStyle={styles.fieldFlush}
+                />
 
-                <TouchableOpacity
-                  style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+                <Button
+                  title={loading ? 'Sending…' : 'Send verification code'}
                   onPress={handleEmailSubmit}
                   disabled={loading}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.submitButtonText}>
-                    {loading ? 'Sending...' : 'Send Verification Code'}
-                  </Text>
-                </TouchableOpacity>
+                  loading={loading}
+                  variant="default"
+                  fullWidth
+                  style={styles.primaryCta}
+                />
               </>
             ) : (
               <>
-                <View style={styles.inputContainer}>
-                  <Text style={styles.label}>Enter 6-digit code</Text>
+                <View style={styles.otpSection}>
+                  <Text style={authScreenStyles.fieldLabel}>Enter 6-digit code</Text>
                   <Text style={styles.subtitle}>
                     We've sent a 6-digit code to {email}
                   </Text>
@@ -314,7 +317,9 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
                     {otp.map((digit, index) => (
                       <TextInput
                         key={index}
-                        ref={(ref) => (otpRefs.current[index] = ref)}
+                        ref={(ref) => {
+                          otpRefs.current[index] = ref
+                        }}
                         style={styles.otpInput}
                         value={digit}
                         onChangeText={(value) => handleOtpChange(index, value)}
@@ -328,16 +333,15 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
                   </View>
                 </View>
 
-                <TouchableOpacity
-                  style={[styles.submitButton, (loading || otp.join('').length !== 6) && styles.submitButtonDisabled]}
+                <Button
+                  title={loading ? 'Verifying…' : 'Verify code'}
                   onPress={handleOtpSubmit}
                   disabled={loading || otp.join('').length !== 6}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.submitButtonText}>
-                    {loading ? 'Verifying...' : 'Verify Code'}
-                  </Text>
-                </TouchableOpacity>
+                  loading={loading}
+                  variant="default"
+                  fullWidth
+                  style={styles.primaryCta}
+                />
 
                 <TouchableOpacity
                   onPress={handleResendOtp}
@@ -361,7 +365,7 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background.primary,
+    backgroundColor: colors.semantic.background,
   },
   keyboardContainer: {
     flex: 1,
@@ -369,6 +373,9 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flexGrow: 1,
     paddingHorizontal: spacing[5],
+    maxWidth: 448,
+    width: '100%',
+    alignSelf: 'center',
   },
   header: {
     flexDirection: 'row',
@@ -401,12 +408,6 @@ const styles = StyleSheet.create({
     borderColor: colors.frame.border,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  title: {
-    ...textStyles.headlineLarge,
-    color: colors.text.primary,
-    fontWeight: '700',
-    marginBottom: spacing[5],
   },
   subtitle: {
     ...textStyles.bodySmall,
@@ -442,33 +443,14 @@ const styles = StyleSheet.create({
   form: {
     width: '100%',
   },
-  inputContainer: {
+  fieldFlush: {
+    marginBottom: spacing[3],
+  },
+  primaryCta: {
+    marginBottom: spacing[4],
+  },
+  otpSection: {
     marginBottom: spacing[5],
-  },
-  label: {
-    ...textStyles.bodySmall,
-    fontWeight: '600',
-    color: colors.text.primary,
-    marginBottom: spacing[2],
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: borderRadius.xl,
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
-    ...textStyles.bodyMedium,
-    backgroundColor: colors.background.primary,
-    color: colors.text.primary,
-    fontSize: 13,
-    minHeight: 48,
-    lineHeight: 18,
-    textAlignVertical: 'center',
-    ...Platform.select({
-      android: {
-        includeFontPadding: false,
-      },
-    }),
   },
   otpContainer: {
     flexDirection: 'row',
@@ -478,42 +460,23 @@ const styles = StyleSheet.create({
   },
   otpInput: {
     flex: 1,
-    height: 55,
+    height: 52,
     borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: borderRadius.xl,
+    borderColor: colors.semantic.border,
+    borderRadius: borderRadius.md,
     textAlign: 'center',
     ...textStyles.titleMedium,
     fontWeight: '600',
-    backgroundColor: colors.background.primary,
-    color: colors.text.primary,
-  },
-  submitButton: {
-    backgroundColor: colors.primary.main,
-    borderRadius: borderRadius.xl,
-    paddingVertical: spacing[4],
-    paddingHorizontal: spacing[5],
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: spacing[2],
-    marginBottom: spacing[5],
-  },
-  submitButtonDisabled: {
-    opacity: 0.6,
-  },
-  submitButtonText: {
-    ...textStyles.bodyMedium,
-    color: colors.text.inverse,
-    fontWeight: '600',
+    backgroundColor: colors.semantic.background,
+    color: colors.semantic.foreground,
   },
   resendButton: {
     alignItems: 'center',
     padding: spacing[2],
   },
   resendText: {
-    ...textStyles.bodySmall,
-    color: colors.primary.main,
-    fontWeight: '500',
+    ...authScreenStyles.footerLink,
+    textAlign: 'center',
   },
   resendTextDisabled: {
     color: colors.text.secondary,

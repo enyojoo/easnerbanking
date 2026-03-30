@@ -13,6 +13,10 @@ export interface Account {
   balance: number
   availableBalance: number
   status: "active" | "pending" | "closed"
+  /** When set, Deposit dialog uses this instead of mock stablecoin rows (Noah wallet address). */
+  stablecoinAddress?: string
+  stablecoinChain?: string
+  stablecoinToken?: "USDC" | "EURC"
 }
 
 export interface Card {

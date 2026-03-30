@@ -8,6 +8,7 @@ import Link from "next/link"
 import { Landmark } from "lucide-react"
 import { DashboardNav } from "@/components/dashboard-nav"
 import { BusinessDropdown } from "@/components/business-dropdown"
+import { AppLockProvider } from "@/components/app-lock/app-lock-provider"
 import { BusinessOnboardingDialog } from "@/components/business-onboarding-dialog"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { usePersonalProfileAvatar } from "@/lib/use-personal-profile-avatar"
@@ -132,11 +133,12 @@ export function DashboardShell({ children, mainClassName = "", constrained = fal
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <BusinessOnboardingDialog />
-      <DashboardNav />
-      <div className="ml-64 flex flex-col min-h-screen">
-        <header className="fixed top-0 left-64 right-0 z-30 flex h-16 min-h-16 items-center justify-end gap-4 border-b bg-background px-6">
+    <AppLockProvider>
+      <div className="min-h-screen bg-background">
+        <BusinessOnboardingDialog />
+        <DashboardNav />
+        <div className="ml-64 flex min-h-screen flex-col">
+          <header className="fixed top-0 left-64 right-0 z-30 flex h-16 min-h-16 items-center justify-end gap-4 border-b bg-background px-6">
           {profileLoading ? (
             <div className="flex items-center gap-2">
               <div className="h-8 w-8 animate-pulse rounded-full bg-muted" />
@@ -152,8 +154,8 @@ export function DashboardShell({ children, mainClassName = "", constrained = fal
               variant="header"
             />
           )}
-        </header>
-        {showTier1Banner ? (
+          </header>
+          {showTier1Banner ? (
           <div
             className="fixed top-16 left-64 right-0 z-20 flex flex-wrap items-center justify-between gap-2 border-b border-amber-200/80 bg-amber-50/90 px-6 py-2.5 text-sm text-amber-950 backdrop-blur-sm"
             role="status"
@@ -165,18 +167,19 @@ export function DashboardShell({ children, mainClassName = "", constrained = fal
               Verify
             </Link>
           </div>
-        ) : null}
-        <main
-          className={cn(
-            "flex-1 px-6 pb-8",
-            showTier1Banner ? "pt-[6.5rem]" : "pt-20",
-            constrained ? "w-full max-w-6xl mx-auto" : "w-full",
-            mainClassName,
-          )}
-        >
-          {children}
-        </main>
+          ) : null}
+          <main
+            className={cn(
+              "flex-1 px-6 pb-8",
+              showTier1Banner ? "pt-[6.5rem]" : "pt-20",
+              constrained ? "mx-auto w-full max-w-6xl" : "w-full",
+              mainClassName,
+            )}
+          >
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
+    </AppLockProvider>
   )
 }

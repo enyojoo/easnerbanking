@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
+import { useFocusEffect } from '@react-navigation/native'
 import {
   View,
   Text,
@@ -22,16 +23,53 @@ import { NavigationProps, KYCSubmission } from '../../types'
 import { kycService } from '../../lib/kycService'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
-import { ComplianceTierLadder } from '../../components/ComplianceTierLadder'
+import { supabase } from '../../lib/supabase'
+import {
+  getVerifiedTotpFactorId,
+  totpFactorsFromListResponse,
+  unenrollUnverifiedTotpFactors,
+} from '../../lib/auth-mfa'
 
 function MoreContent({ navigation }: NavigationProps) {
-  const { userProfile, signOut } = useAuth()
+  const { user, userProfile, signOut } = useAuth()
   const insets = useSafeAreaInsets()
   const [kycSubmissions, setKycSubmissions] = useState<KYCSubmission[]>([])
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const privacyLink = useExternalLink()
   const termsLink = useExternalLink()
+  const [mfaStatusLine, setMfaStatusLine] = useState('')
+  const [mfaStatusKnown, setMfaStatusKnown] = useState(false)
+
+  const refreshMfaStatus = useCallback(async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    if (!session?.user) {
+      setMfaStatusKnown(false)
+      return
+    }
+    const { data, error } = await supabase.auth.mfa.listFactors()
+    if (error) {
+      setMfaStatusLine('Unable to load')
+      setMfaStatusKnown(true)
+      return
+    }
+    const totp = totpFactorsFromListResponse(data)
+    const id = getVerifiedTotpFactorId(totp)
+    if (!id && totp.some((f) => f.status === 'unverified')) {
+      await unenrollUnverifiedTotpFactors(supabase)
+    }
+    setMfaStatusLine(id ? 'On' : 'Off')
+    setMfaStatusKnown(true)
+  }, [])
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!user?.id) return
+      void refreshMfaStatus()
+    }, [user?.id, refreshMfaStatus]),
+  )
 
   // Animation refs
   const headerAnim = useRef(new Animated.Value(0)).current
@@ -144,6 +182,14 @@ function MoreContent({ navigation }: NavigationProps) {
     termsLink.openLink('https://www.easner.com/terms', 'Terms of Service')
   }
 
+  const handleMfaRowPress = () => {
+    if (!mfaStatusKnown) return
+    navigation.navigate('MfaSetup' as never, {
+      autoStartEnroll: mfaStatusLine === 'Off',
+      mfaVerifiedOnCard: mfaStatusLine === 'On',
+    } as never)
+  }
+
   const renderMenuItem = (
     title: string,
     onPress: () => void,
@@ -210,11 +256,6 @@ function MoreContent({ navigation }: NavigationProps) {
               }
             ]}
           >
-          {userProfile ? (
-            <View style={{ paddingHorizontal: spacing[5], marginBottom: spacing[2] }}>
-              <ComplianceTierLadder userProfile={userProfile} />
-            </View>
-          ) : null}
           {/* Account Section */}
           <View style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Account</Text>
@@ -239,7 +280,7 @@ function MoreContent({ navigation }: NavigationProps) {
                 activeOpacity={isVerificationComplete ? 1 : 0.7}
                 disabled={isVerificationComplete}
               >
-                <Text style={styles.menuItemText}>Identity verification (Tier 1)</Text>
+                <Text style={styles.menuItemText}>Account verification</Text>
                 <View style={styles.menuItemRight}>
                   {verificationStatus === "approved" ? (
                   <View style={styles.badgeGreen}>
@@ -261,13 +302,6 @@ function MoreContent({ navigation }: NavigationProps) {
                 </View>
               </TouchableOpacity>
               {renderMenuItem(
-                'Change Password',
-                () => navigation.navigate('ChangePassword'),
-                undefined,
-                false,
-                false
-              )}
-              {renderMenuItem(
                 'Notifications',
                 () => navigation.navigate('Notifications'),
                 undefined,
@@ -278,6 +312,44 @@ function MoreContent({ navigation }: NavigationProps) {
                 'Recipients',
                 () => navigation.navigate('Recipients'),
                 undefined,
+                false,
+                true
+              )}
+            </View>
+          </View>
+
+          {/* Security */}
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Security</Text>
+            <View style={styles.sectionContent}>
+              {renderMenuItem(
+                'Change PIN',
+                () => navigation.navigate('ChangePin' as never),
+                undefined,
+                false,
+                false
+              )}
+              {renderMenuItem(
+                'Change password',
+                () => navigation.navigate('ChangePassword'),
+                undefined,
+                false,
+                false
+              )}
+              {renderMenuItem(
+                'Two-Factor Authentication',
+                handleMfaRowPress,
+                !mfaStatusKnown ? (
+                  <ActivityIndicator size="small" color={colors.primary.main} />
+                ) : (
+                  <View style={mfaStatusLine === 'On' ? styles.badgeGreen : styles.badgeMuted}>
+                    <Text
+                      style={mfaStatusLine === 'On' ? styles.badgeTextGreen : styles.badgeTextMuted}
+                    >
+                      {mfaStatusLine}
+                    </Text>
+                  </View>
+                ),
                 false,
                 true
               )}
@@ -485,6 +557,17 @@ const styles = StyleSheet.create({
   badgeTextYellow: {
     ...textStyles.labelSmall,
     color: colors.warning.dark,
+    fontWeight: '600',
+  },
+  badgeMuted: {
+    backgroundColor: colors.neutral[100],
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[1],
+    borderRadius: borderRadius.sm,
+  },
+  badgeTextMuted: {
+    ...textStyles.labelSmall,
+    color: colors.text.secondary,
     fontWeight: '600',
   },
   signOutContainer: {

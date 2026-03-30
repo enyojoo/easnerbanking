@@ -89,7 +89,7 @@ export function formatCurrency(
 
 /**
  * Map Bridge API transaction status to user-friendly label and color
- * Matches logic used in BridgeTransactionDetailsScreen
+ * Matches logic used in TransactionDetailsScreen (ledger)
  */
 export function getTransactionStatusDisplay(status: string): { label: string; color: string } | null {
   if (!status) return null
@@ -98,7 +98,7 @@ export function getTransactionStatusDisplay(status: string): { label: string; co
     return { label: 'Completed', color: '#10B981' }
   }
   if (statusLower.includes('pending') || statusLower.includes('awaiting') || statusLower.includes('scheduled') || statusLower.includes('received') || statusLower.includes('submitted')) {
-    return { label: 'Processing', color: '#1D4FF3' }
+    return { label: 'Processing', color: '#007ACC' }
   }
   if (statusLower.includes('failed') || statusLower.includes('returned')) {
     return { label: 'Failed', color: '#EF4444' }

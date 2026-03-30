@@ -7,6 +7,8 @@
 export { colors } from './colors'
 export type { Colors } from './colors'
 
+export { USER_AVATAR_SIZE, PROFILE_EDIT_AVATAR_SIZE, userAvatarStyles } from './userAvatar'
+
 export { shadows, combineShadows } from './shadows'
 export type { Shadows } from './shadows'
 

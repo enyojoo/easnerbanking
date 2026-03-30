@@ -1,31 +1,74 @@
+import Constants from 'expo-constants'
 import { supabase } from './supabase'
 
 /**
- * Get the API base URL from environment or use default
+ * Business Next.js API (bootstrap, Noah proxy). Set EXPO_PUBLIC_API_URL or NEXT_PUBLIC_API_URL
+ * in mobile/.env or business/.env.local; app.config.js also exposes `extra.apiUrl`.
  */
-const getApiBaseUrl = (): string => {
-  // Try to get from environment variable first
-  const apiUrl = process.env.EXPO_PUBLIC_API_URL
-  
-  if (apiUrl) {
-    // Remove trailing slash if present
-    return apiUrl.replace(/\/$/, '')
+export const getApiBaseUrl = (): string => {
+  const fromExtra = Constants.expoConfig?.extra?.apiUrl
+  if (typeof fromExtra === 'string' && fromExtra.trim()) {
+    return fromExtra.replace(/\/$/, '')
   }
-  
-  // Fallback: For development, try to extract from Supabase URL
-  // This assumes the API is hosted on the same domain as the web app
-  // In production, you should set EXPO_PUBLIC_API_URL
-  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || ''
-  if (supabaseUrl) {
-    // If Supabase URL is something like https://xxx.supabase.co
-    // and your API is on a different domain, you need to set EXPO_PUBLIC_API_URL
-    // For now, we'll return empty to use relative URLs (works if API is on same domain)
-    console.warn('EXPO_PUBLIC_API_URL not set, using relative URLs. Set this env var for production.')
-    return ''
+
+  const fromEnv = process.env.EXPO_PUBLIC_API_URL
+  if (fromEnv) {
+    return fromEnv.replace(/\/$/, '')
   }
-  
-  // Last resort: return empty string (will use relative URLs)
+
+  if (__DEV__) {
+    return 'http://localhost:3000'
+  }
+
+  console.warn(
+    'EXPO_PUBLIC_API_URL is not set. Set it for production builds (e.g. https://your-business-app.vercel.app).'
+  )
   return ''
+}
+
+/**
+ * Same as business web `POST /api/auth/bootstrap` (Bearer + service-role upsert to public.users).
+ * Call after session exists; `role: individual` skips org/country (no country on mobile).
+ */
+export async function ensureBusinessAppUserBootstrap(): Promise<void> {
+  const apiBase = getApiBaseUrl()
+  if (!apiBase) {
+    console.warn(
+      'EXPO_PUBLIC_API_URL is not set; skipping /api/auth/bootstrap. Set it to your business app URL (e.g. http://localhost:3000) so sign-up matches web.'
+    )
+    return
+  }
+
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    if (!session?.access_token) return
+
+    const fullName =
+      typeof session.user.user_metadata?.name === 'string'
+        ? session.user.user_metadata.name.trim()
+        : null
+
+    const res = await fetch(`${apiBase}/api/auth/bootstrap`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        role: 'individual',
+        fullName: fullName || undefined,
+      }),
+    })
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      console.warn('auth bootstrap failed:', res.status, text)
+    }
+  } catch (e) {
+    console.warn('auth bootstrap error:', e)
+  }
 }
 
 /**

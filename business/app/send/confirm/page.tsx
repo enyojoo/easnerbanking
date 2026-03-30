@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { Card, CardContent } from "@/components/ui/card"
-import { PinDialog } from "@/components/pin-dialog"
+import { PinChallengeDialog } from "@/components/app-lock/pin-challenge-dialog"
+import { useAuth } from "@/lib/auth-context"
+import { hasPin, isLoginPinModuleAvailable } from "@/lib/login-pin"
 import { mockAccounts, currencySymbols } from "@/lib/mock-data"
 import type { Beneficiary } from "@/lib/mock-data"
 import { generateTransactionId } from "@/lib/transaction-id"
@@ -51,10 +53,14 @@ function getFee(method: string): string {
 
 export default function SendConfirmPage() {
   const router = useRouter()
+  const { user } = useAuth()
   const { tier1Complete, isLoading: profileLoading } = useBusinessProfile()
   const [state, setState] = useState<SendFlowState | null>(null)
   const [showPinDialog, setShowPinDialog] = useState(false)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
+
+  const needPinChallenge =
+    !!user?.id && isLoginPinModuleAvailable() && hasPin(user.id)
 
   const handleCopy = async (text: string, key: string) => {
     try {
@@ -95,22 +101,34 @@ export default function SendConfirmPage() {
     }
   }, [profileLoading, tier1Complete, state, router])
 
-  const handlePinConfirm = () => {
+  const handleAuthorizeSuccess = () => {
     if (!state) return
     const transactionId = state.transactionId ?? generateTransactionId()
     sessionStorage.removeItem(SEND_FLOW_STATE_KEY)
     router.push(
-      `/send/status?id=${transactionId}&amount=${state.amount}&currency=${state.receiveCurrency}&recipient=${encodeURIComponent(state.recipient.name)}`
+      `/send/status?id=${transactionId}&amount=${state.amount}&currency=${state.receiveCurrency}&recipient=${encodeURIComponent(state.recipient.name)}`,
     )
+  }
+
+  const onAuthorizeClick = () => {
+    if (needPinChallenge) {
+      setShowPinDialog(true)
+      return
+    }
+    if (typeof window !== "undefined" && isLoginPinModuleAvailable() && user?.id && !hasPin(user.id)) {
+      window.alert("Set an app PIN in Settings before authorizing transfers.")
+      return
+    }
+    handleAuthorizeSuccess()
   }
 
   if (!state) {
     return (
-      <div className="max-w-2xl mx-auto space-y-6">
+      <div className="mx-auto max-w-2xl space-y-6">
         <div className="animate-pulse space-y-4">
-          <div className="h-8 w-48 bg-muted rounded" />
-          <div className="h-32 bg-muted rounded" />
-          <div className="h-32 bg-muted rounded" />
+          <div className="h-8 w-48 rounded bg-muted" />
+          <div className="h-32 rounded bg-muted" />
+          <div className="h-32 rounded bg-muted" />
         </div>
       </div>
     )
@@ -123,32 +141,30 @@ export default function SendConfirmPage() {
   const hasFx = state.receiveCurrency !== state.sendCurrency
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="mx-auto max-w-2xl space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-foreground">Review transfer</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Confirm your transfer details before authorizing
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">Confirm your transfer details before authorizing</p>
       </div>
 
       <Card>
-        <CardContent className="p-6 space-y-4">
-          <div className="flex justify-between items-center pb-4 border-b gap-2">
+        <CardContent className="space-y-4 p-6">
+          <div className="flex items-center justify-between gap-2 border-b pb-4">
             <span className="text-sm text-muted-foreground">Transaction ID</span>
             <button
               type="button"
               onClick={() => handleCopy(state.transactionId ?? generateTransactionId(), "transactionId")}
-              className="flex items-center gap-2 font-mono text-sm font-medium hover:text-primary transition-colors"
+              className="flex items-center gap-2 font-mono text-sm font-medium transition-colors hover:text-primary"
             >
               {state.transactionId ?? generateTransactionId()}
               {copiedKey === "transactionId" ? (
-                <Check className="h-4 w-4 text-primary shrink-0" />
+                <Check className="h-4 w-4 shrink-0 text-primary" />
               ) : (
                 <Copy className="h-4 w-4 shrink-0" />
               )}
             </button>
           </div>
-          <div className="flex justify-between items-center pb-4 border-b">
+          <div className="flex items-center justify-between border-b pb-4">
             <span className="text-sm text-muted-foreground">Amount</span>
             <span className="text-xl font-semibold">
               {currencySymbols[state.receiveCurrency] ?? state.receiveCurrency}
@@ -156,7 +172,7 @@ export default function SendConfirmPage() {
             </span>
           </div>
           {hasFx && (
-            <div className="flex justify-between items-center pb-4 border-b">
+            <div className="flex items-center justify-between border-b pb-4">
               <span className="text-sm text-muted-foreground">You send</span>
               <span className="font-medium">
                 {currencySymbols[state.sendCurrency] ?? state.sendCurrency}
@@ -164,7 +180,7 @@ export default function SendConfirmPage() {
               </span>
             </div>
           )}
-          <div className="flex justify-between items-center pb-4 border-b">
+          <div className="flex items-center justify-between border-b pb-4">
             <span className="text-sm text-muted-foreground">Recipient</span>
             <div className="flex items-center gap-2">
               <User className="h-4 w-4 text-muted-foreground" />
@@ -172,22 +188,22 @@ export default function SendConfirmPage() {
             </div>
           </div>
           {sourceAccount && (
-            <div className="flex justify-between items-center pb-4 border-b">
+            <div className="flex items-center justify-between border-b pb-4">
               <span className="text-sm text-muted-foreground">From account</span>
               <span className="font-medium">
                 {sourceAccount.accountName} • {sourceAccount.currency}
               </span>
             </div>
           )}
-          <div className="flex justify-between items-center pb-4 border-b">
+          <div className="flex items-center justify-between border-b pb-4">
             <span className="text-sm text-muted-foreground">Transfer method</span>
             <span className="font-medium">{transferMethod}</span>
           </div>
-          <div className="flex justify-between items-center pb-4 border-b">
+          <div className="flex items-center justify-between border-b pb-4">
             <span className="text-sm text-muted-foreground">Processing time</span>
             <span className="font-medium">{processingTime}</span>
           </div>
-          <div className="flex justify-between items-center">
+          <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Fee</span>
             <span className="font-semibold">{fee}</span>
           </div>
@@ -197,7 +213,7 @@ export default function SendConfirmPage() {
       {state.note && (
         <Card>
           <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground mb-1">Note</p>
+            <p className="mb-1 text-sm text-muted-foreground">Note</p>
             <p className="text-sm">{state.note}</p>
           </CardContent>
         </Card>
@@ -208,20 +224,19 @@ export default function SendConfirmPage() {
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
-        <Button
-          size="lg"
-          className="flex-1 h-11"
-          onClick={() => setShowPinDialog(true)}
-        >
+        <Button size="lg" className="h-11 flex-1" onClick={onAuthorizeClick}>
           Authorize transfer
         </Button>
       </div>
 
-      <PinDialog
-        open={showPinDialog}
-        onOpenChange={setShowPinDialog}
-        onConfirm={handlePinConfirm}
-      />
+      {user?.id ? (
+        <PinChallengeDialog
+          open={showPinDialog}
+          onOpenChange={setShowPinDialog}
+          userId={user.id}
+          onVerified={handleAuthorizeSuccess}
+        />
+      ) : null}
     </div>
   )
 }

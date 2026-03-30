@@ -7,19 +7,27 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { NavigationProps } from '../../types'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
-import { setupPin, markFirstLoginAfterVerification } from '../../lib/pinAuth'
+import {
+  setupPin,
+  markFirstLoginAfterVerification,
+  updateSessionActivity,
+  setAppLocked,
+} from '../../lib/pinAuth'
+import { emitAppLocked } from '../../lib/app-lock-bus'
 import { useAuth } from '../../contexts/AuthContext'
+import { appPinStrings } from '../../constants/app-pin-en'
 
 export default function PinSetupScreen({ navigation, route }: NavigationProps) {
   const { user, signOut } = useAuth()
-  const [pin, setPin] = useState<string[]>(['', '', '', '', '', ''])
-  const [confirmPin, setConfirmPin] = useState<string[]>(['', '', '', '', '', ''])
+  const [pin, setPin] = useState<string[]>(['', '', '', ''])
+  const [confirmPin, setConfirmPin] = useState<string[]>(['', '', '', ''])
   const [step, setStep] = useState<'pin' | 'confirm'>('pin')
   const [loading, setLoading] = useState(false)
   const insets = useSafeAreaInsets()
@@ -31,24 +39,22 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
     const currentPin = step === 'pin' ? pin : confirmPin
     const filledCount = currentPin.filter(d => d !== '').length
     
-    if (filledCount >= 6) return
+    if (filledCount >= 4) return
 
     const newPin = [...currentPin]
     newPin[filledCount] = num
     
     if (step === 'pin') {
       setPin(newPin)
-      if (filledCount === 5) {
-        // All 6 digits entered, move to confirm step
+      if (filledCount === 3) {
         setTimeout(() => {
           setStep('confirm')
-          setConfirmPin(['', '', '', '', '', ''])
+          setConfirmPin(['', '', '', ''])
         }, 300)
       }
     } else {
       setConfirmPin(newPin)
-      if (filledCount === 5) {
-        // All 6 digits entered, verify
+      if (filledCount === 3) {
         setTimeout(() => {
           handleConfirmPin(newPin.join(''))
         }, 300)
@@ -82,20 +88,20 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
     const pinString = pin.join('')
     const confirmPinStringFinal = confirmPinString || confirmPin.join('')
 
-    if (pinString.length !== 6 || confirmPinStringFinal.length !== 6) {
-      Alert.alert('Error', 'Please enter complete 6-digit PIN')
+    if (pinString.length !== 4 || confirmPinStringFinal.length !== 4) {
+      Alert.alert(appPinStrings.errorTitle, appPinStrings.completePinPrompt)
       return
     }
 
     if (pinString !== confirmPinStringFinal) {
-      Alert.alert('PINs do not match', 'Please create your PIN again.', [
+      Alert.alert(appPinStrings.errorTitle, appPinStrings.mismatch, [
         {
           text: 'OK',
           onPress: () => {
             // Reset to first step - Create PIN
             setStep('pin')
-            setPin(['', '', '', '', '', ''])
-            setConfirmPin(['', '', '', '', '', ''])
+            setPin(['', '', '', ''])
+            setConfirmPin(['', '', '', ''])
           },
         },
       ])
@@ -106,36 +112,32 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
     const result = await setupPin(pinString, user?.id)
 
     if (result.success) {
-      // PIN setup successful - trigger immediate navigation
-      // Mark first login as completed (non-blocking)
-      if (user?.id && isMandatory) {
-        markFirstLoginAfterVerification(user.id).catch(() => {})
+      const uid = user?.id
+      // Fresh session + unlocked so idle re-check does not send user to PIN entry or sign-out
+      await updateSessionActivity()
+      if (uid) await setAppLocked(uid, false)
+
+      if (uid && isMandatory) {
+        markFirstLoginAfterVerification(uid).catch(() => {})
       }
-      
-      // Trigger immediate navigation check (like PIN entry)
-      try {
-        const triggerPinCheck = (global as any).triggerPinCheck
-        if (triggerPinCheck) {
-          triggerPinCheck() // This triggers AppNavigator to check PIN setup immediately
-        }
-      } catch (error) {
-        // Fallback: polling will catch it
-      }
-      
-      // Haptic feedback (non-blocking)
+
+      emitAppLocked()
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
-      
-      // Navigation happens immediately via triggerPinCheck
-      // Keep loading state - screen will change automatically
+
+      // Optional flow: opened from main stack (e.g. More) — gate is already "main"
+      if (!isMandatory) {
+        navigation.goBack()
+      }
     } else {
-      Alert.alert('Error', result.error || 'Failed to set up PIN', [
+      Alert.alert(appPinStrings.errorTitle, result.error || appPinStrings.setupFailed, [
         {
           text: 'OK',
           onPress: () => {
             // Reset to first step on error
             setStep('pin')
-            setPin(['', '', '', '', '', ''])
-            setConfirmPin(['', '', '', '', '', ''])
+            setPin(['', '', '', ''])
+            setConfirmPin(['', '', '', ''])
             setLoading(false)
           },
         },
@@ -147,12 +149,12 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
     if (isMandatory) {
       if (step === 'confirm') {
         setStep('pin')
-        setConfirmPin(['', '', '', '', '', ''])
+        setConfirmPin(['', '', '', ''])
       }
     } else {
       if (step === 'confirm') {
         setStep('pin')
-        setConfirmPin(['', '', '', '', '', ''])
+        setConfirmPin(['', '', '', ''])
       } else {
         navigation.goBack()
       }
@@ -175,10 +177,8 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
             style={styles.headerButton}
             onPress={() => {
               Alert.alert(
-                'PIN Setup',
-                step === 'pin' 
-                  ? 'Create a 6-digit PIN to secure your account. You\'ll use this PIN to quickly access your account.'
-                  : 'Re-enter your PIN to confirm it matches.'
+                step === 'pin' ? appPinStrings.setupTitle : appPinStrings.confirmTitle,
+                step === 'pin' ? appPinStrings.setupSubtitle : appPinStrings.confirmSubtitle,
               )
             }}
             activeOpacity={0.7}
@@ -191,17 +191,14 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
 
         {/* Content */}
         <View style={styles.content}>
-          {/* Title */}
-          <Text style={styles.greeting}>
-            {step === 'pin' 
-              ? 'Create Your PIN'
-              : 'Confirm Your PIN'}
-          </Text>
-
-          {/* Description */}
-          <Text style={styles.description}>
-            The pin you set will be used to sign in and approve transactions, keeping your account secure as well as easy access to Easner.
-          </Text>
+          <View style={styles.titleBlock}>
+            <Text style={styles.title}>
+              {step === 'pin' ? appPinStrings.setupTitle : appPinStrings.confirmTitle}
+            </Text>
+            <Text style={styles.subtitle}>
+              {step === 'pin' ? appPinStrings.setupSubtitle : appPinStrings.confirmSubtitle}
+            </Text>
+          </View>
 
           {/* PIN Dots - Light gray circles */}
           <View style={styles.pinDotsContainer}>
@@ -292,6 +289,15 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
           )}
         </View>
       </KeyboardAvoidingView>
+
+      {loading ? (
+        <View style={styles.loadingOverlay} pointerEvents="box-none">
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="large" color={colors.primary.main} />
+            <Text style={styles.loadingLabel}>{appPinStrings.pinSaving}</Text>
+          </View>
+        </View>
+      ) : null}
     </View>
   )
 }
@@ -300,6 +306,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background.primary,
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  loadingCard: {
+    alignItems: 'center',
+    gap: spacing[4],
+  },
+  loadingLabel: {
+    ...textStyles.bodyMedium,
+    color: colors.text.secondary,
   },
   keyboardView: {
     flex: 1,
@@ -334,22 +355,28 @@ const styles = StyleSheet.create({
     paddingTop: spacing[6],
     justifyContent: 'space-between',
   },
-  greeting: {
+  titleBlock: {
+    width: '100%',
+    alignItems: 'center',
+    paddingHorizontal: spacing[4],
+    marginBottom: spacing[8],
+    gap: spacing[3],
+  },
+  title: {
     fontSize: 32,
     lineHeight: 40,
     color: colors.text.primary,
     fontFamily: 'Outfit-Bold',
     fontWeight: '700',
     textAlign: 'center',
-    marginBottom: spacing[4],
+    width: '100%',
   },
-  description: {
+  subtitle: {
     ...textStyles.bodyMedium,
     color: colors.text.secondary,
     textAlign: 'center',
     lineHeight: 22,
-    paddingHorizontal: spacing[4],
-    marginBottom: spacing[8],
+    width: '100%',
   },
   pinDotsContainer: {
     flexDirection: 'row',

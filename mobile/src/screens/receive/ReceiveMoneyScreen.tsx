@@ -18,12 +18,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
-import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
+import { colors, shadows, textStyles, borderRadius, spacing, fontSize } from '../../theme'
+import { getApiBaseUrl } from '../../lib/apiClient'
 import { noahService } from '../../lib/noahService'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import QRCode from 'react-native-qrcode-svg'
-
 type TabType = 'bank' | 'stablecoin'
 
 export default function ReceiveMoneyScreen({ navigation, route }: NavigationProps) {
@@ -232,7 +232,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                 setLoading(false)
                 // Mark data as loaded to prevent unnecessary refetches
                 dataLoadedRef.current = true
-                // Backfill account holder name and bank address from Bridge API if missing (e.g. EUR accounts created before fix)
+                // Backfill account holder name and bank address from verification API if missing (e.g. EUR accounts created before fix)
                 if (!account.account_holder_name || !account.bank_address) {
                   noahService.getVirtualAccount(currencyLower).then((apiAccount) => {
                     if (apiAccount?.hasAccount) {
@@ -265,7 +265,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
           setLoading(true)
           
           // Fetch virtual account from API
-          // The API will update the database with any missing fields from Bridge
+          // The API will update the database with any missing fields from the provider
           // and return the complete data
           try {
             // Use AbortController for proper timeout handling
@@ -363,7 +363,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
             
             let walletsResponse: Response
             try {
-              walletsResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'}/api/noah/wallets`, {
+              walletsResponse = await fetch(`${getApiBaseUrl() || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/api/noah/wallets`, {
                 headers: {
                   'Authorization': `Bearer ${session?.access_token}`,
                 },
@@ -584,7 +584,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
               dataLoadedRef.current = true
               // Cache the account data
               await setCachedDataLocal(CACHE_KEY_ACCOUNT, accountData)
-              // Backfill account holder name and bank address from Bridge API if missing (e.g. EUR accounts created before fix)
+              // Backfill account holder name and bank address from verification API if missing (e.g. EUR accounts created before fix)
               if (!account.account_holder_name || !account.bank_address) {
                 noahService.getVirtualAccount(currencyLower).then((apiAccount) => {
                   if (apiAccount?.hasAccount) {
@@ -743,7 +743,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
             accountCreationTriggeredRef.current = true
             console.log('[RECEIVE-MONEY] KYC approved but accounts missing, triggering sync-status to create accounts...')
             try {
-              const syncResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'}/api/noah/sync-status`, {
+              const syncResponse = await fetch(`${getApiBaseUrl() || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/api/noah/sync-status`, {
                 method: 'POST',
                 headers: {
                   'Authorization': `Bearer ${session.access_token}`,
@@ -900,18 +900,18 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     }
   }
 
-  // Get bank account details from Bridge virtual account (memoized to prevent unnecessary recalculations)
+  // Get bank account details from virtual account (memoized to prevent unnecessary recalculations)
   const bankAccountDetails = useMemo(() => {
-    // Account exists, return real data from Bridge
+    // Account exists, return real data from the provider
     // Show data if we have it, regardless of KYC status (KYC status only affects "in progress" message)
     // Check virtualAccount directly - if it exists and has data, return it
     if (virtualAccount && (virtualAccount.hasAccount || virtualAccount.accountNumber || virtualAccount.iban || hasAccountInDb)) {
-      // Map all fields that Bridge provides
+      // Map all fields that the provider returns
       if (currency === 'USD') {
         const details = {
-          accountName: virtualAccount.accountHolderName, // bank_beneficiary_name from Bridge
+          accountName: virtualAccount.accountHolderName,
           accountNumber: virtualAccount.accountNumber,
-          routingNumber: virtualAccount.routingNumber, // Bridge provides this for USD
+          routingNumber: virtualAccount.routingNumber,
           iban: undefined, // Not for USD
           swiftBic: undefined, // Not for USD
           bankName: virtualAccount.bankName,
@@ -928,10 +928,10 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
           accountName: virtualAccount.accountHolderName,
           accountNumber: undefined, // Not for EUR
           routingNumber: undefined, // Not for EUR
-          iban: virtualAccount.iban, // Bridge provides this for EUR
-          swiftBic: virtualAccount.bic, // Bridge returns 'bic' for EUR accounts
+          iban: virtualAccount.iban,
+          swiftBic: virtualAccount.bic,
           bankName: virtualAccount.bankName,
-          bankAddress: virtualAccount.bankAddress, // Bridge provides for EUR
+          bankAddress: virtualAccount.bankAddress,
         }
       }
     }
@@ -977,7 +977,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
       
       let response: Response
       try {
-        response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'}/api/noah/create-accounts`, {
+        response = await fetch(`${getApiBaseUrl() || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/api/noah/create-accounts`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${session.access_token}`,
@@ -1002,7 +1002,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
         // If error mentions TOS, provide helpful message
         if (errorMessage.toLowerCase().includes('tos') || errorMessage.toLowerCase().includes('terms of service')) {
           throw new Error(
-            `${errorMessage}\n\nIf you just accepted TOS, please wait a few seconds and try again. Bridge may need a moment to process your acceptance.`
+            `${errorMessage}\n\nIf you just accepted TOS, please wait a few seconds and try again. The provider may need a moment to process your acceptance.`
           )
         }
         
@@ -1042,7 +1042,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
 
                   // Refresh wallet
                   try {
-                    const walletsResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'}/api/noah/wallets`, {
+                    const walletsResponse = await fetch(`${getApiBaseUrl() || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/api/noah/wallets`, {
                       headers: {
                         'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
                       },
@@ -1134,21 +1134,23 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}
-          >
-            <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-          </TouchableOpacity>
-          <View style={styles.headerContent}>
-            <Text style={styles.title}>Receive Money</Text>
-            <View style={styles.currencyDisplay}>
-              <Image 
-                source={getCurrencyFlag(currency)}
-                style={styles.currencyFlag}
-                resizeMode="cover"
-              />
-              <Text style={styles.currencyText}>{currency}</Text>
+          <View style={styles.headerTopRow}>
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+            >
+              <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+            </TouchableOpacity>
+            <View style={styles.headerContent}>
+              <Text style={styles.title}>Receive Money</Text>
+              <View style={styles.currencyDisplay}>
+                <Image 
+                  source={getCurrencyFlag(currency)}
+                  style={styles.currencyFlag}
+                  resizeMode="cover"
+                />
+                <Text style={styles.currencyText}>{currency}</Text>
+              </View>
             </View>
           </View>
         </View>
@@ -1198,14 +1200,14 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                   <>
                     {/* Bank Account Details */}
                     <View style={styles.section}>
-                      {/* Display all fields that Bridge provides */}
+                      {/* Display all fields returned by the provider */}
                       <>
-                        {/* Account Holder Name - Bridge provides this */}
+                        {/* Account holder name */}
                         {bankAccountDetails.accountName && (
                           renderCopyableField('Account Name', bankAccountDetails.accountName, 'accountName')
                         )}
                         
-                        {/* USD Account Fields - Bridge provides these for USD accounts */}
+                        {/* USD account fields */}
                         {currency === 'USD' && (
                           <>
                             {bankAccountDetails.accountNumber && (
@@ -1217,7 +1219,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                           </>
                         )}
                         
-                        {/* EUR Account Fields - Bridge provides these for EUR accounts */}
+                        {/* EUR account fields */}
                         {currency === 'EUR' && (
                           <>
                             {bankAccountDetails.iban && (
@@ -1229,12 +1231,12 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                           </>
                         )}
                         
-                        {/* Bank Name - Bridge provides this */}
+                        {/* Bank name */}
                         {bankAccountDetails.bankName && (
                           renderCopyableField('Bank Name', bankAccountDetails.bankName, 'bankName')
                         )}
                         
-                        {/* Bank Address - Bridge provides this for USD */}
+                        {/* Bank address */}
                         {bankAccountDetails.bankAddress && (
                           renderCopyableField('Bank Address', bankAccountDetails.bankAddress, 'bankAddress')
                         )}
@@ -1455,7 +1457,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                     </TouchableOpacity>
                     )}
                     {kycStatus === 'approved' && !hasStablecoinData && (
-                      <Text style={[styles.kycNoticeText, { marginTop: spacing[2], fontSize: 12 }]}>
+                      <Text style={styles.kycNoticeTextCompact}>
                         Your {currency.toLowerCase() === 'usd' ? 'USDC' : 'EURC'} address is being created automatically. Please wait a moment and refresh the screen.
                       </Text>
                     )}
@@ -1479,11 +1481,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.primary,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: spacing[5],
     paddingTop: spacing[4],
-    paddingBottom: spacing[4],
+    paddingBottom: spacing[3],
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   backButton: {
     width: 44,
@@ -1533,9 +1537,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[3],
     alignItems: 'center',
     borderRadius: borderRadius.xl,
-    backgroundColor: '#F9F9F9',
+    backgroundColor: colors.frame.background,
     borderWidth: 0.5,
-    borderColor: '#E2E2E2',
+    borderColor: colors.frame.border,
   },
   tabActive: {
     backgroundColor: colors.primary.main,
@@ -1578,12 +1582,12 @@ const styles = StyleSheet.create({
   fieldValueContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9F9F9',
+    backgroundColor: colors.frame.background,
     borderRadius: borderRadius.xl,
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[2],
     borderWidth: 0.5,
-    borderColor: '#E2E2E2',
+    borderColor: colors.frame.border,
   },
   fieldValue: {
     flex: 1,
@@ -1678,7 +1682,7 @@ const styles = StyleSheet.create({
     marginTop: spacing[4],
     paddingTop: spacing[4],
     borderTopWidth: 0.5,
-    borderTopColor: '#E2E2E2',
+    borderTopColor: colors.semantic.border,
   },
   supportedStablecoinsLabel: {
     ...textStyles.bodySmall,
@@ -1771,6 +1775,16 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginBottom: spacing[4],
   },
+  kycNoticeTextCompact: {
+    ...textStyles.bodyMedium,
+    fontSize: fontSize.sm,
+    color: colors.text.secondary,
+    fontFamily: 'Outfit-Regular',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginTop: spacing[2],
+    marginBottom: spacing[4],
+  },
   kycNoticeButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1787,14 +1801,14 @@ const styles = StyleSheet.create({
     ...textStyles.bodyMedium,
     color: colors.text.inverse,
     fontWeight: '600',
-    fontSize: 14,
+    fontSize: fontSize.sm,
   },
   kycNoticeButtonDisabled: {
     opacity: 0.6,
   },
   errorText: {
     ...textStyles.bodySmall,
-    color: colors.error?.main || '#FF3B30',
+    color: colors.error.main,
     fontFamily: 'Outfit-Regular',
     marginTop: spacing[2],
     textAlign: 'center',

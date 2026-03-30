@@ -1,13 +1,14 @@
 import { supabase } from './supabase'
+import { joinFullName } from './userProfileHelpers'
 
 export interface UserProfileData {
   firstName: string
   middleName?: string
   lastName: string
   phone: string
-  baseCurrency: string
-  easetag?: string
   dateOfBirth?: string
+  /** Public HTTPS URL from `/api/upload/profile-avatar`; `null` clears `users.avatar_url` */
+  avatarUrl?: string | null
 }
 
 export interface UserStats {
@@ -21,31 +22,27 @@ export const userService = {
     userId: string,
     updates: UserProfileData
   ): Promise<any> {
-    const updateData: any = {
-      first_name: updates.firstName,
-      last_name: updates.lastName,
-      phone: updates.phone,
-      base_currency: updates.baseCurrency,
+    const fullName = joinFullName({
+      firstName: updates.firstName,
+      middleName: updates.middleName,
+      lastName: updates.lastName,
+    })
+    const updateData: Record<string, unknown> = {
+      full_name: fullName || null,
+      phone: updates.phone || null,
       updated_at: new Date().toISOString(),
     }
-    
-    // Include middle_name if provided (even if empty string)
-    if (updates.middleName !== undefined) {
-      updateData.middle_name = updates.middleName || null
-    }
 
-    // Include easetag if provided
-    if (updates.easetag !== undefined) {
-      // Remove @ prefix and convert to lowercase
-      const cleanEasetag = updates.easetag.replace(/^@/, "").toLowerCase().trim()
-      updateData.easetag = cleanEasetag || null
-    }
-
-    // Include date_of_birth if provided
     if (updates.dateOfBirth !== undefined) {
       updateData.date_of_birth = updates.dateOfBirth || null
     }
-    
+
+    if (updates.avatarUrl !== undefined) {
+      const v = updates.avatarUrl
+      updateData.avatar_url =
+        v === null || v === '' ? null : typeof v === 'string' ? v.trim() || null : null
+    }
+
     const { data, error } = await supabase
       .from('users')
       .update(updateData)

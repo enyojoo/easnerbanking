@@ -1,0 +1,28 @@
+/** English copy for app PIN (prepare for i18n extraction). */
+
+export const appPinStrings = {
+  setupTitle: "Create a new PIN",
+  setupSubtitle: "Enter a 4-digit code you won't forget",
+  confirmTitle: "Confirm your PIN",
+  confirmSubtitle: "Enter the same 4 digit code again",
+  mismatch: "PINs do not match. Start again.",
+  lockWelcome: (name: string) => `Welcome back${name ? ` ${name}` : ""}`,
+  lockEnterPin: "Enter your 4-digit PIN",
+  lockIncorrect: "Incorrect PIN",
+  lockVerifying: "Verifying…",
+  pinSaving: "Saving your PIN…",
+  lockLockedTryMinutes: (m: number) => `PIN locked. Try again in ${m} minute(s).`,
+  lockNotYourAccount: "Not your account?",
+  lockLogOut: "Log out",
+  dialogAuthorizeTitle: "Enter PIN to confirm",
+  dialogAuthorizeDesc: "Enter your 4-digit app PIN to continue.",
+  dialogConfirm: "Confirm",
+  dialogCancel: "Cancel",
+  settingsAppPin: "App PIN",
+  settingsCreatePin: "Create app PIN",
+  settingsChangePin: "Change app PIN",
+  settingsCurrentPin: "Current PIN",
+  settingsNewPin: "New PIN",
+  settingsConfirmNew: "Confirm new PIN",
+  errorWebCrypto: "App PIN requires a secure browser context (HTTPS or localhost).",
+} as const

@@ -16,7 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Plus, Snowflake, Settings, Monitor, Apple, ArrowRight, Eye, EyeOff, Copy, Check, AlertCircle } from 'lucide-react-native'
+import { Plus, Snowflake, Settings, Monitor, Apple, ArrowRight, Eye, EyeOff, Copy, Check } from 'lucide-react-native'
 import { useAuth } from '../../contexts/AuthContext'
 import { NavigationProps } from '../../types'
 import { colors, textStyles, borderRadius, spacing, shadows } from '../../theme'
@@ -289,22 +289,6 @@ export default function CardScreen({ navigation }: NavigationProps) {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Tier 3 — B2C placeholder (personal credit cards; Easner-branded, no issuer names) */}
-        <View style={styles.tier3Placeholder} accessibilityRole="summary">
-          <View style={styles.tier3PlaceholderHeader}>
-            <AlertCircle size={18} color={colors.primary.main} strokeWidth={2.2} />
-            <Text style={styles.tier3PlaceholderTitle}>Your Easner card (Tier 3)</Text>
-          </View>
-          <Text style={styles.tier3PlaceholderBody}>
-            Final Easner compliance will unlock a personal card program for your account—typically a personal credit
-            card where the issuer supports it. Debit or prepaid may apply where consumer credit is not available.
-            The cards below are a design preview until your program is connected.
-          </Text>
-          <Text style={styles.tier3PlaceholderFootnote}>
-            Complete identity verification (Tier 1) before counting on production card or spend workflows.
-          </Text>
-        </View>
-
         {/* Card Carousel */}
         <View style={styles.carouselContainer}>
           <Animated.ScrollView
@@ -534,7 +518,7 @@ export default function CardScreen({ navigation }: NavigationProps) {
                       style={styles.transactionItem}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                navigation.navigate('TransactionDetails' as never, { transactionId: transaction.id } as never)
+                navigation.navigate('LegacyTransactionDetails' as never, { transactionId: transaction.id } as never)
                       }}
                       activeOpacity={0.7}
                     >
@@ -595,44 +579,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingTop: spacing[2],
   },
-  tier3Placeholder: {
-    marginHorizontal: spacing[5],
-    marginBottom: spacing[4],
-    padding: spacing[4],
-    borderRadius: borderRadius.xl,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.35)',
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
-  },
-  tier3PlaceholderHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-    marginBottom: spacing[2],
-  },
-  tier3PlaceholderTitle: {
-    ...textStyles.labelLarge,
-    color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
-    flex: 1,
-  },
-  tier3PlaceholderBody: {
-    ...textStyles.bodySmall,
-    color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
-    lineHeight: 20,
-    marginBottom: spacing[3],
-  },
-  tier3PlaceholderFootnote: {
-    ...textStyles.bodySmall,
-    color: colors.text.tertiary,
-    fontFamily: 'Outfit-Regular',
-    fontSize: 12,
-    lineHeight: 18,
-  },
   carouselContainer: {
     height: CARD_HEIGHT + spacing[8], // Fixed height to prevent layout shifts during card movement
-    marginTop: spacing[5],
+    marginTop: spacing[3],
     marginBottom: spacing[0.5], // Further reduced bottom margin
     justifyContent: 'center',
     alignItems: 'center',

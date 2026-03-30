@@ -7,6 +7,9 @@ import { fetchWithSession } from "@/lib/fetch-with-session"
 import { clearLegacySupabaseAuthCookiesOnce } from "@/lib/supabase/clear-legacy-auth-cookies"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { getOnboarding } from "@/lib/onboarding-store"
+import { removePin } from "@/lib/login-pin"
+import { resetSessionActivity } from "@/lib/session-activity"
+import { IdleSessionBridge } from "@/components/idle-session-bridge"
 
 interface AuthContextType {
   user: User | null
@@ -14,6 +17,8 @@ interface AuthContextType {
   signup: (email: string, password: string, name: string) => Promise<{ needsEmailConfirmation: boolean }>
   signInWithGoogle: () => Promise<void>
   logout: () => Promise<void>
+  /** Reset idle timer (after PIN unlock, etc.). */
+  resetSessionActivity: () => void
   isLoading: boolean
 }
 
@@ -83,6 +88,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void bootstrap()
   }, [supabase, user?.id])
 
+  useEffect(() => {
+    if (user?.id) {
+      resetSessionActivity()
+    }
+  }, [user?.id])
+
   const login = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
@@ -117,21 +128,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = async () => {
+    try {
+      const { data } = await supabase.auth.getUser()
+      const uid = data.user?.id
+      if (uid) removePin(uid)
+    } catch {
+      // ignore
+    }
     clearBusinessAppSessionCookie()
     await supabase.auth.signOut()
+  }
+
+  const ctxValue = {
+    user,
+    login,
+    signup,
+    signInWithGoogle,
+    logout,
+    resetSessionActivity,
+    isLoading,
   }
 
   // Don't render until mounted to prevent hydration mismatch
   if (!mounted) {
     return (
-      <AuthContext.Provider value={{ user: null, login, signup, signInWithGoogle, logout, isLoading: true }}>
+      <AuthContext.Provider
+        value={{ user: null, login, signup, signInWithGoogle, logout, resetSessionActivity, isLoading: true }}
+      >
         {children}
       </AuthContext.Provider>
     )
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, signup, signInWithGoogle, logout, isLoading }}>
+    <AuthContext.Provider value={ctxValue}>
+      <IdleSessionBridge />
       {children}
     </AuthContext.Provider>
   )

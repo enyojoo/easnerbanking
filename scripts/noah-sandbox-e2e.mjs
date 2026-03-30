@@ -54,6 +54,25 @@ async function main() {
   }))
   console.log("GET /api/noah/customers", noah.status, JSON.stringify(noah.json).slice(0, 200))
 
+  const biz = { ...auth, "X-Easner-Noah-Scope": "business" }
+  const avail = await fetch(`${base}/api/accounts/available-currencies`, { headers: biz }).then(async (r) => ({
+    status: r.status,
+    json: await r.json().catch(() => ({})),
+  }))
+  console.log("GET /api/accounts/available-currencies", avail.status, JSON.stringify(avail.json).slice(0, 300))
+
+  const bal = await fetch(`${base}/api/noah/wallets/balances`, { headers: biz }).then(async (r) => ({
+    status: r.status,
+    json: await r.json().catch(() => ({})),
+  }))
+  console.log("GET /api/noah/wallets/balances (business scope)", bal.status, JSON.stringify(bal.json).slice(0, 200))
+
+  const va = await fetch(`${base}/api/noah/virtual-accounts?currency=usd`, { headers: biz }).then(async (r) => ({
+    status: r.status,
+    json: await r.json().catch(() => ({})),
+  }))
+  console.log("GET /api/noah/virtual-accounts?currency=usd (business scope)", va.status, JSON.stringify(va.json).slice(0, 250))
+
   process.exit(health.ok && verify.status === 200 ? 0 : 1)
 }
 

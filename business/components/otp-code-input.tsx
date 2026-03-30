@@ -18,7 +18,7 @@ export interface OtpCodeInputProps {
 }
 
 /**
- * Single hidden input over digit boxes (same pattern as {@link PinDialog}).
+ * Single hidden input over digit boxes (same pattern as PIN entry boxes).
  * Digits are visible in each box; suitable for TOTP / SMS OTP.
  */
 export function OtpCodeInput({

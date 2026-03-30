@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react'
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   Alert,
@@ -16,7 +15,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../../lib/supabase'
 import { NavigationProps } from '../../types'
 import { analytics } from '../../lib/analytics'
-import { colors, textStyles, borderRadius, spacing, shadows } from '../../theme'
+import { colors, borderRadius, spacing } from '../../theme'
+import { authScreenStyles } from '../../theme/authScreen'
+import { Button, TextField } from '../../components/ui'
 
 export default function ResetPasswordScreen({ navigation, route }: NavigationProps) {
   const [password, setPassword] = useState('')
@@ -130,10 +131,15 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
   if (!isValidSession) {
     return (
       <View style={styles.container}>
-        <View style={[styles.content, { 
-          paddingTop: insets.top + spacing[4],
-          paddingBottom: Math.max(insets.bottom, spacing[5]) 
-        }]}>
+        <View
+          style={[
+            styles.content,
+            {
+              paddingTop: insets.top + spacing[4],
+              paddingBottom: Math.max(insets.bottom, spacing[5]),
+            },
+          ]}
+        >
           <View style={styles.header}>
             <TouchableOpacity
               style={styles.backButton}
@@ -153,9 +159,9 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
               </View>
             </TouchableOpacity>
           </View>
-            <Text style={styles.title}>Validating Reset Link</Text>
-            <Text style={styles.subtitle}>
-              Please wait while we validate your reset link...
+            <Text style={authScreenStyles.screenTitle}>Validating reset link</Text>
+            <Text style={authScreenStyles.subtitle}>
+              Please wait while we validate your reset link…
             </Text>
         </View>
       </View>
@@ -168,11 +174,14 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
         style={styles.keyboardContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <ScrollView 
-          contentContainerStyle={[styles.scrollContainer, { 
-            paddingTop: insets.top + spacing[4],
-            paddingBottom: Math.max(insets.bottom, spacing[5]) 
-          }]}
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContainer,
+            {
+              paddingTop: insets.top + spacing[4],
+              paddingBottom: Math.max(insets.bottom, spacing[5]),
+            },
+          ]}
           showsVerticalScrollIndicator={false}
         >
           {/* Header with back and help buttons */}
@@ -196,79 +205,72 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
             </TouchableOpacity>
           </View>
 
-          {/* Title */}
-            <Text style={styles.title}>Reset Password</Text>
+          <Text style={authScreenStyles.screenTitle}>Reset password</Text>
 
-          {/* Form */}
-            <View style={styles.form}>
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>New Password</Text>
-                <View style={styles.passwordContainer}>
-                  <TextInput
-                    style={styles.passwordInput}
-                    value={password}
-                    onChangeText={setPassword}
-                    placeholder="Enter new password"
-                    placeholderTextColor={colors.text.secondary}
-                  secureTextEntry={!passwordVisible}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                  <TouchableOpacity
-                    style={styles.eyeButton}
+          <View style={styles.form}>
+            <TextField
+              label="New password"
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Enter new password"
+              secureTextEntry={!passwordVisible}
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!loading}
+              containerStyle={styles.fieldFlush}
+              rightAccessory={
+                <TouchableOpacity
+                  style={styles.eyeButton}
                   onPress={() => setPasswordVisible(!passwordVisible)}
-                    activeOpacity={0.7}
-                  >
+                  activeOpacity={0.7}
+                >
                   <View style={styles.eyeButtonCircle}>
                     <Ionicons
                       name={passwordVisible ? 'eye-off' : 'eye'}
                       size={18}
-                      color={colors.text.secondary}
+                      color={colors.semantic.mutedForeground}
                     />
                   </View>
-                  </TouchableOpacity>
-                </View>
-              </View>
+                </TouchableOpacity>
+              }
+            />
 
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Confirm Password</Text>
-                <View style={styles.passwordContainer}>
-                  <TextInput
-                    style={styles.passwordInput}
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                    placeholder="Confirm new password"
-                    placeholderTextColor={colors.text.secondary}
-                  secureTextEntry={!confirmPasswordVisible}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                  <TouchableOpacity
-                    style={styles.eyeButton}
+            <TextField
+              label="Confirm password"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              placeholder="Confirm new password"
+              secureTextEntry={!confirmPasswordVisible}
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!loading}
+              containerStyle={styles.fieldFlush}
+              rightAccessory={
+                <TouchableOpacity
+                  style={styles.eyeButton}
                   onPress={() => setConfirmPasswordVisible(!confirmPasswordVisible)}
-                    activeOpacity={0.7}
-                  >
+                  activeOpacity={0.7}
+                >
                   <View style={styles.eyeButtonCircle}>
                     <Ionicons
                       name={confirmPasswordVisible ? 'eye-off' : 'eye'}
                       size={18}
-                      color={colors.text.secondary}
+                      color={colors.semantic.mutedForeground}
                     />
                   </View>
-                  </TouchableOpacity>
-                </View>
-              </View>
+                </TouchableOpacity>
+              }
+            />
 
-            <TouchableOpacity
-              style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-                onPress={handleResetPassword}
-                disabled={loading}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.submitButtonText}>
-                {loading ? 'Updating...' : 'Update Password'}
-              </Text>
-            </TouchableOpacity>
+            <Button
+              title={loading ? 'Updating…' : 'Update password'}
+              onPress={handleResetPassword}
+              disabled={loading}
+              loading={loading}
+              variant="default"
+              fullWidth
+              style={styles.primaryCta}
+            />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -279,7 +281,7 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background.primary,
+    backgroundColor: colors.semantic.background,
   },
   keyboardContainer: {
     flex: 1,
@@ -287,6 +289,9 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flexGrow: 1,
     paddingHorizontal: spacing[5],
+    maxWidth: 448,
+    width: '100%',
+    alignSelf: 'center',
   },
   content: {
     flex: 1,
@@ -324,52 +329,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  title: {
-    ...textStyles.headlineLarge,
-    color: colors.text.primary,
-    fontWeight: '700',
-    marginBottom: spacing[5],
-  },
-  subtitle: {
-    ...textStyles.bodyLarge,
-    color: colors.text.secondary,
-    textAlign: 'center',
-  },
   form: {
     width: '100%',
   },
-  inputContainer: {
+  fieldFlush: {
+    marginBottom: spacing[3],
+  },
+  primaryCta: {
     marginBottom: spacing[4],
-  },
-  label: {
-    ...textStyles.bodySmall,
-    fontWeight: '600',
-    color: colors.text.primary,
-    marginBottom: spacing[2],
-  },
-  passwordContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: borderRadius.xl,
-    backgroundColor: colors.background.primary,
-    minHeight: 48,
-  },
-  passwordInput: {
-    flex: 1,
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
-    ...textStyles.bodyMedium,
-    color: colors.text.primary,
-    fontSize: 13,
-    lineHeight: 18,
-    textAlignVertical: 'center',
-    ...Platform.select({
-      android: {
-        includeFontPadding: false,
-      },
-    }),
   },
   eyeButton: {
     padding: spacing[2],
@@ -381,23 +348,5 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  submitButton: {
-    backgroundColor: colors.primary.main,
-    borderRadius: borderRadius.xl,
-    paddingVertical: spacing[4],
-    paddingHorizontal: spacing[5],
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: spacing[2],
-    marginBottom: spacing[5],
-  },
-  submitButtonDisabled: {
-    opacity: 0.6,
-  },
-  submitButtonText: {
-    ...textStyles.bodyMedium,
-    color: colors.text.inverse,
-    fontWeight: '600',
   },
 })

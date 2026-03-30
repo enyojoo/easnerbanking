@@ -1,42 +1,9 @@
 import { supabase } from './supabase'
+import { noahService } from './noahService'
+import { mapNoahDetailToTransactionData } from './noahUserDataHelpers'
+import type { TransactionData } from '../types'
 
-export interface TransactionData {
-  id: string
-  transaction_id: string
-  user_id: string
-  recipient_id: string
-  send_amount: number
-  send_currency: string
-  receive_amount: number
-  receive_currency: string
-  exchange_rate: number
-  fee_amount: number
-  fee_type: string
-  total_amount: number
-  status: string
-  reference?: string
-  created_at: string
-  updated_at: string
-  completed_at?: string
-  receipt_url?: string
-  receipt_filename?: string
-  recipient?: {
-    id: string
-    user_id: string
-    full_name: string
-    account_number: string
-    bank_name: string
-    phone_number?: string
-    currency: string
-    created_at: string
-    updated_at: string
-  }
-  user?: {
-    first_name: string
-    last_name: string
-    email: string
-  }
-}
+export type { TransactionData }
 
 export const transactionService = {
   async create(transactionData: {
@@ -78,6 +45,11 @@ export const transactionService = {
       .single()
 
     if (error) {
+      if ((error as { code?: string }).code === 'PGRST205' || error.message?.includes('schema cache')) {
+        throw new Error(
+          'Legacy transaction storage is not available. Send from your wallet using Send Money.',
+        )
+      }
       throw new Error(`Failed to create transaction: ${error.message}`)
     }
 
@@ -145,40 +117,58 @@ export const transactionService = {
   },
 
   async getById(transactionId: string): Promise<TransactionData> {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    const userId = session?.user?.id ?? ''
+
     const { data, error } = await supabase
       .from('transactions')
-      .select(`
+      .select(
+        `
         *,
         recipient:recipients(*),
         user:users(first_name, last_name, email)
-      `)
+      `,
+      )
       .eq('transaction_id', transactionId)
       .single()
 
-    if (error) {
-      throw new Error(`Failed to fetch transaction: ${error.message}`)
+    if (!error && data) {
+      return data as TransactionData
     }
 
-    return data
+    try {
+      const tx = await noahService.getTransactionDetail(transactionId)
+      return mapNoahDetailToTransactionData(userId, tx)
+    } catch (e) {
+      if (error) {
+        throw new Error(`Failed to fetch transaction: ${error.message}`)
+      }
+      throw e
+    }
   },
 
   async getByUserId(userId: string, limit = 20): Promise<TransactionData[]> {
     const { data, error } = await supabase
       .from('transactions')
-      .select(`
+      .select(
+        `
         *,
         recipient:recipients(*),
         user:users(first_name, last_name, email)
-      `)
+      `,
+      )
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(limit)
 
-    if (error) {
-      throw new Error(`Failed to fetch transactions: ${error.message}`)
+    if (!error && data) {
+      return data as TransactionData[]
     }
 
-    return data || []
+    const rows = await noahService.listTransactions(limit)
+    return rows.map((r) => mapNoahDetailToTransactionData(userId, r))
   },
 
   async updateStatus(transactionId: string, status: string): Promise<void> {
@@ -196,6 +186,10 @@ export const transactionService = {
       .eq('transaction_id', transactionId)
 
     if (error) {
+      if ((error as { code?: string }).code === 'PGRST205' || error.message?.includes('schema cache')) {
+        console.warn('transactionService.updateStatus: no transactions table; skipping')
+        return
+      }
       throw new Error(`Failed to update transaction status: ${error.message}`)
     }
 

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
+import type { Notification as ExpoPushNotification } from 'expo-notifications'
 import { pushNotificationService } from '../lib/pushNotificationService'
-import * as Notifications from 'expo-notifications'
 import { colors } from '../theme'
 
 export interface Notification {
@@ -28,7 +28,7 @@ const NotificationsContext = createContext<NotificationsContextType | undefined>
 
 // Helper function to convert push notification to app notification
 function convertPushNotificationToAppNotification(
-  notification: Notifications.Notification
+  notification: ExpoPushNotification
 ): Notification {
   const data = notification.request.content.data || {}
   const title = notification.request.content.title || 'Notification'

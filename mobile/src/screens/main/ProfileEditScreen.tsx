@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   Keyboard,
   Platform,
+  Image,
 } from 'react-native'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { Ionicons } from '@expo/vector-icons'
@@ -24,8 +25,19 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useUserData } from '../../contexts/UserDataContext'
 import { NavigationProps } from '../../types'
 import { userService, UserProfileData, UserStats } from '../../lib/userService'
-import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
+import {
+  colors,
+  shadows,
+  textStyles,
+  borderRadius,
+  spacing,
+  userAvatarStyles,
+  PROFILE_EDIT_AVATAR_SIZE,
+} from '../../theme'
 import { supabase } from '../../lib/supabase'
+import { splitFullNameForForm, initialsFromFullName, joinFullName } from '../../lib/userProfileHelpers'
+import * as ImagePicker from 'expo-image-picker'
+import { uploadProfileAvatar, PROFILE_AVATAR_MAX_BYTES } from '../../lib/profileAvatarUpload'
 
 function ProfileEditContent({ navigation }: NavigationProps) {
   const { user, userProfile, refreshUserProfile } = useAuth()
@@ -42,8 +54,10 @@ function ProfileEditContent({ navigation }: NavigationProps) {
     phone: '',
     easetag: '',
     dateOfBirth: '',
+    avatarUrl: null as string | null,
   })
   const [editProfileData, setEditProfileData] = useState(profileData)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [checkingEasetag, setCheckingEasetag] = useState(false)
   const [easetagAvailable, setEasetagAvailable] = useState<boolean | null>(null)
   const [showDatePicker, setShowDatePicker] = useState(false)
@@ -80,14 +94,19 @@ function ProfileEditContent({ navigation }: NavigationProps) {
   useEffect(() => {
     if (userProfile) {
       const dob = userProfile.profile.date_of_birth || ''
+      const fromFull = splitFullNameForForm(userProfile.profile.full_name)
       const data = {
-        firstName: userProfile.profile.first_name || '',
-        middleName: userProfile.profile.middle_name || '',
-        lastName: userProfile.profile.last_name || '',
+        firstName: fromFull.firstName || userProfile.profile.first_name || '',
+        middleName: fromFull.middleName || userProfile.profile.middle_name || '',
+        lastName: fromFull.lastName || userProfile.profile.last_name || '',
         email: userProfile.profile.email || '',
         phone: userProfile.profile.phone || '',
         easetag: userProfile.profile.easetag || '',
         dateOfBirth: dob,
+        avatarUrl:
+          typeof userProfile.profile.avatar_url === 'string' && userProfile.profile.avatar_url.trim()
+            ? userProfile.profile.avatar_url.trim()
+            : null,
       }
       setProfileData(data)
       setEditProfileData(data)
@@ -116,12 +135,6 @@ function ProfileEditContent({ navigation }: NavigationProps) {
       return
     }
 
-    // Validate easetag if provided
-    if (editProfileData.easetag && easetagAvailable === false) {
-      Alert.alert('Error', 'Easetag is not available. Please choose a different one.')
-      return
-    }
-
     setLoading(true)
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
@@ -130,8 +143,8 @@ function ProfileEditContent({ navigation }: NavigationProps) {
         middleName: editProfileData.middleName,
         lastName: editProfileData.lastName,
         phone: editProfileData.phone,
-        easetag: editProfileData.easetag,
         dateOfBirth: editProfileData.dateOfBirth,
+        avatarUrl: editProfileData.avatarUrl,
       })
 
       // Update profileData with the response from the server to ensure consistency
@@ -163,6 +176,50 @@ function ProfileEditContent({ navigation }: NavigationProps) {
     setEasetagAvailable(null)
     if (easetagCheckTimeout.current) {
       clearTimeout(easetagCheckTimeout.current)
+    }
+  }
+
+  const profilePhotoInitials = () => {
+    const full = joinFullName({
+      firstName: isEditing ? editProfileData.firstName : profileData.firstName,
+      middleName: isEditing ? editProfileData.middleName : profileData.middleName,
+      lastName: isEditing ? editProfileData.lastName : profileData.lastName,
+    })
+    return initialsFromFullName(full || undefined)
+  }
+
+  const handlePickProfilePhoto = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Allow photo library access to set a profile photo.')
+      return
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.85,
+    })
+    if (result.canceled || !result.assets[0]) return
+    const asset = result.assets[0]
+    if (asset.fileSize != null && asset.fileSize > PROFILE_AVATAR_MAX_BYTES) {
+      Alert.alert('File too large', 'Photo must be 2MB or smaller.')
+      return
+    }
+    setUploadingAvatar(true)
+    try {
+      const up = await uploadProfileAvatar({
+        uri: asset.uri,
+        name: asset.fileName ?? undefined,
+        mimeType: asset.mimeType ?? undefined,
+      })
+      if ('error' in up) {
+        Alert.alert('Upload failed', up.error)
+        return
+      }
+      setEditProfileData((prev) => ({ ...prev, avatarUrl: up.url }))
+    } finally {
+      setUploadingAvatar(false)
     }
   }
 
@@ -568,6 +625,48 @@ function ProfileEditContent({ navigation }: NavigationProps) {
               </View>
 
               <View style={styles.profileContent}>
+                <View style={styles.avatarRow}>
+                  <View style={[userAvatarStyles.circle, styles.profileAvatarCircle]}>
+                    {(isEditing ? editProfileData.avatarUrl : profileData.avatarUrl) ? (
+                      <Image
+                        source={{ uri: (isEditing ? editProfileData.avatarUrl : profileData.avatarUrl) as string }}
+                        style={userAvatarStyles.image}
+                      />
+                    ) : (
+                      <Text style={userAvatarStyles.initials}>{profilePhotoInitials()}</Text>
+                    )}
+                    {uploadingAvatar ? (
+                      <View style={styles.avatarUploading}>
+                        <ActivityIndicator color={colors.text.inverse} size="small" />
+                      </View>
+                    ) : null}
+                  </View>
+                  {isEditing ? (
+                    <View style={styles.avatarActions}>
+                      <TouchableOpacity
+                        onPress={() => void handlePickProfilePhoto()}
+                        disabled={uploadingAvatar || loading}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.avatarActionText}>
+                          {(isEditing ? editProfileData.avatarUrl : profileData.avatarUrl)
+                            ? 'Change photo'
+                            : 'Add photo'}
+                        </Text>
+                      </TouchableOpacity>
+                      {(isEditing ? editProfileData.avatarUrl : profileData.avatarUrl) ? (
+                        <TouchableOpacity
+                          onPress={() => setEditProfileData((p) => ({ ...p, avatarUrl: null }))}
+                          disabled={uploadingAvatar || loading}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.avatarRemoveText}>Remove</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                  ) : null}
+                </View>
+
                 {isEditing ? (
                   <>
                     {renderProfileField(
@@ -798,6 +897,37 @@ const styles = StyleSheet.create({
   },
   profileContent: {
     gap: spacing[2],
+  },
+  avatarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing[3],
+    gap: spacing[4],
+  },
+  profileAvatarCircle: {
+    width: PROFILE_EDIT_AVATAR_SIZE,
+    height: PROFILE_EDIT_AVATAR_SIZE,
+    borderRadius: PROFILE_EDIT_AVATAR_SIZE / 2,
+  },
+  avatarUploading: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarActions: {
+    flex: 1,
+    gap: spacing[2],
+  },
+  avatarActionText: {
+    ...textStyles.labelLarge,
+    color: colors.primary.main,
+    fontWeight: '600',
+  },
+  avatarRemoveText: {
+    ...textStyles.labelMedium,
+    color: colors.error.main,
+    fontWeight: '500',
   },
   fieldContainer: {
     marginBottom: spacing[2],

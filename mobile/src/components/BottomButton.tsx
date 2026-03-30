@@ -1,6 +1,7 @@
 import React from 'react'
-import { View, TouchableOpacity, Text, StyleSheet, Platform } from 'react-native'
+import { View, TouchableOpacity, Text, StyleSheet } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { colors, borderRadius, spacing, textStyles, fontSize } from '../theme'
 
 interface BottomButtonProps {
   title: string
@@ -9,36 +10,40 @@ interface BottomButtonProps {
   variant?: 'primary' | 'secondary'
 }
 
-export default function BottomButton({ 
-  title, 
-  onPress, 
-  disabled = false, 
-  variant = 'primary' 
+export default function BottomButton({
+  title,
+  onPress,
+  disabled = false,
+  variant = 'primary',
 }: BottomButtonProps) {
   const insets = useSafeAreaInsets()
-  
+
   return (
-    <View style={[
-      styles.container,
-      { 
-        paddingBottom: Math.max(insets.bottom + 8, 16),
-        paddingHorizontal: 20,
-      }
-    ]}>
+    <View
+      style={[
+        styles.container,
+        {
+          paddingBottom: Math.max(insets.bottom + spacing[2], spacing[4]),
+          paddingHorizontal: spacing[5],
+        },
+      ]}
+    >
       <TouchableOpacity
         style={[
           styles.button,
           variant === 'primary' ? styles.primaryButton : styles.secondaryButton,
-          disabled && styles.disabledButton
+          disabled && styles.disabledButton,
         ]}
         onPress={onPress}
         disabled={disabled}
       >
-        <Text style={[
-          styles.buttonText,
-          variant === 'primary' ? styles.primaryButtonText : styles.secondaryButtonText,
-          disabled && styles.disabledButtonText
-        ]}>
+        <Text
+          style={[
+            styles.buttonText,
+            variant === 'primary' ? styles.primaryButtonText : styles.secondaryButtonText,
+            disabled && styles.disabledButtonText,
+          ]}
+        >
           {title}
         </Text>
       </TouchableOpacity>
@@ -48,38 +53,39 @@ export default function BottomButton({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.semantic.background,
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    paddingTop: 16,
+    borderTopColor: colors.semantic.border,
+    paddingTop: spacing[4],
   },
   button: {
-    borderRadius: 12,
-    paddingVertical: 16,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing[4],
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 52,
   },
   primaryButton: {
-    backgroundColor: '#1D4FF3',
+    backgroundColor: colors.primary.main,
   },
   secondaryButton: {
-    backgroundColor: '#f3f4f6',
+    backgroundColor: colors.semantic.muted,
   },
   disabledButton: {
-    backgroundColor: '#9ca3af',
+    backgroundColor: colors.neutral[400],
   },
   buttonText: {
-    fontSize: 16,
+    ...textStyles.titleMedium,
+    fontSize: fontSize.md,
     fontWeight: '600',
   },
   primaryButtonText: {
-    color: '#ffffff',
+    color: colors.text.inverse,
   },
   secondaryButtonText: {
-    color: '#374151',
+    color: colors.semantic.foreground,
   },
   disabledButtonText: {
-    color: '#ffffff',
+    color: colors.text.inverse,
   },
 })
