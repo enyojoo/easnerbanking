@@ -30,6 +30,7 @@ export function BusinessOnboardingDialog() {
 
   useEffect(() => {
     if (profile.isLoading) return
+    if (!profile.hasData) return
     if (!profile.isFresh) return
     if (!profile.onboardingComplete) {
       setOpen(true)
@@ -43,6 +44,7 @@ export function BusinessOnboardingDialog() {
     setOpen(false)
   }, [
     profile.isLoading,
+    profile.hasData,
     profile.isFresh,
     profile.onboardingComplete,
     profile.name,
