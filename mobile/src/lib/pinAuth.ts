@@ -144,9 +144,12 @@ export async function hasPin(userId: string): Promise<boolean> {
 }
 
 export async function isPinSetup(userId?: string): Promise<boolean> {
-  const { supabase } = await import('./supabase')
-  const { data } = await supabase.auth.getUser()
-  const uid = userId ?? data.user?.id
+  let uid = userId
+  if (!uid) {
+    const { supabase } = await import('./supabase')
+    const { data } = await supabase.auth.getUser()
+    uid = data.user?.id
+  }
   if (!uid) return false
   return hasPin(uid)
 }
@@ -165,9 +168,12 @@ export async function setupPin(pin: string, userId?: string): Promise<PinAuthRes
     if (!LOGIN_PIN_REGEX.test(pin)) {
       return { success: false, error: 'PIN must be exactly 4 digits' }
     }
-    const { supabase } = await import('./supabase')
-    const { data } = await supabase.auth.getUser()
-    const uid = userId ?? data.user?.id
+    let uid = userId
+    if (!uid) {
+      const { supabase } = await import('./supabase')
+      const { data } = await supabase.auth.getUser()
+      uid = data.user?.id
+    }
     if (!uid) {
       return { success: false, error: 'User not authenticated' }
     }
@@ -188,9 +194,12 @@ export async function setupPin(pin: string, userId?: string): Promise<PinAuthRes
 
 export async function verifyPin(pin: string, userId?: string): Promise<PinAuthResult> {
   try {
-    const { supabase } = await import('./supabase')
-    const { data } = await supabase.auth.getUser()
-    const uid = userId ?? data.user?.id
+    let uid = userId
+    if (!uid) {
+      const { supabase } = await import('./supabase')
+      const { data } = await supabase.auth.getUser()
+      uid = data.user?.id
+    }
     if (!uid) {
       return { success: false, error: 'User not authenticated' }
     }

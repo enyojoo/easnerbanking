@@ -205,17 +205,25 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
             </Text>
           </View>
 
-          {/* PIN Dots - Light gray circles */}
-          <View style={styles.pinDotsContainer}>
-            {currentPin.map((digit, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.pinDot,
-                  digit !== '' && styles.pinDotFilled,
-                ]}
-              />
-            ))}
+          {/* PIN dots, or centered spinner while saving */}
+          <View style={styles.pinDotsWrapper}>
+            {loading ? (
+              <View style={styles.pinDotsLoadingOnly}>
+                <ActivityIndicator size="small" color={colors.primary.main} />
+              </View>
+            ) : (
+              <View style={styles.pinDotsContainer}>
+                {currentPin.map((digit, index) => (
+                  <View
+                    key={index}
+                    style={[
+                      styles.pinDot,
+                      digit !== '' && styles.pinDotFilled,
+                    ]}
+                  />
+                ))}
+              </View>
+            )}
           </View>
 
           {/* Numeric Keypad - 3x3 grid + 0 and backspace */}
@@ -295,14 +303,6 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
         </View>
       </KeyboardAvoidingView>
 
-      {loading ? (
-        <View style={styles.loadingOverlay} pointerEvents="box-none">
-          <View style={styles.loadingCard}>
-            <ActivityIndicator size="large" color={colors.primary.main} />
-            <Text style={styles.loadingLabel}>{appPinStrings.pinSaving}</Text>
-          </View>
-        </View>
-      ) : null}
     </View>
   )
 }
@@ -311,21 +311,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background.primary,
-  },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 100,
-  },
-  loadingCard: {
-    alignItems: 'center',
-    gap: spacing[4],
-  },
-  loadingLabel: {
-    ...textStyles.bodyMedium,
-    color: colors.text.secondary,
   },
   keyboardView: {
     flex: 1,
@@ -383,12 +368,24 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     width: '100%',
   },
+  pinDotsWrapper: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 56,
+    marginBottom: spacing[6],
+  },
+  pinDotsLoadingOnly: {
+    minHeight: 56,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   pinDotsContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: spacing[4],
-    marginBottom: spacing[6],
   },
   pinDot: {
     width: 14,

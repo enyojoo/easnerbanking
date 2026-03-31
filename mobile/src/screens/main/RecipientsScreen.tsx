@@ -1666,6 +1666,33 @@ function RecipientsContent({ navigation }: NavigationProps) {
               </View>
               </View>
             </ScrollView>
+            {showScanModal && (
+              <View style={styles.scanOverlay}>
+                <CameraView
+                  style={StyleSheet.absoluteFillObject}
+                  facing="back"
+                  barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+                  onBarcodeScanned={({ data }) => {
+                    const address = extractWalletAddress(data)
+                    if (!address) return
+                    setNewRecipient(prev => ({ ...prev, walletAddress: address }))
+                    setShowScanModal(false)
+                  }}
+                />
+                <View style={styles.scanUiLayer}>
+                  <View style={styles.scanHeaderRow}>
+                    <Text style={styles.scanTitle}>Scan wallet address</Text>
+                    <TouchableOpacity style={styles.scanCloseButton} onPress={() => setShowScanModal(false)}>
+                      <Ionicons name="close" size={22} color={colors.text.inverse} />
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.scanCenterGroup}>
+                    <View style={styles.scanFrame} />
+                    <Text style={styles.scanHint}>Align QR code inside the frame</Text>
+                  </View>
+                </View>
+              </View>
+            )}
           </View>
         </KeyboardAvoidingView>
       </Modal>
