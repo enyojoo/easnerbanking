@@ -6,8 +6,10 @@ import {
   matchesCurrency,
 } from "@/lib/noah/payment-method-map"
 import { persistVirtualAccountFromPaymentMethod } from "@/lib/noah/persist-account-data"
+import { provisionNoahArtifactsForCustomer } from "@/lib/noah/provisioning"
 import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
+import { ensureCurrencyUsable } from "@/lib/accounts/currency-controls"
 
 export async function GET(request: Request) {
   const mis = requireNoahEnv()
@@ -23,11 +25,20 @@ export async function GET(request: Request) {
   if (guard) return guard
 
   const { noahCustomerId, subjectUserId } = acc.ctx
+  await provisionNoahArtifactsForCustomer({
+    subjectUserId,
+    noahCustomerId,
+    scope: acc.ctx.scope,
+  })
 
   const url = new URL(request.url)
   const currency = (url.searchParams.get("currency") || "usd").toLowerCase() as "usd" | "eur" | "gbp"
   if (currency !== "usd" && currency !== "eur" && currency !== "gbp") {
     return NextResponse.json({ error: "currency must be usd, eur, or gbp" }, { status: 400 })
+  }
+  const guardCurrency = await ensureCurrencyUsable(currency.toUpperCase())
+  if (!guardCurrency.ok) {
+    return NextResponse.json({ error: guardCurrency.reason, code: "CURRENCY_DISABLED" }, { status: 403 })
   }
 
   try {

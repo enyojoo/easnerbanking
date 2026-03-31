@@ -141,6 +141,12 @@ export default function AdminSettingsPage() {
     maxLoginAttempts: 5,
     accountLockoutDuration: 15,
   })
+  const [currencyControls, setCurrencyControls] = useState({
+    USD: { available: true, active: true },
+    EUR: { available: true, active: true },
+    GBP: { available: false, active: true },
+    NGN: { available: false, active: true },
+  })
 
   useEffect(() => {
     loadAllData()
@@ -176,6 +182,12 @@ export default function AdminSettingsPage() {
       const settings = data || []
       const newPlatformConfig = { ...platformConfig }
       const newSecuritySettings = { ...securitySettings }
+      const newCurrencyControls = {
+        USD: { ...currencyControls.USD },
+        EUR: { ...currencyControls.EUR },
+        GBP: { ...currencyControls.GBP },
+        NGN: { ...currencyControls.NGN },
+      }
 
       settings.forEach((setting) => {
         switch (setting.key) {
@@ -203,12 +215,37 @@ export default function AdminSettingsPage() {
           case "account_lockout_duration":
             newSecuritySettings.accountLockoutDuration = Number.parseInt(setting.value)
             break
+          case "currency_available_USD":
+            newCurrencyControls.USD.available = setting.value === "true"
+            break
+          case "currency_active_USD":
+            newCurrencyControls.USD.active = setting.value === "true"
+            break
+          case "currency_available_EUR":
+            newCurrencyControls.EUR.available = setting.value === "true"
+            break
+          case "currency_active_EUR":
+            newCurrencyControls.EUR.active = setting.value === "true"
+            break
+          case "currency_available_GBP":
+            newCurrencyControls.GBP.available = setting.value === "true"
+            break
+          case "currency_active_GBP":
+            newCurrencyControls.GBP.active = setting.value === "true"
+            break
+          case "currency_available_NGN":
+            newCurrencyControls.NGN.available = setting.value === "true"
+            break
+          case "currency_active_NGN":
+            newCurrencyControls.NGN.active = setting.value === "true"
+            break
         }
       })
 
       setPlatformConfig(newPlatformConfig)
       setSecuritySettings(newSecuritySettings)
       setOriginalSecuritySettings(newSecuritySettings)
+      setCurrencyControls(newCurrencyControls)
     } catch (error) {
       console.error("Error loading system settings:", error)
     }
@@ -241,14 +278,14 @@ export default function AdminSettingsPage() {
   }
 
 
-  const updateSystemSetting = async (key: string, value: any, dataType = "string") => {
+  const updateSystemSetting = async (key: string, value: any, dataType = "string", category = "platform") => {
     try {
       const { error } = await supabase.from("system_settings").upsert(
         {
           key,
           value: String(value),
           data_type: dataType,
-          category: "platform",
+          category,
           is_active: true,
           updated_at: new Date().toISOString(),
         },
@@ -281,6 +318,30 @@ export default function AdminSettingsPage() {
       console.error("Error updating platform config:", error)
       // Revert the change if it failed
       setPlatformConfig(platformConfig)
+    }
+  }
+
+  const handleCurrencyControlChange = async (
+    code: "USD" | "EUR" | "GBP" | "NGN",
+    field: "available" | "active",
+    checked: boolean,
+  ) => {
+    const isDefault = code === "USD" || code === "EUR"
+    if (isDefault && field === "available") return
+
+    const next =
+      field === "available"
+        ? { ...currencyControls[code], available: checked, active: checked ? currencyControls[code].active : false }
+        : { ...currencyControls[code], active: checked }
+
+    setCurrencyControls((prev) => ({ ...prev, [code]: next }))
+
+    try {
+      await updateSystemSetting(`currency_available_${code}`, isDefault ? true : next.available, "boolean", "currency")
+      await updateSystemSetting(`currency_active_${code}`, next.active, "boolean", "currency")
+    } catch (error) {
+      console.error("Error updating currency controls:", error)
+      await loadSystemSettings()
     }
   }
 
@@ -691,6 +752,51 @@ export default function AdminSettingsPage() {
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+                <div className="border-t pt-6 space-y-4">
+                  <div>
+                    <h3 className="text-sm font-semibold">Global Currency Controls</h3>
+                    <p className="text-sm text-gray-500">
+                      USD/EUR stay visible in products but can be deactivated to limit actions. Other currencies must be
+                      made available first.
+                    </p>
+                  </div>
+                  {(["USD", "EUR", "GBP", "NGN"] as const).map((code) => {
+                    const control = currencyControls[code]
+                    const isDefault = code === "USD" || code === "EUR"
+                    return (
+                      <div key={code} className="rounded-lg border p-3">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium">{code}</p>
+                            <p className="text-xs text-gray-500">
+                              {isDefault
+                                ? "Default currency. Visibility remains on."
+                                : "Non-default currency. Availability controls visibility/access."}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-6">
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                checked={isDefault ? true : control.available}
+                                disabled={isDefault}
+                                onCheckedChange={(v) => handleCurrencyControlChange(code, "available", Boolean(v))}
+                              />
+                              <Label className="text-xs">Make available</Label>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Switch
+                                checked={control.active}
+                                onCheckedChange={(v) => handleCurrencyControlChange(code, "active", v)}
+                                disabled={!isDefault && !control.available}
+                              />
+                              <Label className="text-xs">Active</Label>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </CardContent>
             </Card>

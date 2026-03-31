@@ -4,6 +4,7 @@ import { mapNoahBalancesToMobile } from "@/lib/noah/balance-map"
 import { requireAuth, requireNoahEnv } from "../../_helpers"
 import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
+import { getGlobalCurrencyPolicies } from "@/lib/accounts/currency-controls"
 
 type BalancesPayload = { Items?: Array<Record<string, unknown>>; PageToken?: string }
 
@@ -19,6 +20,14 @@ export async function GET(request: Request) {
 
   const guard = await requireNoahVerificationApproved(acc.ctx.subjectUserId, acc.ctx.scope)
   if (guard) return guard
+
+  const policies = await getGlobalCurrencyPolicies()
+  if (!policies.USD.active && !policies.EUR.active) {
+    return NextResponse.json(
+      { error: "USD and EUR balances are temporarily unavailable.", code: "CURRENCY_DISABLED" },
+      { status: 403 },
+    )
+  }
 
   try {
     const url = new URL(request.url)

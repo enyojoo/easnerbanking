@@ -18,10 +18,8 @@ type AvailablePayload = {
   defaults: string[]
   enabledExtras: string[]
   offers: (AccountCurrencyOffer & { alreadyAdded: boolean })[]
+  hasOpenableExtraCurrencies?: boolean
 }
-
-/** Set to true when extra currencies are ready to ship in the UI. */
-const OPEN_CURRENCY_ACCOUNT_ENABLED = false
 
 export function OpenCurrencyAccountDialog({ onAdded }: { onAdded: () => void }) {
   const [open, setOpen] = useState(false)
@@ -29,6 +27,32 @@ export function OpenCurrencyAccountDialog({ onAdded }: { onAdded: () => void }) 
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<AvailablePayload | null>(null)
+  const [canOpenAny, setCanOpenAny] = useState(false)
+  const [visibilityResolved, setVisibilityResolved] = useState(false)
+
+  const deriveHasOpenable = (payload: AvailablePayload): boolean => {
+    if (typeof payload.hasOpenableExtraCurrencies === "boolean") return payload.hasOpenableExtraCurrencies
+    return payload.offers.some((o) => !o.alreadyAdded && !o.disabledReason)
+  }
+
+  const loadVisibility = useCallback(async () => {
+    try {
+      const res = await fetchWithSession("/api/accounts/available-currencies", {
+        headers: { "X-Easner-Noah-Scope": "business" },
+      })
+      if (!res.ok) {
+        setCanOpenAny(false)
+        return
+      }
+      const json = (await res.json()) as AvailablePayload
+      setCanOpenAny(deriveHasOpenable(json))
+      setData(json)
+    } catch {
+      setCanOpenAny(false)
+    } finally {
+      setVisibilityResolved(true)
+    }
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -43,6 +67,7 @@ export function OpenCurrencyAccountDialog({ onAdded }: { onAdded: () => void }) 
         return
       }
       setData(json)
+      setCanOpenAny(deriveHasOpenable(json))
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Could not load currencies.")
     } finally {
@@ -51,8 +76,14 @@ export function OpenCurrencyAccountDialog({ onAdded }: { onAdded: () => void }) 
   }, [])
 
   useEffect(() => {
-    if (OPEN_CURRENCY_ACCOUNT_ENABLED && open) void load()
+    void loadVisibility()
+  }, [loadVisibility])
+
+  useEffect(() => {
+    if (open) void load()
   }, [open, load])
+
+  if (!visibilityResolved || !canOpenAny) return null
 
   const openCurrency = async (code: string) => {
     setBusy(code)
@@ -71,6 +102,7 @@ export function OpenCurrencyAccountDialog({ onAdded }: { onAdded: () => void }) 
         setError(json.error ?? "Could not open account.")
         return
       }
+      await loadVisibility()
       setOpen(false)
       onAdded()
     } catch (e: unknown) {
@@ -81,25 +113,9 @@ export function OpenCurrencyAccountDialog({ onAdded }: { onAdded: () => void }) 
   }
 
   return (
-    <Dialog
-      open={OPEN_CURRENCY_ACCOUNT_ENABLED ? open : false}
-      onOpenChange={(next) => {
-        if (!OPEN_CURRENCY_ACCOUNT_ENABLED) return
-        setOpen(next)
-      }}
-    >
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          className="gap-2"
-          disabled={!OPEN_CURRENCY_ACCOUNT_ENABLED}
-          title={
-            OPEN_CURRENCY_ACCOUNT_ENABLED
-              ? undefined
-              : "Opening additional currency accounts is not available yet."
-          }
-        >
+        <Button type="button" variant="outline" className="gap-2">
           <Plus className="h-4 w-4" />
           Open Currency Account
         </Button>

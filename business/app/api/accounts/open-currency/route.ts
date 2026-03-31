@@ -8,6 +8,7 @@ import { persistVirtualAccountFromPaymentMethod } from "@/lib/noah/persist-accou
 import { requireNoahEnv } from "@/app/api/noah/_helpers"
 import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
+import { ensureCurrencyUsable } from "@/lib/accounts/currency-controls"
 
 /**
  * Provider-agnostic entrypoint: after KYC/KYB tiers, open an extra currency (Noah GBP today; Tier 2 NGN stub).
@@ -29,6 +30,11 @@ export async function POST(request: Request) {
   const raw = body.currency?.trim().toUpperCase()
   if (!raw) {
     return NextResponse.json({ error: "currency is required" }, { status: 400 })
+  }
+
+  const currencyGuard = await ensureCurrencyUsable(raw)
+  if (!currencyGuard.ok) {
+    return NextResponse.json({ error: currencyGuard.reason, code: "CURRENCY_DISABLED" }, { status: 403 })
   }
 
   if (raw === "USD" || raw === "EUR") {

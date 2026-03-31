@@ -738,20 +738,21 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
             ? userProfileData.noah_usd_virtual_account_id 
             : userProfileData.noah_eur_virtual_account_id
           
-          // If accounts don't exist, trigger sync-status which will create them
+          // If accounts don't exist, trigger create-accounts provisioning
           if (!userProfileData.noah_wallet_id || !accountId) {
             accountCreationTriggeredRef.current = true
-            console.log('[RECEIVE-MONEY] KYC approved but accounts missing, triggering sync-status to create accounts...')
+            console.log('[RECEIVE-MONEY] KYC approved but accounts missing, triggering create-accounts provisioning...')
             try {
-              const syncResponse = await fetch(`${getApiBaseUrl() || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/api/noah/sync-status`, {
+              const syncResponse = await fetch(`${getApiBaseUrl() || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/api/noah/create-accounts`, {
                 method: 'POST',
                 headers: {
                   'Authorization': `Bearer ${session.access_token}`,
+                  'Content-Type': 'application/json',
                 },
               })
               
               if (syncResponse.ok) {
-                console.log('[RECEIVE-MONEY] ✅ Sync-status completed, accounts should be created')
+                console.log('[RECEIVE-MONEY] ✅ create-accounts completed, accounts should be created')
                 // Reset refs to allow fetching new data after account creation
                 dataLoadedRef.current = false
                 initialLoadInProgressRef.current = false
@@ -763,7 +764,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                 }, 3000)
               }
             } catch (syncError) {
-              console.error('[RECEIVE-MONEY] Error triggering sync-status:', syncError)
+              console.error('[RECEIVE-MONEY] Error triggering create-accounts:', syncError)
               accountCreationTriggeredRef.current = false // Allow retry on error
             }
           }

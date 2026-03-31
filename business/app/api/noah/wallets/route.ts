@@ -3,6 +3,7 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireAuth, requireNoahEnv } from "../_helpers"
 import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
+import { provisionNoahArtifactsForCustomer } from "@/lib/noah/provisioning"
 
 /**
  * Wallet shape for send/receive flows. Easner stores optional address data in `noah_wallets`
@@ -27,6 +28,11 @@ export async function GET(request: Request) {
   let blockchain_memo: string | null = null
 
   try {
+    await provisionNoahArtifactsForCustomer({
+      subjectUserId,
+      noahCustomerId,
+      scope: acc.ctx.scope,
+    })
     const admin = createSupabaseAdmin()
     const { data: userRow } = await admin
       .from("users")

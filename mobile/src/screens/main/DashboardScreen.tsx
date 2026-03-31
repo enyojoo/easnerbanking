@@ -68,10 +68,15 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const { refreshStaleData, refreshing: dataRefreshing } = useUserData()
   const { balances, refreshBalances } = useBalance()
   const insets = useSafeAreaInsets()
-  const [selectedCurrency, setSelectedCurrency] = useState<'USD' | 'EUR'>('USD')
+  const [selectedCurrency, setSelectedCurrency] = useState<'USD' | 'EUR' | 'GBP'>('USD')
   const [balanceVisible, setBalanceVisible] = useState(true)
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [availableCurrencies, setAvailableCurrencies] = useState([
+    { code: 'USD', name: 'US Dollar', symbol: '$', flag: require('../../../assets/flags/us.png') },
+    { code: 'EUR', name: 'Euro', symbol: '€', flag: require('../../../assets/flags/eu.png') },
+  ])
+  const [canOpenMoreCurrencies, setCanOpenMoreCurrencies] = useState(false)
   const [recentTransactions, setRecentTransactions] = useState<DashboardTransaction[]>([])
   const [loadingTransactions, setLoadingTransactions] = useState(true) // Start as loading until cache loads or API completes
   const [hasAttemptedLoad, setHasAttemptedLoad] = useState(false) // Track if we've attempted to load data (cache or API)
@@ -85,11 +90,43 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   /** True while we are removing/replacing the channel on purpose — avoids treating `CLOSED` as a failure. */
   const realtimeIntentionalCloseRef = useRef(false)
 
-  // Available currencies for the dropdown (USD/EUR only)
-  const availableCurrencies = [
-    { code: 'USD', name: 'US Dollar', symbol: '$', flag: require('../../../assets/flags/us.png') },
-    { code: 'EUR', name: 'Euro', symbol: '€', flag: require('../../../assets/flags/eu.png') },
-  ]
+  const getCurrencyFlagSource = (code: string) => {
+    if (code === 'USD') return require('../../../assets/flags/us.png')
+    if (code === 'EUR') return require('../../../assets/flags/eu.png')
+    return require('../../../assets/flags/us.png')
+  }
+
+  const loadAvailableCurrencies = useCallback(async () => {
+    try {
+      const response = await apiGet('/api/accounts/available-currencies')
+      if (!response.ok) return
+      const data = await response.json()
+      const offers = Array.isArray(data?.offers) ? data.offers : []
+      const extras = offers
+        .filter((o: any) => o?.alreadyAdded === true && !o?.disabledReason)
+        .map((o: any) => String(o.code || '').toUpperCase())
+      const orderedCodes = ['USD', 'EUR', ...extras.filter((c: string) => c !== 'USD' && c !== 'EUR')]
+      const mapped = orderedCodes.map((code) => ({
+        code,
+        name: code === 'USD' ? 'US Dollar' : code === 'EUR' ? 'Euro' : code === 'GBP' ? 'British Pound' : code,
+        symbol: code === 'USD' ? '$' : code === 'EUR' ? '€' : code === 'GBP' ? '£' : code,
+        flag: getCurrencyFlagSource(code),
+      }))
+      if (mapped.length > 0) {
+        setAvailableCurrencies(mapped as any)
+      }
+      const hasOpenableFromServer =
+        typeof data?.hasOpenableExtraCurrencies === 'boolean' ? data.hasOpenableExtraCurrencies : null
+      const hasOpenableFromOffers = offers.some((o: any) => !o?.alreadyAdded && !o?.disabledReason)
+      setCanOpenMoreCurrencies(hasOpenableFromServer ?? hasOpenableFromOffers)
+    } catch {
+      // Keep defaults when unavailable
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadAvailableCurrencies()
+  }, [loadAvailableCurrencies])
 
   // Cache TTL (10 minutes - same as other screens)
   const CACHE_TTL = 10 * 60 * 1000
@@ -542,10 +579,13 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
           // Silently fail
         })
       }
-    }, [refreshBalances, fetchRecentTransactions])
+      loadAvailableCurrencies().catch(() => {
+        // Silently fail
+      })
+    }, [refreshBalances, fetchRecentTransactions, loadAvailableCurrencies])
   )
 
-  const balance = parseFloat(balances[selectedCurrency] || '0')
+  const balance = parseFloat((balances as any)[selectedCurrency] || '0')
 
   // Get user's first name for greeting - use only the first word if multiple names exist
   const dashboardAvatarFullName =
@@ -560,7 +600,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
       ? userProfile.profile.avatar_url.trim()
       : null
 
-  const handleCurrencyChange = (currency: 'USD' | 'EUR') => {
+  const handleCurrencyChange = (currency: 'USD' | 'EUR' | 'GBP') => {
     setSelectedCurrency(currency)
     setShowCurrencyDropdown(false)
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -715,19 +755,34 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
           }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Balance</Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setShowCurrencyDropdown(false)
-                }}
-                style={styles.closeButton}
-              >
-                <Ionicons name="close" size={24} color={colors.text.secondary} />
-              </TouchableOpacity>
+              <View style={styles.modalHeaderActions}>
+                {canOpenMoreCurrencies ? (
+                  <TouchableOpacity
+                    style={styles.closeButton}
+                    accessibilityRole="button"
+                    accessibilityLabel="Open currency account"
+                    onPress={() => {
+                      setShowCurrencyDropdown(false)
+                      navigation.navigate('OpenCurrencyAccount')
+                    }}
+                  >
+                    <Plus size={20} color={colors.text.secondary} strokeWidth={2.25} />
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity
+                  onPress={() => {
+                    setShowCurrencyDropdown(false)
+                  }}
+                  style={styles.closeButton}
+                >
+                  <Ionicons name="close" size={24} color={colors.text.secondary} />
+                </TouchableOpacity>
+              </View>
             </View>
 
             <View style={styles.currencyListContainer}>
               {availableCurrencies.map((item) => {
-                const balance = parseFloat(balances[item.code as 'USD' | 'EUR'] || '0')
+                const balance = parseFloat((balances as any)[item.code] || '0')
                 // Use the same formatting as the main balance display for consistency
                 const balanceDisplay = balanceVisible 
                   ? formatBalanceDisplay(balance, item.code as 'USD' | 'EUR')
@@ -742,7 +797,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                     ]}
                     onPress={async () => {
                       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                      handleCurrencyChange(item.code as 'USD' | 'EUR')
+                      handleCurrencyChange(item.code as 'USD' | 'EUR' | 'GBP')
                       setShowCurrencyDropdown(false)
                     }}
                   >
@@ -898,9 +953,11 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
               <View style={styles.flagContainer}>
                 <Image 
                   source={
-                    selectedCurrency === 'USD' 
-                      ? require('../../../assets/flags/us.png') 
-                      : require('../../../assets/flags/eu.png')
+                    selectedCurrency === 'USD'
+                      ? require('../../../assets/flags/us.png')
+                      : selectedCurrency === 'EUR'
+                        ? require('../../../assets/flags/eu.png')
+                        : require('../../../assets/flags/us.png')
                   }
                   style={styles.flagImage}
                   resizeMode="cover"
@@ -1253,6 +1310,11 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[4],
     borderBottomWidth: 1,
     borderBottomColor: colors.border.light,
+  },
+  modalHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
   },
   modalTitle: {
     fontSize: 20,

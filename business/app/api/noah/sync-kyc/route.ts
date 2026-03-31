@@ -2,6 +2,9 @@ import { NextResponse } from "next/server"
 import { noahFetch } from "@/lib/noah/http"
 import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
 import { requireAuth, requireNoahEnv, resolveNoahContext } from "../_helpers"
+import { mapNoahVerificationToKycStatus } from "@/lib/noah/map-kyc"
+import { provisionNoahArtifactsForCustomer } from "@/lib/noah/provisioning"
+import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 
 export async function POST(request: Request) {
   const mis = requireNoahEnv()
@@ -17,7 +20,19 @@ export async function POST(request: Request) {
       path: `/customers/${encodeURIComponent(ctx.noahCustomerId)}`,
     })
     await syncNoahCustomerToSupabase(user.id, customer, ctx.noahCustomerId, ctx.scope)
-    return NextResponse.json({ success: true, noahScope: ctx.scope })
+    const kyc = mapNoahVerificationToKycStatus(customer)
+    let provisioned: Record<string, unknown> | undefined
+    if (kyc === "approved") {
+      const accountCtx = await resolveNoahAccountContext(request, user.id)
+      if (accountCtx.ok) {
+        provisioned = await provisionNoahArtifactsForCustomer({
+          subjectUserId: accountCtx.ctx.subjectUserId,
+          noahCustomerId: accountCtx.ctx.noahCustomerId,
+          scope: accountCtx.ctx.scope,
+        })
+      }
+    }
+    return NextResponse.json({ success: true, noahScope: ctx.scope, provisioned })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
     return NextResponse.json({ error: msg }, { status: 400 })

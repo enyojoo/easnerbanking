@@ -1,6 +1,8 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { parseEasnerUserIdFromNoahCustomerId } from "@/lib/noah/customer-id"
 import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
+import { mapNoahVerificationToKycStatus } from "@/lib/noah/map-kyc"
+import { provisionNoahArtifactsForCustomer } from "@/lib/noah/provisioning"
 
 /**
  * Persist webhook (idempotent) and sync Customer events to public.users when CustomerID is Easner-shaped.
@@ -37,6 +39,14 @@ export async function recordNoahWebhookDelivery(payload: unknown): Promise<{ ski
         Verifications: data.Verifications,
       }
       await syncNoahCustomerToSupabase(parsed.userId, customerLike, customerId, parsed.scope)
+      const mappedStatus = mapNoahVerificationToKycStatus(customerLike)
+      if (mappedStatus === "approved") {
+        await provisionNoahArtifactsForCustomer({
+          subjectUserId: parsed.userId,
+          noahCustomerId: customerId,
+          scope: parsed.scope,
+        })
+      }
     }
   }
 

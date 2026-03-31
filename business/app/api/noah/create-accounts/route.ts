@@ -4,11 +4,9 @@ import { buildHostedOnboardingBody } from "@/lib/noah/hosted-onboarding"
 import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
 import { mapNoahVerificationToKycStatus } from "@/lib/noah/map-kyc"
 import { requireAuth, requireNoahEnv } from "../_helpers"
-import { fetchAllPaymentMethodsForCustomer } from "@/lib/noah/list-payment-methods"
-import { hasPayinBank, matchesCurrency } from "@/lib/noah/payment-method-map"
-import { persistVirtualAccountFromPaymentMethod } from "@/lib/noah/persist-account-data"
 import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
+import { provisionNoahArtifactsForCustomer } from "@/lib/noah/provisioning"
 
 export async function POST(request: Request) {
   const mis = requireNoahEnv()
@@ -59,28 +57,23 @@ export async function POST(request: Request) {
     })
     await syncNoahCustomerToSupabase(subjectUserId, customer, noahCustomerId, scope)
 
-    const allPm = await fetchAllPaymentMethodsForCustomer(noahCustomerId)
-
-    const usdPm = allPm.find((pm) => hasPayinBank(pm, "US"))
-    const eurPm = allPm.find((pm) => {
-      const caps = pm.Capabilities as Record<string, unknown> | undefined
-      if (caps && caps.PayinTo === false) return false
-      return matchesCurrency(pm, "eur")
+    const provisioned = await provisionNoahArtifactsForCustomer({
+      subjectUserId,
+      noahCustomerId,
+      scope,
     })
-    const gbpPm = allPm.find((pm) => hasPayinBank(pm, "GB"))
-
-    if (usdPm) await persistVirtualAccountFromPaymentMethod(subjectUserId, "usd", usdPm)
-    if (eurPm) await persistVirtualAccountFromPaymentMethod(subjectUserId, "eur", eurPm)
-    if (gbpPm) await persistVirtualAccountFromPaymentMethod(subjectUserId, "gbp", gbpPm)
 
     return NextResponse.json({
-      walletCreated: false,
-      usdAccountCreated: !!usdPm,
-      eurAccountCreated: !!eurPm,
-      gbpAccountCreated: !!gbpPm,
-      usdAccountId: usdPm ? String(usdPm.ID ?? "") : undefined,
-      eurAccountId: eurPm ? String(eurPm.ID ?? "") : undefined,
-      gbpAccountId: gbpPm ? String(gbpPm.ID ?? "") : undefined,
+      walletCreated: provisioned.walletCreated,
+      walletId: provisioned.walletId,
+      usdAccountCreated: provisioned.usdAccountCreated,
+      eurAccountCreated: provisioned.eurAccountCreated,
+      gbpAccountCreated: provisioned.gbpAccountCreated,
+      usdAccountId: provisioned.usdAccountId,
+      eurAccountId: provisioned.eurAccountId,
+      gbpAccountId: provisioned.gbpAccountId,
+      usdcAddress: provisioned.usdcAddress,
+      eurcAddress: provisioned.eurcAddress,
       hostedURL: hostedUrl,
       kycStatus: mapNoahVerificationToKycStatus(customer),
       errors,

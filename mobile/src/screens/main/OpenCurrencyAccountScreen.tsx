@@ -1,0 +1,159 @@
+import React, { useCallback, useEffect, useState } from 'react'
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, FlatList } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
+import * as Haptics from 'expo-haptics'
+import ScreenWrapper from '../../components/ScreenWrapper'
+import { NavigationProps } from '../../types'
+import { apiGet, apiPost } from '../../lib/apiClient'
+import { colors, textStyles, spacing, borderRadius } from '../../theme'
+
+type Offer = {
+  code: string
+  label: string
+  alreadyAdded: boolean
+  disabledReason?: string
+  tierRequired: number
+}
+
+export default function OpenCurrencyAccountScreen({ navigation }: NavigationProps) {
+  const [loading, setLoading] = useState(true)
+  const [busyCode, setBusyCode] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [offers, setOffers] = useState<Offer[]>([])
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const response = await apiGet('/api/accounts/available-currencies')
+      const json = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        setError((json as any).error || 'Unable to load currencies.')
+        return
+      }
+      setOffers((json as any).offers || [])
+    } catch (e: any) {
+      setError(e?.message || 'Unable to load currencies.')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const openCurrency = async (code: string) => {
+    setBusyCode(code)
+    setError(null)
+    try {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+      const response = await apiPost('/api/accounts/open-currency', { currency: code })
+      const json = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        setError((json as any).error || `Unable to open ${code}.`)
+        return
+      }
+      navigation.goBack()
+    } catch (e: any) {
+      setError(e?.message || `Unable to open ${code}.`)
+    } finally {
+      setBusyCode(null)
+    }
+  }
+
+  return (
+    <ScreenWrapper>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
+          </TouchableOpacity>
+          <Text style={styles.title}>Open Currency Account</Text>
+        </View>
+
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+
+        {loading ? (
+          <View style={styles.center}>
+            <ActivityIndicator size="small" color={colors.primary.main} />
+          </View>
+        ) : (
+          <FlatList
+            data={offers}
+            keyExtractor={(item) => item.code}
+            contentContainerStyle={styles.list}
+            renderItem={({ item }) => {
+              const disabled = item.alreadyAdded || Boolean(item.disabledReason) || busyCode !== null
+              return (
+                <View style={styles.item}>
+                  <View style={styles.itemTextWrap}>
+                    <Text style={styles.itemTitle}>{item.code} - {item.label}</Text>
+                    <Text style={styles.itemSubtitle}>
+                      {item.disabledReason || (item.alreadyAdded ? 'Already added' : `Tier ${item.tierRequired}`)}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    disabled={disabled}
+                    style={[styles.addBtn, disabled && styles.addBtnDisabled]}
+                    onPress={() => openCurrency(item.code)}
+                  >
+                    {busyCode === item.code ? (
+                      <ActivityIndicator size="small" color={colors.text.inverse} />
+                    ) : (
+                      <Text style={styles.addBtnText}>{item.alreadyAdded ? 'Added' : 'Add'}</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )
+            }}
+          />
+        )}
+      </View>
+    </ScreenWrapper>
+  )
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background.primary, padding: spacing[5] },
+  header: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing[4], gap: spacing[3] },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.frame.background,
+    borderWidth: 0.5,
+    borderColor: colors.frame.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: { ...textStyles.headlineSmall, color: colors.text.primary, fontFamily: 'Outfit-SemiBold' },
+  error: { ...textStyles.bodySmall, color: colors.error.main, marginBottom: spacing[3] },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  list: { gap: spacing[3], paddingBottom: spacing[8] },
+  item: {
+    backgroundColor: colors.frame.background,
+    borderRadius: borderRadius.lg,
+    borderWidth: 0.5,
+    borderColor: colors.frame.border,
+    padding: spacing[3],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  itemTextWrap: { flex: 1 },
+  itemTitle: { ...textStyles.bodyMedium, color: colors.text.primary, fontFamily: 'Outfit-SemiBold' },
+  itemSubtitle: { ...textStyles.bodySmall, color: colors.text.secondary },
+  addBtn: {
+    minWidth: 64,
+    height: 34,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.primary.main,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing[3],
+  },
+  addBtnDisabled: { opacity: 0.5 },
+  addBtnText: { ...textStyles.bodySmall, color: colors.text.inverse, fontFamily: 'Outfit-SemiBold' },
+})
+

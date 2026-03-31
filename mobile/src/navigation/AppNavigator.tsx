@@ -38,6 +38,7 @@ import RecipientsScreen from '../screens/main/RecipientsScreen'
 import TransactionsScreen from '../screens/main/TransactionsScreen'
 import ExpenseInsightsScreen from '../screens/main/ExpenseInsightsScreen'
 import MoreScreen from '../screens/main/MoreScreen'
+import OpenCurrencyAccountScreen from '../screens/main/OpenCurrencyAccountScreen'
 import ProfileEditScreen from '../screens/main/ProfileEditScreen'
 import SupportScreen from '../screens/main/SupportScreen'
 import CardScreen from '../screens/main/CardScreen'
@@ -680,6 +681,14 @@ function MainStack() {
         name="ReceiveMoney" 
         component={ReceiveMoneyScreen}
         options={{ 
+          headerShown: false,
+          ...getTransitionConfig(),
+        }}
+      />
+      <Stack.Screen
+        name="OpenCurrencyAccount"
+        component={OpenCurrencyAccountScreen}
+        options={{
           headerShown: false,
           ...getTransitionConfig(),
         }}
