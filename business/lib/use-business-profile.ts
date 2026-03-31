@@ -111,13 +111,15 @@ export async function updateBusinessProfile(payload: {
 
 export function useBusinessProfile() {
   const { user } = useAuth()
+  const PROFILE_CACHE_TTL_MS = 5 * 60 * 1000
   const cacheKey = user?.id ? CACHE_KEYS.BUSINESS_PROFILE(user.id) : null
   const { data: profileData, setData, loading: isLoading } = useCachedData<BusinessProfile>({
     enabled: Boolean(user?.id),
     cacheKey,
     persistKey: user?.id ? `business_profile_cache_${user.id}` : undefined,
     initialData: DEFAULT_PROFILE,
-    ttlMs: 5 * 60 * 1000,
+    ttlMs: PROFILE_CACHE_TTL_MS,
+    persistMaxAgeMs: PROFILE_CACHE_TTL_MS,
     fetcher: async () => {
       const res = await fetchWithSession("/api/business/profile")
       if (!res.ok) throw new Error("Failed to load profile")
@@ -153,8 +155,9 @@ export function useBusinessProfile() {
     }),
     [profileData],
   )
-  const isFresh = Boolean(cacheKey && dataCache.get(cacheKey) != null && !dataCache.isStale(cacheKey))
-  const hasData = Boolean(user?.id) && !isLoading
+  const hasCachedProfile = Boolean(cacheKey && dataCache.get(cacheKey) != null)
+  const isFresh = Boolean(cacheKey && hasCachedProfile && !dataCache.isStale(cacheKey))
+  const hasData = hasCachedProfile
 
   return {
     ...profile,

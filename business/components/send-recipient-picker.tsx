@@ -18,11 +18,6 @@ import { CountryFlag, CurrencyFlag } from "@/components/flags"
 import { listRecipients } from "@/lib/recipients-store"
 import { useAuth } from "@/lib/auth-context"
 
-function maskAccount(accountNumber: string): string {
-  if (!accountNumber || accountNumber.length < 4) return "****"
-  return `****${accountNumber.slice(-4)}`
-}
-
 interface SendRecipientPickerProps {
   selected: Beneficiary | null
   onSelect: (recipient: Beneficiary | null) => void
@@ -104,21 +99,31 @@ export function SendRecipientPicker({
       >
         {selected ? (
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                <User className="h-5 w-5 text-muted-foreground" />
+            <div className="relative mr-1 shrink-0">
+              <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                <User className="h-5 w-5 text-primary" />
               </div>
-              {selected.countryCode ? (
-                <CountryFlag code={selected.countryCode} size={18} className="rounded-full shrink-0" />
-              ) : (
-                <CurrencyFlag currency={selected.currency} size={18} className="rounded-full shrink-0" />
-              )}
+              <div className="absolute -bottom-0.5 -right-0.5 h-5 w-5 overflow-hidden rounded-full border-2 border-background bg-background">
+                {selected.countryCode ? (
+                  <CountryFlag
+                    code={selected.countryCode}
+                    size={24}
+                    className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-none"
+                  />
+                ) : (
+                  <CurrencyFlag
+                    currency={selected.currency}
+                    size={24}
+                    className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-none"
+                  />
+                )}
+              </div>
             </div>
             <div>
               <p className="font-medium">{selected.name}</p>
               <p className="text-sm text-muted-foreground">
                 <span>
-                  {selected.currency} • {maskAccount(selected.fullAccountNumber)}
+                  {selected.currency} • {selected.fullAccountNumber}
                 </span>
               </p>
             </div>
@@ -153,15 +158,25 @@ export function SendRecipientPicker({
                   onClick={() => handleSelect(b)}
                   className="flex w-full items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left transition-colors hover:bg-muted hover:border-input"
                 >
-                  <div className="flex items-center gap-2.5 shrink-0">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                      <User className="h-5 w-5 text-muted-foreground" />
+                  <div className="relative mr-1 shrink-0">
+                    <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                      <User className="h-5 w-5 text-primary" />
                     </div>
-                    {b.countryCode ? (
-                      <CountryFlag code={b.countryCode} size={18} className="rounded-full shrink-0" />
-                    ) : (
-                      <CurrencyFlag currency={b.currency} size={18} className="rounded-full shrink-0" />
-                    )}
+                    <div className="absolute -bottom-0.5 -right-0.5 h-5 w-5 overflow-hidden rounded-full border-2 border-background bg-background">
+                      {b.countryCode ? (
+                        <CountryFlag
+                          code={b.countryCode}
+                          size={24}
+                          className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-none"
+                        />
+                      ) : (
+                        <CurrencyFlag
+                          currency={b.currency}
+                          size={24}
+                          className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-none"
+                        />
+                      )}
+                    </div>
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="font-medium truncate">{b.name}</p>
