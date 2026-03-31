@@ -424,6 +424,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
             <Text style={styles.recipientAccount}>
               {item.iban || item.account_number || ''}
             </Text>
+            <Text style={styles.recipientCurrency}>{item.currency}</Text>
           </View>
           
           <Ionicons name="chevron-forward" size={20} color={colors.text.secondary} />
@@ -1610,6 +1611,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing[0],
   },
   recipientAccount: {
+    ...textStyles.bodySmall,
+    color: colors.text.secondary,
+    fontFamily: 'Outfit-Regular',
+  },
+  recipientCurrency: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
     fontFamily: 'Outfit-Regular',

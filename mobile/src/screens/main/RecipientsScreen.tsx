@@ -612,6 +612,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
           <Text style={styles.recipientAccount}>
             {item.iban || item.account_number || ''}
           </Text>
+          <Text style={styles.recipientCurrency}>{item.currency}</Text>
         </View>
         
         <View style={styles.recipientActions}>
@@ -1853,6 +1854,12 @@ const styles = StyleSheet.create({
   recipientAccount: {
     ...textStyles.bodySmall,
     color: colors.text.tertiary,
+    fontFamily: 'Outfit-Regular',
+    marginTop: 2,
+  },
+  recipientCurrency: {
+    ...textStyles.bodySmall,
+    color: colors.text.secondary,
     fontFamily: 'Outfit-Regular',
     marginTop: 2,
   },

@@ -10,7 +10,7 @@ import { fetchWithSession } from "@/lib/fetch-with-session"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { useAuth } from "@/lib/auth-context"
 import { CACHE_KEYS, dataCache } from "@/lib/cache"
-import { personalSettingsStore } from "@/lib/personal-settings-store"
+import { useCachedData } from "@/lib/use-cached-data"
 import { ProfilePhotoField } from "@/components/profile-photo-field"
 import {
   AlertDialog,
@@ -44,6 +44,17 @@ type MfaStatusSnapshot = {
   statusLine: string
 }
 
+type PersonalSettingsResponse = {
+  personal: {
+    fullName: string
+    email: string
+    phone: string
+    dateOfBirth: string
+    avatarUrl: string | null
+  }
+  sessionRefreshSuggested?: boolean
+}
+
 function mfaStatusCacheKey(userId: string) {
   return `mfa_security_cache_${userId}`
 }
@@ -75,7 +86,6 @@ export function SettingsPersonalTab() {
   const { user } = useAuth()
   const supabase = useMemo(() => createSupabaseBrowser(), [])
   const [editingSection, setEditingSection] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -83,7 +93,6 @@ export function SettingsPersonalTab() {
     dateOfBirth: "",
     avatarUrl: null as string | null,
   })
-  const mountedRef = useRef(true)
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
   const [mfaDialogOpen, setMfaDialogOpen] = useState(false)
   const [mfaAutoStartEnroll, setMfaAutoStartEnroll] = useState(false)
@@ -97,6 +106,22 @@ export function SettingsPersonalTab() {
   const [pinSettingsOpen, setPinSettingsOpen] = useState(false)
   const [pinStatusVersion, setPinStatusVersion] = useState(0)
   const [hasAppPin, setHasAppPin] = useState(false)
+  const { data: personalData, setData: setPersonalData, loading } = useCachedData<PersonalSettingsResponse>({
+    enabled: Boolean(user?.id),
+    cacheKey: user?.id ? CACHE_KEYS.PERSONAL_SETTINGS(user.id) : null,
+    persistKey: user?.id ? `personal_settings_${user.id}` : undefined,
+    initialData: {
+      personal: { fullName: "", email: "", phone: "", dateOfBirth: "", avatarUrl: null },
+    },
+    fetcher: async () => {
+      const res = await fetchWithSession("/api/settings/personal")
+      if (!res.ok) {
+        const json = (await res.json().catch(() => ({ error: "Failed to load personal settings" }))) as { error?: string }
+        throw new Error(json.error || "Failed to load personal settings")
+      }
+      return (await res.json()) as PersonalSettingsResponse
+    },
+  })
 
   useEffect(() => {
     if (!user?.id) {
@@ -228,66 +253,23 @@ export function SettingsPersonalTab() {
     void refreshMfaStatus()
   }, [user?.id, refreshMfaStatus])
 
-  useLayoutEffect(() => {
-    if (!user?.id) {
-      setFormData({ fullName: "", email: "", phone: "", dateOfBirth: "", avatarUrl: null })
-      setLoading(false)
-      return
-    }
-    personalSettingsStore.hydrateSync(user.id)
-    const d = personalSettingsStore.getData()
-    if (d) {
-      setFormData({
-        fullName: d.personal.fullName,
-        email: d.personal.email,
-        phone: d.personal.phone,
-        dateOfBirth: d.personal.dateOfBirth,
-        avatarUrl: d.personal.avatarUrl ?? null,
-      })
-      setLoading(false)
-    } else {
-      setLoading(true)
-    }
-  }, [user?.id])
-
   useEffect(() => {
-    if (!user?.id) return
-    mountedRef.current = true
-
-    const initialize = async () => {
-      try {
-        await personalSettingsStore.initialize(user.id)
-      } finally {
-        if (mountedRef.current) setLoading(false)
-      }
-    }
-
-    const unsubscribe = personalSettingsStore.subscribe(() => {
-      if (!mountedRef.current) return
-      const d = personalSettingsStore.getData()
-      if (!d) return
-      setFormData({
-        fullName: d.personal.fullName,
-        email: d.personal.email,
-        phone: d.personal.phone,
-        dateOfBirth: d.personal.dateOfBirth,
-        avatarUrl: d.personal.avatarUrl ?? null,
-      })
+    const p = personalData.personal
+    setFormData({
+      fullName: p.fullName || "",
+      email: p.email || "",
+      phone: p.phone || "",
+      dateOfBirth: p.dateOfBirth || "",
+      avatarUrl: p.avatarUrl ?? null,
     })
-
-    void initialize()
-    return () => {
-      mountedRef.current = false
-      unsubscribe()
-    }
-  }, [user?.id])
+  }, [personalData])
 
   const handleEdit = (section: string) => setEditingSection(section)
   const handleCancel = () => setEditingSection(null)
   const handleSave = async (section: string) => {
     const { data } = await supabase.auth.getSession()
     if (!data.session) return
-    await fetchWithSession("/api/settings/personal", {
+    const res = await fetchWithSession("/api/settings/personal", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -297,9 +279,9 @@ export function SettingsPersonalTab() {
         avatarUrl: formData.avatarUrl,
       }),
     })
-    if (user?.id) {
-      personalSettingsStore.invalidate(user.id)
-      await personalSettingsStore.initialize(user.id)
+    if (res.ok) {
+      const next = (await res.json()) as PersonalSettingsResponse
+      setPersonalData(next)
     }
     setEditingSection(null)
   }

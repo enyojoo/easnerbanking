@@ -56,16 +56,25 @@ const countryByCurrency: Record<string, string> = {
   XAF: "Central Africa",
 }
 
-function resolveCountryName(currency: string): string {
-  const code = String(currency || "").toUpperCase()
-  if (countryByCurrency[code]) return countryByCurrency[code]
-  const iso = getCountryCodeForCurrency(code)
-  if (!iso) return code
+function resolveCountryName(currency: string, countryCode?: string): string {
+  const explicitCountryCode = String(countryCode || "").toUpperCase()
+  if (explicitCountryCode) {
+    try {
+      const explicitLabel = new Intl.DisplayNames(["en"], { type: "region" }).of(explicitCountryCode)
+      if (explicitLabel) return explicitLabel
+    } catch {
+      // Fall through to currency-based fallback.
+    }
+  }
+  const currencyCode = String(currency || "").toUpperCase()
+  if (countryByCurrency[currencyCode]) return countryByCurrency[currencyCode]
+  const iso = getCountryCodeForCurrency(currencyCode)
+  if (!iso) return currencyCode
   try {
     const label = new Intl.DisplayNames(["en"], { type: "region" }).of(iso)
-    return label || code
+    return label || currencyCode
   } catch {
-    return code
+    return currencyCode
   }
 }
 
@@ -122,14 +131,18 @@ export function toBeneficiary(row: RecipientRow): Beneficiary {
   const mobileInnerMatch = row.bank_name.match(/^Mobile Money \((.*)\)$/i)
   const mobileInner = mobileInnerMatch?.[1] || ""
   const mobileProvider = mobileInner.includes("|CC:") ? mobileInner.split("|CC:")[0] : mobileInner
+  const legacyCountryCodeFromMobile = mobileInner.includes("|CC:")
+    ? mobileInner.split("|CC:")[1]?.trim().toUpperCase()
+    : undefined
   const walletMatch = row.bank_name.match(/^Wallet \((.*)\)$/i)
   const walletDescriptor = walletMatch?.[1] || ""
   const [walletAssetFromLabel, walletNetworkFromLabel] = walletDescriptor.includes("/")
     ? walletDescriptor.split("/")
     : [undefined, walletDescriptor || undefined]
+  const normalizedCountryCode = (row.country_code || legacyCountryCodeFromMobile || "").trim().toUpperCase() || undefined
   return {
     id: row.id,
-    countryCode: row.country_code || undefined,
+    countryCode: normalizedCountryCode,
     name: row.full_name,
     bankName: mobileInnerMatch ? `Mobile Money (${mobileProvider})` : row.bank_name,
     accountNumber: row.account_number,
@@ -138,7 +151,7 @@ export function toBeneficiary(row: RecipientRow): Beneficiary {
     iban: row.iban || undefined,
     bic: row.swift_bic || undefined,
     sortCode: row.sort_code || undefined,
-    country: resolveCountryName(row.currency),
+    country: resolveCountryName(row.currency, normalizedCountryCode),
     currency: row.currency,
     email: "",
     phone: row.phone_number || "",

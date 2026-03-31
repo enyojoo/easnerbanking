@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Trash2, Users } from "lucide-react"
@@ -10,7 +10,8 @@ import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
-import { teamMembersStore } from "@/lib/team-members-store"
+import { CACHE_KEYS } from "@/lib/cache"
+import { useCachedData } from "@/lib/use-cached-data"
 
 type TeamMember = {
   id: string
@@ -48,7 +49,25 @@ export function SettingsTeamTab() {
   const [membersError, setMembersError] = useState("")
   const [canManageMembers, setCanManageMembers] = useState(false)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
-  const mountedRef = useRef(true)
+  const {
+    data: teamData,
+    setData: setTeamData,
+    loading: teamLoading,
+  } = useCachedData<{ members: TeamMember[]; canManageMembers?: boolean }>({
+    enabled: !isLoading && Boolean(user?.id),
+    cacheKey: user?.id ? CACHE_KEYS.TEAM_MEMBERS(user.id) : null,
+    persistKey: user?.id ? `settings_team_${user.id}` : undefined,
+    initialData: { members: [], canManageMembers: false },
+    fetcher: async () => {
+      const res = await fetchWithSession("/api/settings/team")
+      if (!res.ok) {
+        const json = (await res.json().catch(() => ({ error: "Failed to load team members" }))) as { error?: string }
+        throw new Error(json.error || "Failed to load team members")
+      }
+      return (await res.json()) as { members: TeamMember[]; canManageMembers?: boolean }
+    },
+    onError: (e) => setMembersError(e instanceof Error ? e.message : "Failed to load team members"),
+  })
 
   const reloadTeamFromServer = useCallback(async () => {
     setLoadingMembers(true)
@@ -58,59 +77,24 @@ export function SettingsTeamTab() {
       return
     }
     try {
-      await teamMembersStore.initialize(user.id)
+      const res = await fetchWithSession("/api/settings/team")
+      if (!res.ok) {
+        const json = (await res.json().catch(() => ({ error: "Failed to load team members" }))) as { error?: string }
+        throw new Error(json.error || "Failed to load team members")
+      }
+      const fresh = (await res.json()) as { members: TeamMember[]; canManageMembers?: boolean }
+      setTeamData(fresh)
     } catch (e) {
       setMembersError(e instanceof Error ? e.message : "Failed to load team members")
     } finally {
       setLoadingMembers(false)
     }
-  }, [user?.id])
-
-  useLayoutEffect(() => {
-    if (!user?.id) {
-      setMembers([])
-      setCanManageMembers(false)
-      setLoadingMembers(false)
-      return
-    }
-    teamMembersStore.hydrateSync(user.id)
-    const d = teamMembersStore.getData()
-    if (d) {
-      setMembers(d.members)
-      setCanManageMembers(Boolean(d.canManageMembers))
-      setLoadingMembers(false)
-    } else {
-      setLoadingMembers(true)
-    }
-  }, [user?.id])
+  }, [setTeamData, user?.id])
 
   useEffect(() => {
-    if (!user?.id) return
-    mountedRef.current = true
-
-    const unsubscribe = teamMembersStore.subscribe(() => {
-      if (!mountedRef.current) return
-      const d = teamMembersStore.getData()
-      if (!d) return
-      setMembers(d.members)
-      setCanManageMembers(Boolean(d.canManageMembers))
-    })
-
-    const run = async () => {
-      try {
-        await teamMembersStore.initialize(user.id)
-      } catch (e) {
-        setMembersError(e instanceof Error ? e.message : "Failed to load team members")
-      } finally {
-        if (mountedRef.current) setLoadingMembers(false)
-      }
-    }
-    void run()
-    return () => {
-      mountedRef.current = false
-      unsubscribe()
-    }
-  }, [user?.id])
+    setMembers(teamData.members || [])
+    setCanManageMembers(Boolean(teamData.canManageMembers))
+  }, [teamData])
 
   const addInviteRow = () => setInviteRows((prev) => [...prev, { fullName: "", email: "", role: "Member" }])
   const removeInviteRow = (idx: number) =>
@@ -154,14 +138,13 @@ export function SettingsTeamTab() {
       return
     }
 
-    if (user?.id) teamMembersStore.invalidate(user.id)
     await reloadTeamFromServer()
     setSubmittingInvites(false)
     setInviteRows([{ fullName: "", email: "", role: "Member" }])
     setInviteOpen(false)
   }
 
-  const showLoading = isLoading || loadingMembers
+  const showLoading = isLoading || teamLoading || loadingMembers
 
   const updateMemberRole = async (member: TeamMember, role: InviteDraft["role"]) => {
     const mid = membershipIdForRow(member)
@@ -185,7 +168,6 @@ export function SettingsTeamTab() {
       setUpdatingId(null)
       return
     }
-    if (user?.id) teamMembersStore.invalidate(user.id)
     await reloadTeamFromServer()
     setUpdatingId(null)
   }
@@ -211,7 +193,6 @@ export function SettingsTeamTab() {
       setUpdatingId(null)
       return
     }
-    if (user?.id) teamMembersStore.invalidate(user.id)
     await reloadTeamFromServer()
     setUpdatingId(null)
   }

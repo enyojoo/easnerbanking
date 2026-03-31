@@ -14,7 +14,7 @@ import { RecipientForm } from "@/components/recipient-form"
 import type { Beneficiary } from "@/lib/recipient-types"
 import { Label } from "@/components/ui/label"
 import { Search, Plus, User, ChevronDown } from "lucide-react"
-import { CurrencyFlag } from "@/components/flags"
+import { CountryFlag, CurrencyFlag } from "@/components/flags"
 import { listRecipients } from "@/lib/recipients-store"
 import { useAuth } from "@/lib/auth-context"
 
@@ -108,7 +108,11 @@ export function SendRecipientPicker({
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
                 <User className="h-5 w-5 text-muted-foreground" />
               </div>
-              <CurrencyFlag currency={selected.currency} size={18} className="rounded-full shrink-0" />
+              {selected.countryCode ? (
+                <CountryFlag code={selected.countryCode} size={18} className="rounded-full shrink-0" />
+              ) : (
+                <CurrencyFlag currency={selected.currency} size={18} className="rounded-full shrink-0" />
+              )}
             </div>
             <div>
               <p className="font-medium">{selected.name}</p>
@@ -153,7 +157,11 @@ export function SendRecipientPicker({
                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
                       <User className="h-5 w-5 text-muted-foreground" />
                     </div>
-                    <CurrencyFlag currency={b.currency} size={18} className="rounded-full shrink-0" />
+                    {b.countryCode ? (
+                      <CountryFlag code={b.countryCode} size={18} className="rounded-full shrink-0" />
+                    ) : (
+                      <CurrencyFlag currency={b.currency} size={18} className="rounded-full shrink-0" />
+                    )}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="font-medium truncate">{b.name}</p>

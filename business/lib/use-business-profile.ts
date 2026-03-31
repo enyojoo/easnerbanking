@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo } from "react"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { useAuth } from "@/lib/auth-context"
 import { countries } from "@/lib/countries"
-import { businessProfileStore } from "@/lib/business-profile-store"
+import { CACHE_KEYS, dataCache } from "@/lib/cache"
+import { useCachedData } from "@/lib/use-cached-data"
 
 export type BusinessProfile = {
   organizationId: string | null
@@ -100,97 +101,60 @@ export async function updateBusinessProfile(payload: {
   if (!res.ok) return null
   const json = (await res.json()) as { profile?: BusinessProfile }
   if (json.profile) {
-    // invalidate store cache so pages don't flicker but do revalidate
-    // (store will keep last renderable data until fresh arrives)
+    // Invalidate shared cache key so active pages can revalidate consistently.
     const { data: session } = await supabase.auth.getUser()
-    if (session?.user?.id) businessProfileStore.invalidate(session.user.id)
+    if (session?.user?.id) dataCache.invalidate(CACHE_KEYS.BUSINESS_PROFILE(session.user.id))
     window.dispatchEvent(new Event("business-profile-updated"))
   }
   return json.profile ?? null
 }
 
-function profileFromStore(): BusinessProfile {
-  const d = businessProfileStore.getData()
-  if (!d) return DEFAULT_PROFILE
-  return {
-    ...d.profile,
-    countryCode: d.profile.countryCode ?? countryCodeFromName(d.profile.country),
-  }
-}
-
 export function useBusinessProfile() {
   const { user } = useAuth()
-  const [profile, setProfile] = useState<BusinessProfile>(DEFAULT_PROFILE)
-  const [isLoading, setIsLoading] = useState(false)
-  const [isFresh, setIsFresh] = useState(false)
-  const [hasData, setHasData] = useState(false)
-  const mountedRef = useRef(true)
+  const cacheKey = user?.id ? CACHE_KEYS.BUSINESS_PROFILE(user.id) : null
+  const { data: profileData, setData, loading: isLoading } = useCachedData<BusinessProfile>({
+    enabled: Boolean(user?.id),
+    cacheKey,
+    persistKey: user?.id ? `business_profile_cache_${user.id}` : undefined,
+    initialData: DEFAULT_PROFILE,
+    ttlMs: 5 * 60 * 1000,
+    fetcher: async () => {
+      const res = await fetchWithSession("/api/business/profile")
+      if (!res.ok) throw new Error("Failed to load profile")
+      const json = (await res.json()) as { profile?: BusinessProfile }
+      if (!json.profile) throw new Error("Missing profile")
+      return json.profile
+    },
+  })
 
-  // Hydrate from localStorage before paint so header/nav avoid skeleton + skip redundant fetch when fresh.
-  useLayoutEffect(() => {
-    if (!user?.id) {
-      setProfile(DEFAULT_PROFILE)
-      setIsLoading(false)
-      setIsFresh(false)
-      setHasData(false)
-      return
-    }
-    businessProfileStore.hydrateSync(user.id)
-    const d = businessProfileStore.getData()
-    if (d) {
-      setProfile(profileFromStore())
-      setIsLoading(false)
-      setIsFresh(businessProfileStore.isFresh())
-      setHasData(true)
-    } else {
-      setIsLoading(true)
-      setIsFresh(false)
-      setHasData(false)
-    }
-  }, [user?.id])
+  const refreshProfile = useCallback(async () => {
+    if (!user?.id) return
+    const res = await fetchWithSession("/api/business/profile")
+    if (!res.ok) return
+    const json = (await res.json()) as { profile?: BusinessProfile }
+    if (!json.profile) return
+    setData(json.profile)
+  }, [setData, user?.id])
 
   useEffect(() => {
-    mountedRef.current = true
-
-    if (!user?.id) {
-      setIsFresh(false)
-      setHasData(false)
-      return
-    }
-
-    const initialize = async () => {
-      try {
-        await businessProfileStore.initialize(user.id)
-      } finally {
-        if (mountedRef.current) setIsLoading(false)
-      }
-    }
-
-    const unsubscribe = businessProfileStore.subscribe(() => {
-      if (!mountedRef.current) return
-      const d = businessProfileStore.getData()
-      if (!d) return
-      setProfile({
-        ...d.profile,
-        countryCode: d.profile.countryCode ?? countryCodeFromName(d.profile.country),
-      })
-      setIsFresh(businessProfileStore.isFresh())
-      setHasData(true)
-    })
-
     const onUpdate = () => {
-      if (user.id) businessProfileStore.invalidate(user.id)
-      void initialize()
+      if (!user?.id) return
+      dataCache.invalidate(CACHE_KEYS.BUSINESS_PROFILE(user.id))
+      void refreshProfile()
     }
-
-    void initialize()
     window.addEventListener("business-profile-updated", onUpdate)
-    return () => {
-      mountedRef.current = false
-      unsubscribe()
-      window.removeEventListener("business-profile-updated", onUpdate)
-    }
-  }, [user?.id])
+    return () => window.removeEventListener("business-profile-updated", onUpdate)
+  }, [refreshProfile, user?.id])
+
+  const profile = useMemo(
+    () => ({
+      ...profileData,
+      countryCode: profileData.countryCode ?? countryCodeFromName(profileData.country),
+    }),
+    [profileData],
+  )
+  const isFresh = Boolean(cacheKey && dataCache.get(cacheKey) != null && !dataCache.isStale(cacheKey))
+  const hasData = Boolean(user?.id) && !isLoading
 
   return {
     ...profile,

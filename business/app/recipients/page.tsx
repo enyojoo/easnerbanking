@@ -22,9 +22,13 @@ import {
 } from "@/components/ui/dialog"
 import { RecipientForm } from "@/components/recipient-form"
 import type { Beneficiary } from "@/lib/recipient-types"
-import { CurrencyFlag } from "@/components/flags"
+import { CountryFlag, CurrencyFlag } from "@/components/flags"
 import { deleteRecipient, listRecipients } from "@/lib/recipients-store"
 import { useAuth } from "@/lib/auth-context"
+import { CACHE_KEYS } from "@/lib/cache"
+import { useCachedData } from "@/lib/use-cached-data"
+
+const RECIPIENTS_CACHE_TTL_MS = 2 * 60 * 1000
 
 export default function RecipientsPage() {
   const { user, isLoading } = useAuth()
@@ -32,27 +36,28 @@ export default function RecipientsPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [selectedRecipient, setSelectedRecipient] = useState<Beneficiary | null>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [beneficiaries, setBeneficiaries] = useState<Beneficiary[]>([])
-
-  useEffect(() => {
-    if (isLoading) return
-    if (!user?.id) {
-      setBeneficiaries([])
-      return
-    }
-    void listRecipients(user.id)
-      .then(setBeneficiaries)
-      .catch((err) => {
-        const message = err instanceof Error ? err.message : String(err)
-        // Backend schema/cache drift can briefly return 400 for recipient list reads.
-        // Treat as empty state and avoid noisy console errors in the UI.
-        if (message.toLowerCase().includes("bad request")) {
-          setBeneficiaries([])
-          return
-        }
-        console.error("Failed to load recipients:", message)
-      })
-  }, [isLoading, user?.id])
+  const {
+    data: beneficiaries,
+    setData: setBeneficiaries,
+    loading: isRecipientsLoading,
+  } = useCachedData<Beneficiary[]>({
+    enabled: !isLoading && Boolean(user?.id),
+    cacheKey: user?.id ? CACHE_KEYS.RECIPIENTS(user.id) : null,
+    persistKey: user?.id ? `recipients_cache_${user.id}` : undefined,
+    initialData: [],
+    ttlMs: RECIPIENTS_CACHE_TTL_MS,
+    fetcher: async () => listRecipients(user!.id),
+    onError: (err) => {
+      const message = err instanceof Error ? err.message : String(err)
+      // Backend schema/cache drift can briefly return 400 for recipient list reads.
+      // Treat as empty state and avoid noisy console errors in the UI.
+      if (message.toLowerCase().includes("bad request")) {
+        setBeneficiaries([])
+        return
+      }
+      console.error("Failed to load recipients:", message)
+    },
+  })
 
   const filteredBeneficiaries = beneficiaries.filter((recipient) =>
     recipient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -68,7 +73,9 @@ export default function RecipientsPage() {
   const handleDelete = (recipientId: string) => {
     void deleteRecipient(recipientId)
       .then(() => {
-        setBeneficiaries((prev) => prev.filter((b) => b.id !== recipientId))
+        setBeneficiaries((prev) => {
+          return prev.filter((b) => b.id !== recipientId)
+        })
       })
       .catch((err) => console.error("Delete recipient failed:", err))
   }
@@ -78,7 +85,9 @@ export default function RecipientsPage() {
   }
 
   const handleCreateSuccessWithData = (beneficiary: Beneficiary) => {
-    setBeneficiaries((prev) => [beneficiary, ...prev])
+    setBeneficiaries((prev) => {
+      return [beneficiary, ...prev]
+    })
     setIsCreateDialogOpen(false)
   }
 
@@ -88,7 +97,9 @@ export default function RecipientsPage() {
   }
 
   const handleEditSuccessWithData = (beneficiary: Beneficiary) => {
-    setBeneficiaries((prev) => prev.map((b) => (b.id === beneficiary.id ? beneficiary : b)))
+    setBeneficiaries((prev) => {
+      return prev.map((b) => (b.id === beneficiary.id ? beneficiary : b))
+    })
     setIsEditDialogOpen(false)
     setSelectedRecipient(null)
   }
@@ -121,7 +132,22 @@ export default function RecipientsPage() {
 
       <Card>
         <CardContent className="p-0">
-          {filteredBeneficiaries.length === 0 ? (
+          {isRecipientsLoading ? (
+            <div className="space-y-4 p-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search recipients..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <div className="h-20 w-full animate-pulse rounded-lg bg-muted" />
+              <div className="h-20 w-full animate-pulse rounded-lg bg-muted" />
+              <div className="h-20 w-full animate-pulse rounded-lg bg-muted" />
+            </div>
+          ) : filteredBeneficiaries.length === 0 ? (
             <div className="py-12 text-center">
               <User className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-semibold mb-2">No recipients found</h3>
@@ -154,17 +180,25 @@ export default function RecipientsPage() {
                           <User className="h-5 w-5 text-primary" />
                         </div>
                         <div className="absolute -bottom-0.5 -right-0.5 h-5 w-5 overflow-hidden rounded-full border-2 border-background bg-background">
-                          <CurrencyFlag
-                            currency={recipient.currency}
-                            size={24}
-                            className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-none"
-                          />
+                          {recipient.countryCode ? (
+                            <CountryFlag
+                              code={recipient.countryCode}
+                              size={24}
+                              className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-none"
+                            />
+                          ) : (
+                            <CurrencyFlag
+                              currency={recipient.currency}
+                              size={24}
+                              className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-none"
+                            />
+                          )}
                         </div>
                       </div>
                       <div className="flex-1 min-w-0">
                         <h3 className="font-semibold text-sm">{recipient.name}</h3>
                         <p className="text-xs text-muted-foreground">
-                          {recipient.bankName} • {recipient.fullAccountNumber} • {recipient.country}
+                          {recipient.bankName} • {recipient.fullAccountNumber} • {recipient.currency}
                         </p>
                       </div>
                     </div>

@@ -20,6 +20,14 @@ interface RecipientFormProps {
   onSuccessWithData?: (beneficiary: Beneficiary) => void
 }
 
+function inferRecipientType(recipient?: Beneficiary): "bank" | "mobile" | "wallet" {
+  if (!recipient) return "bank"
+  const bankName = String(recipient.bankName || "").toLowerCase()
+  if (bankName.includes("wallet") || recipient.walletNetwork || recipient.walletAsset) return "wallet"
+  if (bankName.includes("mobile money") || recipient.mobileProvider) return "mobile"
+  return "bank"
+}
+
 const countries = [
   { name: "United States", currency: "USD", code: "US" },
   { name: "Argentina", currency: "ARS", code: "AR" },
@@ -130,7 +138,7 @@ const mobileMoneyCountries = [
 
 export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessWithData }: RecipientFormProps) {
   const [formData, setFormData] = useState({
-    recipientType: "bank",
+    recipientType: isEdit && recipient ? inferRecipientType(recipient as Beneficiary) : "bank",
     name: "",
     bankName: "",
     accountNumber: "",
@@ -170,21 +178,30 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
     if (recipient && isEdit) {
       const walletMatch = recipient.bankName?.match(/^Wallet \((.*)\)$/i)
       const mobileMatch = recipient.bankName?.match(/^Mobile Money \((.*)\)$/i)
+      const mobileInner = mobileMatch?.[1] || ""
+      const normalizedMobileProvider = mobileInner.includes("|CC:")
+        ? mobileInner.split("|CC:")[0]
+        : mobileInner
       const descriptor = walletMatch?.[1] || ""
       const [parsedWalletAsset, parsedWalletNetwork] = descriptor.includes("/")
         ? descriptor.split("/")
         : [recipient.currency || "USDT", descriptor || ""]
-      const matchedCountryFromCode = [...countries, ...mobileMoneyCountries].find(
-        (c) => c.code === (recipient as Beneficiary).countryCode,
+      const inferredType = inferRecipientType(recipient as Beneficiary)
+      const recipientCountryCode = (recipient as Beneficiary).countryCode
+      const countryOptionsForType = inferredType === "mobile" ? mobileMoneyCountries : countries
+      const matchedCountryFromCodeInType = countryOptionsForType.find(
+        (c) => c.code === recipientCountryCode,
       )
-      const matchedCountry = matchedCountryFromCode || resolveCountryByRecipient(recipient as Beneficiary)
+      const matchedCountryFromCodeAny = [...countries, ...mobileMoneyCountries].find(
+        (c) => c.code === recipientCountryCode,
+      )
+      const matchedCountry =
+        matchedCountryFromCodeInType ||
+        matchedCountryFromCodeAny ||
+        resolveCountryByRecipient(recipient as Beneficiary)
       setFormData({
         name: recipient.name || "",
-        recipientType: recipient.bankName?.toLowerCase().includes("wallet")
-          ? "wallet"
-          : recipient.bankName?.toLowerCase().includes("mobile money")
-            ? "mobile"
-            : "bank",
+        recipientType: inferredType,
         bankName: recipient.bankName || "",
         accountNumber: recipient.fullAccountNumber || recipient.accountNumber || "",
         routingNumber: recipient.routingNumber || "",
@@ -193,12 +210,12 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
         sortCode: recipient.sortCode || "",
         country: matchedCountry?.name || recipient.country || "United States",
         email: recipient.email || "",
-        phone: recipient.phone || "",
+        phone: recipient.phone || (inferredType === "mobile" ? (recipient.fullAccountNumber || recipient.accountNumber || "") : ""),
         walletAsset: recipient.walletAsset || parsedWalletAsset || recipient.currency || "USDT",
         walletNetwork: recipient.walletNetwork || parsedWalletNetwork || "",
         walletAddress: recipient.fullAccountNumber || recipient.accountNumber || "",
-        walletMemoTag: recipient.walletMemoTag || "",
-        mobileProvider: recipient.mobileProvider || mobileMatch?.[1] || "",
+        walletMemoTag: recipient.walletMemoTag || recipient.bic || "",
+        mobileProvider: recipient.mobileProvider || normalizedMobileProvider || "",
         transferType: recipient.transferType || "ACH",
         checkingOrSavings: recipient.checkingOrSavings || "",
         addressLine1: recipient.addressLine1 || "",
