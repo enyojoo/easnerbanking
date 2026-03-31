@@ -9,7 +9,7 @@ import { PinChallengeDialog } from "@/components/app-lock/pin-challenge-dialog"
 import { useAuth } from "@/lib/auth-context"
 import { hasPin, isLoginPinModuleAvailable } from "@/lib/login-pin"
 import { mockAccounts, currencySymbols } from "@/lib/mock-data"
-import type { Beneficiary } from "@/lib/mock-data"
+import type { Beneficiary } from "@/lib/recipient-types"
 import { generateTransactionId } from "@/lib/transaction-id"
 import { ArrowLeft, User, Copy, Check } from "lucide-react"
 

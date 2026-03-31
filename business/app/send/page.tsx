@@ -12,7 +12,7 @@ import {
   currencySymbols,
   currencyRates,
 } from "@/lib/mock-data"
-import type { Beneficiary } from "@/lib/mock-data"
+import type { Beneficiary } from "@/lib/recipient-types"
 import {
   otherCurrencies,
   currencyPaymentMethods,

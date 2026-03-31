@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { MessageSquareText, ChevronDown, User } from 'lucide-react-native'
+import { MessageSquareText, ChevronDown, User, Coins } from 'lucide-react-native'
 import Svg, { Path } from 'react-native-svg'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
@@ -35,8 +35,10 @@ import { useBalance } from '../../contexts/BalanceContext'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { getApiBaseUrl } from '../../lib/apiClient'
 import { noahService } from '../../lib/noahService'
+import { getWalletAssets } from '../../lib/recipientCatalog'
+import { getTokenIconUrl } from '../../lib/cryptoIcons'
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window')
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 const KEYPAD_BUTTON_WIDTH = 113
 const KEYPAD_GAP = 8 // spacing[2]
 const KEYPAD_ROW_WIDTH = (KEYPAD_BUTTON_WIDTH * 3) + (KEYPAD_GAP * 2) // 113 * 3 + 8 * 2 = 355
@@ -82,6 +84,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   
   // Get recipient from route params if coming from SelectRecipient
   const recipientFromRoute = (route.params as any)?.recipient as MockRecipient | undefined
+  const preferredBalanceCurrencyFromRoute = String((route.params as any)?.preferredBalanceCurrency || '').toUpperCase()
+  const isPreferredBalanceCurrency = preferredBalanceCurrencyFromRoute === 'USD' || preferredBalanceCurrencyFromRoute === 'EUR'
+  const didInitializeBalanceCurrency = useRef(false)
   
   // UI State only - no backend integration
   const [recipient, setRecipient] = useState<MockRecipient | null>(recipientFromRoute || null)
@@ -97,16 +102,21 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const [selectedOtherCurrency, setSelectedOtherCurrency] = useState<string | null>(null)
   const [selectedOtherPaymentMethod, setSelectedOtherPaymentMethod] = useState<string | null>(null)
 
-  // Auto-select currency with highest balance (prefer USD if > 0, then EUR)
+  // Initialize sending balance currency once:
+  // 1) honor incoming preference from prior screen flow, 2) otherwise fallback to available balance.
   React.useEffect(() => {
+    if (didInitializeBalanceCurrency.current) return
     const usdBalance = parseFloat(balances.USD || '0')
     const eurBalance = parseFloat(balances.EUR || '0')
-    if (usdBalance > 0) {
+    if (isPreferredBalanceCurrency) {
+      setSelectedBalanceCurrency(preferredBalanceCurrencyFromRoute as 'USD' | 'EUR')
+    } else if (usdBalance > 0) {
       setSelectedBalanceCurrency('USD')
     } else if (eurBalance > 0) {
       setSelectedBalanceCurrency('EUR')
     }
-  }, [balances])
+    didInitializeBalanceCurrency.current = true
+  }, [balances, isPreferredBalanceCurrency, preferredBalanceCurrencyFromRoute])
 
   // Available currencies for the dropdown (wallet balances - USD/EUR only)
   const availableCurrencies = [
@@ -114,12 +124,14 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     { code: 'EUR', name: 'Euro', symbol: '€' },
   ]
 
-  // Available currencies for "From Another Currency"
+  // Available options for "Through Another Currency"
   const otherCurrencies = [
+    { code: 'STABLE', name: 'Stablecoin', symbol: '' },
     { code: 'KES', name: 'Kenyan Shilling', symbol: 'KSh' },
     { code: 'GHS', name: 'Ghanaian Cedi', symbol: '₵' },
     { code: 'RUB', name: 'Russian Ruble', symbol: '₽' },
   ]
+  const stablecoinAssets = getWalletAssets()
 
   // Payment method icons mapping
   const paymentMethodIcons: { [key: string]: any } = {
@@ -130,6 +142,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
   // Payment methods for each currency
   const currencyPaymentMethods: { [key: string]: Array<{ code: string; name: string; icon?: string }> } = {
+    STABLE: stablecoinAssets.map((asset) => ({ code: asset, name: asset })),
     GHS: [
       { code: 'bankTransfer', name: 'Bank Transfer' },
       { code: 'mtnMomo', name: 'MTN MOMO', icon: 'mtn' },
@@ -320,8 +333,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const receiveAmount = sendAmount ? Number.parseFloat(sendAmount.replace(/,/g, '')) || 0 : 0
   const receiveCurrency = recipient?.currency || 'EUR'
   // Determine sending currency based on payment method
-  const sendCurrency = selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency 
-    ? selectedOtherCurrency 
+  const sendCurrency = selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency
+    ? selectedOtherCurrency === 'STABLE'
+      ? (selectedOtherPaymentMethod?.toUpperCase() || selectedBalanceCurrency)
+      : selectedOtherCurrency
     : selectedBalanceCurrency
   
   // Get exchange rate using FX Engine (with safety check)
@@ -404,7 +419,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               <TouchableOpacity
                 onPress={() => {
                   // Always go back to SelectRecentRecipientScreen, never to SelectRecipientScreen
-                  navigation.navigate('SelectRecentRecipient' as never)
+                  navigation.navigate('SelectRecentRecipient' as never, {
+                    preferredBalanceCurrency: selectedBalanceCurrency,
+                  } as never)
                 }}
                 style={styles.backButton}
               >
@@ -475,7 +492,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   style={styles.recipientBar}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                    navigation.navigate('SelectRecipient' as never, { selectedRecipientId: recipient.id } as never)
+                    navigation.navigate('SelectRecipient' as never, {
+                      selectedRecipientId: recipient.id,
+                      preferredBalanceCurrency: selectedBalanceCurrency,
+                    } as never)
                   }}
                   activeOpacity={0.7}
                 >
@@ -497,7 +517,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   style={styles.selectRecipientBox}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                    navigation.navigate('SelectRecipient' as never)
+                    navigation.navigate('SelectRecipient' as never, {
+                      preferredBalanceCurrency: selectedBalanceCurrency,
+                    } as never)
                   }}
                   activeOpacity={0.7}
                 >
@@ -574,7 +596,19 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                     ) : selectedPaymentMethod === 'virtualBank' ? (
                       <LandmarkIcon size={20} color={colors.text.primary} />
                     ) : selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency ? (
-                      <CurrencyFlag currency={selectedOtherCurrency} size={24} style={styles.flagImage} />
+                      selectedOtherCurrency === 'STABLE'
+                        ? (
+                          selectedOtherPaymentMethod && getTokenIconUrl(selectedOtherPaymentMethod) ? (
+                            <Image
+                              source={{ uri: getTokenIconUrl(selectedOtherPaymentMethod)! }}
+                              style={styles.flagImage}
+                              resizeMode="cover"
+                            />
+                          ) : (
+                            <Coins size={20} color={colors.text.primary} strokeWidth={2} />
+                          )
+                        )
+                        : <CurrencyFlag currency={selectedOtherCurrency} size={24} style={styles.flagImage} />
                     ) : null}
               </View>
                   <Text style={styles.balanceSelectorText} numberOfLines={1}>
@@ -868,7 +902,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                     transactionId: transactionId,
                     sendAmount: calculatedSendingAmount,
                     receiveAmount: receiveAmountValue,
-                    sendCurrency: selectedOtherCurrency,
+                    sendCurrency: sendCurrency,
                     receiveCurrency: recipient.currency,
                     recipient: recipient,
                     paymentMethod: selectedOtherPaymentMethod,
@@ -880,7 +914,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                     transactionId: transactionId,
                     sendAmount: calculatedSendingAmount,
                     receiveAmount: receiveAmountValue,
-                    sendCurrency: selectedOtherCurrency,
+                    sendCurrency: sendCurrency,
                     receiveCurrency: recipient.currency,
                     recipient: recipient,
                     paymentMethod: selectedOtherPaymentMethod,
@@ -894,7 +928,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                     transactionId: transactionId,
                     sendAmount: calculatedSendingAmount,
                     receiveAmount: receiveAmountValue,
-                    sendCurrency: selectedOtherCurrency,
+                    sendCurrency: sendCurrency,
                     receiveCurrency: recipient.currency,
                     recipient: recipient,
                     paymentMethod: selectedOtherPaymentMethod,
@@ -934,15 +968,17 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             setShowCurrencyPicker(false)
           }}
         >
-          <TouchableOpacity 
-            style={styles.modalOverlay}
-            activeOpacity={1}
-            onPress={() => setShowCurrencyPicker(false)}
-          >
+          <View style={styles.modalOverlay}>
+            <TouchableOpacity
+              style={StyleSheet.absoluteFill}
+              activeOpacity={1}
+              onPress={() => setShowCurrencyPicker(false)}
+            />
             <View style={[styles.modalContainer, { 
-              maxHeight: 600,
+              height: Math.min(SCREEN_HEIGHT * 0.78, 680),
+              minHeight: Math.min(SCREEN_HEIGHT * 0.58, 520),
               paddingBottom: Math.max(insets.bottom, 20),
-            }]} onStartShouldSetResponder={() => true}>
+            }]} onStartShouldSetResponder={() => true} onResponderGrant={() => {}}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>How would you like to send?</Text>
                 <TouchableOpacity
@@ -1005,9 +1041,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   })}
                 </View>
 
-                {/* From Another Currency Section */}
+                {/* Through Another Currency Section */}
                 <View style={styles.paymentSection}>
-                  <Text style={styles.paymentSectionTitle}>From Another Currency</Text>
+                  <Text style={styles.paymentSectionTitle}>Through Another Currency</Text>
                   
                   {/* Currency Selector */}
                   {!selectedOtherCurrency ? (
@@ -1019,10 +1055,15 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                           await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                           setSelectedOtherCurrency(currency.code)
                           setSelectedPaymentMethod('otherCurrency')
+                          setSelectedOtherPaymentMethod(null)
                         }}
                       >
                         <View style={styles.flagContainerSmall}>
-                          <CurrencyFlag currency={currency.code} size={24} style={styles.flagImageSmall} />
+                          {currency.code === 'STABLE' ? (
+                            <Coins size={18} color={colors.text.primary} strokeWidth={2} />
+                          ) : (
+                            <CurrencyFlag currency={currency.code} size={24} style={styles.flagImageSmall} />
+                          )}
                         </View>
                         <View style={styles.currencyItemInfo}>
                           <Text style={styles.currencyItemCode}>{currency.name}</Text>
@@ -1066,7 +1107,17 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                             }}
                           >
                             <View style={styles.flagContainerSmall}>
-                              {method.icon && paymentMethodIcons[method.icon] ? (
+                              {selectedOtherCurrency === 'STABLE' ? (
+                                getTokenIconUrl(method.code) ? (
+                                  <Image
+                                    source={{ uri: getTokenIconUrl(method.code)! }}
+                                    style={styles.flagImageSmall}
+                                    resizeMode="cover"
+                                  />
+                                ) : (
+                                  <Coins size={16} color={colors.text.primary} strokeWidth={2} />
+                                )
+                              ) : method.icon && paymentMethodIcons[method.icon] ? (
                                 <Image 
                                   source={paymentMethodIcons[method.icon]}
                                   style={styles.flagImageSmall}
@@ -1096,7 +1147,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               </View>
               </ScrollView>
             </View>
-          </TouchableOpacity>
+          </View>
         </Modal>
       </View>
     </ScreenWrapper>
@@ -1485,7 +1536,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   modalScrollView: {
-    maxHeight: 500,
+    flex: 1,
+    minHeight: 0,
   },
   modalScrollContent: {
     paddingBottom: spacing[4],

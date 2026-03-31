@@ -6,8 +6,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { ArrowLeftRight, Landmark, User, Mail, Phone, CreditCard, MapPin, ChevronDown } from "lucide-react"
-import type { Beneficiary } from "@/lib/mock-data"
+import { Loader2, User, Mail, Phone, CreditCard, MapPin, ChevronDown } from "lucide-react"
+import type { Beneficiary } from "@/lib/recipient-types"
 import { CountryFlag } from "@/components/flags"
 import { getNetworkIconUrl, getTokenIconUrl } from "@/lib/crypto-icons"
 import { createRecipient, updateRecipient, type RecipientUpsertInput } from "@/lib/recipients-store"
@@ -62,7 +62,7 @@ const countries = [
   { name: "New Zealand", currency: "NZD", code: "NZ" },
   { name: "Nigeria", currency: "NGN", code: "NG" },
   { name: "Philippines", currency: "PHP", code: "PH" },
-  { name: "Poland", currency: "NOK", code: "PL" },
+  { name: "Poland", currency: "PLN", code: "PL" },
   { name: "Portugal", currency: "EUR", code: "PT" },
   { name: "Paraguay", currency: "PYG", code: "PY" },
   { name: "Romania", currency: "RON", code: "RO" },
@@ -156,6 +156,15 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
   const [walletAssetOpen, setWalletAssetOpen] = useState(false)
   const [walletNetworkOpen, setWalletNetworkOpen] = useState(false)
   const [mobileProviderOpen, setMobileProviderOpen] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const resolveCountryByRecipient = (r: Beneficiary) => {
+    const options = (r.bankName?.toLowerCase().includes("mobile money") ? mobileMoneyCountries : countries)
+    const byName = options.find((c) => c.name.toLowerCase() === String(r.country || "").toLowerCase())
+    if (byName) return byName
+    const byCurrency = options.find((c) => c.currency === r.currency)
+    return byCurrency || options[0]
+  }
 
   useEffect(() => {
     if (recipient && isEdit) {
@@ -165,6 +174,10 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
       const [parsedWalletAsset, parsedWalletNetwork] = descriptor.includes("/")
         ? descriptor.split("/")
         : [recipient.currency || "USDT", descriptor || ""]
+      const matchedCountryFromCode = [...countries, ...mobileMoneyCountries].find(
+        (c) => c.code === (recipient as Beneficiary).countryCode,
+      )
+      const matchedCountry = matchedCountryFromCode || resolveCountryByRecipient(recipient as Beneficiary)
       setFormData({
         name: recipient.name || "",
         recipientType: recipient.bankName?.toLowerCase().includes("wallet")
@@ -178,7 +191,7 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
         iban: recipient.iban || "",
         bic: recipient.bic || "",
         sortCode: recipient.sortCode || "",
-        country: recipient.country || "",
+        country: matchedCountry?.name || recipient.country || "United States",
         email: recipient.email || "",
         phone: recipient.phone || "",
         walletAsset: recipient.walletAsset || parsedWalletAsset || recipient.currency || "USDT",
@@ -271,6 +284,7 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSubmitting) return
     if (!validateForm()) return
 
     const selectedCountry = [...countries, ...mobileMoneyCountries].find((c) => c.name === formData.country)
@@ -278,6 +292,7 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
     const isUsdBank = formData.recipientType === "bank" && currency === "USD"
     const payload: RecipientUpsertInput = {
       recipientType: formData.recipientType as "bank" | "mobile" | "wallet",
+      countryCode: selectedCountry?.code,
       fullName: formData.name.trim(),
       accountNumber:
         formData.recipientType === "wallet"
@@ -303,13 +318,16 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
     }
 
     try {
+      setIsSubmitting(true)
       const beneficiary = isEdit && recipient?.id
         ? await updateRecipient(recipient.id, payload)
         : await createRecipient(payload)
       onSuccessWithData?.(beneficiary)
       onSuccess()
     } catch (err) {
-      console.error("Failed to save recipient:", err)
+      console.error("Failed to save recipient:", err instanceof Error ? err.message : err)
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -857,9 +875,9 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
       </div>
 
       <div className="flex justify-end gap-3">
-        <Button type="submit" className="gap-2">
-          <ArrowLeftRight className="h-4 w-4" />
-          {isEdit ? "Update Recipient" : "Save Recipient"}
+        <Button type="submit" className="gap-2" disabled={isSubmitting}>
+          {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          {isSubmitting ? "Saving..." : isEdit ? "Update Recipient" : "Save Recipient"}
         </Button>
       </div>
     </form>

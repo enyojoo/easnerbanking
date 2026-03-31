@@ -9,6 +9,7 @@ export interface RecipientData {
   accountNumber: string
   bankName: string
   currency: string
+  countryCode?: string
   phoneNumber?: string
   mobileProvider?: string
   walletNetwork?: string
@@ -26,6 +27,12 @@ export interface RecipientData {
 function isMissingTableError(e: unknown): boolean {
   const any = e as { code?: string; message?: string }
   return any?.code === 'PGRST205' || String(any?.message || '').includes('schema cache')
+}
+
+function isMissingColumnError(e: unknown): boolean {
+  const any = e as { code?: string; message?: string; details?: string }
+  const text = `${any?.message || ''} ${any?.details || ''}`.toLowerCase()
+  return any?.code === '42703' || text.includes('column') || text.includes('schema cache')
 }
 
 const LOCAL_KEY = (uid: string) => `easner_local_recipients_${uid}`
@@ -53,34 +60,69 @@ function now() {
   return new Date().toISOString()
 }
 
+function buildMobileBankName(provider: string, countryCode?: string) {
+  const cleanProvider = String(provider || '').trim()
+  const cc = String(countryCode || '').trim().toUpperCase()
+  if (!cleanProvider) return 'Mobile Money'
+  if (!cc) return `Mobile Money (${cleanProvider})`
+  return `Mobile Money (${cleanProvider}|CC:${cc})`
+}
+
+function parseMobileBankName(bankName: string): { provider?: string; countryCode?: string; normalizedBankName: string } {
+  const match = String(bankName || '').match(/^Mobile Money \((.*)\)$/i)
+  if (!match) return { normalizedBankName: bankName }
+  const inner = match[1] || ''
+  const ccIdx = inner.lastIndexOf('|CC:')
+  if (ccIdx < 0) {
+    const provider = inner.trim()
+    return { provider, normalizedBankName: `Mobile Money (${provider})` }
+  }
+  const provider = inner.slice(0, ccIdx).trim()
+  const countryCode = inner.slice(ccIdx + 4).trim().toUpperCase()
+  return {
+    provider,
+    countryCode: countryCode || undefined,
+    normalizedBankName: `Mobile Money (${provider})`,
+  }
+}
+
 function normalizeRecipient(row: Recipient): Recipient {
   const bankName = row.bank_name || ''
-  const mobileMatch = bankName.match(/^Mobile Money \((.*)\)$/i)
+  const mobileParsed = parseMobileBankName(bankName)
+  const mobileMatch = mobileParsed.provider ? [undefined, mobileParsed.provider] : bankName.match(/^Mobile Money \((.*)\)$/i)
   const walletMatch = bankName.match(/^Wallet \((.*)\)$/i)
   const walletDescriptor = walletMatch?.[1] || ''
   const [asset, network] = walletDescriptor.includes('/')
     ? walletDescriptor.split('/')
     : [undefined, walletDescriptor || undefined]
+  const isWallet = Boolean(walletMatch)
   return {
     ...row,
+    bank_name: mobileParsed.normalizedBankName || bankName,
+    country_code: row.country_code || mobileParsed.countryCode || undefined,
     mobile_provider: row.mobile_provider || mobileMatch?.[1] || undefined,
     wallet_network: row.wallet_network || network || undefined,
     wallet_memo_tag: row.wallet_memo_tag || (walletMatch ? row.swift_bic || undefined : undefined),
-    currency: row.currency || asset || row.currency,
+    // For legacy wallet rows, bank_name may be the only source of truth for asset/network.
+    currency: (isWallet ? asset || row.currency : row.currency) || row.currency,
   }
 }
 
 export const recipientService = {
   async create(userId: string, recipientData: RecipientData): Promise<Recipient> {
     const derivedSwiftBic = recipientData.swiftBic || recipientData.walletMemoTag
+    const bankNameForPersist = recipientData.mobileProvider
+      ? buildMobileBankName(recipientData.mobileProvider, recipientData.countryCode)
+      : recipientData.bankName
     const row: Recipient = {
       id: newId(),
       user_id: userId,
       full_name: recipientData.fullName,
       account_number: recipientData.accountNumber,
-      bank_name: recipientData.bankName,
+      bank_name: bankNameForPersist,
       phone_number: recipientData.phoneNumber || undefined,
       currency: recipientData.currency,
+      country_code: recipientData.countryCode || undefined,
       routing_number: recipientData.routingNumber || undefined,
       sort_code: recipientData.sortCode || undefined,
       iban: recipientData.iban || undefined,
@@ -97,13 +139,38 @@ export const recipientService = {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('recipients')
-        .insert({
+      const payload = {
           user_id: userId,
           full_name: recipientData.fullName,
           account_number: recipientData.accountNumber,
-          bank_name: recipientData.bankName,
+          bank_name: bankNameForPersist,
+          phone_number: recipientData.phoneNumber || null,
+          currency: recipientData.currency,
+          country_code: recipientData.countryCode || null,
+          routing_number: recipientData.routingNumber || null,
+          sort_code: recipientData.sortCode || null,
+          iban: recipientData.iban || null,
+          swift_bic: derivedSwiftBic || null,
+          transfer_type: recipientData.transferType || null,
+          checking_or_savings: recipientData.checkingOrSavings || null,
+          address_line1: recipientData.addressLine1 || null,
+          noah_external_account_id: recipientData.noahExternalAccountId || null,
+        }
+      const { data, error } = await supabase
+        .from('recipients')
+        .insert(payload)
+        .select()
+        .single()
+
+      if (error) throw error
+      if (data) return normalizeRecipient(data as Recipient)
+    } catch (e) {
+      if (isMissingColumnError(e)) {
+        const payload = {
+          user_id: userId,
+          full_name: recipientData.fullName,
+          account_number: recipientData.accountNumber,
+          bank_name: bankNameForPersist,
           phone_number: recipientData.phoneNumber || null,
           currency: recipientData.currency,
           routing_number: recipientData.routingNumber || null,
@@ -114,13 +181,11 @@ export const recipientService = {
           checking_or_savings: recipientData.checkingOrSavings || null,
           address_line1: recipientData.addressLine1 || null,
           noah_external_account_id: recipientData.noahExternalAccountId || null,
-        })
-        .select()
-        .single()
-
-      if (error) throw error
-      if (data) return normalizeRecipient(data as Recipient)
-    } catch (e) {
+        }
+        const { data, error } = await supabase.from('recipients').insert(payload).select().single()
+        if (!error && data) return normalizeRecipient(data as Recipient)
+        if (error) throw error
+      }
       if (!isMissingTableError(e)) throw e
     }
 
@@ -158,8 +223,10 @@ export const recipientService = {
       bankName?: string
       phoneNumber?: string
       mobileProvider?: string
+      countryCode?: string
       walletNetwork?: string
       walletMemoTag?: string
+      countryCode?: string
       routingNumber?: string
       sortCode?: string
       iban?: string
@@ -174,7 +241,7 @@ export const recipientService = {
       updates.bankName !== undefined
         ? updates.bankName
         : updates.mobileProvider !== undefined
-          ? `Mobile Money (${updates.mobileProvider})`
+          ? buildMobileBankName(updates.mobileProvider, updates.countryCode)
           : updates.walletNetwork !== undefined
             ? `Wallet (${updates.walletNetwork})`
             : undefined
@@ -190,6 +257,7 @@ export const recipientService = {
     if (updates.mobileProvider !== undefined) updateData.mobile_provider = updates.mobileProvider || null
     if (updates.walletNetwork !== undefined) updateData.wallet_network = updates.walletNetwork || null
     if (updates.walletMemoTag !== undefined) updateData.wallet_memo_tag = updates.walletMemoTag || null
+    if (updates.countryCode !== undefined) updateData.country_code = updates.countryCode || null
     if (updates.transferType !== undefined) updateData.transfer_type = updates.transferType || null
     if (updates.checkingOrSavings !== undefined) updateData.checking_or_savings = updates.checkingOrSavings || null
     if (updates.addressLine1 !== undefined) updateData.address_line1 = updates.addressLine1 || null
@@ -206,6 +274,18 @@ export const recipientService = {
       if (error) throw error
       if (data) return normalizeRecipient(data as Recipient)
     } catch (e) {
+      if (isMissingColumnError(e)) {
+        const fallback = { ...updateData }
+        delete fallback.country_code
+        const { data, error } = await supabase
+          .from('recipients')
+          .update(fallback)
+          .eq('id', recipientId)
+          .select()
+          .single()
+        if (!error && data) return normalizeRecipient(data as Recipient)
+        if (error) throw error
+      }
       if (!isMissingTableError(e)) throw e
     }
 

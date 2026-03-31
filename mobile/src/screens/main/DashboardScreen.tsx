@@ -47,6 +47,7 @@ import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import { isTier1Complete } from '../../lib/compliance'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
+const DASHBOARD_SELECTED_CURRENCY_KEY_PREFIX = 'easner_dashboard_selected_currency_'
 
 // Transaction interface for dashboard
 interface DashboardTransaction {
@@ -121,6 +122,29 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   useEffect(() => {
     void loadAvailableCurrencies()
   }, [loadAvailableCurrencies])
+
+  // Persist selected dashboard balance currency per user.
+  useEffect(() => {
+    const uid = userProfile?.id || user?.id
+    if (!uid) return
+    const key = `${DASHBOARD_SELECTED_CURRENCY_KEY_PREFIX}${uid}`
+    let mounted = true
+    const loadSelectedCurrency = async () => {
+      try {
+        const saved = (await AsyncStorage.getItem(key))?.toUpperCase() || ''
+        if (!saved) return
+        if (saved === 'USD' || saved === 'EUR' || saved === 'GBP') {
+          if (mounted) setSelectedCurrency(saved as 'USD' | 'EUR' | 'GBP')
+        }
+      } catch {
+        // Ignore storage read failures and keep in-memory selection.
+      }
+    }
+    void loadSelectedCurrency()
+    return () => {
+      mounted = false
+    }
+  }, [userProfile?.id, user?.id])
 
   // Cache TTL (10 minutes - same as other screens)
   const CACHE_TTL = 10 * 60 * 1000
@@ -600,6 +624,15 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
   }
 
+  useEffect(() => {
+    const uid = userProfile?.id || user?.id
+    if (!uid) return
+    const key = `${DASHBOARD_SELECTED_CURRENCY_KEY_PREFIX}${uid}`
+    AsyncStorage.setItem(key, selectedCurrency).catch(() => {
+      // Ignore storage write failures.
+    })
+  }, [selectedCurrency, userProfile?.id, user?.id])
+
   const toggleBalanceVisibility = () => {
     setBalanceVisible(!balanceVisible)
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -1004,7 +1037,11 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
               style={styles.actionButton}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                navigation.navigate('SelectRecentRecipient' as never)
+                navigation.navigate('SelectRecentRecipient' as never, {
+                  preferredBalanceCurrency: selectedCurrency === 'USD' || selectedCurrency === 'EUR'
+                    ? selectedCurrency
+                    : undefined,
+                } as never)
               }}
               activeOpacity={0.7}
             >

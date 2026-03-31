@@ -34,6 +34,7 @@ import { getNetworkIconUrl, getTokenIconUrl } from '../../lib/cryptoIcons'
 import { Wallet, Building2, Smartphone } from 'lucide-react-native'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { CountryFlag } from '../../components/flags/CountryFlag'
+import { getCountryCodeForCurrency } from '@easner/shared'
 
 export default function SelectRecipientScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
@@ -79,6 +80,7 @@ export default function SelectRecipientScreen({ navigation, route }: NavigationP
   
   // Get pre-selected recipient ID from route params
   const preSelectedRecipientId = (route.params as any)?.selectedRecipientId as string | undefined
+  const preferredBalanceCurrency = String((route.params as any)?.preferredBalanceCurrency || '').toUpperCase()
   
   const [selectedRecipient, setSelectedRecipient] = useState<Recipient | null>(
     preSelectedRecipientId 
@@ -136,7 +138,13 @@ export default function SelectRecipientScreen({ navigation, route }: NavigationP
     
     // Navigate to SendAmountScreen (same as SelectRecentRecipientScreen)
     // Pass fromSelectRecipient to enable instant transition
-    navigation.navigate('SendAmount' as never, { recipient, fromSelectRecipient: true } as never)
+    navigation.navigate('SendAmount' as never, {
+      recipient,
+      fromSelectRecipient: true,
+      preferredBalanceCurrency: preferredBalanceCurrency === 'USD' || preferredBalanceCurrency === 'EUR'
+        ? preferredBalanceCurrency
+        : undefined,
+    } as never)
   }
 
   const handleAddNewRecipient = () => {
@@ -284,6 +292,7 @@ export default function SelectRecipientScreen({ navigation, route }: NavigationP
         accountNumber: accountNumberForType,
         bankName: bankNameForType,
         currency: newRecipient.currency,
+        countryCode: selectedCountryCurrency?.countryCode,
         phoneNumber: selectedRecipientType === 'mobile' ? newRecipient.phoneNumber : undefined,
         mobileProvider: selectedRecipientType === 'mobile' ? newRecipient.provider : undefined,
         walletNetwork: selectedRecipientType === 'wallet' ? newRecipient.network : undefined,
@@ -353,7 +362,7 @@ export default function SelectRecipientScreen({ navigation, route }: NavigationP
             {/* Flag badge on bottom edge of avatar */}
             <View style={styles.avatarFlagBadge}>
               <View style={styles.flagContainer}>
-                <CurrencyFlag currency={item.currency} size={20} style={styles.flagImage} />
+                <CountryFlag code={item.country_code || (item.currency === 'EUR' ? 'EU' : getCountryCodeForCurrency(item.currency) || 'US')} size={20} style={styles.flagImage} />
               </View>
             </View>
           </View>
@@ -826,12 +835,12 @@ export default function SelectRecipientScreen({ navigation, route }: NavigationP
                                 <Text style={styles.currencyCode}>{provider}</Text>
                               </View>
                               {newRecipient.provider === provider && <Ionicons name="checkmark" size={18} color={colors.primary.main} />}
-                            </TouchableOpacity>
-                          ))}
-                        </ScrollView>
-                      </View>
-                    )}
-                  </View>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
                   <TextInput
                     style={styles.modalInput}
                     value={newRecipient.fullName}
@@ -1468,6 +1477,7 @@ const styles = StyleSheet.create({
   },
   avatarContainer: {
     position: 'relative',
+    overflow: 'visible',
     marginRight: spacing[3],
   },
   recipientAvatar: {
@@ -1494,6 +1504,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: -2,
     right: -2,
+    zIndex: 3,
+    elevation: 3,
     width: 20,
     height: 20,
     borderRadius: 10,
@@ -1639,7 +1651,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalScrollView: {
-    maxHeight: 500,
+    flex: 1,
+    minHeight: 0,
   },
   modalScrollContent: {
     paddingBottom: spacing[8],

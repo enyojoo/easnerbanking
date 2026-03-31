@@ -11,11 +11,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { RecipientForm } from "@/components/recipient-form"
-import type { Beneficiary } from "@/lib/mock-data"
+import type { Beneficiary } from "@/lib/recipient-types"
 import { Label } from "@/components/ui/label"
 import { Search, Plus, User, ChevronDown } from "lucide-react"
 import { CurrencyFlag } from "@/components/flags"
 import { listRecipients } from "@/lib/recipients-store"
+import { useAuth } from "@/lib/auth-context"
 
 function maskAccount(accountNumber: string): string {
   if (!accountNumber || accountNumber.length < 4) return "****"
@@ -35,6 +36,7 @@ export function SendRecipientPicker({
   beneficiaries: initialBeneficiaries,
   label = "Recipient",
 }: SendRecipientPickerProps) {
+  const { user, isLoading } = useAuth()
   const [searchTerm, setSearchTerm] = useState("")
   const [isPickerOpen, setIsPickerOpen] = useState(false)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
@@ -48,17 +50,23 @@ export function SendRecipientPicker({
       setBeneficiaries(initialBeneficiaries)
       return
     }
-    void listRecipients()
+    if (isLoading || !user?.id) return
+    void listRecipients(user.id)
       .then((rows) => {
         if (isMounted) setBeneficiaries(rows)
       })
       .catch((err) => {
-        console.error("Failed to load recipients:", err)
+        const message = err instanceof Error ? err.message : String(err)
+        if (message.toLowerCase().includes("bad request")) {
+          if (isMounted) setBeneficiaries([])
+          return
+        }
+        console.error("Failed to load recipients:", message)
       })
     return () => {
       isMounted = false
     }
-  }, [initialBeneficiaries])
+  }, [initialBeneficiaries, isLoading, user?.id])
 
   const filteredBeneficiaries = useMemo(() => {
     if (!searchTerm.trim()) return beneficiaries
@@ -96,13 +104,15 @@ export function SendRecipientPicker({
       >
         {selected ? (
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-              <User className="h-5 w-5 text-muted-foreground" />
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                <User className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <CurrencyFlag currency={selected.currency} size={18} className="rounded-full shrink-0" />
             </div>
             <div>
               <p className="font-medium">{selected.name}</p>
-              <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-                <CurrencyFlag currency={selected.currency} size={16} className="rounded-sm shrink-0" />
+              <p className="text-sm text-muted-foreground">
                 <span>
                   {selected.currency} • {maskAccount(selected.fullAccountNumber)}
                 </span>
@@ -139,13 +149,15 @@ export function SendRecipientPicker({
                   onClick={() => handleSelect(b)}
                   className="flex w-full items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left transition-colors hover:bg-muted hover:border-input"
                 >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
-                    <User className="h-5 w-5 text-muted-foreground" />
+                  <div className="flex items-center gap-2.5 shrink-0">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                      <User className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <CurrencyFlag currency={b.currency} size={18} className="rounded-full shrink-0" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="font-medium truncate">{b.name}</p>
-                    <p className="text-sm text-muted-foreground flex items-center gap-1.5 min-w-0">
-                      <CurrencyFlag currency={b.currency} size={16} className="rounded-sm shrink-0" />
+                    <p className="text-sm text-muted-foreground min-w-0">
                       <span className="truncate">
                         {b.bankName} • {b.currency}
                       </span>

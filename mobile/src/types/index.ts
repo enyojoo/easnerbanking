@@ -31,6 +31,7 @@ export interface ExchangeRate {
 export interface Recipient {
   id: string
   user_id: string
+  country_code?: string
   /** When linked to Noah external account for payouts */
   noah_external_account_id?: string
   full_name: string

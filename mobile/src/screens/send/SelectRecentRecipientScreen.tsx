@@ -35,6 +35,7 @@ import { ShimmerLoader } from '../../components/premium'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { CountryFlag } from '../../components/flags/CountryFlag'
+import { getCountryCodeForCurrency } from '@easner/shared'
 
 // Helper function to get initials from name
 const getInitials = (name: string): string => {
@@ -48,9 +49,10 @@ const getInitials = (name: string): string => {
 const CACHE_KEY_PREFIX = 'recent_recipients_'
 const CACHE_TTL = 2 * 60 * 1000 // 2 minutes
 
-export default function SelectRecentRecipientScreen({ navigation }: NavigationProps) {
+export default function SelectRecentRecipientScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
   const { user, userProfile } = useAuth()
+  const preferredBalanceCurrency = String((route.params as any)?.preferredBalanceCurrency || '').toUpperCase()
   const { recipients, refreshRecipients, currencies, transactions } = useUserData()
   const [recentRecipients, setRecentRecipients] = useState<Recipient[]>([])
   const [hasTransactions, setHasTransactions] = useState(false)
@@ -176,13 +178,23 @@ export default function SelectRecentRecipientScreen({ navigation }: NavigationPr
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     // Navigate directly to SendAmountScreen with selected recipient
     // Pass fromSelectRecentRecipient to enable instant transition
-    navigation.navigate('SendAmount' as never, { recipient, fromSelectRecentRecipient: true } as never)
+    navigation.navigate('SendAmount' as never, {
+      recipient,
+      fromSelectRecentRecipient: true,
+      preferredBalanceCurrency: preferredBalanceCurrency === 'USD' || preferredBalanceCurrency === 'EUR'
+        ? preferredBalanceCurrency
+        : undefined,
+    } as never)
   }
 
   const handleViewAllRecipients = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     // Navigate to SelectRecipientScreen (full list)
-    navigation.navigate('SelectRecipient' as never)
+    navigation.navigate('SelectRecipient' as never, {
+      preferredBalanceCurrency: preferredBalanceCurrency === 'USD' || preferredBalanceCurrency === 'EUR'
+        ? preferredBalanceCurrency
+        : undefined,
+    } as never)
   }
 
   const handleAddNewRecipient = () => {
@@ -318,6 +330,7 @@ export default function SelectRecentRecipientScreen({ navigation }: NavigationPr
         accountNumber: accountNumberForType,
         bankName: bankNameForType,
         currency: newRecipient.currency,
+        countryCode: selectedCountryCurrency?.countryCode,
         phoneNumber: selectedRecipientType === 'mobile' ? newRecipient.phoneNumber : undefined,
         mobileProvider: selectedRecipientType === 'mobile' ? newRecipient.provider : undefined,
         walletNetwork: selectedRecipientType === 'wallet' ? newRecipient.network : undefined,
@@ -345,7 +358,13 @@ export default function SelectRecentRecipientScreen({ navigation }: NavigationPr
       setShowRecipientTypeModal(false)
       
       // Navigate to SendAmountScreen with the newly added recipient
-      navigation.navigate('SendAmount' as never, { recipient: newRecipientData, fromSelectRecentRecipient: true } as never)
+      navigation.navigate('SendAmount' as never, {
+        recipient: newRecipientData,
+        fromSelectRecentRecipient: true,
+        preferredBalanceCurrency: preferredBalanceCurrency === 'USD' || preferredBalanceCurrency === 'EUR'
+          ? preferredBalanceCurrency
+          : undefined,
+      } as never)
     } catch (error) {
       console.error('Error adding recipient:', error)
       setError('Failed to add recipient')
@@ -394,7 +413,7 @@ export default function SelectRecentRecipientScreen({ navigation }: NavigationPr
             {/* Flag badge on bottom edge of avatar */}
             <View style={styles.avatarFlagBadge}>
               <View style={styles.flagContainer}>
-                <CurrencyFlag currency={item.currency} size={20} style={styles.flagImage} />
+                <CountryFlag code={item.country_code || (item.currency === 'EUR' ? 'EU' : getCountryCodeForCurrency(item.currency) || 'US')} size={20} style={styles.flagImage} />
               </View>
             </View>
           </View>
@@ -911,12 +930,12 @@ export default function SelectRecentRecipientScreen({ navigation }: NavigationPr
                                 <Text style={styles.currencyCode}>{provider}</Text>
                               </View>
                               {newRecipient.provider === provider && <Ionicons name="checkmark" size={18} color={colors.primary.main} />}
-                            </TouchableOpacity>
-                          ))}
-                        </ScrollView>
-                      </View>
-                    )}
-                  </View>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
                   <TextInput
                     style={styles.modalInput}
                     value={newRecipient.fullName}
@@ -1528,6 +1547,7 @@ const styles = StyleSheet.create({
   },
   avatarContainer: {
     position: 'relative',
+    overflow: 'visible',
     marginRight: spacing[3],
   },
   recipientAvatar: {
@@ -1548,6 +1568,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: -2,
     right: -2,
+    zIndex: 3,
+    elevation: 3,
     width: 20,
     height: 20,
     borderRadius: 10,
@@ -1690,7 +1712,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalScrollView: {
-    maxHeight: 500,
+    flex: 1,
+    minHeight: 0,
   },
   modalScrollContent: {
     paddingBottom: spacing[8],

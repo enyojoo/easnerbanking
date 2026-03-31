@@ -4,7 +4,6 @@ import { useEffect, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
 import { Plus, Search, MoreVertical, Edit, Trash2, User, Send } from "lucide-react"
 import {
   DropdownMenu,
@@ -22,11 +21,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { RecipientForm } from "@/components/recipient-form"
-import type { Beneficiary } from "@/lib/mock-data"
+import type { Beneficiary } from "@/lib/recipient-types"
 import { CurrencyFlag } from "@/components/flags"
 import { deleteRecipient, listRecipients } from "@/lib/recipients-store"
+import { useAuth } from "@/lib/auth-context"
 
 export default function RecipientsPage() {
+  const { user, isLoading } = useAuth()
   const [searchTerm, setSearchTerm] = useState("")
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [selectedRecipient, setSelectedRecipient] = useState<Beneficiary | null>(null)
@@ -34,10 +35,24 @@ export default function RecipientsPage() {
   const [beneficiaries, setBeneficiaries] = useState<Beneficiary[]>([])
 
   useEffect(() => {
-    void listRecipients()
+    if (isLoading) return
+    if (!user?.id) {
+      setBeneficiaries([])
+      return
+    }
+    void listRecipients(user.id)
       .then(setBeneficiaries)
-      .catch((err) => console.error("Failed to load recipients:", err))
-  }, [])
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : String(err)
+        // Backend schema/cache drift can briefly return 400 for recipient list reads.
+        // Treat as empty state and avoid noisy console errors in the UI.
+        if (message.toLowerCase().includes("bad request")) {
+          setBeneficiaries([])
+          return
+        }
+        console.error("Failed to load recipients:", message)
+      })
+  }, [isLoading, user?.id])
 
   const filteredBeneficiaries = beneficiaries.filter((recipient) =>
     recipient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -134,8 +149,17 @@ export default function RecipientsPage() {
                     className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                        <User className="h-5 w-5 text-primary" />
+                      <div className="relative mr-1">
+                        <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                          <User className="h-5 w-5 text-primary" />
+                        </div>
+                        <div className="absolute -bottom-0.5 -right-0.5 h-5 w-5 overflow-hidden rounded-full border-2 border-background bg-background">
+                          <CurrencyFlag
+                            currency={recipient.currency}
+                            size={24}
+                            className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-none"
+                          />
+                        </div>
                       </div>
                       <div className="flex-1 min-w-0">
                         <h3 className="font-semibold text-sm">{recipient.name}</h3>
@@ -145,10 +169,6 @@ export default function RecipientsPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="text-xs gap-1.5 pr-2">
-                        <CurrencyFlag currency={recipient.currency} size={14} className="rounded-sm" />
-                        {recipient.currency}
-                      </Badge>
                       <Button variant="outline" size="sm" className="gap-1">
                         <Send className="h-3 w-3" />
                         Send

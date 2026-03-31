@@ -19,7 +19,21 @@ export function createSupabaseBrowser() {
     throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY")
   }
   if (!browserClient) {
-    browserClient = createClient(url, key)
+    browserClient = createClient(url, key, {
+      global: {
+        fetch: async (input, init) => {
+          const requestUrl = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+          const headers = new Headers(init?.headers)
+          // Some browser environments/extensions can strip default Supabase headers.
+          // Ensure required credentials are always present for REST calls.
+          if (requestUrl.startsWith(url)) {
+            if (!headers.has("apikey")) headers.set("apikey", key)
+            if (!headers.has("Authorization")) headers.set("Authorization", `Bearer ${key}`)
+          }
+          return fetch(input, { ...init, headers })
+        },
+      },
+    })
   }
   return browserClient
 }

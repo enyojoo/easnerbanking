@@ -1,11 +1,13 @@
 "use client"
 
-import { createSupabaseBrowser } from "@/lib/supabase/browser"
-import type { Beneficiary } from "@/lib/mock-data"
+import type { Beneficiary } from "@/lib/recipient-types"
+import { fetchWithSession } from "@/lib/fetch-with-session"
+import { getCountryCodeForCurrency } from "@easner/shared"
 
 type RecipientRow = {
   id: string
   user_id: string
+  country_code?: string | null
   full_name: string
   account_number: string
   bank_name: string
@@ -27,6 +29,7 @@ type RecipientRow = {
 
 export type RecipientUpsertInput = {
   recipientType: "bank" | "mobile" | "wallet"
+  countryCode?: string
   fullName: string
   accountNumber: string
   bankName: string
@@ -49,10 +52,76 @@ const countryByCurrency: Record<string, string> = {
   USD: "United States",
   GBP: "United Kingdom",
   EUR: "European Union",
+  XOF: "West Africa",
+  XAF: "Central Africa",
+}
+
+function resolveCountryName(currency: string): string {
+  const code = String(currency || "").toUpperCase()
+  if (countryByCurrency[code]) return countryByCurrency[code]
+  const iso = getCountryCodeForCurrency(code)
+  if (!iso) return code
+  try {
+    const label = new Intl.DisplayNames(["en"], { type: "region" }).of(iso)
+    return label || code
+  } catch {
+    return code
+  }
+}
+
+function deriveBankName(input: RecipientUpsertInput): string {
+  if (input.recipientType === "mobile" && input.mobileProvider) {
+    return `Mobile Money (${input.mobileProvider})`
+  }
+  if (input.recipientType === "wallet" && input.walletAsset && input.walletNetwork) {
+    return `Wallet (${input.walletAsset}/${input.walletNetwork})`
+  }
+  if (input.recipientType === "wallet" && input.walletNetwork) {
+    return `Wallet (${input.walletNetwork})`
+  }
+  return input.bankName
+}
+
+function toWritePayload(input: RecipientUpsertInput) {
+  return {
+    country_code: input.countryCode || null,
+    full_name: input.fullName,
+    account_number: input.accountNumber,
+    bank_name: deriveBankName(input),
+    phone_number: input.phoneNumber || null,
+    currency: input.currency,
+    routing_number: input.routingNumber || null,
+    sort_code: input.sortCode || null,
+    iban: input.iban || null,
+    swift_bic: input.swiftBic || input.walletMemoTag || null,
+    transfer_type: input.transferType || null,
+    checking_or_savings: input.checkingOrSavings || null,
+    address_line1: input.addressLine1 || null,
+    mobile_provider: input.mobileProvider || null,
+    wallet_network: input.walletNetwork || null,
+    wallet_memo_tag: input.walletMemoTag || null,
+  }
+}
+
+async function parseApiError(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as { error?: string; message?: string; details?: string; hint?: string; code?: string }
+    return JSON.stringify({
+      status: res.status,
+      error: body.error || body.message || "Request failed",
+      details: body.details,
+      hint: body.hint,
+      code: body.code,
+    })
+  } catch {
+    return JSON.stringify({ status: res.status, error: res.statusText || "Request failed" })
+  }
 }
 
 export function toBeneficiary(row: RecipientRow): Beneficiary {
-  const mobileMatch = row.bank_name.match(/^Mobile Money \((.*)\)$/i)
+  const mobileInnerMatch = row.bank_name.match(/^Mobile Money \((.*)\)$/i)
+  const mobileInner = mobileInnerMatch?.[1] || ""
+  const mobileProvider = mobileInner.includes("|CC:") ? mobileInner.split("|CC:")[0] : mobileInner
   const walletMatch = row.bank_name.match(/^Wallet \((.*)\)$/i)
   const walletDescriptor = walletMatch?.[1] || ""
   const [walletAssetFromLabel, walletNetworkFromLabel] = walletDescriptor.includes("/")
@@ -60,15 +129,16 @@ export function toBeneficiary(row: RecipientRow): Beneficiary {
     : [undefined, walletDescriptor || undefined]
   return {
     id: row.id,
+    countryCode: row.country_code || undefined,
     name: row.full_name,
-    bankName: row.bank_name,
+    bankName: mobileInnerMatch ? `Mobile Money (${mobileProvider})` : row.bank_name,
     accountNumber: row.account_number,
     fullAccountNumber: row.account_number,
     routingNumber: row.routing_number || undefined,
     iban: row.iban || undefined,
     bic: row.swift_bic || undefined,
     sortCode: row.sort_code || undefined,
-    country: countryByCurrency[row.currency] || row.currency,
+    country: resolveCountryName(row.currency),
     currency: row.currency,
     email: "",
     phone: row.phone_number || "",
@@ -77,110 +147,54 @@ export function toBeneficiary(row: RecipientRow): Beneficiary {
     transferType: row.transfer_type || undefined,
     checkingOrSavings: row.checking_or_savings || undefined,
     addressLine1: row.address_line1 || undefined,
-    mobileProvider: row.mobile_provider || mobileMatch?.[1] || undefined,
+    mobileProvider: row.mobile_provider || mobileProvider || undefined,
     walletAsset: walletAssetFromLabel || undefined,
     walletNetwork: row.wallet_network || walletNetworkFromLabel || undefined,
     walletMemoTag: row.wallet_memo_tag || (walletMatch ? row.swift_bic || undefined : undefined),
   }
 }
 
-async function getSessionUserId(): Promise<string> {
-  const supabase = createSupabaseBrowser()
-  const { data } = await supabase.auth.getUser()
-  const userId = data.user?.id
-  if (!userId) throw new Error("User not authenticated")
-  return userId
-}
-
-export async function listRecipients(): Promise<Beneficiary[]> {
-  const supabase = createSupabaseBrowser()
-  const userId = await getSessionUserId()
-  const { data, error } = await supabase
-    .from("recipients")
-    .select("*")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-
-  if (error) throw error
-  return ((data || []) as RecipientRow[]).map(toBeneficiary)
+export async function listRecipients(userId?: string): Promise<Beneficiary[]> {
+  const qs = userId ? `?userId=${encodeURIComponent(userId)}` : ""
+  const res = await fetchWithSession(`/api/recipients${qs}`)
+  if (!res.ok) {
+    throw new Error(await parseApiError(res))
+  }
+  const body = (await res.json()) as { recipients?: RecipientRow[] }
+  return (body.recipients || []).map(toBeneficiary)
 }
 
 export async function createRecipient(input: RecipientUpsertInput): Promise<Beneficiary> {
-  const supabase = createSupabaseBrowser()
-  const userId = await getSessionUserId()
-  const bankName =
-    input.recipientType === "mobile" && input.mobileProvider
-      ? `Mobile Money (${input.mobileProvider})`
-      : input.recipientType === "wallet" && input.walletAsset && input.walletNetwork
-        ? `Wallet (${input.walletAsset}/${input.walletNetwork})`
-        : input.recipientType === "wallet" && input.walletNetwork
-          ? `Wallet (${input.walletNetwork})`
-          : input.bankName
-  const payload = {
-    user_id: userId,
-    full_name: input.fullName,
-    account_number: input.accountNumber,
-    bank_name: bankName,
-    phone_number: input.phoneNumber || null,
-    currency: input.currency,
-    routing_number: input.routingNumber || null,
-    sort_code: input.sortCode || null,
-    iban: input.iban || null,
-    swift_bic: input.swiftBic || input.walletMemoTag || null,
-    transfer_type: input.transferType || null,
-    checking_or_savings: input.checkingOrSavings || null,
-    address_line1: input.addressLine1 || null,
-    mobile_provider: input.mobileProvider || null,
-    wallet_network: input.walletNetwork || null,
-    wallet_memo_tag: input.walletMemoTag || null,
+  const res = await fetchWithSession("/api/recipients", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(toWritePayload(input)),
+  })
+  if (!res.ok) {
+    throw new Error(await parseApiError(res))
   }
-  const { data, error } = await supabase.from("recipients").insert(payload).select("*").single()
-  if (error) throw error
-  return toBeneficiary(data as RecipientRow)
+  const body = (await res.json()) as { recipient: RecipientRow }
+  return toBeneficiary(body.recipient)
 }
 
 export async function updateRecipient(recipientId: string, input: RecipientUpsertInput): Promise<Beneficiary> {
-  const supabase = createSupabaseBrowser()
-  const userId = await getSessionUserId()
-  const bankName =
-    input.recipientType === "mobile" && input.mobileProvider
-      ? `Mobile Money (${input.mobileProvider})`
-      : input.recipientType === "wallet" && input.walletAsset && input.walletNetwork
-        ? `Wallet (${input.walletAsset}/${input.walletNetwork})`
-        : input.recipientType === "wallet" && input.walletNetwork
-          ? `Wallet (${input.walletNetwork})`
-          : input.bankName
-  const payload = {
-    full_name: input.fullName,
-    account_number: input.accountNumber,
-    bank_name: bankName,
-    phone_number: input.phoneNumber || null,
-    currency: input.currency,
-    routing_number: input.routingNumber || null,
-    sort_code: input.sortCode || null,
-    iban: input.iban || null,
-    swift_bic: input.swiftBic || input.walletMemoTag || null,
-    transfer_type: input.transferType || null,
-    checking_or_savings: input.checkingOrSavings || null,
-    address_line1: input.addressLine1 || null,
-    mobile_provider: input.mobileProvider || null,
-    wallet_network: input.walletNetwork || null,
-    wallet_memo_tag: input.walletMemoTag || null,
+  const res = await fetchWithSession(`/api/recipients/${encodeURIComponent(recipientId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(toWritePayload(input)),
+  })
+  if (!res.ok) {
+    throw new Error(await parseApiError(res))
   }
-  const { data, error } = await supabase
-    .from("recipients")
-    .update(payload)
-    .eq("id", recipientId)
-    .eq("user_id", userId)
-    .select("*")
-    .single()
-  if (error) throw error
-  return toBeneficiary(data as RecipientRow)
+  const body = (await res.json()) as { recipient: RecipientRow }
+  return toBeneficiary(body.recipient)
 }
 
 export async function deleteRecipient(recipientId: string): Promise<void> {
-  const supabase = createSupabaseBrowser()
-  const userId = await getSessionUserId()
-  const { error } = await supabase.from("recipients").delete().eq("id", recipientId).eq("user_id", userId)
-  if (error) throw error
+  const res = await fetchWithSession(`/api/recipients/${encodeURIComponent(recipientId)}`, {
+    method: "DELETE",
+  })
+  if (!res.ok) {
+    throw new Error(await parseApiError(res))
+  }
 }
