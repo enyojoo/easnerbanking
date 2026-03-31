@@ -28,7 +28,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { generateTransactionId } from "@/lib/transaction-id"
-import { CurrencyFlag } from "@easner/shared"
+import { CurrencyFlag } from "@/components/flags"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import {
   TIER2_COMPLETE_PLACEHOLDER,

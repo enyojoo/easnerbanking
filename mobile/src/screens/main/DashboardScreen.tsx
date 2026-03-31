@@ -14,6 +14,7 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import * as Haptics from 'expo-haptics'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
@@ -73,8 +74,8 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [availableCurrencies, setAvailableCurrencies] = useState([
-    { code: 'USD', name: 'US Dollar', symbol: '$', flag: require('../../../assets/flags/us.png') },
-    { code: 'EUR', name: 'Euro', symbol: '€', flag: require('../../../assets/flags/eu.png') },
+    { code: 'USD', name: 'US Dollar', symbol: '$' },
+    { code: 'EUR', name: 'Euro', symbol: '€' },
   ])
   const [canOpenMoreCurrencies, setCanOpenMoreCurrencies] = useState(false)
   const [recentTransactions, setRecentTransactions] = useState<DashboardTransaction[]>([])
@@ -90,12 +91,6 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   /** True while we are removing/replacing the channel on purpose — avoids treating `CLOSED` as a failure. */
   const realtimeIntentionalCloseRef = useRef(false)
 
-  const getCurrencyFlagSource = (code: string) => {
-    if (code === 'USD') return require('../../../assets/flags/us.png')
-    if (code === 'EUR') return require('../../../assets/flags/eu.png')
-    return require('../../../assets/flags/us.png')
-  }
-
   const loadAvailableCurrencies = useCallback(async () => {
     try {
       const response = await apiGet('/api/accounts/available-currencies')
@@ -110,7 +105,6 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
         code,
         name: code === 'USD' ? 'US Dollar' : code === 'EUR' ? 'Euro' : code === 'GBP' ? 'British Pound' : code,
         symbol: code === 'USD' ? '$' : code === 'EUR' ? '€' : code === 'GBP' ? '£' : code,
-        flag: getCurrencyFlagSource(code),
       }))
       if (mapped.length > 0) {
         setAvailableCurrencies(mapped as any)
@@ -802,12 +796,8 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                     }}
                   >
                     <View style={styles.flagContainerSmall}>
-                      <Image 
-                        source={item.flag}
-                        style={styles.flagImageSmall}
-                        resizeMode="cover"
-                      />
-            </View>
+                      <CurrencyFlag currency={item.code} size={24} style={styles.flagImageSmall} />
+                    </View>
                     <View style={styles.currencyItemInfo}>
                       <Text style={styles.currencyItemCode}>{item.code} Balance</Text>
                       <Text style={styles.currencyItemBalance}>
@@ -951,18 +941,8 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
               activeOpacity={0.7}
             >
               <View style={styles.flagContainer}>
-                <Image 
-                  source={
-                    selectedCurrency === 'USD'
-                      ? require('../../../assets/flags/us.png')
-                      : selectedCurrency === 'EUR'
-                        ? require('../../../assets/flags/eu.png')
-                        : require('../../../assets/flags/us.png')
-                  }
-                  style={styles.flagImage}
-                  resizeMode="cover"
-                />
-          </View>
+                <CurrencyFlag currency={selectedCurrency} size={28} style={styles.flagImage} />
+              </View>
               <Text style={styles.currencyText}>{selectedCurrency} Balance</Text>
               <ChevronDown size={16} color={colors.text.primary} strokeWidth={2} />
             </TouchableOpacity>
@@ -1178,7 +1158,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     borderWidth: 0.5,
     borderColor: colors.frame.border,
-    gap: spacing[1],
+    gap: spacing[2],
     ...shadows.xs,
   },
   verifyAccountBannerTextWrap: {

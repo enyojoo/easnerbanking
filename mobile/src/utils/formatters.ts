@@ -21,6 +21,12 @@ export function formatPhoneNumber(value: string): string {
   }
 }
 
+export function formatInternationalPhone(value: string): string {
+  const cleaned = value.replace(/[^\d+]/g, '')
+  if (cleaned.startsWith('+')) return `+${cleaned.slice(1).replace(/\D/g, '')}`
+  return cleaned.replace(/\D/g, '')
+}
+
 /**
  * Format account number (spaces every 4 digits)
  */

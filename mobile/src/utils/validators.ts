@@ -97,6 +97,20 @@ export function validateRequired(value: string, fieldName: string): ValidationRe
   return { isValid: true }
 }
 
+export function validateWalletAddress(address: string): ValidationResult {
+  if (!address || address.trim().length < 16) {
+    return { isValid: false, error: 'Wallet address looks too short' }
+  }
+  return { isValid: true }
+}
+
+export function validateMobileMoneyProvider(provider: string): ValidationResult {
+  if (!provider || provider.trim().length < 2) {
+    return { isValid: false, error: 'Please select a mobile money network' }
+  }
+  return { isValid: true }
+}
+
 /**
  * Validate password
  */

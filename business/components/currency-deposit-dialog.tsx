@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Copy, Check, Plus, Share2 } from "lucide-react"
 import { mockStablecoinAccounts, type Account } from "@/lib/mock-data"
 import { QRCodeSVG } from "qrcode.react"
-import { CurrencyFlag } from "@easner/shared"
+import { CurrencyFlag } from "@/components/flags"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { TIER2_COMPLETE_PLACEHOLDER } from "@/lib/compliance-placeholders"
 

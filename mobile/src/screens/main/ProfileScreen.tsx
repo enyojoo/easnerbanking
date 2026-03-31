@@ -21,7 +21,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useUserData } from '../../contexts/UserDataContext'
 import { NavigationProps } from '../../types'
 import { userService, UserProfileData, UserStats } from '../../lib/userService'
-import { getCountryFlag } from '../../utils/flagUtils'
+import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { analytics } from '../../lib/analytics'
 import { supabase } from '../../lib/supabase'
 import { splitFullNameForForm } from '../../lib/userProfileHelpers'
@@ -284,7 +284,7 @@ function ProfileContent({ navigation }: NavigationProps) {
                 }}
               >
                 <View style={styles.currencyInfo}>
-                  <Text style={styles.currencyFlag}>{getCountryFlag(item.code)}</Text>
+                  <CurrencyFlag currency={item.code} size={20} style={styles.currencyFlag} />
                   <View style={styles.currencyDetails}>
                     <Text style={styles.currencyCode}>{item.code}</Text>
                     <Text style={styles.currencyName}>{item.name}</Text>
@@ -406,7 +406,7 @@ function ProfileContent({ navigation }: NavigationProps) {
           onPress={() => setShowCurrencyPicker(true)}
         >
           <View style={styles.currencySelectorContent}>
-            <Text style={styles.currencyFlag}>{getCountryFlag(editProfileData.baseCurrency)}</Text>
+            <CurrencyFlag currency={editProfileData.baseCurrency} size={20} style={styles.currencyFlag} />
             <Text style={styles.currencySelectorText}>
               {editProfileData.baseCurrency} - {currencies.find(c => c.code === editProfileData.baseCurrency)?.name || 'Select Currency'}
             </Text>
@@ -415,7 +415,7 @@ function ProfileContent({ navigation }: NavigationProps) {
         </TouchableOpacity>
       ) : (
         <View style={styles.currencyDisplay}>
-          <Text style={styles.currencyFlag}>{getCountryFlag(profileData.baseCurrency)}</Text>
+          <CurrencyFlag currency={profileData.baseCurrency} size={20} style={styles.currencyFlag} />
           <Text style={styles.currencyText}>{profileData.baseCurrency}</Text>
       </View>
       )}
@@ -535,7 +535,7 @@ function ProfileContent({ navigation }: NavigationProps) {
                   <View style={styles.fieldContainer}>
                     <Text style={styles.fieldLabel}>Base Currency</Text>
                     <View style={styles.currencyDisplay}>
-                      <Text style={styles.currencyFlag}>{getCountryFlag(profileData.baseCurrency)}</Text>
+                      <CurrencyFlag currency={profileData.baseCurrency} size={20} style={styles.currencyFlag} />
                       <Text style={styles.currencyText}>{profileData.baseCurrency}</Text>
                     </View>
                     <Text style={styles.currencyDescription}>

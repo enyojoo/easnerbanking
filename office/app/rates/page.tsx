@@ -15,7 +15,7 @@ import { Plus, MoreHorizontal, Edit, Pause, Trash2, Loader2 } from "lucide-react
 import { useOfficeData } from "@/hooks/use-office-data"
 import { officeDataStore } from "@/lib/office-data-store"
 import { OfficeRatesSkeleton } from "@/components/office-rates-skeleton"
-import { CurrencyFlag } from "@easner/shared"
+import { CurrencyFlag } from "@/components/flags"
 
 const AdminRatesPage = () => {
   const { data, loading } = useOfficeData()

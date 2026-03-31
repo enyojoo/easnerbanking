@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '../../contexts/AuthContext'
 import { useUserData } from '../../contexts/UserDataContext'
 import { NavigationProps } from '../../types'
-import { getCountryFlag } from '../../utils/flagUtils'
+import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { analytics } from '../../lib/analytics'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
 import { generateTransactionId } from '../../lib/transactionId'
@@ -210,7 +210,7 @@ export default function ConfirmationScreen({ navigation, route }: NavigationProp
                 <View style={styles.summaryItem}>
                   <Text style={styles.summaryLabel}>You Send</Text>
                   <View style={styles.summaryAmountRow}>
-                    <Text style={styles.summaryFlag}>{getCountryFlag(sendCurrency)}</Text>
+                    <CurrencyFlag currency={sendCurrency} size={20} style={styles.summaryFlag} />
                     <Text style={styles.summaryAmount}>{formatCurrency(sendAmount, sendCurrency)}</Text>
                   </View>
       </View>
@@ -223,7 +223,7 @@ export default function ConfirmationScreen({ navigation, route }: NavigationProp
                   <Text style={styles.summaryLabel}>They Receive</Text>
                   <View style={styles.summaryAmountRow}>
                     <Text style={styles.summaryAmount}>{formatCurrency(receiveAmount, receiveCurrency)}</Text>
-                    <Text style={styles.summaryFlag}>{getCountryFlag(receiveCurrency)}</Text>
+                    <CurrencyFlag currency={receiveCurrency} size={20} style={styles.summaryFlag} />
                   </View>
           </View>
         </View>

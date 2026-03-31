@@ -16,7 +16,7 @@ import {
 import { CurrencyDepositDialog } from "@/components/currency-deposit-dialog"
 import { FXConvertDialog } from "@/components/fx-convert-dialog"
 import { StatementDownloadDialog } from "@/components/statement-download-dialog"
-import { CurrencyFlag } from "@easner/shared"
+import { CurrencyFlag } from "@/components/flags"
 import { MoreVertical, FileText, Ban, Trash2 } from "lucide-react"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { useBusinessProfile } from "@/lib/use-business-profile"

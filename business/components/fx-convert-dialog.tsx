@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { CurrencyFlag } from "@easner/shared"
+import { CurrencyFlag } from "@/components/flags"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { Loader2 } from "lucide-react"
 

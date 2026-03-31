@@ -20,7 +20,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useBalance } from '../../contexts/BalanceContext'
 import { useUserData } from '../../contexts/UserDataContext'
 import { NavigationProps, PaymentMethod } from '../../types'
-import { getCountryFlag } from '../../utils/flagUtils'
+import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { analytics } from '../../lib/analytics'
 import { transactionService } from '../../lib/transactionService'
 import { getAccountTypeConfigFromCurrency, formatFieldValue } from '../../lib/currencyAccountTypes'
@@ -250,7 +250,7 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
               style={styles.summaryGradient}
             >
               <View style={styles.summaryHeader}>
-                <Text style={{ fontSize: 28 }}>{getCountryFlag(sendCurrency)}</Text>
+                <CurrencyFlag currency={sendCurrency} size={28} />
                 <View style={styles.summaryInfo}>
                   <Text style={styles.summaryLabel}>Total to Transfer</Text>
                   <Text style={styles.summaryAmount}>

@@ -15,7 +15,7 @@ import { mockBeneficiaries } from "@/lib/mock-data"
 import type { Beneficiary } from "@/lib/mock-data"
 import { Label } from "@/components/ui/label"
 import { Search, Plus, User, ChevronDown } from "lucide-react"
-import { CurrencyFlag } from "@easner/shared"
+import { CurrencyFlag } from "@/components/flags"
 
 function maskAccount(accountNumber: string): string {
   if (!accountNumber || accountNumber.length < 4) return "****"

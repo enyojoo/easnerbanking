@@ -32,6 +32,7 @@ import { isTier1Complete, TIER2_COMPLETE_PLACEHOLDER } from '../../lib/complianc
 import { mobileFxEngine } from '../../lib/fxEngine'
 import { generateTransactionId } from '../../lib/transactionId'
 import { useBalance } from '../../contexts/BalanceContext'
+import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { getApiBaseUrl } from '../../lib/apiClient'
 import { noahService } from '../../lib/noahService'
 
@@ -109,15 +110,15 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
   // Available currencies for the dropdown (wallet balances - USD/EUR only)
   const availableCurrencies = [
-    { code: 'USD', name: 'US Dollar', symbol: '$', flag: require('../../../assets/flags/us.png') },
-    { code: 'EUR', name: 'Euro', symbol: '€', flag: require('../../../assets/flags/eu.png') },
+    { code: 'USD', name: 'US Dollar', symbol: '$' },
+    { code: 'EUR', name: 'Euro', symbol: '€' },
   ]
 
   // Available currencies for "From Another Currency"
   const otherCurrencies = [
-    { code: 'KES', name: 'Kenyan Shilling', symbol: 'KSh', flag: require('../../../assets/flags/ke.png') },
-    { code: 'GHS', name: 'Ghanaian Cedi', symbol: '₵', flag: require('../../../assets/flags/gh.png') },
-    { code: 'RUB', name: 'Russian Ruble', symbol: '₽', flag: require('../../../assets/flags/ru.png') },
+    { code: 'KES', name: 'Kenyan Shilling', symbol: 'KSh' },
+    { code: 'GHS', name: 'Ghanaian Cedi', symbol: '₵' },
+    { code: 'RUB', name: 'Russian Ruble', symbol: '₽' },
   ]
 
   // Payment method icons mapping
@@ -567,33 +568,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 >
                   <View style={styles.flagContainer}>
                     {selectedPaymentMethod === 'balance' ? (
-                      <Image 
-                        source={
-                          selectedBalanceCurrency === 'USD' 
-                            ? require('../../../assets/flags/us.png') 
-                            : selectedBalanceCurrency === 'EUR'
-                            ? require('../../../assets/flags/eu.png')
-                            : require('../../../assets/flags/ng.png')
-                        }
-                        style={styles.flagImage}
-                        resizeMode="cover"
-                      />
+                      <CurrencyFlag currency={selectedBalanceCurrency} size={24} style={styles.flagImage} />
                     ) : selectedPaymentMethod === 'linkBank' ? (
                       <Ionicons name="link" size={20} color={colors.text.primary} />
                     ) : selectedPaymentMethod === 'virtualBank' ? (
                       <LandmarkIcon size={20} color={colors.text.primary} />
                     ) : selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency ? (
-                      <Image 
-                        source={
-                          selectedOtherCurrency === 'KES'
-                            ? require('../../../assets/flags/ke.png')
-                            : selectedOtherCurrency === 'GHS'
-                            ? require('../../../assets/flags/gh.png')
-                            : require('../../../assets/flags/ru.png')
-                        }
-                        style={styles.flagImage}
-                        resizeMode="cover"
-                      />
+                      <CurrencyFlag currency={selectedOtherCurrency} size={24} style={styles.flagImage} />
                     ) : null}
               </View>
                   <Text style={styles.balanceSelectorText} numberOfLines={1}>
@@ -1003,11 +984,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                         }}
                       >
                         <View style={styles.flagContainerSmall}>
-                          <Image 
-                            source={item.flag}
-                            style={styles.flagImageSmall}
-                            resizeMode="cover"
-                          />
+                          <CurrencyFlag currency={item.code} size={24} style={styles.flagImageSmall} />
                         </View>
                         <View style={styles.currencyItemInfo}>
                           <Text style={styles.currencyItemCode}>{item.code} Balance</Text>
@@ -1045,11 +1022,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                         }}
                       >
                         <View style={styles.flagContainerSmall}>
-                          <Image 
-                            source={currency.flag}
-                            style={styles.flagImageSmall}
-                            resizeMode="cover"
-                          />
+                          <CurrencyFlag currency={currency.code} size={24} style={styles.flagImageSmall} />
                         </View>
                         <View style={styles.currencyItemInfo}>
                           <Text style={styles.currencyItemCode}>{currency.name}</Text>

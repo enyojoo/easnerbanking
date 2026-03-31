@@ -26,7 +26,6 @@ import ConfirmationDialog from '../../components/ConfirmationDialog'
 import { useToast } from '../../components/ToastProvider'
 import { useUserData } from '../../contexts/UserDataContext'
 import { NavigationProps, Recipient } from '../../types'
-import { getCountryFlag } from '../../utils/flagUtils'
 import { recipientService, RecipientData } from '../../lib/recipientService'
 import { useAuth } from '../../contexts/AuthContext'
 import { analytics } from '../../lib/analytics'
@@ -36,21 +35,11 @@ import { validateRequired, validateAccountNumber, validateIBAN } from '../../uti
 import { formatIBAN, formatSortCode, formatRoutingNumber, formatAccountNumber } from '../../utils/formatters'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
 import { getAllCountryCurrencies, searchCountryCurrencies, CountryCurrency } from '../../lib/countryCurrencyMapping'
+import { getCatalogByRecipientType, getRecipientProviders, getWalletAssets, getWalletNetworksForAsset } from '../../lib/recipientCatalog'
+import { getNetworkIconUrl, getTokenIconUrl } from '../../lib/cryptoIcons'
 import { Wallet, Building2, Smartphone } from 'lucide-react-native'
-
-// Helper function to get flag image source for currency
-const getFlagImageSource = (currency: string) => {
-  const flagMap: Record<string, any> = {
-    'USD': require('../../../assets/flags/us.png'),
-    'EUR': require('../../../assets/flags/eu.png'),
-    'GBP': require('../../../assets/flags/gb.png'),
-    'NGN': require('../../../assets/flags/ng.png'),
-    'KES': require('../../../assets/flags/ke.png'),
-    'GHS': require('../../../assets/flags/gh.png'),
-    'RUB': require('../../../assets/flags/ru.png'),
-  }
-  return flagMap[currency] || require('../../../assets/flags/us.png') // Default to USD
-}
+import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
+import { CountryFlag } from '../../components/flags/CountryFlag'
 
 function RecipientsContent({ navigation }: NavigationProps) {
   const { user, userProfile } = useAuth()
@@ -65,6 +54,12 @@ function RecipientsContent({ navigation }: NavigationProps) {
   const [selectedRecipientType, setSelectedRecipientType] = useState<'wallet' | 'bank' | 'mobile' | null>(null)
   const [selectedCountryCurrency, setSelectedCountryCurrency] = useState<CountryCurrency | null>(null)
   const [showCountryDropdown, setShowCountryDropdown] = useState(false) // Inline dropdown like SelectRecipientScreen
+  const [showProviderDropdown, setShowProviderDropdown] = useState(false)
+  const [showWalletAssetDropdown, setShowWalletAssetDropdown] = useState(false)
+  const [showWalletNetworkDropdown, setShowWalletNetworkDropdown] = useState(false)
+  const [providerSearchTerm, setProviderSearchTerm] = useState('')
+  const [walletAssetSearchTerm, setWalletAssetSearchTerm] = useState('')
+  const [walletNetworkSearchTerm, setWalletNetworkSearchTerm] = useState('')
   const [countrySearchTerm, setCountrySearchTerm] = useState('')
   const [transferType, setTransferType] = useState<'ACH' | 'Wire' | null>(null) // For USA
   // Legacy states (keep for edit modal)
@@ -100,11 +95,15 @@ function RecipientsContent({ navigation }: NavigationProps) {
     fullName: '',
     accountNumber: '',
     bankName: '',
-    currency: 'NGN',
+    currency: 'USD',
     routingNumber: '',
     sortCode: '',
     iban: '',
     swiftBic: '',
+    phoneNumber: '',
+    provider: '',
+    walletAddress: '',
+    network: '',
   })
 
   // Track screen view
@@ -154,15 +153,27 @@ function RecipientsContent({ navigation }: NavigationProps) {
     return names.slice(0, 2).map(name => name[0]).join('').toUpperCase()
   }
 
-  const filteredCurrencies = currencies.filter(currency => {
+  const recipientTypeKey = selectedRecipientType === 'mobile' ? 'mobile_money' : (selectedRecipientType || 'bank')
+  const filteredCurrencies = getCatalogByRecipientType(recipientTypeKey as any).filter(currency => {
     if (currencySearchTerm) {
       return (
-        currency.name.toLowerCase().includes(currencySearchTerm.toLowerCase()) ||
-        currency.code.toLowerCase().includes(currencySearchTerm.toLowerCase())
+        currency.currencyName.toLowerCase().includes(currencySearchTerm.toLowerCase()) ||
+        currency.currencyCode.toLowerCase().includes(currencySearchTerm.toLowerCase()) ||
+        currency.countryName.toLowerCase().includes(currencySearchTerm.toLowerCase())
       )
     }
     return true
   })
+  const selectedCatalogEntry = getCatalogByRecipientType(recipientTypeKey as any).find(
+    (item) => item.currencyCode === newRecipient.currency && item.countryCode === selectedCountryCurrency?.countryCode,
+  ) || getCatalogByRecipientType(recipientTypeKey as any).find((item) => item.currencyCode === newRecipient.currency)
+  const isAnyDropdownOpen = showCountryDropdown || showProviderDropdown || showWalletAssetDropdown || showWalletNetworkDropdown
+  const closeAllDropdowns = () => {
+    setShowCountryDropdown(false)
+    setShowProviderDropdown(false)
+    setShowWalletAssetDropdown(false)
+    setShowWalletNetworkDropdown(false)
+  }
 
   const handleAddRecipient = async () => {
     if (!userProfile?.id) {
@@ -179,10 +190,23 @@ function RecipientsContent({ navigation }: NavigationProps) {
       setIsSubmitting(true)
       setError('')
 
+      const accountNumberForType =
+        selectedRecipientType === 'wallet'
+          ? newRecipient.walletAddress
+          : selectedRecipientType === 'mobile'
+            ? newRecipient.phoneNumber
+            : newRecipient.accountNumber
+      const bankNameForType =
+        selectedRecipientType === 'wallet'
+          ? `Wallet (${newRecipient.network})`
+          : selectedRecipientType === 'mobile'
+            ? `Mobile Money (${newRecipient.provider})`
+            : newRecipient.bankName
+
       await recipientService.create(userProfile.id, {
         fullName: newRecipient.fullName,
-        accountNumber: newRecipient.accountNumber,
-        bankName: newRecipient.bankName,
+        accountNumber: accountNumberForType,
+        bankName: bankNameForType,
         currency: newRecipient.currency,
         routingNumber: newRecipient.routingNumber || undefined,
         sortCode: newRecipient.sortCode || undefined,
@@ -230,6 +254,10 @@ function RecipientsContent({ navigation }: NavigationProps) {
       sortCode: recipient.sort_code || '',
       iban: recipient.iban || '',
       swiftBic: recipient.swift_bic || '',
+      phoneNumber: '',
+      provider: '',
+      walletAddress: '',
+      network: '',
     })
     setShowEditRecipient(true)
   }
@@ -321,7 +349,9 @@ function RecipientsContent({ navigation }: NavigationProps) {
     if (selectedCountryCurrency?.countryCode === 'US' && !transferType) {
       return false
     }
-    if (!newRecipient.fullName || !newRecipient.bankName || !newRecipient.currency) return false
+    if (!newRecipient.fullName || !newRecipient.currency) return false
+    if (selectedRecipientType === 'wallet') return !!newRecipient.network && !!newRecipient.walletAddress
+    if (selectedRecipientType === 'mobile') return !!newRecipient.provider && !!newRecipient.phoneNumber
 
     const accountConfig = getAccountTypeConfigFromCurrency(newRecipient.currency)
     const requiredFields = accountConfig.requiredFields
@@ -342,11 +372,15 @@ function RecipientsContent({ navigation }: NavigationProps) {
       fullName: '',
       accountNumber: '',
       bankName: '',
-      currency: 'NGN',
+      currency: 'USD',
       routingNumber: '',
       sortCode: '',
       iban: '',
       swiftBic: '',
+      phoneNumber: '',
+      provider: '',
+      walletAddress: '',
+      network: '',
     })
     setError('')
     setFieldErrors({})
@@ -355,6 +389,13 @@ function RecipientsContent({ navigation }: NavigationProps) {
     setSelectedCountryCurrency(null)
     setCountrySearchTerm('')
     setShowCountryDropdown(false)
+    setShowProviderDropdown(false)
+    setShowWalletAssetDropdown(false)
+    setShowWalletNetworkDropdown(false)
+    setShowCurrencyDropdown(false)
+    setProviderSearchTerm('')
+    setWalletAssetSearchTerm('')
+    setWalletNetworkSearchTerm('')
     setTransferType(null)
     setShowRecipientTypeModal(false)
     setShowBankAccountForm(false)
@@ -455,11 +496,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
           {/* Flag badge on bottom edge of avatar */}
           <View style={styles.avatarFlagBadge}>
             <View style={styles.flagContainer}>
-              <Image 
-                source={getFlagImageSource(item.currency)}
-                style={styles.flagImage}
-                resizeMode="cover"
-              />
+              <CurrencyFlag currency={item.currency} size={20} style={styles.flagImage} />
             </View>
           </View>
         </View>
@@ -690,10 +727,12 @@ function RecipientsContent({ navigation }: NavigationProps) {
                 style={styles.recipientTypeOption}
                 onPress={async () => {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  const firstAsset = getWalletAssets()[0] || 'USDT'
+                  const firstNetwork = getWalletNetworksForAsset(firstAsset)[0] || ''
                   setSelectedRecipientType('wallet')
+                  setNewRecipient(prev => ({ ...prev, currency: firstAsset, network: firstNetwork }))
                   setShowRecipientTypeModal(false)
-                  // TODO: Navigate to wallet address form
-                  Alert.alert('Coming Soon', 'Wallet address recipient will be available soon')
+                  setShowBankAccountForm(true)
                 }}
                 activeOpacity={0.7}
               >
@@ -712,6 +751,14 @@ function RecipientsContent({ navigation }: NavigationProps) {
                 onPress={async () => {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                   setSelectedRecipientType('bank')
+                  setSelectedCountryCurrency({
+                    countryCode: 'US',
+                    countryName: 'United States',
+                    currencyCode: 'USD',
+                    currencyName: 'US Dollar',
+                    flagEmoji: '',
+                  })
+                  setNewRecipient(prev => ({ ...prev, currency: 'USD' }))
                   setShowRecipientTypeModal(false)
                   setShowBankAccountForm(true)
                 }}
@@ -731,7 +778,18 @@ function RecipientsContent({ navigation }: NavigationProps) {
                 style={styles.recipientTypeOption}
                 onPress={async () => {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  const firstMobile = getCatalogByRecipientType('mobile_money' as any)[0]
+                  const firstCurrency = firstMobile?.currencyCode || 'KES'
+                  const firstProvider = getRecipientProviders(firstCurrency, 'mobile_money')[0] || ''
                   setSelectedRecipientType('mobile')
+                  setSelectedCountryCurrency({
+                    countryCode: firstMobile?.countryCode || 'KE',
+                    countryName: firstMobile?.countryName || 'Kenya',
+                    currencyCode: firstCurrency,
+                    currencyName: firstMobile?.currencyName || 'Kenyan Shilling',
+                    flagEmoji: '',
+                  })
+                  setNewRecipient(prev => ({ ...prev, currency: firstCurrency, provider: firstProvider }))
                   setShowRecipientTypeModal(false)
                   setShowBankAccountForm(true) // Use same form for now
                 }}
@@ -776,13 +834,13 @@ function RecipientsContent({ navigation }: NavigationProps) {
           />
           <View 
             style={[styles.modalContainer, { 
-              maxHeight: '90%',
+              height: '92%',
               paddingBottom: Math.max(insets.bottom, 20),
             }]}
           >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                {selectedRecipientType === 'mobile' ? 'Add mobile wallet' : 'Add bank account'}
+                {selectedRecipientType === 'wallet' ? 'Add wallet address' : selectedRecipientType === 'mobile' ? 'Add mobile wallet' : 'Add bank account'}
               </Text>
               <TouchableOpacity
                 onPress={() => {
@@ -803,6 +861,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
               keyboardShouldPersistTaps="handled"
             >
               <View style={styles.modalContent}>
+              {isAnyDropdownOpen && <TouchableOpacity style={styles.dropdownBackdrop} activeOpacity={1} onPress={closeAllDropdowns} />}
               {error ? (
                 <View style={styles.errorContainer}>
                   <Text style={styles.errorText}>{error}</Text>
@@ -810,7 +869,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
               ) : null}
               
               {/* Country/Currency Selector - Matching SelectRecipientScreen exactly */}
-              <View style={styles.currencySelectorWrapper}>
+              {selectedRecipientType !== 'wallet' && <View style={[styles.currencySelectorWrapper, showCountryDropdown && styles.currencySelectorWrapperActive]}>
                 <TouchableOpacity
                   style={styles.currencySelector}
                   onPress={() => {
@@ -820,9 +879,13 @@ function RecipientsContent({ navigation }: NavigationProps) {
                   activeOpacity={0.7}
                 >
                   <View style={styles.currencySelectorContent}>
-                    <Text style={styles.currencyFlag}>{getCountryFlag(newRecipient.currency)}</Text>
+                    {selectedCatalogEntry ? (
+                      <CountryFlag code={selectedCatalogEntry.countryCode} size={22} style={styles.currencyFlag} />
+                    ) : (
+                      <CurrencyFlag currency={newRecipient.currency} size={22} style={styles.currencyFlag} />
+                    )}
                     <Text style={styles.currencySelectorText}>
-                      {newRecipient.currency} - {currencies.find(c => c.code === newRecipient.currency)?.name || 'Select Currency'}
+                      {selectedCatalogEntry ? `${newRecipient.currency} - ${selectedCatalogEntry.countryName}` : 'Select currency'}
                     </Text>
                     <Ionicons 
                       name={showCountryDropdown ? "chevron-up" : "chevron-down"} 
@@ -849,45 +912,33 @@ function RecipientsContent({ navigation }: NavigationProps) {
                       nestedScrollEnabled={true}
                       keyboardShouldPersistTaps="handled"
                     >
-                      {(countrySearchTerm 
-                        ? currencies.filter(c => 
-                            c.name.toLowerCase().includes(countrySearchTerm.toLowerCase()) ||
-                            c.code.toLowerCase().includes(countrySearchTerm.toLowerCase())
-                          )
-                        : currencies
-                      ).map((item) => {
-                        // Find matching country from countryCurrencyMap for country info
-                        const countryCurrency = getAllCountryCurrencies().find(
-                          cc => cc.currencyCode === item.code
-                        )
-                        const isSelected = newRecipient.currency === item.code
+                      {(countrySearchTerm ? filteredCurrencies : getCatalogByRecipientType(recipientTypeKey as any)).map((item) => {
+                        const isSelected = newRecipient.currency === item.currencyCode
                         
                         return (
                           <TouchableOpacity
-                            key={item.code}
+                            key={`${item.countryCode}-${item.currencyCode}`}
                             style={[
                               styles.currencyDropdownItem,
                               isSelected && styles.currencyDropdownItemSelected
                             ]}
                             onPress={async () => {
                               await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                              let countryToSet: CountryCurrency
-                              
-                              if (countryCurrency) {
-                                countryToSet = countryCurrency
-                              } else {
-                                // Fallback: create a basic country currency object
-                                countryToSet = {
-                                  countryCode: item.code,
-                                  countryName: item.name,
-                                  currencyCode: item.code,
-                                  currencyName: item.name,
-                                  flagEmoji: getCountryFlag(item.code)
-                                }
+                              const countryToSet: CountryCurrency = {
+                                countryCode: item.countryCode,
+                                countryName: item.countryName,
+                                currencyCode: item.currencyCode,
+                                currencyName: item.currencyName,
+                                flagEmoji: '',
                               }
                               
                               setSelectedCountryCurrency(countryToSet)
-                              setNewRecipient(prev => ({ ...prev, currency: item.code }))
+                              const firstProvider = getRecipientProviders(item.currencyCode, 'mobile_money')[0] || ''
+                              setNewRecipient(prev => ({
+                                ...prev,
+                                currency: item.currencyCode,
+                                provider: selectedRecipientType === 'mobile' ? firstProvider : prev.provider,
+                              }))
                               
                               // For USA, reset transfer type
                               if (countryToSet.countryCode === 'US') {
@@ -901,12 +952,11 @@ function RecipientsContent({ navigation }: NavigationProps) {
                             }}
                             activeOpacity={0.7}
                           >
-                            <Text style={styles.currencyFlag}>{getCountryFlag(item.code)}</Text>
+                            <CountryFlag code={item.countryCode} size={22} style={styles.currencyFlag} />
                             <View style={styles.currencyInfo}>
-                              <Text style={styles.currencyCode}>{item.code}</Text>
-                              <Text style={styles.currencyName}>{item.name}</Text>
+                              <Text style={styles.currencyCode}>{item.currencyCode}</Text>
+                              <Text style={styles.currencyName}>{item.countryName}</Text>
                             </View>
-                            <Text style={styles.currencySymbol}>{item.symbol}</Text>
                             {isSelected && (
                               <Ionicons name="checkmark" size={18} color={colors.primary.main} />
                             )}
@@ -916,12 +966,225 @@ function RecipientsContent({ navigation }: NavigationProps) {
                     </ScrollView>
                   </View>
                 )}
-              </View>
+              </View>}
 
               {/* Show form fields */}
               {selectedCountryCurrency && (
                 <>
-              {(() => {
+              {selectedRecipientType === 'mobile' && (
+                <>
+                  <View style={[styles.currencySelectorWrapper, showProviderDropdown && styles.currencySelectorWrapperActive]}>
+                    <TouchableOpacity
+                      style={styles.currencySelector}
+                      onPress={() => {
+                        setShowProviderDropdown(!showProviderDropdown)
+                        setShowCountryDropdown(false)
+                        setShowWalletAssetDropdown(false)
+                        setShowWalletNetworkDropdown(false)
+                      }}
+                      activeOpacity={0.7}
+                      disabled={isSubmitting}
+                    >
+                      <View style={styles.currencySelectorContent}>
+                        <Text style={styles.currencySelectorText}>
+                          {newRecipient.provider || 'Select network'}
+                        </Text>
+                        <Ionicons name={showProviderDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6b7280" />
+                      </View>
+                    </TouchableOpacity>
+                    {showProviderDropdown && (
+                      <View style={styles.currencyDropdown}>
+                        <View style={styles.currencyDropdownSearch}>
+                          <Ionicons name="search" size={18} color={colors.neutral[400]} />
+                          <TextInput
+                            style={styles.currencyDropdownSearchInput}
+                            placeholder="Search network..."
+                            placeholderTextColor={colors.neutral[400]}
+                            value={providerSearchTerm}
+                            onChangeText={setProviderSearchTerm}
+                          />
+                        </View>
+                        <ScrollView style={styles.currencyDropdownList} nestedScrollEnabled={true}>
+                          {getRecipientProviders(newRecipient.currency, 'mobile_money')
+                            .filter((provider) => provider.toLowerCase().includes(providerSearchTerm.toLowerCase()))
+                            .map((provider) => (
+                            <TouchableOpacity
+                              key={provider}
+                              style={[styles.currencyDropdownItem, newRecipient.provider === provider && styles.currencyDropdownItemSelected]}
+                              onPress={async () => {
+                                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                                setNewRecipient(prev => ({ ...prev, provider }))
+                                setShowProviderDropdown(false)
+                                setProviderSearchTerm('')
+                              }}
+                            >
+                              <View style={styles.currencyInfo}>
+                                <Text style={styles.currencyCode}>{provider}</Text>
+                              </View>
+                              {newRecipient.provider === provider && <Ionicons name="checkmark" size={18} color={colors.primary.main} />}
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                      </View>
+                    )}
+                  </View>
+                  <TextInput
+                    style={styles.modalInput}
+                    value={newRecipient.fullName}
+                    onChangeText={(text) => setNewRecipient(prev => ({ ...prev, fullName: text }))}
+                    placeholder="Account name"
+                    placeholderTextColor={colors.text.secondary}
+                    editable={!isSubmitting}
+                  />
+                  <TextInput
+                    style={styles.modalInput}
+                    value={newRecipient.phoneNumber}
+                    onChangeText={(text) => setNewRecipient(prev => ({ ...prev, phoneNumber: text }))}
+                    placeholder="Phone number"
+                    placeholderTextColor={colors.text.secondary}
+                    keyboardType="phone-pad"
+                    editable={!isSubmitting}
+                  />
+                </>
+              )}
+              {selectedRecipientType === 'wallet' && (
+                <>
+                  <TextInput
+                    style={styles.modalInput}
+                    value={newRecipient.fullName}
+                    onChangeText={(text) => setNewRecipient(prev => ({ ...prev, fullName: text }))}
+                    placeholder="Address nickname"
+                    placeholderTextColor={colors.text.secondary}
+                    editable={!isSubmitting}
+                  />
+                  <TextInput
+                    style={styles.modalInput}
+                    value={newRecipient.walletAddress}
+                    onChangeText={(text) => setNewRecipient(prev => ({ ...prev, walletAddress: text }))}
+                    placeholder="Wallet address"
+                    placeholderTextColor={colors.text.secondary}
+                    editable={!isSubmitting}
+                  />
+                  <View style={[styles.currencySelectorWrapper, showWalletAssetDropdown && styles.currencySelectorWrapperActive]}>
+                    <TouchableOpacity
+                      style={styles.currencySelector}
+                      onPress={() => {
+                        setShowWalletAssetDropdown(!showWalletAssetDropdown)
+                        setShowWalletNetworkDropdown(false)
+                      }}
+                      activeOpacity={0.7}
+                      disabled={isSubmitting}
+                    >
+                      <View style={styles.currencySelectorContent}>
+                        {getTokenIconUrl(newRecipient.currency) ? <Image source={{ uri: getTokenIconUrl(newRecipient.currency)! }} style={styles.cryptoIcon} /> : null}
+                        <Text style={styles.currencySelectorText}>
+                          {newRecipient.currency || 'Select asset'}
+                        </Text>
+                        <Ionicons name={showWalletAssetDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6b7280" />
+                      </View>
+                    </TouchableOpacity>
+                    {showWalletAssetDropdown && (
+                      <View style={styles.currencyDropdown}>
+                        <View style={styles.currencyDropdownSearch}>
+                          <Ionicons name="search" size={18} color={colors.neutral[400]} />
+                          <TextInput
+                            style={styles.currencyDropdownSearchInput}
+                            placeholder="Search asset..."
+                            placeholderTextColor={colors.neutral[400]}
+                            value={walletAssetSearchTerm}
+                            onChangeText={setWalletAssetSearchTerm}
+                          />
+                        </View>
+                        <ScrollView style={styles.currencyDropdownList} nestedScrollEnabled={true}>
+                          {getWalletAssets()
+                            .filter((asset) => asset.toLowerCase().includes(walletAssetSearchTerm.toLowerCase()))
+                            .map((asset) => (
+                            <TouchableOpacity
+                              key={asset}
+                              style={[styles.currencyDropdownItem, newRecipient.currency === asset && styles.currencyDropdownItemSelected]}
+                              onPress={async () => {
+                                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                                const networks = getWalletNetworksForAsset(asset)
+                                setNewRecipient(prev => ({
+                                  ...prev,
+                                  currency: asset,
+                                  network: networks[0] || '',
+                                }))
+                                setShowWalletAssetDropdown(false)
+                                setWalletAssetSearchTerm('')
+                              }}
+                            >
+                              {getTokenIconUrl(asset) ? <Image source={{ uri: getTokenIconUrl(asset)! }} style={styles.cryptoIcon} /> : null}
+                              <View style={styles.currencyInfo}>
+                                <Text style={styles.currencyCode}>{asset}</Text>
+                              </View>
+                              {newRecipient.currency === asset && <Ionicons name="checkmark" size={18} color={colors.primary.main} />}
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                      </View>
+                    )}
+                  </View>
+                  <View style={[styles.currencySelectorWrapper, showWalletNetworkDropdown && styles.currencySelectorWrapperActive]}>
+                    <TouchableOpacity
+                      style={styles.currencySelector}
+                      onPress={() => {
+                        if (!isSubmitting) {
+                          setShowWalletNetworkDropdown(!showWalletNetworkDropdown)
+                          setShowWalletAssetDropdown(false)
+                        }
+                      }}
+                      activeOpacity={0.7}
+                      disabled={isSubmitting}
+                    >
+                      <View style={styles.currencySelectorContent}>
+                        {getNetworkIconUrl(newRecipient.network) ? <Image source={{ uri: getNetworkIconUrl(newRecipient.network)! }} style={styles.cryptoIcon} /> : null}
+                        <Text style={styles.currencySelectorText}>
+                          {newRecipient.network || 'Select network'}
+                        </Text>
+                        <Ionicons name={showWalletNetworkDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6b7280" />
+                      </View>
+                    </TouchableOpacity>
+                    {showWalletNetworkDropdown && (
+                      <View style={styles.currencyDropdown}>
+                        <View style={styles.currencyDropdownSearch}>
+                          <Ionicons name="search" size={18} color={colors.neutral[400]} />
+                          <TextInput
+                            style={styles.currencyDropdownSearchInput}
+                            placeholder="Search network..."
+                            placeholderTextColor={colors.neutral[400]}
+                            value={walletNetworkSearchTerm}
+                            onChangeText={setWalletNetworkSearchTerm}
+                          />
+                        </View>
+                        <ScrollView style={styles.currencyDropdownList} nestedScrollEnabled={true}>
+                          {getWalletNetworksForAsset(newRecipient.currency)
+                            .filter((network) => network.toLowerCase().includes(walletNetworkSearchTerm.toLowerCase()))
+                            .map((network) => (
+                            <TouchableOpacity
+                              key={network}
+                              style={[styles.currencyDropdownItem, newRecipient.network === network && styles.currencyDropdownItemSelected]}
+                              onPress={async () => {
+                                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                                setNewRecipient(prev => ({ ...prev, network }))
+                                setShowWalletNetworkDropdown(false)
+                                setWalletNetworkSearchTerm('')
+                              }}
+                            >
+                              {getNetworkIconUrl(network) ? <Image source={{ uri: getNetworkIconUrl(network)! }} style={styles.cryptoIcon} /> : null}
+                              <View style={styles.currencyInfo}>
+                                <Text style={styles.currencyCode}>{network}</Text>
+                              </View>
+                              {newRecipient.network === network && <Ionicons name="checkmark" size={18} color={colors.primary.main} />}
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                      </View>
+                    )}
+                  </View>
+                </>
+              )}
+              {selectedRecipientType === 'bank' && (() => {
                 const accountConfig = newRecipient.currency
                   ? getAccountTypeConfigFromCurrency(newRecipient.currency)
                   : null
@@ -1261,7 +1524,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
             }}
           />
           <View style={[styles.modalContainer, { 
-            maxHeight: '90%',
+            height: '92%',
             paddingBottom: Math.max(insets.bottom, 20),
           }]} 
           onStartShouldSetResponder={() => true}
@@ -1299,9 +1562,13 @@ function RecipientsContent({ navigation }: NavigationProps) {
                   disabled={true}
                 >
                   <View style={styles.currencySelectorContent}>
-                    <Text style={styles.currencyFlag}>{getCountryFlag(newRecipient.currency)}</Text>
+                    {selectedCountryCurrency?.countryCode ? (
+                      <CountryFlag code={selectedCountryCurrency.countryCode} size={22} style={styles.currencyFlag} />
+                    ) : (
+                      <CurrencyFlag currency={newRecipient.currency} size={22} style={styles.currencyFlag} />
+                    )}
                     <Text style={styles.currencySelectorText}>
-                      {newRecipient.currency} - {currencies.find(c => c.code === newRecipient.currency)?.name || 'Select Currency'}
+                      {newRecipient.currency} - {selectedCountryCurrency?.countryName || 'Selected country'}
                     </Text>
                     <Ionicons name="lock-closed" size={16} color="#9ca3af" />
                   </View>
@@ -1773,6 +2040,11 @@ const styles = StyleSheet.create({
   modalContent: {
     paddingHorizontal: spacing[5],
     paddingTop: spacing[4],
+    position: 'relative',
+  },
+  dropdownBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 3000,
   },
   modalInput: {
     borderWidth: 1.5,
@@ -1841,6 +2113,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing[4],
     zIndex: 1000,
   },
+  currencySelectorWrapperActive: {
+    zIndex: 4000,
+  },
   currencySelector: {
     borderWidth: 1,
     borderColor: colors.frame.border,
@@ -1868,8 +2143,8 @@ const styles = StyleSheet.create({
     borderColor: colors.frame.border,
     borderRadius: borderRadius.lg,
     backgroundColor: colors.background.primary,
-    maxHeight: 220,
-    zIndex: 1001,
+    maxHeight: 260,
+    zIndex: 5000,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -1878,7 +2153,7 @@ const styles = StyleSheet.create({
         shadowRadius: 12,
       },
       android: {
-        elevation: 8,
+        elevation: 20,
       },
     }),
   },
@@ -1898,7 +2173,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[1],
   },
   currencyDropdownList: {
-    maxHeight: 180,
+    maxHeight: 260,
   },
   currencyDropdownItem: {
     flexDirection: 'row',
@@ -2080,7 +2355,7 @@ const styles = StyleSheet.create({
     borderColor: '#E2E2E2',
     borderRadius: borderRadius.lg,
     backgroundColor: colors.background.primary,
-    maxHeight: 220,
+    maxHeight: 260,
     zIndex: 1001,
     ...Platform.select({
       ios: {
@@ -2118,7 +2393,7 @@ const styles = StyleSheet.create({
     }),
   },
   currencyDropdownList: {
-    maxHeight: 180,
+    maxHeight: 220,
   },
   currencyDropdownItem: {
     flexDirection: 'row',
@@ -2138,6 +2413,12 @@ const styles = StyleSheet.create({
   currencyInfo: {
     flex: 1,
     marginLeft: spacing[2],
+  },
+  cryptoIcon: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    marginRight: spacing[2],
   },
   currencyCode: {
     ...textStyles.bodyMedium,

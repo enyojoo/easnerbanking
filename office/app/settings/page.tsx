@@ -36,7 +36,7 @@ import {
   validateField,
   formatFieldValue,
 } from "@/lib/currency-account-types"
-import { CurrencyFlag } from "@easner/shared"
+import { CurrencyFlag } from "@/components/flags"
 
 interface SystemSetting {
   id: string

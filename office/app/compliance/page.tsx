@@ -15,7 +15,7 @@ import { Search, Eye, CheckCircle, Clock, XCircle, User, Mail, Phone, Trash2, Ch
 import { kycService, KYCSubmission } from "@/lib/kyc-service"
 import { getIdTypeLabel } from "@/lib/country-id-types"
 import { countryService } from "@/lib/country-service"
-import { CountryFlag } from "@easner/shared"
+import { CountryFlag } from "@/components/flags"
 import { supabase } from "@/lib/supabase"
 import { officeFetch } from "@/lib/api-client"
 import { OfficeComplianceSkeleton } from "@/components/office-compliance-skeleton"

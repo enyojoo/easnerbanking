@@ -13,7 +13,7 @@ import { BusinessLogoField } from "@/components/business-logo-field"
 import { countries } from "@/lib/countries"
 import { getKybFields } from "@/lib/kyb-by-country"
 import { updateBusinessProfile, useBusinessProfile } from "@/lib/use-business-profile"
-import { CountryFlag } from "@easner/shared"
+import { CountryFlag } from "@/components/flags"
 import { BusinessVerificationSection } from "@/components/compliance/business-verification-section"
 
 function getCountryFromCode(code: string) {

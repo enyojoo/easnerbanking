@@ -24,6 +24,7 @@ import { noahService } from '../../lib/noahService'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import QRCode from 'react-native-qrcode-svg'
+import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 type TabType = 'bank' | 'stablecoin'
 
 export default function ReceiveMoneyScreen({ navigation, route }: NavigationProps) {
@@ -815,12 +816,6 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
       : curr
   }
 
-  const getCurrencyFlag = (curr: string) => {
-    if (curr === 'USD') return require('../../../assets/flags/us.png')
-    if (curr === 'EUR') return require('../../../assets/flags/eu.png')
-    return require('../../../assets/flags/us.png')
-  }
-
   const handleCopy = async (text: string, key: string) => {
     try {
       await Clipboard.setString(text)
@@ -1145,11 +1140,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
             <View style={styles.headerContent}>
               <Text style={styles.title}>Receive Money</Text>
               <View style={styles.currencyDisplay}>
-                <Image 
-                  source={getCurrencyFlag(currency)}
-                  style={styles.currencyFlag}
-                  resizeMode="cover"
-                />
+                <CurrencyFlag currency={currency} size={28} style={styles.currencyFlag} />
                 <Text style={styles.currencyText}>{currency}</Text>
               </View>
             </View>

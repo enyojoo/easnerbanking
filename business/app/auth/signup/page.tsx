@@ -21,7 +21,7 @@ import { Eye, EyeOff, Info, MapPin, ChevronDown } from "lucide-react"
 import Link from "next/link"
 import { countries } from "@/lib/countries"
 import { setOnboarding } from "@/lib/onboarding-store"
-import { CountryFlag } from "@easner/shared"
+import { CountryFlag } from "@/components/flags"
 
 const TERMS_URL = "https://www.easner.com/terms?from=register"
 

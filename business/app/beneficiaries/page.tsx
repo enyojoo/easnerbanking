@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/dialog"
 import { RecipientForm } from "@/components/recipient-form"
 import { mockBeneficiaries } from "@/lib/mock-data"
-import { CurrencyFlag } from "@easner/shared"
+import { CurrencyFlag } from "@/components/flags"
 
 export default function RecipientsPage() {
   const [searchTerm, setSearchTerm] = useState("")
