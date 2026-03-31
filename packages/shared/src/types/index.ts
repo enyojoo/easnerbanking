@@ -47,6 +47,9 @@ export interface Recipient {
   postal_code?: string
   transfer_type?: "ACH" | "Wire"
   checking_or_savings?: "checking" | "savings"
+  mobile_provider?: string
+  wallet_network?: string
+  wallet_memo_tag?: string
   created_at: string
   updated_at: string
 }

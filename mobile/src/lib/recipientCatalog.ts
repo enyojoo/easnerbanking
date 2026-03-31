@@ -105,7 +105,7 @@ const noahBankCountryCurrencies: Array<{ countryCode: string; countryName: strin
   { countryCode: 'NZ', countryName: 'New Zealand', currencyCode: 'NZD', currencyName: 'New Zealand Dollar' },
   { countryCode: 'NG', countryName: 'Nigeria', currencyCode: 'NGN', currencyName: 'Nigerian Naira' },
   { countryCode: 'PH', countryName: 'Philippines', currencyCode: 'PHP', currencyName: 'Philippine Peso' },
-  { countryCode: 'PL', countryName: 'Poland', currencyCode: 'NOK', currencyName: 'Norwegian Krone' },
+  { countryCode: 'PL', countryName: 'Poland', currencyCode: 'PLN', currencyName: 'Polish Zloty' },
   { countryCode: 'PT', countryName: 'Portugal', currencyCode: 'EUR', currencyName: 'Euro' },
   { countryCode: 'PY', countryName: 'Paraguay', currencyCode: 'PYG', currencyName: 'Paraguayan Guarani' },
   { countryCode: 'RO', countryName: 'Romania', currencyCode: 'RON', currencyName: 'Romanian Leu' },

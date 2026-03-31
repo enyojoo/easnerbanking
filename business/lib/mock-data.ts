@@ -126,6 +126,13 @@ export interface Beneficiary {
   currency: string
   email: string
   phone: string
+  transferType?: "ACH" | "Wire"
+  checkingOrSavings?: "checking" | "savings"
+  addressLine1?: string
+  mobileProvider?: string
+  walletAsset?: string
+  walletNetwork?: string
+  walletMemoTag?: string
   createdAt: string
   lastUsed: string
 }

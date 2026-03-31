@@ -10,6 +10,7 @@ import { ArrowLeftRight, Landmark, User, Mail, Phone, CreditCard, MapPin, Chevro
 import type { Beneficiary } from "@/lib/mock-data"
 import { CountryFlag } from "@/components/flags"
 import { getNetworkIconUrl, getTokenIconUrl } from "@/lib/crypto-icons"
+import { createRecipient, updateRecipient, type RecipientUpsertInput } from "@/lib/recipients-store"
 
 interface RecipientFormProps {
   recipient?: any
@@ -137,7 +138,7 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
     iban: "",
     bic: "",
     sortCode: "",
-    country: "",
+    country: "United States",
     email: "",
     phone: "",
     walletAsset: "USDT",
@@ -145,6 +146,9 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
     walletAddress: "",
     walletMemoTag: "",
     mobileProvider: "",
+    transferType: "ACH",
+    checkingOrSavings: "",
+    addressLine1: "",
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -155,6 +159,12 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
 
   useEffect(() => {
     if (recipient && isEdit) {
+      const walletMatch = recipient.bankName?.match(/^Wallet \((.*)\)$/i)
+      const mobileMatch = recipient.bankName?.match(/^Mobile Money \((.*)\)$/i)
+      const descriptor = walletMatch?.[1] || ""
+      const [parsedWalletAsset, parsedWalletNetwork] = descriptor.includes("/")
+        ? descriptor.split("/")
+        : [recipient.currency || "USDT", descriptor || ""]
       setFormData({
         name: recipient.name || "",
         recipientType: recipient.bankName?.toLowerCase().includes("wallet")
@@ -171,11 +181,14 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
         country: recipient.country || "",
         email: recipient.email || "",
         phone: recipient.phone || "",
-        walletAsset: recipient.currency || "USDT",
-        walletNetwork: "",
+        walletAsset: recipient.walletAsset || parsedWalletAsset || recipient.currency || "USDT",
+        walletNetwork: recipient.walletNetwork || parsedWalletNetwork || "",
         walletAddress: recipient.fullAccountNumber || recipient.accountNumber || "",
-        walletMemoTag: "",
-        mobileProvider: recipient.bankName?.match(/Mobile Money \((.*)\)/)?.[1] || "",
+        walletMemoTag: recipient.walletMemoTag || "",
+        mobileProvider: recipient.mobileProvider || mobileMatch?.[1] || "",
+        transferType: recipient.transferType || "ACH",
+        checkingOrSavings: recipient.checkingOrSavings || "",
+        addressLine1: recipient.addressLine1 || "",
       })
     }
   }, [recipient, isEdit])
@@ -205,7 +218,7 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
 
     if (formData.recipientType === "mobile") {
       if (!formData.country) newErrors.country = "Country is required"
-      if (!formData.mobileProvider.trim()) newErrors.mobileProvider = "Network is required"
+      if (!formData.mobileProvider.trim()) newErrors.mobileProvider = "Provider is required"
       if (!formData.phone.trim()) newErrors.phone = "Phone number is required"
     }
 
@@ -229,6 +242,15 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
     if (formData.recipientType === "bank" && currency === "USD" && !formData.routingNumber.trim()) {
       newErrors.routingNumber = "Routing number is required for USD"
     }
+    if (formData.recipientType === "bank" && currency === "USD" && !formData.transferType.trim()) {
+      newErrors.transferType = "Transfer type is required for USD"
+    }
+    if (formData.recipientType === "bank" && currency === "USD" && !formData.checkingOrSavings.trim()) {
+      newErrors.checkingOrSavings = "Account type is required for USD"
+    }
+    if (formData.recipientType === "bank" && currency === "USD" && !formData.addressLine1.trim()) {
+      newErrors.addressLine1 = "Address is required for USD"
+    }
 
     if (formData.recipientType === "bank" && currency === "EUR") {
       if (!formData.iban.trim()) {
@@ -247,51 +269,47 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
     return Object.keys(newErrors).length === 0
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    if (validateForm()) {
-      if (!isEdit && onSuccessWithData) {
-        const selectedCountry = [...countries, ...mobileMoneyCountries].find((c) => c.name === formData.country)
-        const currency = formData.recipientType === "wallet" ? formData.walletAsset : (selectedCountry?.currency || "USD")
-        const fullAccountNumber =
-          formData.recipientType === "wallet"
-            ? formData.walletAddress
-            : formData.recipientType === "mobile"
-              ? formData.phone
-              : (formData.iban || formData.accountNumber)
-        const beneficiary: Beneficiary = {
-          id: `ben_${Date.now()}`,
-          name: formData.name.trim(),
-          bankName:
-            formData.recipientType === "wallet"
-              ? `Wallet (${formData.walletAsset}/${formData.walletNetwork})`
-              : formData.recipientType === "mobile"
-                ? `Mobile Money (${formData.mobileProvider})`
-                : formData.bankName.trim(),
-          accountNumber:
-            formData.recipientType === "wallet"
-              ? formData.walletAddress.trim()
-              : formData.recipientType === "mobile"
-                ? formData.phone.trim()
-                : formData.accountNumber.trim(),
-          fullAccountNumber: fullAccountNumber.trim(),
-          country: formData.country,
-          currency,
-          email: formData.recipientType === "bank" ? formData.email.trim() : "",
-          phone: formData.phone.trim(),
-          createdAt: new Date().toISOString().split("T")[0],
-          lastUsed: new Date().toISOString().split("T")[0],
-          ...(formData.recipientType === "bank" && currency === "USD" && { routingNumber: formData.routingNumber?.trim() }),
-          ...(formData.recipientType === "bank" && currency === "EUR" && {
-            iban: formData.iban?.trim(),
-            bic: formData.bic?.trim(),
-          }),
-          ...(formData.recipientType === "bank" && currency === "GBP" && { sortCode: formData.sortCode?.trim() }),
-        }
-        onSuccessWithData(beneficiary)
-      }
+    if (!validateForm()) return
+
+    const selectedCountry = [...countries, ...mobileMoneyCountries].find((c) => c.name === formData.country)
+    const currency = formData.recipientType === "wallet" ? formData.walletAsset : (selectedCountry?.currency || "USD")
+    const isUsdBank = formData.recipientType === "bank" && currency === "USD"
+    const payload: RecipientUpsertInput = {
+      recipientType: formData.recipientType as "bank" | "mobile" | "wallet",
+      fullName: formData.name.trim(),
+      accountNumber:
+        formData.recipientType === "wallet"
+          ? formData.walletAddress.trim()
+          : formData.recipientType === "mobile"
+            ? formData.phone.trim()
+            : formData.accountNumber.trim(),
+      bankName:
+        formData.recipientType === "bank" ? formData.bankName.trim() : "",
+      currency,
+      phoneNumber: formData.phone.trim() || undefined,
+      mobileProvider: formData.recipientType === "mobile" ? formData.mobileProvider.trim() || undefined : undefined,
+      walletAsset: formData.recipientType === "wallet" ? formData.walletAsset.trim() || undefined : undefined,
+      walletNetwork: formData.recipientType === "wallet" ? formData.walletNetwork.trim() || undefined : undefined,
+      walletMemoTag: formData.recipientType === "wallet" ? formData.walletMemoTag.trim() || undefined : undefined,
+      routingNumber: formData.routingNumber?.trim() || undefined,
+      sortCode: formData.sortCode?.trim() || undefined,
+      iban: formData.iban?.trim() || undefined,
+      swiftBic: formData.recipientType === "bank" ? formData.bic?.trim() || undefined : undefined,
+      transferType: isUsdBank ? (formData.transferType as "ACH" | "Wire") : undefined,
+      checkingOrSavings: isUsdBank ? (formData.checkingOrSavings as "checking" | "savings") : undefined,
+      addressLine1: isUsdBank ? formData.addressLine1.trim() : undefined,
+    }
+
+    try {
+      const beneficiary = isEdit && recipient?.id
+        ? await updateRecipient(recipient.id, payload)
+        : await createRecipient(payload)
+      onSuccessWithData?.(beneficiary)
       onSuccess()
+    } catch (err) {
+      console.error("Failed to save recipient:", err)
     }
   }
 
@@ -343,9 +361,9 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
         <div className="space-y-2 md:col-span-2">
           <label className="text-sm font-medium">Recipient Type</label>
           <div className="grid grid-cols-3 gap-2 max-w-xl">
-            <Button type="button" variant={formData.recipientType === "bank" ? "default" : "outline"} onClick={() => selectRecipientType("bank")}>Bank</Button>
-            <Button type="button" variant={formData.recipientType === "mobile" ? "default" : "outline"} onClick={() => selectRecipientType("mobile")}>Mobile money</Button>
-            <Button type="button" variant={formData.recipientType === "wallet" ? "default" : "outline"} onClick={() => selectRecipientType("wallet")}>Wallet</Button>
+            <Button type="button" variant={formData.recipientType === "bank" ? "default" : "outline"} onClick={() => selectRecipientType("bank")}>Bank Account</Button>
+            <Button type="button" variant={formData.recipientType === "mobile" ? "default" : "outline"} onClick={() => selectRecipientType("mobile")}>Mobile Money</Button>
+            <Button type="button" variant={formData.recipientType === "wallet" ? "default" : "outline"} onClick={() => selectRecipientType("wallet")}>Wallet Address</Button>
           </div>
         </div>
         {formData.recipientType === "bank" && (
@@ -359,7 +377,7 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
             value={formData.name}
             onChange={(e) => handleInputChange("name", e.target.value)}
               placeholder="John Doe"
-            className={`h-12 placeholder:text-muted-foreground/60 capitalize ${errors.name ? "border-red-500" : ""}`}
+            className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 capitalize ${errors.name ? "border-red-500" : ""}`}
           />
           {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
         </div>
@@ -379,7 +397,7 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
             value={formData.email}
             onChange={(e) => handleInputChange("email", e.target.value)}
             placeholder="john.doe@example.com"
-            className={`h-12 placeholder:text-muted-foreground/60 ${errors.email ? "border-red-500" : ""}`}
+            className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.email ? "border-red-500" : ""}`}
           />
           {errors.email && <p className="text-xs text-red-500">{errors.email}</p>}
         </div>
@@ -396,7 +414,7 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
             value={formData.phone}
             onChange={(e) => handleInputChange("phone", e.target.value)}
             placeholder="+1 555 123 4567"
-            className={`h-12 placeholder:text-muted-foreground/60 ${errors.phone ? "border-red-500" : ""}`}
+            className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.phone ? "border-red-500" : ""}`}
           />
           {errors.phone && <p className="text-xs text-red-500">{errors.phone}</p>}
         </div>
@@ -416,14 +434,14 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
                     <span className="truncate text-xs sm:text-sm">{selectedCountry.currency} - {selectedCountry.name}</span>
                   </div>
                 ) : (
-                  <span className="text-muted-foreground">Select country / currency</span>
+                  <span className="text-xs text-muted-foreground">Select country / currency</span>
                 )}
                 <ChevronDown className="h-4 w-4 opacity-50" />
               </button>
             </PopoverTrigger>
                 <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[60]" align="start" side="bottom" sideOffset={4}>
                   <Command className="max-h-[320px]">
-                <CommandInput placeholder="Search country or currency..." />
+                <CommandInput className="placeholder:text-xs" placeholder="Search country or currency..." />
                     <div
                       className="h-[260px] overflow-y-auto overscroll-contain"
                       onWheel={(e) => e.stopPropagation()}
@@ -463,7 +481,7 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
             {formData.recipientType === "mobile" && (
               <>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Network</label>
+                  <label className="text-sm font-medium">Provider</label>
                   <Popover open={mobileProviderOpen} onOpenChange={setMobileProviderOpen}>
                     <PopoverTrigger asChild>
                       <Button
@@ -471,15 +489,17 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
                         className={`h-12 w-full justify-between ${errors.mobileProvider ? "border-red-500" : ""}`}
                         type="button"
                       >
-                        {formData.mobileProvider || "Select network"}
+                        <span className={formData.mobileProvider ? "" : "text-xs text-muted-foreground"}>
+                          {formData.mobileProvider || "Select provider"}
+                        </span>
                         <ChevronDown className="h-4 w-4 opacity-60" />
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
                       <Command>
-                        <CommandInput placeholder="Search network..." />
+                        <CommandInput className="placeholder:text-xs" placeholder="Search providers..." />
                         <CommandList className="max-h-[260px] overflow-y-auto overscroll-contain">
-                          <CommandEmpty>No network found.</CommandEmpty>
+                          <CommandEmpty>No providers found.</CommandEmpty>
                           <CommandGroup>
                             {(mobileMoneyProvidersByCurrency[currency] || ["Other"]).map((provider) => (
                               <CommandItem
@@ -511,7 +531,7 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
                     value={formData.name}
                     onChange={(e) => handleInputChange("name", e.target.value)}
                     placeholder="John Doe"
-                    className={`h-12 placeholder:text-muted-foreground/60 capitalize ${errors.name ? "border-red-500" : ""}`}
+                    className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 capitalize ${errors.name ? "border-red-500" : ""}`}
                   />
                   {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
                 </div>
@@ -526,7 +546,7 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
                     value={formData.phone}
                     onChange={(e) => handleInputChange("phone", e.target.value)}
                     placeholder="+2348012345678"
-                    className={`h-12 placeholder:text-muted-foreground/60 ${errors.phone ? "border-red-500" : ""}`}
+                    className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.phone ? "border-red-500" : ""}`}
                   />
                   {errors.phone && <p className="text-xs text-red-500">{errors.phone}</p>}
                 </div>
@@ -553,7 +573,7 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
                 value={formData.name}
                 onChange={(e) => handleInputChange("name", e.target.value)}
                 placeholder="Binance Hot Wallet"
-                className={`h-12 placeholder:text-muted-foreground/60 ${errors.name ? "border-red-500" : ""}`}
+                className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.name ? "border-red-500" : ""}`}
               />
               {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
             </div>
@@ -570,14 +590,16 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
                       {getTokenIconUrl(formData.walletAsset) && (
                         <img src={getTokenIconUrl(formData.walletAsset)} alt={formData.walletAsset} className="h-[18px] w-[18px] rounded-full object-cover" />
                       )}
-                      {formData.walletAsset || "Select asset"}
+                      <span className={formData.walletAsset ? "" : "text-xs text-muted-foreground"}>
+                        {formData.walletAsset || "Select asset"}
+                      </span>
                     </span>
                     <ChevronDown className="h-4 w-4 opacity-60" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
                   <Command>
-                    <CommandInput placeholder="Search asset..." />
+                    <CommandInput className="placeholder:text-xs" placeholder="Search asset..." />
                     <CommandList className="max-h-[260px] overflow-y-auto overscroll-contain">
                       <CommandEmpty>No asset found.</CommandEmpty>
                       <CommandGroup>
@@ -618,14 +640,16 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
                       {getNetworkIconUrl(formData.walletNetwork) && (
                         <img src={getNetworkIconUrl(formData.walletNetwork)} alt={formData.walletNetwork} className="h-[18px] w-[18px] rounded-full object-cover" />
                       )}
-                      {formData.walletNetwork || "Select network"}
+                      <span className={formData.walletNetwork ? "" : "text-xs text-muted-foreground"}>
+                        {formData.walletNetwork || "Select network"}
+                      </span>
                     </span>
                     <ChevronDown className="h-4 w-4 opacity-60" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
                   <Command>
-                    <CommandInput placeholder="Search network..." />
+                    <CommandInput className="placeholder:text-xs" placeholder="Search network..." />
                     <CommandList className="max-h-[260px] overflow-y-auto overscroll-contain">
                       <CommandEmpty>No network found.</CommandEmpty>
                       <CommandGroup>
@@ -653,11 +677,21 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
             </div>
             <div className="space-y-2">
               <label className="text-xs text-muted-foreground">Memo / Tag (optional)</label>
-              <Input value={formData.walletMemoTag} onChange={(e) => handleInputChange("walletMemoTag", e.target.value)} placeholder="Destination tag or memo if required" className="h-12" />
+              <Input
+                value={formData.walletMemoTag}
+                onChange={(e) => handleInputChange("walletMemoTag", e.target.value)}
+                placeholder="Destination tag or memo if required"
+                className="h-12 placeholder:text-xs placeholder:text-muted-foreground/60"
+              />
             </div>
             <div className="space-y-2 md:col-span-2">
               <label className="text-xs text-muted-foreground">Wallet Address</label>
-              <Input value={formData.walletAddress} onChange={(e) => handleInputChange("walletAddress", e.target.value)} placeholder="Recipient wallet address" className={`h-12 ${errors.walletAddress ? "border-red-500" : ""}`} />
+              <Input
+                value={formData.walletAddress}
+                onChange={(e) => handleInputChange("walletAddress", e.target.value)}
+                placeholder="Recipient wallet address"
+                className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.walletAddress ? "border-red-500" : ""}`}
+              />
               {errors.walletAddress && <p className="text-xs text-red-500">{errors.walletAddress}</p>}
             </div>
           </div>
@@ -665,13 +699,64 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
 
         {formData.recipientType === "bank" && currency === "USD" && (
           <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2 col-span-2">
+              <label className="text-xs text-muted-foreground">Transfer Type</label>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant={formData.transferType === "ACH" ? "default" : "outline"}
+                  onClick={() => handleInputChange("transferType", "ACH")}
+                >
+                  ACH
+                </Button>
+                <Button
+                  type="button"
+                  variant={formData.transferType === "Wire" ? "default" : "outline"}
+                  onClick={() => handleInputChange("transferType", "Wire")}
+                >
+                  Wire
+                </Button>
+              </div>
+              {errors.transferType && <p className="text-xs text-red-500">{errors.transferType}</p>}
+            </div>
+            <div className="space-y-2 col-span-2">
+              <label className="text-xs text-muted-foreground">Account Type</label>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant={formData.checkingOrSavings === "checking" ? "default" : "outline"}
+                  onClick={() => handleInputChange("checkingOrSavings", "checking")}
+                >
+                  Checking
+                </Button>
+                <Button
+                  type="button"
+                  variant={formData.checkingOrSavings === "savings" ? "default" : "outline"}
+                  onClick={() => handleInputChange("checkingOrSavings", "savings")}
+                >
+                  Savings
+                </Button>
+              </div>
+              {errors.checkingOrSavings && <p className="text-xs text-red-500">{errors.checkingOrSavings}</p>}
+            </div>
+            <div className="space-y-2 col-span-2">
+              <label className="text-xs text-muted-foreground">Address</label>
+              <Input
+                value={formData.addressLine1}
+                onChange={(e) => handleInputChange("addressLine1", e.target.value)}
+                placeholder="Address"
+                className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.addressLine1 ? "border-red-500" : ""}`}
+                required
+              />
+              {errors.addressLine1 && <p className="text-xs text-red-500">{errors.addressLine1}</p>}
+            </div>
             <div className="space-y-2">
               <label className="text-xs text-muted-foreground">Routing Number</label>
               <Input
                 value={formData.routingNumber || ""}
                 onChange={(e) => handleInputChange("routingNumber", e.target.value)}
                 placeholder="121000248"
-                className={`h-12 placeholder:text-muted-foreground/60 ${errors.routingNumber ? "border-red-500" : ""}`}
+                className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.routingNumber ? "border-red-500" : ""}`}
                 required
               />
               {errors.routingNumber && <p className="text-xs text-red-500">{errors.routingNumber}</p>}
@@ -682,7 +767,7 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
                 value={formData.accountNumber}
                 onChange={(e) => handleInputChange("accountNumber", e.target.value)}
                 placeholder="1234567890"
-                className={`h-12 placeholder:text-muted-foreground/60 normal-case ${errors.accountNumber ? "border-red-500" : ""}`}
+                className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 normal-case ${errors.accountNumber ? "border-red-500" : ""}`}
                 required
               />
               {errors.accountNumber && <p className="text-xs text-red-500">{errors.accountNumber}</p>}
@@ -698,7 +783,7 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
                 value={formData.iban || ""}
                 onChange={(e) => handleInputChange("iban", e.target.value)}
                 placeholder="DE89370400440532013000"
-                className={`h-12 font-mono text-sm placeholder:text-muted-foreground/60 ${errors.iban ? "border-red-500" : ""}`}
+                className={`h-12 font-mono text-sm placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.iban ? "border-red-500" : ""}`}
                 required
               />
               {errors.iban && <p className="text-xs text-red-500">{errors.iban}</p>}
@@ -709,7 +794,7 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
                 value={formData.bic || ""}
                 onChange={(e) => handleInputChange("bic", e.target.value)}
                 placeholder="SOBKDEB2XXX"
-                className={`h-12 font-mono text-sm placeholder:text-muted-foreground/60 ${errors.bic ? "border-red-500" : ""}`}
+                className={`h-12 font-mono text-sm placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.bic ? "border-red-500" : ""}`}
                 required
               />
               {errors.bic && <p className="text-xs text-red-500">{errors.bic}</p>}
@@ -725,7 +810,7 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
                 value={formData.sortCode || ""}
                 onChange={(e) => handleInputChange("sortCode", e.target.value)}
                 placeholder="04-00-04"
-                className={`h-12 placeholder:text-muted-foreground/60 ${errors.sortCode ? "border-red-500" : ""}`}
+                className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.sortCode ? "border-red-500" : ""}`}
                 required
               />
               {errors.sortCode && <p className="text-xs text-red-500">{errors.sortCode}</p>}
@@ -736,7 +821,7 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
                 value={formData.accountNumber}
                 onChange={(e) => handleInputChange("accountNumber", e.target.value)}
                 placeholder="12345678"
-                className={`h-12 placeholder:text-muted-foreground/60 normal-case ${errors.accountNumber ? "border-red-500" : ""}`}
+                className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 normal-case ${errors.accountNumber ? "border-red-500" : ""}`}
                 required
               />
               {errors.accountNumber && <p className="text-xs text-red-500">{errors.accountNumber}</p>}
@@ -751,7 +836,7 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
               value={formData.accountNumber}
               onChange={(e) => handleInputChange("accountNumber", e.target.value)}
               placeholder="1234567890"
-              className={`h-12 placeholder:text-muted-foreground/60 normal-case ${errors.accountNumber ? "border-red-500" : ""}`}
+              className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 normal-case ${errors.accountNumber ? "border-red-500" : ""}`}
               required
             />
             {errors.accountNumber && <p className="text-xs text-red-500">{errors.accountNumber}</p>}
@@ -764,7 +849,7 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
             value={formData.bankName}
             onChange={(e) => handleInputChange("bankName", e.target.value)}
             placeholder="Bank Name"
-            className={`h-12 placeholder:text-muted-foreground/60 capitalize ${errors.bankName ? "border-red-500" : ""}`}
+            className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 capitalize ${errors.bankName ? "border-red-500" : ""}`}
             required
           />
           {errors.bankName && <p className="text-xs text-red-500">{errors.bankName}</p>}

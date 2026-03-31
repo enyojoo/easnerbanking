@@ -18,6 +18,7 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { CameraView, useCameraPermissions } from 'expo-camera'
 import { User, Wallet, Building2, Smartphone } from 'lucide-react-native'
 import { NavigationProps, Recipient } from '../../types'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
@@ -67,6 +68,8 @@ export default function SelectRecentRecipientScreen({ navigation }: NavigationPr
   const [providerSearchTerm, setProviderSearchTerm] = useState('')
   const [walletAssetSearchTerm, setWalletAssetSearchTerm] = useState('')
   const [walletNetworkSearchTerm, setWalletNetworkSearchTerm] = useState('')
+  const [showScanModal, setShowScanModal] = useState(false)
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [selectedCountryCurrency, setSelectedCountryCurrency] = useState<CountryCurrency | null>(null)
@@ -85,6 +88,9 @@ export default function SelectRecentRecipientScreen({ navigation }: NavigationPr
     provider: '',
     walletAddress: '',
     network: '',
+    memoTag: '',
+    checkingOrSavings: '',
+    addressLine1: '',
   })
 
   // Animation refs
@@ -199,6 +205,9 @@ export default function SelectRecentRecipientScreen({ navigation }: NavigationPr
       provider: '',
       walletAddress: '',
       network: '',
+      memoTag: '',
+      checkingOrSavings: '',
+      addressLine1: '',
     })
     setError('')
     setSelectedCountryCurrency(null)
@@ -207,6 +216,7 @@ export default function SelectRecentRecipientScreen({ navigation }: NavigationPr
     setShowProviderDropdown(false)
     setShowWalletAssetDropdown(false)
     setShowWalletNetworkDropdown(false)
+    setShowScanModal(false)
     setProviderSearchTerm('')
     setWalletAssetSearchTerm('')
     setWalletNetworkSearchTerm('')
@@ -225,6 +235,26 @@ export default function SelectRecentRecipientScreen({ navigation }: NavigationPr
     return fieldMap[fieldName] || fieldName
   }
 
+  const extractWalletAddress = (value: string): string => {
+    const raw = String(value || '').trim()
+    if (!raw) return ''
+    const noQuery = raw.split('?')[0]
+    if (noQuery.includes(':')) {
+      const parts = noQuery.split(':')
+      return parts[parts.length - 1] || raw
+    }
+    return noQuery
+  }
+
+  const handleScanPress = async () => {
+    const perm = cameraPermission?.granted ? cameraPermission : await requestCameraPermission()
+    if (!perm?.granted) {
+      Alert.alert('Camera permission needed', 'Please enable camera permission to scan wallet address QR codes.')
+      return
+    }
+    setShowScanModal(true)
+  }
+
   const isFormValid = () => {
     if (!newRecipient.fullName || !newRecipient.currency) return false
 
@@ -232,6 +262,12 @@ export default function SelectRecentRecipientScreen({ navigation }: NavigationPr
     if (selectedRecipientType === 'mobile') return !!newRecipient.provider && !!newRecipient.phoneNumber
 
     if (selectedCountryCurrency?.countryCode === 'US' && !transferType) {
+      return false
+    }
+    if (selectedCountryCurrency?.countryCode === 'US' && !newRecipient.checkingOrSavings) {
+      return false
+    }
+    if (selectedCountryCurrency?.countryCode === 'US' && !newRecipient.addressLine1.trim()) {
       return false
     }
 
@@ -272,7 +308,7 @@ export default function SelectRecentRecipientScreen({ navigation }: NavigationPr
             : newRecipient.accountNumber
       const bankNameForType =
         selectedRecipientType === 'wallet'
-          ? `Wallet (${newRecipient.network})`
+          ? `Wallet (${newRecipient.currency}/${newRecipient.network})`
           : selectedRecipientType === 'mobile'
             ? `Mobile Money (${newRecipient.provider})`
             : newRecipient.bankName
@@ -282,10 +318,18 @@ export default function SelectRecentRecipientScreen({ navigation }: NavigationPr
         accountNumber: accountNumberForType,
         bankName: bankNameForType,
         currency: newRecipient.currency,
+        phoneNumber: selectedRecipientType === 'mobile' ? newRecipient.phoneNumber : undefined,
+        mobileProvider: selectedRecipientType === 'mobile' ? newRecipient.provider : undefined,
+        walletNetwork: selectedRecipientType === 'wallet' ? newRecipient.network : undefined,
+        walletMemoTag: selectedRecipientType === 'wallet' ? newRecipient.memoTag : undefined,
         routingNumber: newRecipient.routingNumber || undefined,
         sortCode: newRecipient.sortCode || undefined,
         iban: newRecipient.iban || undefined,
         swiftBic: newRecipient.swiftBic || undefined,
+        transferType: selectedCountryCurrency?.countryCode === 'US' ? transferType || undefined : undefined,
+        checkingOrSavings:
+          selectedCountryCurrency?.countryCode === 'US' ? (newRecipient.checkingOrSavings as 'checking' | 'savings' | '') || undefined : undefined,
+        addressLine1: selectedCountryCurrency?.countryCode === 'US' ? newRecipient.addressLine1 || undefined : undefined,
       })
 
       await refreshRecipients()
@@ -597,7 +641,7 @@ export default function SelectRecentRecipientScreen({ navigation }: NavigationPr
                   <Wallet size={24} color={colors.primary.main} strokeWidth={2} />
                 </View>
                 <View style={styles.recipientTypeContent}>
-                  <Text style={styles.recipientTypeTitle}>Wallet address</Text>
+                  <Text style={styles.recipientTypeTitle}>Wallet Address</Text>
                   <Text style={styles.recipientTypeSubtitle}>Send stablecoins to an address</Text>
                 </View>
               </TouchableOpacity>
@@ -624,7 +668,7 @@ export default function SelectRecentRecipientScreen({ navigation }: NavigationPr
                   <Building2 size={24} color={colors.primary.main} strokeWidth={2} />
                 </View>
                 <View style={styles.recipientTypeContent}>
-                  <Text style={styles.recipientTypeTitle}>Bank account</Text>
+                  <Text style={styles.recipientTypeTitle}>Bank Account</Text>
                   <Text style={styles.recipientTypeSubtitle}>Send cash to a bank account</Text>
                 </View>
               </TouchableOpacity>
@@ -654,8 +698,8 @@ export default function SelectRecentRecipientScreen({ navigation }: NavigationPr
                   <Smartphone size={24} color={colors.primary.main} strokeWidth={2} />
                 </View>
                 <View style={styles.recipientTypeContent}>
-                  <Text style={styles.recipientTypeTitle}>Mobile wallet</Text>
-                  <Text style={styles.recipientTypeSubtitle}>Send cash to a mobile wallet</Text>
+                  <Text style={styles.recipientTypeTitle}>Mobile Money</Text>
+                  <Text style={styles.recipientTypeSubtitle}>Send cash via mobile money</Text>
                 </View>
               </TouchableOpacity>
             </View>
@@ -696,7 +740,7 @@ export default function SelectRecentRecipientScreen({ navigation }: NavigationPr
           >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                {selectedRecipientType === 'wallet' ? 'Add wallet address' : selectedRecipientType === 'mobile' ? 'Add mobile wallet' : 'Add bank account'}
+                {selectedRecipientType === 'wallet' ? 'Add Wallet Address' : selectedRecipientType === 'mobile' ? 'Add Mobile Money' : 'Add Bank Account'}
               </Text>
               <TouchableOpacity
                 onPress={() => {
@@ -769,12 +813,17 @@ export default function SelectRecentRecipientScreen({ navigation }: NavigationPr
                     nestedScrollEnabled={true}
                     keyboardShouldPersistTaps="handled"
                   >
-                    {filteredCurrencies.map((item) => (
+                    {filteredCurrencies.map((item) => {
+                      const isSelected =
+                        newRecipient.currency === item.currencyCode &&
+                        selectedCountryCurrency?.countryCode === item.countryCode
+
+                      return (
                       <TouchableOpacity
                         key={`${item.countryCode}-${item.currencyCode}`}
                         style={[
                           styles.currencyDropdownItem,
-                          newRecipient.currency === item.currencyCode && styles.currencyDropdownItemSelected
+                          isSelected && styles.currencyDropdownItemSelected
                         ]}
                         onPress={async () => {
                           await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -801,11 +850,11 @@ export default function SelectRecentRecipientScreen({ navigation }: NavigationPr
                           <Text style={styles.currencyCode}>{item.currencyCode}</Text>
                           <Text style={styles.currencyName}>{item.countryName}</Text>
                         </View>
-                        {newRecipient.currency === item.currencyCode && (
+                        {isSelected && (
                           <Ionicons name="checkmark" size={18} color={colors.primary.main} />
                         )}
                       </TouchableOpacity>
-                    ))}
+                    )})}
                   </ScrollView>
                 </View>
               )}
@@ -827,7 +876,7 @@ export default function SelectRecentRecipientScreen({ navigation }: NavigationPr
                     >
                       <View style={styles.currencySelectorContent}>
                         <Text style={styles.currencySelectorText}>
-                          {newRecipient.provider || 'Select network'}
+                          {newRecipient.provider || 'Select provider'}
                         </Text>
                         <Ionicons name={showProviderDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6b7280" />
             </View>
@@ -838,7 +887,7 @@ export default function SelectRecentRecipientScreen({ navigation }: NavigationPr
                           <Ionicons name="search" size={18} color={colors.neutral[400]} />
                           <TextInput
                             style={styles.currencyDropdownSearchInput}
-                            placeholder="Search network..."
+                            placeholder="Search providers..."
                             placeholderTextColor={colors.neutral[400]}
                             value={providerSearchTerm}
                             onChangeText={setProviderSearchTerm}
@@ -895,14 +944,6 @@ export default function SelectRecentRecipientScreen({ navigation }: NavigationPr
                     value={newRecipient.fullName}
                     onChangeText={(text) => setNewRecipient(prev => ({ ...prev, fullName: text }))}
                     placeholder="Address nickname"
-                    placeholderTextColor={colors.text.secondary}
-                    editable={!isSubmitting}
-                  />
-                  <TextInput
-                    style={styles.modalInput}
-                    value={newRecipient.walletAddress}
-                    onChangeText={(text) => setNewRecipient(prev => ({ ...prev, walletAddress: text }))}
-                    placeholder="Wallet address"
                     placeholderTextColor={colors.text.secondary}
                     editable={!isSubmitting}
                   />
@@ -1023,6 +1064,27 @@ export default function SelectRecentRecipientScreen({ navigation }: NavigationPr
                       </View>
                     )}
                   </View>
+                  <View style={styles.walletAddressInputWrap}>
+                    <TextInput
+                      style={[styles.modalInput, styles.walletAddressInput]}
+                      value={newRecipient.walletAddress}
+                      onChangeText={(text) => setNewRecipient(prev => ({ ...prev, walletAddress: text }))}
+                      placeholder="Wallet Address"
+                      placeholderTextColor={colors.text.secondary}
+                      editable={!isSubmitting}
+                    />
+                    <TouchableOpacity style={styles.walletScanIconButton} onPress={handleScanPress} activeOpacity={0.7}>
+                      <Ionicons name="scan-outline" size={18} color={colors.primary.main} />
+                    </TouchableOpacity>
+                  </View>
+                  <TextInput
+                    style={styles.modalInput}
+                    value={newRecipient.memoTag}
+                    onChangeText={(text) => setNewRecipient(prev => ({ ...prev, memoTag: text }))}
+                    placeholder="Memo / Tag (optional)"
+                    placeholderTextColor={colors.text.secondary}
+                    editable={!isSubmitting}
+                  />
                 </>
               )}
 
@@ -1106,6 +1168,45 @@ export default function SelectRecentRecipientScreen({ navigation }: NavigationPr
                     {/* US Account Fields */}
                     {accountConfig.accountType === "us" && (
                       <>
+                        <View style={styles.transferTypeContainer}>
+                          <View style={styles.transferTypeOptions}>
+                            <TouchableOpacity
+                              style={[styles.transferTypeOption, newRecipient.checkingOrSavings === 'checking' && styles.transferTypeOptionSelected]}
+                              onPress={() => {
+                                setNewRecipient(prev => ({ ...prev, checkingOrSavings: 'checking' }))
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                              }}
+                              activeOpacity={0.7}
+                            >
+                              <Text style={[styles.transferTypeOptionText, newRecipient.checkingOrSavings === 'checking' && styles.transferTypeOptionTextSelected]}>
+                                Checking
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.transferTypeOption, newRecipient.checkingOrSavings === 'savings' && styles.transferTypeOptionSelected]}
+                              onPress={() => {
+                                setNewRecipient(prev => ({ ...prev, checkingOrSavings: 'savings' }))
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                              }}
+                              activeOpacity={0.7}
+                            >
+                              <Text style={[styles.transferTypeOptionText, newRecipient.checkingOrSavings === 'savings' && styles.transferTypeOptionTextSelected]}>
+                                Savings
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                        <View>
+                          <TextInput
+                            style={styles.modalInput}
+                            value={newRecipient.addressLine1}
+                            onChangeText={(text) => setNewRecipient(prev => ({ ...prev, addressLine1: text }))}
+                            placeholder="Address *"
+                            placeholderTextColor={colors.text.secondary}
+                            autoCapitalize="words"
+                            editable={!isSubmitting}
+                          />
+                        </View>
                         <View>
                           <TextInput
                             style={styles.modalInput}
@@ -1297,6 +1398,33 @@ export default function SelectRecentRecipientScreen({ navigation }: NavigationPr
               </View>
               </View>
             </ScrollView>
+            {showScanModal && (
+              <View style={styles.scanOverlay}>
+                <CameraView
+                  style={StyleSheet.absoluteFillObject}
+                  facing="back"
+                  barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+                  onBarcodeScanned={({ data }) => {
+                    const address = extractWalletAddress(data)
+                    if (!address) return
+                    setNewRecipient(prev => ({ ...prev, walletAddress: address }))
+                    setShowScanModal(false)
+                  }}
+                />
+                <View style={styles.scanUiLayer}>
+                  <View style={styles.scanHeaderRow}>
+                    <Text style={styles.scanTitle}>Scan wallet address</Text>
+                    <TouchableOpacity style={styles.scanCloseButton} onPress={() => setShowScanModal(false)}>
+                      <Ionicons name="close" size={22} color={colors.text.inverse} />
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.scanCenterGroup}>
+                    <View style={styles.scanFrame} />
+                    <Text style={styles.scanHint}>Align QR code inside the frame</Text>
+                  </View>
+                </View>
+              </View>
+            )}
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -1629,6 +1757,80 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.6,
+  },
+  walletAddressInputWrap: {
+    marginBottom: spacing[4],
+    position: 'relative',
+  },
+  walletAddressInput: {
+    marginBottom: 0,
+    paddingRight: 44,
+  },
+  walletScanIconButton: {
+    position: 'absolute',
+    right: spacing[3],
+    top: '50%',
+    transform: [{ translateY: -16 }],
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scanOverlay: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    zIndex: 9000,
+  },
+  scanUiLayer: {
+    flex: 1,
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    paddingTop: spacing[12],
+    paddingHorizontal: spacing[6],
+    backgroundColor: 'rgba(0,0,0,0.25)',
+  },
+  scanCenterGroup: {
+    marginTop: spacing[16],
+    alignItems: 'center',
+  },
+  scanHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+  },
+  scanTitle: {
+    ...textStyles.bodyLarge,
+    color: colors.text.inverse,
+    fontFamily: 'Outfit-SemiBold',
+  },
+  scanCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  scanFrame: {
+    width: 260,
+    height: 260,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.9)',
+    backgroundColor: 'transparent',
+  },
+  scanHint: {
+    ...textStyles.bodySmall,
+    color: colors.text.inverse,
+    textAlign: 'center',
+    marginTop: spacing[3],
   },
   currencySelectorWrapper: {
     marginBottom: spacing[4],

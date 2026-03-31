@@ -60,3 +60,55 @@ After KYC (individual) or KYB (business) is approved:
 6. Toggle GBP to available+active in Office and confirm GBP appears in available-currency APIs.
 7. Toggle USD or EUR to inactive in Office and confirm related account/deposit actions return disabled messaging.
 
+## 6) Recipient Field Mapping Guardrails
+
+Use `public.recipients` as the shared storage for business beneficiaries and mobile recipients.
+
+### Canonical mapping by rail
+
+- **Bank**
+  - `full_name` <- recipient name
+  - `bank_name` <- bank name
+  - `account_number` <- account number
+  - `routing_number` <- USD routing number
+  - `sort_code` <- GBP sort code
+  - `iban` <- EUR IBAN
+  - `swift_bic` <- optional SWIFT/BIC
+  - USD-specific:
+    - `transfer_type` <- `ACH` or `Wire`
+    - `checking_or_savings` <- `checking` or `savings`
+    - `address_line1` <- required USD recipient address line
+
+- **Mobile money**
+  - `full_name` <- recipient name
+  - `phone_number` <- recipient phone
+  - `mobile_provider` <- selected provider
+  - `account_number` <- phone (compatibility for existing transfer paths)
+  - `bank_name` <- `Mobile Money (<provider>)` display label
+
+- **Wallet**
+  - `full_name` <- recipient nickname/name
+  - `currency` <- asset (e.g. `USDT`, `BTC`)
+  - `account_number` <- wallet address
+  - `wallet_network` <- selected wallet network
+  - `wallet_memo_tag` <- optional memo/tag
+  - `bank_name` <- `Wallet (<asset>/<network>)` display label
+
+### Known gaps and current policy
+
+- `country` is selected in UI but not persisted as a dedicated recipient column.
+- `address_line2`, `city`, `state`, and `postal_code` are available in schema but optional/unset for current flows.
+- `noah_external_account_id` is lifecycle-managed and not guaranteed at recipient create time in all paths.
+- Mobile money provider and wallet metadata are now persisted in dedicated columns while keeping compatibility display labels in `bank_name`.
+
+### Validation policy
+
+- USD bank recipient creation/edit requires all of:
+  - transfer type
+  - account type (checking/savings)
+  - address line 1
+  - routing number
+  - account number
+- Mobile money requires provider + phone.
+- Wallet requires asset + network + address; memo/tag remains optional.
+

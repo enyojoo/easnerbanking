@@ -6,7 +6,7 @@ export const appPinStrings = {
   confirmTitle: "Confirm your PIN",
   confirmSubtitle: "Enter the same 4 digit code again",
   mismatch: "PINs do not match. Start again.",
-  lockWelcome: (name: string) => `Welcome back${name ? ` ${name}` : ""}`,
+  lockWelcome: (name: string) => `Hi${name ? `, ${name}` : ""}`,
   lockEnterPin: "Enter your 4-digit PIN",
   lockIncorrect: "Incorrect PIN",
   lockVerifying: "Verifying…",

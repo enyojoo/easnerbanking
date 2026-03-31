@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,64 +22,84 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { RecipientForm } from "@/components/recipient-form"
-import { mockBeneficiaries } from "@/lib/mock-data"
+import type { Beneficiary } from "@/lib/mock-data"
 import { CurrencyFlag } from "@/components/flags"
+import { deleteRecipient, listRecipients } from "@/lib/recipients-store"
 
 export default function RecipientsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [selectedRecipient, setSelectedRecipient] = useState<any>(null)
+  const [selectedRecipient, setSelectedRecipient] = useState<Beneficiary | null>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [beneficiaries, setBeneficiaries] = useState<Beneficiary[]>([])
 
-  const filteredBeneficiaries = mockBeneficiaries.filter((recipient) =>
+  useEffect(() => {
+    void listRecipients()
+      .then(setBeneficiaries)
+      .catch((err) => console.error("Failed to load recipients:", err))
+  }, [])
+
+  const filteredBeneficiaries = beneficiaries.filter((recipient) =>
     recipient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     recipient.bankName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     recipient.country.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  const handleEdit = (recipient: any) => {
+  const handleEdit = (recipient: Beneficiary) => {
     setSelectedRecipient(recipient)
     setIsEditDialogOpen(true)
   }
 
   const handleDelete = (recipientId: string) => {
-    // Handle delete logic here
-    console.log("Delete recipient:", recipientId)
+    void deleteRecipient(recipientId)
+      .then(() => {
+        setBeneficiaries((prev) => prev.filter((b) => b.id !== recipientId))
+      })
+      .catch((err) => console.error("Delete recipient failed:", err))
   }
 
   const handleCreateSuccess = () => {
     setIsCreateDialogOpen(false)
-    // Refresh recipients list or show success message
+  }
+
+  const handleCreateSuccessWithData = (beneficiary: Beneficiary) => {
+    setBeneficiaries((prev) => [beneficiary, ...prev])
+    setIsCreateDialogOpen(false)
   }
 
   const handleEditSuccess = () => {
     setIsEditDialogOpen(false)
     setSelectedRecipient(null)
-    // Refresh recipients list or show success message
+  }
+
+  const handleEditSuccessWithData = (beneficiary: Beneficiary) => {
+    setBeneficiaries((prev) => prev.map((b) => (b.id === beneficiary.id ? beneficiary : b)))
+    setIsEditDialogOpen(false)
+    setSelectedRecipient(null)
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Beneficiaries</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage your saved beneficiaries for quick transfers</p>
+          <h1 className="text-2xl font-semibold text-foreground">Recipients</h1>
+          <p className="text-sm text-muted-foreground mt-1">Manage your saved recipients for quick transfers</p>
         </div>
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
-              Add Beneficiary
+              Add Recipient
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-6xl">
+          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Add New Beneficiary</DialogTitle>
+              <DialogTitle>Add New Recipient</DialogTitle>
               <DialogDescription>
-                Enter the beneficiary's details to save them for future transfers.
+                Enter the recipient's details to save them for future transfers.
               </DialogDescription>
             </DialogHeader>
-            <RecipientForm onSuccess={handleCreateSuccess} />
+            <RecipientForm onSuccess={handleCreateSuccess} onSuccessWithData={handleCreateSuccessWithData} />
           </DialogContent>
         </Dialog>
       </div>
@@ -89,16 +109,10 @@ export default function RecipientsPage() {
           {filteredBeneficiaries.length === 0 ? (
             <div className="py-12 text-center">
               <User className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No beneficiaries found</h3>
+              <h3 className="text-lg font-semibold mb-2">No recipients found</h3>
               <p className="text-sm text-muted-foreground mb-4">
-                {searchTerm ? "Try adjusting your search terms" : "Get started by adding your first beneficiary"}
+                {searchTerm ? "Try adjusting your search terms" : "Get started by adding your first recipient"}
               </p>
-              {!searchTerm && (
-                <Button onClick={() => setIsCreateDialogOpen(true)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Beneficiary
-                </Button>
-              )}
             </div>
           ) : (
             <>
@@ -106,7 +120,7 @@ export default function RecipientsPage() {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search beneficiaries..."
+                    placeholder="Search recipients..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-9"
@@ -151,7 +165,7 @@ export default function RecipientsPage() {
                             Edit
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem 
+                          <DropdownMenuItem
                             onClick={() => handleDelete(recipient.id)}
                             className="text-red-600 focus:text-red-600"
                           >
@@ -171,16 +185,17 @@ export default function RecipientsPage() {
 
       {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-6xl">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Edit Beneficiary</DialogTitle>
+            <DialogTitle>Edit Recipient</DialogTitle>
             <DialogDescription>
-              Update the beneficiary's details.
+              Update the recipient's details.
             </DialogDescription>
           </DialogHeader>
-          <RecipientForm 
-            recipient={selectedRecipient} 
+          <RecipientForm
+            recipient={selectedRecipient}
             onSuccess={handleEditSuccess}
+            onSuccessWithData={handleEditSuccessWithData}
             isEdit={true}
           />
         </DialogContent>
@@ -188,3 +203,4 @@ export default function RecipientsPage() {
     </div>
   )
 }
+

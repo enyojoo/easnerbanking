@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -11,11 +11,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { RecipientForm } from "@/components/recipient-form"
-import { mockBeneficiaries } from "@/lib/mock-data"
 import type { Beneficiary } from "@/lib/mock-data"
 import { Label } from "@/components/ui/label"
 import { Search, Plus, User, ChevronDown } from "lucide-react"
 import { CurrencyFlag } from "@/components/flags"
+import { listRecipients } from "@/lib/recipients-store"
 
 function maskAccount(accountNumber: string): string {
   if (!accountNumber || accountNumber.length < 4) return "****"
@@ -24,7 +24,7 @@ function maskAccount(accountNumber: string): string {
 
 interface SendRecipientPickerProps {
   selected: Beneficiary | null
-  onSelect: (beneficiary: Beneficiary | null) => void
+  onSelect: (recipient: Beneficiary | null) => void
   beneficiaries?: Beneficiary[]
   label?: string
 }
@@ -39,8 +39,26 @@ export function SendRecipientPicker({
   const [isPickerOpen, setIsPickerOpen] = useState(false)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [beneficiaries, setBeneficiaries] = useState<Beneficiary[]>(
-    () => initialBeneficiaries ?? mockBeneficiaries
+    () => initialBeneficiaries ?? []
   )
+
+  useEffect(() => {
+    let isMounted = true
+    if (initialBeneficiaries && initialBeneficiaries.length) {
+      setBeneficiaries(initialBeneficiaries)
+      return
+    }
+    void listRecipients()
+      .then((rows) => {
+        if (isMounted) setBeneficiaries(rows)
+      })
+      .catch((err) => {
+        console.error("Failed to load recipients:", err)
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [initialBeneficiaries])
 
   const filteredBeneficiaries = useMemo(() => {
     if (!searchTerm.trim()) return beneficiaries
@@ -101,7 +119,7 @@ export function SendRecipientPicker({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Select recipient</DialogTitle>
-            <DialogDescription>Choose a saved beneficiary or add a new one</DialogDescription>
+            <DialogDescription>Choose a saved recipient or add a new one</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="relative">
@@ -145,7 +163,7 @@ export function SendRecipientPicker({
               }}
             >
               <Plus className="mr-2 h-4 w-4" />
-              Add new beneficiary
+              Add new recipient
             </Button>
           </div>
         </DialogContent>
@@ -154,7 +172,7 @@ export function SendRecipientPicker({
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Add beneficiary</DialogTitle>
+            <DialogTitle>Add recipient</DialogTitle>
             <DialogDescription>Enter the recipient&apos;s details</DialogDescription>
           </DialogHeader>
           <RecipientForm

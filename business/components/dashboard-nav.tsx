@@ -38,7 +38,7 @@ export function DashboardNav() {
 
   const getInitialOpenGroups = () => {
     const openGroups = new Set<string>()
-    if (pathname.startsWith("/send") || pathname.startsWith("/beneficiaries")) {
+    if (pathname.startsWith("/send") || pathname.startsWith("/recipients")) {
       openGroups.add("payments")
     }
     if (pathname.startsWith("/invoices") || pathname.startsWith("/customers")) {
@@ -74,7 +74,7 @@ export function DashboardNav() {
       type: "group" as const,
       items: [
         { href: "/send", label: "Send", icon: Send },
-        { href: "/beneficiaries", label: "Beneficiaries", icon: UsersRound },
+        { href: "/recipients", label: "Recipients", icon: UsersRound },
       ],
     },
     { href: "/cards", label: "Cards", icon: CreditCard, type: "single" as const },
