@@ -111,16 +111,13 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     }
   }, [loading, headerAnim, contentAnim])
 
-  // Refresh user profile when screen comes into focus
-  // This ensures we get the latest status from database (updated by webhooks)
-  // Only refresh on focus if userProfile is not yet loaded to avoid unnecessary refreshes
+  // Refresh on focus so verification-dependent screens never keep stale status.
   useFocusEffect(
     React.useCallback(() => {
-      if (refreshUserProfile && userProfile?.id && !userProfile?.noah_kyc_status) {
-        // Only refresh if we don't have noah_kyc_status yet
+      if (refreshUserProfile && userProfile?.id) {
         refreshUserProfile()
       }
-    }, [userProfile?.id, userProfile?.noah_kyc_status]) // Only refresh if status is missing
+    }, [userProfile?.id, refreshUserProfile])
   )
 
   // Sync Noah customer status — fetches from the verification API and updates the database
@@ -776,6 +773,9 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     // If postMessage didn't fire, rely on webhooks and sync-status
     // Status will be updated when user refreshes or reopens the screen
     console.log('[TOS-MODAL] Modal closed. TOS status will be synced via webhooks or next screen load.')
+    if (refreshUserProfile && userProfile?.id) {
+      void refreshUserProfile()
+    }
   }
 
   const handleOpenKYC = async () => {
@@ -959,9 +959,14 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
       console.log('[KYC-MODAL] Both KYC and TOS completed, refreshing user profile')
       // Refresh user profile to get updated KYC status
       setTimeout(() => {
-        // Trigger a refresh of the user profile
-        // This will be handled by the parent component or context
+        if (refreshUserProfile && userProfile?.id) {
+          void refreshUserProfile()
+        }
       }, 2000)
+      return
+    }
+    if (refreshUserProfile && userProfile?.id) {
+      void refreshUserProfile()
     }
   }
 

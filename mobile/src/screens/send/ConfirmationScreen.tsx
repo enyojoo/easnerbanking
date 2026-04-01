@@ -25,7 +25,7 @@ import { PinChallengeModal } from '../../components/pin'
 
 export default function ConfirmationScreen({ navigation, route }: NavigationProps) {
   const { userProfile, user } = useAuth()
-  const { refreshTransactions } = useUserData()
+  const { refreshTransactions, invalidateTransactions } = useUserData()
   const insets = useSafeAreaInsets()
   const [isProcessing, setIsProcessing] = useState(false)
   const [pinModalVisible, setPinModalVisible] = useState(false)
@@ -115,7 +115,7 @@ export default function ConfirmationScreen({ navigation, route }: NavigationProp
           {
             text: 'View Details',
             onPress: () => {
-              refreshTransactions()
+              void invalidateTransactions().then(() => refreshTransactions(true))
               navigation.navigate('LegacyTransactionDetails', { 
                 transactionId,
                 fromScreen: 'SendFlow'

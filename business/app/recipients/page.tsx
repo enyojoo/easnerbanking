@@ -28,7 +28,7 @@ import { useAuth } from "@/lib/auth-context"
 import { CACHE_KEYS } from "@/lib/cache"
 import { useCachedData } from "@/lib/use-cached-data"
 
-const RECIPIENTS_CACHE_TTL_MS = 2 * 60 * 1000
+const RECIPIENTS_CACHE_TTL_MS = 60 * 60 * 1000
 
 export default function RecipientsPage() {
   const { user, isLoading } = useAuth()
@@ -59,6 +59,13 @@ export default function RecipientsPage() {
     },
   })
 
+  const reconcileRecipientsFromServer = () => {
+    if (!user?.id) return
+    void listRecipients(user.id)
+      .then((fresh) => setBeneficiaries(fresh))
+      .catch((err) => console.error("Recipient cache reconcile failed:", err))
+  }
+
   const filteredBeneficiaries = beneficiaries.filter((recipient) =>
     recipient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     recipient.bankName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -76,6 +83,7 @@ export default function RecipientsPage() {
         setBeneficiaries((prev) => {
           return prev.filter((b) => b.id !== recipientId)
         })
+        reconcileRecipientsFromServer()
       })
       .catch((err) => console.error("Delete recipient failed:", err))
   }
@@ -88,6 +96,7 @@ export default function RecipientsPage() {
     setBeneficiaries((prev) => {
       return [beneficiary, ...prev]
     })
+    reconcileRecipientsFromServer()
     setIsCreateDialogOpen(false)
   }
 
@@ -100,6 +109,7 @@ export default function RecipientsPage() {
     setBeneficiaries((prev) => {
       return prev.map((b) => (b.id === beneficiary.id ? beneficiary : b))
     })
+    reconcileRecipientsFromServer()
     setIsEditDialogOpen(false)
     setSelectedRecipient(null)
   }

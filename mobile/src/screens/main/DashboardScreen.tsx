@@ -40,7 +40,6 @@ import { useUserData } from '../../contexts/UserDataContext'
 import { useFocusEffect } from '@react-navigation/native'
 import { useBalance } from '../../contexts/BalanceContext'
 import { apiGet, apiPost } from '../../lib/apiClient'
-import { supabase } from '../../lib/supabase'
 import { ShimmerLoader } from '../../components/premium'
 import { getTransactionStatusDisplay } from '../../utils/formatters'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
@@ -66,7 +65,7 @@ interface DashboardTransaction {
 }
 
 export default function DashboardScreen({ navigation }: NavigationProps) {
-  const { user, userProfile } = useAuth()
+  const { user, userProfile, refreshUserProfile } = useAuth()
   const { refreshStaleData, refreshing: dataRefreshing } = useUserData()
   const { balances, refreshBalances } = useBalance()
   const insets = useSafeAreaInsets()
@@ -83,14 +82,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const [loadingTransactions, setLoadingTransactions] = useState(true) // Start as loading until cache loads or API completes
   const [hasAttemptedLoad, setHasAttemptedLoad] = useState(false) // Track if we've attempted to load data (cache or API)
   const dataLoadedRef = useRef(false)
-  const realtimeSetupRef = useRef(false) // Track if real-time/polling is already set up
-  const pollingStartedRef = useRef(false) // Track if polling has been started
-  const hasLoggedPollingStartRef = useRef(false) // Track if we've logged polling start
   const lastSyncTimeRef = useRef(0) // Track last sync time to prevent frequent syncs
-  const fetchRecentTransactionsRef = useRef<((force?: boolean, silent?: boolean) => Promise<void>) | null>(null)
-  const refreshBalancesRef = useRef<((force?: boolean) => Promise<void>) | null>(null)
-  /** True while we are removing/replacing the channel on purpose — avoids treating `CLOSED` as a failure. */
-  const realtimeIntentionalCloseRef = useRef(false)
 
   const loadAvailableCurrencies = useCallback(async () => {
     try {
@@ -146,8 +138,8 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     }
   }, [userProfile?.id, user?.id])
 
-  // Cache TTL (10 minutes - same as other screens)
-  const CACHE_TTL = 10 * 60 * 1000
+  // Financially sensitive feed: keep cache short and rely on realtime updates.
+  const CACHE_TTL = 60 * 1000
   const CACHE_KEY = `easner_dashboard_transactions_${userProfile?.id || ''}`
 
   // Helper to get cached data
@@ -277,12 +269,6 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     }
   }, [userProfile?.id, CACHE_KEY, getCachedData, setCachedData, isStale, hasAttemptedLoad, recentTransactions])
 
-  // Keep refs in sync with latest functions
-  useEffect(() => {
-    fetchRecentTransactionsRef.current = fetchRecentTransactions
-    refreshBalancesRef.current = refreshBalances
-  }, [fetchRecentTransactions, refreshBalances])
-
   // Load cached transactions immediately on mount (like balances - instant display)
   useEffect(() => {
     if (!userProfile?.id) {
@@ -350,242 +336,12 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     triggerSync()
   }, [userProfile?.id, fetchRecentTransactions])
 
-  // Real-time subscription with minimal polling fallback (only when real-time fails)
-  useEffect(() => {
-    if (!userProfile?.id) {
-      realtimeSetupRef.current = false
-      pollingStartedRef.current = false
-      return
-    }
-
-    // Prevent multiple setups
-    if (realtimeSetupRef.current) {
-      return
-    }
-    realtimeSetupRef.current = true
-    pollingStartedRef.current = false // Reset when setting up new session
-    hasLoggedPollingStartRef.current = false // Reset logging for new session
-
-    let pollingInterval: NodeJS.Timeout | null = null
-    let lastTransactionTimestamp: string | null = null
-    let lastRefreshTime = 0
-    let channel: ReturnType<typeof supabase.channel> | null = null
-    let realtimeRetryTimeout: NodeJS.Timeout | null = null
-    let isRealTimeActive = false
-    let realtimeRetryCount = 0
-    const DEBOUNCE_MS = 500
-    const POLL_INTERVAL_ONLY_WHEN_REALTIME_FAILS = 300000 // 5 minutes - only when real-time fails
-    const REALTIME_RETRY_DELAY = 5000 // 5 seconds between retries
-    const MAX_REALTIME_RETRIES = 3
-
-    // Start minimal polling ONLY when real-time completely fails (last resort)
-    const startPolling = () => {
-      // Don't start polling if real-time is active
-      if (isRealTimeActive) {
-        return
-      }
-      // Don't start if already started (use ref to persist across function calls)
-      if (pollingStartedRef.current || pollingInterval) {
-        return
-      }
-      pollingStartedRef.current = true
-      
-      // Only log once when polling first starts (use ref to persist)
-      if (!hasLoggedPollingStartRef.current) {
-        console.log(`[DASHBOARD] ⚠️ Real-time unavailable, using minimal polling (every ${POLL_INTERVAL_ONLY_WHEN_REALTIME_FAILS/1000/60}min)`)
-        hasLoggedPollingStartRef.current = true
-      }
-
-      const scheduleNext = () => {
-        if (pollingInterval) {
-          clearTimeout(pollingInterval)
-          pollingInterval = null
-        }
-        
-        pollingInterval = setTimeout(async () => {
-          try {
-            const response = await apiGet(`/api/noah/transactions?limit=1`)
-            if (response.ok) {
-              const data = await response.json()
-              const latestTx = data.transactions?.[0]
-              const currentTimestamp = latestTx?.created_at || latestTx?.noah_created_at
-              
-              if (currentTimestamp && currentTimestamp !== lastTransactionTimestamp) {
-                console.log('[DASHBOARD] 🔄 Polling detected transaction change, refreshing...')
-                lastTransactionTimestamp = currentTimestamp
-                if (fetchRecentTransactionsRef.current) {
-                  await fetchRecentTransactionsRef.current(true, true) // Silent refresh - no skeleton
-                }
-                if (refreshBalancesRef.current) {
-                  await refreshBalancesRef.current(true)
-                }
-              }
-            }
-          } catch (error: any) {
-            // Silently handle errors - we're in fallback mode
-          }
-          
-          // Schedule next poll (recursive)
-          scheduleNext()
-        }, POLL_INTERVAL_ONLY_WHEN_REALTIME_FAILS)
-      }
-
-      // Start polling
-      scheduleNext()
-    }
-
-    // Setup real-time subscription with retry logic
-    const setupRealtime = async (retryAttempt = 0) => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        console.warn('[DASHBOARD] No session, using minimal polling')
-        if (!pollingStartedRef.current && !pollingInterval) {
-          startPolling()
-        }
-        return
-      }
-
-      // Clean up existing channel if any (triggers `CLOSED`; must not log/retry as failure)
-      if (channel) {
-        realtimeIntentionalCloseRef.current = true
-        supabase.removeChannel(channel)
-        channel = null
-      }
-
-      try {
-        channel = supabase
-          .channel(`dashboard-transactions-${userProfile.id}-${Date.now()}`) // Unique channel name
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table: 'noah_transactions',
-              filter: `user_id=eq.${userProfile.id}`,
-            } as any,
-            async (payload: any) => {
-              try {
-                // Skip UPDATE events that don't change meaningful fields (prevents excessive refreshes)
-                if (payload.eventType === 'UPDATE') {
-                  const txId = payload.new?.transaction_id || payload.new?.id
-                  const oldStatus = payload.old?.status
-                  const newStatus = payload.new?.status
-                  
-                  // Only process UPDATE if status actually changed
-                  if (oldStatus === newStatus) {
-                    // Status unchanged - skip this update to prevent excessive refreshes
-                    return
-                  }
-                }
-                
-                // Debounce rapid updates (increased to 2 seconds for UPDATE events)
-                const now = Date.now()
-                const debounceTime = payload.eventType === 'UPDATE' ? 2000 : DEBOUNCE_MS
-                if (now - lastRefreshTime < debounceTime) {
-                  return
-                }
-                lastRefreshTime = now
-                
-                console.log('[DASHBOARD] ✅ Real-time transaction update:', payload.eventType)
-                if (fetchRecentTransactionsRef.current) {
-                  await fetchRecentTransactionsRef.current(true, true) // Silent refresh
-                }
-                if (refreshBalancesRef.current) {
-                  refreshBalancesRef.current(true).catch(() => {})
-                }
-              } catch (error) {
-                console.error('[DASHBOARD] Error processing real-time update:', error)
-              }
-            }
-          )
-          .subscribe((status) => {
-            if (status === 'SUBSCRIBED') {
-              realtimeIntentionalCloseRef.current = false
-              console.log('[DASHBOARD] ✅ Real-time subscription active')
-              isRealTimeActive = true
-              realtimeRetryCount = 0 // Reset retry count on success
-              // Stop polling if it was running (real-time is more efficient)
-              if (pollingInterval) {
-                clearTimeout(pollingInterval)
-                pollingInterval = null
-                pollingStartedRef.current = false
-                hasLoggedPollingStartRef.current = false
-              }
-            } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-              if (status === 'CLOSED' && realtimeIntentionalCloseRef.current) {
-                realtimeIntentionalCloseRef.current = false
-                return
-              }
-              isRealTimeActive = false
-              console.warn(`[DASHBOARD] Real-time ${status}, will retry...`)
-
-              // Retry real-time setup if we haven't exceeded max retries
-              if (realtimeRetryCount < MAX_REALTIME_RETRIES) {
-                realtimeRetryCount++
-                if (realtimeRetryTimeout) {
-                  clearTimeout(realtimeRetryTimeout)
-                }
-                realtimeRetryTimeout = setTimeout(() => {
-                  console.log(`[DASHBOARD] Retrying real-time subscription (attempt ${realtimeRetryCount}/${MAX_REALTIME_RETRIES})...`)
-                  setupRealtime(realtimeRetryCount)
-                }, REALTIME_RETRY_DELAY)
-              } else {
-                // Max retries reached, fall back to minimal polling
-                console.warn('[DASHBOARD] Max real-time retries reached, using minimal polling')
-                if (!pollingStartedRef.current && !pollingInterval) {
-                  startPolling()
-                }
-              }
-            } else {
-              console.log(`[DASHBOARD] Real-time status: ${status}`)
-            }
-          })
-      } catch (error) {
-        console.error('[DASHBOARD] Real-time setup error:', error)
-        // Retry if we haven't exceeded max retries
-        if (realtimeRetryCount < MAX_REALTIME_RETRIES) {
-          realtimeRetryCount++
-          if (realtimeRetryTimeout) {
-            clearTimeout(realtimeRetryTimeout)
-          }
-          realtimeRetryTimeout = setTimeout(() => {
-            console.log(`[DASHBOARD] Retrying real-time subscription after error (attempt ${realtimeRetryCount}/${MAX_REALTIME_RETRIES})...`)
-            setupRealtime(realtimeRetryCount)
-          }, REALTIME_RETRY_DELAY)
-        } else {
-          // Max retries reached, fall back to minimal polling
-          console.warn('[DASHBOARD] Max real-time retries reached after error, using minimal polling')
-          if (!pollingStartedRef.current && !pollingInterval) {
-            startPolling()
-          }
-        }
-      }
-    }
-
-    setupRealtime()
-
-    return () => {
-      realtimeSetupRef.current = false
-      pollingStartedRef.current = false
-      if (realtimeRetryTimeout) {
-        clearTimeout(realtimeRetryTimeout)
-        realtimeRetryTimeout = null
-      }
-      if (channel) {
-        realtimeIntentionalCloseRef.current = true
-        supabase.removeChannel(channel)
-        channel = null
-      }
-      if (pollingInterval) {
-        clearTimeout(pollingInterval)
-        pollingInterval = null
-      }
-    }
-  }, [userProfile?.id]) // Only depend on userProfile.id to prevent re-runs
-
   // Refresh balances on focus only if stale (don't fetch every time)
   useFocusEffect(
     React.useCallback(() => {
+      if (!isTier1Complete(userProfile)) {
+        void refreshUserProfile()
+      }
       // Only refresh if data is stale - fetchBalances will check cache first
       // This prevents unnecessary API calls when data is fresh
       refreshBalances(false).catch(() => {
@@ -600,7 +356,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
       loadAvailableCurrencies().catch(() => {
         // Silently fail
       })
-    }, [refreshBalances, fetchRecentTransactions, loadAvailableCurrencies])
+    }, [refreshUserProfile, userProfile, refreshBalances, fetchRecentTransactions, loadAvailableCurrencies])
   )
 
   const balance = parseFloat((balances as any)[selectedCurrency] || '0')

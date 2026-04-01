@@ -25,10 +25,10 @@ interface BalanceProviderProps {
   children: ReactNode
 }
 
-// Cache TTL: 10 minutes (like Revolut/CashApp - balances don't change that frequently)
-const BALANCE_CACHE_TTL = 10 * 60 * 1000
-// Background refresh interval: 5 minutes
-const BACKGROUND_REFRESH_INTERVAL = 5 * 60 * 1000
+// Balance data is financially sensitive: keep freshness windows short.
+const BALANCE_CACHE_TTL = 60 * 1000
+// Fallback polling cadence (used only when realtime is not healthy).
+const BACKGROUND_REFRESH_INTERVAL = 60 * 1000
 
 export function BalanceProvider({ children }: BalanceProviderProps) {
   const { user } = useAuth()
@@ -40,6 +40,7 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
   const fetchBalancesRef = useRef<((force: boolean) => Promise<void>) | null>(null)
   const processedTransactionIdsRef = useRef<Set<string>>(new Set())
   const lastBalanceRefreshRef = useRef<number>(0)
+  const realtimeHealthyRef = useRef<boolean>(false)
   const DEBOUNCE_MS = 1000 // Debounce balance refreshes to prevent rapid API calls
   
   const BALANCE_CACHE_KEY = `easner_wallet_balances_${user?.id || 'anonymous'}`
@@ -189,6 +190,7 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
 
     // Set up background refresh interval (like Revolut/CashApp)
     backgroundRefreshIntervalRef.current = setInterval(() => {
+      if (realtimeHealthyRef.current) return
       fetchBalances(false).catch(() => {
         // Silently fail
       })
@@ -312,8 +314,10 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
           )
           .subscribe((status) => {
             if (status === 'SUBSCRIBED') {
+              realtimeHealthyRef.current = true
               console.log('[BalanceContext] ✅ Real-time subscription active')
             } else {
+              realtimeHealthyRef.current = false
               console.log(`[BalanceContext] Real-time ${status}`)
             }
           })
@@ -325,6 +329,7 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
     setupRealtime()
 
     return () => {
+      realtimeHealthyRef.current = false
       if (channel) {
         supabase.removeChannel(channel)
       }

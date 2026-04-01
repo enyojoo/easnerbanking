@@ -111,7 +111,7 @@ export async function updateBusinessProfile(payload: {
 
 export function useBusinessProfile() {
   const { user } = useAuth()
-  const PROFILE_CACHE_TTL_MS = 5 * 60 * 1000
+  const PROFILE_CACHE_TTL_MS = 60 * 60 * 1000
   const cacheKey = user?.id ? CACHE_KEYS.BUSINESS_PROFILE(user.id) : null
   const { data: profileData, setData, loading: isLoading } = useCachedData<BusinessProfile>({
     enabled: Boolean(user?.id),

@@ -3,6 +3,7 @@ import { useAuth } from './AuthContext'
 import { Currency, ExchangeRate, Recipient, Transaction, PaymentMethod } from '../types'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { AppState, AppStateStatus } from 'react-native'
+import { supabase } from '../lib/supabase'
 import { NOAH_CONTEXT_CURRENCIES } from '../lib/noahStaticData'
 import { noahService } from '../lib/noahService'
 import { mapNoahListItemToTransaction, buildExchangeRatesFromNoahQuotes } from '../lib/noahUserDataHelpers'
@@ -23,6 +24,12 @@ interface UserDataContextType {
   refreshPaymentMethods: (force?: boolean) => Promise<void>
   refreshAll: (force?: boolean) => Promise<void>
   refreshStaleData: () => Promise<void> // Refresh only stale data
+  invalidateCurrencies: () => Promise<void>
+  invalidateExchangeRates: () => Promise<void>
+  invalidateRecipients: () => Promise<void>
+  invalidateTransactions: () => Promise<void>
+  invalidatePaymentMethods: () => Promise<void>
+  invalidateAll: () => Promise<void>
 }
 
 const UserDataContext = createContext<UserDataContextType | undefined>(undefined)
@@ -43,9 +50,9 @@ interface UserDataProviderProps {
 const CACHE_TTL = {
   CURRENCIES: 24 * 60 * 60 * 1000, // 24 hours (rarely changes)
   EXCHANGE_RATES: 5 * 60 * 1000, // 5 minutes (changes frequently)
-  RECIPIENTS: 10 * 60 * 1000, // 10 minutes
-  TRANSACTIONS: 2 * 60 * 1000, // 2 minutes (changes frequently)
-  PAYMENT_METHODS: 10 * 60 * 1000, // 10 minutes
+  RECIPIENTS: 60 * 60 * 1000, // 60 minutes (low-volatility user metadata)
+  TRANSACTIONS: 60 * 1000, // 1 minute (financially sensitive)
+  PAYMENT_METHODS: 60 * 60 * 1000, // 60 minutes (metadata with action-triggered refresh)
 }
 
 /** Noah tier guard (403) — normal until KYC/KYB is approved; not an unexpected failure. */
@@ -99,6 +106,14 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
       }))
     } catch (error) {
       console.warn(`Error caching ${key}:`, error)
+    }
+  }
+
+  const dropCachedKey = async (key: string) => {
+    try {
+      await AsyncStorage.removeItem(key)
+    } catch {
+      // ignore cache deletion errors
     }
   }
 
@@ -329,6 +344,49 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
     setLoading(false)
   }
 
+  const invalidateCurrencies = async () => {
+    const key = `easner_currencies_${user?.id || 'global'}`
+    await dropCachedKey(key)
+    delete lastFetchTimes.current.currencies
+  }
+
+  const invalidateExchangeRates = async () => {
+    const key = `easner_exchange_rates_${user?.id || 'global'}`
+    await dropCachedKey(key)
+    delete lastFetchTimes.current.exchangeRates
+  }
+
+  const invalidateRecipients = async () => {
+    if (!user?.id) return
+    const key = `easner_recipients_${user.id}`
+    await dropCachedKey(key)
+    delete lastFetchTimes.current.recipients
+  }
+
+  const invalidateTransactions = async () => {
+    if (!user?.id) return
+    const key = `easner_transactions_${user.id}`
+    await dropCachedKey(key)
+    delete lastFetchTimes.current.transactions
+  }
+
+  const invalidatePaymentMethods = async () => {
+    if (!user?.id) return
+    const key = `easner_payment_methods_${user.id}`
+    await dropCachedKey(key)
+    delete lastFetchTimes.current.paymentMethods
+  }
+
+  const invalidateAll = async () => {
+    await Promise.all([
+      invalidateCurrencies(),
+      invalidateExchangeRates(),
+      invalidateRecipients(),
+      invalidateTransactions(),
+      invalidatePaymentMethods(),
+    ])
+  }
+
   // Refresh only stale data (for background refresh)
   const refreshStaleData = async () => {
     if (refreshing) return // Prevent multiple simultaneous refreshes
@@ -449,6 +507,43 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
     return () => subscription.remove()
   }, [user?.id, dataInitialized])
 
+  // Realtime invalidation for transaction + recipient freshness.
+  useEffect(() => {
+    if (!user?.id || !dataInitialized) return
+
+    const channel = supabase
+      .channel(`userdata-refresh-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'noah_transactions',
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          void fetchTransactions(true, false)
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'recipients',
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          void fetchRecipients(true, false)
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [user?.id, dataInitialized])
+
   const value = {
     currencies,
     exchangeRates,
@@ -464,6 +559,12 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
     refreshPaymentMethods,
     refreshAll,
     refreshStaleData,
+    invalidateCurrencies,
+    invalidateExchangeRates,
+    invalidateRecipients,
+    invalidateTransactions,
+    invalidatePaymentMethods,
+    invalidateAll,
   }
 
   return <UserDataContext.Provider value={value}>{children}</UserDataContext.Provider>

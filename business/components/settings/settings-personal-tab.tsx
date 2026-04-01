@@ -37,6 +37,7 @@ import { PinSettingsDialog } from "@/components/app-lock/pin-settings-dialog"
 
 /** Aligns with personal settings store / dataCache freshness window. */
 const MFA_STATUS_CACHE_TTL_MS = 5 * 60 * 1000
+const PERSONAL_SETTINGS_CACHE_TTL_MS = 60 * 60 * 1000
 /** Keep local MFA snapshot long enough to avoid flicker after reload / new tab. */
 const MFA_STATUS_LS_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 
@@ -113,6 +114,7 @@ export function SettingsPersonalTab() {
     initialData: {
       personal: { fullName: "", email: "", phone: "", dateOfBirth: "", avatarUrl: null },
     },
+    ttlMs: PERSONAL_SETTINGS_CACHE_TTL_MS,
     fetcher: async () => {
       const res = await fetchWithSession("/api/settings/personal")
       if (!res.ok) {

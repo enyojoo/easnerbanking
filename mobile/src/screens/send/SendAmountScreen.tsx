@@ -76,7 +76,7 @@ function LandmarkIcon({ size = 24, color = '#000' }: { size?: number; color?: st
 
 export default function SendAmountScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
-  const { userProfile } = useAuth()
+  const { userProfile, refreshUserProfile } = useAuth()
   const { exchangeRates: exchangeRatesFromContext } = useUserData()
   const { balances, updateBalanceOptimistically } = useBalance()
   // Ensure exchangeRates is always an array (fallback to empty array if undefined)
@@ -175,6 +175,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   // Update recipient when screen comes into focus (smooth transition)
   useFocusEffect(
     React.useCallback(() => {
+      if (!isTier1Complete(userProfile)) {
+        void refreshUserProfile()
+      }
       const params = route.params as any
       if (params?.recipient) {
         // Update recipient immediately for smooth transition
@@ -189,7 +192,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       if (typeof params?.selectedOtherPaymentMethod === 'string' || params?.selectedOtherPaymentMethod === null) {
         setSelectedOtherPaymentMethod(params.selectedOtherPaymentMethod ?? null)
       }
-    }, [route.params])
+    }, [route.params, refreshUserProfile, userProfile])
   )
 
   // Run entrance animations

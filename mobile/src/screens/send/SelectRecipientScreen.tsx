@@ -39,7 +39,7 @@ import { getCountryCodeForCurrency } from '@easner/shared'
 export default function SelectRecipientScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
   const { userProfile } = useAuth()
-  const { recipients, refreshRecipients, currencies } = useUserData()
+  const { recipients, refreshRecipients, invalidateRecipients, currencies } = useUserData()
   const [searchTerm, setSearchTerm] = useState('')
   // New 3-step flow states
   const [showRecipientTypeModal, setShowRecipientTypeModal] = useState(false) // Step 1: Choose type
@@ -318,7 +318,8 @@ export default function SelectRecipientScreen({ navigation, route }: NavigationP
         addressLine1: selectedCountryCurrency?.countryCode === 'US' ? newRecipient.addressLine1 || undefined : undefined,
       })
 
-      await refreshRecipients()
+      await invalidateRecipients()
+      await refreshRecipients(true)
       setError('')
       resetForm()
       setShowBankAccountForm(false)

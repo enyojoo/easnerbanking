@@ -45,7 +45,7 @@ import { getCountryCodeForCurrency } from '@easner/shared'
 
 function RecipientsContent({ navigation }: NavigationProps) {
   const { user, userProfile } = useAuth()
-  const { recipients, loading, refreshRecipients, currencies } = useUserData()
+  const { recipients, loading, refreshRecipients, invalidateRecipients, currencies } = useUserData()
   const insets = useSafeAreaInsets()
   const [uiRecipients, setUiRecipients] = useState<Recipient[]>([])
   const [searchTerm, setSearchTerm] = useState('')
@@ -154,6 +154,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
 
   const onRefresh = async () => {
     setRefreshing(true)
+    await invalidateRecipients()
     await refreshRecipients(true) // Force refresh on pull-to-refresh
     setRefreshing(false)
   }
@@ -237,6 +238,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
       setUiRecipients((prev) => [createdRecipient, ...prev.filter((r) => r.id !== createdRecipient.id)])
 
       // Refresh recipients data
+      await invalidateRecipients()
       await refreshRecipients(true)
       setError('')
 
@@ -363,6 +365,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
       setUiRecipients((prev) => prev.map((r) => (r.id === updatedRecipient.id ? updatedRecipient : r)))
 
       // Refresh recipients data
+      await invalidateRecipients()
       await refreshRecipients(true)
       setError('')
 
@@ -391,6 +394,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
       setDeletingId(deleteConfirmation.id)
       await recipientService.delete(deleteConfirmation.id, user.id)
       setUiRecipients((prev) => prev.filter((r) => r.id !== deleteConfirmation.id))
+      await invalidateRecipients()
       await refreshRecipients(true)
       showSuccess('Recipient deleted successfully')
     } catch (error: any) {

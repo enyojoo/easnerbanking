@@ -27,7 +27,7 @@ export function useCachedData<T>({
   cacheKey,
   fetcher,
   initialData,
-  ttlMs = 2 * 60 * 1000,
+  ttlMs = 60 * 60 * 1000,
   persistKey,
   persistMaxAgeMs = 30 * 24 * 60 * 60 * 1000,
   onError,
@@ -35,8 +35,28 @@ export function useCachedData<T>({
   const [data, setDataState] = useState<T>(initialData)
   const [loading, setLoading] = useState<boolean>(enabled)
 
+  const fetchFresh = useCallback(() => {
+    if (!enabled || !cacheKey) return Promise.resolve()
+    return fetcher()
+      .then((fresh) => {
+        setDataState(fresh)
+        setLoading(false)
+        dataCache.set(cacheKey, fresh, ttlMs)
+        if (persistKey && typeof window !== "undefined") {
+          try {
+            localStorage.setItem(persistKey, JSON.stringify({ data: fresh, timestamp: Date.now() }))
+          } catch {
+            // Ignore localStorage write errors.
+          }
+        }
+      })
+      .catch((error) => {
+        setLoading(false)
+        onError?.(error)
+      })
+  }, [enabled, cacheKey, fetcher, ttlMs, persistKey, onError])
+
   useEffect(() => {
-    let isMounted = true
     if (!enabled || !cacheKey) {
       setDataState(initialData)
       setLoading(false)
@@ -47,6 +67,10 @@ export function useCachedData<T>({
     if (cached != null) {
       setDataState(cached)
       setLoading(false)
+      // Return cached data instantly, then refresh in background if stale.
+      if (dataCache.isStale(cacheKey)) {
+        void fetchFresh()
+      }
       return
     }
 
@@ -69,30 +93,26 @@ export function useCachedData<T>({
     }
 
     setLoading(true)
-    void fetcher()
-      .then((fresh) => {
-        if (!isMounted) return
-        setDataState(fresh)
-        setLoading(false)
-        dataCache.set(cacheKey, fresh, ttlMs)
-        if (persistKey && typeof window !== "undefined") {
-          try {
-            localStorage.setItem(persistKey, JSON.stringify({ data: fresh, timestamp: Date.now() }))
-          } catch {
-            // Ignore localStorage write errors.
-          }
-        }
-      })
-      .catch((error) => {
-        if (!isMounted) return
-        setLoading(false)
-        onError?.(error)
-      })
+    void fetchFresh()
 
     return () => {
-      isMounted = false
+      // no-op
     }
-  }, [enabled, cacheKey, fetcher, initialData, ttlMs, onError])
+  }, [enabled, cacheKey, initialData, fetchFresh, persistKey, persistMaxAgeMs, ttlMs])
+
+  useEffect(() => {
+    if (!enabled || !cacheKey || typeof window === "undefined") return
+    const revalidateIfStale = () => {
+      if (document.visibilityState === "hidden") return
+      if (dataCache.isStale(cacheKey)) void fetchFresh()
+    }
+    window.addEventListener("focus", revalidateIfStale)
+    document.addEventListener("visibilitychange", revalidateIfStale)
+    return () => {
+      window.removeEventListener("focus", revalidateIfStale)
+      document.removeEventListener("visibilitychange", revalidateIfStale)
+    }
+  }, [enabled, cacheKey, fetchFresh])
 
   const setData = useCallback(
     (next: SetStateAction<T>) => {

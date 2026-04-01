@@ -29,7 +29,7 @@ type TabType = 'bank' | 'stablecoin'
 
 export default function ReceiveMoneyScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
-  const { userProfile } = useAuth()
+  const { userProfile, refreshUserProfile } = useAuth()
   const [activeTab, setActiveTab] = useState<TabType>('bank')
   const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>({})
   const [virtualAccount, setVirtualAccount] = useState<any>(null)
@@ -106,6 +106,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const prevCurrencyRef = useRef<string | null>(null)
   // Ref to track if initial load is in progress (prevent multiple loads)
   const initialLoadInProgressRef = useRef(false)
+  const prevKycStatusRef = useRef<string | null>(null)
   
   // Cache TTL (10 minutes - same as recipients)
   const CACHE_TTL = 10 * 60 * 1000
@@ -780,19 +781,21 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     autoCreateAccounts()
   }, [kycStatus, currency, accountReady, walletReady])
   
-  // Refresh data when screen comes into focus (only if data hasn't been loaded yet)
+  // Refresh on focus and re-evaluate account state when verification status changes.
   useFocusEffect(
     React.useCallback(() => {
-      // Skip refresh completely if data has already been loaded
-      // This prevents unnecessary database queries when navigating back to the screen
-      if (dataLoadedRef.current) {
-        console.log('[ReceiveMoney] Data already loaded, skipping focus refresh completely')
+      void refreshUserProfile?.()
+      const kycChanged = prevKycStatusRef.current !== kycStatus
+      prevKycStatusRef.current = kycStatus
+      if (kycChanged) {
+        dataLoadedRef.current = false
+        void fetchAccountData(false)
         return
       }
-      
-      // Data not loaded yet - the currency useEffect will handle loading it
-      // Don't do anything here to avoid duplicate fetches
-    }, [])
+      if (!dataLoadedRef.current) {
+        void fetchAccountData(false)
+      }
+    }, [kycStatus, refreshUserProfile])
   )
   
   // Set default tab based on currency support

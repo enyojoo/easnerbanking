@@ -30,6 +30,8 @@ type InviteDraft = {
   role: "Admin" | "Member" | "Viewer"
 }
 
+const TEAM_MEMBERS_CACHE_TTL_MS = 60 * 60 * 1000
+
 /** Membership row id for API calls; invited rows may omit `membershipId` in cached payloads but `id` is the row id when `user_id` is null. */
 function membershipIdForRow(member: TeamMember): string | undefined {
   if (member.membershipId) return member.membershipId
@@ -58,6 +60,7 @@ export function SettingsTeamTab() {
     cacheKey: user?.id ? CACHE_KEYS.TEAM_MEMBERS(user.id) : null,
     persistKey: user?.id ? `settings_team_${user.id}` : undefined,
     initialData: { members: [], canManageMembers: false },
+    ttlMs: TEAM_MEMBERS_CACHE_TTL_MS,
     fetcher: async () => {
       const res = await fetchWithSession("/api/settings/team")
       if (!res.ok) {

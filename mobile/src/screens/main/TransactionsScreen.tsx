@@ -31,7 +31,6 @@ import { analytics } from '../../lib/analytics'
 import { useAuth } from '../../contexts/AuthContext'
 import { useFocusRefreshAll } from '../../hooks/useFocusRefresh'
 import { apiGet, apiPost } from '../../lib/apiClient'
-import { supabase } from '../../lib/supabase'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
 import { getTransactionStatusDisplay } from '../../utils/formatters'
@@ -301,8 +300,8 @@ function TransactionsContent({ navigation }: NavigationProps) {
     analytics.trackScreenView('Transactions')
   }, [])
 
-  // Cache TTL (10 minutes - same as other screens)
-  const CACHE_TTL = 10 * 60 * 1000
+  // Financially sensitive feed: keep cache short and rely on realtime updates.
+  const CACHE_TTL = 60 * 1000
   const CACHE_KEY = `easner_combined_transactions_${userProfile?.id || ''}`
 
   // Helper to get cached data (use useCallback to ensure stable reference)
@@ -419,198 +418,6 @@ function TransactionsContent({ navigation }: NavigationProps) {
 
   // Refresh stale data when screen comes into focus
   useFocusRefreshAll(false) // Only refresh if stale (> 5 minutes)
-
-  // Real-time subscription with minimal polling fallback (only when real-time fails)
-  useEffect(() => {
-    if (!userProfile?.id) return
-
-    let pollingInterval: NodeJS.Timeout | null = null
-    let lastTransactionTimestamp: string | null = null
-    let lastRefreshTime = 0
-    let channel: ReturnType<typeof supabase.channel> | null = null
-    let realtimeRetryTimeout: NodeJS.Timeout | null = null
-    let isRealTimeActive = false
-    let realtimeRetryCount = 0
-    const DEBOUNCE_MS = 500
-    const POLL_INTERVAL_ONLY_WHEN_REALTIME_FAILS = 300000 // 5 minutes - only when real-time fails
-    const REALTIME_RETRY_DELAY = 5000 // 5 seconds between retries
-    const MAX_REALTIME_RETRIES = 3
-
-    // Start minimal polling ONLY when real-time completely fails (last resort)
-    const startPolling = () => {
-      // Don't start polling if real-time is active
-      if (isRealTimeActive) {
-        return
-      }
-      // Don't start if already polling
-      if (pollingInterval) {
-        return
-      }
-
-      console.log(`[TRANSACTIONS] ⚠️ Real-time unavailable, using minimal polling (every ${POLL_INTERVAL_ONLY_WHEN_REALTIME_FAILS/1000/60}min)`)
-
-      const scheduleNext = () => {
-        if (pollingInterval) {
-          clearTimeout(pollingInterval)
-          pollingInterval = null
-        }
-        
-        pollingInterval = setTimeout(async () => {
-          try {
-            const response = await apiGet(`/api/noah/transactions?limit=1`)
-            if (response.ok) {
-              const data = await response.json()
-              const latestTx = data.transactions?.[0]
-              const currentTimestamp = latestTx?.created_at || latestTx?.noah_created_at
-              
-              if (currentTimestamp && currentTimestamp !== lastTransactionTimestamp) {
-                console.log('[TRANSACTIONS] 🔄 Polling detected transaction change, refreshing...')
-                lastTransactionTimestamp = currentTimestamp
-                await fetchTransactions(true, true) // Silent refresh - no skeleton
-              }
-            }
-          } catch (error: any) {
-            // Silently handle errors - we're in fallback mode
-          }
-          
-          // Schedule next poll (recursive)
-          scheduleNext()
-        }, POLL_INTERVAL_ONLY_WHEN_REALTIME_FAILS)
-      }
-
-      // Start polling
-      scheduleNext()
-    }
-
-    // Setup real-time subscription with retry logic
-    const setupRealtime = async (retryAttempt = 0) => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        console.warn('[TRANSACTIONS] No session, using minimal polling')
-        startPolling()
-        return
-      }
-
-      // Clean up existing channel if any
-      if (channel) {
-        supabase.removeChannel(channel)
-        channel = null
-      }
-
-      try {
-        channel = supabase
-          .channel(`user-noah-transactions-${userProfile.id}-${Date.now()}`) // Unique channel name
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table: 'noah_transactions',
-              filter: `user_id=eq.${userProfile.id}`,
-            } as any,
-              async (payload: any) => {
-                try {
-                  // Skip UPDATE events that don't change meaningful fields (prevents excessive refreshes)
-                  if (payload.eventType === 'UPDATE') {
-                    const oldStatus = payload.old?.status
-                    const newStatus = payload.new?.status
-                    
-                    // Only process UPDATE if status actually changed
-                    if (oldStatus === newStatus) {
-                      // Status unchanged - skip this update to prevent excessive refreshes
-                      return
-                    }
-                  }
-                  
-                  // Debounce rapid updates (increased to 2 seconds for UPDATE events)
-                  const now = Date.now()
-                  const debounceTime = payload.eventType === 'UPDATE' ? 2000 : DEBOUNCE_MS
-                  if (now - lastRefreshTime < debounceTime) {
-                    return
-                  }
-                  lastRefreshTime = now
-                  
-                console.log('[TRANSACTIONS] ✅ Real-time transaction update:', payload.eventType)
-                await fetchTransactions(true, true) // Silent refresh
-                } catch (error) {
-                  console.error('[TRANSACTIONS] Error processing real-time update:', error)
-                }
-              }
-          )
-          .subscribe((status) => {
-            if (status === 'SUBSCRIBED') {
-              console.log('[TRANSACTIONS] ✅ Real-time subscription active')
-              isRealTimeActive = true
-              realtimeRetryCount = 0 // Reset retry count on success
-              // Stop polling if it was running (real-time is more efficient)
-              if (pollingInterval) {
-                clearTimeout(pollingInterval)
-                pollingInterval = null
-              }
-            } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-              console.warn(`[TRANSACTIONS] Real-time ${status}, will retry...`)
-              isRealTimeActive = false
-              
-              // Retry real-time setup if we haven't exceeded max retries
-              if (realtimeRetryCount < MAX_REALTIME_RETRIES) {
-                realtimeRetryCount++
-                if (realtimeRetryTimeout) {
-                  clearTimeout(realtimeRetryTimeout)
-                }
-                realtimeRetryTimeout = setTimeout(() => {
-                  console.log(`[TRANSACTIONS] Retrying real-time subscription (attempt ${realtimeRetryCount}/${MAX_REALTIME_RETRIES})...`)
-                  setupRealtime(realtimeRetryCount)
-                }, REALTIME_RETRY_DELAY)
-              } else {
-                // Max retries reached, fall back to minimal polling
-                console.warn('[TRANSACTIONS] Max real-time retries reached, using minimal polling')
-                if (!pollingInterval) {
-                  startPolling()
-                }
-              }
-            } else {
-              console.log(`[TRANSACTIONS] Real-time status: ${status}`)
-            }
-          })
-      } catch (error) {
-        console.error('[TRANSACTIONS] Real-time setup error:', error)
-        // Retry if we haven't exceeded max retries
-        if (realtimeRetryCount < MAX_REALTIME_RETRIES) {
-          realtimeRetryCount++
-          if (realtimeRetryTimeout) {
-            clearTimeout(realtimeRetryTimeout)
-          }
-          realtimeRetryTimeout = setTimeout(() => {
-            console.log(`[TRANSACTIONS] Retrying real-time subscription after error (attempt ${realtimeRetryCount}/${MAX_REALTIME_RETRIES})...`)
-            setupRealtime(realtimeRetryCount)
-          }, REALTIME_RETRY_DELAY)
-        } else {
-          // Max retries reached, fall back to minimal polling
-          console.warn('[TRANSACTIONS] Max real-time retries reached after error, using minimal polling')
-          if (!pollingInterval) {
-            startPolling()
-          }
-        }
-      }
-    }
-
-    setupRealtime()
-
-    return () => {
-      if (realtimeRetryTimeout) {
-        clearTimeout(realtimeRetryTimeout)
-        realtimeRetryTimeout = null
-      }
-      if (channel) {
-        supabase.removeChannel(channel)
-        channel = null
-      }
-      if (pollingInterval) {
-        clearTimeout(pollingInterval)
-        pollingInterval = null
-      }
-    }
-  }, [userProfile?.id, fetchTransactions])
 
   const onRefresh = async () => {
     setRefreshing(true)

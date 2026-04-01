@@ -28,7 +28,14 @@ import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
 
 export default function PaymentMethodScreen({ navigation, route }: NavigationProps) {
   const { userProfile } = useAuth()
-  const { paymentMethods, refreshPaymentMethods, currencies, refreshTransactions } = useUserData()
+  const {
+    paymentMethods,
+    refreshPaymentMethods,
+    invalidatePaymentMethods,
+    currencies,
+    refreshTransactions,
+    invalidateTransactions,
+  } = useUserData()
   const { updateBalanceOptimistically } = useBalance()
   const insets = useSafeAreaInsets()
   const [transactionId, setTransactionId] = useState('')
@@ -64,7 +71,7 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
   }, [])
 
   useEffect(() => {
-    refreshPaymentMethods()
+    void invalidatePaymentMethods().then(() => refreshPaymentMethods(true))
     setTransactionId(generateTransactionId())
   }, [])
 
@@ -153,7 +160,8 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
           console.log('Receipt upload would happen here:', uploadedFile)
       }
 
-      await refreshTransactions()
+      await invalidateTransactions()
+      await refreshTransactions(true)
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
 
       navigation.navigate('SendTransactionDetails', { 

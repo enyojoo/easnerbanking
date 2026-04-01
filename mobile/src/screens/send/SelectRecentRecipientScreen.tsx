@@ -47,13 +47,13 @@ const getInitials = (name: string): string => {
 }
 
 const CACHE_KEY_PREFIX = 'recent_recipients_'
-const CACHE_TTL = 2 * 60 * 1000 // 2 minutes
+const CACHE_TTL = 60 * 60 * 1000 // 60 minutes (recipient metadata)
 
 export default function SelectRecentRecipientScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
   const { user, userProfile } = useAuth()
   const preferredBalanceCurrency = String((route.params as any)?.preferredBalanceCurrency || '').toUpperCase()
-  const { recipients, refreshRecipients, currencies, transactions } = useUserData()
+  const { recipients, refreshRecipients, invalidateRecipients, currencies, transactions } = useUserData()
   const [recentRecipients, setRecentRecipients] = useState<Recipient[]>([])
   const [hasTransactions, setHasTransactions] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -345,7 +345,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
         addressLine1: selectedCountryCurrency?.countryCode === 'US' ? newRecipient.addressLine1 || undefined : undefined,
       })
 
-      await refreshRecipients()
+      await invalidateRecipients()
+      await refreshRecipients(true)
       
       // Clear cache to force refresh
       if (user) {

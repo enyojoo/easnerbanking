@@ -31,7 +31,7 @@ import {
 } from '../../lib/auth-mfa'
 
 function MoreContent({ navigation }: NavigationProps) {
-  const { user, userProfile, signOut } = useAuth()
+  const { user, userProfile, refreshUserProfile, signOut } = useAuth()
   const insets = useSafeAreaInsets()
   const [kycSubmissions, setKycSubmissions] = useState<KYCSubmission[]>([])
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
@@ -67,8 +67,13 @@ function MoreContent({ navigation }: NavigationProps) {
   useFocusEffect(
     useCallback(() => {
       if (!user?.id) return
+      const noahKycStatus =
+        userProfile?.noah_kyc_status ?? (userProfile as { profile?: { noah_kyc_status?: string } })?.profile?.noah_kyc_status
+      if (noahKycStatus !== 'approved') {
+        void refreshUserProfile()
+      }
       void refreshMfaStatus()
-    }, [user?.id, refreshMfaStatus]),
+    }, [user?.id, userProfile, refreshUserProfile, refreshMfaStatus]),
   )
 
   // Animation refs

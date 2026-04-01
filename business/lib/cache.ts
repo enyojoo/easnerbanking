@@ -7,8 +7,8 @@ interface CacheItem<T> {
 
 class DataCache {
   private cache = new Map<string, CacheItem<unknown>>()
-  private readonly DEFAULT_TTL = 2 * 60 * 1000 // 2 minutes
-  private readonly STALE_WHILE_REVALIDATE_TTL = 5 * 60 * 1000 // 5 minutes
+  private readonly DEFAULT_TTL = 60 * 60 * 1000 // 60 minutes
+  private readonly STALE_WHILE_REVALIDATE_TTL = 24 * 60 * 60 * 1000 // 24 hours
   private refreshPromises = new Map<string, Promise<unknown>>()
 
   set<T>(key: string, data: T, ttl: number = this.DEFAULT_TTL): void {
