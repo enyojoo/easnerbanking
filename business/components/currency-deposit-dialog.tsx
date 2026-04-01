@@ -186,7 +186,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
             {depositDetailsBlocked
               ? blockedByAfricanTier
                 ? "African banking verification is required for NGN pay-in details."
-                : "Complete business verification to see deposit instructions."
+                : ""
               : `Deposit funds via bank transfer or stablecoin. Both methods credit your ${account.currency} balance.`}
           </DialogDescription>
         </DialogHeader>
@@ -198,9 +198,12 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
                 ? "Please complete African banking setup for your organization to receive NGN pay-in details and local pay-in/pay-out. This is separate from global account verification."
                 : "Please complete your business verification to receive bank and stablecoin deposit information."}
             </p>
-            <Button asChild className="w-full sm:w-auto">
-              <Link href="/settings?tab=business">Business verification</Link>
-            </Button>
+            <Link
+              href="/settings?tab=business"
+              className="inline-block w-full sm:w-auto font-semibold underline underline-offset-2"
+            >
+              Verify
+            </Link>
           </div>
         ) : (
         <Tabs defaultValue="bank" className="w-full">
