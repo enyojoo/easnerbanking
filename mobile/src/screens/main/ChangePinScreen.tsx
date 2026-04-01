@@ -275,7 +275,7 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
 
   if (!ready) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={[styles.container, { paddingTop: insets.top + spacing[4] }]}>
         <View style={styles.loadingOnly}>
           <ActivityIndicator color={colors.primary.main} size="large" />
         </View>
@@ -286,7 +286,7 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
   const keypadDisabled = loading || verifyBusy || lockedOut
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top + spacing[4] }]}>
       <KeyboardAvoidingView style={styles.keyboardView} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.header}>
           <TouchableOpacity

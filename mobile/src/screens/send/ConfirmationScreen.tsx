@@ -154,7 +154,7 @@ export default function ConfirmationScreen({ navigation, route }: NavigationProp
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top + spacing[4] }]}>
       {/* Header */}
       <Animated.View 
         style={[

@@ -205,7 +205,7 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
   )
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top + spacing[4] }]}>
       {/* Header */}
       <Animated.View 
         style={[

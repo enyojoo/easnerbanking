@@ -270,7 +270,7 @@ export default function CardScreen({ navigation }: NavigationProps) {
     return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top }]}>
+      <View style={[styles.header, { paddingTop: insets.top + spacing[4] }]}>
         <Text style={styles.headerTitle}>My Cards</Text>
         <TouchableOpacity
           style={styles.addButton}

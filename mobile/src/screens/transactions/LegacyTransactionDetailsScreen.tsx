@@ -263,7 +263,7 @@ export default function LegacyTransactionDetailsScreen({ navigation, route }: Na
 
   if (error) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={[styles.container, { paddingTop: insets.top + spacing[4] }]}>
         <View style={styles.errorContainer}>
           <View style={styles.errorIconContainer}>
             <Ionicons name="alert-circle" size={48} color={colors.error.main} />
@@ -286,7 +286,7 @@ export default function LegacyTransactionDetailsScreen({ navigation, route }: Na
 
   if (!transaction) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={[styles.container, { paddingTop: insets.top + spacing[4] }]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary.main} />
           <Text style={styles.loadingText}>Loading transaction...</Text>
@@ -298,7 +298,7 @@ export default function LegacyTransactionDetailsScreen({ navigation, route }: Na
   const statusInfo = getStatusInfo(transaction.status)
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top + spacing[4] }]}>
       <ScrollView 
         style={styles.scrollView} 
         refreshControl={

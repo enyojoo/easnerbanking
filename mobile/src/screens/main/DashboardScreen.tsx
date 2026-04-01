@@ -617,7 +617,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   return (
     <View style={styles.container}>
       {/* Header: avatar | verify banner (if needed) | support */}
-      <View style={[styles.headerWrapper, { paddingTop: insets.top }]}>
+      <View style={[styles.headerWrapper, { paddingTop: insets.top + spacing[4] }]}>
         <View style={styles.header}>
           {/* Header Content */}
           <View style={styles.headerContent}>
