@@ -81,6 +81,14 @@ export default function SelectRecipientScreen({ navigation, route }: NavigationP
   // Get pre-selected recipient ID from route params
   const preSelectedRecipientId = (route.params as any)?.selectedRecipientId as string | undefined
   const preferredBalanceCurrency = String((route.params as any)?.preferredBalanceCurrency || '').toUpperCase()
+  const selectedPaymentMethod = (route.params as any)?.selectedPaymentMethod as
+    | 'balance'
+    | 'linkBank'
+    | 'virtualBank'
+    | 'otherCurrency'
+    | undefined
+  const selectedOtherCurrency = (route.params as any)?.selectedOtherCurrency as string | undefined
+  const selectedOtherPaymentMethod = (route.params as any)?.selectedOtherPaymentMethod as string | undefined
   
   const [selectedRecipient, setSelectedRecipient] = useState<Recipient | null>(
     preSelectedRecipientId 
@@ -144,6 +152,9 @@ export default function SelectRecipientScreen({ navigation, route }: NavigationP
       preferredBalanceCurrency: preferredBalanceCurrency === 'USD' || preferredBalanceCurrency === 'EUR'
         ? preferredBalanceCurrency
         : undefined,
+      selectedPaymentMethod,
+      selectedOtherCurrency: selectedOtherCurrency ?? null,
+      selectedOtherPaymentMethod: selectedOtherPaymentMethod ?? null,
     } as never)
   }
 
@@ -282,7 +293,7 @@ export default function SelectRecipientScreen({ navigation, route }: NavigationP
             : newRecipient.accountNumber
       const bankNameForType =
         selectedRecipientType === 'wallet'
-          ? `Wallet (${newRecipient.currency}/${newRecipient.network})`
+          ? `Wallet (${newRecipient.network})`
           : selectedRecipientType === 'mobile'
             ? `Mobile Money (${newRecipient.provider})`
             : newRecipient.bankName
@@ -345,6 +356,8 @@ export default function SelectRecipientScreen({ navigation, route }: NavigationP
 
   const renderRecipient = ({ item }: { item: Recipient }) => {
     const isSelected = selectedRecipient?.id === item.id
+    const isWalletRecipient = String(item.bank_name || '').toLowerCase().includes('wallet')
+    const tokenIcon = getTokenIconUrl(item.currency)
 
     return (
       <TouchableOpacity
@@ -362,7 +375,15 @@ export default function SelectRecipientScreen({ navigation, route }: NavigationP
             {/* Flag badge on bottom edge of avatar */}
             <View style={styles.avatarFlagBadge}>
               <View style={styles.flagContainer}>
-                <CountryFlag code={item.country_code || (item.currency === 'EUR' ? 'EU' : getCountryCodeForCurrency(item.currency) || 'US')} size={20} style={styles.flagImage} />
+                {isWalletRecipient && tokenIcon ? (
+                  <Image source={{ uri: tokenIcon }} style={styles.flagImage} />
+                ) : (
+                  <CountryFlag
+                    code={item.country_code || (item.currency === 'EUR' ? 'EU' : getCountryCodeForCurrency(item.currency) || 'US')}
+                    size={20}
+                    style={styles.flagImage}
+                  />
+                )}
               </View>
             </View>
           </View>

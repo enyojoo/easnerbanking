@@ -1,4 +1,6 @@
-type Listener = () => void
+export type AppLockEvent = 'locked' | 'unlocked'
+
+type Listener = (event: AppLockEvent) => void
 
 const listeners = new Set<Listener>()
 
@@ -7,10 +9,10 @@ export function registerAppLockListener(fn: Listener): () => void {
   return () => listeners.delete(fn)
 }
 
-export function emitAppLocked(): void {
+export function emitAppLocked(event: AppLockEvent = 'locked'): void {
   for (const fn of listeners) {
     try {
-      fn()
+      fn(event)
     } catch {
       // ignore
     }

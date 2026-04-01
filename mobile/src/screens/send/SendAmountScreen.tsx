@@ -85,22 +85,33 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   // Get recipient from route params if coming from SelectRecipient
   const recipientFromRoute = (route.params as any)?.recipient as MockRecipient | undefined
   const preferredBalanceCurrencyFromRoute = String((route.params as any)?.preferredBalanceCurrency || '').toUpperCase()
+  const selectedPaymentMethodFromRoute = (route.params as any)?.selectedPaymentMethod as
+    | 'balance'
+    | 'linkBank'
+    | 'virtualBank'
+    | 'otherCurrency'
+    | undefined
+  const selectedOtherCurrencyFromRoute = (route.params as any)?.selectedOtherCurrency as string | undefined
+  const selectedOtherPaymentMethodFromRoute = (route.params as any)?.selectedOtherPaymentMethod as string | undefined
   const isPreferredBalanceCurrency = preferredBalanceCurrencyFromRoute === 'USD' || preferredBalanceCurrencyFromRoute === 'EUR'
   const didInitializeBalanceCurrency = useRef(false)
   
   // UI State only - no backend integration
   const [recipient, setRecipient] = useState<MockRecipient | null>(recipientFromRoute || null)
-  const [sendAmount, setSendAmount] = useState('0.00')
+  const [sendAmount, setSendAmount] = useState('0')
   const [note, setNote] = useState('')
   const [selectedBalanceCurrency, setSelectedBalanceCurrency] = useState<string>('USD')
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false)
-  // Auto-select USD Balance by default (or highest balance if USD is 0)
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'balance' | 'linkBank' | 'virtualBank' | 'otherCurrency'>(() => {
-    // Auto-select balance payment method by default
-    return 'balance'
-  })
-  const [selectedOtherCurrency, setSelectedOtherCurrency] = useState<string | null>(null)
-  const [selectedOtherPaymentMethod, setSelectedOtherPaymentMethod] = useState<string | null>(null)
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'balance' | 'linkBank' | 'virtualBank' | 'otherCurrency'>(
+    selectedPaymentMethodFromRoute ?? 'balance'
+  )
+  const [selectedOtherCurrency, setSelectedOtherCurrency] = useState<string | null>(
+    selectedOtherCurrencyFromRoute ?? null
+  )
+  const [selectedOtherPaymentMethod, setSelectedOtherPaymentMethod] = useState<string | null>(
+    selectedOtherPaymentMethodFromRoute ?? null
+  )
+  const [amountEntryMode, setAmountEntryMode] = useState<'receive' | 'send'>('receive')
 
   // Initialize sending balance currency once:
   // 1) honor incoming preference from prior screen flow, 2) otherwise fallback to available balance.
@@ -169,6 +180,15 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         // Update recipient immediately for smooth transition
         setRecipient(params.recipient)
       }
+      if (params?.selectedPaymentMethod) {
+        setSelectedPaymentMethod(params.selectedPaymentMethod)
+      }
+      if (typeof params?.selectedOtherCurrency === 'string' || params?.selectedOtherCurrency === null) {
+        setSelectedOtherCurrency(params.selectedOtherCurrency ?? null)
+      }
+      if (typeof params?.selectedOtherPaymentMethod === 'string' || params?.selectedOtherPaymentMethod === null) {
+        setSelectedOtherPaymentMethod(params.selectedOtherPaymentMethod ?? null)
+      }
     }, [route.params])
   )
 
@@ -195,38 +215,18 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     return names.slice(0, 2).map(name => name[0]).join('').toUpperCase()
   }
 
-  // Format amount with commas and ensure 2 decimal places
+  // Format amount with commas, optional decimal, max 2 decimals.
   const formatAmount = (rawValue: string): string => {
-    if (!rawValue || rawValue === '.' || rawValue === '') {
-      return '0.00'
-    }
-    
-    // Remove all commas
-    let cleaned = rawValue.replace(/,/g, '')
-    
-    // Split by decimal point
-    const parts = cleaned.split('.')
-    
-    // Get integer part
-    let integerPart = parts[0] || '0'
-    // Remove leading zeros except keep at least one digit
-    if (integerPart.length > 1) {
-      integerPart = integerPart.replace(/^0+/, '') || '0'
-    }
-    
-    // Get decimal part (limit to 2 places)
-    let decimalPart = ''
-    if (parts.length > 1) {
-      decimalPart = parts[1].substring(0, 2)
-    }
-    
-    // Format integer with commas
-    const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-    
-    // Always show 2 decimal places
-    const formattedDecimal = decimalPart.padEnd(2, '0')
-    
-    return `${formattedInteger}.${formattedDecimal}`
+    const input = String(rawValue || '').replace(/,/g, '').replace(/[^0-9.]/g, '')
+    if (!input) return '0'
+
+    const hasDot = input.includes('.')
+    const [rawInteger = '0', rawDecimal = ''] = input.split('.')
+    const normalizedInteger = rawInteger.replace(/^0+(?=\d)/, '') || '0'
+    const formattedInteger = normalizedInteger.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+
+    if (!hasDot) return formattedInteger
+    return `${formattedInteger}.${rawDecimal.slice(0, 2)}`
   }
 
   // Calculate dynamic font size based on amount length (like Cash App/Revolut)
@@ -257,56 +257,42 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     return fontSize
   }
 
-  // Keypad handlers - Smooth calculator-style input
+  // Keypad handlers - natural typing with optional decimal mode.
   const handleKeypadPress = (value: string) => {
     if (!recipient) return // Disabled until recipient is selected
     
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    
-    // Get current value as pure number string (remove commas and decimal)
-    let numberString = sendAmount.replace(/,/g, '').replace(/\./g, '')
-    
+
+    let raw = sendAmount.replace(/,/g, '')
+
     if (value === 'backspace') {
-      if (numberString.length > 3) {
-        // Remove rightmost digit (shift right)
-        numberString = numberString.slice(0, -1)
-        // Ensure minimum 3 digits
-        while (numberString.length < 3) {
-          numberString = '0' + numberString
-        }
-        // Format: insert decimal before last 2 digits
-        const integerPart = numberString.slice(0, -2) || '0'
-        const decimalPart = numberString.slice(-2)
-        setSendAmount(formatAmount(`${integerPart}.${decimalPart}`))
-    } else {
-        setSendAmount('0.00')
-      }
-    } else if (value === '.') {
-      // Decimal point not needed, always 2 decimal places
+      const next = raw.slice(0, -1)
+      setSendAmount(formatAmount(next))
       return
-    } else {
-      // Add number - shift left and append to right (calculator style)
-      if (numberString.length >= 10) {
-        // Max length reached, shift left by removing first digit
-        numberString = numberString.slice(1) + value
-      } else {
-        // Append new digit
-        numberString = numberString + value
-      }
-      
-      // Ensure minimum 3 digits
-      while (numberString.length < 3) {
-        numberString = '0' + numberString
-      }
-      
-      // Format: insert decimal before last 2 digits
-      const integerPart = numberString.slice(0, -2) || '0'
-      const decimalPart = numberString.slice(-2)
-      setSendAmount(formatAmount(`${integerPart}.${decimalPart}`))
     }
+
+    if (value === '.') {
+      if (raw.includes('.')) return
+      setSendAmount(formatAmount(`${raw}.`))
+      return
+    }
+
+    // Numeric key
+    if (!/^\d$/.test(value)) return
+    if (raw.includes('.')) {
+      const decimals = raw.split('.')[1] ?? ''
+      if (decimals.length >= 2) return
+    }
+
+    if (raw === '0') raw = value
+    else raw += value
+    setSendAmount(formatAmount(raw))
   }
 
   const formatCurrency = (amount: number, currency: string): string => {
+    const roundedAmount = Math.round((Number.isFinite(amount) ? amount : 0) * 100) / 100
+    const fractionalPart = Math.abs(roundedAmount - Math.trunc(roundedAmount))
+    const showDecimals = fractionalPart >= 0.01
     const symbol = currency === 'USD' ? '$' 
       : currency === 'EUR' ? '€' 
       : currency === 'NGN' ? '₦' 
@@ -315,7 +301,17 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       : currency === 'RUB' ? '₽' 
       : currency === 'GBP' ? '£' 
       : ''
-    return `${symbol}${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    const formattedAmount = roundedAmount.toLocaleString("en-US", {
+      minimumFractionDigits: showDecimals ? 2 : 0,
+      maximumFractionDigits: showDecimals ? 2 : 0,
+    })
+    return symbol ? `${symbol}${formattedAmount}` : `${currency} ${formattedAmount}`
+  }
+
+  const toSwitchInputAmount = (amount: number): string => {
+    const roundedAmount = Math.round((Number.isFinite(amount) ? amount : 0) * 100) / 100
+    const fractionalPart = Math.abs(roundedAmount - Math.trunc(roundedAmount))
+    return fractionalPart >= 0.01 ? roundedAmount.toFixed(2) : String(Math.trunc(roundedAmount))
   }
 
   const getCurrencySymbol = (currency: string): string => {
@@ -330,8 +326,35 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   }
 
   const currentBalance = parseFloat(balances[selectedBalanceCurrency as 'USD' | 'EUR'] || '0')
-  const receiveAmount = sendAmount ? Number.parseFloat(sendAmount.replace(/,/g, '')) || 0 : 0
+  const enteredAmount = sendAmount ? Number.parseFloat(sendAmount.replace(/,/g, '')) || 0 : 0
   const receiveCurrency = recipient?.currency || 'EUR'
+  const dynamicAmountFontSize = getDynamicFontSize(sendAmount)
+  const dynamicAmountLineHeight = Math.round(dynamicAmountFontSize * 1.05)
+  const amountTextStyle =
+    Platform.OS === 'android'
+      ? { fontSize: dynamicAmountFontSize, lineHeight: dynamicAmountLineHeight }
+      : { fontSize: dynamicAmountFontSize }
+  const amountDisplayCurrency = amountEntryMode === 'receive' ? receiveCurrency : sendCurrency
+  const amountDisplaySymbolRaw = getCurrencySymbol(amountDisplayCurrency)
+  const amountDisplaySymbol =
+    (typeof amountDisplaySymbolRaw === 'string' && amountDisplaySymbolRaw.trim().length > 0
+      ? amountDisplaySymbolRaw
+      : String(amountDisplayCurrency || '').trim()) || getCurrencySymbol(selectedBalanceCurrency)
+  const amountAssetIconUrl = getTokenIconUrl(String(amountDisplayCurrency || '').toUpperCase()) || null
+  const showAmountAssetIcon = Boolean(amountAssetIconUrl && amountDisplaySymbol.length > 2)
+  const amountPrefixStyle = {
+    ...amountTextStyle,
+    fontSize:
+      amountDisplaySymbol.length > 2
+        ? Math.max(Math.round(dynamicAmountFontSize * 0.52), 20)
+        : (amountTextStyle as { fontSize: number }).fontSize,
+    lineHeight:
+      amountDisplaySymbol.length > 2
+        ? Math.max(Math.round(dynamicAmountLineHeight * 0.55), 22)
+        : Platform.OS === 'android'
+          ? dynamicAmountLineHeight
+          : undefined,
+  }
   // Determine sending currency based on payment method
   const sendCurrency = selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency
     ? selectedOtherCurrency === 'STABLE'
@@ -344,12 +367,22 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     ? mobileFxEngine.getRate(exchangeRates, sendCurrency, receiveCurrency)
     : null
   const exchangeRate = rateData?.rate || 1
+  const reverseExchangeRate = exchangeRate > 0 ? 1 / exchangeRate : 0
   
-  // Calculate order amounts using FX Engine
-  // User enters receive amount, we calculate send amount + fees
+  // Calculate order amounts using FX Engine.
+  // receiveAmount is payout currency amount; sendingAmount is funding currency amount.
+  let receiveAmount = 0
   let sendingAmount = 0
   let feeAmount = 0
   let totalAmount = 0
+
+  if (amountEntryMode === 'receive') {
+    receiveAmount = enteredAmount
+  } else if (sendCurrency !== receiveCurrency) {
+    receiveAmount = reverseExchangeRate > 0 ? enteredAmount / reverseExchangeRate : enteredAmount * exchangeRate
+  } else {
+    receiveAmount = enteredAmount
+  }
   
   if (recipient && receiveAmount > 0 && sendCurrency !== receiveCurrency && rateData && exchangeRates && Array.isArray(exchangeRates)) {
     try {
@@ -370,6 +403,21 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   } else if (receiveAmount > 0 && sendCurrency !== receiveCurrency) {
     // Fallback calculation if no rate data
     sendingAmount = receiveAmount / exchangeRate
+  } else if (receiveAmount > 0) {
+    sendingAmount = receiveAmount
+  }
+
+  const toggleAmountDirection = () => {
+    if (!recipient) return
+    if (amountEntryMode === 'receive') {
+      if (!sendingAmount || sendingAmount <= 0) return
+      setAmountEntryMode('send')
+      setSendAmount(formatAmount(toSwitchInputAmount(sendingAmount)))
+      return
+    }
+    if (!receiveAmount || receiveAmount <= 0) return
+    setAmountEntryMode('receive')
+    setSendAmount(formatAmount(toSwitchInputAmount(receiveAmount)))
   }
 
   const tier1Ok = isTier1Complete(userProfile)
@@ -446,44 +494,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 }
               ]}
             >
-              {receiveAmount > 0 &&
-              !tier1Ok &&
-              (selectedPaymentMethod === 'balance' ||
-                selectedPaymentMethod === 'linkBank' ||
-                selectedPaymentMethod === 'virtualBank') ? (
-                <View
-                  style={{
-                    marginHorizontal: spacing[5],
-                    marginBottom: spacing[3],
-                    backgroundColor: '#FFF8E6',
-                    padding: spacing[3],
-                    borderRadius: 12,
-                    borderWidth: 1,
-                    borderColor: '#F5E6C8',
-                  }}
-                >
-                  <Text style={{ ...textStyles.bodySmall, color: colors.text.primary }}>
-                    Please complete your identity verification to send from your balance or use linked bank options.
-                  </Text>
-                </View>
-              ) : null}
-              {receiveAmount > 0 && selectedPaymentMethod === 'otherCurrency' && !tier2Ok ? (
-                <View
-                  style={{
-                    marginHorizontal: spacing[5],
-                    marginBottom: spacing[3],
-                    backgroundColor: '#F3F0FF',
-                    padding: spacing[3],
-                    borderRadius: 12,
-                    borderWidth: 1,
-                    borderColor: '#E4E0F7',
-                  }}
-                >
-                  <Text style={{ ...textStyles.bodySmall, color: colors.text.primary }}>
-                    Please complete African banking setup to use mobile money and local transfers when available.
-                  </Text>
-                </View>
-              ) : null}
 
               {/* Recipient Section */}
               {recipient ? (
@@ -495,6 +505,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                     navigation.navigate('SelectRecipient' as never, {
                       selectedRecipientId: recipient.id,
                       preferredBalanceCurrency: selectedBalanceCurrency,
+                      selectedPaymentMethod,
+                      selectedOtherCurrency,
+                      selectedOtherPaymentMethod,
                     } as never)
                   }}
                   activeOpacity={0.7}
@@ -505,7 +518,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   </View>
                   <View style={styles.recipientInfo}>
                     <Text style={styles.recipientName}>{recipient.full_name}</Text>
-                    <Text style={styles.recipientDetails}>
+                    <Text style={styles.recipientDetails} numberOfLines={1} ellipsizeMode="tail">
                       {recipient.currency} • {recipient.account_number}
                     </Text>
                   </View>
@@ -535,17 +548,33 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 <View style={styles.amountInputWrapper}>
                   <View style={styles.amountInputContainer}>
                     {recipient && (
-                      <Text style={[styles.currencyPrefix, { fontSize: getDynamicFontSize(sendAmount) }]}>
-                        {getCurrencySymbol(receiveCurrency)}
-                      </Text>
+                      showAmountAssetIcon ? (
+                        <View style={styles.amountAssetIconWrap}>
+                          <Image
+                            source={{ uri: amountAssetIconUrl! }}
+                            style={styles.amountAssetIcon}
+                            resizeMode="cover"
+                          />
+                        </View>
+                      ) : (
+                        <Text
+                          style={[
+                            styles.currencyPrefix,
+                            amountPrefixStyle,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {amountDisplaySymbol}
+                        </Text>
+                      )
                     )}
               <TextInput
                       style={[
                         styles.amountInput, 
                         !recipient && styles.amountInputDisabled,
-                        { fontSize: getDynamicFontSize(sendAmount) }
+                        amountTextStyle,
                       ]}
-                      value={recipient ? sendAmount : '0.00'}
+                      value={recipient ? sendAmount : '0'}
                 onChangeText={(text) => {
                         if (!recipient) return // Disabled until recipient is selected
                         
@@ -556,7 +585,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                         const formatted = formatAmount(cleaned)
                         setSendAmount(formatted)
                 }}
-                placeholder="0.00"
+                placeholder="0"
                       placeholderTextColor={colors.text.secondary}
                 keyboardType="numeric"
                       editable={!!recipient}
@@ -569,9 +598,22 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 {/* Fixed height container to prevent layout shift */}
               <View style={styles.exchangeInfo}>
                   {recipient && sendAmount && Number.parseFloat(sendAmount.replace(/,/g, '')) > 0 && sendCurrency !== receiveCurrency ? (
-                    <Text style={styles.exchangeInfoText}>
-                      Sending: {formatCurrency(sendingAmount, sendCurrency)}   •   Rate: 1 {sendCurrency} = {exchangeRate.toFixed(2)} {receiveCurrency}
-              </Text>
+                    <View style={styles.exchangeInfoInline}>
+                      <TouchableOpacity onPress={toggleAmountDirection} activeOpacity={0.7} style={styles.exchangeToggleTouchArea}>
+                        <Ionicons name="swap-vertical" size={13} color={colors.primary.main} />
+                        <Text style={styles.exchangeInfoText}>
+                          {amountEntryMode === 'receive'
+                            ? `Sending: ${formatCurrency(sendingAmount, sendCurrency)}`
+                            : `Receiving: ${formatCurrency(receiveAmount, receiveCurrency)}`}
+                        </Text>
+                      </TouchableOpacity>
+                      <Text style={styles.exchangeInfoText}>
+                        {' • '}
+                        {amountEntryMode === 'receive'
+                          ? `Rate: 1 ${sendCurrency} = ${exchangeRate.toFixed(2)} ${receiveCurrency}`
+                          : `Rate: 1 ${receiveCurrency} = ${reverseExchangeRate.toFixed(4)} ${sendCurrency}`}
+                      </Text>
+                    </View>
                   ) : (
                     <Text style={[styles.exchangeInfoText, { opacity: 0 }]}> </Text>
                   )}
@@ -627,12 +669,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   <ChevronDown size={16} color={colors.text.primary} strokeWidth={2} />
                 </TouchableOpacity>
 
-                {/* Balance Display - Under the selector (only show for balance method) */}
-                {selectedPaymentMethod === 'balance' && (
-                  <Text style={styles.balanceText}>
-                    Balance: {formatCurrency(currentBalance, selectedBalanceCurrency)}
-                  </Text>
-                )}
           </View>
 
               {/* Note and Keypad Wrapper */}
@@ -713,12 +749,12 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       onPress={() => handleKeypadPress('backspace')}
                       onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
                       activeOpacity={0.6}
-                      disabled={!sendAmount || sendAmount.length === 0}
+                      disabled={!sendAmount || sendAmount === '0'}
                     >
                       <Ionicons 
                         name="backspace" 
                         size={24} 
-                        color={(!sendAmount || sendAmount.length === 0) ? colors.text.secondary : colors.text.primary} 
+                        color={(!sendAmount || sendAmount === '0') ? colors.text.secondary : colors.text.primary} 
                       />
                 </TouchableOpacity>
               </View>
@@ -730,36 +766,37 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         
         {/* Send/Authorize Button */}
         <View style={[styles.bottomContainer, { paddingTop: 25, paddingBottom: Math.max(insets.bottom, 20) }]}>
+          {!tier1Ok ? (
+            <TouchableOpacity
+              style={styles.verifyInlineCta}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                navigation.navigate('AccountVerification' as never)
+              }}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Verify identity to unlock banking. Begin."
+            >
+              <Text style={styles.verifyInlineText}>Verify identity to unlock banking</Text>
+              <Text style={styles.verifyInlineLink}>Begin</Text>
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity
             style={[styles.sendButton, sendButtonDisabled && styles.sendButtonDisabled]}
             onPress={async () => {
-              const receiveAmountValue = Number.parseFloat(sendAmount.replace(/,/g, ''))
-              if (!sendAmount || sendAmount === '0.00' || receiveAmountValue <= 0 || !recipient || !selectedPaymentMethod) return
+              const enteredAmountValue = Number.parseFloat(sendAmount.replace(/,/g, ''))
+              const receiveAmountValue =
+                amountEntryMode === 'receive'
+                  ? enteredAmountValue
+                  : sendCurrency !== receiveCurrency
+                    ? (reverseExchangeRate > 0 ? enteredAmountValue / reverseExchangeRate : enteredAmountValue * exchangeRate)
+                    : enteredAmountValue
+              if (!sendAmount || sendAmount === '0' || receiveAmountValue <= 0 || !recipient || !selectedPaymentMethod) return
               
               // For otherCurrency, require both currency and payment method selection
               if (selectedPaymentMethod === 'otherCurrency' && (!selectedOtherCurrency || !selectedOtherPaymentMethod)) return
 
-              if (verificationBlocksSend) {
-                if (
-                  !tier1Ok &&
-                  (selectedPaymentMethod === 'balance' ||
-                    selectedPaymentMethod === 'linkBank' ||
-                    selectedPaymentMethod === 'virtualBank')
-                ) {
-                  Alert.alert(
-                    'Verification required',
-                    'Please complete your identity verification to send from your balance or use linked bank options.',
-                  )
-                  return
-                }
-                if (!tier2Ok && selectedPaymentMethod === 'otherCurrency') {
-                  Alert.alert(
-                    'Verification required',
-                    'Please complete African banking setup to use mobile money and local transfers when available.',
-                  )
-                  return
-                }
-              }
+              if (verificationBlocksSend) return
               
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
               
@@ -1234,9 +1271,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#F9F9F9',
     borderRadius: 24,
-    height: 52,
+    height: 56,
+    width: '85%',
+    alignSelf: 'center',
     paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
+    paddingVertical: 0,
     marginBottom: 25,
     gap: spacing[3],
     borderWidth: 0.5,
@@ -1262,17 +1301,21 @@ const styles = StyleSheet.create({
   },
   recipientInfo: {
     flex: 1,
+    justifyContent: 'center',
+    paddingVertical: 0,
   },
   recipientName: {
     ...textStyles.bodyLarge,
     color: colors.text.primary,
     fontFamily: 'Outfit-SemiBold',
-    marginBottom: 2,
+    lineHeight: 18,
+    marginBottom: 0,
   },
   recipientDetails: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
     fontFamily: 'Outfit-Regular',
+    lineHeight: 16,
   },
   changeText: {
     ...textStyles.bodyMedium,
@@ -1310,7 +1353,23 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontFamily: 'Outfit-Black',
     marginRight: 0,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
     // Dynamic font size will be applied inline
+  },
+  amountAssetIconWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginRight: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  amountAssetIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
   },
   amountInput: {
     // Base fontSize - will be overridden by inline style for dynamic sizing
@@ -1334,6 +1393,17 @@ const styles = StyleSheet.create({
     height: 18,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  exchangeInfoInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exchangeToggleTouchArea: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 2,
+    gap: 4,
   },
   exchangeInfoText: {
     fontSize: 10,
@@ -1399,7 +1469,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9F9F9',
     borderRadius: borderRadius.xl,
     paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
+    ...Platform.select({
+      android: {
+        height: 44,
+        paddingVertical: 0,
+      },
+      ios: {
+        paddingVertical: spacing[3],
+      },
+    }),
     gap: spacing[2],
     borderWidth: 0.5,
     borderColor: '#E2E2E2',
@@ -1416,6 +1494,7 @@ const styles = StyleSheet.create({
     ...Platform.select({
       android: {
         includeFontPadding: false,
+        paddingVertical: 0,
       },
     }),
   },
@@ -1456,6 +1535,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[5],
     paddingTop: 0,
     backgroundColor: colors.background.primary,
+  },
+  verifyInlineCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    marginBottom: spacing[3],
+  },
+  verifyInlineText: {
+    ...textStyles.bodySmall,
+    color: colors.text.secondary,
+    fontFamily: 'Outfit-Regular',
+  },
+  verifyInlineLink: {
+    ...textStyles.bodySmall,
+    color: colors.primary.main,
+    fontFamily: 'Outfit-SemiBold',
+    textDecorationLine: 'underline',
   },
   sendButton: {
     borderRadius: borderRadius.xl,

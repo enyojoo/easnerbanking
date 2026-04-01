@@ -50,14 +50,14 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
         setTimeout(() => {
           setStep('confirm')
           setConfirmPin(['', '', '', ''])
-        }, 300)
+        }, 80)
       }
     } else {
       setConfirmPin(newPin)
       if (filledCount === 3) {
         setTimeout(() => {
           handleConfirmPin(newPin.join(''))
-        }, 300)
+        }, 80)
       }
     }
     
@@ -121,7 +121,7 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
         markFirstLoginAfterVerification(uid).catch(() => {})
       }
 
-      emitAppLocked()
+      emitAppLocked('unlocked')
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
 

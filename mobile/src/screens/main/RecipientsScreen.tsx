@@ -210,7 +210,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
             : newRecipient.accountNumber
       const bankNameForType =
         selectedRecipientType === 'wallet'
-          ? `Wallet (${newRecipient.currency}/${newRecipient.network})`
+          ? `Wallet (${newRecipient.network})`
           : selectedRecipientType === 'mobile'
             ? `Mobile Money (${newRecipient.provider})`
             : newRecipient.bankName
@@ -337,7 +337,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
             : newRecipient.accountNumber
       const bankNameForType =
         selectedRecipientType === 'wallet'
-          ? `Wallet (${newRecipient.currency}/${newRecipient.network})`
+          ? `Wallet (${newRecipient.network})`
           : selectedRecipientType === 'mobile'
             ? `Mobile Money (${newRecipient.provider})`
             : newRecipient.bankName
@@ -586,66 +586,78 @@ function RecipientsContent({ navigation }: NavigationProps) {
     return { isValid: true }
   }
 
-  const renderRecipient = ({ item }: { item: Recipient }) => (
-    <TouchableOpacity
-      style={styles.recipientItem}
-      activeOpacity={0.7}
-    >
-      <View style={styles.recipientRow}>
-        <View style={styles.avatarContainer}>
-          <View style={styles.recipientAvatar}>
-            <Text style={styles.recipientAvatarText}>
-              {getInitials(item.full_name)}
-            </Text>
-          </View>
-          {/* Flag badge on bottom edge of avatar */}
-          <View style={styles.avatarFlagBadge}>
-            <View style={styles.flagContainer}>
-              <CountryFlag code={item.country_code || (item.currency === 'EUR' ? 'EU' : getCountryCodeForCurrency(item.currency) || 'US')} size={20} style={styles.flagImage} />
+  const renderRecipient = ({ item }: { item: Recipient }) => {
+    const isWalletRecipient = String(item.bank_name || '').toLowerCase().includes('wallet')
+    const tokenIcon = getTokenIconUrl(item.currency)
+    return (
+      <TouchableOpacity
+        style={styles.recipientItem}
+        activeOpacity={0.7}
+      >
+        <View style={styles.recipientRow}>
+          <View style={styles.avatarContainer}>
+            <View style={styles.recipientAvatar}>
+              <Text style={styles.recipientAvatarText}>
+                {getInitials(item.full_name)}
+              </Text>
+            </View>
+            {/* Asset/currency badge on bottom edge of avatar */}
+            <View style={styles.avatarFlagBadge}>
+              <View style={styles.flagContainer}>
+                {isWalletRecipient && tokenIcon ? (
+                  <Image source={{ uri: tokenIcon }} style={styles.flagImage} />
+                ) : (
+                  <CountryFlag
+                    code={item.country_code || (item.currency === 'EUR' ? 'EU' : getCountryCodeForCurrency(item.currency) || 'US')}
+                    size={20}
+                    style={styles.flagImage}
+                  />
+                )}
+              </View>
             </View>
           </View>
-        </View>
         
-        <View style={styles.recipientInfo}>
-          <Text style={styles.recipientName}>{item.full_name}</Text>
-          <Text style={styles.recipientBank}>{item.bank_name}</Text>
-          <Text style={styles.recipientAccount}>
-            {item.iban || item.account_number || ''}
-          </Text>
-          <Text style={styles.recipientCurrency}>{item.currency}</Text>
-        </View>
+          <View style={styles.recipientInfo}>
+            <Text style={styles.recipientName}>{item.full_name}</Text>
+            <Text style={styles.recipientBank}>{item.bank_name}</Text>
+            <Text style={styles.recipientAccount}>
+              {item.iban || item.account_number || ''}
+            </Text>
+            <Text style={styles.recipientCurrency}>{item.currency}</Text>
+          </View>
         
-        <View style={styles.recipientActions}>
-          <TouchableOpacity
-            style={styles.actionIcon}
-            onPress={async () => {
-              await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-              handleEditRecipient(item)
-            }}
-            disabled={isSubmitting}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="pencil-outline" size={18} color={colors.text.primary} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionIcon, styles.actionIconDelete]}
-            onPress={async () => {
-              await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-              handleDeleteRecipient(item)
-            }}
-            disabled={deletingId === item.id}
-            activeOpacity={0.7}
-          >
-            {deletingId === item.id ? (
-              <Ionicons name="hourglass-outline" size={18} color={colors.error.main} />
-            ) : (
-              <Ionicons name="trash-outline" size={18} color={colors.error.main} />
-            )}
-          </TouchableOpacity>
+          <View style={styles.recipientActions}>
+            <TouchableOpacity
+              style={styles.actionIcon}
+              onPress={async () => {
+                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                handleEditRecipient(item)
+              }}
+              disabled={isSubmitting}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="pencil-outline" size={18} color={colors.text.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionIcon, styles.actionIconDelete]}
+              onPress={async () => {
+                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+                handleDeleteRecipient(item)
+              }}
+              disabled={deletingId === item.id}
+              activeOpacity={0.7}
+            >
+              {deletingId === item.id ? (
+                <Ionicons name="hourglass-outline" size={18} color={colors.error.main} />
+              ) : (
+                <Ionicons name="trash-outline" size={18} color={colors.error.main} />
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
-    </TouchableOpacity>
-  )
+      </TouchableOpacity>
+    )
+  }
 
   return (
     <ScreenWrapper>

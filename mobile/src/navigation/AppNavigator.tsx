@@ -361,7 +361,8 @@ function MainTabs() {
           borderBottomLeftRadius: 100,
           borderBottomRightRadius: 100,
           marginHorizontal: spacing[8],
-          marginBottom: spacing[2] + (Platform.OS === 'ios' ? insets.bottom : 0),
+          marginBottom:
+            spacing[2] + (Platform.OS === 'ios' ? insets.bottom : Math.max(insets.bottom, 20)),
           position: 'absolute',
           overflow: 'hidden', // Ensure rounded corners are clipped
         },
@@ -912,7 +913,14 @@ export default function AppNavigator() {
   }, [checkOnboardingState]) // Run on mount and when function changes
 
   useEffect(() => {
-    return registerAppLockListener(() => setLockTick((t) => t + 1))
+    return registerAppLockListener((event) => {
+      if (event === 'unlocked') {
+        setPinGate('main')
+      } else if (event === 'locked') {
+        setPinGate('pin')
+      }
+      setLockTick((t) => t + 1)
+    })
   }, [])
 
   useEffect(() => {
@@ -957,7 +965,7 @@ export default function AppNavigator() {
         await signOut()
         return
       }
-      if (r === 'locked') emitAppLocked()
+      if (r === 'locked') emitAppLocked('locked')
     }, 60000)
     return () => clearInterval(id)
   }, [user?.id, pinGate, signOut])

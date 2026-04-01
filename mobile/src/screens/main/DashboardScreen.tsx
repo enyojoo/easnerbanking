@@ -892,11 +892,11 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                   }}
                   activeOpacity={0.88}
                   accessibilityRole="button"
-                  accessibilityLabel="Verify account to unlock banking. Begin."
+                  accessibilityLabel="Verify identity to unlock banking. Begin."
                 >
                   <View style={styles.verifyAccountBannerTextWrap}>
                     <Text style={styles.verifyAccountBannerTitle} numberOfLines={2}>
-                      Verify account to unlock banking
+                      Verify identity to unlock banking
                     </Text>
                   </View>
                   <Text style={styles.verifyAccountBannerCta}>Begin</Text>

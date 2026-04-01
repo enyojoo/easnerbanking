@@ -82,7 +82,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
     if (filledCount === 3) {
       setTimeout(() => {
         handleVerifyPin(newPin.join(''))
-      }, 300)
+      }, 80)
     }
     
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -119,7 +119,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
       if (user?.id) {
         await setAppLocked(user.id, false)
         await updateSessionActivity()
-        emitAppLocked()
+        emitAppLocked('unlocked')
       }
       
       // Haptic feedback (non-blocking, fire and forget)

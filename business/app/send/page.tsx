@@ -32,8 +32,6 @@ import { CurrencyFlag } from "@/components/flags"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import {
   TIER2_COMPLETE_PLACEHOLDER,
-  sendFlowUsesTier2Rail,
-  isTier2AfricanSendCurrency,
 } from "@/lib/compliance-placeholders"
 
 const SEND_FLOW_STATE_KEY = "send_flow_state"
@@ -94,6 +92,7 @@ export default function SendPage() {
   const { tier1Complete } = useBusinessProfile()
   const [recipient, setRecipient] = useState<Beneficiary | null>(null)
   const [amountStr, setAmountStr] = useState("")
+  const [amountEntryMode, setAmountEntryMode] = useState<"receive" | "send">("receive")
   const [sourceAccountId, setSourceAccountId] = useState<string | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>("balance")
   const [otherCurrency, setOtherCurrency] = useState<OtherCurrencyCode | "STABLECOIN" | null>(null)
@@ -119,7 +118,7 @@ export default function SendPage() {
     }
   }, [])
 
-  const amount = parseAmountFromDisplay(amountStr)
+  const enteredAmount = parseAmountFromDisplay(amountStr)
   const receiveCurrency = recipient?.currency ?? "USD"
   const sourceAccount = mockAccounts.find((a) => a.id === sourceAccountId)
 
@@ -131,32 +130,46 @@ export default function SendPage() {
     return "USD"
   }, [paymentMethod, sourceAccount, otherCurrency])
 
-  const sendAmount = useMemo(() => {
-    if (!recipient || amount <= 0) return 0
-    return convertAmount(amount, receiveCurrency, sendCurrency)
-  }, [amount, receiveCurrency, sendCurrency, recipient])
+  const receiveAmount = useMemo(() => {
+    if (!recipient || enteredAmount <= 0) return 0
+    if (receiveCurrency === sendCurrency) return enteredAmount
+    return amountEntryMode === "receive"
+      ? enteredAmount
+      : convertAmount(enteredAmount, sendCurrency, receiveCurrency)
+  }, [recipient, enteredAmount, receiveCurrency, sendCurrency, amountEntryMode])
 
-  const hasFx = receiveCurrency !== sendCurrency && amount > 0
-  const rateDisplay =
-    hasFx && sendCurrency && receiveCurrency
-      ? `1 ${sendCurrency} = ${getConversionRate(sendCurrency, receiveCurrency).toFixed(4)} ${receiveCurrency}`
-      : null
+  const sendAmount = useMemo(() => {
+    if (!recipient || receiveAmount <= 0) return 0
+    if (receiveCurrency === sendCurrency) return receiveAmount
+    return amountEntryMode === "send"
+      ? enteredAmount
+      : convertAmount(receiveAmount, receiveCurrency, sendCurrency)
+  }, [recipient, receiveAmount, receiveCurrency, sendCurrency, amountEntryMode, enteredAmount])
+
+  const hasFx = receiveCurrency !== sendCurrency && receiveAmount > 0
+  const forwardRate = hasFx ? getConversionRate(sendCurrency, receiveCurrency) : 1
+  const reverseRate = hasFx ? getConversionRate(receiveCurrency, sendCurrency) : 1
+  const rateDisplay = hasFx
+    ? amountEntryMode === "receive"
+      ? `1 ${sendCurrency} = ${forwardRate.toFixed(4)} ${receiveCurrency}`
+      : `1 ${receiveCurrency} = ${reverseRate.toFixed(4)} ${sendCurrency}`
+    : null
 
   const afterTransferBalance =
-    sourceAccount && amount > 0 && paymentMethod === "balance"
+    sourceAccount && receiveAmount > 0 && paymentMethod === "balance"
       ? sourceAccount.availableBalance - sendAmount
       : sourceAccount?.availableBalance ?? 0
 
   const suggestedAccount = useMemo(() => {
     const usdAccount = mockAccounts.find((a) => a.currency === "USD")
-    if (!recipient || amount <= 0) return usdAccount ?? mockAccounts[0]
+    if (!recipient || receiveAmount <= 0) return usdAccount ?? mockAccounts[0]
     const matching = mockAccounts.find(
       (a) => a.currency === receiveCurrency && a.availableBalance >= sendAmount
     )
     if (matching) return matching
     const sufficient = mockAccounts.find((a) => a.availableBalance >= sendAmount)
     return sufficient ?? usdAccount ?? mockAccounts[0]
-  }, [recipient, amount, receiveCurrency, sendAmount])
+  }, [recipient, receiveAmount, receiveCurrency, sendAmount])
 
   useEffect(() => {
     if (recipient && !sourceAccountId && paymentMethod === "balance" && suggestedAccount) {
@@ -178,7 +191,7 @@ export default function SendPage() {
 
   const canContinueBalance =
     recipient !== null &&
-    amount > 0 &&
+    receiveAmount > 0 &&
     sourceAccountId !== null &&
     sourceAccount &&
     sourceAccount.availableBalance >= sendAmount &&
@@ -186,11 +199,11 @@ export default function SendPage() {
     tier1Complete
 
   const canContinueStablecoin =
-    recipient !== null && amount > 0 && hasValidStablecoinSelection && tier1Complete
+    recipient !== null && receiveAmount > 0 && hasValidStablecoinSelection && tier1Complete
 
   const canContinueOtherCurrency =
     recipient !== null &&
-    amount > 0 &&
+    receiveAmount > 0 &&
     hasValidOtherCurrencySelection &&
     TIER2_COMPLETE_PLACEHOLDER
 
@@ -201,22 +214,35 @@ export default function SendPage() {
         ? canContinueStablecoin
         : canContinueOtherCurrency
 
-  const showTier1SendNotice =
-    !tier1Complete && recipient && amount > 0 && (isBalanceSource || isStablecoinSource)
-
-  const showTier2SendNotice =
-    !TIER2_COMPLETE_PLACEHOLDER &&
-    recipient &&
-    amount > 0 &&
-    hasValidOtherCurrencySelection &&
-    sendFlowUsesTier2Rail(paymentMethod, otherCurrency ?? undefined)
   const isAuthorizeFlow = !isBalanceSource
 
   const hasInsufficientBalance =
     isBalanceSource &&
     sourceAccount &&
-    amount > 0 &&
+    receiveAmount > 0 &&
     sourceAccount.availableBalance < sendAmount
+
+  const formatSwitchAmount = (raw: number): string => {
+    const rounded = Math.round((Number.isFinite(raw) ? raw : 0) * 100) / 100
+    const frac = Math.abs(rounded - Math.trunc(rounded))
+    const nextRaw = frac >= 0.01 ? rounded.toFixed(2) : String(Math.trunc(rounded))
+    return formatAmountForDisplay(nextRaw)
+  }
+
+  const handleToggleAmountDirection = () => {
+    if (!recipient || !hasFx) return
+    if (amountEntryMode === "receive") {
+      if (sendAmount <= 0) return
+      setAmountEntryMode("send")
+      setAmountStr(formatSwitchAmount(sendAmount))
+      return
+    }
+    if (receiveAmount <= 0) return
+    setAmountEntryMode("receive")
+    setAmountStr(formatSwitchAmount(receiveAmount))
+  }
+
+  const amountInputCurrency = amountEntryMode === "receive" ? receiveCurrency : sendCurrency
   const shortfallAmount =
     hasInsufficientBalance && sourceAccount
       ? sendAmount - sourceAccount.availableBalance
@@ -242,7 +268,7 @@ export default function SendPage() {
 
     const state: SendFlowState = {
       recipient,
-      amount,
+      amount: receiveAmount,
       receiveCurrency,
       sendAmount,
       sendCurrency,
@@ -289,40 +315,6 @@ export default function SendPage() {
         </p>
       </div>
 
-      {showTier1SendNotice ? (
-        <div
-          className="rounded-lg border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-sm text-amber-950"
-          role="status"
-        >
-          Please complete your business verification to send from your balances or pay with stablecoin.{" "}
-          <Link href="/settings?tab=business" className="font-semibold underline underline-offset-2">
-            Business verification
-          </Link>
-        </div>
-      ) : null}
-
-      {showTier2SendNotice ? (
-        <div className="rounded-lg border border-violet-200/80 bg-violet-50/50 px-4 py-3 text-sm text-foreground/90" role="status">
-          {isTier2AfricanSendCurrency(otherCurrency ?? undefined) ? (
-            <>
-              Please complete your business verification to access African banking, pay-in/pay-out, and local rails such as
-              mobile money (where available).{" "}
-              <Link href="/settings?tab=business" className="font-semibold underline underline-offset-2">
-                Verification
-              </Link>
-            </>
-          ) : (
-            <>
-              Please complete your business verification to access this payment route when it is enabled for your
-              organization.{" "}
-              <Link href="/settings?tab=business" className="font-semibold underline underline-offset-2">
-                Verification
-              </Link>
-            </>
-          )}
-        </div>
-      ) : null}
-
       <SendRecipientPicker
         selected={recipient}
         onSelect={setRecipient}
@@ -331,12 +323,30 @@ export default function SendPage() {
       {recipient && (
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-4">
-            <Label className="text-muted-foreground shrink-0">Amount ({receiveCurrency})</Label>
+            <Label className="text-muted-foreground shrink-0">
+              Amount ({amountEntryMode === "receive" ? receiveCurrency : sendCurrency})
+            </Label>
             {hasFx && rateDisplay && (
-              <span className="text-sm text-muted-foreground text-right">
-                Sending: {currencySymbols[sendCurrency] ?? sendCurrency}
-                {sendAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })} {sendCurrency} • Rate: {rateDisplay}
-              </span>
+              <div className="text-sm text-muted-foreground text-right flex items-center justify-end gap-1">
+                <button
+                  type="button"
+                  onClick={handleToggleAmountDirection}
+                  className="inline-flex items-center gap-1 hover:text-foreground"
+                >
+                  <span>↕</span>
+                  <span>
+                    {amountEntryMode === "receive" ? "Sending" : "Receiving"}:{" "}
+                    {currencySymbols[amountEntryMode === "receive" ? sendCurrency : receiveCurrency] ??
+                      (amountEntryMode === "receive" ? sendCurrency : receiveCurrency)}
+                    {(amountEntryMode === "receive" ? sendAmount : receiveAmount).toLocaleString("en-US", {
+                      minimumFractionDigits:
+                        Math.abs((amountEntryMode === "receive" ? sendAmount : receiveAmount) % 1) >= 0.01 ? 2 : 0,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
+                </button>
+                <span>• Rate: {rateDisplay}</span>
+              </div>
             )}
           </div>
           <div
@@ -344,7 +354,7 @@ export default function SendPage() {
             style={{ fontVariantNumeric: "tabular-nums" }}
           >
             <span className="font-black text-foreground select-none shrink-0 text-5xl">
-              {currencySymbols[receiveCurrency] ?? receiveCurrency}
+              {currencySymbols[amountInputCurrency] ?? amountInputCurrency}
             </span>
             <input
               type="text"
@@ -398,7 +408,7 @@ export default function SendPage() {
               </span>
               <div>
                 <p className="font-medium">{getSourceDisplayLabel()}</p>
-                {paymentMethod === "balance" && sourceAccount && amount > 0 &&
+                {paymentMethod === "balance" && sourceAccount && receiveAmount > 0 &&
                   (hasInsufficientBalance ? (
                     <p className="text-sm text-destructive font-medium">
                       Insufficient balance — short by {currencySymbols[sourceAccount.currency] ?? ""}
@@ -453,11 +463,6 @@ export default function SendPage() {
             <div className="space-y-4 px-4 pb-6">
               <div>
                 <p className="text-sm font-medium text-muted-foreground mb-2">From Balance</p>
-                {!tier1Complete && amount > 0 ? (
-                  <p className="text-xs text-muted-foreground mb-2 px-1">
-                    Please complete your business verification to send from your organization balances.
-                  </p>
-                ) : null}
                 <div className="space-y-1">
                   {mockAccounts.map((acc) => {
                     const sufficient = acc.availableBalance >= sendAmount
@@ -487,7 +492,7 @@ export default function SendPage() {
                             {acc.availableBalance.toLocaleString("en-US", {
                               minimumFractionDigits: 2,
                             })}
-                            {!sufficient && amount > 0 && (
+                            {!sufficient && receiveAmount > 0 && (
                               <span className="block mt-0.5">
                                 Short by {currencySymbols[acc.currency] ?? ""}
                                 {(sendAmount - acc.availableBalance).toLocaleString("en-US", {
@@ -506,12 +511,6 @@ export default function SendPage() {
 
               <div>
                 <p className="text-sm font-medium text-muted-foreground mb-2">Through Another Currency</p>
-                {!TIER2_COMPLETE_PLACEHOLDER && amount > 0 ? (
-                  <p className="text-xs text-muted-foreground mb-2 px-1">
-                    Please complete your business verification to access African banking and local send methods when
-                    they are available for your organization.
-                  </p>
-                ) : null}
                 {!otherCurrency ? (
                   <div className="space-y-1">
                     <button
