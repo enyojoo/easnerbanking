@@ -83,6 +83,9 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const [hasAttemptedLoad, setHasAttemptedLoad] = useState(false) // Track if we've attempted to load data (cache or API)
   const dataLoadedRef = useRef(false)
   const lastSyncTimeRef = useRef(0) // Track last sync time to prevent frequent syncs
+  const noahKycStatus =
+    userProfile?.noah_kyc_status ??
+    (userProfile as { profile?: { noah_kyc_status?: string } })?.profile?.noah_kyc_status
 
   const loadAvailableCurrencies = useCallback(async () => {
     try {
@@ -339,7 +342,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   // Refresh balances on focus only if stale (don't fetch every time)
   useFocusEffect(
     React.useCallback(() => {
-      if (!isTier1Complete(userProfile)) {
+      if (noahKycStatus !== 'approved') {
         void refreshUserProfile()
       }
       // Only refresh if data is stale - fetchBalances will check cache first
@@ -356,7 +359,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
       loadAvailableCurrencies().catch(() => {
         // Silently fail
       })
-    }, [refreshUserProfile, userProfile, refreshBalances, fetchRecentTransactions, loadAvailableCurrencies])
+    }, [refreshUserProfile, noahKycStatus, refreshBalances, fetchRecentTransactions, loadAvailableCurrencies])
   )
 
   const balance = parseFloat((balances as any)[selectedCurrency] || '0')

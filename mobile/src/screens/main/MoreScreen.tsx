@@ -73,7 +73,7 @@ function MoreContent({ navigation }: NavigationProps) {
         void refreshUserProfile()
       }
       void refreshMfaStatus()
-    }, [user?.id, userProfile, refreshUserProfile, refreshMfaStatus]),
+    }, [user?.id, userProfile?.noah_kyc_status, refreshUserProfile, refreshMfaStatus]),
   )
 
   // Animation refs

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react'
 import * as Linking from 'expo-linking'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '../lib/supabase'
@@ -70,6 +70,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [userProfile, setUserProfile] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [mfaPending, setMfaPending] = useState<{ factorId: string } | null>(null)
+  const profileFetchInFlightRef = useRef<Set<string>>(new Set())
 
   const syncMfaGateFromSession = useCallback(async (): Promise<'none' | 'pending' | 'missing_factor'> => {
     const { data: aal, error: aalErr } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
@@ -148,6 +149,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   )
 
   const fetchUserProfile = async (userId: string, user?: any) => {
+    if (profileFetchInFlightRef.current.has(userId)) {
+      return null
+    }
+    profileFetchInFlightRef.current.add(userId)
+
     try {
       console.log('AuthContext: Fetching user profile for userId:', userId)
 
@@ -226,14 +232,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Don't clear user state on error, just log it
       console.log('AuthContext: Profile fetch error, but keeping user session')
       return null
+    } finally {
+      profileFetchInFlightRef.current.delete(userId)
     }
   }
 
   const refreshUserProfile = useCallback(async () => {
-    if (user) {
+    if (user?.id) {
       await fetchUserProfile(user.id)
     }
-  }, [user])
+  }, [user?.id])
 
   useEffect(() => {
     let mounted = true

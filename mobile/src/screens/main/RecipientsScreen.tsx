@@ -623,8 +623,10 @@ function RecipientsContent({ navigation }: NavigationProps) {
         
           <View style={styles.recipientInfo}>
             <Text style={styles.recipientName}>{item.full_name}</Text>
-            <Text style={styles.recipientBank}>{item.bank_name}</Text>
-            <Text style={styles.recipientAccount}>
+            <Text style={styles.recipientBank} numberOfLines={1} ellipsizeMode="tail">
+              {item.bank_name}
+            </Text>
+            <Text style={styles.recipientAccount} numberOfLines={1} ellipsizeMode="tail">
               {item.iban || item.account_number || ''}
             </Text>
             <Text style={styles.recipientCurrency}>{item.currency}</Text>
@@ -1881,6 +1883,7 @@ const styles = StyleSheet.create({
   },
   recipientInfo: {
     flex: 1,
+    minWidth: 0,
     marginRight: spacing[2],
   },
   recipientName: {

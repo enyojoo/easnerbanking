@@ -77,6 +77,9 @@ function LandmarkIcon({ size = 24, color = '#000' }: { size?: number; color?: st
 export default function SendAmountScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
   const { userProfile, refreshUserProfile } = useAuth()
+  const noahKycStatus =
+    userProfile?.noah_kyc_status ??
+    (userProfile as { noah_kyc_status?: string; profile?: { noah_kyc_status?: string } })?.profile?.noah_kyc_status
   const { exchangeRates: exchangeRatesFromContext } = useUserData()
   const { balances, updateBalanceOptimistically } = useBalance()
   // Ensure exchangeRates is always an array (fallback to empty array if undefined)
@@ -175,7 +178,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   // Update recipient when screen comes into focus (smooth transition)
   useFocusEffect(
     React.useCallback(() => {
-      if (!isTier1Complete(userProfile)) {
+      if (noahKycStatus !== 'approved') {
         void refreshUserProfile()
       }
       const params = route.params as any
@@ -192,7 +195,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       if (typeof params?.selectedOtherPaymentMethod === 'string' || params?.selectedOtherPaymentMethod === null) {
         setSelectedOtherPaymentMethod(params.selectedOtherPaymentMethod ?? null)
       }
-    }, [route.params, refreshUserProfile, userProfile])
+    }, [route.params, refreshUserProfile, noahKycStatus])
   )
 
   // Run entrance animations
