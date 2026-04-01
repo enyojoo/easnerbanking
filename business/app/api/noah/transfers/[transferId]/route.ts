@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { noahFetch } from "@/lib/noah/http"
 import { pickTxAmountAndCurrency } from "@/lib/noah/map-transactions"
+import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireAuth, requireNoahEnv, resolveNoahContext } from "../../_helpers"
 
 type Props = { params: Promise<{ transferId: string }> }
@@ -31,12 +32,30 @@ export async function GET(request: Request, routeCtx: Props) {
     const { amount, currency } = pickTxAmountAndCurrency(tx)
     const id = String(tx.ID ?? transferId)
     const st = String(tx.Status ?? "")
+    const status = st.toLowerCase()
+    const admin = createSupabaseAdmin()
+    await admin.from("transactions").upsert(
+      {
+        user_id: user.id,
+        noah_transaction_id: id,
+        provider: "noah",
+        status,
+        amount,
+        currency,
+        direction: "out",
+        payload: tx,
+        metadata: {
+          source: "api_noah_transfers_status",
+        },
+      },
+      { onConflict: "provider,noah_transaction_id" }
+    )
     return NextResponse.json({
       id,
       transaction_id: id,
       amount: String(amount),
       currency: currency.toLowerCase(),
-      status: st.toLowerCase(),
+      status,
     })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)

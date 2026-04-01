@@ -1,6 +1,19 @@
 import { supabase } from "./supabase"
 import { officeFetch } from "./api-client"
 
+const RATES_FEATURE_ENABLED = process.env.NEXT_PUBLIC_OFFICE_ENABLE_RATES === "true"
+
+function isSilentOptionalDataError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error || "")
+  return (
+    msg.includes("relation") ||
+    msg.includes("permission") ||
+    msg.includes("PGRST") ||
+    msg.includes("JWT") ||
+    msg.includes("Failed to fetch")
+  )
+}
+
 interface AdminData {
   users: any[]
   transactions: any[]
@@ -195,12 +208,13 @@ class OfficeDataStore {
         setTimeout(() => reject(new Error("Data loading timeout")), 15000),
       )
 
-      // Load critical data first (transactions, currencies, exchange rates, base currency)
+      // Load critical data first.
+      // Rates/currencies are optional for environments that don't use rates features.
       // These are needed for dashboard stats and can be shown immediately
       const criticalDataPromise = Promise.allSettled([
         this.loadTransactions(),
-        this.loadCurrencies(),
-        this.loadExchangeRates(),
+        RATES_FEATURE_ENABLED ? this.loadCurrencies() : Promise.resolve([]),
+        RATES_FEATURE_ENABLED ? this.loadExchangeRates() : Promise.resolve([]),
         this.getAdminBaseCurrency(),
       ])
 
@@ -406,6 +420,7 @@ class OfficeDataStore {
 
   private async loadCurrencies() {
     try {
+      if (!RATES_FEATURE_ENABLED) return []
       const { data, error } = await supabase
         .from("currencies")
         .select("*")
@@ -414,13 +429,18 @@ class OfficeDataStore {
       if (error) throw error
       return data || []
     } catch (error) {
-      console.error("Error loading currencies:", error)
+      if (!isSilentOptionalDataError(error)) {
+        console.error("Error loading currencies:", error)
+      } else {
+        console.warn("OfficeDataStore: currencies unavailable; continuing with empty set.")
+      }
       return [] // Return empty array on error to prevent crashes
     }
   }
 
   private async loadExchangeRates() {
     try {
+      if (!RATES_FEATURE_ENABLED) return []
       const { data, error } = await supabase
         .from("exchange_rates")
         .select(`
@@ -433,7 +453,11 @@ class OfficeDataStore {
       if (error) throw error
       return data || []
     } catch (error) {
-      console.error("Error loading exchange rates:", error)
+      if (!isSilentOptionalDataError(error)) {
+        console.error("Error loading exchange rates:", error)
+      } else {
+        console.warn("OfficeDataStore: exchange rates unavailable; continuing with empty set.")
+      }
       return [] // Return empty array on error to prevent crashes
     }
   }
@@ -784,60 +808,49 @@ class OfficeDataStore {
         }
       })
 
-    // Subscribe to currencies table changes
-    const currenciesChannel = supabase
-      .channel('admin-currencies')
-      .on(
-        'postgres_changes',
-        {
-          event: '*', // INSERT, UPDATE, DELETE
-          schema: 'public',
-          table: 'currencies',
-        },
-        async (payload) => {
-          console.log('OfficeDataStore: Currency change received via Realtime:', payload.eventType)
-          // Reload currencies
-          await this.refreshCurrencies()
-        }
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('OfficeDataStore: Subscribed to currencies real-time updates')
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('OfficeDataStore: Currencies subscription error')
-        }
-      })
+    const optionalChannels: ReturnType<typeof supabase.channel>[] = []
+    if (RATES_FEATURE_ENABLED) {
+      // Subscribe to currencies table changes
+      const currenciesChannel = supabase
+        .channel('admin-currencies')
+        .on(
+          'postgres_changes',
+          {
+            event: '*', // INSERT, UPDATE, DELETE
+            schema: 'public',
+            table: 'currencies',
+          },
+          async (payload) => {
+            console.log('OfficeDataStore: Currency change received via Realtime:', payload.eventType)
+            await this.refreshCurrencies()
+          }
+        )
+        .subscribe()
 
-    // Subscribe to exchange_rates table changes
-    const exchangeRatesChannel = supabase
-      .channel('admin-exchange-rates')
-      .on(
-        'postgres_changes',
-        {
-          event: '*', // INSERT, UPDATE, DELETE
-          schema: 'public',
-          table: 'exchange_rates',
-        },
-        async (payload) => {
-          console.log('OfficeDataStore: Exchange rate change received via Realtime:', payload.eventType)
-          // Reload exchange rates
-          await this.refreshExchangeRates()
-        }
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('OfficeDataStore: Subscribed to exchange rates real-time updates')
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('OfficeDataStore: Exchange rates subscription error')
-        }
-      })
+      // Subscribe to exchange_rates table changes
+      const exchangeRatesChannel = supabase
+        .channel('admin-exchange-rates')
+        .on(
+          'postgres_changes',
+          {
+            event: '*', // INSERT, UPDATE, DELETE
+            schema: 'public',
+            table: 'exchange_rates',
+          },
+          async (payload) => {
+            console.log('OfficeDataStore: Exchange rate change received via Realtime:', payload.eventType)
+            await this.refreshExchangeRates()
+          }
+        )
+        .subscribe()
+      optionalChannels.push(currenciesChannel, exchangeRatesChannel)
+    }
 
     // Store channels for cleanup
     this.realtimeChannels = [
       transactionsChannel,
       usersChannel,
-      currenciesChannel,
-      exchangeRatesChannel,
+      ...optionalChannels,
     ]
   }
 

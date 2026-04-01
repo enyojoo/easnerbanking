@@ -13,6 +13,16 @@ import {
   ClipboardCheck,
   Radio,
   ScrollText,
+  HandCoins,
+  FileCog,
+  CircleDollarSign,
+  BadgeDollarSign,
+  Gift,
+  SlidersHorizontal,
+  BarChart3,
+  RefreshCw,
+  Gauge,
+  Database,
 } from "lucide-react"
 
 export type NavItem = {
@@ -22,7 +32,7 @@ export type NavItem = {
 }
 
 export type NavGroup = {
-  id: "mobile" | "business" | "platform"
+  id: "mobile" | "business" | "platform" | "commercial"
   label: string
   items: NavItem[]
 }
@@ -46,6 +56,22 @@ export const officeNavGroups: NavGroup[] = [
       { name: "Organizations", href: "/business/organizations", icon: Building2 },
       { name: "Customers", href: "/business/customers", icon: UsersRound },
       { name: "Invoices", href: "/business/invoices", icon: Receipt },
+    ],
+  },
+  {
+    id: "commercial",
+    label: "Commercial",
+    items: [
+      { name: "Plans", href: "/commercial/plans", icon: HandCoins },
+      { name: "Pricing Rules", href: "/commercial/rules", icon: FileCog },
+      { name: "Limit Policies", href: "/commercial/limits", icon: CircleDollarSign },
+      { name: "Subscriptions", href: "/commercial/subscriptions", icon: BadgeDollarSign },
+      { name: "Promo", href: "/commercial/promo", icon: Gift },
+      { name: "Rollout", href: "/commercial/rollout", icon: SlidersHorizontal },
+      { name: "Metrics", href: "/commercial/metrics", icon: BarChart3 },
+      { name: "Provider Fee Baselines", href: "/commercial/provider-fees", icon: Database },
+      { name: "Pricing Engine Health", href: "/commercial/health", icon: Gauge },
+      { name: "Webhook Replay Ops", href: "/commercial/ops", icon: RefreshCw },
     ],
   },
   {

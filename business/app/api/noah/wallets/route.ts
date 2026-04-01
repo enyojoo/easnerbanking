@@ -6,7 +6,7 @@ import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { provisionNoahArtifactsForCustomer } from "@/lib/noah/provisioning"
 
 /**
- * Wallet shape for send/receive flows. Easner stores optional address data in `noah_wallets`
+ * Wallet shape for send/receive flows. Easner stores optional address data in `wallets`
  * when synced; the route returns Noah customer id as `walletId` for compatibility with mobile.
  */
 export async function GET(request: Request) {
@@ -42,7 +42,7 @@ export async function GET(request: Request) {
     const wid = userRow?.noah_wallet_id as string | undefined
     if (wid) {
       const { data: w } = await admin
-        .from("noah_wallets")
+        .from("wallets")
         .select("address, blockchain_memo")
         .eq("noah_wallet_id", wid)
         .maybeSingle()

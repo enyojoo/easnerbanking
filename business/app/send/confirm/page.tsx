@@ -25,6 +25,13 @@ interface SendFlowState {
   paymentMethod?: string
   note: string
   transactionId?: string
+  pricingQuote?: {
+    transferFee?: number
+    payoutFee?: number
+    exchangeRate?: number
+    expiresAt?: string
+    repricingReason?: string | null
+  }
 }
 
 function getTransferMethod(recipient: Beneficiary, currency: string): string {
@@ -45,10 +52,6 @@ function getProcessingTime(method: string): string {
     default:
       return "Same day"
   }
-}
-
-function getFee(method: string): string {
-  return method === "Wire Transfer" ? "$25.00" : "$0.00"
 }
 
 export default function SendConfirmPage() {
@@ -137,8 +140,10 @@ export default function SendConfirmPage() {
   const sourceAccount = mockAccounts.find((a) => a.id === state.sourceAccountId!)
   const transferMethod = getTransferMethod(state.recipient, state.receiveCurrency)
   const processingTime = getProcessingTime(transferMethod)
-  const fee = getFee(transferMethod)
   const hasFx = state.receiveCurrency !== state.sendCurrency
+  const transferFee = state.pricingQuote?.transferFee ?? (transferMethod === "Wire Transfer" ? 25 : 0)
+  const payoutFee = state.pricingQuote?.payoutFee ?? 0
+  const exchangeRate = state.pricingQuote?.exchangeRate ?? (hasFx && state.amount > 0 ? state.sendAmount / state.amount : 1)
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -204,9 +209,36 @@ export default function SendConfirmPage() {
             <span className="font-medium">{processingTime}</span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Fee</span>
-            <span className="font-semibold">{fee}</span>
+            <span className="text-sm text-muted-foreground">Transfer fee</span>
+            <span className="font-semibold">
+              {currencySymbols[state.sendCurrency] ?? state.sendCurrency}
+              {transferFee.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+            </span>
           </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Exchange rate</span>
+            <span className="font-semibold">{exchangeRate.toFixed(6)}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Payout fee</span>
+            <span className="font-semibold">
+              {currencySymbols[state.receiveCurrency] ?? state.receiveCurrency}
+              {payoutFee.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Total recipient amount</span>
+            <span className="font-semibold">
+              {currencySymbols[state.receiveCurrency] ?? state.receiveCurrency}
+              {state.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+          {state.pricingQuote?.expiresAt ? (
+            <div className="text-xs text-muted-foreground">
+              Quote expires at {new Date(state.pricingQuote.expiresAt).toLocaleTimeString()}
+              {state.pricingQuote.repricingReason ? ` • repriced: ${state.pricingQuote.repricingReason}` : ""}
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 

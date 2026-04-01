@@ -17,7 +17,7 @@ export async function resolveOrgOwnerUserId(
   fallbackUserId: string,
 ): Promise<string> {
   const { data: rows, error } = await admin
-    .from("easner_organization_memberships")
+    .from("organization_memberships")
     .select("user_id,role,status,created_at")
     .eq("organization_id", orgId)
     .order("created_at", { ascending: true })

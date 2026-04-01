@@ -8,9 +8,9 @@ export async function GET(request: Request) {
 
   const admin = createSupabaseAdmin()
   const [orgs, customers, invoices] = await Promise.all([
-    admin.from("easner_organizations").select("id", { count: "exact", head: true }),
+    admin.from("organizations").select("id", { count: "exact", head: true }),
     admin.from("easner_b2b_customers").select("id", { count: "exact", head: true }),
-    admin.from("easner_invoices").select("id", { count: "exact", head: true }),
+    admin.from("invoices").select("id", { count: "exact", head: true }),
   ])
 
   const firstErr = orgs.error || customers.error || invoices.error

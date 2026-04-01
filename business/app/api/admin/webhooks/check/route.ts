@@ -25,7 +25,7 @@ export async function GET(request: Request) {
   let webhookEvents: { event_type: string | null; created_at: string; payload: unknown }[] = []
   if (customerId) {
     const { data: deliveries } = await admin
-      .from("noah_webhook_deliveries")
+      .from("webhook_deliveries")
       .select("payload, received_at, event_type")
       .eq("noah_customer_id", customerId)
       .order("received_at", { ascending: false })

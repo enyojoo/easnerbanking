@@ -74,6 +74,18 @@ function LandmarkIcon({ size = 24, color = '#000' }: { size?: number; color?: st
   )
 }
 
+function repricingReasonLabel(reasonCode: string): string {
+  const map: Record<string, string> = {
+    fx_moved: 'FX market moved',
+    provider_fee_changed: 'Provider fee changed',
+    route_unavailable: 'Selected route became unavailable',
+    compliance_status_changed: 'Compliance status changed',
+    subscription_changed: 'Subscription changed',
+    quote_expired: 'Quote expired',
+  }
+  return map[reasonCode] || reasonCode.replaceAll('_', ' ')
+}
+
 export default function SendAmountScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
   const { userProfile, refreshUserProfile } = useAuth()
@@ -838,6 +850,29 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 calculatedSendingAmount = receiveAmountValue
                 calculatedTotalAmount = receiveAmountValue
               }
+
+              let pricingQuoteId: string | undefined
+              let pricingQuoteExpiry: string | undefined
+              try {
+                const quote = await noahService.createPricingQuote({
+                  sourceCurrency: sendCurrency,
+                  destinationCurrency: recipient.currency,
+                  sourceAmount: calculatedSendingAmount,
+                  rail:
+                    selectedPaymentMethod === 'balance'
+                      ? 'wallet'
+                      : selectedPaymentMethod === 'otherCurrency'
+                        ? selectedOtherPaymentMethod || undefined
+                        : selectedPaymentMethod,
+                  countryCode: recipient.country_code,
+                })
+                pricingQuoteId = quote.quoteId
+                pricingQuoteExpiry = quote.expiresAt
+                calculatedFeeAmount = quote.totalFeeAmount
+                calculatedTotalAmount = calculatedSendingAmount + quote.totalFeeAmount
+              } catch (quoteError) {
+                console.warn('Pricing quote unavailable, falling back to local calculation:', quoteError)
+              }
               
               if (selectedPaymentMethod === 'balance') {
                 // Use Bridge transfer API to send from wallet to external bank account
@@ -873,6 +908,18 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                     sourceWalletId: wallet.walletId,
                     destinationExternalAccountId: recipient.noah_external_account_id || '', // This needs to be set when creating recipient
                   })
+                  if (pricingQuoteId) {
+                    const validation = await noahService.validatePricingQuote(pricingQuoteId)
+                    await noahService.applyPricingQuote(pricingQuoteId, transfer.transaction_id || transfer.id)
+                    if (validation.reasonCode) {
+                      Alert.alert('Quote Repriced', `Pricing was revalidated due to: ${repricingReasonLabel(validation.reasonCode)}`)
+                    } else if (pricingQuoteExpiry) {
+                      Alert.alert(
+                        'Quote Applied',
+                        `Final fee and total have been locked for this transfer.\nQuote expiry: ${new Date(pricingQuoteExpiry).toLocaleTimeString()}`
+                      )
+                    }
+                  }
                   
                   // Optimistic balance update AFTER transfer created (like CashApp/Revolut - instant UI feedback)
                   // Pass transaction_id to prevent double update in real-time handler

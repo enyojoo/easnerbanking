@@ -52,7 +52,7 @@ async function requireOwner(admin: ReturnType<typeof createSupabaseAdmin>, userI
   if (!me?.easner_organization_id) return { error: NextResponse.json({ error: "Organization not found for user" }, { status: 400 }) }
 
   const { data: myMembership, error: membershipError } = await admin
-    .from("easner_organization_memberships")
+    .from("organization_memberships")
     .select("role")
     .eq("organization_id", me.easner_organization_id)
     .eq("user_id", userId)
@@ -93,7 +93,7 @@ export async function GET(request: Request) {
 
   // Preferred source: organization memberships with granular roles.
   const { data: membershipRows, error: membershipError } = await admin
-    .from("easner_organization_memberships")
+    .from("organization_memberships")
     .select("id,user_id,full_name,email,role,status,created_at")
     .eq("organization_id", orgId)
     .order("created_at", { ascending: true })
@@ -187,7 +187,7 @@ export async function POST(request: Request) {
   }))
 
   const { error } = await admin
-    .from("easner_organization_memberships")
+    .from("organization_memberships")
     .upsert(rows, { onConflict: "organization_id,email" })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
@@ -214,7 +214,7 @@ export async function PATCH(request: Request) {
   if ("error" in ownerCheck) return ownerCheck.error
 
   const { data: existing, error: existingError } = await admin
-    .from("easner_organization_memberships")
+    .from("organization_memberships")
     .select("id,organization_id,role")
     .eq("id", body.membershipId)
     .maybeSingle()
@@ -227,7 +227,7 @@ export async function PATCH(request: Request) {
   }
 
   const { error } = await admin
-    .from("easner_organization_memberships")
+    .from("organization_memberships")
     .update({ role: body.role.toLowerCase(), updated_at: new Date().toISOString() })
     .eq("id", body.membershipId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -248,7 +248,7 @@ export async function DELETE(request: Request) {
   if ("error" in ownerCheck) return ownerCheck.error
 
   const { data: existing, error: existingError } = await admin
-    .from("easner_organization_memberships")
+    .from("organization_memberships")
     .select("id,organization_id,role")
     .eq("id", membershipId)
     .maybeSingle()
@@ -260,7 +260,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Owner cannot be removed" }, { status: 400 })
   }
 
-  const { error } = await admin.from("easner_organization_memberships").delete().eq("id", membershipId)
+  const { error } = await admin.from("organization_memberships").delete().eq("id", membershipId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   return GET(request)

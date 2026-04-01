@@ -116,7 +116,7 @@ async function upsertWalletData(
 ): Promise<void> {
   if (!wallet) return
   const admin = createSupabaseAdmin()
-  await admin.from("noah_wallets").upsert(
+  await admin.from("wallets").upsert(
     {
       user_id: subjectUserId,
       noah_wallet_id: wallet.walletId,

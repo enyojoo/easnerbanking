@@ -32,7 +32,7 @@ export async function GET() {
       lastInvoiceDate: new Date(r.created_at).toISOString().slice(0, 10),
     }))
 
-    const { data: invRows } = await admin.from("easner_invoices").select("*").order("created_at", { ascending: false }).limit(200)
+    const { data: invRows } = await admin.from("invoices").select("*").order("created_at", { ascending: false }).limit(200)
     const invoices: Invoice[] = (invRows ?? []).map((r) => {
       const total = Number(r.amount_cents ?? 0) / 100
       const due = r.due_date ? String(r.due_date) : new Date().toISOString().slice(0, 10)

@@ -194,7 +194,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
               setHasWalletInDb(true)
               // Try to get wallet address from database
               const { data: wallet } = await supabase
-                .from('noah_wallets')
+                .from('wallets')
                 .select('address')
                 .eq('noah_wallet_id', userProfileData.noah_wallet_id)
                 .single()
@@ -210,7 +210,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
             if (accountId) {
               // Try to get account details from database
               const { data: account } = await supabase
-                .from('noah_virtual_accounts')
+                .from('virtual_accounts')
                 .select('account_number, routing_number, iban, bic, bank_name, bank_address, account_holder_name')
                 .eq('noah_virtual_account_id', accountId)
                 .single()
@@ -560,7 +560,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
           
           if (accountId) {
             const { data: account } = await supabase
-              .from('noah_virtual_accounts')
+              .from('virtual_accounts')
               .select('account_number, routing_number, iban, bic, bank_name, bank_address, account_holder_name')
               .eq('noah_virtual_account_id', accountId)
               .single()
@@ -615,7 +615,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
             
             // Load wallet with liquidation address fields
             const { data: wallet } = await supabase
-              .from('noah_wallets')
+              .from('wallets')
               .select('address, usdc_liquidation_address, usdc_liquidation_memo, eurc_liquidation_address, eurc_liquidation_memo')
               .eq('noah_wallet_id', userProfileData.noah_wallet_id)
               .single()

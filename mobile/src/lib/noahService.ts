@@ -56,6 +56,21 @@ interface NoahTransfer {
   transaction_id?: string
 }
 
+interface PricingQuote {
+  quoteId: string
+  expiresAt: string
+  providerRate: number
+  effectiveRate: number
+  destinationAmount: number
+  fxMarkupBps: number
+  payinFeeAmount: number
+  payoutFeeAmount: number
+  totalFeeAmount: number
+  sourceAmount: number
+  sourceCurrency: string
+  destinationCurrency: string
+}
+
 interface NoahKycLink {
   kyc_link: string
   tos_link?: string
@@ -66,6 +81,69 @@ interface NoahKycLink {
 }
 
 export const noahService = {
+  async createPricingQuote(input: {
+    sourceCurrency: string
+    destinationCurrency: string
+    sourceAmount: number
+    rail?: string
+    countryCode?: string
+  }): Promise<PricingQuote> {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) throw new Error('Not authenticated')
+
+    const response = await fetch(`${apiUrl()}/api/pricing/quote`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify(input),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok || !(data as any).ok) {
+      throw new Error((data as any).error || 'Failed to create quote')
+    }
+    return (data as any).quote as PricingQuote
+  },
+
+  async validatePricingQuote(quoteId: string): Promise<{ reasonCode?: string | null }> {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) throw new Error('Not authenticated')
+
+    const response = await fetch(`${apiUrl()}/api/pricing/validate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ quoteId }),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok || !(data as any).ok) {
+      throw new Error((data as any).error || 'Quote validation failed')
+    }
+    return { reasonCode: (data as any)?.repricing?.reasonCode ?? null }
+  },
+
+  async applyPricingQuote(quoteId: string, transactionId?: string): Promise<{ reasonCode?: string | null }> {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) throw new Error('Not authenticated')
+
+    const response = await fetch(`${apiUrl()}/api/pricing/apply`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ quoteId, transactionId }),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok || !(data as any).ok) {
+      throw new Error((data as any).error || 'Failed to apply quote')
+    }
+    return { reasonCode: (data as any)?.repricing?.reasonCode ?? null }
+  },
+
   /**
    * Fetch customer by id (hosted customer object from provider API)
    */

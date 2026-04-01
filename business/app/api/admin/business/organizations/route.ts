@@ -8,7 +8,7 @@ export async function GET(request: Request) {
 
   const admin = createSupabaseAdmin()
   const { data, error } = await admin
-    .from("easner_organizations")
+    .from("organizations")
     .select("*")
     .order("created_at", { ascending: false })
 

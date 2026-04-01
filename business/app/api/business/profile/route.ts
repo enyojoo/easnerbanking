@@ -91,7 +91,7 @@ async function resolveCanManageBusinessVerification(
   if (!orgId) return true
 
   const { data: row, error } = await admin
-    .from("easner_organization_memberships")
+    .from("organization_memberships")
     .select("role,status")
     .eq("organization_id", orgId)
     .eq("user_id", userId)
@@ -116,7 +116,7 @@ async function ensureOrganizationId(
   const first = firstNameFromFullName(fullName ?? userRow?.full_name ?? null)
   const orgName = first ? possessiveBusinessName(first) : defaultOrgName(email, userId)
   const slug = `${slugify(orgName) || `business-${userId.slice(0, 8)}`}-${userId.slice(0, 8)}`
-  const { data: org, error } = await admin.from("easner_organizations").insert({ name: orgName, slug }).select("id").single()
+  const { data: org, error } = await admin.from("organizations").insert({ name: orgName, slug }).select("id").single()
   if (error) throw new Error(error.message)
 
   await admin
@@ -140,13 +140,13 @@ async function fetchOrganizationProfile(admin: ReturnType<typeof createSupabaseA
   const baseSelect = "id,name,logo_url,business_type,base_currency,description,country"
   const minimalSelect = "id,name,country"
 
-  const rich = await admin.from("easner_organizations").select(richSelect).eq("id", organizationId).maybeSingle()
+  const rich = await admin.from("organizations").select(richSelect).eq("id", organizationId).maybeSingle()
   if (!rich.error && rich.data) return rich.data
 
-  const base = await admin.from("easner_organizations").select(baseSelect).eq("id", organizationId).maybeSingle()
+  const base = await admin.from("organizations").select(baseSelect).eq("id", organizationId).maybeSingle()
   if (!base.error && base.data) return base.data
 
-  const minimal = await admin.from("easner_organizations").select(minimalSelect).eq("id", organizationId).maybeSingle()
+  const minimal = await admin.from("organizations").select(minimalSelect).eq("id", organizationId).maybeSingle()
   return minimal.data ?? null
 }
 
@@ -300,7 +300,7 @@ export async function PUT(request: Request) {
   if (body.postalCode !== undefined) updates.postal_code = body.postalCode?.trim() || null
   if (country !== null) updates.country = country
 
-  const { error } = await admin.from("easner_organizations").update(updates).eq("id", organizationId)
+  const { error } = await admin.from("organizations").update(updates).eq("id", organizationId)
   if (error) {
     // Fallback for older schemas that don't yet include all optional settings columns.
     const minimalUpdates: Record<string, unknown> = {
@@ -313,7 +313,7 @@ export async function PUT(request: Request) {
     if (updates.base_currency !== undefined) minimalUpdates.base_currency = updates.base_currency
     if (updates.description !== undefined) minimalUpdates.description = updates.description
 
-    const retry = await admin.from("easner_organizations").update(minimalUpdates).eq("id", organizationId)
+    const retry = await admin.from("organizations").update(minimalUpdates).eq("id", organizationId)
     if (retry.error) return NextResponse.json({ error: retry.error.message }, { status: 500 })
   }
 

@@ -63,7 +63,7 @@ async function ensureOwnerMembership(params: {
   if (!email) return
 
   // Best-effort: if memberships table is not migrated yet, bootstrap should still succeed.
-  await admin.from("easner_organization_memberships").upsert(
+  await admin.from("organization_memberships").upsert(
     {
       organization_id: organizationId,
       user_id: userId,
@@ -147,14 +147,14 @@ export async function POST(request: Request) {
     }
 
     const { data: insertedWithCountry, error: insertErrWithCountry } = await admin
-      .from("easner_organizations")
+      .from("organizations")
       .insert(orgPayloadWithCountry)
       .select("id")
       .single()
 
     if (insertErrWithCountry) {
       const { data: insertedNoCountry, error: insertErrNoCountry } = await admin
-        .from("easner_organizations")
+        .from("organizations")
         .insert({
           name: orgName,
           slug: `${slugBase}-${user.id.slice(0, 8)}`,
@@ -169,7 +169,7 @@ export async function POST(request: Request) {
       organizationId = insertedWithCountry.id
     }
   } else if (country) {
-    await admin.from("easner_organizations").update({ country }).eq("id", organizationId)
+    await admin.from("organizations").update({ country }).eq("id", organizationId)
   }
 
   const userLinkPayload = {

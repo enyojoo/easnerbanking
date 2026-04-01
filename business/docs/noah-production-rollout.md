@@ -43,8 +43,8 @@ After KYC (individual) or KYB (business) is approved:
 
 - Webhook or sync fallback updates `users.noah_kyc_status` / `users.noah_kyb_status`.
 - Provisioning runs and upserts:
-  - virtual account details (`noah_virtual_accounts` + user pointers),
-  - wallet details + liquidation addresses (`noah_wallets` + `users.noah_wallet_id`).
+  - virtual account details (`virtual_accounts` + user pointers),
+  - wallet details + liquidation addresses (`wallets` + `users.noah_wallet_id`).
 - Business and mobile account/receive screens should display bank account + stablecoin address data without manual setup.
 - Currency-disabled responses are enforced at API level for open-currency and deposit/address flows.
 

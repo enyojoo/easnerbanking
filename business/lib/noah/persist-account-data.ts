@@ -2,7 +2,7 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { mapPaymentMethodToVirtualAccountDisplay } from "./payment-method-map"
 
 /**
- * Upsert `noah_virtual_accounts` and set `users.noah_usd_virtual_account_id` / `noah_eur_virtual_account_id`.
+ * Upsert `virtual_accounts` and set `users.noah_usd_virtual_account_id` / `noah_eur_virtual_account_id`.
  * Uses service role; `subjectUserId` is the Easner user who owns the Noah customer row (individual or org owner for business).
  */
 export async function persistVirtualAccountFromPaymentMethod(
@@ -17,7 +17,7 @@ export async function persistVirtualAccountFromPaymentMethod(
   const display = mapPaymentMethodToVirtualAccountDisplay(pm, currency)
   const fiat = currency.toUpperCase()
 
-  const { error: upsertErr } = await admin.from("noah_virtual_accounts").upsert(
+  const { error: upsertErr } = await admin.from("virtual_accounts").upsert(
     {
       user_id: subjectUserId,
       noah_virtual_account_id: pmId,
@@ -35,7 +35,7 @@ export async function persistVirtualAccountFromPaymentMethod(
   )
 
   if (upsertErr) {
-    console.error("[persistVirtualAccountFromPaymentMethod] upsert noah_virtual_accounts:", upsertErr)
+    console.error("[persistVirtualAccountFromPaymentMethod] upsert virtual_accounts:", upsertErr)
     return
   }
 

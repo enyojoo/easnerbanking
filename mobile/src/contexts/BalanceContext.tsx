@@ -254,7 +254,7 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
             {
               event: '*',
               schema: 'public',
-              table: 'noah_transactions',
+              table: 'transactions',
               filter: `user_id=eq.${user.id}`,
             },
             async (payload: any) => {

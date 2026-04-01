@@ -41,18 +41,28 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       })
 
-      const data = await response.json()
+      const contentType = response.headers.get("content-type") || ""
+      const data = contentType.includes("application/json")
+        ? await response.json().catch(() => ({}))
+        : await response.text().then((raw) => ({ error: raw.slice(0, 200) }))
 
       if (!response.ok) {
-        throw new Error(data.error || "Login failed")
+        throw new Error(
+          (typeof data === "object" && data && "error" in data && typeof data.error === "string"
+            ? data.error
+            : "Login failed")
+        )
       }
 
-      if (!data.success) {
+      if (!(typeof data === "object" && data && "success" in data && data.success)) {
         throw new Error("Login failed")
       }
 
-      if (data.session) {
-        const { error: sessionError } = await supabase.auth.setSession(data.session)
+      const sessionData =
+        typeof data === "object" && data && "session" in data ? (data.session as Parameters<typeof supabase.auth.setSession>[0]) : null
+
+      if (sessionData) {
+        const { error: sessionError } = await supabase.auth.setSession(sessionData)
         if (sessionError) {
           console.error("Session set error:", sessionError)
           throw new Error("Failed to set session")

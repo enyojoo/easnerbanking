@@ -15,7 +15,7 @@ export async function getEnabledExtraCurrencies(
     const orgId = u?.easner_organization_id as string | undefined
     if (!orgId) return []
     const { data: org } = await admin
-      .from("easner_organizations")
+      .from("organizations")
       .select("enabled_extra_account_currencies")
       .eq("id", orgId)
       .maybeSingle()
@@ -56,7 +56,7 @@ export async function appendEnabledExtraCurrency(
       return
     }
     await admin
-      .from("easner_organizations")
+      .from("organizations")
       .update({ enabled_extra_account_currencies: next })
       .eq("id", orgId)
     return
