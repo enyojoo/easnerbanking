@@ -34,7 +34,6 @@ import {
   getAccountTypeConfigFromCurrency,
   formatFieldValue,
 } from "@/lib/currency-account-types"
-import { OfficeTransactionsSkeleton } from "@/components/office-transactions-skeleton"
 import { officeDataStore } from "@/lib/office-data-store"
 import { useOfficeData } from "@/hooks/use-office-data"
 import { officeFetch } from "@/lib/api-client"
@@ -93,7 +92,7 @@ interface CombinedTransaction {
 }
 
 export default function AdminTransactionsPage() {
-  const { data: adminData, loading: adminDataLoading } = useOfficeData()
+  const { data: adminData } = useOfficeData()
   
   // Initialize from cache synchronously to prevent flicker
   const getInitialTransactions = (): CombinedTransaction[] => {
@@ -170,7 +169,6 @@ export default function AdminTransactionsPage() {
   }
 
   const [transactions, setTransactions] = useState<CombinedTransaction[]>(() => getInitialTransactions())
-  const [loading, setLoading] = useState(!adminData?.transactions) // Only show loading if no cached data
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [typeFilter, setTypeFilter] = useState<"all" | "send" | "receive">("all")
@@ -282,13 +280,11 @@ export default function AdminTransactionsPage() {
         }
       })
       setTransactions(transformedTransactions)
-      setLoading(false)
-    } else if (!adminDataLoading) {
+    } else {
       // If adminData is loaded but has no transactions, set empty array
       setTransactions([])
-      setLoading(false)
     }
-  }, [adminData, adminDataLoading])
+  }, [adminData])
 
   // Update current time every second
   useEffect(() => {
@@ -298,15 +294,6 @@ export default function AdminTransactionsPage() {
 
     return () => clearInterval(timer)
   }, [])
-
-  // Only show skeleton if we're truly loading and have no data
-  if ((loading || adminDataLoading) && transactions.length === 0 && !adminData?.transactions?.length) {
-    return (
-      <OfficeDashboardLayout>
-        <OfficeTransactionsSkeleton />
-      </OfficeDashboardLayout>
-    )
-  }
 
   const filteredTransactions = transactions.filter((transaction) => {
     const matchesSearch =

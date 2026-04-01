@@ -18,7 +18,6 @@ import { countryService } from "@/lib/country-service"
 import { CountryFlag } from "@/components/flags"
 import { supabase } from "@/lib/supabase"
 import { officeFetch } from "@/lib/api-client"
-import { OfficeComplianceSkeleton } from "@/components/office-compliance-skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { KycSubmissionsQueue } from "@/components/kyc-submissions-queue"
 
@@ -80,7 +79,7 @@ function OfficeCompliancePage() {
   const isCacheFresh = cacheTimestamp && (Date.now() - cacheTimestamp < CACHE_TTL)
 
   const [users, setUsers] = useState<ComplianceUser[]>(initialUsers)
-  const [loading, setLoading] = useState(!initialUsers.length) // Only show loading if no cached data
+  const [, setLoading] = useState(!initialUsers.length) // Keep internal loading toggles for refresh flow.
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [selectedUser, setSelectedUser] = useState<ComplianceUser | null>(null)
@@ -477,15 +476,6 @@ function OfficeCompliancePage() {
         <CountryFlag code={code} size={18} title={country?.name ?? code} />
         <span>{country?.name ?? code}</span>
       </span>
-    )
-  }
-
-  // Only show skeleton if we're truly loading and have no cached data
-  if (loading && !users.length) {
-    return (
-      <OfficeDashboardLayout>
-        <OfficeComplianceSkeleton />
-      </OfficeDashboardLayout>
     )
   }
 
@@ -1006,7 +996,7 @@ export default function CompliancePage() {
     <Suspense
       fallback={
         <OfficeDashboardLayout>
-          <OfficeComplianceSkeleton />
+          <div className="p-6" />
         </OfficeDashboardLayout>
       }
     >

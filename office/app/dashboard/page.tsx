@@ -19,82 +19,11 @@ import {
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Skeleton } from "@/components/ui/skeleton"
 import { useOfficeData } from "@/hooks/use-office-data"
 import { officeFetch } from "@/lib/api-client"
 
-function OfficeDashboardSkeleton() {
-  return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <Skeleton className="h-8 w-64 mb-2" />
-          <Skeleton className="h-5 w-96" />
-        </div>
-      </div>
-
-      {/* Stats Cards Skeleton */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {[1, 2, 3, 4].map((i) => (
-          <Card key={i}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="h-4 w-4 rounded" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-8 w-24 mb-2" />
-              <Skeleton className="h-3 w-20" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Content Cards Skeleton */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-40 mb-2" />
-            <Skeleton className="h-4 w-64" />
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
-                  <Skeleton className="h-4 w-4 rounded-full" />
-                  <div className="flex-1 space-y-2">
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-3 w-3/4" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-48 mb-2" />
-            <Skeleton className="h-4 w-56" />
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="flex items-center justify-between">
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-4 w-16" />
-                  <Skeleton className="h-4 w-12" />
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  )
-}
-
 export default function AdminDashboardPage() {
-  const { data, loading } = useOfficeData()
+  const { data } = useOfficeData()
   const [b2bSummary, setB2bSummary] = useState<{
     organizationCount: number
     b2bCustomerCount: number
@@ -115,15 +44,6 @@ export default function AdminDashboardPage() {
       })
       .catch(() => {})
   }, [])
-
-  // Only show skeleton if we're truly loading and have no cached data
-  if (loading && !data) {
-    return (
-      <OfficeDashboardLayout>
-        <OfficeDashboardSkeleton />
-      </OfficeDashboardLayout>
-    )
-  }
 
   const getActivityIcon = (type: string) => {
     // Handle card funding types

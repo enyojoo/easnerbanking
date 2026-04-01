@@ -14,11 +14,10 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Plus, MoreHorizontal, Edit, Pause, Trash2, Loader2 } from "lucide-react"
 import { useOfficeData } from "@/hooks/use-office-data"
 import { officeDataStore } from "@/lib/office-data-store"
-import { OfficeRatesSkeleton } from "@/components/office-rates-skeleton"
 import { CurrencyFlag } from "@/components/flags"
 
 const AdminRatesPage = () => {
-  const { data, loading } = useOfficeData()
+  const { data } = useOfficeData()
   const [selectedCurrency, setSelectedCurrency] = useState<any>(null)
   const [isEditingRates, setIsEditingRates] = useState(false)
   const [isAddingCurrency, setIsAddingCurrency] = useState(false)
@@ -36,15 +35,6 @@ const AdminRatesPage = () => {
     can_send: true,
     can_receive: true,
   })
-
-  // Only show skeleton if we're truly loading and have no cached data
-  if (loading && !data) {
-    return (
-      <OfficeDashboardLayout>
-        <OfficeRatesSkeleton />
-      </OfficeDashboardLayout>
-    )
-  }
 
   const currencies = data?.currencies || []
   const exchangeRates = data?.exchangeRates || []

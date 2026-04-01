@@ -33,7 +33,6 @@ import { supabase } from "@/lib/supabase"
 import { formatCurrency } from "@/utils/currency"
 import { useOfficeData } from "@/hooks/use-office-data"
 import { officeDataStore, calculateUserVolume } from "@/lib/office-data-store"
-import { OfficeUsersSkeleton } from "@/components/office-users-skeleton"
 import { kycService, KYCSubmission } from "@/lib/kyc-service"
 import { getIdTypeLabel } from "@/lib/country-id-types"
 import { Textarea } from "@/components/ui/textarea"
@@ -78,7 +77,7 @@ interface TransactionData {
 }
 
 export default function AdminUsersPage() {
-  const { data, loading } = useOfficeData()
+  const { data } = useOfficeData()
   const { userProfile } = useAuth()
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
@@ -177,15 +176,6 @@ export default function AdminUsersPage() {
     
     fetchAllKyc()
   }, [data?.users])
-
-  // Only show skeleton if we're truly loading and have no cached data
-  if (loading && (!data || !data.users?.length)) {
-    return (
-      <OfficeDashboardLayout>
-        <OfficeUsersSkeleton />
-      </OfficeDashboardLayout>
-    )
-  }
 
   // Ensure we have data structure even if empty
   if (!data) {

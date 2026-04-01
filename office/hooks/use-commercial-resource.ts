@@ -1,14 +1,34 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useState } from "react"
+import { useCachedData } from "@/lib/use-cached-data"
 
-export function useCommercialResource<T>(loader: () => Promise<T[]>) {
-  const [rows, setRows] = useState<T[]>([])
-  const [loading, setLoading] = useState(true)
+interface UseCommercialResourceOptions {
+  cacheKey: string
+  persistKey: string
+  ttlMs?: number
+}
+
+export function useCommercialResource<T>(
+  loader: () => Promise<T[]>,
+  { cacheKey, persistKey, ttlMs = 5 * 60 * 1000 }: UseCommercialResourceOptions,
+) {
   const [error, setError] = useState<string | null>(null)
-
+  const [refreshing, setRefreshing] = useState(false)
+  const { data: rows, setData: setRows, loading } = useCachedData<T[]>({
+    enabled: true,
+    cacheKey,
+    fetcher: loader,
+    initialData: [],
+    ttlMs,
+    persistKey,
+    persistMaxAgeMs: ttlMs,
+    onError: (e) => {
+      setError(e instanceof Error ? e.message : "Failed to load data")
+    },
+  })
   const refresh = useCallback(async () => {
-    setLoading(true)
+    setRefreshing(true)
     setError(null)
     try {
       const data = await loader()
@@ -16,13 +36,9 @@ export function useCommercialResource<T>(loader: () => Promise<T[]>) {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load data")
     } finally {
-      setLoading(false)
+      setRefreshing(false)
     }
-  }, [loader])
+  }, [loader, setRows])
 
-  useEffect(() => {
-    void refresh()
-  }, [refresh])
-
-  return { rows, setRows, loading, error, refresh }
+  return { rows, setRows, loading: loading || refreshing, error, refresh }
 }

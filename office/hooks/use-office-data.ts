@@ -1,59 +1,61 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { officeDataStore } from "@/lib/office-data-store"
 import { useAuth } from "@/lib/auth-context"
+import { useCachedData } from "@/lib/use-cached-data"
+import { CACHE_KEYS } from "@/lib/cache"
 
 export function useOfficeData() {
   const { user, isAdmin } = useAuth()
-  const initialData = officeDataStore.getData()
-  const [data, setData] = useState<any>(initialData)
-  // Only treat as loading when there is no renderable snapshot yet (stale cached data still renders).
-  const [loading, setLoading] = useState(!initialData)
+  const enabled = Boolean(isAdmin && user)
+  const initialData = useMemo(() => {
+    const inMemory = officeDataStore.getData()
+    if (inMemory) return inMemory
+    if (typeof window === "undefined") return null
+    try {
+      const raw = localStorage.getItem("office_data_cache")
+      if (!raw) return null
+      const parsed = JSON.parse(raw) as { data?: unknown }
+      return (parsed?.data ?? null) as any
+    } catch {
+      return null
+    }
+  }, [])
+  const [dataInitialized, setDataInitialized] = useState(Boolean(initialData))
   const [error, setError] = useState<string | null>(null)
+  const { data, setData, loading } = useCachedData<any>({
+    enabled,
+    cacheKey: CACHE_KEYS.OFFICE_DATA,
+    initialData,
+    ttlMs: 5 * 60 * 1000,
+    persistKey: "office_data_cache",
+    persistMaxAgeMs: 5 * 60 * 1000,
+    fetcher: async () => {
+      await officeDataStore.initializeDirect()
+      const next = officeDataStore.getData()
+      if (!next) {
+        throw new Error("Failed to load office data")
+      }
+      return next
+    },
+    onError: (err) => {
+      console.error("Failed to initialize office data:", err)
+      const existing = officeDataStore.getData()
+      if (existing) {
+        setData(existing)
+        setError(null)
+        setDataInitialized(true)
+        return
+      }
+      setError("Failed to load office data")
+    },
+  })
 
   useEffect(() => {
     let mounted = true
 
-    if (isAdmin && user) {
-      const initializeData = async () => {
-        if (!mounted) return
-
-        try {
-          const existing = officeDataStore.getData()
-          const hasData = Boolean(existing)
-          // Only show loading when we don't have fresh data (prevents flicker)
-          if (!hasData) {
-            setLoading(true)
-          }
-          setError(null)
-          await officeDataStore.initializeDirect()
-          if (mounted) {
-            const newData = officeDataStore.getData()
-            if (newData) {
-              setData(newData)
-            }
-            setLoading(false)
-          }
-        } catch (err) {
-          console.error("Failed to initialize office data:", err)
-          if (mounted) {
-            const existingData = officeDataStore.getData()
-            if (existingData) {
-              setData(existingData)
-              setError(null)
-            } else {
-              setError("Failed to load office data")
-            }
-            setLoading(false)
-          }
-        }
-      }
-
-      initializeData()
-    } else {
-      setLoading(false)
-    }
+    if (!enabled) return () => { mounted = false }
 
     const unsubscribe = officeDataStore.subscribe(() => {
       if (mounted) {
@@ -65,7 +67,7 @@ export function useOfficeData() {
             }
             return newData
           })
-          setLoading((prevLoading) => prevLoading && newData ? false : prevLoading)
+          setDataInitialized(true)
           setError(null)
         }
       }
@@ -75,7 +77,9 @@ export function useOfficeData() {
       mounted = false
       unsubscribe()
     }
-  }, [isAdmin, user])
+  }, [enabled, setData])
 
-  return { data, loading, error }
+  const hasRenderableData = Boolean(data) || dataInitialized
+
+  return { data, loading: enabled ? loading && !hasRenderableData : false, error }
 }

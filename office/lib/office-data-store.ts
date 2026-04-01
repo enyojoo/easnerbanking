@@ -1,7 +1,9 @@
 import { supabase } from "./supabase"
 import { officeFetch } from "./api-client"
+import { CACHE_KEYS, dataCache } from "./cache"
 
 const RATES_FEATURE_ENABLED = process.env.NEXT_PUBLIC_OFFICE_ENABLE_RATES === "true"
+const OFFICE_DATA_TTL_MS = 5 * 60 * 1000
 
 function isSilentOptionalDataError(error: unknown): boolean {
   const msg = error instanceof Error ? error.message : String(error || "")
@@ -85,6 +87,16 @@ class OfficeDataStore {
       }
     }
 
+    const cached = dataCache.getWithRefresh<AdminData>(CACHE_KEYS.OFFICE_DATA, async () => {
+      const fresh = await this.loadData()
+      return fresh
+    })
+    if (cached) {
+      this.data = cached
+      this.notify()
+      return this.data
+    }
+
     // If data is fresh, don't reload - just return existing data
     if (this.initialized && this.isDataFresh()) {
       return this.data
@@ -113,13 +125,11 @@ class OfficeDataStore {
 
   private isDataFresh(): boolean {
     if (!this.data) {
-      // Try to load from localStorage cache
+      // Try to load from in-memory or localStorage cache
       this.loadFromCache()
       if (!this.data) return false
     }
-    // Extend freshness to 5 minutes since we have real-time updates
-    const fiveMinutes = 5 * 60 * 1000
-    return Date.now() - this.data.lastUpdated < fiveMinutes
+    return !dataCache.isStale(CACHE_KEYS.OFFICE_DATA)
   }
 
   // Public freshness check (used by hooks/pages to avoid flicker)
@@ -130,29 +140,33 @@ class OfficeDataStore {
   private saveToCache() {
     if (typeof window === 'undefined' || !this.data) return
     try {
-      const cacheKey = 'office_data_cache'
+      dataCache.set(CACHE_KEYS.OFFICE_DATA, this.data, OFFICE_DATA_TTL_MS)
       const cacheData = {
         data: this.data,
         timestamp: Date.now(),
       }
-      localStorage.setItem(cacheKey, JSON.stringify(cacheData))
+      localStorage.setItem('office_data_cache', JSON.stringify(cacheData))
     } catch (error) {
       console.error('OfficeDataStore: Error saving to cache:', error)
     }
   }
 
   private loadFromCache(): boolean {
+    const memoryCached = dataCache.get<AdminData>(CACHE_KEYS.OFFICE_DATA)
+    if (memoryCached) {
+      this.data = memoryCached
+      return true
+    }
+
     if (typeof window === 'undefined') return false
     try {
-      const cacheKey = 'office_data_cache'
-      const cached = localStorage.getItem(cacheKey)
+      const cached = localStorage.getItem('office_data_cache')
       if (!cached) return false
 
       const { data, timestamp } = JSON.parse(cached)
-      // Check if cache is still fresh (5 minutes)
-      const fiveMinutes = 5 * 60 * 1000
-      if (Date.now() - timestamp < fiveMinutes) {
+      if (Date.now() - timestamp < OFFICE_DATA_TTL_MS) {
         this.data = data
+        dataCache.set(CACHE_KEYS.OFFICE_DATA, data, OFFICE_DATA_TTL_MS)
         console.log('OfficeDataStore: Loaded data from cache')
         return true
       } else {
@@ -169,6 +183,7 @@ class OfficeDataStore {
   private clearCache() {
     if (typeof window === 'undefined') return
     try {
+      dataCache.invalidate(CACHE_KEYS.OFFICE_DATA)
       localStorage.removeItem('office_data_cache')
     } catch (error) {
       console.error('OfficeDataStore: Error clearing cache:', error)

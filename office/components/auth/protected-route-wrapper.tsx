@@ -2,7 +2,6 @@
 
 import { usePathname } from "next/navigation"
 import { useRouteProtection } from "@/hooks/use-route-protection"
-import { OfficeAuthLoadingSkeleton } from "@/components/office-auth-loading-skeleton"
 
 const PROTECTED_PATHS = [
   "/dashboard",
@@ -23,14 +22,10 @@ function isProtectedPath(pathname: string | null): boolean {
 
 export function ProtectedRouteWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const { isChecking } = useRouteProtection({ requireAuth: true, adminOnly: true, redirectTo: "/auth/login" })
+  useRouteProtection({ requireAuth: true, adminOnly: true, redirectTo: "/auth/login" })
 
   if (!isProtectedPath(pathname)) {
     return <>{children}</>
-  }
-
-  if (isChecking) {
-    return <OfficeAuthLoadingSkeleton />
   }
 
   return <>{children}</>
