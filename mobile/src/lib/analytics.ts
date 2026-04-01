@@ -1,47 +1,48 @@
 import { getPostHog } from './posthog'
 
+type Props = Record<string, any>
+type ScreenTrackingMode = 'manual' | 'auto'
+
+let screenTrackingMode: ScreenTrackingMode = 'manual'
+
+const withDefaults = (properties?: Props): Props => ({
+  platform: 'mobile',
+  environment: __DEV__ ? 'development' : 'production',
+  ...properties,
+})
+
+const capture = (event: string, properties?: Props) => {
+  const posthog = getPostHog()
+  if (!posthog) return
+  posthog.capture(event, withDefaults(properties))
+}
+
 export const analytics = {
+  setScreenTrackingMode: (mode: ScreenTrackingMode) => {
+    screenTrackingMode = mode
+  },
+
   // User identification and authentication
-  identify: (userId: string, properties?: Record<string, any>) => {
+  identify: (userId: string, properties?: Props) => {
     const posthog = getPostHog()
-    if (posthog) {
-      posthog.identify(userId, properties)
-    }
+    if (!posthog) return
+    posthog.identify(userId, withDefaults(properties))
   },
 
   // Track user registration
-  trackSignUp: (method: string, properties?: Record<string, any>) => {
-    const posthog = getPostHog()
-    if (posthog) {
-      posthog.capture('user_signed_up', {
-        method,
-        platform: 'mobile',
-        ...properties
-      })
-    }
+  trackSignUp: (method: string, properties?: Props) => {
+    capture('user_signed_up', { method, ...properties })
   },
 
   // Track user login
-  trackSignIn: (method: string, properties?: Record<string, any>) => {
-    const posthog = getPostHog()
-    if (posthog) {
-      posthog.capture('user_signed_in', {
-        method,
-        platform: 'mobile',
-        ...properties
-      })
-    }
+  trackSignIn: (method: string, properties?: Props) => {
+    capture('user_signed_in', { method, ...properties })
   },
 
   // Track user logout
   trackSignOut: () => {
-    const posthog = getPostHog()
-    if (posthog) {
-      posthog.capture('user_signed_out', {
-        platform: 'mobile'
-      })
-      posthog.reset()
-    }
+    capture('user_signed_out')
+    getPostHog()?.reset()
   },
 
   // Transaction tracking
@@ -53,13 +54,7 @@ export const analytics = {
     exchangeRate: number
     fee: number
   }) => {
-    const posthog = getPostHog()
-    if (posthog) {
-      posthog.capture('transaction_started', {
-        ...properties,
-        platform: 'mobile'
-      })
-    }
+    capture('transaction_started', properties)
   },
 
   trackTransactionCompleted: (properties: {
@@ -72,16 +67,20 @@ export const analytics = {
     fee: number
     totalAmount: number
   }) => {
-    const posthog = getPostHog()
-    if (posthog) {
-      posthog.capture('transaction_completed', {
-        ...properties,
-        platform: 'mobile'
-      })
-    }
+    capture('transaction_completed', properties)
   },
 
   // Currency converter usage
+  trackCurrencyConverted: (properties: {
+    fromCurrency: string
+    toCurrency: string
+    amount: number
+    convertedAmount: number
+    exchangeRate: number
+  }) => {
+    capture('currency_converted', properties)
+  },
+
   trackCurrencyConversion: (properties: {
     fromCurrency: string
     toCurrency: string
@@ -89,13 +88,7 @@ export const analytics = {
     convertedAmount: number
     exchangeRate: number
   }) => {
-    const posthog = getPostHog()
-    if (posthog) {
-      posthog.capture('currency_converted', {
-        ...properties,
-        platform: 'mobile'
-      })
-    }
+    capture('currency_converted', properties)
   },
 
   // Recipient management
@@ -104,13 +97,7 @@ export const analytics = {
     bankName: string
     country: string
   }) => {
-    const posthog = getPostHog()
-    if (posthog) {
-      posthog.capture('recipient_added', {
-        ...properties,
-        platform: 'mobile'
-      })
-    }
+    capture('recipient_added', properties)
   },
 
   trackRecipientEdited: (properties: {
@@ -118,82 +105,65 @@ export const analytics = {
     bankName: string
     country: string
   }) => {
-    const posthog = getPostHog()
-    if (posthog) {
-      posthog.capture('recipient_edited', {
-        ...properties,
-        platform: 'mobile'
-      })
-    }
+    capture('recipient_edited', properties)
+  },
+
+  trackRecipientSelected: (properties: {
+    recipientId: string
+    recipientType?: string
+    country?: string
+  }) => {
+    capture('recipient_selected', properties)
   },
 
   // Screen navigation
-  trackScreenView: (screenName: string, properties?: Record<string, any>) => {
+  trackScreenView: (screenName: string, properties?: Props) => {
+    if (screenTrackingMode === 'auto') return
     const posthog = getPostHog()
-    if (posthog) {
-      posthog.screen(screenName, {
-        ...properties,
-        platform: 'mobile'
-      })
-    }
+    if (!posthog) return
+    posthog.screen(screenName, withDefaults(properties))
+  },
+
+  trackNavigationScreenView: (screenName: string, properties?: Props) => {
+    const posthog = getPostHog()
+    if (!posthog) return
+    posthog.screen(screenName, withDefaults(properties))
   },
 
   // Feature usage
-  trackFeatureUsed: (featureName: string, properties?: Record<string, any>) => {
-    const posthog = getPostHog()
-    if (posthog) {
-      posthog.capture('feature_used', {
-        feature: featureName,
-        platform: 'mobile',
-        ...properties
-      })
-    }
+  trackFeatureUsed: (featureName: string, properties?: Props) => {
+    capture('feature_used', { feature: featureName, ...properties })
   },
 
   // Error tracking
-  trackError: (error: string, properties?: Record<string, any>) => {
-    const posthog = getPostHog()
-    if (posthog) {
-      posthog.capture('error_occurred', {
-        error,
-        platform: 'mobile',
-        ...properties
-      })
-    }
+  trackError: (error: string, properties?: Props) => {
+    capture('error_occurred', { error, ...properties })
   },
 
   // App lifecycle
   trackAppOpened: () => {
-    const posthog = getPostHog()
-    if (posthog) {
-      posthog.capture('app_opened', {
-        platform: 'mobile'
-      })
-    }
+    capture('app_opened')
   },
 
   trackAppBackgrounded: () => {
-    const posthog = getPostHog()
-    if (posthog) {
-      posthog.capture('app_backgrounded', {
-        platform: 'mobile'
-      })
-    }
+    capture('app_backgrounded')
   },
 
   // User properties
-  setUserProperties: (properties: Record<string, any>) => {
+  setUserProperties: (properties: Props) => {
     const posthog = getPostHog()
-    if (posthog) {
-      posthog.setPersonProperties(properties)
-    }
+    if (!posthog) return
+    posthog.setPersonProperties(withDefaults(properties))
   },
 
   // Group properties (for organization-level analytics)
-  setGroupProperties: (groupType: string, groupKey: string, properties: Record<string, any>) => {
+  setGroupProperties: (groupType: string, groupKey: string, properties: Props) => {
     const posthog = getPostHog()
-    if (posthog) {
-      posthog.group(groupType, groupKey, properties)
-    }
-  }
+    if (!posthog) return
+    posthog.group(groupType, groupKey, withDefaults(properties))
+  },
+
+  reset: () => {
+    getPostHog()?.reset()
+  },
 }

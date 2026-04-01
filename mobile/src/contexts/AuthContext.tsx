@@ -376,6 +376,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
         rememberMe,
         userId: data.user?.id
       })
+      if (data.user?.id) {
+        analytics.identify(data.user.id, {
+          email: data.user.email || email.trim(),
+          authMethod: 'email',
+        })
+      }
 
       // Don't mark first login here - only mark after PIN is set up
       // This way, users with active sessions are treated as existing users
@@ -425,6 +431,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       if (error) {
         return { error }
+      }
+
+      if (data.user?.id) {
+        analytics.identify(data.user.id, {
+          email: data.user.email || email.trim(),
+          name: name.trim(),
+          authMethod: 'email',
+        })
+        analytics.trackSignUp('email', {
+          userId: data.user.id,
+          needsEmailConfirmation: !data.session,
+        })
       }
 
       return { error: null, needsEmailConfirmation: !data.session }

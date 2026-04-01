@@ -3,9 +3,9 @@ import type { Metadata } from "next"
 import { GeistSans } from "geist/font/sans"
 import { GeistMono } from "geist/font/mono"
 import { Toaster } from "sonner"
-import { Analytics } from "@vercel/analytics/next"
 import { ClientAuthProvider } from "@/components/client-auth-provider"
 import { ChunkLoadErrorHandler } from "@/components/chunk-load-error-handler"
+import { PostHogProvider } from "@/components/posthog-provider"
 import { Providers } from "@/components/providers"
 import { Suspense } from "react"
 import { LoadingSpinner } from "@/components/loading-spinner"
@@ -30,11 +30,12 @@ export default function RootLayout({
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
         <ChunkLoadErrorHandler />
         <Suspense fallback={<LoadingSpinner />}>
-          <ClientAuthProvider>
-            <Providers>{children}</Providers>
-          </ClientAuthProvider>
+          <PostHogProvider>
+            <ClientAuthProvider>
+              <Providers>{children}</Providers>
+            </ClientAuthProvider>
+          </PostHogProvider>
           <Toaster />
-          <Analytics />
         </Suspense>
       </body>
     </html>

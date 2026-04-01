@@ -1,7 +1,5 @@
 import React, { useEffect } from 'react'
-import { AppState, AppStateStatus } from 'react-native'
-import { initPostHog, getPostHog } from '../lib/posthog'
-import { analytics } from '../lib/analytics'
+import { initPostHog } from '../lib/posthog'
 
 interface PostHogProviderProps {
   children: React.ReactNode
@@ -9,26 +7,8 @@ interface PostHogProviderProps {
 
 export function PostHogProvider({ children }: PostHogProviderProps) {
   useEffect(() => {
-    // Initialize PostHog
+    // Initialize once at app root. Lifecycle events are handled by SDK config.
     initPostHog()
-    
-    // Track app opened
-    analytics.trackAppOpened()
-
-    // Handle app state changes
-    const handleAppStateChange = (nextAppState: AppStateStatus) => {
-      if (nextAppState === 'background') {
-        analytics.trackAppBackgrounded()
-      } else if (nextAppState === 'active') {
-        analytics.trackAppOpened()
-      }
-    }
-
-    const subscription = AppState.addEventListener('change', handleAppStateChange)
-
-    return () => {
-      subscription?.remove()
-    }
   }, [])
 
   return <>{children}</>

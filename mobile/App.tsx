@@ -19,6 +19,7 @@ import { NotificationsProvider } from './src/contexts/NotificationsContext'
 import { BalanceProvider } from './src/contexts/BalanceContext'
 import { ToastProvider } from './src/components/ToastProvider'
 import { PostHogProvider } from './src/components/PostHogProvider'
+import { analytics } from './src/lib/analytics'
 import { deepLinkService } from './src/services/DeepLinkService'
 import { pushNotificationService } from './src/lib/pushNotificationService'
 import AppNavigator from './src/navigation/AppNavigator'
@@ -31,7 +32,16 @@ SplashScreen.preventAutoHideAsync()
 // Inner app component that has access to AuthContext
 function AppContent() {
   const navigationRef = useRef<NavigationContainerRef<any>>(null)
+  const routeNameRef = useRef<string>('')
   const { loading: authLoading } = useAuth()
+  const getActiveRouteName = (route: any): string => {
+    if (!route) return 'Unknown'
+    if (route.state && route.state.index != null) {
+      return getActiveRouteName(route.state.routes[route.state.index])
+    }
+    return route.name || 'Unknown'
+  }
+
   const [splashFinished, setSplashFinished] = useState(false)
   const appFadeAnim = useRef(new Animated.Value(0)).current
 
@@ -67,6 +77,21 @@ function AppContent() {
     <Animated.View style={{ flex: 1, opacity: appFadeAnim }}>
       <NavigationContainer
         ref={navigationRef}
+        onReady={() => {
+          analytics.setScreenTrackingMode('auto')
+          const currentRoute = navigationRef.current?.getCurrentRoute()
+          const currentRouteName = getActiveRouteName(currentRoute)
+          routeNameRef.current = currentRouteName
+          analytics.trackNavigationScreenView(currentRouteName)
+        }}
+        onStateChange={() => {
+          const currentRoute = navigationRef.current?.getCurrentRoute()
+          const currentRouteName = getActiveRouteName(currentRoute)
+          if (routeNameRef.current !== currentRouteName) {
+            routeNameRef.current = currentRouteName
+            analytics.trackNavigationScreenView(currentRouteName)
+          }
+        }}
         theme={{
           colors: {
             primary: colors.primary.main,

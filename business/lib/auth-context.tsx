@@ -10,6 +10,7 @@ import { getOnboarding } from "@/lib/onboarding-store"
 import { removePin } from "@/lib/login-pin"
 import { resetSessionActivity } from "@/lib/session-activity"
 import { IdleSessionBridge } from "@/components/idle-session-bridge"
+import { analytics } from "@/lib/analytics"
 
 interface AuthContextType {
   user: User | null
@@ -95,11 +96,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user?.id])
 
   const login = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
     })
     if (error) throw error
+    if (data.user?.id) {
+      analytics.identify(data.user.id, { email: data.user.email || email.trim() })
+      analytics.trackSignIn("email", { userId: data.user.id })
+    }
   }
 
   const signup = async (email: string, password: string, name: string) => {
@@ -113,6 +118,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     })
     if (error) throw error
+    if (data.user?.id) {
+      analytics.identify(data.user.id, {
+        email: data.user.email || email.trim(),
+        name: name.trim(),
+      })
+      analytics.trackSignUp("email", {
+        userId: data.user.id,
+        needsEmailConfirmation: !data.session,
+      })
+    }
     return { needsEmailConfirmation: !data.session }
   }
 
@@ -125,6 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     })
     if (error) throw error
+    analytics.trackSignIn("google")
   }
 
   const logout = async () => {
@@ -136,6 +152,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // ignore
     }
     clearBusinessAppSessionCookie()
+    analytics.trackSignOut({ userId: user?.id || null })
+    analytics.reset()
     await supabase.auth.signOut()
   }
 
