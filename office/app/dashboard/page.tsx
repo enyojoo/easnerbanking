@@ -125,14 +125,14 @@ export default function AdminDashboardPage() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Total Volume</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600">USD volume</CardTitle>
               <TrendingUp className="h-4 w-4 text-primary" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-gray-900">
-                {formatCurrency(data?.stats.totalVolume || 0, data?.baseCurrency)}
+                {formatCurrency(data?.stats.usdVolume ?? 0, "USD")}
               </div>
-              <p className="text-xs text-gray-500 mt-1">From all currencies.</p>
+              <p className="text-xs text-gray-500 mt-1">USD only — same transaction window as Office data (recent rows).</p>
             </CardContent>
           </Card>
 
@@ -208,13 +208,13 @@ export default function AdminDashboardPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" size="sm" asChild>
-              <Link href="/rates">Rates</Link>
+              <Link href="/platform-control?tab=currencies">Currencies</Link>
             </Button>
             <Button variant="secondary" size="sm" asChild>
-              <Link href="/settings">Settings</Link>
+              <Link href="/platform-control?tab=settings">Settings</Link>
             </Button>
             <Button variant="secondary" size="sm" asChild>
-              <Link href="/platform/health">Integrations & health</Link>
+              <Link href="/platform-control?tab=health">Integrations & health</Link>
             </Button>
           </div>
         </div>
@@ -253,36 +253,67 @@ export default function AdminDashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Currency Pair Popularity */}
           <Card>
             <CardHeader>
-              <CardTitle>Currency Pair Popularity</CardTitle>
-              <CardDescription>Most popular trading pairs</CardDescription>
+              <CardTitle>Top currencies</CardTitle>
+              <CardDescription>By transaction count in the loaded ledger window</CardDescription>
             </CardHeader>
             <CardContent className="max-h-80 overflow-y-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Currency Pair</TableHead>
-                    <TableHead>Volume %</TableHead>
+                    <TableHead>Currency</TableHead>
                     <TableHead>Transactions</TableHead>
+                    <TableHead>Sum of amounts</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data?.currencyPairs?.map((item: any, index: number) => (
-                    <TableRow key={index}>
-                      <TableCell className="font-medium">{item.pair}</TableCell>
+                  {(data?.stats.topCurrencies ?? []).map((row) => (
+                    <TableRow key={row.code}>
+                      <TableCell className="font-medium">{row.code}</TableCell>
+                      <TableCell>{row.count}</TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          <div className="w-16 bg-gray-200 rounded-full h-2">
-                            <div className="bg-primary h-2 rounded-full" style={{ width: `${item.volume}%` }} />
-                          </div>
-                          <span className="text-sm">{item.volume.toFixed(1)}%</span>
-                        </div>
+                        {row.totalAmount.toLocaleString("en-US", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
                       </TableCell>
-                      <TableCell>{item.transactions}</TableCell>
                     </TableRow>
-                  )) || []}
+                  ))}
+                  {(!data?.stats.topCurrencies || data.stats.topCurrencies.length === 0) && (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-sm text-muted-foreground">
+                        No currency data in the current window.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>Processing time (completed)</CardTitle>
+              <CardDescription>
+                Duration from created_at to updated_at when both are present (provider-ledger transactions).
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Bucket</TableHead>
+                    <TableHead>Completed transactions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(data?.stats.processingBuckets ?? []).map((b) => (
+                    <TableRow key={b.label}>
+                      <TableCell className="font-medium">{b.label}</TableCell>
+                      <TableCell>{b.count}</TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </CardContent>

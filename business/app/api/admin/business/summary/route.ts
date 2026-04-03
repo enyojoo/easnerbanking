@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   const admin = createSupabaseAdmin()
   const [orgs, customers, invoices] = await Promise.all([
     admin.from("organizations").select("id", { count: "exact", head: true }),
-    admin.from("easner_b2b_customers").select("id", { count: "exact", head: true }),
+    admin.from("b2b_customers").select("id", { count: "exact", head: true }),
     admin.from("invoices").select("id", { count: "exact", head: true }),
   ])
 
@@ -17,7 +17,10 @@ export async function GET(request: Request) {
   if (firstErr) {
     console.error("admin business summary:", firstErr)
     return NextResponse.json(
-      { error: firstErr.message, hint: "Apply supabase/migrations/20260327120000_easner_b2b_and_audit.sql in Supabase" },
+      {
+        error: firstErr.message,
+        hint: "Apply supabase/migrations/20260403_000003_b2b_customers.sql (or run pending Supabase migrations).",
+      },
       { status: 500 },
     )
   }

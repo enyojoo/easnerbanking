@@ -13,7 +13,7 @@ export async function GET() {
   }
   try {
     const admin = createSupabaseAdmin()
-    const { data: rows, error } = await admin.from("easner_b2b_customers").select("*").order("created_at", { ascending: false }).limit(200)
+    const { data: rows, error } = await admin.from("b2b_customers").select("*").order("created_at", { ascending: false }).limit(200)
     if (error) {
       return NextResponse.json({ customers: [] as Customer[], invoices: [] as Invoice[], error: error.message })
     }

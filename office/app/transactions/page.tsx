@@ -21,301 +21,94 @@ import {
   Clock,
   XCircle,
   AlertCircle,
-  ArrowUpDown,
   X,
-  ChevronDown,
 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import type { Transaction } from "@/types"
-import { formatCurrency } from "@/utils/currency"
-import { supabase } from "@/lib/supabase"
-import { paymentMethodService } from "@/lib/payment-methods"
-import {
-  getAccountTypeConfigFromCurrency,
-  formatFieldValue,
-} from "@/lib/currency-account-types"
 import { officeDataStore } from "@/lib/office-data-store"
 import { useOfficeData } from "@/hooks/use-office-data"
-import { officeFetch } from "@/lib/api-client"
 
-interface CombinedTransaction {
+interface ProviderLedgerTx {
   id: string
-  transaction_id: string
-  type: "send" | "receive" | "card_funding"
+  provider?: string | null
+  noah_transaction_id?: string | null
   status: string
   created_at: string
+  updated_at?: string
+  direction?: "in" | "out" | null
+  amount?: number | null
+  currency?: string | null
   user?: {
     first_name: string
     last_name: string
     email: string
   }
-  // Send transaction fields
-  send_amount?: number
-  send_currency?: string
-  receive_amount?: number
-  receive_currency?: string
-  recipient?: {
-    full_name: string
-    account_number: string
-    bank_name: string
-    routing_number?: string
-    sort_code?: string
-    iban?: string
-    swift_bic?: string
-    currency?: string
-    address_line1?: string
-    address_line2?: string
-    city?: string
-    state?: string
-    postal_code?: string
-    transfer_type?: "ACH" | "Wire"
-    checking_or_savings?: "checking" | "savings"
-  }
-  // Receive transaction fields
-  crypto_amount?: number
-  crypto_currency?: string
-  fiat_amount?: number
-  fiat_currency?: string
-  stellar_transaction_hash?: string
-  blockchain_tx_hash?: string
-  crypto_wallet?: {
-    wallet_address: string
-    crypto_currency: string
-  }
-  // Card funding fields
-  destination_type?: "bank" | "card"
-  noah_card_account_id?: string
-  // Receipt fields
-  receipt_url?: string
-  receipt_filename?: string
-  exchange_rate?: number
 }
 
 export default function AdminTransactionsPage() {
   const { data: adminData } = useOfficeData()
   
   // Initialize from cache synchronously to prevent flicker
-  const getInitialTransactions = (): CombinedTransaction[] => {
+  const getInitialTransactions = (): ProviderLedgerTx[] => {
     if (!adminData?.transactions) return []
-    // Transform transactions to match CombinedTransaction interface
-    return (adminData.transactions || []).map((tx: any) => {
-      // If it's already transformed (has type), use it as is
-      if (tx.type) {
-        return {
-          id: tx.id,
-          transaction_id: tx.transaction_id || tx.id,
-          type: tx.type,
-          status: tx.status,
-          created_at: tx.created_at,
-          updated_at: tx.updated_at,
-          user: tx.user,
-          user_id: tx.user_id,
-          // Send fields
-          send_amount: tx.send_amount,
-          send_currency: tx.send_currency,
-          receive_amount: tx.receive_amount,
-          receive_currency: tx.receive_currency,
-          recipient: tx.recipient,
-          // Receive fields
-          crypto_amount: tx.crypto_amount,
-          crypto_currency: tx.crypto_currency,
-          fiat_amount: tx.fiat_amount,
-          fiat_currency: tx.fiat_currency,
-          stellar_transaction_hash: tx.stellar_transaction_hash || tx.blockchain_tx_hash,
-          blockchain_tx_hash: tx.blockchain_tx_hash,
-          crypto_wallet: tx.crypto_wallet,
-          destination_type: tx.destination_type,
-          noah_card_account_id: tx.noah_card_account_id,
-          // Receipt fields
-          receipt_url: tx.receipt_url,
-          receipt_filename: tx.receipt_filename,
-          exchange_rate: tx.exchange_rate,
-        }
-      }
-      // Otherwise, determine type from transaction structure
-      const isReceive = tx.crypto_amount || tx.fiat_amount
-      const isCardFunding = tx.destination_type === "card" || tx.noah_card_account_id
-      return {
-        id: tx.id,
-        transaction_id: tx.transaction_id || tx.id,
-        type: isReceive ? (isCardFunding ? "card_funding" : "receive") : "send",
-        status: tx.status,
-        created_at: tx.created_at,
-        updated_at: tx.updated_at,
-        user: tx.user,
-        user_id: tx.user_id,
-        // Send fields
-        send_amount: tx.send_amount,
-        send_currency: tx.send_currency,
-        receive_amount: tx.receive_amount,
-        receive_currency: tx.receive_currency,
-        recipient: tx.recipient,
-        // Receive fields
-        crypto_amount: tx.crypto_amount,
-        crypto_currency: tx.crypto_currency,
-        fiat_amount: tx.fiat_amount,
-        fiat_currency: tx.fiat_currency,
-        stellar_transaction_hash: tx.stellar_transaction_hash || tx.blockchain_tx_hash,
-        blockchain_tx_hash: tx.blockchain_tx_hash,
-        crypto_wallet: tx.crypto_wallet,
-        destination_type: tx.destination_type,
-        noah_card_account_id: tx.noah_card_account_id,
-        // Receipt fields
-        receipt_url: tx.receipt_url,
-        receipt_filename: tx.receipt_filename,
-        exchange_rate: tx.exchange_rate,
-      }
-    })
+    return (adminData.transactions || []).map((tx: any) => ({
+      id: tx.id,
+      provider: tx.provider ?? null,
+      noah_transaction_id: tx.noah_transaction_id ?? null,
+      status: String(tx.status || "pending"),
+      created_at: tx.created_at,
+      updated_at: tx.updated_at,
+      direction: tx.direction ?? null,
+      amount: tx.amount ?? null,
+      currency: tx.currency ?? null,
+      user: tx.user,
+    }))
   }
 
-  const [transactions, setTransactions] = useState<CombinedTransaction[]>(() => getInitialTransactions())
+  const [transactions, setTransactions] = useState<ProviderLedgerTx[]>(() => getInitialTransactions())
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
-  const [typeFilter, setTypeFilter] = useState<"all" | "send" | "receive">("all")
+  const [directionFilter, setDirectionFilter] = useState<"all" | "in" | "out">("all")
   const [currencyFilter, setCurrencyFilter] = useState("all")
   const [selectedTransactions, setSelectedTransactions] = useState<string[]>([])
-  const [selectedTransaction, setSelectedTransaction] = useState<CombinedTransaction | null>(null)
-  const [currentTime, setCurrentTime] = useState(Date.now())
-  const [timerDuration, setTimerDuration] = useState(3600) // Payment method's completion_timer_seconds
-  const [paymentMethods, setPaymentMethods] = useState<any[]>([])
-
-  // Load payment methods
-  useEffect(() => {
-    const loadPaymentMethods = async () => {
-      try {
-        const paymentMethodsData = await paymentMethodService.getAll()
-        setPaymentMethods(paymentMethodsData || [])
-      } catch (error) {
-        console.error("Error loading payment methods:", error)
-      }
-    }
-
-    loadPaymentMethods()
-  }, [])
-
-  // Initialize timer duration from payment method when transaction is selected
-  useEffect(() => {
-    if (selectedTransaction && paymentMethods.length > 0) {
-      const getDefaultPaymentMethod = (currency: string) => {
-        const methods = paymentMethods.filter((pm) => pm.currency === currency && pm.status === "active")
-        return methods.find((pm) => pm.is_default) || methods[0]
-      }
-
-      const defaultMethod = getDefaultPaymentMethod(selectedTransaction.send_currency)
-      const timerSeconds = defaultMethod?.completion_timer_seconds ?? 3600
-      setTimerDuration(timerSeconds)
-    }
-  }, [selectedTransaction, paymentMethods])
+  const [selectedTransaction, setSelectedTransaction] = useState<ProviderLedgerTx | null>(null)
 
   // Update transactions when adminData changes (from realtime updates or initial load)
   useEffect(() => {
     if (adminData?.transactions) {
-      // Transform transactions to match CombinedTransaction interface
-      const transformedTransactions: CombinedTransaction[] = (adminData.transactions || []).map((tx: any) => {
-        // If it's already transformed (has type), use it as is
-        if (tx.type) {
-          return {
-            id: tx.id,
-            transaction_id: tx.transaction_id || tx.id,
-            type: tx.type,
-            status: tx.status,
-            created_at: tx.created_at,
-            updated_at: tx.updated_at,
-            user: tx.user,
-            user_id: tx.user_id,
-            // Send fields
-            send_amount: tx.send_amount,
-            send_currency: tx.send_currency,
-            receive_amount: tx.receive_amount,
-            receive_currency: tx.receive_currency,
-            recipient: tx.recipient,
-            // Receive fields
-            crypto_amount: tx.crypto_amount,
-            crypto_currency: tx.crypto_currency,
-            fiat_amount: tx.fiat_amount,
-            fiat_currency: tx.fiat_currency,
-            stellar_transaction_hash: tx.stellar_transaction_hash || tx.blockchain_tx_hash,
-            blockchain_tx_hash: tx.blockchain_tx_hash,
-            crypto_wallet: tx.crypto_wallet,
-            destination_type: tx.destination_type,
-            noah_card_account_id: tx.noah_card_account_id,
-            // Receipt fields
-            receipt_url: tx.receipt_url,
-            receipt_filename: tx.receipt_filename,
-            exchange_rate: tx.exchange_rate,
-          }
-        }
-        // Otherwise, determine type from transaction structure
-        const isReceive = tx.crypto_amount || tx.fiat_amount
-        const isCardFunding = tx.destination_type === "card" || tx.noah_card_account_id
-        return {
-          id: tx.id,
-          transaction_id: tx.transaction_id || tx.id,
-          type: isReceive ? (isCardFunding ? "card_funding" : "receive") : "send",
-          status: tx.status,
-          created_at: tx.created_at,
-          updated_at: tx.updated_at,
-          user: tx.user,
-          user_id: tx.user_id,
-          // Send fields
-          send_amount: tx.send_amount,
-          send_currency: tx.send_currency,
-          receive_amount: tx.receive_amount,
-          receive_currency: tx.receive_currency,
-          recipient: tx.recipient,
-          // Receive fields
-          crypto_amount: tx.crypto_amount,
-          crypto_currency: tx.crypto_currency,
-          fiat_amount: tx.fiat_amount,
-          fiat_currency: tx.fiat_currency,
-          stellar_transaction_hash: tx.stellar_transaction_hash || tx.blockchain_tx_hash,
-          blockchain_tx_hash: tx.blockchain_tx_hash,
-          crypto_wallet: tx.crypto_wallet,
-          destination_type: tx.destination_type,
-          noah_card_account_id: tx.noah_card_account_id,
-          // Receipt fields
-          receipt_url: tx.receipt_url,
-          receipt_filename: tx.receipt_filename,
-          exchange_rate: tx.exchange_rate,
-        }
-      })
-      setTransactions(transformedTransactions)
+      const next: ProviderLedgerTx[] = (adminData.transactions || []).map((tx: any) => ({
+        id: tx.id,
+        provider: tx.provider ?? null,
+        noah_transaction_id: tx.noah_transaction_id ?? null,
+        status: String(tx.status || "pending"),
+        created_at: tx.created_at,
+        updated_at: tx.updated_at,
+        direction: tx.direction ?? null,
+        amount: tx.amount ?? null,
+        currency: tx.currency ?? null,
+        user: tx.user,
+      }))
+      setTransactions(next)
     } else {
       // If adminData is loaded but has no transactions, set empty array
       setTransactions([])
     }
   }, [adminData])
 
-  // Update current time every second
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(Date.now())
-    }, 1000)
-
-    return () => clearInterval(timer)
-  }, [])
-
   const filteredTransactions = transactions.filter((transaction) => {
     const matchesSearch =
       searchTerm === "" ||
-      transaction.transaction_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      transaction.user?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (transaction.type === "receive" || transaction.type === "card_funding") &&
-        (transaction.stellar_transaction_hash?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          transaction.blockchain_tx_hash?.toLowerCase().includes(searchTerm.toLowerCase()))
+      transaction.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(transaction.noah_transaction_id || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(transaction.user?.email || "").toLowerCase().includes(searchTerm.toLowerCase())
 
     const matchesStatus = statusFilter === "all" || transaction.status === statusFilter
-    const matchesType = typeFilter === "all" || 
-      (typeFilter === "send" && transaction.type === "send") ||
-      (typeFilter === "receive" && (transaction.type === "receive" || transaction.type === "card_funding"))
+    const matchesDirection =
+      directionFilter === "all" || (transaction.direction || "out") === directionFilter
     const matchesCurrency =
       currencyFilter === "all" ||
-      (transaction.type === "send" &&
-        (transaction.send_currency === currencyFilter || transaction.receive_currency === currencyFilter)) ||
-      ((transaction.type === "receive" || transaction.type === "card_funding") &&
-        (transaction.crypto_currency === currencyFilter || transaction.fiat_currency === currencyFilter))
+      String(transaction.currency || "").toUpperCase() === currencyFilter
 
-    return matchesSearch && matchesStatus && matchesType && matchesCurrency
+    return matchesSearch && matchesStatus && matchesDirection && matchesCurrency
   })
 
   const formatTimestamp = (dateString: string) => {
@@ -365,7 +158,7 @@ export default function AdminTransactionsPage() {
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedTransactions(filteredTransactions.map((t: any) => t.transaction_id))
+      setSelectedTransactions(filteredTransactions.map((t: any) => t.id))
     } else {
       setSelectedTransactions([])
     }
@@ -384,7 +177,7 @@ export default function AdminTransactionsPage() {
       await officeDataStore.updateTransactionStatus(transactionId, newStatus)
 
       // Update selectedTransaction if it's the one being updated
-      if (selectedTransaction?.transaction_id === transactionId) {
+      if (selectedTransaction?.id === transactionId) {
         setSelectedTransaction((prev) => (prev ? { ...prev, status: newStatus as any } : null))
       }
     } catch (err) {
@@ -405,99 +198,20 @@ export default function AdminTransactionsPage() {
     }
   }
 
-  // Calculate elapsed time in seconds
-  const getElapsedTime = (): number => {
-    if (!selectedTransaction) return 0
-    
-    const createdAt = new Date(selectedTransaction.created_at).getTime()
-    
-    if (selectedTransaction.status === "completed") {
-      const completedAt = selectedTransaction.completed_at
-        ? new Date(selectedTransaction.completed_at).getTime()
-        : new Date(selectedTransaction.updated_at).getTime()
-      return Math.floor((completedAt - createdAt) / 1000)
-    } else {
-      // For pending/processing, use current time
-      return Math.floor((currentTime - createdAt) / 1000)
-    }
-  }
-
-  // Calculate remaining time for pending/processing
-  const getRemainingTime = (): number => {
-    const elapsed = getElapsedTime()
-    const remaining = timerDuration - elapsed
-    return Math.max(0, remaining)
-  }
-
-  // Calculate delay for completed transactions or when timer has finished
-  const getDelay = (): number => {
-    if (!selectedTransaction) return 0
-    const elapsed = getElapsedTime()
-    const delay = elapsed - timerDuration
-    return Math.max(0, delay)
-  }
-
-  // Format time for display
-  const formatTime = (seconds: number): string => {
-    const hours = Math.floor(seconds / 3600)
-    const minutes = Math.floor((seconds % 3600) / 60)
-    const remainingSeconds = seconds % 60
-
-    if (hours > 0) {
-      return `${hours}:${minutes.toString().padStart(2, "0")}:${remainingSeconds.toString().padStart(2, "0")}`
-    }
-    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
-  }
-
-  // Get timer display text
-  const getTimerDisplay = (): string | null => {
-    if (!selectedTransaction) return null
-    
-    // Don't show timer for failed/cancelled
-    if (selectedTransaction.status === "failed" || selectedTransaction.status === "cancelled") {
-      return null
-    }
-
-    if (selectedTransaction.status === "completed") {
-      const elapsed = getElapsedTime()
-      const delay = getDelay()
-      
-      if (delay > 0) {
-        return `Took ${formatTime(elapsed)} • Delayed ${formatTime(delay)}`
-      } else {
-        return `Took ${formatTime(elapsed)}`
-      }
-    } else {
-      // Pending or processing
-      const remaining = getRemainingTime()
-      const delay = getDelay()
-      
-      // If timer has finished (remaining <= 0), show delayed time
-      if (remaining <= 0 && delay > 0) {
-        return `Delayed ${formatTime(delay)}`
-      }
-      
-      // Otherwise show countdown
-      return `Time left ${formatTime(remaining)}`
-    }
-  }
-
   const handleExport = () => {
     const csvContent = [
-      ["Transaction ID", "Date", "User", "From", "To", "Send Amount", "Receive Amount", "Status", "Recipient"].join(
-        ",",
-      ),
+      ["ID", "Provider", "Provider Tx ID", "Direction", "Amount", "Currency", "Status", "Date", "User"].join(","),
       ...filteredTransactions.map((t: any) =>
         [
-          t.transaction_id,
+          t.id,
+          t.provider || "",
+          t.noah_transaction_id || "",
+          t.direction || "",
+          t.amount ?? "",
+          t.currency ?? "",
+          t.status,
           formatTimestamp(t.created_at),
           `${t.user?.first_name} ${t.user?.last_name}`,
-          t.send_currency,
-          t.receive_currency,
-          t.send_amount,
-          t.receive_amount,
-          t.status,
-          t.recipient?.full_name || "",
         ].join(","),
       ),
     ].join("\n")
@@ -529,16 +243,16 @@ export default function AdminTransactionsPage() {
           {/* Search and Filters Row */}
           <div className="flex flex-wrap items-center gap-3">
             {/* Type Filter Tabs */}
-            <Tabs value={typeFilter} onValueChange={(v) => setTypeFilter(v as "all" | "send" | "receive")}>
+            <Tabs value={directionFilter} onValueChange={(v) => setDirectionFilter(v as "all" | "in" | "out")}>
               <TabsList className="bg-gray-100">
                 <TabsTrigger value="all" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
                   All Transactions
                 </TabsTrigger>
-                <TabsTrigger value="send" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                  Send (Fiat)
+                <TabsTrigger value="out" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                  Outgoing
                 </TabsTrigger>
-                <TabsTrigger value="receive" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                  Receive & Card
+                <TabsTrigger value="in" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                  Incoming
                 </TabsTrigger>
               </TabsList>
             </Tabs>
@@ -547,7 +261,7 @@ export default function AdminTransactionsPage() {
             <div className="relative flex-1 min-w-[300px]">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
               <Input
-                placeholder="Search by transaction ID, email, or blockchain hash..."
+                placeholder="Search by ID or email..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-12 h-12 text-base"
@@ -600,7 +314,7 @@ export default function AdminTransactionsPage() {
             </Select>
 
             {/* Clear Filters Button */}
-            {(searchTerm || statusFilter !== "all" || currencyFilter !== "all" || typeFilter !== "all") && (
+            {(searchTerm || statusFilter !== "all" || currencyFilter !== "all" || directionFilter !== "all") && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -608,7 +322,7 @@ export default function AdminTransactionsPage() {
                   setSearchTerm("")
                   setStatusFilter("all")
                   setCurrencyFilter("all")
-                  setTypeFilter("all")
+                  setDirectionFilter("all")
                 }}
                 className="text-gray-600 hover:text-gray-900"
               >
@@ -619,14 +333,14 @@ export default function AdminTransactionsPage() {
           </div>
 
           {/* Active Filters Badges */}
-          {(searchTerm || statusFilter !== "all" || currencyFilter !== "all" || typeFilter !== "all") && (
+          {(searchTerm || statusFilter !== "all" || currencyFilter !== "all" || directionFilter !== "all") && (
             <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-200">
               <span className="text-sm text-gray-500">Active filters:</span>
-              {typeFilter !== "all" && (
+              {directionFilter !== "all" && (
                 <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-200">
-                  Type: {typeFilter === "send" ? "Send (Fiat)" : "Receive & Card"}
+                  Direction: {directionFilter === "out" ? "Outgoing" : "Incoming"}
                   <button
-                    onClick={() => setTypeFilter("all")}
+                    onClick={() => setDirectionFilter("all")}
                     className="ml-2 hover:bg-blue-100 rounded-full p-0.5"
                   >
                     <X className="h-3 w-3" />
@@ -725,13 +439,15 @@ export default function AdminTransactionsPage() {
                   <TableRow key={transaction.id}>
                     <TableCell>
                       <Checkbox
-                        checked={selectedTransactions.includes(transaction.transaction_id)}
+                        checked={selectedTransactions.includes(transaction.id)}
                         onCheckedChange={(checked) =>
-                          handleSelectTransaction(transaction.transaction_id, checked as boolean)
+                          handleSelectTransaction(transaction.id, checked as boolean)
                         }
                       />
                     </TableCell>
-                    <TableCell className="font-mono text-sm">{transaction.transaction_id}</TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {transaction.noah_transaction_id || transaction.id}
+                    </TableCell>
                     <TableCell>{formatDate(transaction.created_at)}</TableCell>
                     <TableCell>
                       <div>
@@ -742,28 +458,18 @@ export default function AdminTransactionsPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {transaction.type === "send" ? (
-                        <div>
-                          <div className="font-medium">
-                            {formatCurrency(transaction.send_amount || 0, transaction.send_currency || "")}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            → {formatCurrency(transaction.receive_amount || 0, transaction.receive_currency || "")}
-                          </div>
+                      <div className="space-y-0.5">
+                        <div className="font-medium">
+                          {(Number(transaction.amount || 0) || 0).toLocaleString("en-US", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}{" "}
+                          {String(transaction.currency || "").toUpperCase()}
                         </div>
-                      ) : (
-                        <div>
-                          <div className="font-medium">
-                            {transaction.crypto_amount} {transaction.crypto_currency}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            → {formatCurrency(transaction.fiat_amount || 0, transaction.fiat_currency || "")}
-                            {transaction.type === "card_funding" && (
-                              <span className="ml-2 text-xs text-blue-600">(Card Funding)</span>
-                            )}
-                          </div>
+                        <div className="text-sm text-gray-500">
+                          {String(transaction.provider || "").toUpperCase()} • {(transaction.direction || "out").toUpperCase()}
                         </div>
-                      )}
+                      </div>
                     </TableCell>
                     <TableCell>{getStatusBadge(transaction.status)}</TableCell>
                     <TableCell>
@@ -776,22 +482,14 @@ export default function AdminTransactionsPage() {
                           </DialogTrigger>
                           <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
                             <DialogHeader>
-                              <div className="flex items-center gap-6">
-                                <DialogTitle>Transaction Details</DialogTitle>
-                                {selectedTransaction && getTimerDisplay() && (
-                                  <div className="flex items-center text-orange-600">
-                                    <Clock className="h-4 w-4 mr-1" />
-                                    <span className="font-mono text-sm">{getTimerDisplay()}</span>
-                                  </div>
-                                )}
-                              </div>
+                              <DialogTitle>Transaction Details</DialogTitle>
                             </DialogHeader>
                             {selectedTransaction && (
                               <div className="overflow-y-auto flex-1 pr-2 -mr-2 space-y-4">
                                 <div className="grid grid-cols-2 gap-4">
                                   <div>
-                                    <label className="text-sm font-medium text-gray-600">Transaction ID</label>
-                                    <p className="font-mono">{selectedTransaction.transaction_id}</p>
+                                    <label className="text-sm font-medium text-gray-600">ID</label>
+                                    <p className="font-mono text-xs break-all">{selectedTransaction.id}</p>
                                   </div>
                                   <div>
                                     <label className="text-sm font-medium text-gray-600">Status</label>
@@ -808,207 +506,28 @@ export default function AdminTransactionsPage() {
                                     <label className="text-sm font-medium text-gray-600">Date</label>
                                     <p>{formatTimestamp(selectedTransaction.created_at)}</p>
                                   </div>
-                                  {selectedTransaction.type === "send" ? (
-                                    <>
-                                      <div>
-                                        <label className="text-sm font-medium text-gray-600">Send Amount</label>
-                                        <p className="font-medium">
-                                          {formatCurrency(
-                                            selectedTransaction.send_amount || 0,
-                                            selectedTransaction.send_currency || "",
-                                          )}
-                                        </p>
-                                      </div>
-                                      <div>
-                                        <label className="text-sm font-medium text-gray-600">Receive Amount</label>
-                                        <p className="font-medium">
-                                          {formatCurrency(
-                                            selectedTransaction.receive_amount || 0,
-                                            selectedTransaction.receive_currency || "",
-                                          )}
-                                        </p>
-                                      </div>
-                                      <div>
-                                        <label className="text-sm font-medium text-gray-600">Recipient</label>
-                                        <p>{selectedTransaction.recipient?.full_name}</p>
-                                    {(() => {
-                                      const recipient = selectedTransaction.recipient as any
-                                      if (!recipient) return null
-
-                                      const recipientCurrency = recipient.currency || selectedTransaction.receive_currency
-                                      const accountConfig = recipientCurrency
-                                        ? getAccountTypeConfigFromCurrency(recipientCurrency)
-                                        : null
-                                      const accountType = accountConfig?.accountType
-
-                                      return (
-                                        <div className="text-sm text-gray-500 space-y-1">
-                                          {accountType === "us" && recipient.routing_number && (
-                                            <p className="font-mono text-xs">
-                                              Routing: {formatFieldValue(accountType, "routing_number", recipient.routing_number)}
-                                            </p>
-                                          )}
-                                          {accountType === "uk" && recipient.sort_code && (
-                                            <p className="font-mono text-xs">
-                                              Sort Code: {formatFieldValue(accountType, "sort_code", recipient.sort_code)}
-                                            </p>
-                                          )}
-                                          {recipient.account_number && (
-                                            <p className="font-mono text-xs">
-                                              {accountConfig?.fieldLabels.account_number || "Account Number"}: {recipient.account_number}
-                                            </p>
-                                          )}
-                                          {recipient.iban && (
-                                            <p className="font-mono text-xs">
-                                              IBAN: {formatFieldValue(accountType || "generic", "iban", recipient.iban)}
-                                            </p>
-                                          )}
-                                          {recipient.swift_bic && (
-                                            <p className="font-mono text-xs">SWIFT/BIC: {recipient.swift_bic}</p>
-                                          )}
-                                          <p>{recipient.bank_name}</p>
-                                          {/* US Account Additional Fields */}
-                                          {accountType === "us" && (
-                                            <>
-                                              {recipient.transfer_type && (
-                                                <p className="text-xs">
-                                                  Transfer Type: <span className="font-medium">{recipient.transfer_type}</span>
-                                                </p>
-                                              )}
-                                              {recipient.checking_or_savings && (
-                                                <p className="text-xs">
-                                                  Account Type: <span className="font-medium capitalize">{recipient.checking_or_savings}</span>
-                                                </p>
-                                              )}
-                                              {recipient.address_line1 && (
-                                                <p className="text-xs">
-                                                  Address: {recipient.address_line1}
-                                                  {recipient.address_line2 && `, ${recipient.address_line2}`}
-                                                </p>
-                                              )}
-                                              {(recipient.city || recipient.state || recipient.postal_code) && (
-                                                <p className="text-xs">
-                                                  {[recipient.city, recipient.state, recipient.postal_code].filter(Boolean).join(", ")}
-                                                </p>
-                                              )}
-                                            </>
-                                          )}
-                                        </div>
-                                      )
-                                    })()}
-                                      </div>
-                                      <div>
-                                        <label className="text-sm font-medium text-gray-600">Exchange Rate</label>
-                                        <p className="font-medium">
-                                          1 {selectedTransaction.send_currency} = {selectedTransaction.exchange_rate}{" "}
-                                          {selectedTransaction.receive_currency}
-                                        </p>
-                                      </div>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <div>
-                                        <label className="text-sm font-medium text-gray-600">Stablecoin Received</label>
-                                        <p className="font-medium">
-                                          {selectedTransaction.crypto_amount} {selectedTransaction.crypto_currency}
-                                        </p>
-                                      </div>
-                                      <div>
-                                        <label className="text-sm font-medium text-gray-600">Fiat Amount</label>
-                                        <p className="font-medium">
-                                          {formatCurrency(
-                                            selectedTransaction.fiat_amount || 0,
-                                            selectedTransaction.fiat_currency || "",
-                                          )}
-                                        </p>
-                                      </div>
-                                      <div>
-                                        <label className="text-sm font-medium text-gray-600">Exchange Rate</label>
-                                        <p className="font-medium">
-                                          1 {selectedTransaction.crypto_currency} = {selectedTransaction.exchange_rate}{" "}
-                                          {selectedTransaction.fiat_currency}
-                                        </p>
-                                      </div>
-                                      <div>
-                                        <label className="text-sm font-medium text-gray-600">Stellar Transaction Hash</label>
-                                        <p className="font-mono text-xs break-all">
-                                          {selectedTransaction.stellar_transaction_hash}
-                                        </p>
-                                      </div>
-                                      <div>
-                                        <label className="text-sm font-medium text-gray-600">Wallet Address</label>
-                                        <p className="font-mono text-xs">
-                                          {selectedTransaction.crypto_wallet?.wallet_address}
-                                        </p>
-                                      </div>
-                                      <div>
-                                        <label className="text-sm font-medium text-gray-600">Deposit Account</label>
-                                        <p>{selectedTransaction.crypto_wallet?.recipient?.full_name}</p>
-                                        <p className="text-sm text-gray-500">
-                                          {selectedTransaction.crypto_wallet?.recipient?.account_number}
-                                        </p>
-                                        <p className="text-sm text-gray-500">
-                                          {selectedTransaction.crypto_wallet?.recipient?.bank_name}
-                                        </p>
-                                      </div>
-                                    </>
-                                  )}
-                                </div>
-
-                                <div>
-                                  <label className="text-sm font-medium text-gray-600">Receipt</label>
-                                  {selectedTransaction.receipt_url ? (
-                                    <div className="mt-1">
-                                      <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                                        <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                                          <CheckCircle className="h-4 w-4 text-green-600" />
-                                        </div>
-                                        <div className="flex-1">
-                                          <p className="text-sm font-medium text-gray-900">
-                                            {selectedTransaction.receipt_filename || "Receipt"}
-                                          </p>
-                                        </div>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={async () => {
-                                            const receiptUrl = selectedTransaction.receipt_url!
-                                            // Check if it's a file path (starts with "receipts/") or a public URL
-                                            const isPath = receiptUrl.startsWith("receipts/")
-                                            
-                                            if (isPath) {
-                                              try {
-                                                const response = await officeFetch(`/api/admin/receipts/documents?path=${encodeURIComponent(receiptUrl)}`)
-                                                
-                                                if (response.ok) {
-                                                  const data = await response.json()
-                                                  if (data.url) {
-                                                    window.open(data.url, "_blank")
-                                                  } else {
-                                                    alert("Failed to access receipt: No URL returned from server.")
-                                                  }
-                                                } else {
-                                                  const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
-                                                  alert(`Failed to access receipt: ${errorData.error || response.statusText || "Please try again."}`)
-                                                }
-                                              } catch (error: any) {
-                                                console.error("Error fetching signed URL:", error)
-                                                alert(`Failed to access receipt: ${error.message || "Please try again."}`)
-                                              }
-                                            } else {
-                                              // Public URL - open directly (backward compatibility)
-                                              window.open(receiptUrl, "_blank")
-                                            }
-                                          }}
-                                        >
-                                          <Eye className="h-4 w-4 mr-1" />
-                                          View
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <p className="text-sm text-gray-500 mt-1">No receipt uploaded</p>
-                                  )}
+                                  <div>
+                                    <label className="text-sm font-medium text-gray-600">Provider</label>
+                                    <p className="font-medium">{String(selectedTransaction.provider || "—")}</p>
+                                  </div>
+                                  <div>
+                                    <label className="text-sm font-medium text-gray-600">Provider Tx ID</label>
+                                    <p className="font-mono text-xs break-all">{selectedTransaction.noah_transaction_id || "—"}</p>
+                                  </div>
+                                  <div>
+                                    <label className="text-sm font-medium text-gray-600">Direction</label>
+                                    <p className="font-medium">{String(selectedTransaction.direction || "out").toUpperCase()}</p>
+                                  </div>
+                                  <div>
+                                    <label className="text-sm font-medium text-gray-600">Amount</label>
+                                    <p className="font-medium">
+                                      {(Number(selectedTransaction.amount || 0) || 0).toLocaleString("en-US", {
+                                        minimumFractionDigits: 2,
+                                        maximumFractionDigits: 2,
+                                      })}{" "}
+                                      {String(selectedTransaction.currency || "").toUpperCase()}
+                                    </p>
+                                  </div>
                                 </div>
 
                                 <div className="border-t pt-4">
@@ -1018,7 +537,7 @@ export default function AdminTransactionsPage() {
                                       size="sm"
                                       variant="outline"
                                       onClick={() =>
-                                        handleStatusUpdate(selectedTransaction.transaction_id, "processing")
+                                        handleStatusUpdate(selectedTransaction.id, "processing")
                                       }
                                       disabled={selectedTransaction.status === "processing"}
                                     >
@@ -1028,7 +547,7 @@ export default function AdminTransactionsPage() {
                                       size="sm"
                                       variant="outline"
                                       onClick={() =>
-                                        handleStatusUpdate(selectedTransaction.transaction_id, "completed")
+                                        handleStatusUpdate(selectedTransaction.id, "completed")
                                       }
                                       disabled={selectedTransaction.status === "completed"}
                                       className="text-green-600 hover:text-green-700"
@@ -1038,7 +557,7 @@ export default function AdminTransactionsPage() {
                                     <Button
                                       size="sm"
                                       variant="outline"
-                                      onClick={() => handleStatusUpdate(selectedTransaction.transaction_id, "failed")}
+                                      onClick={() => handleStatusUpdate(selectedTransaction.id, "failed")}
                                       disabled={selectedTransaction.status === "failed"}
                                       className="text-red-600 hover:text-red-700"
                                     >
@@ -1047,7 +566,7 @@ export default function AdminTransactionsPage() {
                                     <Button
                                       size="sm"
                                       variant="outline"
-                                      onClick={() => handleStatusUpdate(selectedTransaction.transaction_id, "cancelled")}
+                                      onClick={() => handleStatusUpdate(selectedTransaction.id, "cancelled")}
                                       disabled={selectedTransaction.status === "cancelled"}
                                       className="text-gray-600 hover:text-gray-700"
                                     >
@@ -1068,23 +587,23 @@ export default function AdminTransactionsPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem
-                              onClick={() => handleStatusUpdate(transaction.transaction_id, "processing")}
+                            onClick={() => handleStatusUpdate(transaction.id, "processing")}
                             >
                               Payment Received
                             </DropdownMenuItem>
                             <DropdownMenuItem
-                              onClick={() => handleStatusUpdate(transaction.transaction_id, "completed")}
+                            onClick={() => handleStatusUpdate(transaction.id, "completed")}
                             >
                               Transfer Complete
                             </DropdownMenuItem>
                             <DropdownMenuItem
-                              onClick={() => handleStatusUpdate(transaction.transaction_id, "failed")}
+                            onClick={() => handleStatusUpdate(transaction.id, "failed")}
                               className="text-red-600"
                             >
                               Mark as Failed
                             </DropdownMenuItem>
                             <DropdownMenuItem
-                              onClick={() => handleStatusUpdate(transaction.transaction_id, "cancelled")}
+                            onClick={() => handleStatusUpdate(transaction.id, "cancelled")}
                               className="text-gray-600"
                             >
                               Cancel Transfer

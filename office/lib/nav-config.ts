@@ -7,22 +7,9 @@ import {
   Building2,
   UsersRound,
   Receipt,
-  TrendingUp,
-  Settings,
-  Activity,
-  ClipboardCheck,
-  Radio,
-  ScrollText,
   HandCoins,
-  FileCog,
-  CircleDollarSign,
-  BadgeDollarSign,
-  Gift,
-  SlidersHorizontal,
-  BarChart3,
-  RefreshCw,
-  Gauge,
-  Database,
+  LineChart,
+  PanelsTopLeft,
 } from "lucide-react"
 
 export type NavItem = {
@@ -32,7 +19,7 @@ export type NavItem = {
 }
 
 export type NavGroup = {
-  id: "mobile" | "business" | "platform" | "commercial"
+  id: "mobile" | "business" | "revenue" | "platform"
   label: string
   items: NavItem[]
 }
@@ -59,39 +46,29 @@ export const officeNavGroups: NavGroup[] = [
     ],
   },
   {
-    id: "commercial",
-    label: "Commercial",
+    id: "revenue",
+    label: "Revenue",
     items: [
-      { name: "Plans", href: "/commercial/plans", icon: HandCoins },
-      { name: "Pricing Rules", href: "/commercial/rules", icon: FileCog },
-      { name: "Limit Policies", href: "/commercial/limits", icon: CircleDollarSign },
-      { name: "Subscriptions", href: "/commercial/subscriptions", icon: BadgeDollarSign },
-      { name: "Promo", href: "/commercial/promo", icon: Gift },
-      { name: "Rollout", href: "/commercial/rollout", icon: SlidersHorizontal },
-      { name: "Metrics", href: "/commercial/metrics", icon: BarChart3 },
-      { name: "Provider Fee Baselines", href: "/commercial/provider-fees", icon: Database },
-      { name: "Pricing Engine Health", href: "/commercial/health", icon: Gauge },
-      { name: "Webhook Replay Ops", href: "/commercial/ops", icon: RefreshCw },
+      { name: "Monetization", href: "/monetization", icon: HandCoins },
+      { name: "Pricing & FX", href: "/pricing-fx", icon: LineChart },
     ],
   },
   {
     id: "platform",
     label: "Platform",
-    items: [
-      { name: "Rates", href: "/rates", icon: TrendingUp },
-      { name: "Settings", href: "/settings", icon: Settings },
-      { name: "Integrations & health", href: "/platform/health", icon: Radio },
-      { name: "Industry checklist", href: "/platform/industry-checklist", icon: ClipboardCheck },
-      { name: "Audit log", href: "/platform/audit", icon: ScrollText },
-      { name: "Noah operations", href: "/platform/noah", icon: Activity },
-    ],
+    items: [{ name: "Platform control", href: "/platform-control", icon: PanelsTopLeft }],
   },
 ]
 
 /** Match pathname to active nav item (including prefix routes). */
-export function isNavItemActive(pathname: string, href: string): boolean {
+export function isNavItemActive(pathname: string | null, href: string): boolean {
+  if (!pathname) return false
   if (pathname === href || pathname === `${href}/`) return true
   // "/business" overview must not stay active on deeper /business/* routes
   if (href === "/business") return false
+  // Hub routes: stay active for any tab query string
+  if (href === "/monetization" || href === "/pricing-fx" || href === "/platform-control") {
+    return pathname === href || pathname === `${href}/`
+  }
   return pathname.startsWith(`${href}/`)
 }

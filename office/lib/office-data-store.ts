@@ -29,9 +29,14 @@ interface AdminData {
     totalTransactions: number
     totalVolume: number
     pendingTransactions: number
+    /** Sum of transaction amounts where currency is USD (provider-ledger). */
+    usdVolume: number
+    /** Top currencies by transaction count in the loaded window. */
+    topCurrencies: { code: string; count: number; totalAmount: number }[]
+    /** Completed transactions bucketed by processing duration (created_at → updated_at). */
+    processingBuckets: { label: string; count: number }[]
   }
   recentActivity: any[]
-  currencyPairs: any[]
   lastUpdated: number
 }
 
@@ -171,7 +176,7 @@ class OfficeDataStore {
         return true
       } else {
         // Cache expired, remove it
-        localStorage.removeItem(cacheKey)
+        localStorage.removeItem("office_data_cache")
         return false
       }
     } catch (error) {
@@ -250,7 +255,6 @@ class OfficeDataStore {
         return dateB - dateA
       })
       const recentActivity = this.processRecentActivity(sortedTransactions.slice(0, 10))
-      const currencyPairs = this.processCurrencyPairs(transactionsResult.filter((t) => t.status === "completed"))
 
       // Create initial data structure with critical data - preserve existing data to prevent flickering
       const existingData = this.data
@@ -262,7 +266,6 @@ class OfficeDataStore {
         baseCurrency,
         stats: tempStats,
         recentActivity,
-        currencyPairs,
         lastUpdated: Date.now(),
       }
 
@@ -296,7 +299,6 @@ class OfficeDataStore {
           baseCurrency,
           stats,
           recentActivity,
-          currencyPairs,
           lastUpdated: Date.now(),
         }
 
@@ -402,31 +404,24 @@ class OfficeDataStore {
     try {
       console.log("OfficeDataStore: Loading transactions...")
       
-      // Load send transactions
-      const { data: sendTransactions, error: sendError } = await supabase
+      // Provider-ledger transactions (Noah + future providers)
+      const { data: rows, error } = await supabase
         .from("transactions")
         .select(`
           *,
           user:users(first_name, last_name, email),
-          recipient:recipients(full_name, bank_name, account_number, routing_number, sort_code, iban, swift_bic, currency, address_line1, address_line2, city, state, postal_code, transfer_type, checking_or_savings)
         `)
         .order("created_at", { ascending: false })
         .limit(200)
 
-      if (sendError) {
-        console.error("OfficeDataStore: Error loading send transactions:", sendError)
-        throw sendError
+      if (error) {
+        console.error("OfficeDataStore: Error loading transactions:", error)
+        throw error
       }
 
-      // Only return send transactions (crypto_receive_transactions table removed)
-      const allTransactions = (sendTransactions || []).map((tx: any) => ({ ...tx, type: "send" }))
-
-      console.log("OfficeDataStore: Transactions loaded successfully:", {
-        send: sendTransactions?.length || 0,
-        total: allTransactions.length,
-      })
+      console.log("OfficeDataStore: Transactions loaded successfully:", rows?.length || 0)
       
-      return allTransactions
+      return rows || []
     } catch (error) {
       console.error("Error loading transactions:", error)
       return [] // Return empty array on error to prevent crashes
@@ -481,9 +476,8 @@ class OfficeDataStore {
     const totalTransactions = transactions.length
     const pendingTransactions = transactions.filter((t) => t.status === "pending" || t.status === "processing").length
 
-    // Calculate total volume in admin's base currency using already-loaded exchange rates
-    const completedTransactions = transactions.filter((t) => t.status === "completed")
-    const totalVolume = this.calculateVolumeInBaseCurrency(completedTransactions, baseCurrency, exchangeRates)
+    // Provider-ledger does not guarantee FX fields; keep volume conservative for now.
+    const totalVolume = 0
 
     return {
       totalUsers: 0, // Will be updated when users load
@@ -492,6 +486,7 @@ class OfficeDataStore {
       totalTransactions,
       totalVolume,
       pendingTransactions,
+      ...this.computeProviderLedgerDashboardExtras(transactions),
     }
   }
 
@@ -506,9 +501,8 @@ class OfficeDataStore {
     const totalTransactions = transactions.length
     const pendingTransactions = transactions.filter((t) => t.status === "pending" || t.status === "processing").length
 
-    // Calculate total volume in admin's base currency using already-loaded exchange rates
-    const completedTransactions = transactions.filter((t) => t.status === "completed")
-    const totalVolume = this.calculateVolumeInBaseCurrency(completedTransactions, baseCurrency, exchangeRates)
+    // Provider-ledger does not guarantee FX fields; keep volume conservative for now.
+    const totalVolume = 0
 
     return {
       totalUsers,
@@ -517,7 +511,54 @@ class OfficeDataStore {
       totalTransactions,
       totalVolume,
       pendingTransactions,
+      ...this.computeProviderLedgerDashboardExtras(transactions),
     }
+  }
+
+  private computeProviderLedgerDashboardExtras(transactions: any[]) {
+    let usdVolume = 0
+    const byCurrency = new Map<string, { count: number; totalAmount: number }>()
+
+    for (const t of transactions) {
+      const code = String(t.currency || "").trim().toUpperCase() || "—"
+      const amt = Number(t.amount) || 0
+      if (code === "USD") {
+        usdVolume += amt
+      }
+      const cur = byCurrency.get(code) || { count: 0, totalAmount: 0 }
+      cur.count += 1
+      cur.totalAmount += amt
+      byCurrency.set(code, cur)
+    }
+
+    const topCurrencies = Array.from(byCurrency.entries())
+      .map(([code, v]) => ({ code, count: v.count, totalAmount: v.totalAmount }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 12)
+
+    const bucketDefs = [
+      { label: "< 5 min", maxMin: 5 },
+      { label: "5–30 min", maxMin: 30 },
+      { label: "30 min – 2 h", maxMin: 120 },
+      { label: "2 h – 24 h", maxMin: 1440 },
+      { label: "24 h+", maxMin: Number.POSITIVE_INFINITY },
+    ] as const
+    const processingBuckets = bucketDefs.map((b) => ({ label: b.label, count: 0 }))
+
+    for (const t of transactions) {
+      if (String(t.status || "").toLowerCase() !== "completed") continue
+      const start = t.created_at ? new Date(t.created_at).getTime() : NaN
+      const end = t.updated_at ? new Date(t.updated_at).getTime() : NaN
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) continue
+      const minutes = (end - start) / 60000
+      if (minutes < 5) processingBuckets[0].count += 1
+      else if (minutes < 30) processingBuckets[1].count += 1
+      else if (minutes < 120) processingBuckets[2].count += 1
+      else if (minutes < 1440) processingBuckets[3].count += 1
+      else processingBuckets[4].count += 1
+    }
+
+    return { usdVolume, topCurrencies, processingBuckets }
   }
 
   private async getAdminBaseCurrency(): Promise<string> {
@@ -608,59 +649,38 @@ class OfficeDataStore {
 
   private processRecentActivity(transactions: any[]) {
     return transactions.map((tx) => {
-      // Determine transaction type
-      const txType = tx.type || (tx.send_amount ? "send" : tx.crypto_amount ? "receive" : null)
-      // Noah money movement: funding a card settlement destination (not Easner Cards product)
-      const isCardFunding = txType === "card_funding" || (tx.destination_type === "card" || tx.noah_card_account_id)
-      
-      // Format amount based on transaction type
-      let amount = ""
-      if (txType === "send") {
-        amount = this.formatCurrency(tx.receive_amount || tx.send_amount || 0, tx.receive_currency || tx.send_currency || "")
-      } else if (txType === "receive" || isCardFunding) {
-        if (isCardFunding) {
-          amount = `${tx.crypto_amount || 0} ${tx.crypto_currency || ""}`
-        } else {
-          amount = this.formatCurrency(tx.fiat_amount || 0, tx.fiat_currency || "")
-        }
-      } else {
-        amount = this.formatCurrency(tx.send_amount || 0, tx.send_currency || "")
-      }
+      const direction = String(tx.direction || "").toLowerCase() === "in" ? "in" : "out"
+      const status = String(tx.status || "pending").toLowerCase()
+      const code = String(tx.currency || "").toUpperCase()
+      const amountRaw = Number(tx.amount || 0)
+      const amount =
+        amountRaw && code
+          ? `${amountRaw.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${code}`
+          : ""
+
+      const message =
+        status === "completed"
+          ? direction === "out"
+            ? "Payout completed"
+            : "Funds received"
+          : status === "failed"
+            ? "Transfer failed"
+            : status === "cancelled"
+              ? "Transfer cancelled"
+              : status === "processing"
+                ? "Transfer processing"
+                : "Transfer created"
 
       return {
-        id: tx.id || tx.transaction_id,
-        type: this.getActivityType(tx.status, txType, isCardFunding),
-        message: this.getActivityMessage(tx, txType, isCardFunding),
+        id: tx.id,
+        type: `transaction_${status}`,
+        message,
         user: tx.user ? `${tx.user.first_name} ${tx.user.last_name}` : undefined,
         amount,
         time: this.getRelativeTime(tx.created_at),
-        status: this.getActivityStatus(tx.status),
+        status: this.getActivityStatus(status),
       }
     })
-  }
-
-  private processCurrencyPairs(transactions: any[]) {
-    const pairStats: { [key: string]: { volume: number; count: number } } = {}
-
-    transactions.forEach((tx) => {
-      const pair = `${tx.send_currency} → ${tx.receive_currency}`
-      if (!pairStats[pair]) {
-        pairStats[pair] = { volume: 0, count: 0 }
-      }
-      pairStats[pair].volume += tx.send_amount
-      pairStats[pair].count += 1
-    })
-
-    const totalVolume = Object.values(pairStats).reduce((sum, stat) => sum + stat.volume, 0)
-
-    return Object.entries(pairStats)
-      .map(([pair, stats]) => ({
-        pair,
-        volume: totalVolume > 0 ? (stats.volume / totalVolume) * 100 : 0,
-        transactions: stats.count,
-      }))
-      .sort((a, b) => b.volume - a.volume)
-      .slice(0, 4)
   }
 
   private getActivityType(status: string, txType?: string, isCardFunding?: boolean) {
@@ -877,7 +897,6 @@ class OfficeDataStore {
       // Use already-loaded exchange rates for volume calculation
       const stats = await this.calculateStats(this.data.users, transactionsResult, this.data.baseCurrency, this.data.exchangeRates)
       const recentActivity = this.processRecentActivity(transactionsResult.slice(0, 10))
-      const currencyPairs = this.processCurrencyPairs(transactionsResult.filter((t) => t.status === "completed"))
 
       // Create a new object reference to ensure React detects the change
       this.data = {
@@ -885,7 +904,6 @@ class OfficeDataStore {
         transactions: transactionsResult,
         stats: stats,
         recentActivity: recentActivity,
-        currencyPairs: currencyPairs,
         lastUpdated: Date.now(),
       }
       this.saveToCache()
@@ -991,7 +1009,7 @@ class OfficeDataStore {
           status: newStatus,
           updated_at: new Date().toISOString(),
         })
-        .eq("transaction_id", transactionId)
+        .eq("id", transactionId)
 
       if (error) {
         throw error
@@ -1000,7 +1018,7 @@ class OfficeDataStore {
       // Update local data after successful update
       if (this.data) {
         const updatedTransactions = this.data.transactions.map((tx) =>
-          tx.transaction_id === transactionId ? { ...tx, status: newStatus } : tx,
+          tx.id === transactionId ? { ...tx, status: newStatus } : tx,
         )
         const updatedStats = await this.calculateStats(this.data.users, updatedTransactions, this.data.baseCurrency, this.data.exchangeRates)
         const updatedRecentActivity = this.processRecentActivity(updatedTransactions.slice(0, 10))

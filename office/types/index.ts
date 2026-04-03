@@ -53,26 +53,18 @@ export interface Recipient {
 
 export interface Transaction {
   id: string
-  transaction_id: string
   user_id: string
-  recipient_id: string
-  send_amount: number
-  send_currency: string
-  receive_amount: number
-  receive_currency: string
-  exchange_rate: number
-  fee_amount: number
-  fee_type: string
-  total_amount: number
-  status: "pending" | "processing" | "completed" | "failed" | "cancelled"
-  reference?: string
-  receipt_url?: string
-  receipt_filename?: string
+  provider: string
+  noah_transaction_id?: string | null
+  provider_transaction_id?: string | null
+  status: string
+  amount?: number | null
+  currency?: string | null
+  direction?: "in" | "out" | null
+  payload?: any
+  metadata?: any
   created_at: string
   updated_at: string
-  completed_at?: string
-  failure_reason?: string
-  recipient?: Recipient
   user?: {
     first_name: string
     last_name: string

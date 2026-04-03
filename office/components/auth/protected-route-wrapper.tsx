@@ -5,14 +5,14 @@ import { useRouteProtection } from "@/hooks/use-route-protection"
 
 const PROTECTED_PATHS = [
   "/dashboard",
-  "/rates",
   "/kyc",
   "/compliance",
   "/users",
-  "/settings",
   "/transactions",
   "/business",
-  "/platform",
+  "/monetization",
+  "/pricing-fx",
+  "/platform-control",
 ]
 
 function isProtectedPath(pathname: string | null): boolean {

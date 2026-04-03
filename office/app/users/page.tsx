@@ -64,16 +64,14 @@ interface UserData {
 }
 
 interface TransactionData {
-  transaction_id: string
+  id: string
   created_at: string
-  send_currency: string
-  receive_currency: string
-  send_amount: number
-  receive_amount: number
+  provider?: string | null
+  provider_tx_id?: string | null
+  direction?: "in" | "out" | null
+  amount?: number | null
+  currency?: string | null
   status: string
-  recipient: {
-    full_name: string
-  }
 }
 
 export default function AdminUsersPage() {
@@ -96,11 +94,10 @@ export default function AdminUsersPage() {
   const [updatingKyc, setUpdatingKyc] = useState(false)
   const [userKycMap, setUserKycMap] = useState<Map<string, KYCSubmission[]>>(new Map())
 
-  // Format currency using database currencies
-  const formatCurrencyFromDB = (amount: number, currencyCode: string): string => {
-    const currency = data?.currencies?.find((c: any) => c.code === currencyCode)
-    const symbol = currency?.symbol || currencyCode
-    return `${symbol}${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const formatAmount = (amount: number | null | undefined, currencyCode: string | null | undefined): string => {
+    const amt = Number(amount || 0) || 0
+    const cur = String(currencyCode || "").toUpperCase()
+    return `${amt.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${cur}`
   }
 
   const formatTimestamp = (dateString: string) => {
@@ -130,14 +127,14 @@ export default function AdminUsersPage() {
       const { data, error } = await supabase
         .from("transactions")
         .select(`
-          transaction_id,
+          id,
           created_at,
-          send_currency,
-          receive_currency,
-          send_amount,
-          receive_amount,
-          status,
-          recipient:recipients(full_name)
+          provider,
+          noah_transaction_id,
+          direction,
+          amount,
+          currency,
+          status
         `)
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
@@ -146,16 +143,14 @@ export default function AdminUsersPage() {
       if (error) throw error
       // Transform the data to match TransactionData interface
       const transformedData = (data || []).map((tx: any) => ({
-        transaction_id: tx.transaction_id,
+        id: tx.id,
         created_at: tx.created_at,
-        send_currency: tx.send_currency,
-        receive_currency: tx.receive_currency,
-        send_amount: tx.send_amount,
-        receive_amount: tx.receive_amount,
+        provider: tx.provider ?? null,
+        provider_tx_id: tx.noah_transaction_id ?? null,
+        direction: tx.direction ?? null,
+        amount: tx.amount ?? null,
+        currency: tx.currency ?? null,
         status: tx.status,
-        recipient: {
-          full_name: Array.isArray(tx.recipient) ? tx.recipient[0]?.full_name || '' : tx.recipient?.full_name || ''
-        }
       }))
       setUserTransactions(transformedData)
     } catch (err) {
@@ -193,12 +188,9 @@ export default function AdminUsersPage() {
   // Calculate transaction stats and verification status for each user
   const usersWithStats = (data?.users || []).map((user: any) => {
     const userTransactions = (data?.transactions || []).filter((t: any) => t.user_id === user.id)
-    const userExchangeRates = data?.exchangeRates || []
-    const baseCurrency = user.base_currency || "NGN"
-
-    // Use the same calculation method as the dashboard for consistency
-    const totalVolume = calculateUserVolume(userTransactions, baseCurrency, userExchangeRates)
     const completedTransactions = userTransactions.filter((t: any) => t.status === "completed")
+
+    const totalVolume = 0
 
     // Use noah_kyc_status for KYC verification status
     // Map noah_kyc_status to display values: approved -> verified, others -> pending
@@ -709,9 +701,10 @@ export default function AdminUsersPage() {
                                     <Table>
                                       <TableHeader>
                                         <TableRow>
-                                          <TableHead>Transaction ID</TableHead>
+                                          <TableHead>ID</TableHead>
                                           <TableHead>Date</TableHead>
-                                          <TableHead>Currency Pair</TableHead>
+                                          <TableHead>Provider</TableHead>
+                                          <TableHead>Direction</TableHead>
                                           <TableHead>Amount</TableHead>
                                           <TableHead>Status</TableHead>
                                         </TableRow>
@@ -719,28 +712,22 @@ export default function AdminUsersPage() {
                                       <TableBody>
                                         {userTransactions.map((transaction) => (
                                           // Remove .slice(0, 5) to show all transactions
-                                          <TableRow key={transaction.transaction_id}>
+                                          <TableRow key={transaction.id}>
                                             <TableCell className="font-mono text-sm">
-                                              {transaction.transaction_id}
+                                              {transaction.provider_tx_id || transaction.id}
                                             </TableCell>
                                             <TableCell>
                                               {formatTimestamp(transaction.created_at)}
                                             </TableCell>
                                             <TableCell>
-                                              {transaction.send_currency} → {transaction.receive_currency}
+                                              {String(transaction.provider || "").toUpperCase() || "—"}
                                             </TableCell>
                                             <TableCell>
-                                              <div>
-                                                <div className="font-medium">
-                                                  {formatCurrencyFromDB(transaction.send_amount, transaction.send_currency)}
-                                                </div>
-                                                <div className="text-sm text-gray-500">
-                                                  →{" "}
-                                                  {formatCurrencyFromDB(
-                                                    transaction.receive_amount,
-                                                    transaction.receive_currency,
-                                                  )}
-                                                </div>
+                                              {(transaction.direction || "out").toUpperCase()}
+                                            </TableCell>
+                                            <TableCell>
+                                              <div className="font-medium">
+                                                {formatAmount(transaction.amount, transaction.currency)}
                                               </div>
                                             </TableCell>
                                             <TableCell>
