@@ -9,6 +9,7 @@ import type {
   UserSubscription,
   PricingEngineHealth,
   ProviderFeeSchedule,
+  CreateProviderFeeSchedulePayload,
 } from "@/lib/types/commercial"
 
 async function asJson<T>(response: Response): Promise<T> {
@@ -72,7 +73,7 @@ export const commercialApi = {
   },
   async createSubscription(payload: {
     userId: string
-    organizationId?: string
+    businessId?: string
     planId: string
     scope?: string
     startsAt?: string
@@ -138,7 +139,7 @@ export const commercialApi = {
     const data = await asJson<{ schedules?: ProviderFeeSchedule[] }>(res)
     return data.schedules ?? []
   },
-  async createProviderFeeSchedule(payload: Record<string, unknown>): Promise<ProviderFeeSchedule> {
+  async createProviderFeeSchedule(payload: CreateProviderFeeSchedulePayload): Promise<ProviderFeeSchedule> {
     const res = await officeFetch("/api/admin/commercial/provider-fees", {
       method: "POST",
       body: JSON.stringify(payload),

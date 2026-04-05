@@ -1,6 +1,10 @@
 export interface Beneficiary {
   id: string
   countryCode?: string
+  /** Resolved Easenet handle (lowercase, no @) when recipient is Easenet P2P */
+  payeeEasetag?: string
+  /** Snapshot URL from payee users.avatar_url */
+  avatarUrl?: string
   name: string
   bankName: string
   accountNumber: string
@@ -13,6 +17,7 @@ export interface Beneficiary {
   currency: string
   email: string
   phone: string
+  /** US bank rail: Fedwire is stored as `Wire`. */
   transferType?: "ACH" | "Wire"
   checkingOrSavings?: "checking" | "savings"
   addressLine1?: string

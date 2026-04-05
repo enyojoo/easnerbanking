@@ -15,6 +15,7 @@ import type { Beneficiary } from "@/lib/recipient-types"
 import { Label } from "@/components/ui/label"
 import { Search, Plus, User, ChevronDown } from "lucide-react"
 import { CountryFlag, CurrencyFlag } from "@/components/flags"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { listRecipients } from "@/lib/recipients-store"
 import { useAuth } from "@/lib/auth-context"
 
@@ -63,16 +64,24 @@ export function SendRecipientPicker({
     }
   }, [initialBeneficiaries, isLoading, user?.id])
 
+  const recipientSearchHaystack = (b: Beneficiary) =>
+    [
+      b.name,
+      b.bankName,
+      b.country,
+      b.email,
+      b.payeeEasetag ? `@${b.payeeEasetag}` : "",
+      b.accountNumber,
+      b.fullAccountNumber,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+
   const filteredBeneficiaries = useMemo(() => {
     if (!searchTerm.trim()) return beneficiaries
     const term = searchTerm.toLowerCase()
-    return beneficiaries.filter(
-      (b) =>
-        b.name.toLowerCase().includes(term) ||
-        b.bankName.toLowerCase().includes(term) ||
-        b.country.toLowerCase().includes(term) ||
-        b.email.toLowerCase().includes(term)
-    )
+    return beneficiaries.filter((b) => recipientSearchHaystack(b).includes(term))
   }, [beneficiaries, searchTerm])
 
   const handleAddSuccess = (newBeneficiary?: Beneficiary) => {
@@ -89,6 +98,15 @@ export function SendRecipientPicker({
     setIsPickerOpen(false)
   }
 
+  const recipientInitials = (b: Beneficiary) =>
+    b.name
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((p) => p[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "?"
+
   return (
     <div className="space-y-2">
       <Label className="text-muted-foreground">{label}</Label>
@@ -100,9 +118,16 @@ export function SendRecipientPicker({
         {selected ? (
           <div className="flex items-center gap-3">
             <div className="relative mr-1 shrink-0">
-              <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                <User className="h-5 w-5 text-primary" />
-              </div>
+              {selected.avatarUrl ? (
+                <Avatar className="h-10 w-10 border border-border">
+                  <AvatarImage src={selected.avatarUrl} alt="" />
+                  <AvatarFallback>{recipientInitials(selected)}</AvatarFallback>
+                </Avatar>
+              ) : (
+                <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                  <User className="h-5 w-5 text-primary" />
+                </div>
+              )}
               <div className="absolute -bottom-0.5 -right-0.5 h-5 w-5 overflow-hidden rounded-full border-2 border-background bg-background">
                 {selected.countryCode ? (
                   <CountryFlag
@@ -123,7 +148,9 @@ export function SendRecipientPicker({
               <p className="font-medium">{selected.name}</p>
               <p className="text-sm text-muted-foreground">
                 <span>
-                  {selected.currency} • {selected.fullAccountNumber}
+                  {selected.payeeEasetag
+                    ? `@${selected.payeeEasetag} • ${selected.currency}`
+                    : `${selected.currency} • ${selected.fullAccountNumber}`}
                 </span>
               </p>
             </div>
@@ -144,7 +171,7 @@ export function SendRecipientPicker({
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search by name, bank, or country..."
+                placeholder="Search by name, bank, Easetag, or country..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-9"
@@ -159,9 +186,16 @@ export function SendRecipientPicker({
                   className="flex w-full items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left transition-colors hover:bg-muted hover:border-input"
                 >
                   <div className="relative mr-1 shrink-0">
-                    <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                      <User className="h-5 w-5 text-primary" />
-                    </div>
+                    {b.avatarUrl ? (
+                      <Avatar className="h-10 w-10 border border-border">
+                        <AvatarImage src={b.avatarUrl} alt="" />
+                        <AvatarFallback>{recipientInitials(b)}</AvatarFallback>
+                      </Avatar>
+                    ) : (
+                      <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                        <User className="h-5 w-5 text-primary" />
+                      </div>
+                    )}
                     <div className="absolute -bottom-0.5 -right-0.5 h-5 w-5 overflow-hidden rounded-full border-2 border-background bg-background">
                       {b.countryCode ? (
                         <CountryFlag
@@ -182,7 +216,9 @@ export function SendRecipientPicker({
                     <p className="font-medium truncate">{b.name}</p>
                     <p className="text-sm text-muted-foreground min-w-0">
                       <span className="truncate">
-                        {b.bankName} • {b.currency}
+                        {b.payeeEasetag
+                          ? `@${b.payeeEasetag} • ${b.currency}`
+                          : `${b.bankName} • ${b.currency}`}
                       </span>
                     </p>
                   </div>

@@ -11,7 +11,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useCommercialRules } from "@/hooks/use-commercial-rules"
 import { useCommercialMetrics } from "@/hooks/use-commercial-metrics"
 import { commercialApi } from "@/lib/commercial-api"
-import type { ProviderFeeSchedule, RolloutControl, PricingEngineHealth } from "@/lib/types/commercial"
+import type {
+  ProviderFeeSchedule,
+  RolloutControl,
+  PricingEngineHealth,
+  ProviderFeeComponent,
+} from "@/lib/types/commercial"
 
 export function CommercialRulesPanel() {
   const { rows, loading, error, refresh } = useCommercialRules()
@@ -311,6 +316,11 @@ export function CommercialRulesPanel() {
   )
 }
 
+function truncCell(value: string | null | undefined, max = 14): string {
+  if (value == null || value === "") return "—"
+  return value.length <= max ? value : `${value.slice(0, max)}…`
+}
+
 export function CommercialProviderFeesPanel() {
   const [rows, setRows] = useState<ProviderFeeSchedule[]>([])
   const [loading, setLoading] = useState(true)
@@ -321,13 +331,28 @@ export function CommercialProviderFeesPanel() {
   const [corridor, setCorridor] = useState("")
   const [sourceCurrency, setSourceCurrency] = useState("USD")
   const [destinationCurrency, setDestinationCurrency] = useState("USDC")
+  const [feeComponent, setFeeComponent] = useState<ProviderFeeComponent>("legacy_combined")
+  const [direction, setDirection] = useState<"inbound" | "outbound" | "">("")
+  const [countryCode, setCountryCode] = useState("")
+  const [payoutMethod, setPayoutMethod] = useState("")
+  const [variableFeeBps, setVariableFeeBps] = useState("")
+  const [feeCurrency, setFeeCurrency] = useState("USD")
+  const [percentFeeBase, setPercentFeeBase] = useState<string>("")
+  const [minAmountSchedule, setMinAmountSchedule] = useState("")
+  const [maxAmountSchedule, setMaxAmountSchedule] = useState("")
   const [variableFeePercent, setVariableFeePercent] = useState("0")
   const [fixedFeeAmount, setFixedFeeAmount] = useState("0")
   const [localRailFeeAmount, setLocalRailFeeAmount] = useState("0")
+  const [kycKybFeeAmount, setKycKybFeeAmount] = useState("0")
+  const [ibanInfraFeeAmount, setIbanInfraFeeAmount] = useState("0")
   const [filterProvider, setFilterProvider] = useState("")
   const [filterVersion, setFilterVersion] = useState("")
   const [filterCorridor, setFilterCorridor] = useState("")
+  const [filterFeeComponent, setFilterFeeComponent] = useState<string>("all")
+  const [filterCountry, setFilterCountry] = useState("")
   const [togglingId, setTogglingId] = useState<string | null>(null)
+
+  const directionEnabled = feeComponent === "provider_funding_fee"
 
   const load = async () => {
     setLoading(true)
@@ -350,17 +375,39 @@ export function CommercialProviderFeesPanel() {
       setNotice("version is required")
       return
     }
+    const minBand = minAmountSchedule.trim() ? Number(minAmountSchedule) : null
+    const maxBand = maxAmountSchedule.trim() ? Number(maxAmountSchedule) : null
+    if (minBand != null && maxBand != null && minBand > maxBand) {
+      setNotice("Min amount cannot be greater than max amount.")
+      return
+    }
+    const bpsNum = variableFeeBps.trim() ? Number(variableFeeBps) : null
+    if (bpsNum != null && (!Number.isFinite(bpsNum) || bpsNum < 0)) {
+      setNotice("Variable fee (bps) must be a valid non-negative number.")
+      return
+    }
     try {
       await commercialApi.createProviderFeeSchedule({
         provider,
         version: version.trim(),
+        fee_component: feeComponent,
+        direction: directionEnabled && direction ? direction : null,
+        country_code: countryCode.trim().toUpperCase() || null,
+        payout_method: payoutMethod.trim() || null,
         rail: rail || null,
         corridor: corridor || null,
-        source_currency: sourceCurrency.toUpperCase(),
-        destination_currency: destinationCurrency.toUpperCase(),
+        source_currency: sourceCurrency.toUpperCase() || null,
+        destination_currency: destinationCurrency.toUpperCase() || null,
         variable_fee_percent: Number(variableFeePercent || 0),
+        variable_fee_bps: bpsNum,
         fixed_fee_amount: Number(fixedFeeAmount || 0),
         local_rail_fee_amount: Number(localRailFeeAmount || 0),
+        kyc_kyb_fee_amount: Number(kycKybFeeAmount || 0),
+        iban_infra_fee_amount: Number(ibanInfraFeeAmount || 0),
+        fee_currency: feeCurrency.trim().toUpperCase() || "USD",
+        percent_fee_base: percentFeeBase.trim() || null,
+        min_amount: minBand,
+        max_amount: maxBand,
       })
       setNotice("Provider fee schedule saved.")
       await load()
@@ -387,13 +434,16 @@ export function CommercialProviderFeesPanel() {
     const providerNeedle = filterProvider.trim().toLowerCase()
     const versionNeedle = filterVersion.trim().toLowerCase()
     const corridorNeedle = filterCorridor.trim().toLowerCase()
+    const countryNeedle = filterCountry.trim().toLowerCase()
     return rows.filter((r) => {
       if (providerNeedle && !String(r.provider || "").toLowerCase().includes(providerNeedle)) return false
       if (versionNeedle && !String(r.version || "").toLowerCase().includes(versionNeedle)) return false
       if (corridorNeedle && !String(r.corridor || "").toLowerCase().includes(corridorNeedle)) return false
+      if (filterFeeComponent !== "all" && String(r.fee_component || "legacy_combined") !== filterFeeComponent) return false
+      if (countryNeedle && !String(r.country_code || "").toLowerCase().includes(countryNeedle)) return false
       return true
     })
-  }, [rows, filterProvider, filterVersion, filterCorridor])
+  }, [rows, filterProvider, filterVersion, filterCorridor, filterFeeComponent, filterCountry])
 
   return (
     <div className="space-y-6">
@@ -423,6 +473,56 @@ export function CommercialProviderFeesPanel() {
               <Input value={corridor} onChange={(e) => setCorridor(e.target.value)} placeholder="US-USD-USDC" />
             </div>
           </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="space-y-2">
+              <Label>Fee component</Label>
+              <Select value={feeComponent} onValueChange={(v) => setFeeComponent(v as ProviderFeeComponent)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="legacy_combined">legacy_combined</SelectItem>
+                  <SelectItem value="provider_ramp_fee">provider_ramp_fee</SelectItem>
+                  <SelectItem value="provider_funding_fee">provider_funding_fee</SelectItem>
+                  <SelectItem value="provider_local_payout_fee">provider_local_payout_fee</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Direction (funding)</Label>
+              <Select
+                value={direction || "none"}
+                onValueChange={(v) => setDirection(v === "none" ? "" : (v as "inbound" | "outbound"))}
+                disabled={!directionEnabled}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="N/A" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">—</SelectItem>
+                  <SelectItem value="inbound">inbound</SelectItem>
+                  <SelectItem value="outbound">outbound</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Country code</Label>
+              <Input
+                value={countryCode}
+                onChange={(e) => setCountryCode(e.target.value.toUpperCase())}
+                placeholder="KE"
+                maxLength={2}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Payout method</Label>
+              <Input
+                value={payoutMethod}
+                onChange={(e) => setPayoutMethod(e.target.value)}
+                placeholder="bank_transfer, mobile_money_mpesa"
+              />
+            </div>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div className="space-y-2">
               <Label>Source</Label>
@@ -433,19 +533,64 @@ export function CommercialProviderFeesPanel() {
               <Input value={destinationCurrency} onChange={(e) => setDestinationCurrency(e.target.value.toUpperCase())} />
             </div>
             <div className="space-y-2">
-              <Label>Variable Fee %</Label>
+              <Label>Variable fee (bps)</Label>
+              <Input value={variableFeeBps} onChange={(e) => setVariableFeeBps(e.target.value)} placeholder="optional" />
+            </div>
+            <div className="space-y-2">
+              <Label>Fee currency</Label>
+              <Input value={feeCurrency} onChange={(e) => setFeeCurrency(e.target.value.toUpperCase())} />
+            </div>
+            <div className="space-y-2">
+              <Label>Percent fee base</Label>
+              <Select value={percentFeeBase || "none"} onValueChange={(v) => setPercentFeeBase(v === "none" ? "" : v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="optional" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">—</SelectItem>
+                  <SelectItem value="source_amount">source_amount</SelectItem>
+                  <SelectItem value="conversion_notional">conversion_notional</SelectItem>
+                  <SelectItem value="payout_amount">payout_amount</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div className="space-y-2">
+              <Label>Min amount (band)</Label>
+              <Input value={minAmountSchedule} onChange={(e) => setMinAmountSchedule(e.target.value)} placeholder="optional" />
+            </div>
+            <div className="space-y-2">
+              <Label>Max amount (band)</Label>
+              <Input value={maxAmountSchedule} onChange={(e) => setMaxAmountSchedule(e.target.value)} placeholder="optional" />
+            </div>
+            <div className="space-y-2">
+              <Label>Variable fee % (legacy)</Label>
               <Input value={variableFeePercent} onChange={(e) => setVariableFeePercent(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label>Fixed Fee</Label>
+              <Label>Fixed fee</Label>
               <Input value={fixedFeeAmount} onChange={(e) => setFixedFeeAmount(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label>Local Rail Fee</Label>
+              <Label>Local rail fee</Label>
               <Input value={localRailFeeAmount} onChange={(e) => setLocalRailFeeAmount(e.target.value)} />
             </div>
           </div>
-          <Button onClick={onCreate}>Save Fee Baseline</Button>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>KYC/KYB fee</Label>
+              <Input value={kycKybFeeAmount} onChange={(e) => setKycKybFeeAmount(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>IBAN infra fee</Label>
+              <Input value={ibanInfraFeeAmount} onChange={(e) => setIbanInfraFeeAmount(e.target.value)} />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Use fee component + bps for decomposed Noah rows; legacy combined schedules can use variable %.
+          </p>
+          <Button onClick={() => void onCreate()}>Save Fee Baseline</Button>
         </CardContent>
       </Card>
 
@@ -454,7 +599,7 @@ export function CommercialProviderFeesPanel() {
           <CardTitle>Fee Schedules</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
             <div className="space-y-1">
               <Label>Filter Provider</Label>
               <Input value={filterProvider} onChange={(e) => setFilterProvider(e.target.value)} placeholder="noah" />
@@ -467,53 +612,92 @@ export function CommercialProviderFeesPanel() {
               <Label>Filter Corridor</Label>
               <Input value={filterCorridor} onChange={(e) => setFilterCorridor(e.target.value)} placeholder="US-USD-USDC" />
             </div>
+            <div className="space-y-1">
+              <Label>Fee component</Label>
+              <Select value={filterFeeComponent} onValueChange={setFilterFeeComponent}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">all</SelectItem>
+                  <SelectItem value="legacy_combined">legacy_combined</SelectItem>
+                  <SelectItem value="provider_ramp_fee">provider_ramp_fee</SelectItem>
+                  <SelectItem value="provider_funding_fee">provider_funding_fee</SelectItem>
+                  <SelectItem value="provider_local_payout_fee">provider_local_payout_fee</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Filter country</Label>
+              <Input value={filterCountry} onChange={(e) => setFilterCountry(e.target.value)} placeholder="KE" />
+            </div>
           </div>
           {loading ? (
             <p className="text-sm text-muted-foreground">Loading schedules...</p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Provider</TableHead>
-                  <TableHead>Version</TableHead>
-                  <TableHead>Route</TableHead>
-                  <TableHead>Pair</TableHead>
-                  <TableHead>Variable %</TableHead>
-                  <TableHead>Fixed</TableHead>
-                  <TableHead>Local</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredRows.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell>{r.provider}</TableCell>
-                    <TableCell>{r.version}</TableCell>
-                    <TableCell>
-                      {r.rail || "any"} / {r.corridor || "any"}
-                    </TableCell>
-                    <TableCell>
-                      {r.source_currency || "*"}-{r.destination_currency || "*"}
-                    </TableCell>
-                    <TableCell>{r.variable_fee_percent}</TableCell>
-                    <TableCell>{r.fixed_fee_amount}</TableCell>
-                    <TableCell>{r.local_rail_fee_amount}</TableCell>
-                    <TableCell>{r.is_active ? "active" : "inactive"}</TableCell>
-                    <TableCell>
-                      <Button
-                        variant={r.is_active ? "outline" : "default"}
-                        size="sm"
-                        onClick={() => void onToggleActive(r)}
-                        disabled={togglingId === r.id}
-                      >
-                        {togglingId === r.id ? "Updating..." : r.is_active ? "Deactivate" : "Activate"}
-                      </Button>
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Provider</TableHead>
+                    <TableHead>Ver</TableHead>
+                    <TableHead>Route</TableHead>
+                    <TableHead>Pair</TableHead>
+                    <TableHead>Component</TableHead>
+                    <TableHead>Dir</TableHead>
+                    <TableHead>Country</TableHead>
+                    <TableHead>Payout</TableHead>
+                    <TableHead>BPS</TableHead>
+                    <TableHead>Fee ccy</TableHead>
+                    <TableHead>% base</TableHead>
+                    <TableHead>Band</TableHead>
+                    <TableHead>Var%</TableHead>
+                    <TableHead>Fix</TableHead>
+                    <TableHead>Local</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Action</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {filteredRows.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell>{r.provider}</TableCell>
+                      <TableCell className="whitespace-nowrap">{truncCell(r.version, 12)}</TableCell>
+                      <TableCell>
+                        {r.rail || "any"} / {truncCell(r.corridor, 10)}
+                      </TableCell>
+                      <TableCell>
+                        {r.source_currency || "*"}-{r.destination_currency || "*"}
+                      </TableCell>
+                      <TableCell>{r.fee_component || "legacy_combined"}</TableCell>
+                      <TableCell>{r.direction || "—"}</TableCell>
+                      <TableCell>{r.country_code || "—"}</TableCell>
+                      <TableCell title={r.payout_method || ""}>{truncCell(r.payout_method, 12)}</TableCell>
+                      <TableCell>{r.variable_fee_bps ?? "—"}</TableCell>
+                      <TableCell>{r.fee_currency || "USD"}</TableCell>
+                      <TableCell title={r.percent_fee_base || ""}>{truncCell(r.percent_fee_base, 12)}</TableCell>
+                      <TableCell>
+                        {r.min_amount ?? "—"}–{r.max_amount ?? "—"}
+                      </TableCell>
+                      <TableCell>{r.variable_fee_percent}</TableCell>
+                      <TableCell>{r.fixed_fee_amount}</TableCell>
+                      <TableCell>{r.local_rail_fee_amount}</TableCell>
+                      <TableCell>{r.is_active ? "active" : "inactive"}</TableCell>
+                      <TableCell>
+                        <Button
+                          variant={r.is_active ? "outline" : "default"}
+                          size="sm"
+                          onClick={() => void onToggleActive(r)}
+                          disabled={togglingId === r.id}
+                        >
+                          {togglingId === r.id ? "Updating..." : r.is_active ? "Deactivate" : "Activate"}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -770,6 +954,57 @@ export function CommercialMetricsPanel() {
               </CardContent>
             </Card>
           </div>
+
+          {metrics.providerPricing ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">Provider cost on quotes (7d)</CardTitle>
+                </CardHeader>
+                <CardContent className="text-sm space-y-1">
+                  <p>
+                    Rows with total_provider_cost:{" "}
+                    <span className="font-semibold">{metrics.providerPricing.quotesWithTotalProviderCost}</span>
+                  </p>
+                  <p>
+                    Sum total_provider_cost:{" "}
+                    <span className="font-semibold">{metrics.providerPricing.sumTotalProviderCostOnQuotes.toFixed(4)}</span>
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">Provider cost on applied fees (7d)</CardTitle>
+                </CardHeader>
+                <CardContent className="text-sm space-y-1">
+                  <p>
+                    Rows with total_provider_cost:{" "}
+                    <span className="font-semibold">{metrics.providerPricing.appliedWithTotalProviderCost}</span>
+                  </p>
+                  <p>
+                    Sum total_provider_cost:{" "}
+                    <span className="font-semibold">{metrics.providerPricing.sumTotalProviderCostOnApplied.toFixed(4)}</span>
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">Quoted user fees (pricing_totals)</CardTitle>
+                </CardHeader>
+                <CardContent className="text-sm space-y-1">
+                  <p>
+                    Quotes with pricing_totals:{" "}
+                    <span className="font-semibold">{metrics.providerPricing.quotesWithPricingTotals}</span>
+                  </p>
+                  <p>
+                    Sum total_user_fee:{" "}
+                    <span className="font-semibold">{metrics.providerPricing.sumTotalUserFeeOnQuotes.toFixed(4)}</span>
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          ) : null}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card>
               <CardHeader>

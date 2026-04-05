@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
+import { payoutCorridorGate } from "@/lib/payout-corridor-validation"
 
 type RecipientWritePayload = {
   country_code?: string | null
@@ -18,6 +19,8 @@ type RecipientWritePayload = {
   mobile_provider?: string | null
   wallet_network?: string | null
   wallet_memo_tag?: string | null
+  payee_easetag?: string | null
+  payee_avatar_url?: string | null
 }
 
 function looksLikeMissingStructuredColumn(error: unknown): boolean {
@@ -77,6 +80,9 @@ export async function POST(request: Request) {
   }
 
   const admin = createSupabaseAdmin()
+  const gate = await payoutCorridorGate(admin, payload as Parameters<typeof payoutCorridorGate>[1])
+  if (gate) return gate
+
   const primary = await admin
     .from("recipients")
     .insert({ ...payload, user_id: user.id })

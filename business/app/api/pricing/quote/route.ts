@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requirePricingAuth } from "../_helpers"
 import { createQuote } from "@/lib/pricing/evaluator"
+import type { ProviderCostsBreakdown } from "@/lib/pricing/provider-costs"
 
 export async function POST(request: Request) {
   const auth = await requirePricingAuth(request)
@@ -14,12 +15,20 @@ export async function POST(request: Request) {
         sourceAmount?: number | string
         rail?: string
         countryCode?: string
+        payoutCountry?: string
+        payoutMethod?: string
+        fundingRail?: string
+        fundingDirection?: "inbound" | "outbound"
+        fundingRailOutbound?: string
+        fundingDirectionOutbound?: "inbound" | "outbound"
         providerRate?: number | string
         strategyMode?: "maximize_margin" | "maximize_conversion" | "maximize_volume" | "strategic_account_pricing"
         routeType?: "stablecoin" | "fiat" | "mixed"
         routeCandidates?: Array<{
           id: string
           providerCostAmount?: number
+          totalProviderCostReporting?: number
+          providerCosts?: Record<string, unknown> | null
           speedScore?: number
           successScore?: number
           routeType?: "stablecoin" | "fiat" | "mixed"
@@ -52,10 +61,19 @@ export async function POST(request: Request) {
       sourceAmount,
       rail: body?.rail,
       countryCode: body?.countryCode,
+      payoutCountry: body?.payoutCountry ? String(body.payoutCountry).trim() : undefined,
+      payoutMethod: body?.payoutMethod ? String(body.payoutMethod).trim() : undefined,
+      fundingRail: body?.fundingRail ? String(body.fundingRail).trim() : undefined,
+      fundingDirection: body?.fundingDirection,
+      fundingRailOutbound: body?.fundingRailOutbound ? String(body.fundingRailOutbound).trim() : undefined,
+      fundingDirectionOutbound: body?.fundingDirectionOutbound,
       providerRate,
       strategyMode: body?.strategyMode,
       routeType: body?.routeType,
-      routeCandidates: body?.routeCandidates,
+      routeCandidates: body?.routeCandidates?.map((c) => ({
+        ...c,
+        providerCosts: c.providerCosts as ProviderCostsBreakdown | null | undefined,
+      })),
       providerFeeVersion: body?.providerFeeVersion,
       providerFeePercent: body?.providerFeePercent != null ? Number(body.providerFeePercent) : undefined,
       providerFixedFee: body?.providerFixedFee != null ? Number(body.providerFixedFee) : undefined,

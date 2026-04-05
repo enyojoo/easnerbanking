@@ -403,14 +403,10 @@ class OfficeDataStore {
   private async loadTransactions() {
     try {
       console.log("OfficeDataStore: Loading transactions...")
-      
-      // Provider-ledger transactions (Noah + future providers)
+
       const { data: rows, error } = await supabase
         .from("transactions")
-        .select(`
-          *,
-          user:users(first_name, last_name, email),
-        `)
+        .select("*")
         .order("created_at", { ascending: false })
         .limit(200)
 
@@ -419,9 +415,37 @@ class OfficeDataStore {
         throw error
       }
 
-      console.log("OfficeDataStore: Transactions loaded successfully:", rows?.length || 0)
-      
-      return rows || []
+      const list = rows || []
+      const userIds = [...new Set(list.map((t: { user_id?: string | null }) => t.user_id).filter(Boolean))] as string[]
+
+      const userById = new Map<string, { email: string | null; full_name: string | null }>()
+      if (userIds.length > 0) {
+        const { data: profiles, error: pe } = await supabase.from("users").select("id, email, full_name").in("id", userIds)
+        if (pe) {
+          console.warn("OfficeDataStore: could not batch-load users for transactions:", pe.message)
+        }
+        for (const u of profiles || []) {
+          const row = u as { id: string; email: string | null; full_name: string | null }
+          userById.set(row.id, { email: row.email ?? null, full_name: row.full_name ?? null })
+        }
+      }
+
+      const withUsers = list.map((t: Record<string, unknown> & { user_id?: string | null }) => {
+        const uid = t.user_id ? String(t.user_id) : ""
+        const p = uid ? userById.get(uid) : undefined
+        const full = (p?.full_name || "").trim()
+        const parts = full ? full.split(/\s+/) : []
+        const first_name = parts[0] || ""
+        const last_name = parts.length > 1 ? parts.slice(1).join(" ") : ""
+        return {
+          ...t,
+          user: p ? { first_name, last_name, email: p.email } : null,
+        }
+      })
+
+      console.log("OfficeDataStore: Transactions loaded successfully:", withUsers.length)
+
+      return withUsers
     } catch (error) {
       console.error("Error loading transactions:", error)
       return [] // Return empty array on error to prevent crashes
@@ -492,11 +516,9 @@ class OfficeDataStore {
 
   private async calculateStats(users: any[], transactions: any[], baseCurrency: string, exchangeRates: any[] = []) {
     const totalUsers = users.length
-    const activeUsers = users.filter((u) => u.status === "active").length
-    // Count users with approved Noah KYC or email verified
-    const verifiedUsers = users.filter((u) => 
-      u.noah_kyc_status === "approved" || u.email_confirmed_at
-    ).length
+    // public.users has no account status column; treat "active" as email confirmed in auth.
+    const activeUsers = users.filter((u) => Boolean(u.email_confirmed_at)).length
+    const verifiedUsers = users.filter((u) => u.noah_kyc_status === "approved").length
 
     const totalTransactions = transactions.length
     const pendingTransactions = transactions.filter((t) => t.status === "pending" || t.status === "processing").length
@@ -1079,36 +1101,9 @@ class OfficeDataStore {
     }
   }
 
+  /** Legacy hook: `public.users` has no `status` column (see migrations). */
   async updateUserStatus(userId: string, newStatus: string) {
-    try {
-      console.log(`OfficeDataStore: Updating user ${userId} status to ${newStatus}`)
-      
-      const { error } = await supabase
-        .from("users")
-        .update({
-          status: newStatus,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", userId)
-
-      if (error) {
-        console.error("Database error:", error)
-        throw error
-      }
-
-      // Update local data
-      if (this.data) {
-        this.data.users = this.data.users.map((user) => 
-          user.id === userId ? { ...user, status: newStatus, updated_at: new Date().toISOString() } : user
-        )
-        this.data.stats = await this.calculateStats(this.data.users, this.data.transactions, this.data.baseCurrency)
-        this.notify()
-        console.log("Local data updated successfully")
-      }
-    } catch (error) {
-      console.error("Error updating user status:", error)
-      throw error
-    }
+    console.warn("OfficeDataStore: public.users has no `status` column; skipping update.", { userId, newStatus })
   }
 
   async updateUserVerification(userId: string, newStatus: string) {

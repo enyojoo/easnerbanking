@@ -8,7 +8,7 @@ export async function GET(request: Request) {
 
   const admin = createSupabaseAdmin()
   const [orgs, customers, invoices] = await Promise.all([
-    admin.from("organizations").select("id", { count: "exact", head: true }),
+    admin.from("businesses").select("id", { count: "exact", head: true }),
     admin.from("b2b_customers").select("id", { count: "exact", head: true }),
     admin.from("invoices").select("id", { count: "exact", head: true }),
   ])
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({
-    organizationCount: orgs.count ?? 0,
+    businessCount: orgs.count ?? 0,
     b2bCustomerCount: customers.count ?? 0,
     invoiceCount: invoices.count ?? 0,
   })

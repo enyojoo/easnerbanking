@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import {
   View,
   Text,
@@ -14,12 +14,20 @@ import {
   KeyboardAvoidingView,
   Keyboard,
   Alert,
+  ActivityIndicator,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CameraView, useCameraPermissions } from 'expo-camera'
-import { User, Wallet, Building2, Smartphone } from 'lucide-react-native'
+import { Wallet, Building2, Smartphone, AtSign, Search } from 'lucide-react-native'
+import { fetchEasenetPublicProfile } from '../../lib/easenetProfile'
+import {
+  mergeLastSentMaps,
+  sortRecipientsForSendHub,
+  filterRecipientsBySearch,
+} from '../../lib/recentSendRecipients'
+import { buildDraftEasenetRecipient, isDraftEasenetRecipient } from '../../lib/draftEasenetRecipient'
 import { NavigationProps, Recipient } from '../../types'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -32,7 +40,6 @@ import { CountryCurrency } from '../../lib/countryCurrencyMapping'
 import { getCatalogByRecipientType, getRecipientProviders, getWalletAssets, getWalletNetworksForAsset } from '../../lib/recipientCatalog'
 import { getNetworkIconUrl, getTokenIconUrl } from '../../lib/cryptoIcons'
 import { ShimmerLoader } from '../../components/premium'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { CountryFlag } from '../../components/flags/CountryFlag'
 import { getCountryCodeForCurrency } from '@easner/shared'
@@ -46,22 +53,26 @@ const getInitials = (name: string): string => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
-const CACHE_KEY_PREFIX = 'recent_recipients_'
-const CACHE_TTL = 60 * 60 * 1000 // 60 minutes (recipient metadata)
-
 export default function SelectRecentRecipientScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
   const { user, userProfile } = useAuth()
   const preferredBalanceCurrency = String((route.params as any)?.preferredBalanceCurrency || '').toUpperCase()
-  const { recipients, refreshRecipients, invalidateRecipients, currencies, transactions } = useUserData()
-  const [recentRecipients, setRecentRecipients] = useState<Recipient[]>([])
-  const [hasTransactions, setHasTransactions] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
+  const routePaymentMethod = (route.params as any)?.selectedPaymentMethod as
+    | 'balance'
+    | 'linkBank'
+    | 'virtualBank'
+    | 'otherCurrency'
+    | undefined
+  const routeOtherCurrency = (route.params as any)?.selectedOtherCurrency as string | undefined
+  const routeOtherPaymentMethod = (route.params as any)?.selectedOtherPaymentMethod as string | undefined
+  const { recipients, refreshRecipients, invalidateRecipients, currencies, transactions, loading: recipientsLoading } = useUserData()
+  const [searchTerm, setSearchTerm] = useState('')
+  const [lastSentAtByRecipient, setLastSentAtByRecipient] = useState<Record<string, number>>({})
   
   // Add recipient flow states
   const [showRecipientTypeModal, setShowRecipientTypeModal] = useState(false)
   const [showBankAccountForm, setShowBankAccountForm] = useState(false)
-  const [selectedRecipientType, setSelectedRecipientType] = useState<'wallet' | 'bank' | 'mobile' | null>(null)
+  const [selectedRecipientType, setSelectedRecipientType] = useState<'wallet' | 'bank' | 'mobile' | 'easenet' | null>(null)
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false)
   const [showProviderDropdown, setShowProviderDropdown] = useState(false)
   const [showWalletAssetDropdown, setShowWalletAssetDropdown] = useState(false)
@@ -76,7 +87,23 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   const [error, setError] = useState('')
   const [selectedCountryCurrency, setSelectedCountryCurrency] = useState<CountryCurrency | null>(null)
   const [transferType, setTransferType] = useState<'ACH' | 'Wire' | null>(null)
-  
+  const [easenetProfile, setEasenetProfile] = useState<{
+    easetag: string
+    fullName: string
+    avatarUrl: string | null
+  } | null>(null)
+  const [easenetLookupLoading, setEasenetLookupLoading] = useState(false)
+  const [easenetLookupError, setEasenetLookupError] = useState<string | null>(null)
+
+  /** Hub search (@mode) live lookup — separate from add-recipient modal. */
+  const [hubSearchEasenet, setHubSearchEasenet] = useState<{
+    easetag: string
+    fullName: string
+    avatarUrl: string | null
+  } | null>(null)
+  const [hubSearchLoading, setHubSearchLoading] = useState(false)
+  const [hubSearchError, setHubSearchError] = useState<string | null>(null)
+
   const [newRecipient, setNewRecipient] = useState({
     fullName: '',
     accountNumber: '',
@@ -93,6 +120,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     memoTag: '',
     checkingOrSavings: '',
     addressLine1: '',
+    payeeEasetag: '',
   })
 
   // Animation refs
@@ -114,65 +142,133 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     ]).start()
   }, [headerAnim, contentAnim])
 
-  // Recent recipients: newest saved recipients first (Noah has no `recipient_id` on ledger txs)
   useEffect(() => {
-    const sync = async () => {
-      if (!user) {
-        setRecentRecipients([])
-        setHasTransactions(false)
-        setIsLoading(false)
-        return
-      }
-
-      setIsLoading(true)
-      const cacheKey = `${CACHE_KEY_PREFIX}${user.id}`
-
-      try {
-        const cached = await AsyncStorage.getItem(cacheKey)
-        if (cached) {
-          const { data, timestamp } = JSON.parse(cached)
-          if (Date.now() - timestamp < CACHE_TTL) {
-            setRecentRecipients(data.recipients || [])
-            setHasTransactions(!!data.hasTransactions)
-          }
-        }
-      } catch {
-        /* ignore */
-      }
-
-      const hasTx = transactions.length > 0
-      setHasTransactions(hasTx)
-
-      if (recipients.length === 0) {
-        setRecentRecipients([])
-        setIsLoading(false)
-        await AsyncStorage.setItem(
-          cacheKey,
-          JSON.stringify({
-            data: { recipients: [], hasTransactions: hasTx },
-            timestamp: Date.now(),
-          }),
-        )
-        return
-      }
-
-      const sorted = [...recipients].sort(
-        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-      )
-      const recent = sorted.slice(0, 5)
-      setRecentRecipients(recent)
-      setIsLoading(false)
-      await AsyncStorage.setItem(
-        cacheKey,
-        JSON.stringify({
-          data: { recipients: recent, hasTransactions: hasTx },
-          timestamp: Date.now(),
-        }),
-      )
+    if (!user?.id) {
+      setLastSentAtByRecipient({})
+      return
     }
+    let cancelled = false
+    void mergeLastSentMaps(user.id, transactions).then((merged) => {
+      if (!cancelled) setLastSentAtByRecipient(merged)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id, transactions])
 
-    void sync()
-  }, [user, recipients, transactions])
+  const { sorted: hubSorted, recentIds } = useMemo(
+    () => sortRecipientsForSendHub(recipients, lastSentAtByRecipient),
+    [recipients, lastSentAtByRecipient],
+  )
+
+  const hubDisplayRecipients = useMemo(
+    () => filterRecipientsBySearch(hubSorted, searchTerm),
+    [hubSorted, searchTerm],
+  )
+
+  useEffect(() => {
+    const t = searchTerm.trim()
+    if (!t.startsWith('@')) {
+      setHubSearchEasenet(null)
+      setHubSearchLoading(false)
+      setHubSearchError(null)
+      return
+    }
+    const raw = t.replace(/^@+/, '').trim()
+    if (raw.length < 4) {
+      setHubSearchEasenet(null)
+      setHubSearchLoading(false)
+      setHubSearchError(null)
+      return
+    }
+    let cancelled = false
+    setHubSearchLoading(true)
+    setHubSearchError(null)
+    const timer = setTimeout(() => {
+      void (async () => {
+        const res = await fetchEasenetPublicProfile(raw)
+        if (cancelled) return
+        setHubSearchLoading(false)
+        if (res.found) {
+          setHubSearchEasenet({
+            easetag: res.easetag,
+            fullName: res.fullName,
+            avatarUrl: res.avatarUrl,
+          })
+          setHubSearchError(null)
+        } else {
+          setHubSearchEasenet(null)
+          setHubSearchError(
+            res.reason === 'self' ? 'You cannot pay yourself.' : 'Easetag not found.',
+          )
+        }
+      })()
+    }, 450)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [searchTerm])
+
+  const hubVirtualRecipient = useMemo(() => {
+    if (!hubSearchEasenet || !userProfile?.id) return null
+    const tag = hubSearchEasenet.easetag.trim().toLowerCase()
+    const alreadySaved = hubDisplayRecipients.some(
+      (r) => (r.payee_easetag || '').trim().toLowerCase() === tag,
+    )
+    if (alreadySaved) return null
+    return buildDraftEasenetRecipient({
+      easetag: hubSearchEasenet.easetag,
+      fullName: hubSearchEasenet.fullName,
+      avatarUrl: hubSearchEasenet.avatarUrl,
+      userId: userProfile.id,
+    })
+  }, [hubSearchEasenet, hubDisplayRecipients, userProfile?.id])
+
+  const sendHubFlatListData = useMemo(() => {
+    if (!hubVirtualRecipient) return hubDisplayRecipients
+    return [hubVirtualRecipient, ...hubDisplayRecipients]
+  }, [hubVirtualRecipient, hubDisplayRecipients])
+
+  useEffect(() => {
+    if (selectedRecipientType !== 'easenet' || !showBankAccountForm) {
+      return
+    }
+    const raw = newRecipient.payeeEasetag.trim().replace(/^@+/, '')
+    if (raw.length < 4) {
+      setEasenetProfile(null)
+      setEasenetLookupError(null)
+      setEasenetLookupLoading(false)
+      return
+    }
+    let cancelled = false
+    setEasenetLookupLoading(true)
+    setEasenetLookupError(null)
+    const t = setTimeout(() => {
+      void (async () => {
+        const res = await fetchEasenetPublicProfile(raw)
+        if (cancelled) return
+        setEasenetLookupLoading(false)
+        if (res.found) {
+          setEasenetProfile({
+            easetag: res.easetag,
+            fullName: res.fullName,
+            avatarUrl: res.avatarUrl,
+          })
+          setEasenetLookupError(null)
+        } else {
+          setEasenetProfile(null)
+          setEasenetLookupError(
+            res.reason === 'self' ? 'You cannot add yourself as a recipient.' : 'Easetag not found.',
+          )
+        }
+      })()
+    }, 450)
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [newRecipient.payeeEasetag, selectedRecipientType, showBankAccountForm])
 
   const handleSelectRecipient = async (recipient: Recipient) => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -184,16 +280,9 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       preferredBalanceCurrency: preferredBalanceCurrency === 'USD' || preferredBalanceCurrency === 'EUR'
         ? preferredBalanceCurrency
         : undefined,
-    } as never)
-  }
-
-  const handleViewAllRecipients = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    // Navigate to SelectRecipientScreen (full list)
-    navigation.navigate('SelectRecipient' as never, {
-      preferredBalanceCurrency: preferredBalanceCurrency === 'USD' || preferredBalanceCurrency === 'EUR'
-        ? preferredBalanceCurrency
-        : undefined,
+      selectedPaymentMethod: routePaymentMethod,
+      selectedOtherCurrency: routeOtherCurrency ?? null,
+      selectedOtherPaymentMethod: routeOtherPaymentMethod ?? null,
     } as never)
   }
 
@@ -220,7 +309,12 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       memoTag: '',
       checkingOrSavings: '',
       addressLine1: '',
+      payeeEasetag: '',
     })
+    setEasenetProfile(null)
+    setEasenetLookupError(null)
+    setEasenetLookupLoading(false)
+    setSelectedRecipientType(null)
     setError('')
     setSelectedCountryCurrency(null)
     setTransferType(null)
@@ -268,6 +362,9 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   }
 
   const isFormValid = () => {
+    if (selectedRecipientType === 'easenet') {
+      return Boolean(easenetProfile && newRecipient.payeeEasetag.trim().length >= 1)
+    }
     if (!newRecipient.fullName || !newRecipient.currency) return false
 
     if (selectedRecipientType === 'wallet') return !!newRecipient.network && !!newRecipient.walletAddress
@@ -312,6 +409,40 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       setIsSubmitting(true)
       setError('')
 
+      if (selectedRecipientType === 'easenet') {
+        if (!easenetProfile) {
+          Alert.alert('Error', 'Enter a valid Easetag and wait for the profile to load')
+          return
+        }
+        const tag = easenetProfile.easetag
+        const newRecipientData = await recipientService.create(userProfile.id, {
+          fullName: easenetProfile.fullName,
+          accountNumber: tag,
+          bankName: `Easenet (@${tag})`,
+          currency: 'USD',
+          countryCode: 'US',
+          payeeEasetag: tag,
+          payeeAvatarUrl: easenetProfile.avatarUrl,
+        })
+        await invalidateRecipients()
+        await refreshRecipients(true)
+        setError('')
+        resetForm()
+        setShowBankAccountForm(false)
+        setShowRecipientTypeModal(false)
+        navigation.navigate('SendAmount' as never, {
+          recipient: newRecipientData,
+          fromSelectRecentRecipient: true,
+          preferredBalanceCurrency: preferredBalanceCurrency === 'USD' || preferredBalanceCurrency === 'EUR'
+            ? preferredBalanceCurrency
+            : undefined,
+          selectedPaymentMethod: routePaymentMethod,
+          selectedOtherCurrency: routeOtherCurrency ?? null,
+          selectedOtherPaymentMethod: routeOtherPaymentMethod ?? null,
+        } as never)
+        return
+      }
+
       const accountNumberForType =
         selectedRecipientType === 'wallet'
           ? newRecipient.walletAddress
@@ -347,12 +478,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
 
       await invalidateRecipients()
       await refreshRecipients(true)
-      
-      // Clear cache to force refresh
-      if (user) {
-        await AsyncStorage.removeItem(`${CACHE_KEY_PREFIX}${user.id}`)
-      }
-      
+
       setError('')
       resetForm()
       setShowBankAccountForm(false)
@@ -365,6 +491,9 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
         preferredBalanceCurrency: preferredBalanceCurrency === 'USD' || preferredBalanceCurrency === 'EUR'
           ? preferredBalanceCurrency
           : undefined,
+        selectedPaymentMethod: routePaymentMethod,
+        selectedOtherCurrency: routeOtherCurrency ?? null,
+        selectedOtherPaymentMethod: routeOtherPaymentMethod ?? null,
       } as never)
     } catch (error) {
       console.error('Error adding recipient:', error)
@@ -375,7 +504,12 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     }
   }
 
-  const recipientTypeKey = selectedRecipientType === 'mobile' ? 'mobile_money' : (selectedRecipientType || 'bank')
+  const recipientTypeKey =
+    selectedRecipientType === 'mobile'
+      ? 'mobile_money'
+      : selectedRecipientType === 'easenet'
+        ? 'bank'
+        : (selectedRecipientType || 'bank')
   const filteredCurrencies = getCatalogByRecipientType(recipientTypeKey as any).filter(currency => {
     if (currencySearchTerm) {
       return (
@@ -398,6 +532,11 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   }
 
   const renderRecipient = ({ item }: { item: Recipient }) => {
+    const isDraftEasenet = isDraftEasenetRecipient(item.id)
+    const showRecentBadge = recentIds.has(item.id) && !isDraftEasenet
+    const isWalletRecipient = String(item.bank_name || '').toLowerCase().includes('wallet')
+    const tokenIcon = getTokenIconUrl(item.currency)
+    const isEasenet = Boolean(item.payee_easetag?.trim())
     return (
       <TouchableOpacity
         style={styles.recipientItem}
@@ -407,190 +546,198 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
         <View style={styles.recipientRow}>
           <View style={styles.avatarContainer}>
             <View style={styles.recipientAvatar}>
-              <Text style={styles.recipientAvatarText}>
-                {getInitials(item.full_name)}
-              </Text>
+              {item.payee_avatar_url ? (
+                <Image source={{ uri: item.payee_avatar_url }} style={styles.recipientAvatarPhoto} />
+              ) : (
+                <Text style={styles.recipientAvatarText}>
+                  {getInitials(item.full_name)}
+                </Text>
+              )}
             </View>
-            {/* Flag badge on bottom edge of avatar */}
             <View style={styles.avatarFlagBadge}>
               <View style={styles.flagContainer}>
-                <CountryFlag code={item.country_code || (item.currency === 'EUR' ? 'EU' : getCountryCodeForCurrency(item.currency) || 'US')} size={20} style={styles.flagImage} />
+                {isWalletRecipient && tokenIcon ? (
+                  <Image source={{ uri: tokenIcon }} style={styles.flagImage} />
+                ) : (
+                  <CountryFlag
+                    code={item.country_code || (item.currency === 'EUR' ? 'EU' : getCountryCodeForCurrency(item.currency) || 'US')}
+                    size={20}
+                    style={styles.flagImage}
+                  />
+                )}
               </View>
             </View>
           </View>
-          
+
           <View style={styles.recipientInfo}>
-            <Text style={styles.recipientName}>{item.full_name}</Text>
+            <View style={styles.recipientNameRow}>
+              <Text style={styles.recipientName} numberOfLines={1}>
+                {item.full_name}
+              </Text>
+              {showRecentBadge ? (
+                <View style={styles.recentBadge}>
+                  <Text style={styles.recentBadgeText}>Recent</Text>
+                </View>
+              ) : null}
+              {isDraftEasenet ? (
+                <View style={styles.newRecipientBadge}>
+                  <Text style={styles.newRecipientBadgeText}>New</Text>
+                </View>
+              ) : null}
+            </View>
             <Text style={styles.recipientBank} numberOfLines={1} ellipsizeMode="tail">
-              {item.bank_name}
+              {isEasenet ? `@${item.payee_easetag} • ${item.currency}` : item.bank_name}
             </Text>
             <Text style={styles.recipientAccount} numberOfLines={1} ellipsizeMode="tail">
-              {item.iban || item.account_number || ''}
+              {isEasenet ? '' : item.iban || item.account_number || ''}
             </Text>
             <Text style={styles.recipientCurrency}>{item.currency}</Text>
           </View>
-          
+
           <Ionicons name="chevron-forward" size={20} color={colors.text.secondary} />
         </View>
       </TouchableOpacity>
     )
   }
 
+  const listHeader = (
+    <>
+      <Animated.View
+        style={[
+          styles.header,
+          {
+            opacity: headerAnim,
+            transform: [
+              {
+                translateY: headerAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [-20, 0],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
+        <TouchableOpacity
+          onPress={() => {
+            navigation.navigate('MainTabs' as never)
+          }}
+          style={styles.backButton}
+        >
+          <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+        </TouchableOpacity>
+        <View style={styles.headerContent}>
+          <Text style={styles.title}>Send Money</Text>
+        </View>
+      </Animated.View>
+
+      <Animated.View
+        style={[
+          styles.searchContainer,
+          {
+            opacity: contentAnim,
+            transform: [
+              {
+                translateY: contentAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [20, 0],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
+        <View style={styles.searchWrapper}>
+          <Search size={18} color={colors.text.secondary} strokeWidth={2} />
+          <TextInput
+            style={styles.searchInput}
+            value={searchTerm}
+            onChangeText={setSearchTerm}
+            placeholder="Search @easetag or recipients"
+            placeholderTextColor={colors.text.secondary}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="done"
+            onSubmitEditing={() => Keyboard.dismiss()}
+          />
+          {searchTerm.trim().startsWith('@') && hubSearchLoading ? (
+            <ActivityIndicator size="small" color={colors.primary.main} />
+          ) : null}
+          {searchTerm.length > 0 && !(searchTerm.trim().startsWith('@') && hubSearchLoading) ? (
+            <TouchableOpacity onPress={() => setSearchTerm('')}>
+              <Ionicons name="close-circle" size={18} color={colors.text.secondary} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        {searchTerm.trim().startsWith('@') &&
+        hubSearchError &&
+        !hubSearchLoading &&
+        !hubVirtualRecipient &&
+        hubDisplayRecipients.length === 0 ? (
+          <Text style={styles.searchErrorText}>{hubSearchError}</Text>
+        ) : null}
+      </Animated.View>
+    </>
+  )
+
+  const listEmpty = (
+    <Animated.View
+      style={[
+        styles.emptyState,
+        {
+          opacity: contentAnim,
+          transform: [
+            {
+              translateY: contentAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [20, 0],
+              }),
+            },
+          ],
+        },
+      ]}
+    >
+      <View style={styles.emptyIconContainer}>
+        <Ionicons name="people-outline" size={48} color={colors.text.secondary} />
+      </View>
+      <Text style={styles.emptyTitle}>{searchTerm.trim() ? 'No matches' : 'No recipients yet'}</Text>
+      <Text style={styles.emptyText}>
+        {searchTerm.trim() ? 'Try another search' : 'Add a recipient to send money'}
+      </Text>
+    </Animated.View>
+  )
+
   return (
     <ScreenWrapper>
       <View style={styles.container}>
-        <ScrollView 
-          style={styles.scrollView}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
-        >
-            {/* Header */}
-            <Animated.View 
-              style={[
-                styles.header,
-                {
-                  opacity: headerAnim,
-                  transform: [{
-                    translateY: headerAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [-20, 0],
-                    })
-                  }]
-                }
-              ]}
-            >
-              <TouchableOpacity
-                onPress={() => {
-                  // Always go back to App Dash (MainTabs), never to SendAmountScreen
-                  navigation.navigate('MainTabs' as never)
-                }}
-                style={styles.backButton}
-              >
-                <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-              </TouchableOpacity>
-              <View style={styles.headerContent}>
-              <Text style={styles.title}>Send Money</Text>
-            </View>
-            </Animated.View>
-
-          {/* Recipient Selector Box - Matching SendAmountScreen */}
-          <Animated.View 
-            style={[
-              styles.recipientSelectorContainer,
-              {
-                opacity: contentAnim,
-                transform: [{
-                  translateY: contentAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [20, 0],
-                  })
-                }]
-              }
+        {recipientsLoading && recipients.length === 0 ? (
+          <View style={[styles.scrollContent, { paddingHorizontal: spacing[5], paddingTop: spacing[4] }]}>
+            {[1, 2, 3, 4].map((i) => (
+              <ShimmerLoader
+                key={i}
+                width="100%"
+                height={88}
+                borderRadius={borderRadius.xl}
+                style={{ marginBottom: spacing[3] }}
+              />
+            ))}
+          </View>
+        ) : (
+          <FlatList
+            data={sendHubFlatListData}
+            renderItem={renderRecipient}
+            keyExtractor={(item) => item.id}
+            ListHeaderComponent={listHeader}
+            ListEmptyComponent={listEmpty}
+            contentContainerStyle={[
+              styles.scrollContent,
+              { paddingBottom: insets.bottom + 100, flexGrow: 1 },
             ]}
-          >
-            <TouchableOpacity
-              style={styles.selectRecipientBox}
-              onPress={handleViewAllRecipients}
-              activeOpacity={0.7}
-            >
-              <View style={styles.selectRecipientIcon}>
-                <User size={20} color={colors.text.secondary} strokeWidth={2} />
-              </View>
-              <Text style={styles.selectRecipientText}>Select Recipient</Text>
-            </TouchableOpacity>
-          </Animated.View>
-
-          {/* Loading Skeleton - Frame Only */}
-          {isLoading ? (
-            <Animated.View
-              style={[
-                styles.recipientsContainer,
-                {
-                  opacity: contentAnim,
-                  transform: [{
-                    translateY: contentAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [20, 0],
-                    })
-                  }]
-                }
-              ]}
-            >
-              {[1, 2, 3, 4].map((i) => (
-                <ShimmerLoader 
-                  key={i}
-                  width="100%" 
-                  height={88} 
-                  borderRadius={borderRadius.xl}
-                  style={{ marginBottom: spacing[3] }}
-                />
-              ))}
-            </Animated.View>
-          ) : hasTransactions && recentRecipients.length > 0 ? (
-            <>
-              <Animated.View
-                style={[
-                  styles.sectionTitleContainer,
-                  {
-                    opacity: contentAnim,
-                    transform: [{
-                      translateY: contentAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [20, 0],
-                      })
-                    }]
-                  }
-                ]}
-              >
-                <Text style={styles.sectionTitle}>Recent</Text>
-              </Animated.View>
-
-              <Animated.View
-                style={[
-                  styles.recipientsContainer,
-                  {
-                    opacity: contentAnim,
-                    transform: [{
-                      translateY: contentAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [20, 0],
-                      })
-                    }]
-                  }
-                ]}
-              >
-                <FlatList
-                  data={recentRecipients}
-                  renderItem={renderRecipient}
-                  keyExtractor={(item) => item.id}
-                  scrollEnabled={false}
-                  showsVerticalScrollIndicator={false}
-                />
-              </Animated.View>
-            </>
-          ) : (
-            <Animated.View
-              style={[
-                styles.emptyState,
-                {
-                  opacity: contentAnim,
-                  transform: [{
-                    translateY: contentAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [20, 0],
-                    })
-                  }]
-                }
-              ]}
-            >
-              <View style={styles.emptyIconContainer}>
-                <Ionicons name="people-outline" size={48} color={colors.text.secondary} />
-              </View>
-              <Text style={styles.emptyTitle}>Add or Select a recipient</Text>
-              <Text style={styles.emptyText}>and make your first transfer</Text>
-            </Animated.View>
-          )}
-        </ScrollView>
+            style={styles.scrollView}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          />
+        )}
 
         {/* Add a recipient Button - Fixed at bottom */}
         <View style={[styles.bottomButtonContainer, { paddingBottom: insets.bottom + spacing[4] }]}>
@@ -645,6 +792,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                 <Ionicons name="close" size={24} color={colors.text.secondary} />
               </TouchableOpacity>
             </View>
+            <Text style={styles.addFlowEasetagHint}>Send money to someone by @easetag</Text>
 
             <View style={styles.recipientTypeOptions}>
               <TouchableOpacity
@@ -702,7 +850,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                   const firstMobile = getCatalogByRecipientType('mobile_money' as any)[0]
                   const firstCurrency = firstMobile?.currencyCode || 'KES'
-                  const firstProvider = getRecipientProviders(firstCurrency, 'mobile_money')[0] || ''
+                  const firstProvider = getRecipientProviders(firstCurrency, 'mobile_money', firstMobile?.countryCode)[0] || ''
                   setSelectedRecipientType('mobile')
                   setSelectedCountryCurrency({
                     countryCode: firstMobile?.countryCode || 'KE',
@@ -723,6 +871,42 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                 <View style={styles.recipientTypeContent}>
                   <Text style={styles.recipientTypeTitle}>Mobile Money</Text>
                   <Text style={styles.recipientTypeSubtitle}>Send cash via mobile money</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.recipientTypeOption}
+                onPress={async () => {
+                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  setSelectedRecipientType('easenet')
+                  setEasenetProfile(null)
+                  setEasenetLookupError(null)
+                  setSelectedCountryCurrency({
+                    countryCode: 'US',
+                    countryName: 'United States',
+                    currencyCode: 'USD',
+                    currencyName: 'US Dollar',
+                    flagEmoji: '',
+                  })
+                  setNewRecipient((prev) => ({
+                    ...prev,
+                    currency: 'USD',
+                    payeeEasetag: '',
+                    fullName: '',
+                    bankName: '',
+                    accountNumber: '',
+                  }))
+                  setShowRecipientTypeModal(false)
+                  setShowBankAccountForm(true)
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.recipientTypeIcon}>
+                  <AtSign size={24} color={colors.primary.main} strokeWidth={2} />
+                </View>
+                <View style={styles.recipientTypeContent}>
+                  <Text style={styles.recipientTypeTitle}>Easenet</Text>
+                  <Text style={styles.recipientTypeSubtitle}>Pay by @handle (wallet transfer)</Text>
                 </View>
               </TouchableOpacity>
             </View>
@@ -763,7 +947,13 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
           >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                {selectedRecipientType === 'wallet' ? 'Add Wallet Address' : selectedRecipientType === 'mobile' ? 'Add Mobile Money' : 'Add Bank Account'}
+                {selectedRecipientType === 'wallet'
+                  ? 'Add Wallet Address'
+                  : selectedRecipientType === 'mobile'
+                    ? 'Add Mobile Money'
+                    : selectedRecipientType === 'easenet'
+                      ? 'Add Easenet recipient'
+                      : 'Add Bank Account'}
               </Text>
               <TouchableOpacity
                 onPress={() => {
@@ -792,8 +982,52 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                 </View>
               ) : null}
               
+            {selectedRecipientType === 'easenet' && (
+              <>
+                <Text style={styles.modalHint}>Send money to someone by @easetag</Text>
+                <Text style={[styles.modalHint, styles.modalHintSecondary]}>
+                  Wallet transfers use USD. Enter the payee&apos;s Easenet handle.
+                </Text>
+                <View style={styles.easenetInputRow}>
+                  <Text style={styles.easenetAt}>@</Text>
+                  <TextInput
+                    style={[styles.modalInput, styles.easenetInput]}
+                    value={newRecipient.payeeEasetag}
+                    onChangeText={(text) =>
+                      setNewRecipient((prev) => ({ ...prev, payeeEasetag: text.replace(/^@+/, '') }))
+                    }
+                    placeholder="handle"
+                    placeholderTextColor={colors.text.secondary}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    editable={!isSubmitting}
+                  />
+                  {easenetLookupLoading ? (
+                    <ActivityIndicator size="small" color={colors.primary.main} style={styles.easenetSpinner} />
+                  ) : null}
+                </View>
+                {easenetLookupError ? <Text style={styles.errorText}>{easenetLookupError}</Text> : null}
+                {easenetProfile ? (
+                  <View style={styles.easenetPreview}>
+                    {easenetProfile.avatarUrl ? (
+                      <Image source={{ uri: easenetProfile.avatarUrl }} style={styles.easenetAvatarImg} />
+                    ) : (
+                      <View style={styles.easenetAvatarFallback}>
+                        <Text style={styles.easenetAvatarInitials}>{getInitials(easenetProfile.fullName)}</Text>
+                      </View>
+                    )}
+                    <View style={styles.easenetPreviewText}>
+                      <Text style={styles.easenetPreviewName}>{easenetProfile.fullName}</Text>
+                      <Text style={styles.easenetPreviewTag}>@{easenetProfile.easetag}</Text>
+                    </View>
+                  </View>
+                ) : null}
+              </>
+            )}
+
             {/* Country/Currency Selector */}
-            {selectedRecipientType !== 'wallet' && <View style={[styles.currencySelectorWrapper, showCurrencyDropdown && styles.currencySelectorWrapperActive]}>
+            {selectedRecipientType !== 'wallet' && selectedRecipientType !== 'easenet' && (
+            <View style={[styles.currencySelectorWrapper, showCurrencyDropdown && styles.currencySelectorWrapperActive]}>
               <TouchableOpacity
                 style={styles.currencySelector}
                 onPress={() => {
@@ -858,7 +1092,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                             flagEmoji: '',
                           })
                               setTransferType(null)
-                          const firstProvider = getRecipientProviders(item.currencyCode, 'mobile_money')[0] || ''
+                          const firstProvider = getRecipientProviders(item.currencyCode, 'mobile_money', item.countryCode)[0] || ''
                           setNewRecipient(prev => ({
                             ...prev,
                             currency: item.currencyCode,
@@ -881,7 +1115,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                   </ScrollView>
                 </View>
               )}
-            </View>}
+            </View>
+            )}
 
               {selectedRecipientType === 'mobile' && (
                 <>
@@ -902,7 +1137,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                           {newRecipient.provider || 'Select provider'}
                         </Text>
                         <Ionicons name={showProviderDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6b7280" />
-            </View>
+                      </View>
                     </TouchableOpacity>
                     {showProviderDropdown && (
                       <View style={styles.currencyDropdown}>
@@ -917,7 +1152,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                           />
                         </View>
                         <ScrollView style={styles.currencyDropdownList} nestedScrollEnabled={true}>
-                          {getRecipientProviders(newRecipient.currency, 'mobile_money')
+                          {getRecipientProviders(newRecipient.currency, 'mobile_money', selectedCountryCurrency?.countryCode)
                             .filter((provider) => provider.toLowerCase().includes(providerSearchTerm.toLowerCase()))
                             .map((provider) => (
                             <TouchableOpacity
@@ -1151,7 +1386,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                             activeOpacity={0.7}
                           >
                             <Text style={[styles.transferTypeOptionText, transferType === 'Wire' && styles.transferTypeOptionTextSelected]}>
-                              Wire
+                              Fedwire
                             </Text>
                           </TouchableOpacity>
                         </View>
@@ -1492,6 +1727,42 @@ const styles = StyleSheet.create({
     ...textStyles.headlineMedium,
     color: colors.text.primary,
   },
+  searchContainer: {
+    paddingHorizontal: spacing[5],
+    marginBottom: spacing[3],
+  },
+  searchWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.frame.background,
+    borderRadius: borderRadius.lg,
+    borderWidth: 0.5,
+    borderColor: colors.frame.border,
+    paddingHorizontal: spacing[3],
+    gap: spacing[2],
+    minHeight: 48,
+  },
+  searchInput: {
+    flex: 1,
+    ...textStyles.bodyMedium,
+    color: colors.text.primary,
+    fontFamily: 'Outfit-Regular',
+    paddingVertical: spacing[2],
+  },
+  searchErrorText: {
+    ...textStyles.bodySmall,
+    color: colors.error.main,
+    fontFamily: 'Outfit-Regular',
+    marginTop: spacing[2],
+    paddingHorizontal: spacing[1],
+  },
+  addFlowEasetagHint: {
+    ...textStyles.bodySmall,
+    color: colors.text.secondary,
+    fontFamily: 'Outfit-Regular',
+    paddingHorizontal: spacing[5],
+    paddingBottom: spacing[3],
+  },
   recipientSelectorContainer: {
     paddingHorizontal: spacing[5],
     marginBottom: spacing[4],
@@ -1561,6 +1832,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary.main + '15',
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+  },
+  recipientAvatarPhoto: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
   recipientAvatarText: {
     ...textStyles.titleMedium,
@@ -1602,11 +1879,42 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
+  recipientNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    marginBottom: spacing[1],
+    flexWrap: 'wrap',
+  },
   recipientName: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
     fontFamily: 'Outfit-SemiBold',
-    marginBottom: spacing[1],
+    flexShrink: 1,
+  },
+  recentBadge: {
+    backgroundColor: colors.primary.main + '18',
+    paddingHorizontal: spacing[2],
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  recentBadgeText: {
+    ...textStyles.bodySmall,
+    fontFamily: 'Outfit-SemiBold',
+    color: colors.primary.main,
+    fontSize: 11,
+  },
+  newRecipientBadge: {
+    backgroundColor: colors.neutral[200],
+    paddingHorizontal: spacing[2],
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  newRecipientBadgeText: {
+    ...textStyles.bodySmall,
+    fontFamily: 'Outfit-SemiBold',
+    color: colors.text.secondary,
+    fontSize: 11,
   },
   recipientBank: {
     ...textStyles.bodySmall,
@@ -1758,6 +2066,78 @@ const styles = StyleSheet.create({
         includeFontPadding: false,
       },
     }),
+  },
+  modalHint: {
+    ...textStyles.bodySmall,
+    color: colors.text.secondary,
+    marginBottom: spacing[1],
+    fontFamily: 'Outfit-Regular',
+  },
+  modalHintSecondary: {
+    marginTop: 0,
+    marginBottom: spacing[2],
+    opacity: 0.9,
+  },
+  easenetInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing[2],
+  },
+  easenetAt: {
+    ...textStyles.bodyMedium,
+    color: colors.text.secondary,
+    marginRight: spacing[1],
+    fontFamily: 'Outfit-Regular',
+  },
+  easenetInput: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  easenetSpinner: {
+    marginLeft: spacing[2],
+  },
+  easenetPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing[3],
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.frame.border,
+    backgroundColor: colors.frame.background,
+    marginBottom: spacing[3],
+  },
+  easenetAvatarImg: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+  },
+  easenetAvatarFallback: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.primary.main + '18',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  easenetAvatarInitials: {
+    ...textStyles.titleSmall,
+    color: colors.primary.main,
+    fontFamily: 'Outfit-SemiBold',
+  },
+  easenetPreviewText: {
+    marginLeft: spacing[3],
+    flex: 1,
+  },
+  easenetPreviewName: {
+    ...textStyles.bodyMedium,
+    color: colors.text.primary,
+    fontFamily: 'Outfit-SemiBold',
+  },
+  easenetPreviewTag: {
+    ...textStyles.bodySmall,
+    color: colors.text.secondary,
+    marginTop: 2,
+    fontFamily: 'Outfit-Regular',
   },
   modalButtons: {
     flexDirection: 'row',

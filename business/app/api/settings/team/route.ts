@@ -40,7 +40,7 @@ function normalizeEmail(email: string): string {
 async function getMeAndOrg(admin: ReturnType<typeof createSupabaseAdmin>, userId: string) {
   const { data: me, error: meError } = await admin
     .from("users")
-    .select("id,email,full_name,easner_organization_id")
+    .select("id,email,full_name,easner_business_id")
     .eq("id", userId)
     .maybeSingle()
   return { me, meError }
@@ -49,21 +49,21 @@ async function getMeAndOrg(admin: ReturnType<typeof createSupabaseAdmin>, userId
 async function requireOwner(admin: ReturnType<typeof createSupabaseAdmin>, userId: string) {
   const { me, meError } = await getMeAndOrg(admin, userId)
   if (meError) return { error: NextResponse.json({ error: meError.message }, { status: 500 }) }
-  if (!me?.easner_organization_id) return { error: NextResponse.json({ error: "Organization not found for user" }, { status: 400 }) }
+  if (!me?.easner_business_id) return { error: NextResponse.json({ error: "Business not found for user" }, { status: 400 }) }
 
   const { data: myMembership, error: membershipError } = await admin
-    .from("organization_memberships")
+    .from("business_memberships")
     .select("role")
-    .eq("organization_id", me.easner_organization_id)
+    .eq("business_id", me.easner_business_id)
     .eq("user_id", userId)
     .maybeSingle()
 
   if (membershipError) return { error: NextResponse.json({ error: membershipError.message }, { status: 500 }) }
   if (!myMembership || normalizeRole(myMembership.role) !== "Owner") {
-    return { error: NextResponse.json({ error: "Only organization owners can manage team members" }, { status: 403 }) }
+    return { error: NextResponse.json({ error: "Only business owners can manage team members" }, { status: 403 }) }
   }
 
-  return { orgId: me.easner_organization_id }
+  return { orgId: me.easner_business_id }
 }
 
 export async function GET(request: Request) {
@@ -79,7 +79,7 @@ export async function GET(request: Request) {
 
   const myName = (me?.full_name ?? "").trim() || (typeof user.user_metadata?.name === "string" ? user.user_metadata.name : "") || "Account Owner"
   const myEmail = (me?.email ?? user.email ?? "").trim()
-  const orgId = me?.easner_organization_id ?? null
+  const orgId = me?.easner_business_id ?? null
 
   if (!orgId) {
     const solo: TeamMember = {
@@ -93,9 +93,9 @@ export async function GET(request: Request) {
 
   // Preferred source: organization memberships with granular roles.
   const { data: membershipRows, error: membershipError } = await admin
-    .from("organization_memberships")
+    .from("business_memberships")
     .select("id,user_id,full_name,email,role,status,created_at")
-    .eq("organization_id", orgId)
+    .eq("business_id", orgId)
     .order("created_at", { ascending: true })
 
   if (!membershipError && membershipRows) {
@@ -120,7 +120,7 @@ export async function GET(request: Request) {
   const { data: rows, error: membersError } = await admin
     .from("users")
     .select("id,full_name,email")
-    .eq("easner_organization_id", orgId)
+    .eq("easner_business_id", orgId)
     .order("created_at", { ascending: true })
 
   if (membersError) return NextResponse.json({ error: membersError.message }, { status: 500 })
@@ -176,7 +176,7 @@ export async function POST(request: Request) {
   if ("error" in ownerCheck) return ownerCheck.error
 
   const rows = invites.map((row) => ({
-    organization_id: ownerCheck.orgId,
+    business_id: ownerCheck.orgId,
     user_id: null,
     full_name: row.fullName,
     email: row.email,
@@ -187,8 +187,8 @@ export async function POST(request: Request) {
   }))
 
   const { error } = await admin
-    .from("organization_memberships")
-    .upsert(rows, { onConflict: "organization_id,email" })
+    .from("business_memberships")
+    .upsert(rows, { onConflict: "business_id,email" })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   return GET(request)
@@ -214,12 +214,12 @@ export async function PATCH(request: Request) {
   if ("error" in ownerCheck) return ownerCheck.error
 
   const { data: existing, error: existingError } = await admin
-    .from("organization_memberships")
-    .select("id,organization_id,role")
+    .from("business_memberships")
+    .select("id,business_id,role")
     .eq("id", body.membershipId)
     .maybeSingle()
   if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 })
-  if (!existing || existing.organization_id !== ownerCheck.orgId) {
+  if (!existing || existing.business_id !== ownerCheck.orgId) {
     return NextResponse.json({ error: "Member not found" }, { status: 404 })
   }
   if (normalizeRole(existing.role) === "Owner") {
@@ -227,7 +227,7 @@ export async function PATCH(request: Request) {
   }
 
   const { error } = await admin
-    .from("organization_memberships")
+    .from("business_memberships")
     .update({ role: body.role.toLowerCase(), updated_at: new Date().toISOString() })
     .eq("id", body.membershipId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -248,19 +248,19 @@ export async function DELETE(request: Request) {
   if ("error" in ownerCheck) return ownerCheck.error
 
   const { data: existing, error: existingError } = await admin
-    .from("organization_memberships")
-    .select("id,organization_id,role")
+    .from("business_memberships")
+    .select("id,business_id,role")
     .eq("id", membershipId)
     .maybeSingle()
   if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 })
-  if (!existing || existing.organization_id !== ownerCheck.orgId) {
+  if (!existing || existing.business_id !== ownerCheck.orgId) {
     return NextResponse.json({ error: "Member not found" }, { status: 404 })
   }
   if (normalizeRole(existing.role) === "Owner") {
     return NextResponse.json({ error: "Owner cannot be removed" }, { status: 400 })
   }
 
-  const { error } = await admin.from("organization_memberships").delete().eq("id", membershipId)
+  const { error } = await admin.from("business_memberships").delete().eq("id", membershipId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   return GET(request)

@@ -36,11 +36,11 @@ export async function resolveNoahAccountContext(
   const admin = createSupabaseAdmin()
   const { data: userRow } = await admin
     .from("users")
-    .select("easner_organization_id")
+    .select("easner_business_id")
     .eq("id", sessionUserId)
     .maybeSingle()
 
-  const orgId = userRow?.easner_organization_id as string | null | undefined
+  const orgId = userRow?.easner_business_id as string | null | undefined
   if (!orgId) {
     return {
       ok: true,

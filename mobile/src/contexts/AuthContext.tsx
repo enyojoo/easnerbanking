@@ -183,6 +183,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const row = regularUser as Record<string, unknown>
         const profile = mapUsersRowToUser(row)
         setUser(profile)
+        void import('../lib/payoutCorridors').then((m) => {
+          void m.hydratePayoutCorridorsFromStorage().then(() => m.refreshPayoutCorridors())
+        })
+
         setUserProfile({
           id: regularUser.id,
           email: regularUser.email,
@@ -194,7 +198,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           noah_signed_agreement_id: profile.noah_signed_agreement_id,
           noah_kyb_status: profile.noah_kyb_status,
           easner_role: profile.easner_role,
-          easner_organization_id: profile.easner_organization_id,
+          easner_business_id: profile.easner_business_id,
           bridge_kyc_status: row.bridge_kyc_status as string | undefined,
           bridge_customer_id: row.bridge_customer_id as string | undefined,
           bridge_kyc_rejection_reasons: row.bridge_kyc_rejection_reasons,

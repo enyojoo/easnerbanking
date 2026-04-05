@@ -1,18 +1,51 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { LogOut, Menu, X } from "lucide-react"
+import { ChevronDown, ChevronRight, LogOut, Menu, X } from "lucide-react"
 import { BrandLogo } from "@easner/shared"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/lib/auth-context"
 import { officeDataStore } from "@/lib/office-data-store"
-import { officeNavGroups, isNavItemActive } from "@/lib/nav-config"
+import {
+  officeNavPrimaryLinks,
+  officeNavCollapsibleSections,
+  officeNavPlatformLink,
+  isNavItemActive,
+  isCollapsibleSectionActive,
+} from "@/lib/nav-config"
+import { cn } from "@/lib/utils"
 
 interface OfficeDashboardLayoutProps {
   children: React.ReactNode
+}
+
+const singleButtonClass = (active: boolean) =>
+  cn(
+    "w-full justify-start gap-3 px-3 py-3 h-auto text-sm font-medium rounded-md transition-all duration-200",
+    active ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+  )
+
+const groupHeaderButtonClass = (hasActiveChild: boolean) =>
+  cn(
+    "w-full justify-between gap-3 px-3 py-3 h-auto text-sm font-medium rounded-md transition-all duration-200",
+    hasActiveChild ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+  )
+
+function getInitialOpenGroups(pathname: string | null): Set<string> {
+  const next = new Set<string>()
+  if (!pathname) return next
+  if (
+    pathname.startsWith("/businesses") ||
+    pathname.startsWith("/customers") ||
+    pathname.startsWith("/invoices")
+  ) {
+    next.add("business")
+  }
+  if (pathname.startsWith("/monetization") || pathname.startsWith("/pricing-fx")) next.add("revenue")
+  return next
 }
 
 export function OfficeDashboardLayout({ children }: OfficeDashboardLayoutProps) {
@@ -20,6 +53,21 @@ export function OfficeDashboardLayout({ children }: OfficeDashboardLayoutProps) 
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { signOut } = useAuth()
+
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => getInitialOpenGroups(pathname))
+
+  useEffect(() => {
+    setOpenGroups(getInitialOpenGroups(pathname))
+  }, [pathname])
+
+  const toggleGroup = (key: string) => {
+    setOpenGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
 
   const handleLogout = async () => {
     try {
@@ -33,6 +81,8 @@ export function OfficeDashboardLayout({ children }: OfficeDashboardLayoutProps) 
     }
   }
 
+  const PlatformNavIcon = officeNavPlatformLink.icon
+
   return (
     <div className="flex h-screen bg-background">
       {sidebarOpen && (
@@ -42,70 +92,95 @@ export function OfficeDashboardLayout({ children }: OfficeDashboardLayoutProps) 
       )}
 
       <div
-        className={`fixed inset-y-0 left-0 z-50 w-60 border-r bg-sidebar flex flex-col transform transition-transform duration-300 ease-in-out ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
+        className={cn(
+          "fixed left-0 top-0 z-50 h-screen w-64 border-r bg-sidebar flex flex-col transform transition-transform duration-300 ease-in-out lg:translate-x-0",
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        )}
       >
-        <div className="flex flex-col h-full w-full">
-          <div className="flex items-center justify-between px-6 h-16 border-b border-sidebar-border">
-            <div className="flex items-center gap-2">
-              <BrandLogo size="sm" />
-              <span className="text-sm text-primary font-medium">Office</span>
-            </div>
-            <Button variant="ghost" size="sm" className="lg:hidden" onClick={() => setSidebarOpen(false)}>
-              <X className="h-5 w-5" />
-            </Button>
+        <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-6">
+          <div className="flex min-w-0 items-center gap-2">
+            <BrandLogo size="sm" href="/dashboard" className="shrink-0" />
+            <span className="truncate text-sm font-medium text-primary">Office</span>
           </div>
+          <Button variant="ghost" size="icon" className="shrink-0 lg:hidden" onClick={() => setSidebarOpen(false)} aria-label="Close menu">
+            <X className="h-5 w-5" />
+          </Button>
+        </div>
 
-          <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-6">
-            {officeNavGroups.map((group) => (
-              <div key={group.id}>
-                <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  {group.label}
-                </p>
-                <div className="space-y-0.5">
-                  {group.items.map((item) => {
-                    const isActive = isNavItemActive(pathname, item.href)
-                    return (
-                      <Link
-                        key={`${group.id}-${item.href}`}
-                        href={item.href}
-                        className={`flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-md transition-all duration-200 ${
-                          isActive
-                            ? "bg-accent text-accent-foreground"
-                            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                        }`}
-                        onClick={() => setSidebarOpen(false)}
-                      >
-                        <item.icon className="mr-3 h-5 w-5 flex-shrink-0" />
-                        <span className="truncate">{item.name}</span>
-                      </Link>
-                    )
-                  })}
-                </div>
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-6">
+          {officeNavPrimaryLinks.map((item) => {
+            const Icon = item.icon
+            const active = isNavItemActive(pathname, item.href)
+            return (
+              <Link key={item.href} href={item.href} onClick={() => setSidebarOpen(false)}>
+                <Button variant="ghost" className={singleButtonClass(active)}>
+                  <Icon className="h-5 w-5 shrink-0" />
+                  <span className="truncate">{item.name}</span>
+                </Button>
+              </Link>
+            )
+          })}
+
+          {officeNavCollapsibleSections.map((section) => {
+            const isOpen = openGroups.has(section.id)
+            const hasActiveChild = isCollapsibleSectionActive(section.id, pathname)
+            const Icon = section.icon
+            return (
+              <div key={section.id} className="space-y-1">
+                <Button variant="ghost" onClick={() => toggleGroup(section.id)} className={groupHeaderButtonClass(hasActiveChild)}>
+                  <div className="flex items-center gap-3">
+                    <Icon className="h-5 w-5 shrink-0" />
+                    <span className="truncate">{section.label}</span>
+                  </div>
+                  {isOpen ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
+                </Button>
+
+                {isOpen ? (
+                  <div className="ml-4 space-y-1">
+                    {section.items.map((child) => {
+                      const ChildIcon = child.icon
+                      const active = isNavItemActive(pathname, child.href)
+                      return (
+                        <Link key={child.href} href={child.href} onClick={() => setSidebarOpen(false)}>
+                          <Button variant="ghost" className={singleButtonClass(active)}>
+                            <ChildIcon className="h-5 w-5 shrink-0" />
+                            <span className="truncate">{child.name}</span>
+                          </Button>
+                        </Link>
+                      )
+                    })}
+                  </div>
+                ) : null}
               </div>
-            ))}
-          </nav>
+            )
+          })}
 
-          <div className="px-3 py-4 border-t border-sidebar-border">
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-muted-foreground hover:text-accent-foreground hover:bg-accent px-3 py-3"
-              onClick={handleLogout}
-            >
-              <LogOut className="mr-3 h-5 w-5 flex-shrink-0" />
-              <span className="truncate">Logout</span>
+          <Link href={officeNavPlatformLink.href} onClick={() => setSidebarOpen(false)}>
+            <Button variant="ghost" className={singleButtonClass(isNavItemActive(pathname, officeNavPlatformLink.href))}>
+              <PlatformNavIcon className="h-5 w-5 shrink-0" />
+              <span className="truncate">{officeNavPlatformLink.name}</span>
             </Button>
-          </div>
+          </Link>
+        </nav>
+
+        <div className="border-t border-sidebar-border px-4 py-4">
+          <Button
+            variant="ghost"
+            className="h-auto w-full justify-start gap-3 px-3 py-3 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            onClick={handleLogout}
+          >
+            <LogOut className="h-5 w-5 shrink-0" />
+            <span className="truncate">Logout</span>
+          </Button>
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col overflow-hidden lg:ml-60">
-        <div className="bg-background border-b border-sidebar-border px-4 h-16 flex items-center sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between w-full">
-            <Button variant="ghost" size="sm" className="lg:hidden" onClick={() => setSidebarOpen(true)}>
-              <Menu className="h-5 w-5" />
-            </Button>
-            <div className="flex-1" />
-          </div>
+      <div className="flex flex-1 flex-col overflow-hidden lg:ml-64">
+        <div className="flex h-16 items-center border-b border-sidebar-border bg-background px-4 sm:px-6 lg:px-8">
+          <Button variant="ghost" size="sm" className="lg:hidden" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
+            <Menu className="h-5 w-5" />
+          </Button>
+          <div className="flex-1" />
         </div>
 
         <main className="flex-1 overflow-y-auto">{children}</main>

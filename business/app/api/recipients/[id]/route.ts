@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
+import { payoutCorridorGate } from "@/lib/payout-corridor-validation"
 
 type RecipientWritePayload = {
   country_code?: string | null
@@ -18,6 +19,8 @@ type RecipientWritePayload = {
   mobile_provider?: string | null
   wallet_network?: string | null
   wallet_memo_tag?: string | null
+  payee_easetag?: string | null
+  payee_avatar_url?: string | null
 }
 
 function looksLikeMissingStructuredColumn(error: unknown): boolean {
@@ -56,6 +59,29 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   const admin = createSupabaseAdmin()
+  const { data: existing } = await admin
+    .from("recipients")
+    .select("country_code,currency,mobile_provider,wallet_network,wallet_memo_tag,payee_easetag,bank_name")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .maybeSingle()
+
+  if (!existing) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 })
+  }
+
+  const merged = {
+    country_code: payload.country_code ?? existing.country_code ?? null,
+    currency: payload.currency ?? existing.currency ?? "",
+    mobile_provider: payload.mobile_provider ?? existing.mobile_provider ?? null,
+    wallet_network: payload.wallet_network ?? existing.wallet_network ?? null,
+    wallet_memo_tag: payload.wallet_memo_tag ?? existing.wallet_memo_tag ?? null,
+    payee_easetag: payload.payee_easetag ?? existing.payee_easetag ?? null,
+    bank_name: payload.bank_name ?? existing.bank_name ?? null,
+  }
+  const gate = await payoutCorridorGate(admin, merged)
+  if (gate) return gate
+
   const primary = await admin
     .from("recipients")
     .update(payload)

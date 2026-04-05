@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as
     | {
         userId?: string
-        organizationId?: string
+        businessId?: string
         planId?: string
         scope?: string
         startsAt?: string
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     .from("user_subscriptions")
     .insert({
       user_id: userId,
-      organization_id: body?.organizationId || null,
+      business_id: body?.businessId || null,
       plan_id: planId,
       scope: body?.scope || "individual",
       status: "active",

@@ -148,6 +148,12 @@ function ProfileEditContent({ navigation }: NavigationProps) {
         avatarUrl: editProfileData.avatarUrl,
       })
 
+      const nextTag = editProfileData.easetag.replace(/^@/, '').trim().toLowerCase()
+      const prevTag = (profileData.easetag || '').replace(/^@/, '').trim().toLowerCase()
+      if (nextTag && nextTag !== prevTag) {
+        await userService.updateEasetag(nextTag)
+      }
+
       // Update profileData with the response from the server to ensure consistency
       const updatedProfileData = {
         ...editProfileData,
@@ -485,7 +491,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                 </Text>
               </>
             )}
-            {easetagAvailable === null && editProfileData.easetag.length < 3 && (
+            {easetagAvailable === null && editProfileData.easetag.length < 4 && (
               <Text style={[styles.easetagStatusTextInline, { color: colors.text.tertiary }]}>
                 Min 3 chars
               </Text>

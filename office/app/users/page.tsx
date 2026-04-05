@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
+import Link from "next/link"
 import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -9,58 +10,64 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Checkbox } from "@/components/ui/checkbox"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Search,
   Download,
   Filter,
   Eye,
-  MoreHorizontal,
   Calendar,
   CheckCircle,
   Clock,
   XCircle,
-  AlertCircle,
   User,
   Mail,
   Phone,
-  Ban,
   UserCheck,
-  TrendingUp,
 } from "lucide-react"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { supabase } from "@/lib/supabase"
-import { formatCurrency } from "@/utils/currency"
-import { useOfficeData } from "@/hooks/use-office-data"
-import { officeDataStore, calculateUserVolume } from "@/lib/office-data-store"
+import { officeFetch } from "@/lib/api-client"
 import { kycService, KYCSubmission } from "@/lib/kyc-service"
-import { getIdTypeLabel } from "@/lib/country-id-types"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/lib/auth-context"
 
+/** Mirrors `public.users` (+ `email_confirmed_at` merged from auth). */
 interface UserData {
   id: string
-  email: string
-  first_name: string
-  middle_name?: string
-  last_name: string
-  phone?: string
-  date_of_birth?: string
-  address?: string
-  country_code?: string
-  noah_kyc_metadata?: any
-  status: string
-  // verification_status removed - use noah_kyc_status for KYC status
-  noah_kyc_status?: string
-  noah_customer_id?: string
-  noah_kyc_rejection_reasons?: any
-  email_confirmed_at?: string
-  base_currency: string
+  email: string | null
+  full_name: string | null
+  phone: string | null
+  date_of_birth: string | null
+  avatar_url: string | null
+  easner_role: string
+  easner_business_id: string | null
   created_at: string
-  last_login?: string
+  updated_at: string
+  noah_customer_id?: string | null
+  noah_kyc_status?: string | null
+  noah_kyc_rejection_reasons?: unknown
+  noah_kyc_metadata?: Record<string, unknown> | null
+  noah_signed_agreement_id?: string | null
+  noah_wallet_id?: string | null
+  noah_usd_virtual_account_id?: string | null
+  noah_eur_virtual_account_id?: string | null
+  noah_gbp_virtual_account_id?: string | null
+  noah_kyb_customer_id?: string | null
+  noah_kyb_status?: string | null
+  enabled_extra_account_currencies?: string[]
+  email_confirmed_at?: string | null
   totalTransactions: number
   totalVolume: number
+  verificationStatus?: string
+  noahKycStatus?: string
+}
+
+function userDisplayName(user: Pick<UserData, "id" | "email" | "full_name">) {
+  const n = (user.full_name || "").trim()
+  if (n) return n
+  if (user.email) return user.email
+  return `${user.id.slice(0, 8)}…`
 }
 
 interface TransactionData {
@@ -75,12 +82,10 @@ interface TransactionData {
 }
 
 export default function AdminUsersPage() {
-  const { data } = useOfficeData()
-  const { userProfile } = useAuth()
+  const { user, isAdmin, loading: authLoading } = useAuth()
   const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
+  const [roleFilter, setRoleFilter] = useState<"all" | "individual" | "business">("all")
   const [verificationFilter, setVerificationFilter] = useState("all")
-  const [selectedUsers, setSelectedUsers] = useState<string[]>([])
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null)
   const [userTransactions, setUserTransactions] = useState<TransactionData[]>([])
   const [saving, setSaving] = useState(false)
@@ -93,6 +98,10 @@ export default function AdminUsersPage() {
   const [rejectionReason, setRejectionReason] = useState("")
   const [updatingKyc, setUpdatingKyc] = useState(false)
   const [userKycMap, setUserKycMap] = useState<Map<string, KYCSubmission[]>>(new Map())
+  const [linkedOrgName, setLinkedOrgName] = useState<string | null>(null)
+  const [directoryUsers, setDirectoryUsers] = useState<UserData[]>([])
+  const [dirLoading, setDirLoading] = useState(true)
+  const [dirError, setDirError] = useState<string | null>(null)
 
   const formatAmount = (amount: number | null | undefined, currencyCode: string | null | undefined): string => {
     const amt = Number(amount || 0) || 0
@@ -122,7 +131,7 @@ export default function AdminUsersPage() {
     return `${month} ${day}, ${year}`
   }
 
-  const fetchUserTransactions = async (userId: string) => {
+  const fetchUserTransactions = useCallback(async (userId: string) => {
     try {
       const { data, error } = await supabase
         .from("transactions")
@@ -138,10 +147,8 @@ export default function AdminUsersPage() {
         `)
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
-      // Remove .limit(20) to show all transactions
 
       if (error) throw error
-      // Transform the data to match TransactionData interface
       const transformedData = (data || []).map((tx: any) => ({
         id: tx.id,
         created_at: tx.created_at,
@@ -157,61 +164,130 @@ export default function AdminUsersPage() {
       console.error("Error fetching user transactions:", err)
       setUserTransactions([])
     }
-  }
+  }, [])
 
-  // Fetch KYC submissions for all users (must be before conditional return to follow Rules of Hooks)
   useEffect(() => {
-    const fetchAllKyc = async () => {
-      if (!data?.users) return
-      
-      // KYC data is now in users table, no need to fetch from kyc_submissions
-      // Set empty map since we're using user data directly
-      setUserKycMap(new Map())
+    setUserKycMap(new Map())
+  }, [])
+
+  useEffect(() => {
+    if (authLoading) return
+    if (!isAdmin || !user) {
+      setDirLoading(false)
+      setDirectoryUsers([])
+      setDirError(null)
+      return
     }
-    
-    fetchAllKyc()
-  }, [data?.users])
 
-  // Ensure we have data structure even if empty
-  if (!data) {
-    return (
-      <OfficeDashboardLayout>
-        <div className="p-6">
-          <div className="text-center py-12">
-            <p className="text-gray-600">No data available. Please refresh the page.</p>
-          </div>
-        </div>
-      </OfficeDashboardLayout>
-    )
-  }
+    let cancelled = false
+    setDirLoading(true)
+    setDirError(null)
 
-  // Calculate transaction stats and verification status for each user
-  const usersWithStats = (data?.users || []).map((user: any) => {
-    const userTransactions = (data?.transactions || []).filter((t: any) => t.user_id === user.id)
-    const completedTransactions = userTransactions.filter((t: any) => t.status === "completed")
+    void officeFetch("/api/admin/office/users")
+      .then(async (r) => {
+        const d = (await r.json()) as { users?: unknown[]; error?: string }
+        if (!r.ok || d.error) {
+          throw new Error(typeof d.error === "string" ? d.error : "Failed to load users")
+        }
+        return d.users ?? []
+      })
+      .then((rows) => {
+        if (cancelled) return
+        const list: UserData[] = (rows as Record<string, unknown>[]).map((row) => {
+          const id = String(row.id)
+          const noahKycStatus = String(row.noah_kyc_status || "not_started")
+          return {
+            ...row,
+            id,
+            email: (row.email as string | null) ?? null,
+            full_name: (row.full_name as string | null) ?? null,
+            phone: (row.phone as string | null) ?? null,
+            date_of_birth: (row.date_of_birth as string | null) ?? null,
+            avatar_url: (row.avatar_url as string | null) ?? null,
+            easner_role: String(row.easner_role || "individual"),
+            easner_business_id: (row.easner_business_id as string | null) ?? null,
+            created_at: String(row.created_at),
+            updated_at: String(row.updated_at),
+            noah_customer_id: row.noah_customer_id as string | null | undefined,
+            noah_kyc_status: row.noah_kyc_status as string | null | undefined,
+            noah_kyc_rejection_reasons: row.noah_kyc_rejection_reasons,
+            noah_kyc_metadata: row.noah_kyc_metadata as UserData["noah_kyc_metadata"],
+            noah_signed_agreement_id: row.noah_signed_agreement_id as string | null | undefined,
+            noah_wallet_id: row.noah_wallet_id as string | null | undefined,
+            noah_usd_virtual_account_id: row.noah_usd_virtual_account_id as string | null | undefined,
+            noah_eur_virtual_account_id: row.noah_eur_virtual_account_id as string | null | undefined,
+            noah_gbp_virtual_account_id: row.noah_gbp_virtual_account_id as string | null | undefined,
+            noah_kyb_customer_id: row.noah_kyb_customer_id as string | null | undefined,
+            noah_kyb_status: row.noah_kyb_status as string | null | undefined,
+            enabled_extra_account_currencies: row.enabled_extra_account_currencies as string[] | undefined,
+            email_confirmed_at: row.email_confirmed_at as string | null | undefined,
+            totalTransactions: 0,
+            totalVolume: 0,
+            verificationStatus: noahKycStatus === "approved" ? "verified" : "pending",
+            noahKycStatus,
+          } as UserData
+        })
+        setDirectoryUsers(list)
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setDirError(e instanceof Error ? e.message : "Failed to load users")
+          setDirectoryUsers([])
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setDirLoading(false)
+      })
 
-    const totalVolume = 0
-
-    // Use noah_kyc_status for KYC verification status
-    // Map noah_kyc_status to display values: approved -> verified, others -> pending
-    const noahKycStatus = user.noah_kyc_status || "not_started"
-    const verificationStatus = noahKycStatus === "approved" ? "verified" : "pending"
-
-    return {
-      ...user,
-      totalTransactions: completedTransactions.length,
-      totalVolume,
-      verificationStatus,
-      noahKycStatus, // Include for filtering
+    return () => {
+      cancelled = true
     }
-  })
+  }, [authLoading, isAdmin, user])
 
-  const filteredUsers = usersWithStats.filter((user: any) => {
-    const fullName = `${user.first_name} ${user.last_name}`.toLowerCase()
-    const matchesSearch =
-      fullName.includes(searchTerm.toLowerCase()) || user.email.toLowerCase().includes(searchTerm.toLowerCase())
+  const usersWithStats = useMemo(() => directoryUsers, [directoryUsers])
 
-    const matchesStatus = statusFilter === "all" || user.status === statusFilter
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const id = new URLSearchParams(window.location.search).get("highlight")
+    if (!id || usersWithStats.length === 0) return
+    const found = usersWithStats.find((u: UserData) => u.id === id)
+    if (found) {
+      setSelectedUser(found)
+      void fetchUserTransactions(found.id)
+      requestAnimationFrame(() => {
+        document.querySelector(`[data-user-row="${id}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" })
+      })
+    }
+  }, [usersWithStats, fetchUserTransactions])
+
+  useEffect(() => {
+    const orgId = selectedUser?.easner_business_id
+    if (!orgId) {
+      setLinkedOrgName(null)
+      return
+    }
+    let cancelled = false
+    void supabase
+      .from("businesses")
+      .select("name")
+      .eq("id", orgId)
+      .maybeSingle()
+      .then(({ data: row }) => {
+        if (!cancelled) setLinkedOrgName(row?.name ?? null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selectedUser?.easner_business_id])
+
+  const filteredUsers = usersWithStats.filter((user: UserData) => {
+    const q = searchTerm.toLowerCase()
+    const name = (user.full_name || "").toLowerCase()
+    const em = (user.email || "").toLowerCase()
+    const matchesSearch = !q || name.includes(q) || em.includes(q) || user.id.toLowerCase().includes(q)
+
+    const role = String(user.easner_role || "individual").toLowerCase()
+    const matchesRole = roleFilter === "all" || role === roleFilter
     // Filter by noah_kyc_status
     const noahKycStatus = user.noahKycStatus || user.noah_kyc_status || "not_started"
     let matchesVerification = true
@@ -224,29 +300,46 @@ export default function AdminUsersPage() {
         matchesVerification = noahKycStatus === "rejected"
       } else if (verificationFilter === "in_review") {
         matchesVerification = noahKycStatus === "under_review" || noahKycStatus === "in_review"
+      } else if (verificationFilter === "unverified") {
+        matchesVerification = !noahKycStatus || noahKycStatus === "not_started"
       }
     }
 
-    return matchesSearch && matchesStatus && matchesVerification
+    return matchesSearch && matchesRole && matchesVerification
   })
 
-  const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      active: { color: "bg-green-100 text-green-800", icon: <CheckCircle className="h-3 w-3 mr-1" /> },
-      suspended: { color: "bg-red-100 text-red-800", icon: <Ban className="h-3 w-3 mr-1" /> },
-      inactive: { color: "bg-gray-100 text-gray-800", icon: <Clock className="h-3 w-3 mr-1" /> },
-    }
+  function accountTypeLabel(user: UserData): "Consumer" | "Business" | "Both" | null {
+    const role = String(user.easner_role || "").toLowerCase()
+    const hasOrg = Boolean(user.easner_business_id)
+    const isBusiness = role === "business" || hasOrg
+    const isConsumer = role === "individual" || user.totalTransactions > 0
+    if (isBusiness && isConsumer) return "Both"
+    if (isBusiness) return "Business"
+    if (isConsumer) return "Consumer"
+    return null
+  }
 
-    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.inactive
+  const getAccountTypeBadge = (user: UserData) => {
+    const label = accountTypeLabel(user)
+    if (!label) return <span className="text-xs text-muted-foreground">—</span>
+    const cls =
+      label === "Both"
+        ? "bg-violet-100 text-violet-800 hover:bg-violet-100"
+        : label === "Business"
+          ? "bg-blue-100 text-blue-800 hover:bg-blue-100"
+          : "bg-slate-100 text-slate-800 hover:bg-slate-100"
+    return <Badge className={cls}>{label}</Badge>
+  }
 
+  const getEasnerRoleBadge = (role: string | null | undefined) => {
+    const r = String(role || "individual").toLowerCase()
+    const isBiz = r === "business"
     return (
-      <Badge className={`${config.color} hover:${config.color} flex items-center`}>
-        {config.icon}
-        {status.charAt(0).toUpperCase() + status.slice(1)}
+      <Badge className={isBiz ? "bg-indigo-100 text-indigo-800 hover:bg-indigo-100" : "bg-slate-100 text-slate-800 hover:bg-slate-100"}>
+        {isBiz ? "Business" : "Individual"}
       </Badge>
     )
   }
-
 
   const getVerificationBadge = (user: UserData & { noah_kyc_status?: string }) => {
     // Use noah_kyc_status for KYC verification
@@ -269,75 +362,49 @@ export default function AdminUsersPage() {
     )
   }
 
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      setSelectedUsers(filteredUsers.map((u: UserData) => u.id))
-    } else {
-      setSelectedUsers([])
-    }
+  function formatBusinessVerificationLabel(st: string | null | undefined) {
+    if (!st) return ""
+    const s = String(st).toLowerCase()
+    if (s === "approved") return "Approved"
+    if (s === "rejected") return "Rejected"
+    return String(st).replace(/_/g, " ")
   }
 
-  const handleSelectUser = (userId: string, checked: boolean) => {
-    if (checked) {
-      setSelectedUsers([...selectedUsers, userId])
-    } else {
-      setSelectedUsers(selectedUsers.filter((id) => id !== userId))
-    }
-  }
-
-  const handleStatusUpdate = async (userId: string, newStatus: string) => {
-    try {
-      await officeDataStore.updateUserStatus(userId, newStatus)
-      if (selectedUser?.id === userId) {
-        setSelectedUser((prev) => (prev ? { ...prev, status: newStatus } : null))
-      }
-    } catch (err) {
-      console.error("Error updating user status:", err)
-    }
-  }
-
-  const handleVerificationUpdate = async (userId: string, newStatus: string) => {
-    try {
-      await officeDataStore.updateUserVerification(userId, newStatus)
-      if (selectedUser?.id === userId) {
-        setSelectedUser((prev) => {
-          // Map old verification_status to noah_kyc_status
-          const statusMap: Record<string, string> = {
-            "verified": "approved",
-            "pending": "not_started",
-            "rejected": "rejected",
-            "unverified": "not_started",
-          }
-          const noahKycStatus = statusMap[newStatus] || newStatus
-          return prev ? { ...prev, noah_kyc_status: noahKycStatus } : null
-        })
-      }
-    } catch (err) {
-      console.error("Error updating user verification:", err)
-    }
-  }
-
-  const handleBulkStatusUpdate = async (newStatus: string) => {
-    try {
-      await Promise.all(selectedUsers.map((userId) => officeDataStore.updateUserStatus(userId, newStatus)))
-      setSelectedUsers([])
-    } catch (err) {
-      console.error("Error bulk updating user status:", err)
-    }
-  }
+  const renderVerificationCell = (u: UserData) => (
+    <div className="flex flex-col items-center gap-1">
+      {getVerificationBadge(u)}
+      {String(u.easner_role).toLowerCase() === "business" && u.noah_kyb_status ? (
+        <span className="text-xs text-muted-foreground text-center max-w-[160px] leading-tight">
+          Business: {formatBusinessVerificationLabel(u.noah_kyb_status)}
+        </span>
+      ) : null}
+    </div>
+  )
 
   const handleExport = () => {
     const csvContent = [
-      ["Name", "Email", "Phone", "Status", "Verification", "Registration Date", "Total Volume"].join(","),
+      [
+        "Full name",
+        "Email",
+        "Phone",
+        "Role",
+        "Business id",
+        "Email confirmed",
+        "Identity verification (KYC)",
+        "Business verification (KYB)",
+        "Created",
+      ].join(","),
       ...filteredUsers.map((u: UserData) =>
         [
-          `${u.first_name} ${u.last_name}`,
-          u.email,
+          `"${(u.full_name || "").replace(/"/g, '""')}"`,
+          u.email || "",
           u.phone || "",
-          u.status,
-          u.email_confirmed_at ? "verified" : "unverified",
+          u.easner_role || "individual",
+          u.easner_business_id || "",
+          u.email_confirmed_at ? "yes" : "no",
+          u.noah_kyc_status || "",
+          u.noah_kyb_status || "",
           formatDate(u.created_at),
-          formatCurrencyFromDB(u.totalVolume, u.base_currency),
         ].join(","),
       ),
     ].join("\n")
@@ -363,14 +430,14 @@ export default function AdminUsersPage() {
   }
 
   const handleKycReview = async () => {
-    if (!selectedKycSubmission || !userProfile) return
+    if (!selectedKycSubmission || !user?.id) return
 
     setUpdatingKyc(true)
     try {
       await kycService.updateStatus(
         selectedKycSubmission.id,
         reviewStatus,
-        userProfile.id,
+        user.id,
         reviewStatus === "rejected" ? rejectionReason : undefined
       )
       
@@ -405,14 +472,24 @@ export default function AdminUsersPage() {
   }
 
 
-  // Registration analytics data
   const registrationStats = {
-    totalUsers: data?.stats.totalUsers || 0,
-    activeUsers: data?.stats.activeUsers || 0,
-    verifiedUsers: data?.stats.verifiedUsers || 0,
-    newThisWeek: (data?.users || []).filter(
-      (u: UserData) => new Date(u.created_at).getTime() > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).getTime(),
+    totalUsers: directoryUsers.length,
+    verifiedUsers: directoryUsers.filter((u) => u.noah_kyc_status === "approved").length,
+    newThisWeek: directoryUsers.filter(
+      (u) => new Date(u.created_at).getTime() > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).getTime(),
     ).length,
+  }
+
+  if (authLoading || (dirLoading && directoryUsers.length === 0 && !dirError)) {
+    return (
+      <OfficeDashboardLayout>
+        <div className="p-6 space-y-4">
+          <Skeleton className="h-9 w-56" />
+          <Skeleton className="h-24 w-full max-w-4xl" />
+          <Skeleton className="h-72 w-full" />
+        </div>
+      </OfficeDashboardLayout>
+    )
   }
 
   return (
@@ -431,59 +508,30 @@ export default function AdminUsersPage() {
           </div>
         </div>
 
-        {/* Registration Analytics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        {dirError ? (
+          <p className="text-sm text-red-600 rounded-md border border-red-200 bg-red-50 px-4 py-3">{dirError}</p>
+        ) : null}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Total Users</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600">Total users</CardTitle>
               <User className="h-4 w-4 text-primary" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-gray-900">{registrationStats.totalUsers}</div>
-              <p className="text-xs text-green-600">+{registrationStats.newThisWeek} this week</p>
+              <p className="text-xs text-muted-foreground">New profiles in the last 7 days: {registrationStats.newThisWeek}</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Active Users</CardTitle>
-              <CheckCircle className="h-4 w-4 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gray-900">{registrationStats.activeUsers}</div>
-              <p className="text-xs text-gray-600">
-                {registrationStats.totalUsers > 0
-                  ? Math.round((registrationStats.activeUsers / registrationStats.totalUsers) * 100)
-                  : 0}
-                % of total
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Verified Users</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600">Verified</CardTitle>
               <UserCheck className="h-4 w-4 text-blue-600" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-gray-900">{registrationStats.verifiedUsers}</div>
-              <p className="text-xs text-gray-600">
-                {registrationStats.totalUsers > 0
-                  ? Math.round((registrationStats.verifiedUsers / registrationStats.totalUsers) * 100)
-                  : 0}
-                % verified
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">New This Week</CardTitle>
-              <TrendingUp className="h-4 w-4 text-primary" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gray-900">{registrationStats.newThisWeek}</div>
-              <p className="text-xs text-green-600">Growing steadily</p>
+              <p className="text-xs text-muted-foreground">Users who completed identity verification</p>
             </CardContent>
           </Card>
         </div>
@@ -508,15 +556,14 @@ export default function AdminUsersPage() {
                 />
               </div>
 
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v as "all" | "individual" | "business")}>
                 <SelectTrigger>
-                  <SelectValue placeholder="All Status" />
+                  <SelectValue placeholder="Role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="suspended">Suspended</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
+                  <SelectItem value="all">All roles</SelectItem>
+                  <SelectItem value="individual">Individual</SelectItem>
+                  <SelectItem value="business">Business</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -541,63 +588,28 @@ export default function AdminUsersPage() {
           </CardContent>
         </Card>
 
-        {/* Bulk Actions */}
-        {selectedUsers.length > 0 && (
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">{selectedUsers.length} user(s) selected</span>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => handleBulkStatusUpdate("active")}>
-                    Activate
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => handleBulkStatusUpdate("suspended")}>
-                    Suspend
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         {/* Users Table */}
         <Card>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-12">
-                    <Checkbox
-                      checked={selectedUsers.length === filteredUsers.length && filteredUsers.length > 0}
-                      onCheckedChange={handleSelectAll}
-                    />
-                  </TableHead>
-                  <TableHead className="text-left">Name</TableHead>
-                  <TableHead className="w-[120px] text-center">Status</TableHead>
-                  <TableHead className="w-[140px] text-center">Verification</TableHead>
-                  <TableHead className="w-[120px] text-center">Transactions</TableHead>
-                  <TableHead className="w-[150px] text-center">Total Volume</TableHead>
-                  <TableHead className="w-[120px] text-center">Actions</TableHead>
+                  <TableHead className="text-left min-w-[160px]">Name</TableHead>
+                  <TableHead className="min-w-[180px]">Email</TableHead>
+                  <TableHead className="w-[130px] text-center">Account type</TableHead>
+                  <TableHead className="w-[160px] text-center">Verification</TableHead>
+                  <TableHead className="w-[100px] text-center">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {usersWithStats.map((user: UserData) => (
-                  <TableRow key={user.id}>
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedUsers.includes(user.id)}
-                        onCheckedChange={(checked) => handleSelectUser(user.id, checked as boolean)}
-                      />
+                {filteredUsers.map((user: UserData) => (
+                  <TableRow key={user.id} data-user-row={user.id}>
+                    <TableCell className="text-left font-medium">{userDisplayName(user)}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground max-w-[220px] truncate" title={user.email || ""}>
+                      {user.email || "—"}
                     </TableCell>
-                    <TableCell className="text-left">
-                      <div className="font-medium">
-                        {user.first_name} {user.last_name}
-                      </div>
-                    </TableCell>
-                    <TableCell className="w-[120px] text-center">{getStatusBadge(user.status)}</TableCell>
-                    <TableCell className="w-[140px] text-center">{getVerificationBadge(user)}</TableCell>
-                    <TableCell className="w-[120px] text-center font-medium">{user.totalTransactions}</TableCell>
-                    <TableCell className="w-[150px] text-center font-medium">{formatCurrencyFromDB(user.totalVolume, user.base_currency)}</TableCell>
+                    <TableCell className="text-center">{getAccountTypeBadge(user)}</TableCell>
+                    <TableCell className="text-center">{renderVerificationCell(user)}</TableCell>
                     <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-2">
                         <Dialog>
@@ -608,91 +620,126 @@ export default function AdminUsersPage() {
                           </DialogTrigger>
                           <DialogContent className="max-w-4xl">
                             <DialogHeader>
-                              <DialogTitle>
-                                User Details - {selectedUser?.first_name} {selectedUser?.last_name}
-                              </DialogTitle>
+                              <DialogTitle>User — {selectedUser ? userDisplayName(selectedUser) : ""}</DialogTitle>
                             </DialogHeader>
                             {selectedUser && (
                               <div className="space-y-6">
-                                {/* User Information */}
                                 <div className="grid grid-cols-2 gap-6">
                                   <div className="space-y-4">
                                     <div>
-                                      <label className="text-sm font-medium text-gray-600">Personal Information</label>
-                                      <div className="mt-2 space-y-2">
+                                      <label className="text-sm font-medium text-gray-600">Profile</label>
+                                      <div className="mt-2 space-y-2 text-sm">
                                         <div className="flex items-center gap-2">
                                           <User className="h-4 w-4 text-gray-400" />
-                                          <span>
-                                            {selectedUser.first_name} {selectedUser.last_name}
-                                          </span>
+                                          <span>{userDisplayName(selectedUser)}</span>
                                         </div>
                                         <div className="flex items-center gap-2">
                                           <Mail className="h-4 w-4 text-gray-400" />
-                                          <span>{selectedUser.email}</span>
+                                          <span>{selectedUser.email || "—"}</span>
                                         </div>
-                                        {selectedUser.phone && (
+                                        {selectedUser.phone ? (
                                           <div className="flex items-center gap-2">
                                             <Phone className="h-4 w-4 text-gray-400" />
                                             <span>{selectedUser.phone}</span>
                                           </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                    <div>
-                                      <label className="text-sm font-medium text-gray-600">Account Status</label>
-                                      <div className="mt-2 space-y-2">
-                                        <div className="flex items-center justify-between">
-                                          <span className="text-sm">Status:</span>
-                                          {getStatusBadge(selectedUser.status)}
+                                        ) : null}
+                                        {selectedUser.date_of_birth ? (
+                                          <div className="flex justify-between gap-4">
+                                            <span className="text-gray-600">Date of birth</span>
+                                            <span>{formatDate(selectedUser.date_of_birth)}</span>
+                                          </div>
+                                        ) : null}
+                                        <div className="flex justify-between gap-4">
+                                          <span className="text-gray-600">Email confirmed</span>
+                                          <span>{selectedUser.email_confirmed_at ? formatTimestamp(selectedUser.email_confirmed_at) : "No"}</span>
                                         </div>
-                                        <div className="flex items-center justify-between">
-                                          <span className="text-sm">Verification:</span>
+                                        <div className="flex justify-between gap-4">
+                                          <span className="text-gray-600">Account type</span>
+                                          {getEasnerRoleBadge(selectedUser.easner_role)}
+                                        </div>
+                                        <div className="flex justify-between gap-4 items-center">
+                                          <span className="text-gray-600">Identity verification</span>
                                           {getVerificationBadge(selectedUser)}
+                                        </div>
+                                        <div className="flex justify-between gap-4 items-center">
+                                          <span className="text-gray-600">Business verification</span>
+                                          <span className="text-sm">
+                                            {selectedUser.noah_kyb_status
+                                              ? formatBusinessVerificationLabel(selectedUser.noah_kyb_status)
+                                              : "—"}
+                                          </span>
                                         </div>
                                       </div>
                                     </div>
                                   </div>
                                   <div className="space-y-4">
                                     <div>
-                                      <label className="text-sm font-medium text-gray-600">Account Details</label>
-                                      <div className="mt-2 space-y-2">
-                                        <div className="flex justify-between">
-                                          <span className="text-sm text-gray-600">Registration:</span>
-                                          <span className="text-sm">
-                                            {formatDate(selectedUser.created_at)}
-                                          </span>
+                                      <label className="text-sm font-medium text-gray-600">Record</label>
+                                      <div className="mt-2 space-y-2 text-sm">
+                                        <div className="flex justify-between gap-4">
+                                          <span className="text-gray-600">User id</span>
+                                          <span className="font-mono text-xs break-all text-right">{selectedUser.id}</span>
                                         </div>
-                                        {selectedUser.last_login && (
-                                          <div className="flex justify-between">
-                                            <span className="text-sm text-gray-600">Last Login:</span>
-                                            <span className="text-sm">
-                                              {formatTimestamp(selectedUser.last_login)}
-                                            </span>
-                                          </div>
-                                        )}
-                                        <div className="flex justify-between">
-                                          <span className="text-sm text-gray-600">Base Currency:</span>
-                                          <span className="text-sm font-medium">{selectedUser.base_currency}</span>
+                                        <div className="flex justify-between gap-4">
+                                          <span className="text-gray-600">Created</span>
+                                          <span>{formatTimestamp(selectedUser.created_at)}</span>
+                                        </div>
+                                        <div className="flex justify-between gap-4">
+                                          <span className="text-gray-600">Updated</span>
+                                          <span>{formatTimestamp(selectedUser.updated_at)}</span>
+                                        </div>
+                                        <div className="flex justify-between gap-4">
+                                          <span className="text-gray-600">Completed transactions</span>
+                                          <span className="font-medium">{selectedUser.totalTransactions}</span>
                                         </div>
                                       </div>
                                     </div>
                                     <div>
-                                      <label className="text-sm font-medium text-gray-600">Transaction Summary</label>
-                                      <div className="mt-2 space-y-2">
-                                        <div className="flex justify-between">
-                                          <span className="text-sm text-gray-600">Total Transactions:</span>
-                                          <span className="font-medium">{selectedUser.totalTransactions}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                          <span className="text-sm text-gray-600">Total Volume:</span>
-                                          <span className="font-medium">
-                                            {formatCurrencyFromDB(selectedUser.totalVolume, selectedUser.base_currency)}
-                                          </span>
-                                        </div>
+                                      <label className="text-sm font-medium text-gray-600">Wallet & provider references</label>
+                                      <div className="mt-2 space-y-1.5 text-xs font-mono break-all">
+                                        {[
+                                          ["Customer", selectedUser.noah_customer_id],
+                                          ["Wallet", selectedUser.noah_wallet_id],
+                                          ["Signed agreement", selectedUser.noah_signed_agreement_id],
+                                          ["USD virtual account", selectedUser.noah_usd_virtual_account_id],
+                                          ["EUR virtual account", selectedUser.noah_eur_virtual_account_id],
+                                          ["GBP virtual account", selectedUser.noah_gbp_virtual_account_id],
+                                          ["Business customer (KYB)", selectedUser.noah_kyb_customer_id],
+                                        ].map(([k, v]) =>
+                                          v ? (
+                                            <div key={k} className="flex flex-col border-b border-border/60 pb-1">
+                                              <span className="text-muted-foreground">{k}</span>
+                                              <span>{v}</span>
+                                            </div>
+                                          ) : null,
+                                        )}
+                                        {(selectedUser.enabled_extra_account_currencies?.length ?? 0) > 0 ? (
+                                          <div className="pt-1">
+                                            <span className="text-muted-foreground block">Extra account currencies</span>
+                                            <span>{selectedUser.enabled_extra_account_currencies?.join(", ")}</span>
+                                          </div>
+                                        ) : null}
                                       </div>
                                     </div>
                                   </div>
                                 </div>
+
+                                {selectedUser.easner_business_id ? (
+                                  <div>
+                                    <label className="text-sm font-medium text-gray-600">Businesses</label>
+                                    <div className="mt-2 rounded-md border p-3 text-sm">
+                                      <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <span className="font-medium">{linkedOrgName ?? "Linked workspace"}</span>
+                                        <Link
+                                          href={`/businesses?highlight=${encodeURIComponent(selectedUser.easner_business_id)}`}
+                                          className="text-primary underline-offset-2 hover:underline"
+                                        >
+                                          Open in Businesses
+                                        </Link>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : null}
 
                                 {/* Transaction History */}
                                 <div>
@@ -747,7 +794,7 @@ export default function AdminUsersPage() {
                                         ))}
                                         {userTransactions.length === 0 && (
                                           <TableRow>
-                                            <TableCell colSpan={5} className="text-center py-4 text-gray-500">
+                                            <TableCell colSpan={6} className="text-center py-4 text-gray-500">
                                               No transactions found
                                             </TableCell>
                                           </TableRow>
@@ -757,29 +804,6 @@ export default function AdminUsersPage() {
                                   </div>
                                 </div>
 
-                                {/* Action Buttons */}
-                                <div className="border-t pt-4">
-                                  <label className="text-sm font-medium text-gray-600">Account Actions</label>
-                                  <div className="flex gap-2 mt-2">
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => handleStatusUpdate(selectedUser.id, "active")}
-                                      disabled={selectedUser.status === "active"}
-                                    >
-                                      Activate Account
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => handleStatusUpdate(selectedUser.id, "suspended")}
-                                      disabled={selectedUser.status === "suspended"}
-                                      className="text-red-600 hover:text-red-700"
-                                    >
-                                      Suspend Account
-                                    </Button>
-                                  </div>
-                                </div>
                               </div>
                             )}
                           </DialogContent>
@@ -789,24 +813,21 @@ export default function AdminUsersPage() {
                         <Dialog open={kycReviewDialogOpen} onOpenChange={setKycReviewDialogOpen}>
                           <DialogContent className="max-w-4xl">
                             <DialogHeader>
-                              <DialogTitle>
-                                KYC Verification - {selectedUser?.first_name} {selectedUser?.last_name}
-                              </DialogTitle>
+                              <DialogTitle>KYC — {selectedUser ? userDisplayName(selectedUser) : ""}</DialogTitle>
                             </DialogHeader>
                             {selectedUser && (
                               <div className="space-y-6">
-                                {/* Noah KYC Status */}
                                 <div className="border-t pt-6">
-                                  <h3 className="text-lg font-semibold mb-4">Noah KYC Status</h3>
+                                  <h3 className="text-lg font-semibold mb-4">Verification status</h3>
                                   {selectedUser.noah_kyc_status ? (
                                     <div className="space-y-3">
                                       <div className="flex items-center gap-2">
                                         <span className="text-sm text-gray-600">Status:</span>
-                                        {getVerificationBadge(selectedUser.noah_kyc_status)}
+                                        {getVerificationBadge(selectedUser)}
                                       </div>
                                       {selectedUser.noah_customer_id && (
                                         <div className="flex items-center gap-2">
-                                          <span className="text-sm text-gray-600">Noah Customer ID:</span>
+                                          <span className="text-sm text-gray-600">Customer ID</span>
                                           <span className="text-sm font-mono">{selectedUser.noah_customer_id}</span>
                                         </div>
                                       )}
@@ -830,137 +851,83 @@ export default function AdminUsersPage() {
                                   )}
                                 </div>
 
-                                {/* Identity Verification - Show only if Noah KYC is approved */}
                                 {selectedUser.noah_kyc_status === "approved" && (
                                   <>
-                                    {/* Identity Verification */}
-                                    {selectedUser.first_name || selectedUser.date_of_birth ? (
+                                    {(selectedUser.full_name || selectedUser.date_of_birth || selectedUser.noah_kyc_metadata) && (
                                       <div>
-                                        <label className="text-sm font-medium text-gray-600">Identity Verification</label>
-                                        <div className="mt-2 space-y-4">
-                                          <div className="grid grid-cols-2 gap-6">
-                                            <div className="space-y-4">
-                                              <div>
-                                                <div className="flex items-center justify-between mb-2">
-                                                  <span className="text-sm text-gray-600">Status:</span>
-                                                  <Badge className="bg-green-100 text-green-700">APPROVED</Badge>
-                                                </div>
-                                                {selectedUser.first_name && (
-                                                  <div className="flex justify-between">
-                                                    <span className="text-sm text-gray-600">First Name:</span>
-                                                    <span className="text-sm">{selectedUser.first_name}</span>
-                                                  </div>
-                                                )}
-                                                {selectedUser.middle_name && (
-                                                  <div className="flex justify-between">
-                                                    <span className="text-sm text-gray-600">Middle Name:</span>
-                                                    <span className="text-sm">{selectedUser.middle_name}</span>
-                                                  </div>
-                                                )}
-                                                {selectedUser.last_name && (
-                                                  <div className="flex justify-between">
-                                                    <span className="text-sm text-gray-600">Last Name:</span>
-                                                    <span className="text-sm">{selectedUser.last_name}</span>
-                                                  </div>
-                                                )}
-                                                {selectedUser.date_of_birth && (
-                                                  <div className="flex justify-between">
-                                                    <span className="text-sm text-gray-600">Date of Birth:</span>
-                                                    <span className="text-sm">{new Date(selectedUser.date_of_birth).toLocaleDateString()}</span>
-                                                  </div>
-                                                )}
-                                                {selectedUser.country_code && (
-                                                  <div className="flex justify-between">
-                                                    <span className="text-sm text-gray-600">Country:</span>
-                                                    <span className="text-sm">{selectedUser.country_code.toUpperCase()}</span>
-                                                  </div>
-                                                )}
-                                              </div>
-                                            </div>
-                                            <div className="space-y-4">
-                                              {selectedUser.noah_kyc_metadata && (
-                                                <>
-                                                  {selectedUser.noah_kyc_metadata.ssn && (
-                                                    <div className="flex justify-between">
-                                                      <span className="text-sm text-gray-600">SSN:</span>
-                                                      <span className="text-sm">***-**-{selectedUser.noah_kyc_metadata.ssn.slice(-4)}</span>
-                                                    </div>
-                                                  )}
-                                                  {selectedUser.noah_kyc_metadata.passportNumber && (
-                                                    <div className="flex justify-between">
-                                                      <span className="text-sm text-gray-600">Passport:</span>
-                                                      <span className="text-sm">{selectedUser.noah_kyc_metadata.passportNumber}</span>
-                                                    </div>
-                                                  )}
-                                                  {selectedUser.noah_kyc_metadata.nationalIdNumber && (
-                                                    <div className="flex justify-between">
-                                                      <span className="text-sm text-gray-600">National ID:</span>
-                                                      <span className="text-sm">{selectedUser.noah_kyc_metadata.nationalIdNumber}</span>
-                                                    </div>
-                                                  )}
-                                                </>
-                                              )}
-                                            </div>
+                                        <label className="text-sm font-medium text-gray-600">Identity details</label>
+                                        <div className="mt-2 space-y-3 text-sm">
+                                          <div className="flex items-center justify-between mb-1">
+                                            <span className="text-gray-600">KYC</span>
+                                            <Badge className="bg-green-100 text-green-700">APPROVED</Badge>
                                           </div>
+                                          {selectedUser.full_name ? (
+                                            <div className="flex justify-between gap-4">
+                                              <span className="text-gray-600">full_name</span>
+                                              <span className="text-right">{selectedUser.full_name}</span>
+                                            </div>
+                                          ) : null}
+                                          {selectedUser.date_of_birth ? (
+                                            <div className="flex justify-between gap-4">
+                                              <span className="text-gray-600">date_of_birth</span>
+                                              <span>{new Date(selectedUser.date_of_birth).toLocaleDateString()}</span>
+                                            </div>
+                                          ) : null}
+                                          {(() => {
+                                            const meta = selectedUser.noah_kyc_metadata as Record<string, string> | null | undefined
+                                            if (!meta) return null
+                                            return (
+                                              <div className="space-y-2 border-t pt-3">
+                                                {meta.ssn ? (
+                                                  <div className="flex justify-between">
+                                                    <span className="text-gray-600">SSN (last 4)</span>
+                                                    <span>***-**-{String(meta.ssn).slice(-4)}</span>
+                                                  </div>
+                                                ) : null}
+                                                {meta.passportNumber ? (
+                                                  <div className="flex justify-between">
+                                                    <span className="text-gray-600">Passport</span>
+                                                    <span>{meta.passportNumber}</span>
+                                                  </div>
+                                                ) : null}
+                                                {meta.nationalIdNumber ? (
+                                                  <div className="flex justify-between">
+                                                    <span className="text-gray-600">National ID</span>
+                                                    <span>{meta.nationalIdNumber}</span>
+                                                  </div>
+                                                ) : null}
+                                              </div>
+                                            )
+                                          })()}
                                         </div>
-                                      </div>
-                                    ) : (
-                                      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
-                                        <p className="text-gray-500 text-xs">No identity verification data available</p>
                                       </div>
                                     )}
 
-                                    {/* Address Verification */}
-                                    {selectedUser.address ? (
-                                      <div>
-                                        <label className="text-sm font-medium text-gray-600">Address Verification</label>
-                                        <div className="mt-2 space-y-4">
-                                          <div className="grid grid-cols-2 gap-6">
-                                            <div className="space-y-4">
-                                              <div>
-                                                <div className="flex items-center justify-between mb-2">
-                                                  <span className="text-sm text-gray-600">Status:</span>
-                                                  <Badge className="bg-green-100 text-green-700">APPROVED</Badge>
-                                                </div>
-                                                {selectedUser.country_code && (
-                                                  <div className="flex justify-between">
-                                                    <span className="text-sm text-gray-600">Country:</span>
-                                                    <span className="text-sm">{selectedUser.country_code.toUpperCase()}</span>
-                                                  </div>
-                                                )}
-                                              </div>
+                                    {(() => {
+                                      const addr = (selectedUser.noah_kyc_metadata as { address?: Record<string, string> } | null)?.address
+                                      if (!addr) {
+                                        return (
+                                          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
+                                            <p className="text-gray-500 text-xs">No structured address on file</p>
+                                          </div>
+                                        )
+                                      }
+                                      return (
+                                        <div>
+                                          <label className="text-sm font-medium text-gray-600">Address</label>
+                                          <div className="mt-2 text-xs text-gray-700 space-y-0.5">
+                                            {addr.line1 ? <div>{addr.line1}</div> : null}
+                                            {addr.line2 ? <div>{addr.line2}</div> : null}
+                                            <div>
+                                              {addr.city}
+                                              {addr.state ? `, ${addr.state}` : ""}
+                                              {addr.postal_code ? ` ${addr.postal_code}` : ""}
                                             </div>
-                                            <div className="space-y-4">
-                                              <div className="flex justify-between">
-                                                <span className="text-sm text-gray-600">Address:</span>
-                                                <span className="text-sm text-right">{selectedUser.address}</span>
-                                              </div>
-                                              {selectedUser.noah_kyc_metadata?.address && (
-                                                <div className="pt-2 border-t">
-                                                  <p className="text-xs text-gray-500 mb-1">Structured Address:</p>
-                                                  <div className="text-xs text-gray-700 space-y-0.5">
-                                                    <div>{selectedUser.noah_kyc_metadata.address.line1}</div>
-                                                    {selectedUser.noah_kyc_metadata.address.line2 && (
-                                                      <div>{selectedUser.noah_kyc_metadata.address.line2}</div>
-                                                    )}
-                                                    <div>
-                                                      {selectedUser.noah_kyc_metadata.address.city}
-                                                      {selectedUser.noah_kyc_metadata.address.state && `, ${selectedUser.noah_kyc_metadata.address.state}`}
-                                                      {selectedUser.noah_kyc_metadata.address.postal_code && ` ${selectedUser.noah_kyc_metadata.address.postal_code}`}
-                                                    </div>
-                                                    <div>{selectedUser.noah_kyc_metadata.address.country}</div>
-                                                  </div>
-                                                </div>
-                                              )}
-                                            </div>
+                                            {addr.country ? <div>{addr.country}</div> : null}
                                           </div>
                                         </div>
-                                      </div>
-                                    ) : (
-                                      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
-                                        <p className="text-gray-500 text-xs">No address verification data available</p>
-                                      </div>
-                                    )}
+                                      )
+                                    })()}
                                   </>
                                 )}
                               </div>
@@ -1028,21 +995,9 @@ export default function AdminUsersPage() {
                           </DialogContent>
                         </Dialog>
 
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="sm">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleStatusUpdate(user.id, "active")}>
-                              Activate Account
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleStatusUpdate(user.id, "suspended")}>
-                              Suspend Account
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        <Button variant="outline" size="sm" onClick={() => handleKycOpen(user)}>
+                          KYC
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>

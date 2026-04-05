@@ -13,8 +13,14 @@ export async function GET(request: Request) {
   const since = daysAgoIso(7)
 
   const [feesRes, quotesRes, txRes, webhookRes] = await Promise.all([
-    admin.from("applied_fees").select("total_fee_amount, source_amount, created_at"),
-    admin.from("fee_quotes").select("id, status, created_at, pricing_strategy_mode, repricing_reason_code, margin_snapshot, quote_payload"),
+    admin
+      .from("applied_fees")
+      .select("total_fee_amount, source_amount, created_at, total_provider_cost, pricing_totals, provider_costs"),
+    admin
+      .from("fee_quotes")
+      .select(
+        "id, status, created_at, pricing_strategy_mode, repricing_reason_code, margin_snapshot, quote_payload, total_provider_cost, pricing_totals, provider_costs"
+      ),
     admin.from("transactions").select("id, status, created_at, metadata"),
     admin.from("webhook_deliveries").select("id, processed, error, created_at"),
   ])
@@ -76,6 +82,33 @@ export async function GET(request: Request) {
     })
   )
 
+  let quotesWithTotalProviderCost = 0
+  let sumTotalProviderCostOnQuotes = 0
+  let quotesWithPricingTotals = 0
+  let sumTotalUserFeeOnQuotes = 0
+  for (const q of quotes) {
+    const tpc = q.total_provider_cost
+    if (tpc != null && tpc !== "" && Number.isFinite(Number(tpc))) {
+      quotesWithTotalProviderCost += 1
+      sumTotalProviderCostOnQuotes += Number(tpc)
+    }
+    const pt = q.pricing_totals as { total_user_fee?: number } | null | undefined
+    if (pt && typeof pt.total_user_fee === "number" && Number.isFinite(pt.total_user_fee)) {
+      quotesWithPricingTotals += 1
+      sumTotalUserFeeOnQuotes += pt.total_user_fee
+    }
+  }
+
+  let appliedWithTotalProviderCost = 0
+  let sumTotalProviderCostOnApplied = 0
+  for (const f of fees) {
+    const tpc = f.total_provider_cost
+    if (tpc != null && tpc !== "" && Number.isFinite(Number(tpc))) {
+      appliedWithTotalProviderCost += 1
+      sumTotalProviderCostOnApplied += Number(tpc)
+    }
+  }
+
   const alerts = {
     webhookRetryExhaustionRisk: webhookFailureRate > 0.05,
     marginCompressionRisk: takeRateBps < 30,
@@ -104,6 +137,14 @@ export async function GET(request: Request) {
       marginByAmountBand,
       marginByCorridor,
       conversionByStrategyMode,
+    },
+    providerPricing: {
+      quotesWithTotalProviderCost,
+      sumTotalProviderCostOnQuotes,
+      appliedWithTotalProviderCost,
+      sumTotalProviderCostOnApplied,
+      quotesWithPricingTotals,
+      sumTotalUserFeeOnQuotes,
     },
     alerts,
   })

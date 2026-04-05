@@ -12,11 +12,11 @@ export async function POST(request: Request) {
   const admin = createSupabaseAdmin()
   const { data: userRow } = await admin
     .from("users")
-    .select("easner_organization_id")
+    .select("easner_business_id")
     .eq("id", user.id)
     .maybeSingle()
 
-  const organizationId = userRow?.easner_organization_id ?? null
+  const organizationId = userRow?.easner_business_id ?? null
   if (!organizationId) {
     return NextResponse.json({ error: "No organization linked to your account." }, { status: 400 })
   }

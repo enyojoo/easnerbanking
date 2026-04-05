@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,6 +15,7 @@ import { getKybFields } from "@/lib/kyb-by-country"
 import { updateBusinessProfile, useBusinessProfile } from "@/lib/use-business-profile"
 import { CountryFlag } from "@/components/flags"
 import { BusinessVerificationSection } from "@/components/compliance/business-verification-section"
+import { fetchWithSession } from "@/lib/fetch-with-session"
 
 function getCountryFromCode(code: string) {
   return countries.find((c) => c.code === code)
@@ -22,6 +23,7 @@ function getCountryFromCode(code: string) {
 
 type BusinessSettingsForm = {
   businessName: string
+  easetag: string
   businessLogo: string | null
   businessType: string
   registrationNumber: string
@@ -44,8 +46,12 @@ export function SettingsBusinessTab() {
   const [countryCode, setCountryCode] = useState("US")
   const [countryOpen, setCountryOpen] = useState(false)
   const [editingSection, setEditingSection] = useState<string | null>(null)
+  const [easetagAvailable, setEasetagAvailable] = useState<boolean | null>(null)
+  const [checkingEasetag, setCheckingEasetag] = useState(false)
+  const easetagCheckTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [formData, setFormData] = useState<BusinessSettingsForm>({
     businessName: "",
+    easetag: "",
     businessLogo: null,
     businessType: "",
     registrationNumber: "",
@@ -71,6 +77,7 @@ export function SettingsBusinessTab() {
     setFormData((prev) => ({
       ...prev,
       businessName: profile.name || prev.businessName,
+      easetag: profile.easetag || "",
       businessLogo: profile.logoUrl ?? prev.businessLogo,
       businessType: profile.businessType || prev.businessType,
       registrationNumber: profile.registrationNumber || prev.registrationNumber,
@@ -90,6 +97,7 @@ export function SettingsBusinessTab() {
     profile.isLoading,
     profile.countryCode,
     profile.name,
+    profile.easetag,
     profile.logoUrl,
     profile.businessType,
     profile.registrationNumber,
@@ -106,12 +114,49 @@ export function SettingsBusinessTab() {
     profile.country,
   ])
 
+  const checkEasetagAvailability = async (raw: string) => {
+    const trimmed = raw.replace(/^@/, "").trim().toLowerCase()
+    if (!trimmed || trimmed === (profile.easetag || "").replace(/^@/, "").toLowerCase()) {
+      setEasetagAvailable(null)
+      return
+    }
+    setCheckingEasetag(true)
+    try {
+      const res = await fetchWithSession(
+        `/api/business/easetag/check?easetag=${encodeURIComponent(trimmed)}`,
+      )
+      const data = (await res.json()) as { available?: boolean; valid?: boolean }
+      setEasetagAvailable(data.valid !== false && Boolean(data.available))
+    } catch {
+      setEasetagAvailable(false)
+    } finally {
+      setCheckingEasetag(false)
+    }
+  }
+
+  const handleEasetagInput = (value: string) => {
+    const clean = value.replace(/^@/g, "").replace(/\s/g, "")
+    handleInputChange("easetag", clean)
+    setEasetagAvailable(null)
+    if (easetagCheckTimeout.current) clearTimeout(easetagCheckTimeout.current)
+    if (!clean || clean === (profile.easetag || "")) {
+      setEasetagAvailable(null)
+      return
+    }
+    easetagCheckTimeout.current = setTimeout(() => void checkEasetagAvailability(clean), 400)
+  }
+
   const handleEdit = (section: string) => setEditingSection(section)
-  const handleCancel = () => setEditingSection(null)
+  const handleCancel = () => {
+    setEditingSection(null)
+    setEasetagAvailable(null)
+    if (easetagCheckTimeout.current) clearTimeout(easetagCheckTimeout.current)
+  }
   const handleSave = async (section: string) => {
     if (section === "business") {
       await updateBusinessProfile({
         businessName: formData.businessName,
+        easetag: formData.easetag.trim() ? formData.easetag.trim().replace(/^@/, "").toLowerCase() : null,
         businessLogo: formData.businessLogo,
         businessType: formData.businessType,
         registrationNumber: formData.registrationNumber,
@@ -211,6 +256,33 @@ export function SettingsBusinessTab() {
                 onChange={(e) => handleInputChange("businessName", e.target.value)}
                 disabled={editingSection !== "business"}
               />
+              <div className="space-y-1">
+                <Label htmlFor="businessEasetag">Easetag</Label>
+                <div className="flex rounded-md shadow-xs border border-input overflow-hidden bg-background">
+                  <span className="flex items-center px-3 text-muted-foreground text-sm border-r border-input bg-muted/40">
+                    @
+                  </span>
+                  <Input
+                    id="businessEasetag"
+                    className="border-0 shadow-none focus-visible:ring-0 rounded-none"
+                    value={formData.easetag}
+                    onChange={(e) => handleEasetagInput(e.target.value)}
+                    disabled={editingSection !== "business"}
+                    placeholder="yourbusiness"
+                    autoCapitalize="none"
+                  />
+                </div>
+                {editingSection === "business" && formData.easetag && !checkingEasetag && easetagAvailable === true && (
+                  <p className="text-xs text-green-600">Available</p>
+                )}
+                {editingSection === "business" && formData.easetag && !checkingEasetag && easetagAvailable === false && (
+                  <p className="text-xs text-destructive">Already taken or invalid</p>
+                )}
+                {editingSection === "business" && checkingEasetag && (
+                  <p className="text-xs text-muted-foreground">Checking…</p>
+                )}
+                <p className="text-xs text-muted-foreground">Public handle for your business (global; must be unique).</p>
+              </div>
             </div>
             <BusinessLogoField
               value={formData.businessLogo}

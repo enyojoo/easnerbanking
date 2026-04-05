@@ -23,12 +23,14 @@ type RecipientRow = {
   mobile_provider?: string | null
   wallet_network?: string | null
   wallet_memo_tag?: string | null
+  payee_easetag?: string | null
+  payee_avatar_url?: string | null
   created_at: string
   updated_at: string
 }
 
 export type RecipientUpsertInput = {
-  recipientType: "bank" | "mobile" | "wallet"
+  recipientType: "bank" | "mobile" | "wallet" | "easenet"
   countryCode?: string
   fullName: string
   accountNumber: string
@@ -46,6 +48,9 @@ export type RecipientUpsertInput = {
   transferType?: "ACH" | "Wire"
   checkingOrSavings?: "checking" | "savings"
   addressLine1?: string
+  /** Normalized easetag (no @); required for easenet */
+  payeeEasetag?: string
+  payeeAvatarUrl?: string | null
 }
 
 const countryByCurrency: Record<string, string> = {
@@ -79,6 +84,9 @@ function resolveCountryName(currency: string, countryCode?: string): string {
 }
 
 function deriveBankName(input: RecipientUpsertInput): string {
+  if (input.recipientType === "easenet" && input.payeeEasetag) {
+    return `Easenet (@${input.payeeEasetag})`
+  }
   if (input.recipientType === "mobile" && input.mobileProvider) {
     return `Mobile Money (${input.mobileProvider})`
   }
@@ -109,6 +117,8 @@ function toWritePayload(input: RecipientUpsertInput) {
     mobile_provider: input.mobileProvider || null,
     wallet_network: input.walletNetwork || null,
     wallet_memo_tag: input.walletMemoTag || null,
+    payee_easetag: input.recipientType === "easenet" ? input.payeeEasetag || null : null,
+    payee_avatar_url: input.recipientType === "easenet" ? input.payeeAvatarUrl ?? null : null,
   }
 }
 
@@ -143,6 +153,8 @@ export function toBeneficiary(row: RecipientRow): Beneficiary {
   return {
     id: row.id,
     countryCode: normalizedCountryCode,
+    payeeEasetag: row.payee_easetag || undefined,
+    avatarUrl: row.payee_avatar_url || undefined,
     name: row.full_name,
     bankName: mobileInnerMatch ? `Mobile Money (${mobileProvider})` : row.bank_name,
     accountNumber: row.account_number,

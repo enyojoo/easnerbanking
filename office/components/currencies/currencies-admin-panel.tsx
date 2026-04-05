@@ -44,12 +44,31 @@ export function CurrenciesAdminPanel() {
   }, [])
 
   const rows: CurrencyRow[] = useMemo(() => {
-    return catalog.map((c) => {
-      const upper = c.code.toUpperCase()
-      const defaultActive = upper === "USD" || upper === "EUR"
-      const active = overrides[upper] ?? defaultActive
-      return { code: upper, name: c.name, active }
-    })
+    const hiddenCodes = new Set(["BMD", "AWG", "ANG", "TOP", "XPF", "SHP", "SBD", "MOP", "KYD", "GIP", "FKP", "FJD", "BZD"]) // Bermudan Dollar, Aruban Florin, Netherlands Antillean Guilder, Tongan Paʻanga, CFP Franc, St. Helena Pound, Solomon Islands Dollar, Macanese Pataca, Cayman Islands Dollar, Gibraltar Pound, Falkland Islands Pound, Fijian Dollar, Belize Dollar
+
+    const augmentedCatalog = (() => {
+      const codes = new Set(catalog.map((c) => c.code.toUpperCase()))
+      const extra: Array<{ code: string; name: string; symbol: string }> = []
+      if (!codes.has("EUR")) extra.push({ code: "EUR", name: "Euro", symbol: "€" })
+      if (!codes.has("GBP")) extra.push({ code: "GBP", name: "British Pound Sterling", symbol: "£" })
+      if (extra.length === 0) return catalog
+      return [...catalog, ...extra]
+    })()
+
+    return augmentedCatalog
+      .filter((c) => !hiddenCodes.has(c.code.toUpperCase()))
+      .map((c) => {
+        const upper = c.code.toUpperCase()
+        const defaultActive = upper === "USD" || upper === "EUR"
+        const active = overrides[upper] ?? defaultActive
+        const displayName =
+          upper === "ZWG"
+            ? "Zimbabwe Gold"
+            : upper === "SLE"
+              ? "Sierra Leonean Leones"
+              : c.name
+        return { code: upper, name: displayName, active }
+      })
   }, [catalog, overrides])
 
   const handleToggleCurrency = async (code: string, nextActive: boolean) => {
@@ -90,7 +109,29 @@ export function CurrenciesAdminPanel() {
                 <TableRow key={currency.code}>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <CurrencyFlag currency={currency.code} size={22} />
+                      {(() => {
+                        const code = currency.code.toUpperCase()
+                        const tokenIcons: Record<string, string> = {
+                          USDT: "https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/usdt.png",
+                          USDC: "https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/usdc.png",
+                          SOL: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/solana/info/logo.png",
+                          PYUSD: "https://logo.svgcdn.com/token-branded/pyusd.png",
+                          BTC: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/bitcoin/info/logo.png",
+                          EURC: "https://logo.svgcdn.com/token-branded/eurc.png",
+                        }
+                        const src = tokenIcons[code]
+                        if (src) {
+                          return (
+                            <img
+                              src={src}
+                              alt=""
+                              className="h-[22px] w-[22px] rounded object-cover shrink-0"
+                              loading="lazy"
+                            />
+                          )
+                        }
+                        return <CurrencyFlag currency={currency.code} size={22} />
+                      })()}
                       <span className="font-medium">{currency.name || currency.code}</span>
                     </div>
                   </TableCell>

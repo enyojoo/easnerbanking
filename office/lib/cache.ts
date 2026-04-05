@@ -74,6 +74,8 @@ export const dataCache = new DataCache()
 
 export const CACHE_KEYS = {
   OFFICE_DATA: "office_data",
+  /** Dashboard overview (`/api/admin/office/overview`) — combine with `:${preset}` in callers. */
+  OFFICE_OVERVIEW: "office_overview",
   COMMERCIAL_LIMITS: "commercial_limits",
   COMMERCIAL_PLANS: "commercial_plans",
   COMMERCIAL_RULES: "commercial_rules",

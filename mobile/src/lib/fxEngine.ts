@@ -2,6 +2,10 @@
  * Mobile FX Engine
  * Self-contained FX calculation logic for mobile app
  * (Cannot import from root lib/ directory in React Native)
+ *
+ * Authoritative fees for executed transfers should come from the business pricing quote
+ * (`noahService.createPricingQuote` → `/api/pricing/quote`) when available. This engine is
+ * for offline/UX preview using `exchange_rates` rows and may diverge from quoted Noah layers.
  */
 
 import type { ExchangeRate } from '../types'

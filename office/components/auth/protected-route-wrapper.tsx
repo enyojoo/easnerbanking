@@ -5,11 +5,11 @@ import { useRouteProtection } from "@/hooks/use-route-protection"
 
 const PROTECTED_PATHS = [
   "/dashboard",
-  "/kyc",
-  "/compliance",
   "/users",
   "/transactions",
-  "/business",
+  "/businesses",
+  "/customers",
+  "/invoices",
   "/monetization",
   "/pricing-fx",
   "/platform-control",

@@ -9,13 +9,13 @@ export async function getEnabledExtraCurrencies(
   if (scope === "business") {
     const { data: u } = await admin
       .from("users")
-      .select("easner_organization_id")
+      .select("easner_business_id")
       .eq("id", subjectUserId)
       .maybeSingle()
-    const orgId = u?.easner_organization_id as string | undefined
+    const orgId = u?.easner_business_id as string | undefined
     if (!orgId) return []
     const { data: org } = await admin
-      .from("organizations")
+      .from("businesses")
       .select("enabled_extra_account_currencies")
       .eq("id", orgId)
       .maybeSingle()
@@ -44,10 +44,10 @@ export async function appendEnabledExtraCurrency(
   if (scope === "business") {
     const { data: u } = await admin
       .from("users")
-      .select("easner_organization_id")
+      .select("easner_business_id")
       .eq("id", subjectUserId)
       .maybeSingle()
-    const orgId = u?.easner_organization_id as string | undefined
+    const orgId = u?.easner_business_id as string | undefined
     if (!orgId) {
       await admin
         .from("users")
@@ -56,7 +56,7 @@ export async function appendEnabledExtraCurrency(
       return
     }
     await admin
-      .from("organizations")
+      .from("businesses")
       .update({ enabled_extra_account_currencies: next })
       .eq("id", orgId)
     return

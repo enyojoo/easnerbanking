@@ -1,0 +1,48 @@
+import { NextResponse } from "next/server"
+import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { requireOfficeAdmin } from "@/lib/api/admin-auth"
+
+type PatchBody = {
+  enabled?: boolean
+  sort_order?: number | null
+  providers?: unknown
+  country_name?: string
+  settlement_backend?: string | null
+  metadata?: Record<string, unknown> | null
+}
+
+export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }) {
+  const auth = await requireOfficeAdmin(request)
+  if (!auth.ok) return auth.response
+
+  const { id } = await ctx.params
+  if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 })
+
+  let body: PatchBody
+  try {
+    body = (await request.json()) as PatchBody
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
+  }
+
+  const updates: Record<string, unknown> = { updated_by: auth.ctx.userId }
+
+  if (typeof body.enabled === "boolean") updates.enabled = body.enabled
+  if (body.sort_order === null || typeof body.sort_order === "number") updates.sort_order = body.sort_order
+  if (body.providers !== undefined) updates.providers = body.providers
+  if (typeof body.country_name === "string" && body.country_name.trim()) updates.country_name = body.country_name.trim()
+  if (body.settlement_backend !== undefined) updates.settlement_backend = body.settlement_backend
+  if (body.metadata !== undefined) updates.metadata = body.metadata
+
+  if (Object.keys(updates).length <= 1) {
+    return NextResponse.json({ error: "No valid fields to update" }, { status: 400 })
+  }
+
+  const admin = createSupabaseAdmin()
+  const { data, error } = await admin.from("payout_corridors").update(updates).eq("id", id).select("*").maybeSingle()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 })
+
+  return NextResponse.json({ corridor: data })
+}

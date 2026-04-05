@@ -7,6 +7,10 @@
  *   BASE_URL=http://localhost:3001 JWT=eyJhbG... node scripts/noah-sandbox-e2e.mjs
  *
  * Manual mobile: same BASE_URL in EXPO_PUBLIC_API_URL; sign in; run TOS → KYC → sync; check transactions.
+ *
+ * Payout rails (US bank, SEPA, mobile Identifier, W2W): see business/docs/noah-payout-sandbox-matrix.md
+ *
+ * Env: NOAH_API_KEY, NOAH_API_BASE_URL, NOAH_WALLET_TRANSFER_PATH (optional), SUPABASE_* ; webhooks → /api/noah/webhooks (Noah dashboard).
  */
 
 const base = (process.env.BASE_URL || "http://localhost:3001").replace(/\/$/, "")
@@ -72,6 +76,18 @@ async function main() {
     json: await r.json().catch(() => ({})),
   }))
   console.log("GET /api/noah/virtual-accounts?currency=usd (business scope)", va.status, JSON.stringify(va.json).slice(0, 250))
+
+  const w = await fetch(`${base}/api/noah/wallets`, { headers: auth }).then(async (r) => ({
+    status: r.status,
+    json: await r.json().catch(() => ({})),
+  }))
+  console.log("GET /api/noah/wallets", w.status, JSON.stringify(w.json).slice(0, 400))
+
+  const ucheck = await fetch(`${base}/api/username/check?easetag=testtag123456789`).then(async (r) => ({
+    status: r.status,
+    json: await r.json().catch(() => ({})),
+  }))
+  console.log("GET /api/username/check", ucheck.status, ucheck.json)
 
   process.exit(health.ok && verify.status === 200 ? 0 : 1)
 }

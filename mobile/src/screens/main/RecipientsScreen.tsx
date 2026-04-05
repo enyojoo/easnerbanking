@@ -11,6 +11,7 @@ import {
   Modal,
   Animated,
   Image,
+  ActivityIndicator,
   ScrollView,
   Platform,
   KeyboardAvoidingView,
@@ -38,7 +39,8 @@ import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
 import { getAllCountryCurrencies, searchCountryCurrencies, CountryCurrency } from '../../lib/countryCurrencyMapping'
 import { getCatalogByRecipientType, getRecipientProviders, getWalletAssets, getWalletNetworksForAsset } from '../../lib/recipientCatalog'
 import { getNetworkIconUrl, getTokenIconUrl } from '../../lib/cryptoIcons'
-import { Wallet, Building2, Smartphone } from 'lucide-react-native'
+import { Wallet, Building2, Smartphone, AtSign } from 'lucide-react-native'
+import { fetchEasenetPublicProfile } from '../../lib/easenetProfile'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { CountryFlag } from '../../components/flags/CountryFlag'
 import { getCountryCodeForCurrency } from '@easner/shared'
@@ -54,7 +56,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
   const [showRecipientTypeModal, setShowRecipientTypeModal] = useState(false) // Step 1: Choose type
   const [showCountryCurrencyModal, setShowCountryCurrencyModal] = useState(false) // Step 2: Choose country/currency
   const [showBankAccountForm, setShowBankAccountForm] = useState(false) // Step 3: Bank Account form
-  const [selectedRecipientType, setSelectedRecipientType] = useState<'wallet' | 'bank' | 'mobile' | null>(null)
+  const [selectedRecipientType, setSelectedRecipientType] = useState<'wallet' | 'bank' | 'mobile' | 'easenet' | null>(null)
   const [selectedCountryCurrency, setSelectedCountryCurrency] = useState<CountryCurrency | null>(null)
   const [showCountryDropdown, setShowCountryDropdown] = useState(false) // Inline dropdown like SelectRecipientScreen
   const [showProviderDropdown, setShowProviderDropdown] = useState(false)
@@ -75,6 +77,13 @@ function RecipientsContent({ navigation }: NavigationProps) {
   const [error, setError] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [easenetProfile, setEasenetProfile] = useState<{
+    easetag: string
+    fullName: string
+    avatarUrl: string | null
+  } | null>(null)
+  const [easenetLookupLoading, setEasenetLookupLoading] = useState(false)
+  const [easenetLookupError, setEasenetLookupError] = useState<string | null>(null)
 
   // Animation refs
   const headerAnim = useRef(new Animated.Value(0)).current
@@ -111,6 +120,10 @@ function RecipientsContent({ navigation }: NavigationProps) {
     memoTag: '',
     checkingOrSavings: '',
     addressLine1: '',
+    city: '',
+    state: '',
+    postalCode: '',
+    payeeEasetag: '',
   })
 
   // Track screen view
@@ -134,6 +147,46 @@ function RecipientsContent({ navigation }: NavigationProps) {
   useEffect(() => {
     setUiRecipients(recipients)
   }, [recipients])
+
+  useEffect(() => {
+    if (selectedRecipientType !== 'easenet' || !showBankAccountForm) {
+      return
+    }
+    const raw = newRecipient.payeeEasetag.trim().replace(/^@+/, '')
+    if (raw.length < 4) {
+      setEasenetProfile(null)
+      setEasenetLookupError(null)
+      setEasenetLookupLoading(false)
+      return
+    }
+    let cancelled = false
+    setEasenetLookupLoading(true)
+    setEasenetLookupError(null)
+    const t = setTimeout(() => {
+      void (async () => {
+        const res = await fetchEasenetPublicProfile(raw)
+        if (cancelled) return
+        setEasenetLookupLoading(false)
+        if (res.found) {
+          setEasenetProfile({
+            easetag: res.easetag,
+            fullName: res.fullName,
+            avatarUrl: res.avatarUrl,
+          })
+          setEasenetLookupError(null)
+        } else {
+          setEasenetProfile(null)
+          setEasenetLookupError(
+            res.reason === 'self' ? 'You cannot add yourself as a recipient.' : 'Easetag not found.',
+          )
+        }
+      })()
+    }, 450)
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [newRecipient.payeeEasetag, selectedRecipientType, showBankAccountForm])
   
   // Reset form after create/edit form modal closes (for smooth animation)
   useEffect(() => {
@@ -147,10 +200,19 @@ function RecipientsContent({ navigation }: NavigationProps) {
     }
   }, [showBankAccountForm, editingRecipient])
 
-  const filteredRecipients = uiRecipients.filter(recipient =>
-    recipient.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    recipient.bank_name.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const filteredRecipients = uiRecipients.filter((recipient) => {
+    const q = searchTerm.toLowerCase()
+    if (!q.trim()) return true
+    const hay = [
+      recipient.full_name,
+      recipient.bank_name,
+      recipient.payee_easetag ? `@${recipient.payee_easetag}` : '',
+      recipient.account_number,
+    ]
+      .join(' ')
+      .toLowerCase()
+    return hay.includes(q)
+  })
 
   const onRefresh = async () => {
     setRefreshing(true)
@@ -166,7 +228,12 @@ function RecipientsContent({ navigation }: NavigationProps) {
     return names.slice(0, 2).map(name => name[0]).join('').toUpperCase()
   }
 
-  const recipientTypeKey = selectedRecipientType === 'mobile' ? 'mobile_money' : (selectedRecipientType || 'bank')
+  const recipientTypeKey =
+    selectedRecipientType === 'mobile'
+      ? 'mobile_money'
+      : selectedRecipientType === 'easenet'
+        ? 'bank'
+        : (selectedRecipientType || 'bank')
   const filteredCurrencies = getCatalogByRecipientType(recipientTypeKey as any).filter(currency => {
     if (currencySearchTerm) {
       return (
@@ -203,6 +270,31 @@ function RecipientsContent({ navigation }: NavigationProps) {
       setIsSubmitting(true)
       setError('')
 
+      if (selectedRecipientType === 'easenet') {
+        if (!easenetProfile) {
+          showError('Enter a valid Easetag and wait for the profile to load')
+          return
+        }
+        const tag = easenetProfile.easetag
+        const createdRecipient = await recipientService.create(userProfile.id, {
+          fullName: easenetProfile.fullName,
+          accountNumber: tag,
+          bankName: `Easenet (@${tag})`,
+          currency: 'USD',
+          countryCode: 'US',
+          payeeEasetag: tag,
+          payeeAvatarUrl: easenetProfile.avatarUrl,
+        })
+        setUiRecipients((prev) => [createdRecipient, ...prev.filter((r) => r.id !== createdRecipient.id)])
+        await invalidateRecipients()
+        await refreshRecipients(true)
+        setError('')
+        resetForm()
+        setShowBankAccountForm(false)
+        Alert.alert('Success', 'Recipient added successfully')
+        return
+      }
+
       const accountNumberForType =
         selectedRecipientType === 'wallet'
           ? newRecipient.walletAddress
@@ -234,6 +326,9 @@ function RecipientsContent({ navigation }: NavigationProps) {
         checkingOrSavings:
           selectedCountryCurrency?.countryCode === 'US' ? (newRecipient.checkingOrSavings as 'checking' | 'savings' | '') || undefined : undefined,
         addressLine1: selectedCountryCurrency?.countryCode === 'US' ? newRecipient.addressLine1 || undefined : undefined,
+        city: selectedCountryCurrency?.countryCode === 'US' ? newRecipient.city || undefined : undefined,
+        state: selectedCountryCurrency?.countryCode === 'US' ? newRecipient.state || undefined : undefined,
+        postalCode: selectedCountryCurrency?.countryCode === 'US' ? newRecipient.postalCode || undefined : undefined,
       })
       setUiRecipients((prev) => [createdRecipient, ...prev.filter((r) => r.id !== createdRecipient.id)])
 
@@ -259,9 +354,33 @@ function RecipientsContent({ navigation }: NavigationProps) {
     setEditingRecipient(recipient)
     const bankNameRaw = String(recipient.bank_name || "")
     const bank = bankNameRaw.toLowerCase()
-    const inferredType: 'wallet' | 'bank' | 'mobile' =
-      bank.includes('wallet') ? 'wallet' : bank.includes('mobile money') ? 'mobile' : 'bank'
+    const inferredType: 'wallet' | 'bank' | 'mobile' | 'easenet' =
+      bank.includes('wallet')
+        ? 'wallet'
+        : bank.includes('mobile money')
+          ? 'mobile'
+          : bank.includes('easenet')
+            ? 'easenet'
+            : 'bank'
     setSelectedRecipientType(inferredType)
+    if (inferredType === 'easenet') {
+      const tag = String(recipient.payee_easetag || recipient.account_number || '')
+        .trim()
+        .replace(/^@+/, '')
+      setEasenetProfile(
+        tag
+          ? {
+              easetag: tag,
+              fullName: recipient.full_name,
+              avatarUrl: recipient.payee_avatar_url || null,
+            }
+          : null,
+      )
+      setEasenetLookupError(null)
+    } else {
+      setEasenetProfile(null)
+      setEasenetLookupError(null)
+    }
     const walletMatch = bankNameRaw.match(/^Wallet \((.*)\)$/i)
     const walletDescriptor = walletMatch?.[1] || ''
     const [walletAssetFromBank, walletNetworkFromBank] = walletDescriptor.includes('/')
@@ -272,7 +391,8 @@ function RecipientsContent({ navigation }: NavigationProps) {
     const ccIdx = mobileInner.lastIndexOf('|CC:')
     const providerFromBank = (ccIdx >= 0 ? mobileInner.slice(0, ccIdx) : mobileInner).trim()
 
-    const recipientTypeKey = inferredType === 'mobile' ? 'mobile_money' : inferredType
+    const recipientTypeKey =
+      inferredType === 'mobile' ? 'mobile_money' : inferredType === 'easenet' ? 'bank' : inferredType
     const catalogMatch =
       getCatalogByRecipientType(recipientTypeKey as any).find(
         (cc) => cc.currencyCode === recipient.currency && (!recipient.country_code || cc.countryCode === recipient.country_code),
@@ -311,6 +431,14 @@ function RecipientsContent({ navigation }: NavigationProps) {
       memoTag: recipient.wallet_memo_tag || recipient.swift_bic || '',
       checkingOrSavings: recipient.checking_or_savings || '',
       addressLine1: recipient.address_line1 || '',
+      city: recipient.city || '',
+      state: recipient.state || '',
+      postalCode: recipient.postal_code || '',
+      payeeEasetag: (
+        recipient.payee_easetag ||
+        (inferredType === 'easenet' ? recipient.account_number : '') ||
+        ''
+      ).replace(/^@+/, ''),
     })
     setShowBankAccountForm(true)
   }
@@ -331,6 +459,30 @@ function RecipientsContent({ navigation }: NavigationProps) {
         setError('Not signed in')
         return
       }
+
+      if (selectedRecipientType === 'easenet') {
+        if (!easenetProfile) {
+          showError('Enter a valid Easetag and wait for the profile to load')
+          return
+        }
+        const tag = easenetProfile.easetag
+        const updatedRecipient = await recipientService.update(editingRecipient.id, user.id, {
+          fullName: easenetProfile.fullName,
+          accountNumber: tag,
+          bankName: `Easenet (@${tag})`,
+          countryCode: 'US',
+          payeeEasetag: tag,
+          payeeAvatarUrl: easenetProfile.avatarUrl,
+        })
+        setUiRecipients((prev) => prev.map((r) => (r.id === updatedRecipient.id ? updatedRecipient : r)))
+        await invalidateRecipients()
+        await refreshRecipients(true)
+        setError('')
+        setShowBankAccountForm(false)
+        showSuccess('Recipient updated successfully')
+        return
+      }
+
       const accountNumberForType =
         selectedRecipientType === 'wallet'
           ? newRecipient.walletAddress
@@ -361,6 +513,9 @@ function RecipientsContent({ navigation }: NavigationProps) {
         checkingOrSavings:
           selectedCountryCurrency?.countryCode === 'US' ? (newRecipient.checkingOrSavings as 'checking' | 'savings' | '') || undefined : undefined,
         addressLine1: selectedCountryCurrency?.countryCode === 'US' ? newRecipient.addressLine1 || undefined : undefined,
+        city: selectedCountryCurrency?.countryCode === 'US' ? newRecipient.city || undefined : undefined,
+        state: selectedCountryCurrency?.countryCode === 'US' ? newRecipient.state || undefined : undefined,
+        postalCode: selectedCountryCurrency?.countryCode === 'US' ? newRecipient.postalCode || undefined : undefined,
       })
       setUiRecipients((prev) => prev.map((r) => (r.id === updatedRecipient.id ? updatedRecipient : r)))
 
@@ -444,6 +599,9 @@ function RecipientsContent({ navigation }: NavigationProps) {
   }
 
   const isFormValid = () => {
+    if (selectedRecipientType === 'easenet') {
+      return Boolean(easenetProfile && newRecipient.payeeEasetag.trim().length >= 1)
+    }
     // For US accounts, transfer type is required
     if (selectedCountryCurrency?.countryCode === 'US' && !transferType) {
       return false
@@ -452,6 +610,15 @@ function RecipientsContent({ navigation }: NavigationProps) {
       return false
     }
     if (selectedCountryCurrency?.countryCode === 'US' && !newRecipient.addressLine1.trim()) {
+      return false
+    }
+    if (selectedCountryCurrency?.countryCode === 'US' && !newRecipient.city.trim()) {
+      return false
+    }
+    if (selectedCountryCurrency?.countryCode === 'US' && !newRecipient.state.trim()) {
+      return false
+    }
+    if (selectedCountryCurrency?.countryCode === 'US' && !newRecipient.postalCode.trim()) {
       return false
     }
     if (!newRecipient.fullName || !newRecipient.currency) return false
@@ -489,6 +656,10 @@ function RecipientsContent({ navigation }: NavigationProps) {
       memoTag: '',
       checkingOrSavings: '',
       addressLine1: '',
+      city: '',
+      state: '',
+      postalCode: '',
+      payeeEasetag: '',
     })
     setError('')
     setFieldErrors({})
@@ -508,6 +679,9 @@ function RecipientsContent({ navigation }: NavigationProps) {
     setTransferType(null)
     setShowRecipientTypeModal(false)
     setShowBankAccountForm(false)
+    setEasenetProfile(null)
+    setEasenetLookupError(null)
+    setEasenetLookupLoading(false)
   }
 
   // Validate a single field
@@ -593,6 +767,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
   const renderRecipient = ({ item }: { item: Recipient }) => {
     const isWalletRecipient = String(item.bank_name || '').toLowerCase().includes('wallet')
     const tokenIcon = getTokenIconUrl(item.currency)
+    const isEasenet = Boolean(item.payee_easetag?.trim())
     return (
       <TouchableOpacity
         style={styles.recipientItem}
@@ -601,9 +776,13 @@ function RecipientsContent({ navigation }: NavigationProps) {
         <View style={styles.recipientRow}>
           <View style={styles.avatarContainer}>
             <View style={styles.recipientAvatar}>
+              {item.payee_avatar_url ? (
+                <Image source={{ uri: item.payee_avatar_url }} style={styles.recipientAvatarPhoto} />
+              ) : (
               <Text style={styles.recipientAvatarText}>
                 {getInitials(item.full_name)}
               </Text>
+              )}
             </View>
             {/* Asset/currency badge on bottom edge of avatar */}
             <View style={styles.avatarFlagBadge}>
@@ -624,10 +803,10 @@ function RecipientsContent({ navigation }: NavigationProps) {
           <View style={styles.recipientInfo}>
             <Text style={styles.recipientName}>{item.full_name}</Text>
             <Text style={styles.recipientBank} numberOfLines={1} ellipsizeMode="tail">
-              {item.bank_name}
+              {isEasenet ? `@${item.payee_easetag} • ${item.currency}` : item.bank_name}
             </Text>
             <Text style={styles.recipientAccount} numberOfLines={1} ellipsizeMode="tail">
-              {item.iban || item.account_number || ''}
+              {isEasenet ? '' : item.iban || item.account_number || ''}
             </Text>
             <Text style={styles.recipientCurrency}>{item.currency}</Text>
           </View>
@@ -844,6 +1023,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                 <Ionicons name="close" size={24} color={colors.text.secondary} />
               </TouchableOpacity>
             </View>
+            <Text style={styles.addFlowEasetagHint}>Send money to someone by @easetag</Text>
 
             <View style={styles.recipientTypeOptions}>
               {/* Wallet Address Option */}
@@ -904,7 +1084,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                   const firstMobile = getCatalogByRecipientType('mobile_money' as any)[0]
                   const firstCurrency = firstMobile?.currencyCode || 'KES'
-                  const firstProvider = getRecipientProviders(firstCurrency, 'mobile_money')[0] || ''
+                  const firstProvider = getRecipientProviders(firstCurrency, 'mobile_money', firstMobile?.countryCode)[0] || ''
                   setSelectedRecipientType('mobile')
                   setSelectedCountryCurrency({
                     countryCode: firstMobile?.countryCode || 'KE',
@@ -925,6 +1105,43 @@ function RecipientsContent({ navigation }: NavigationProps) {
                 <View style={styles.recipientTypeContent}>
                   <Text style={styles.recipientTypeTitle}>Mobile Money</Text>
                   <Text style={styles.recipientTypeSubtitle}>Send cash via mobile money</Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Easenet (P2P) */}
+              <TouchableOpacity
+                style={styles.recipientTypeOption}
+                onPress={async () => {
+                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  setSelectedRecipientType('easenet')
+                  setEasenetProfile(null)
+                  setEasenetLookupError(null)
+                  setSelectedCountryCurrency({
+                    countryCode: 'US',
+                    countryName: 'United States',
+                    currencyCode: 'USD',
+                    currencyName: 'US Dollar',
+                    flagEmoji: '',
+                  })
+                  setNewRecipient((prev) => ({
+                    ...prev,
+                    currency: 'USD',
+                    payeeEasetag: '',
+                    fullName: '',
+                    bankName: '',
+                    accountNumber: '',
+                  }))
+                  setShowRecipientTypeModal(false)
+                  setShowBankAccountForm(true)
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.recipientTypeIcon}>
+                  <AtSign size={24} color={colors.primary.main} strokeWidth={2} />
+                </View>
+                <View style={styles.recipientTypeContent}>
+                  <Text style={styles.recipientTypeTitle}>Easenet</Text>
+                  <Text style={styles.recipientTypeSubtitle}>Pay someone by their @handle (wallet transfer)</Text>
                 </View>
               </TouchableOpacity>
             </View>
@@ -970,6 +1187,8 @@ function RecipientsContent({ navigation }: NavigationProps) {
                   ? editingRecipient ? 'Edit Wallet Address' : 'Add Wallet Address'
                   : selectedRecipientType === 'mobile'
                     ? editingRecipient ? 'Edit Mobile Money' : 'Add Mobile Money'
+                    : selectedRecipientType === 'easenet'
+                      ? editingRecipient ? 'Edit Easenet recipient' : 'Add Easenet recipient'
                     : editingRecipient ? 'Edit Bank Account' : 'Add Bank Account'}
               </Text>
               <TouchableOpacity
@@ -1000,7 +1219,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
               ) : null}
               
               {/* Country/Currency Selector - Matching SelectRecipientScreen exactly */}
-              {selectedRecipientType !== 'wallet' && <View style={[styles.currencySelectorWrapper, showCountryDropdown && styles.currencySelectorWrapperActive]}>
+              {selectedRecipientType !== 'wallet' && selectedRecipientType !== 'easenet' && <View style={[styles.currencySelectorWrapper, showCountryDropdown && styles.currencySelectorWrapperActive]}>
                 <TouchableOpacity
                   style={styles.currencySelector}
                   onPress={() => {
@@ -1066,7 +1285,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                               }
                               
                               setSelectedCountryCurrency(countryToSet)
-                              const firstProvider = getRecipientProviders(item.currencyCode, 'mobile_money')[0] || ''
+                              const firstProvider = getRecipientProviders(item.currencyCode, 'mobile_money', item.countryCode)[0] || ''
                               setNewRecipient(prev => ({
                                 ...prev,
                                 currency: item.currencyCode,
@@ -1102,8 +1321,54 @@ function RecipientsContent({ navigation }: NavigationProps) {
               </View>}
 
               {/* Show form fields */}
-              {(selectedCountryCurrency || selectedRecipientType === 'wallet') && (
+              {(selectedCountryCurrency || selectedRecipientType === 'wallet' || selectedRecipientType === 'easenet') && (
                 <>
+              {selectedRecipientType === 'easenet' && (
+                <>
+                  <Text style={styles.modalHint}>Send money to someone by @easetag</Text>
+                  <Text style={[styles.modalHint, styles.modalHintSecondary]}>
+                    Wallet transfers use USD. Enter the payee&apos;s Easenet handle.
+                  </Text>
+                  <View style={styles.easenetInputRow}>
+                    <Text style={styles.easenetAt}>@</Text>
+                    <TextInput
+                      style={[styles.modalInput, styles.easenetInput]}
+                      value={newRecipient.payeeEasetag}
+                      onChangeText={(text) =>
+                        setNewRecipient((prev) => ({ ...prev, payeeEasetag: text.replace(/^@+/, '') }))
+                      }
+                      placeholder="handle"
+                      placeholderTextColor={colors.text.secondary}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      editable={!isSubmitting}
+                    />
+                    {easenetLookupLoading ? (
+                      <ActivityIndicator size="small" color={colors.primary.main} style={styles.easenetSpinner} />
+                    ) : null}
+                  </View>
+                  {easenetLookupError ? (
+                    <Text style={styles.errorText}>{easenetLookupError}</Text>
+                  ) : null}
+                  {easenetProfile ? (
+                    <View style={styles.easenetPreview}>
+                      {easenetProfile.avatarUrl ? (
+                        <Image source={{ uri: easenetProfile.avatarUrl }} style={styles.easenetAvatarImg} />
+                      ) : (
+                        <View style={styles.easenetAvatarFallback}>
+                          <Text style={styles.easenetAvatarInitials}>
+                            {getInitials(easenetProfile.fullName)}
+                          </Text>
+                        </View>
+                      )}
+                      <View style={styles.easenetPreviewText}>
+                        <Text style={styles.easenetPreviewName}>{easenetProfile.fullName}</Text>
+                        <Text style={styles.easenetPreviewTag}>@{easenetProfile.easetag}</Text>
+                      </View>
+                    </View>
+                  ) : null}
+                </>
+              )}
               {selectedRecipientType === 'mobile' && (
                 <>
                   <View style={[styles.currencySelectorWrapper, showProviderDropdown && styles.currencySelectorWrapperActive]}>
@@ -1138,7 +1403,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                           />
                         </View>
                         <ScrollView style={styles.currencyDropdownList} nestedScrollEnabled={true}>
-                          {getRecipientProviders(newRecipient.currency, 'mobile_money')
+                          {getRecipientProviders(newRecipient.currency, 'mobile_money', selectedCountryCurrency?.countryCode)
                             .filter((provider) => provider.toLowerCase().includes(providerSearchTerm.toLowerCase()))
                             .map((provider) => (
                             <TouchableOpacity
@@ -1366,7 +1631,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                             activeOpacity={0.7}
                           >
                             <Text style={[styles.transferTypeOptionText, transferType === 'Wire' && styles.transferTypeOptionTextSelected]}>
-                              Wire
+                              Fedwire
                             </Text>
                           </TouchableOpacity>
                         </View>
@@ -1453,11 +1718,46 @@ function RecipientsContent({ navigation }: NavigationProps) {
                             style={styles.modalInput}
                             value={newRecipient.addressLine1}
                             onChangeText={(text) => setNewRecipient(prev => ({ ...prev, addressLine1: text }))}
-                            placeholder="Address *"
+                            placeholder="Street address *"
                             placeholderTextColor={colors.text.secondary}
                             autoCapitalize="words"
                             editable={!isSubmitting}
                           />
+                        </View>
+                        <View>
+                          <TextInput
+                            style={styles.modalInput}
+                            value={newRecipient.city}
+                            onChangeText={(text) => setNewRecipient(prev => ({ ...prev, city: text }))}
+                            placeholder="City *"
+                            placeholderTextColor={colors.text.secondary}
+                            autoCapitalize="words"
+                            editable={!isSubmitting}
+                          />
+                        </View>
+                        <View style={styles.twoColumnRow}>
+                          <View style={styles.halfInput}>
+                            <TextInput
+                              style={styles.modalInput}
+                              value={newRecipient.state}
+                              onChangeText={(text) => setNewRecipient(prev => ({ ...prev, state: text }))}
+                              placeholder="State *"
+                              placeholderTextColor={colors.text.secondary}
+                              autoCapitalize="characters"
+                              editable={!isSubmitting}
+                            />
+                          </View>
+                          <View style={styles.halfInput}>
+                            <TextInput
+                              style={styles.modalInput}
+                              value={newRecipient.postalCode}
+                              onChangeText={(text) => setNewRecipient(prev => ({ ...prev, postalCode: text }))}
+                              placeholder="ZIP *"
+                              placeholderTextColor={colors.text.secondary}
+                              keyboardType="default"
+                              editable={!isSubmitting}
+                            />
+                          </View>
                         </View>
                         <View>
                           <TextInput
@@ -1653,6 +1953,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                         )}
                       </View>
                     )}
+
                   </>
                 )
               })()}
@@ -1844,6 +2145,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary.main + '15',
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+  },
+  recipientAvatarPhoto: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
   recipientAvatarText: {
     ...textStyles.titleMedium,
@@ -2024,6 +2331,78 @@ const styles = StyleSheet.create({
   modalInputError: {
     borderColor: colors.error.main,
     borderWidth: 1.5,
+  },
+  modalHint: {
+    ...textStyles.bodySmall,
+    color: colors.text.secondary,
+    marginBottom: spacing[1],
+    fontFamily: 'Outfit-Regular',
+  },
+  modalHintSecondary: {
+    marginTop: 0,
+    marginBottom: spacing[2],
+    opacity: 0.9,
+  },
+  easenetInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing[2],
+  },
+  easenetAt: {
+    ...textStyles.bodyMedium,
+    color: colors.text.secondary,
+    marginRight: spacing[1],
+    fontFamily: 'Outfit-Regular',
+  },
+  easenetInput: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  easenetSpinner: {
+    marginLeft: spacing[2],
+  },
+  easenetPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing[3],
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.frame.border,
+    backgroundColor: colors.frame.background,
+    marginBottom: spacing[3],
+  },
+  easenetAvatarImg: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+  },
+  easenetAvatarFallback: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.primary.main + '18',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  easenetAvatarInitials: {
+    ...textStyles.titleSmall,
+    color: colors.primary.main,
+    fontFamily: 'Outfit-SemiBold',
+  },
+  easenetPreviewText: {
+    marginLeft: spacing[3],
+    flex: 1,
+  },
+  easenetPreviewName: {
+    ...textStyles.bodyMedium,
+    color: colors.text.primary,
+    fontFamily: 'Outfit-SemiBold',
+  },
+  easenetPreviewTag: {
+    ...textStyles.bodySmall,
+    color: colors.text.secondary,
+    marginTop: 2,
+    fontFamily: 'Outfit-Regular',
   },
   errorText: {
     ...textStyles.bodySmall,
@@ -2309,6 +2688,13 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: borderRadius['3xl'],
     borderTopRightRadius: borderRadius['3xl'],
     paddingTop: spacing[2],
+  },
+  addFlowEasetagHint: {
+    ...textStyles.bodySmall,
+    color: colors.text.secondary,
+    fontFamily: 'Outfit-Regular',
+    paddingHorizontal: spacing[5],
+    paddingBottom: spacing[2],
   },
   recipientTypeOptions: {
     padding: spacing[5],

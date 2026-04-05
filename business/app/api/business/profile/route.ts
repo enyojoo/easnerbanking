@@ -2,9 +2,12 @@ import { NextResponse } from "next/server"
 import { countries } from "@/lib/countries"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
+import { validateEasetag, normalizeEasetag } from "@/lib/easetag-validation"
+import { isEasetagGloballyAvailable } from "@/lib/easetag-global"
 
 type UpdateBody = {
   businessName?: string
+  easetag?: string | null
   businessLogo?: string | null
   businessType?: string
   registrationNumber?: string
@@ -37,13 +40,6 @@ function countryCodeFromName(name: string | null | undefined): string | null {
   if (!name) return null
   const found = countries.find((c) => c.name.toLowerCase() === name.toLowerCase())
   return found?.code ?? null
-}
-
-function slugify(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
 }
 
 function defaultOrgName(email: string | undefined, fallbackId: string): string {
@@ -91,9 +87,9 @@ async function resolveCanManageBusinessVerification(
   if (!orgId) return true
 
   const { data: row, error } = await admin
-    .from("organization_memberships")
+    .from("business_memberships")
     .select("role,status")
-    .eq("organization_id", orgId)
+    .eq("business_id", orgId)
     .eq("user_id", userId)
     .maybeSingle()
 
@@ -110,13 +106,16 @@ async function ensureOrganizationId(
   email?: string,
   fullName?: string | null,
 ) {
-  const { data: userRow } = await admin.from("users").select("easner_organization_id,full_name").eq("id", userId).maybeSingle()
-  if (userRow?.easner_organization_id) return userRow.easner_organization_id
+  const { data: userRow } = await admin.from("users").select("easner_business_id,full_name").eq("id", userId).maybeSingle()
+  if (userRow?.easner_business_id) return userRow.easner_business_id
 
   const first = firstNameFromFullName(fullName ?? userRow?.full_name ?? null)
   const orgName = first ? possessiveBusinessName(first) : defaultOrgName(email, userId)
-  const slug = `${slugify(orgName) || `business-${userId.slice(0, 8)}`}-${userId.slice(0, 8)}`
-  const { data: org, error } = await admin.from("organizations").insert({ name: orgName, slug }).select("id").single()
+  const { data: org, error } = await admin
+    .from("businesses")
+    .insert({ name: orgName, easetag: null })
+    .select("id")
+    .single()
   if (error) throw new Error(error.message)
 
   await admin
@@ -125,7 +124,7 @@ async function ensureOrganizationId(
       {
         id: userId,
         email: email ?? null,
-        easner_organization_id: org.id,
+        easner_business_id: org.id,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "id" },
@@ -134,19 +133,19 @@ async function ensureOrganizationId(
   return org.id
 }
 
-async function fetchOrganizationProfile(admin: ReturnType<typeof createSupabaseAdmin>, organizationId: string) {
+async function fetchBusinessProfile(admin: ReturnType<typeof createSupabaseAdmin>, businessId: string) {
   const richSelect =
-    "id,name,logo_url,business_type,registration_number,tax_id,base_currency,description,website,support_email,support_phone,address_line1,city,state,postal_code,country"
-  const baseSelect = "id,name,logo_url,business_type,base_currency,description,country"
-  const minimalSelect = "id,name,country"
+    "id,name,easetag,logo_url,business_type,registration_number,tax_id,base_currency,description,website,support_email,support_phone,address_line1,city,state,postal_code,country"
+  const baseSelect = "id,name,easetag,logo_url,business_type,base_currency,description,country"
+  const minimalSelect = "id,name,easetag,country"
 
-  const rich = await admin.from("organizations").select(richSelect).eq("id", organizationId).maybeSingle()
+  const rich = await admin.from("businesses").select(richSelect).eq("id", businessId).maybeSingle()
   if (!rich.error && rich.data) return rich.data
 
-  const base = await admin.from("organizations").select(baseSelect).eq("id", organizationId).maybeSingle()
+  const base = await admin.from("businesses").select(baseSelect).eq("id", businessId).maybeSingle()
   if (!base.error && base.data) return base.data
 
-  const minimal = await admin.from("organizations").select(minimalSelect).eq("id", organizationId).maybeSingle()
+  const minimal = await admin.from("businesses").select(minimalSelect).eq("id", businessId).maybeSingle()
   return minimal.data ?? null
 }
 
@@ -157,12 +156,12 @@ export async function GET(request: Request) {
   const admin = createSupabaseAdmin()
   const { data: userRowWithName, error: userRowErr } = await admin
     .from("users")
-    .select("id,easner_role,easner_organization_id,full_name")
+    .select("id,easner_role,easner_business_id,full_name")
     .eq("id", user.id)
     .maybeSingle()
   const { data: userRowFallback } = userRowErr
-    ? await admin.from("users").select("id,easner_role,easner_organization_id").eq("id", user.id).maybeSingle()
-    : { data: null as { id: string; easner_role: string | null; easner_organization_id: string | null } | null }
+    ? await admin.from("users").select("id,easner_role,easner_business_id").eq("id", user.id).maybeSingle()
+    : { data: null as { id: string; easner_role: string | null; easner_business_id: string | null } | null }
   const userRow = (userRowWithName ??
     (userRowFallback
       ? { ...userRowFallback, full_name: null }
@@ -170,7 +169,7 @@ export async function GET(request: Request) {
     | {
         id: string
         easner_role: string | null
-        easner_organization_id: string | null
+        easner_business_id: string | null
         full_name: string | null
       }
     | null
@@ -178,6 +177,7 @@ export async function GET(request: Request) {
   let org = null as null | {
     id: string
     name: string | null
+    easetag: string | null
     logo_url: string | null
     business_type: string | null
     registration_number: string | null
@@ -194,8 +194,8 @@ export async function GET(request: Request) {
     country: string | null
   }
 
-  if (userRow?.easner_organization_id) {
-    org = (await fetchOrganizationProfile(admin, userRow.easner_organization_id)) as typeof org
+  if (userRow?.easner_business_id) {
+    org = (await fetchBusinessProfile(admin, userRow.easner_business_id)) as typeof org
   }
 
   const onboardingComplete = Boolean(org && org.business_type && org.base_currency && org.description)
@@ -207,7 +207,7 @@ export async function GET(request: Request) {
     return defaultOrgName(user.email, user.id)
   })()
 
-  const orgId = userRow?.easner_organization_id ?? null
+  const orgId = userRow?.easner_business_id ?? null
   let tier1Complete = false
   let tier1VerificationStatus: string | null = null
   /** Internal: org Owner's Noah KYB customer id (same row as tier1VerificationStatus). */
@@ -231,8 +231,9 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     profile: {
-      organizationId: org?.id ?? userRow?.easner_organization_id ?? null,
+      businessId: org?.id ?? userRow?.easner_business_id ?? null,
       name: (org?.name ?? "").trim() || generatedOrgName,
+      easetag: org?.easetag ?? null,
       logoUrl: org?.logo_url ?? null,
       businessType: org?.business_type ?? "",
       registrationNumber: org?.registration_number ?? "",
@@ -271,7 +272,7 @@ export async function PUT(request: Request) {
   }
 
   const admin = createSupabaseAdmin()
-  const organizationId = await ensureOrganizationId(
+  const businessId = await ensureOrganizationId(
     admin,
     user.id,
     user.email,
@@ -282,6 +283,25 @@ export async function PUT(request: Request) {
   const country = countryNameFromCode(countryCode)
   const updates: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
+  }
+
+  if (body.easetag !== undefined) {
+    const raw = body.easetag
+    if (raw === null || String(raw).trim() === "") {
+      updates.easetag = null
+    } else {
+      const v = validateEasetag(String(raw))
+      if (!v.valid) {
+        return NextResponse.json({ error: v.error ?? "Invalid Easetag" }, { status: 400 })
+      }
+      const globallyOk = await isEasetagGloballyAvailable(admin, String(raw), {
+        excludeBusinessId: businessId,
+      })
+      if (!globallyOk) {
+        return NextResponse.json({ error: "Easetag is already taken" }, { status: 409 })
+      }
+      updates.easetag = normalizeEasetag(String(raw))
+    }
   }
 
   if (body.businessName !== undefined) updates.name = body.businessName?.trim() || null
@@ -300,7 +320,7 @@ export async function PUT(request: Request) {
   if (body.postalCode !== undefined) updates.postal_code = body.postalCode?.trim() || null
   if (country !== null) updates.country = country
 
-  const { error } = await admin.from("organizations").update(updates).eq("id", organizationId)
+  const { error } = await admin.from("businesses").update(updates).eq("id", businessId)
   if (error) {
     // Fallback for older schemas that don't yet include all optional settings columns.
     const minimalUpdates: Record<string, unknown> = {
@@ -312,8 +332,9 @@ export async function PUT(request: Request) {
     if (updates.business_type !== undefined) minimalUpdates.business_type = updates.business_type
     if (updates.base_currency !== undefined) minimalUpdates.base_currency = updates.base_currency
     if (updates.description !== undefined) minimalUpdates.description = updates.description
+    if (updates.easetag !== undefined) minimalUpdates.easetag = updates.easetag
 
-    const retry = await admin.from("organizations").update(minimalUpdates).eq("id", organizationId)
+    const retry = await admin.from("businesses").update(minimalUpdates).eq("id", businessId)
     if (retry.error) return NextResponse.json({ error: retry.error.message }, { status: 500 })
   }
 

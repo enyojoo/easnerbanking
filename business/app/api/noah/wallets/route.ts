@@ -26,6 +26,7 @@ export async function GET(request: Request) {
 
   let address = ""
   let blockchain_memo: string | null = null
+  let provisionedNoahWalletId = ""
 
   try {
     await provisionNoahArtifactsForCustomer({
@@ -41,6 +42,7 @@ export async function GET(request: Request) {
       .maybeSingle()
     const wid = userRow?.noah_wallet_id as string | undefined
     if (wid) {
+      provisionedNoahWalletId = wid
       const { data: w } = await admin
         .from("wallets")
         .select("address, blockchain_memo")
@@ -53,10 +55,18 @@ export async function GET(request: Request) {
     /* optional DB */
   }
 
+  const sourceWalletId = provisionedNoahWalletId || noahCustomerId
+
+  /**
+   * Noah POST /transactions/sell (Reliance/customer wallet model) expects SourceWalletID = provisioned wallet UUID.
+   * `walletId` historically mirrored `noahCustomerId` for mobile compatibility — keep both during rollout.
+   */
   return NextResponse.json({
     wallets: [
       {
         walletId: noahCustomerId,
+        noahCustomerId,
+        sourceWalletId,
         chain: "solana",
         address,
         blockchain_memo,

@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { officeFetch } from "@/lib/api-client"
 import { CurrenciesAdminPanel } from "@/components/currencies/currencies-admin-panel"
 import { SettingsAdminPanel } from "@/components/settings/settings-admin-panel"
+import { PayoutCorridorsAdminPanel } from "@/components/platform-control/payout-corridors-admin-panel"
 
 export function PlatformCurrenciesPanel() {
   return <CurrenciesAdminPanel />
@@ -18,6 +19,10 @@ export function PlatformCurrenciesPanel() {
 
 export function PlatformSettingsPanel() {
   return <SettingsAdminPanel />
+}
+
+export function PayoutCorridorsPanel() {
+  return <PayoutCorridorsAdminPanel />
 }
 
 export function IntegrationsHealthPanel() {
@@ -52,11 +57,11 @@ export function IntegrationsHealthPanel() {
       <Card>
         <CardHeader>
           <CardTitle>Webhooks and Noah</CardTitle>
-          <CardDescription>Use user detail in Compliance to run webhook diagnostics for a Noah customer.</CardDescription>
+          <CardDescription>Open a user in Users to review verification, then use Noah operations for provider checks.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
           <Button asChild variant="outline">
-            <Link href="/compliance">Open Compliance</Link>
+            <Link href="/users">Users</Link>
           </Button>
           <Button asChild variant="outline">
             <Link href="/platform-control?tab=noah">Noah operations</Link>
@@ -202,7 +207,7 @@ const industryRows = [
   { area: "Customer / user ops", status: "Partial — users & compliance; notes/history when audit matures" },
   { area: "Payments / money movement", status: "Partial — transactions; exports/search TBD" },
   { area: "Compliance & identity", status: "In progress — KYC & Compliance tabs, Noah ops page" },
-  { area: "B2B / commercial", status: "In progress — organizations, customers, invoices (Supabase)" },
+  { area: "B2B / commercial", status: "In progress — businesses, customers, invoices (Supabase)" },
   { area: "Treasury / product config", status: "Partial — rates & settings under Platform" },
   { area: "Integrations", status: "Partial — health page; webhook drill-down from Compliance" },
   { area: "Governance", status: "Started — audit log; admin_users.role column" },

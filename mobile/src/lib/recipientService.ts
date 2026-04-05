@@ -21,6 +21,11 @@ export interface RecipientData {
   transferType?: "ACH" | "Wire"
   checkingOrSavings?: "checking" | "savings"
   addressLine1?: string
+  city?: string
+  state?: string
+  postalCode?: string
+  payeeEasetag?: string
+  payeeAvatarUrl?: string | null
   noahExternalAccountId?: string
 }
 
@@ -130,6 +135,11 @@ export const recipientService = {
       transfer_type: recipientData.transferType || undefined,
       checking_or_savings: recipientData.checkingOrSavings || undefined,
       address_line1: recipientData.addressLine1 || undefined,
+      city: recipientData.city || undefined,
+      state: recipientData.state || undefined,
+      postal_code: recipientData.postalCode || undefined,
+      payee_easetag: recipientData.payeeEasetag || undefined,
+      payee_avatar_url: recipientData.payeeAvatarUrl || undefined,
       mobile_provider: recipientData.mobileProvider || undefined,
       wallet_network: recipientData.walletNetwork || undefined,
       wallet_memo_tag: recipientData.walletMemoTag || undefined,
@@ -154,6 +164,11 @@ export const recipientService = {
           transfer_type: recipientData.transferType || null,
           checking_or_savings: recipientData.checkingOrSavings || null,
           address_line1: recipientData.addressLine1 || null,
+          city: recipientData.city || null,
+          state: recipientData.state || null,
+          postal_code: recipientData.postalCode || null,
+          payee_easetag: recipientData.payeeEasetag || null,
+          payee_avatar_url: recipientData.payeeAvatarUrl ?? null,
           noah_external_account_id: recipientData.noahExternalAccountId || null,
         }
       const { data, error } = await supabase
@@ -226,7 +241,6 @@ export const recipientService = {
       countryCode?: string
       walletNetwork?: string
       walletMemoTag?: string
-      countryCode?: string
       routingNumber?: string
       sortCode?: string
       iban?: string
@@ -234,6 +248,11 @@ export const recipientService = {
       transferType?: "ACH" | "Wire"
       checkingOrSavings?: "checking" | "savings"
       addressLine1?: string
+      city?: string
+      state?: string
+      postalCode?: string
+      payeeEasetag?: string
+      payeeAvatarUrl?: string | null
     },
   ): Promise<Recipient> {
     const derivedSwiftBic = updates.swiftBic ?? updates.walletMemoTag
@@ -261,6 +280,11 @@ export const recipientService = {
     if (updates.transferType !== undefined) updateData.transfer_type = updates.transferType || null
     if (updates.checkingOrSavings !== undefined) updateData.checking_or_savings = updates.checkingOrSavings || null
     if (updates.addressLine1 !== undefined) updateData.address_line1 = updates.addressLine1 || null
+    if (updates.city !== undefined) updateData.city = updates.city || null
+    if (updates.state !== undefined) updateData.state = updates.state || null
+    if (updates.postalCode !== undefined) updateData.postal_code = updates.postalCode || null
+    if (updates.payeeEasetag !== undefined) updateData.payee_easetag = updates.payeeEasetag || null
+    if (updates.payeeAvatarUrl !== undefined) updateData.payee_avatar_url = updates.payeeAvatarUrl ?? null
     updateData.updated_at = now()
 
     try {

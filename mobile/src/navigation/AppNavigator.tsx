@@ -561,17 +561,17 @@ function MainStack() {
           const fromSelectRecipientParam = params?.fromSelectRecipient === true
           const fromSelectRecentRecipientParam = params?.fromSelectRecentRecipient === true
           
-          // Check if previous screen is SelectRecentRecipientScreen or SelectRecipientScreen (backward navigation)
+          // Check if previous screen is the send recipient hub (backward navigation)
           const state = navigation.getState()
           const currentIndex = state?.index ?? 0
           const previousRoute = currentIndex > 0 ? state?.routes?.[currentIndex - 1] : null
           const isFromSelectRecent = previousRoute?.name === 'SelectRecentRecipient'
-          const isFromSelectRecipient = previousRoute?.name === 'SelectRecipient'
-          const isFromRecipientScreen = isFromSelectRecent || isFromSelectRecipient || fromSelectRecipientParam || fromSelectRecentRecipientParam
+          const isFromRecipientScreen =
+            isFromSelectRecent || fromSelectRecipientParam || fromSelectRecentRecipientParam
           
           return {
             headerShown: false,
-            // No animation when navigating from/to SelectRecentRecipientScreen or SelectRecipientScreen (same header)
+            // No animation when navigating from/to the send recipient hub (same header)
             ...(isFromRecipientScreen ? {
               transitionSpec: {
                 open: {

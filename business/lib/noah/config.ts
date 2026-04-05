@@ -17,6 +17,14 @@ export function getNoahSigningPrivateKey(): string {
 }
 
 /**
+ * Wallet-to-wallet (internal) transfer path. Noah documents vary by program; set explicitly when Noah confirms your contract.
+ * @default /transactions/transfer
+ */
+export function getNoahWalletTransferPath(): string {
+  return (process.env.NOAH_WALLET_TRANSFER_PATH || "/transactions/transfer").trim() || "/transactions/transfer"
+}
+
+/**
  * Hosted onboarding `ReturnURL` sent in `POST /v1/onboarding/:CustomerID` JSON body.
  * Noah requires a full URL including `https://` (not a path-only value).
  * @see https://docs.noah.com/recipes/onboarding/hosted-onboarding
@@ -58,3 +66,5 @@ export function getNoahBusinessReturnUrl(): string {
 export function isNoahConfigured(): boolean {
   return Boolean(getNoahApiKey())
 }
+
+// NOAH_SETTLEMENT_CRYPTO: optional; defaults in `payout-prepare.ts` (sandbox USDC_TEST).

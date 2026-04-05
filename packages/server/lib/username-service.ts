@@ -16,7 +16,7 @@ export interface UsernameLookupResult {
 /**
  * Validate easetag format
  * Rules:
- * - 3-20 characters
+ * - 4-10 characters
  * - Lowercase alphanumeric, underscore, or hyphen only
  * - Must start with a letter or number
  */
@@ -28,12 +28,12 @@ export function validateEasetag(easetag: string): { valid: boolean; error?: stri
   // Remove @ if present
   const cleanTag = easetag.replace(/^@/, "").toLowerCase()
 
-  if (cleanTag.length < 3) {
-    return { valid: false, error: "Easetag must be at least 3 characters" }
+  if (cleanTag.length < 4) {
+    return { valid: false, error: "Easetag must be at least 4 characters" }
   }
 
-  if (cleanTag.length > 20) {
-    return { valid: false, error: "Easetag must be 20 characters or less" }
+  if (cleanTag.length > 10) {
+    return { valid: false, error: "Easetag must be 10 characters or less" }
   }
 
   // Must start with letter or number

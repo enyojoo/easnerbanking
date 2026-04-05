@@ -67,7 +67,7 @@ export type LimitPolicy = {
 export type UserSubscription = {
   id: string
   user_id: string
-  organization_id: string | null
+  business_id: string | null
   plan_id: string
   scope: "individual" | "organization" | string
   status: "active" | "paused" | "cancelled" | "expired" | string
@@ -119,6 +119,16 @@ export type RolloutControl = {
   updated_at: string
 }
 
+/** Aggregated provider / pricing quote fields for ops visibility (7d window). */
+export type CommercialProviderPricingWindow = {
+  quotesWithTotalProviderCost: number
+  sumTotalProviderCostOnQuotes: number
+  appliedWithTotalProviderCost: number
+  sumTotalProviderCostOnApplied: number
+  quotesWithPricingTotals: number
+  sumTotalUserFeeOnQuotes: number
+}
+
 export type CommercialMetrics = {
   window: string
   metrics: {
@@ -142,6 +152,8 @@ export type CommercialMetrics = {
     marginByCorridor?: Record<string, { count: number; netRevenue: number }>
     conversionByStrategyMode?: Record<string, number>
   }
+  /** Present when the business metrics API aggregates quote/applied fee rows with provider columns. */
+  providerPricing?: CommercialProviderPricingWindow
   alerts?: {
     webhookRetryExhaustionRisk: boolean
     marginCompressionRisk: boolean
@@ -167,6 +179,41 @@ export type PricingEngineHealth = {
   }
 }
 
+export type ProviderFeeComponent =
+  | "legacy_combined"
+  | "provider_ramp_fee"
+  | "provider_funding_fee"
+  | "provider_local_payout_fee"
+  | string
+
+/** POST body for provider fee schedules (snake_case keys match business admin API). */
+export type CreateProviderFeeSchedulePayload = {
+  provider?: string
+  version: string
+  fee_component?: ProviderFeeComponent
+  direction?: string | null
+  payout_method?: string | null
+  country_code?: string | null
+  rail?: string | null
+  corridor?: string | null
+  source_currency?: string | null
+  destination_currency?: string | null
+  variable_fee_percent?: number
+  variable_fee_bps?: number | null
+  fixed_fee_amount?: number
+  local_rail_fee_amount?: number
+  kyc_kyb_fee_amount?: number
+  iban_infra_fee_amount?: number
+  fee_currency?: string
+  percent_fee_base?: string | null
+  min_amount?: number | null
+  max_amount?: number | null
+  active_from?: string | null
+  active_to?: string | null
+  is_active?: boolean
+  metadata?: Record<string, unknown>
+}
+
 export type ProviderFeeSchedule = {
   id: string
   provider: string
@@ -175,7 +222,16 @@ export type ProviderFeeSchedule = {
   corridor: string | null
   source_currency: string | null
   destination_currency: string | null
-  variable_fee_percent: number
+  fee_component?: string | null
+  direction?: string | null
+  payout_method?: string | null
+  country_code?: string | null
+  variable_fee_percent?: number
+  variable_fee_bps?: number | null
+  fee_currency?: string | null
+  percent_fee_base?: string | null
+  min_amount?: number | null
+  max_amount?: number | null
   fixed_fee_amount: number
   local_rail_fee_amount: number
   kyc_kyb_fee_amount: number
@@ -185,4 +241,5 @@ export type ProviderFeeSchedule = {
   is_active: boolean
   metadata: Record<string, unknown>
   created_at: string
+  updated_at?: string
 }

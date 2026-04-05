@@ -1,6 +1,7 @@
 /**
- * Country to Currency Mapping
- * Maps countries to their primary currencies for bank account selection
+ * Country ↔ currency helpers for search / display in legacy flows.
+ * Payout rails (bank + mobile money) use `GET /api/payout-corridors` + `recipientCatalog` merge instead.
+ * Do not use this file as source of truth for corridor currencies (several EUR rows were historically wrong).
  */
 
 export interface CountryCurrency {

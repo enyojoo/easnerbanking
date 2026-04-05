@@ -34,6 +34,10 @@ export interface Recipient {
   country_code?: string
   /** When linked to Noah external account for payouts */
   noah_external_account_id?: string
+  /** Noah form-session sell (must match prepare fiat amount) */
+  noah_form_session_id?: string | null
+  noah_sell_crypto_authorized?: string | null
+  noah_sell_crypto_currency?: string | null
   full_name: string
   account_number: string
   bank_name: string
@@ -48,6 +52,10 @@ export interface Recipient {
   city?: string
   state?: string
   postal_code?: string
+  /** Easenet @handle for wallet-to-wallet (Noah internal transfer). */
+  payee_easetag?: string
+  /** Snapshot of payee `users.avatar_url` at save time (Easenet recipients). */
+  payee_avatar_url?: string
   transfer_type?: "ACH" | "Wire"
   checking_or_savings?: "checking" | "savings"
   mobile_provider?: string
@@ -157,7 +165,7 @@ export interface User {
   date_of_birth?: string | null
   avatar_url?: string | null
   easner_role?: "individual" | "business"
-  easner_organization_id?: string | null
+  easner_business_id?: string | null
   enabled_extra_account_currencies?: string[]
   noah_customer_id?: string | null
   noah_kyc_status?: string | null
@@ -206,7 +214,7 @@ export interface AuthUser {
   noah_signed_agreement_id?: string | null
   noah_kyb_status?: string | null
   easner_role?: "individual" | "business"
-  easner_organization_id?: string | null
+  easner_business_id?: string | null
   bridge_kyc_status?: string
   bridge_customer_id?: string
   bridge_kyc_rejection_reasons?: unknown

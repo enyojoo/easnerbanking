@@ -11,7 +11,8 @@ import { hasPin, isLoginPinModuleAvailable } from "@/lib/login-pin"
 import { mockAccounts, currencySymbols } from "@/lib/mock-data"
 import type { Beneficiary } from "@/lib/recipient-types"
 import { generateTransactionId } from "@/lib/transaction-id"
-import { ArrowLeft, User, Copy, Check } from "lucide-react"
+import { fetchWithSession } from "@/lib/fetch-with-session"
+import { ArrowLeft, User, Copy, Check, Loader2 } from "lucide-react"
 
 const SEND_FLOW_STATE_KEY = "send_flow_state"
 
@@ -34,7 +35,12 @@ interface SendFlowState {
   }
 }
 
+function isEasenetRecipient(recipient: Beneficiary): boolean {
+  return Boolean(recipient.payeeEasetag?.trim())
+}
+
 function getTransferMethod(recipient: Beneficiary, currency: string): string {
+  if (isEasenetRecipient(recipient)) return "Easenet (wallet-to-wallet)"
   if (currency === "USD" && recipient.country === "United States") return "ACH"
   if (currency === "EUR") return "SEPA"
   if (currency === "GBP" && recipient.country === "United Kingdom") return "Faster Payments"
@@ -43,6 +49,8 @@ function getTransferMethod(recipient: Beneficiary, currency: string): string {
 
 function getProcessingTime(method: string): string {
   switch (method) {
+    case "Easenet (wallet-to-wallet)":
+      return "Usually instant"
     case "ACH":
       return "1-3 business days"
     case "SEPA":
@@ -61,6 +69,8 @@ export default function SendConfirmPage() {
   const [state, setState] = useState<SendFlowState | null>(null)
   const [showPinDialog, setShowPinDialog] = useState(false)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
+  const [isAuthorizing, setIsAuthorizing] = useState(false)
+  const [authorizeError, setAuthorizeError] = useState<string | null>(null)
 
   const needPinChallenge =
     !!user?.id && isLoginPinModuleAvailable() && hasPin(user.id)
@@ -104,16 +114,60 @@ export default function SendConfirmPage() {
     }
   }, [profileLoading, tier1Complete, state, router])
 
-  const handleAuthorizeSuccess = () => {
+  const finishSend = (transactionId: string) => {
     if (!state) return
-    const transactionId = state.transactionId ?? generateTransactionId()
     sessionStorage.removeItem(SEND_FLOW_STATE_KEY)
     router.push(
       `/send/status?id=${transactionId}&amount=${state.amount}&currency=${state.receiveCurrency}&recipient=${encodeURIComponent(state.recipient.name)}`,
     )
   }
 
+  const handleAuthorizeSuccess = async () => {
+    if (!state) return
+    setAuthorizeError(null)
+
+    if (isEasenetRecipient(state.recipient)) {
+      setIsAuthorizing(true)
+      try {
+        const tag = state.recipient.payeeEasetag!.trim().replace(/^@+/, "")
+        const res = await fetchWithSession("/api/noah/transfers/w2w", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            destinationEasetag: tag,
+            amount: state.sendAmount,
+            currency: state.sendCurrency.toLowerCase(),
+          }),
+        })
+        const data = (await res.json().catch(() => ({}))) as {
+          ok?: boolean
+          error?: string
+          hint?: string
+          transaction?: Record<string, unknown>
+        }
+        if (!res.ok || !data.ok) {
+          const err = typeof data.error === "string" ? data.error : "Wallet transfer failed"
+          const hint = typeof data.hint === "string" ? data.hint : ""
+          setAuthorizeError(hint ? `${err} — ${hint}` : err)
+          return
+        }
+        const tx = data.transaction
+        const id = String(tx?.ID ?? tx?.id ?? state.transactionId ?? generateTransactionId())
+        finishSend(id)
+      } catch (e) {
+        setAuthorizeError(e instanceof Error ? e.message : "Transfer failed")
+      } finally {
+        setIsAuthorizing(false)
+      }
+      return
+    }
+
+    const transactionId = state.transactionId ?? generateTransactionId()
+    finishSend(transactionId)
+  }
+
   const onAuthorizeClick = () => {
+    setAuthorizeError(null)
     if (needPinChallenge) {
       setShowPinDialog(true)
       return
@@ -122,7 +176,7 @@ export default function SendConfirmPage() {
       window.alert("Set an app PIN in Settings before authorizing transfers.")
       return
     }
-    handleAuthorizeSuccess()
+    void handleAuthorizeSuccess()
   }
 
   if (!state) {
@@ -140,10 +194,15 @@ export default function SendConfirmPage() {
   const sourceAccount = mockAccounts.find((a) => a.id === state.sourceAccountId!)
   const transferMethod = getTransferMethod(state.recipient, state.receiveCurrency)
   const processingTime = getProcessingTime(transferMethod)
-  const hasFx = state.receiveCurrency !== state.sendCurrency
-  const transferFee = state.pricingQuote?.transferFee ?? (transferMethod === "Wire Transfer" ? 25 : 0)
-  const payoutFee = state.pricingQuote?.payoutFee ?? 0
-  const exchangeRate = state.pricingQuote?.exchangeRate ?? (hasFx && state.amount > 0 ? state.sendAmount / state.amount : 1)
+  const easenetSend = isEasenetRecipient(state.recipient)
+  const hasFx = !easenetSend && state.receiveCurrency !== state.sendCurrency
+  const transferFee = easenetSend
+    ? 0
+    : state.pricingQuote?.transferFee ?? (transferMethod === "Wire Transfer" ? 25 : 0)
+  const payoutFee = easenetSend ? 0 : (state.pricingQuote?.payoutFee ?? 0)
+  const exchangeRate = easenetSend
+    ? 1
+    : state.pricingQuote?.exchangeRate ?? (hasFx && state.amount > 0 ? state.sendAmount / state.amount : 1)
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -242,6 +301,12 @@ export default function SendConfirmPage() {
         </CardContent>
       </Card>
 
+      {authorizeError ? (
+        <p className="text-sm text-red-600" role="alert">
+          {authorizeError}
+        </p>
+      ) : null}
+
       {state.note && (
         <Card>
           <CardContent className="p-4">
@@ -256,8 +321,15 @@ export default function SendConfirmPage() {
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
-        <Button size="lg" className="h-11 flex-1" onClick={onAuthorizeClick}>
-          Authorize transfer
+        <Button size="lg" className="h-11 flex-1" onClick={onAuthorizeClick} disabled={isAuthorizing}>
+          {isAuthorizing ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Sending…
+            </>
+          ) : (
+            "Authorize transfer"
+          )}
         </Button>
       </div>
 
@@ -266,7 +338,9 @@ export default function SendConfirmPage() {
           open={showPinDialog}
           onOpenChange={setShowPinDialog}
           userId={user.id}
-          onVerified={handleAuthorizeSuccess}
+          onVerified={() => {
+            void handleAuthorizeSuccess()
+          }}
         />
       ) : null}
     </div>

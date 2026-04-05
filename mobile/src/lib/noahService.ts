@@ -56,7 +56,16 @@ interface NoahTransfer {
   transaction_id?: string
 }
 
-interface PricingQuote {
+/** Aligns with business/lib/pricing/provider-costs PricingTotals when PRICING_PROVIDER_DECOMPOSED=true */
+export interface PricingQuoteTotals {
+  total_provider_cost: number
+  total_easner_fee: number
+  total_user_fee: number
+  total_recipient_amount: number
+  reporting_currency: string
+}
+
+export interface PricingQuote {
   quoteId: string
   expiresAt: string
   providerRate: number
@@ -69,6 +78,9 @@ interface PricingQuote {
   sourceAmount: number
   sourceCurrency: string
   destinationCurrency: string
+  providerCosts?: unknown
+  totalProviderCostReporting?: number | null
+  pricingTotals?: PricingQuoteTotals | null
 }
 
 interface NoahKycLink {
@@ -87,6 +99,12 @@ export const noahService = {
     sourceAmount: number
     rail?: string
     countryCode?: string
+    payoutCountry?: string
+    payoutMethod?: string
+    fundingRail?: string
+    fundingDirection?: 'inbound' | 'outbound'
+    fundingRailOutbound?: string
+    fundingDirectionOutbound?: 'inbound' | 'outbound'
   }): Promise<PricingQuote> {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) throw new Error('Not authenticated')
@@ -97,7 +115,19 @@ export const noahService = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify(input),
+      body: JSON.stringify({
+        sourceCurrency: input.sourceCurrency,
+        destinationCurrency: input.destinationCurrency,
+        sourceAmount: input.sourceAmount,
+        rail: input.rail,
+        countryCode: input.countryCode,
+        payoutCountry: input.payoutCountry,
+        payoutMethod: input.payoutMethod,
+        fundingRail: input.fundingRail,
+        fundingDirection: input.fundingDirection,
+        fundingRailOutbound: input.fundingRailOutbound,
+        fundingDirectionOutbound: input.fundingDirectionOutbound,
+      }),
     })
     const data = await response.json().catch(() => ({}))
     if (!response.ok || !(data as any).ok) {
@@ -628,13 +658,183 @@ export const noahService = {
   },
 
   /**
+   * Prepare Noah crypto→fiat sell (validates beneficiary; use FormSessionID on /transactions/sell).
+   */
+  async prepareSellPayout(input: {
+    fiatAmount: string
+    fullName: string
+    countryCode?: string
+    currency?: string
+    accountNumber?: string
+    routingNumber?: string
+    iban?: string
+    addressLine1?: string
+    city?: string
+    state?: string
+    postalCode?: string
+    accountType?: 'Checking' | 'Savings'
+    /** US: ACH vs Fedwire (stored as `Wire` on recipient). Ignored for EUR. */
+    transferType?: 'ACH' | 'Wire'
+  }): Promise<{
+    ok: boolean
+    formSessionId: string | null
+    cryptoAuthorizedAmount: string | null
+    cryptoCurrency: string
+    paymentMethodId: string | null
+    error?: string
+  }> {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) throw new Error('Not authenticated')
+    const currency = (input.currency || 'USD').toUpperCase()
+    const countryCode =
+      (input.countryCode || (currency === 'EUR' ? 'DE' : 'US')).toUpperCase()
+    const body: Record<string, unknown> = {
+      fiatAmount: input.fiatAmount,
+      currency,
+      countryCode,
+      fullName: input.fullName,
+      accountType: input.accountType ?? 'Checking',
+    }
+    if (currency === 'EUR' && input.iban?.trim()) {
+      body.iban = input.iban.replace(/\s/g, '')
+    } else {
+      body.accountNumber = input.accountNumber
+      body.routingNumber = input.routingNumber
+      body.addressLine1 = input.addressLine1
+      body.city = input.city
+      body.state = input.state
+      body.postalCode = input.postalCode
+      body.transferType = input.transferType ?? 'ACH'
+    }
+
+    const response = await fetch(`${apiUrl()}/api/noah/payouts/prepare`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify(body),
+    })
+    const data = await response.json().catch(() => ({})) as Record<string, unknown>
+    if (!response.ok) {
+      return {
+        ok: false,
+        formSessionId: null,
+        cryptoAuthorizedAmount: null,
+        cryptoCurrency: '',
+        paymentMethodId: null,
+        error: typeof data.error === 'string' ? data.error : 'Prepare failed',
+      }
+    }
+    return {
+      ok: true,
+      formSessionId: (data.formSessionId as string) ?? null,
+      cryptoAuthorizedAmount: (data.cryptoAuthorizedAmount as string) ?? null,
+      cryptoCurrency: (data.cryptoCurrency as string) ?? 'USDC_TEST',
+      paymentMethodId: (data.paymentMethodId as string) ?? null,
+    }
+  },
+
+  async prepareMobileMoneyPayout(input: {
+    fiatAmount: string
+    countryCode: string
+    currency: string
+    fullName: string
+    phoneNumber: string
+    paymentMethodSubstrings?: string[]
+  }): Promise<{
+    ok: boolean
+    formSessionId: string | null
+    cryptoAuthorizedAmount: string | null
+    cryptoCurrency: string
+    paymentMethodId: string | null
+    error?: string
+  }> {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) throw new Error('Not authenticated')
+    const response = await fetch(`${apiUrl()}/api/noah/payouts/prepare-mobile`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        fiatAmount: input.fiatAmount,
+        countryCode: input.countryCode,
+        currency: input.currency,
+        fullName: input.fullName,
+        phoneNumber: input.phoneNumber,
+        paymentMethodSubstrings: input.paymentMethodSubstrings,
+      }),
+    })
+    const data = await response.json().catch(() => ({})) as Record<string, unknown>
+    if (!response.ok) {
+      return {
+        ok: false,
+        formSessionId: null,
+        cryptoAuthorizedAmount: null,
+        cryptoCurrency: '',
+        paymentMethodId: null,
+        error: typeof data.error === 'string' ? data.error : 'Mobile prepare failed',
+      }
+    }
+    return {
+      ok: true,
+      formSessionId: (data.formSessionId as string) ?? null,
+      cryptoAuthorizedAmount: (data.cryptoAuthorizedAmount as string) ?? null,
+      cryptoCurrency: (data.cryptoCurrency as string) ?? 'USDC_TEST',
+      paymentMethodId: (data.paymentMethodId as string) ?? null,
+    }
+  },
+
+  async createWalletToWalletTransfer(input: {
+    destinationEasetag: string
+    amount: string
+    currency: string
+    cryptoCurrency?: string
+  }): Promise<NoahTransfer> {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) throw new Error('Not authenticated')
+    const response = await fetch(`${apiUrl()}/api/noah/transfers/w2w`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        destinationEasetag: input.destinationEasetag.replace(/^@/, '').trim(),
+        amount: input.amount,
+        currency: input.currency,
+        cryptoCurrency: input.cryptoCurrency,
+      }),
+    })
+    const data = await response.json().catch(() => ({})) as Record<string, unknown>
+    if (!response.ok || !data.ok) {
+      throw new Error(typeof data.error === 'string' ? data.error : 'Wallet transfer failed')
+    }
+    const tx = data.transaction as Record<string, unknown> | undefined
+    const id = String(tx?.ID ?? tx?.id ?? '')
+    const status = String(tx?.Status ?? tx?.status ?? 'pending').toLowerCase()
+    return {
+      id,
+      amount: input.amount,
+      currency: input.currency,
+      status,
+      transaction_id: id,
+    }
+  },
+
+  /**
    * Create transfer from wallet to external bank account
    */
   async createTransfer(transferData: {
     amount: string
-    currency: 'usd' | 'eur'
+    currency: string
     sourceWalletId: string
-    destinationExternalAccountId: string
+    destinationExternalAccountId?: string
+    formSessionId?: string
+    cryptoAuthorizedAmount?: string
+    cryptoCurrency?: string
   }): Promise<NoahTransfer> {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) throw new Error('Not authenticated')

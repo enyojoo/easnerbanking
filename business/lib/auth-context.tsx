@@ -90,6 +90,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [supabase, user?.id])
 
   useEffect(() => {
+    if (!user?.id) return
+    void import("@/lib/use-payout-corridors").then((m) => m.prefetchPayoutCorridors())
+  }, [user?.id])
+
+  useEffect(() => {
     if (user?.id) {
       resetSessionActivity()
     }

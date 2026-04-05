@@ -174,6 +174,12 @@ function ProfileContent({ navigation }: NavigationProps) {
       console.log('[PROFILE-SAVE] middleName value:', editProfileData.middleName, 'type:', typeof editProfileData.middleName, 'undefined?', editProfileData.middleName === undefined)
       await userService.updateProfile(user.id, updatePayload)
 
+      const nextTag = (editProfileData.easetag || '').replace(/^@/, '').trim().toLowerCase()
+      const prevTag = (profileData.easetag || '').replace(/^@/, '').trim().toLowerCase()
+      if (nextTag && nextTag !== prevTag) {
+        await userService.updateEasetag(nextTag)
+      }
+
       // Update local state
       setProfileData(editProfileData)
 
@@ -350,7 +356,7 @@ function ProfileContent({ navigation }: NavigationProps) {
                 </Text>
               </>
             )}
-            {easetagAvailable === null && editProfileData.easetag.length < 3 && (
+            {easetagAvailable === null && editProfileData.easetag.length < 4 && (
               <Text style={[styles.easetagStatusTextInline, { color: '#6b7280' }]}>
                 Min 3 chars
               </Text>

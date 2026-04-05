@@ -2,6 +2,9 @@
 
 /**
  * Hosted KYB opens in a dialog iframe. Users close via the dialog’s built-in control.
+ *
+ * B2B parity: uses the same `/api/noah/kyc-links` + Easner context headers as consumer flows;
+ * Tier state is driven by Owner `noah_kyb_status` via `useBusinessProfile` (see `/api/business/profile`).
  */
 
 import { useCallback, useEffect, useRef, useState } from "react"
@@ -37,7 +40,7 @@ export function BusinessVerificationSection() {
     tier1VerificationStatus,
     canManageBusinessVerification,
     isLoading,
-    organizationId,
+    businessId,
   } = useBusinessProfile()
 
   const [busy, setBusy] = useState<null | "link">(null)
@@ -151,7 +154,7 @@ export function BusinessVerificationSection() {
               {isT1 ? (
                 <CardContent className="space-y-4 pt-0">
                   {error ? <p className="text-sm text-destructive">{error}</p> : null}
-                  {!organizationId ? (
+                  {!businessId ? (
                     <p className="text-xs text-muted-foreground">Create or join an organization to continue.</p>
                   ) : null}
                   {!canManageBusinessVerification ? (

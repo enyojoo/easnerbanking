@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server"
+import { randomUUID } from "node:crypto"
 import { requireAuth, requireNoahEnv } from "../_helpers"
 import { noahFetch } from "@/lib/noah/http"
 import { pickTxAmountAndCurrency } from "@/lib/noah/map-transactions"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveNoahContext } from "../_helpers"
+import { getNoahSettlementCryptoCurrency } from "@/lib/noah/payout-prepare"
 
 export async function POST(request: Request) {
   const mis = requireNoahEnv()
@@ -19,39 +21,88 @@ export async function POST(request: Request) {
         currency?: string
         sourceWalletId?: string
         destinationExternalAccountId?: string
+        formSessionId?: string
+        cryptoAuthorizedAmount?: string
+        cryptoCurrency?: string
       }
     | null
 
   const sourceWalletId = String(body?.sourceWalletId || "").trim()
   const destinationExternalAccountId = String(body?.destinationExternalAccountId || "").trim()
+  const formSessionId = String(body?.formSessionId || "").trim()
+  const cryptoAuthorizedAmount = String(body?.cryptoAuthorizedAmount || "").trim()
+  const cryptoCurrencyRaw = String(body?.cryptoCurrency || getNoahSettlementCryptoCurrency()).trim()
   const amountRaw = String(body?.amount ?? "").trim()
   const currencyRaw = String(body?.currency || "").trim().toUpperCase()
-  const allowedCurrency = currencyRaw === "USD" || currencyRaw === "EUR" ? currencyRaw : ""
+  const isIsoFiat = /^[A-Z]{3}$/.test(currencyRaw)
+  /** Form-session sell supports any fiat returned by the prepared channel (e.g. KES, GHS). */
+  const fiatCurrency = isIsoFiat ? currencyRaw : ""
+  /** External-account sell path remains USD/EUR until expanded. */
+  const externalFiatOk = currencyRaw === "USD" || currencyRaw === "EUR"
   const amount = Number.parseFloat(amountRaw)
 
-  if (!sourceWalletId || !destinationExternalAccountId || !allowedCurrency || !Number.isFinite(amount) || amount <= 0) {
+  const isFormSessionSell =
+    Boolean(formSessionId) &&
+    Boolean(cryptoAuthorizedAmount) &&
+    Boolean(fiatCurrency) &&
+    Number.isFinite(amount) &&
+    amount > 0
+
+  if (
+    !isFormSessionSell &&
+    (!sourceWalletId ||
+      !destinationExternalAccountId ||
+      !externalFiatOk ||
+      !Number.isFinite(amount) ||
+      amount <= 0)
+  ) {
     return NextResponse.json(
       {
         error:
-          "Missing or invalid transfer fields. Required: sourceWalletId, destinationExternalAccountId, amount > 0, currency in [USD, EUR].",
+          "Missing or invalid transfer fields. Either (sourceWalletId, destinationExternalAccountId, amount, currency USD|EUR) or (formSessionId, cryptoAuthorizedAmount, amount, fiat ISO 4217 code, cryptoCurrency).",
       },
       { status: 400 }
     )
   }
 
-  const sellPayloadPascal = {
-    CustomerID: noahCtx.noahCustomerId,
-    SourceWalletID: sourceWalletId,
-    DestinationExternalAccountID: destinationExternalAccountId,
-    FiatCurrency: allowedCurrency,
-    Amount: amount.toFixed(2),
-  }
-  const sellPayloadCamel = {
-    customerId: noahCtx.noahCustomerId,
-    sourceWalletId,
-    destinationExternalAccountId,
-    fiatCurrency: allowedCurrency,
-    amount: amount.toFixed(2),
+  let sellPayloadPascal: Record<string, unknown>
+  let sellPayloadCamel: Record<string, unknown>
+  let metadataExtra: Record<string, unknown> = {}
+
+  if (isFormSessionSell) {
+    sellPayloadPascal = {
+      CustomerID: noahCtx.noahCustomerId,
+      CryptoCurrency: cryptoCurrencyRaw,
+      FiatAmount: amount.toFixed(2),
+      CryptoAuthorizedAmount: cryptoAuthorizedAmount,
+      FormSessionID: formSessionId,
+      Nonce: randomUUID(),
+    }
+    sellPayloadCamel = {
+      customerId: noahCtx.noahCustomerId,
+      cryptoCurrency: cryptoCurrencyRaw,
+      fiatAmount: amount.toFixed(2),
+      cryptoAuthorizedAmount: cryptoAuthorizedAmount,
+      formSessionId,
+      nonce: randomUUID(),
+    }
+    metadataExtra = { formSessionId, cryptoCurrency: cryptoCurrencyRaw, fiatCurrency, sellMode: "form_session" }
+  } else {
+    sellPayloadPascal = {
+      CustomerID: noahCtx.noahCustomerId,
+      SourceWalletID: sourceWalletId,
+      DestinationExternalAccountID: destinationExternalAccountId,
+      FiatCurrency: currencyRaw,
+      Amount: amount.toFixed(2),
+    }
+    sellPayloadCamel = {
+      customerId: noahCtx.noahCustomerId,
+      sourceWalletId,
+      destinationExternalAccountId,
+      fiatCurrency: currencyRaw,
+      amount: amount.toFixed(2),
+    }
+    metadataExtra = { destinationExternalAccountId, sellMode: "external_account" }
   }
 
   try {
@@ -81,12 +132,13 @@ export async function POST(request: Request) {
         provider: "noah",
         status,
         amount: txAmount || amount,
-        currency: currency || allowedCurrency,
+        currency: currency || (isFormSessionSell ? fiatCurrency : currencyRaw),
         direction: "out",
         payload: tx,
         metadata: {
-          sourceWalletId,
-          destinationExternalAccountId,
+          sourceWalletId: sourceWalletId || null,
+          destinationExternalAccountId: destinationExternalAccountId || null,
+          ...metadataExtra,
           source: "api_noah_transfers",
         },
       },
@@ -97,7 +149,7 @@ export async function POST(request: Request) {
       id: id || "",
       transaction_id: id || "",
       amount: String(txAmount || amount),
-      currency: String(currency || allowedCurrency).toLowerCase(),
+      currency: String(currency || (isFormSessionSell ? fiatCurrency : currencyRaw)).toLowerCase(),
       status,
     })
   } catch (e: unknown) {

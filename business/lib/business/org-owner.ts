@@ -17,9 +17,9 @@ export async function resolveOrgOwnerUserId(
   fallbackUserId: string,
 ): Promise<string> {
   const { data: rows, error } = await admin
-    .from("organization_memberships")
+    .from("business_memberships")
     .select("user_id,role,status,created_at")
-    .eq("organization_id", orgId)
+    .eq("business_id", orgId)
     .order("created_at", { ascending: true })
 
   if (!error && rows?.length) {
@@ -32,7 +32,7 @@ export async function resolveOrgOwnerUserId(
   const { data: orgUsers } = await admin
     .from("users")
     .select("id")
-    .eq("easner_organization_id", orgId)
+    .eq("easner_business_id", orgId)
     .order("created_at", { ascending: true })
     .limit(1)
 

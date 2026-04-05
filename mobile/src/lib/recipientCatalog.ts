@@ -1,3 +1,5 @@
+import type { PayoutCorridorPublic } from '@easner/shared'
+
 export type RecipientType = 'bank' | 'mobile_money' | 'wallet'
 export type RailStatus = 'supported' | 'coming_soon'
 
@@ -50,7 +52,7 @@ const bankDefaultFields: RecipientFieldSpec[] = [
   { key: 'accountNumber', label: 'Account number', placeholder: 'Account number', required: true, keyboardType: 'number-pad' },
 ]
 
-const mobileMoneyFields: RecipientFieldSpec[] = [
+export const mobileMoneyFields: RecipientFieldSpec[] = [
   { key: 'fullName', label: 'Account name', placeholder: 'Account name', required: true },
   { key: 'provider', label: 'Network', placeholder: 'Select network', required: true },
   { key: 'phoneNumber', label: 'Phone number', placeholder: '+2348012345678', required: true, keyboardType: 'phone-pad' },
@@ -124,9 +126,19 @@ const noahBankCountryCurrencies: Array<{ countryCode: string; countryName: strin
   { countryCode: 'UG', countryName: 'Uganda', currencyCode: 'UGX', currencyName: 'Ugandan Shilling' },
   { countryCode: 'UY', countryName: 'Uruguay', currencyCode: 'UYU', currencyName: 'Uruguayan Peso' },
   { countryCode: 'VU', countryName: 'Vanuatu', currencyCode: 'VUV', currencyName: 'Vanuatu Vatu' },
+  { countryCode: 'BW', countryName: 'Botswana', currencyCode: 'BWP', currencyName: 'Botswana Pula' },
+  { countryCode: 'CM', countryName: 'Cameroon', currencyCode: 'XAF', currencyName: 'Central African CFA Franc' },
+  { countryCode: 'KE', countryName: 'Kenya', currencyCode: 'KES', currencyName: 'Kenyan Shilling' },
+  { countryCode: 'SN', countryName: 'Senegal', currencyCode: 'XOF', currencyName: 'West African CFA Franc' },
+  { countryCode: 'TZ', countryName: 'Tanzania', currencyCode: 'TZS', currencyName: 'Tanzanian Shilling' },
+  { countryCode: 'TG', countryName: 'Togo', currencyCode: 'XOF', currencyName: 'West African CFA Franc' },
+  { countryCode: 'ZM', countryName: 'Zambia', currencyCode: 'ZMW', currencyName: 'Zambian Kwacha' },
+  { countryCode: 'BF', countryName: 'Burkina Faso', currencyCode: 'XOF', currencyName: 'West African CFA Franc' },
+  { countryCode: 'ML', countryName: 'Mali', currencyCode: 'XOF', currencyName: 'West African CFA Franc' },
 ]
 
-function getBankFieldsForCurrency(currencyCode: string): RecipientFieldSpec[] {
+/** Exported for corridor merge tests / tooling */
+export function getBankFieldsForCurrency(currencyCode: string): RecipientFieldSpec[] {
   if (currencyCode === 'USD') {
     return [
       { key: 'fullName', label: 'Account name', placeholder: 'Account name', required: true },
@@ -152,6 +164,34 @@ function getBankFieldsForCurrency(currencyCode: string): RecipientFieldSpec[] {
     ]
   }
   return bankDefaultFields
+}
+
+let payoutCorridorCache: { bank: PayoutCorridorPublic[]; mobile: PayoutCorridorPublic[] } | null = null
+
+/** Updated when mobile loads/refreshes GET /api/payout-corridors */
+export function setPayoutCorridorCache(next: { bank: PayoutCorridorPublic[]; mobile: PayoutCorridorPublic[] } | null) {
+  payoutCorridorCache = next
+}
+
+export function getPayoutCorridorCache(): typeof payoutCorridorCache {
+  return payoutCorridorCache
+}
+
+function usePayoutCorridorsApi(): boolean {
+  return process.env.EXPO_PUBLIC_USE_PAYOUT_CORRIDORS !== 'false'
+}
+
+function corridorsToRecipientEntries(corridors: PayoutCorridorPublic[], kind: 'bank' | 'mobile_money'): RecipientCatalogEntry[] {
+  return corridors.map((c) => ({
+    countryCode: c.country_code,
+    countryName: c.country_name,
+    currencyCode: c.currency_code,
+    currencyName: c.currency_name,
+    recipientType: kind === 'bank' ? ('bank' as const) : ('mobile_money' as const),
+    status: 'supported' as const,
+    providers: kind === 'mobile_money' && Array.isArray(c.providers) ? (c.providers as string[]) : undefined,
+    fields: kind === 'bank' ? getBankFieldsForCurrency(c.currency_code) : mobileMoneyFields,
+  }))
 }
 
 export const recipientCatalog: RecipientCatalogEntry[] = [
@@ -188,17 +228,52 @@ export const recipientCatalog: RecipientCatalogEntry[] = [
 ]
 
 export function getCatalogByRecipientType(recipientType: RecipientType): RecipientCatalogEntry[] {
+  if (recipientType === 'wallet') {
+    return recipientCatalog.filter((entry) => entry.recipientType === 'wallet')
+  }
+  if (usePayoutCorridorsApi() && payoutCorridorCache) {
+    if (recipientType === 'bank' && payoutCorridorCache.bank.length) {
+      return corridorsToRecipientEntries(payoutCorridorCache.bank, 'bank')
+    }
+    if (recipientType === 'mobile_money' && payoutCorridorCache.mobile.length) {
+      return corridorsToRecipientEntries(payoutCorridorCache.mobile, 'mobile_money')
+    }
+  }
   return recipientCatalog.filter((entry) => entry.recipientType === recipientType)
 }
 
-export function getRecipientFormFields(currencyCode: string, recipientType: RecipientType): RecipientFieldSpec[] {
+export function getRecipientFormFields(
+  currencyCode: string,
+  recipientType: RecipientType,
+  countryCode?: string,
+): RecipientFieldSpec[] {
+  if (recipientType === 'bank' && countryCode && payoutCorridorCache?.bank.length) {
+    const row = payoutCorridorCache.bank.find(
+      (c) =>
+        c.country_code.toUpperCase() === countryCode.toUpperCase() &&
+        c.currency_code.toUpperCase() === currencyCode.toUpperCase(),
+    )
+    if (row) return getBankFieldsForCurrency(row.currency_code)
+  }
   const match = recipientCatalog.find(
     (entry) => entry.currencyCode === currencyCode && entry.recipientType === recipientType,
   )
   return match?.fields || []
 }
 
-export function getRecipientProviders(currencyCode: string, recipientType: RecipientType): string[] {
+export function getRecipientProviders(
+  currencyCode: string,
+  recipientType: RecipientType,
+  countryCode?: string,
+): string[] {
+  if (recipientType === 'mobile_money' && countryCode && payoutCorridorCache?.mobile.length) {
+    const row = payoutCorridorCache.mobile.find(
+      (c) =>
+        c.country_code.toUpperCase() === countryCode.toUpperCase() &&
+        c.currency_code.toUpperCase() === currencyCode.toUpperCase(),
+    )
+    if (row && Array.isArray(row.providers)) return row.providers as string[]
+  }
   const match = recipientCatalog.find(
     (entry) => entry.currencyCode === currencyCode && entry.recipientType === recipientType,
   )

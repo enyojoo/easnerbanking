@@ -1,5 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  async redirects() {
+    return [
+      { source: "/business", destination: "/businesses", permanent: true },
+      { source: "/business/organizations", destination: "/businesses", permanent: true },
+      { source: "/organizations", destination: "/businesses", permanent: true },
+      { source: "/organizations/:path*", destination: "/businesses/:path*", permanent: true },
+      { source: "/business/customers", destination: "/customers", permanent: true },
+      { source: "/business/invoices", destination: "/invoices", permanent: true },
+    ]
+  },
   transpilePackages: ["@easner/shared"],
   compress: true,
   images: {

@@ -7,12 +7,12 @@ export async function GET(request: Request) {
   if (!auth.ok) return auth.response
 
   const { searchParams } = new URL(request.url)
-  const organizationId = searchParams.get("organizationId")
+  const businessId = searchParams.get("businessId")
 
   const admin = createSupabaseAdmin()
   let q = admin.from("invoices").select("*").order("created_at", { ascending: false })
-  if (organizationId) {
-    q = q.eq("organization_id", organizationId)
+  if (businessId) {
+    q = q.eq("business_id", businessId)
   }
   const { data, error } = await q
 

@@ -23,6 +23,7 @@ import {
 import { RecipientForm } from "@/components/recipient-form"
 import type { Beneficiary } from "@/lib/recipient-types"
 import { CountryFlag, CurrencyFlag } from "@/components/flags"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { deleteRecipient, listRecipients } from "@/lib/recipients-store"
 import { useAuth } from "@/lib/auth-context"
 import { CACHE_KEYS } from "@/lib/cache"
@@ -66,11 +67,35 @@ export default function RecipientsPage() {
       .catch((err) => console.error("Recipient cache reconcile failed:", err))
   }
 
+  const recipientMatchesSearch = (recipient: Beneficiary, term: string) => {
+    if (!term.trim()) return true
+    const q = term.toLowerCase()
+    return [
+      recipient.name,
+      recipient.bankName,
+      recipient.country,
+      recipient.payeeEasetag ? `@${recipient.payeeEasetag}` : "",
+      recipient.accountNumber,
+      recipient.fullAccountNumber,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+      .includes(q)
+  }
+
   const filteredBeneficiaries = beneficiaries.filter((recipient) =>
-    recipient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    recipient.bankName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    recipient.country.toLowerCase().includes(searchTerm.toLowerCase())
+    recipientMatchesSearch(recipient, searchTerm)
   )
+
+  const recipientInitials = (r: Beneficiary) =>
+    r.name
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((p) => p[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "?"
 
   const handleEdit = (recipient: Beneficiary) => {
     setSelectedRecipient(recipient)
@@ -186,9 +211,16 @@ export default function RecipientsPage() {
                   >
                     <div className="flex items-center gap-3">
                       <div className="relative mr-1">
+                        {recipient.avatarUrl ? (
+                          <Avatar className="h-10 w-10 border border-border">
+                            <AvatarImage src={recipient.avatarUrl} alt="" />
+                            <AvatarFallback>{recipientInitials(recipient)}</AvatarFallback>
+                          </Avatar>
+                        ) : (
                         <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
                           <User className="h-5 w-5 text-primary" />
                         </div>
+                        )}
                         <div className="absolute -bottom-0.5 -right-0.5 h-5 w-5 overflow-hidden rounded-full border-2 border-background bg-background">
                           {recipient.countryCode ? (
                             <CountryFlag
@@ -208,7 +240,9 @@ export default function RecipientsPage() {
                       <div className="flex-1 min-w-0">
                         <h3 className="font-semibold text-sm">{recipient.name}</h3>
                         <p className="text-xs text-muted-foreground">
-                          {recipient.bankName} • {recipient.fullAccountNumber} • {recipient.currency}
+                          {recipient.payeeEasetag
+                            ? `@${recipient.payeeEasetag} • ${recipient.currency}`
+                            : `${recipient.bankName} • ${recipient.fullAccountNumber} • ${recipient.currency}`}
                         </p>
                       </div>
                     </div>

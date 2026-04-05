@@ -123,7 +123,7 @@ export default function MobileMoneyScreen({ navigation, route }: NavigationProps
     
     setTimeout(() => {
       navigation.navigate('SendTransactionDetails' as never, {
-        transactionId: orderId,
+        transactionId,
         sendAmount,
         receiveAmount,
         sendCurrency,

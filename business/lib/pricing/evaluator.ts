@@ -1,5 +1,19 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { getStrategyRuntimeConfig, inCanary } from "@/lib/pricing/strategy-config"
+import {
+  buildPricingTotals,
+  buildProviderCostsBreakdown,
+  getReportingCurrency,
+  isProviderDecompositionEnabled,
+  providerCostsToLegacySnapshot,
+  providerReportingToSourceAmount,
+  sumProviderCostsReporting,
+  type FundingDirection,
+  type ProviderCostLine,
+  type ProviderCostsBreakdown,
+  type ProviderScheduleRow,
+  type PricingTotals,
+} from "@/lib/pricing/provider-costs"
 
 type FeeKind = "payin_fee" | "payout_fee" | "fx_markup"
 type StrategyMode =
@@ -16,21 +30,6 @@ type RepricingReasonCode =
   | "subscription_changed"
   | "quote_expired"
 
-type ProviderFeeSchedule = {
-  id: string
-  provider: string
-  version: string
-  rail: string | null
-  corridor: string | null
-  source_currency: string | null
-  destination_currency: string | null
-  variable_fee_percent: number
-  fixed_fee_amount: number
-  local_rail_fee_amount: number
-  kyc_kyb_fee_amount: number
-  iban_infra_fee_amount: number
-}
-
 export type QuoteInput = {
   userId: string
   sourceCurrency: string
@@ -38,12 +37,24 @@ export type QuoteInput = {
   sourceAmount: number
   rail?: string
   countryCode?: string
+  /** ISO country for local payout fee schedules */
+  payoutCountry?: string
+  /** Normalized payout method, e.g. bank_transfer, mobile_money_mpesa */
+  payoutMethod?: string
+  /** Inbound/outbound bank rail for provider_funding_fee rows */
+  fundingRail?: string
+  fundingDirection?: FundingDirection
+  fundingRailOutbound?: string
+  fundingDirectionOutbound?: FundingDirection
   providerRate?: number
   strategyMode?: StrategyMode
   routeType?: "stablecoin" | "fiat" | "mixed"
   routeCandidates?: Array<{
     id: string
     providerCostAmount?: number
+    /** When set, used instead of providerCostAmount for route scoring (reporting currency sum) */
+    totalProviderCostReporting?: number
+    providerCosts?: ProviderCostsBreakdown | null
     speedScore?: number
     successScore?: number
     routeType?: "stablecoin" | "fiat" | "mixed"
@@ -117,6 +128,11 @@ export type QuoteResult = {
     easner_premium_service_fee: number
     easner_subscription_benefit_adjustment: number
   }
+  /** Noah ramp / funding / local payout lines with pinned schedule ids */
+  providerCosts: ProviderCostsBreakdown | null
+  /** Sum of provider components in reporting currency (e.g. USD) */
+  totalProviderCostReporting: number | null
+  pricingTotals: PricingTotals | null
 }
 
 function nowIso() {
@@ -259,6 +275,9 @@ function selectBestRoute(params: {
   effectiveRate: number
   totalFeeAmount: number
   providerCostAmount: number
+  reportingCurrency: string
+  sourceCurrency: string
+  providerRate: number
 }): { selectedRoute: string; routeSelectionReason: string } {
   const candidates = params.candidates ?? []
   if (!candidates.length) {
@@ -269,7 +288,15 @@ function selectBestRoute(params: {
   }
 
   const weighted = candidates.map((c) => {
-    const providerCost = Number(c.providerCostAmount ?? params.providerCostAmount)
+    const providerCost =
+      c.totalProviderCostReporting != null && Number.isFinite(Number(c.totalProviderCostReporting))
+        ? providerReportingToSourceAmount(
+            Number(c.totalProviderCostReporting),
+            params.reportingCurrency,
+            params.sourceCurrency,
+            params.providerRate
+          )
+        : Number(c.providerCostAmount ?? params.providerCostAmount)
     const speed = Number(c.speedScore ?? 0.5)
     const success = Number(c.successScore ?? 0.5)
     const allInPriceScore = 1 / (1 + params.totalFeeAmount)
@@ -305,31 +332,36 @@ function computeProviderBaselineCost(input: QuoteInput, sourceAmount: number): n
   return round8(variableCost + fixedFee + localRailFee)
 }
 
-async function fetchProviderFeeSchedule(params: {
-  provider: string
-  rail?: string
-  corridor?: string
-  sourceCurrency: string
-  destinationCurrency: string
-}): Promise<ProviderFeeSchedule | null> {
+async function fetchProviderFeeSchedules(provider: string): Promise<ProviderScheduleRow[]> {
   const admin = createSupabaseAdmin()
   const now = nowIso()
   const { data, error } = await admin
     .from("provider_fee_schedules")
     .select("*")
-    .eq("provider", params.provider)
+    .eq("provider", provider)
     .eq("is_active", true)
     .or(`active_from.is.null,active_from.lte.${now}`)
     .or(`active_to.is.null,active_to.gte.${now}`)
     .order("created_at", { ascending: false })
   if (error) throw error
+  return (data || []) as ProviderScheduleRow[]
+}
 
-  const rows = (data || []) as ProviderFeeSchedule[]
+function pickSingleProviderScheduleRow(
+  rows: ProviderScheduleRow[],
+  params: {
+    rail?: string
+    corridor?: string
+    sourceCurrency: string
+    destinationCurrency: string
+  }
+): ProviderScheduleRow | null {
   const match = rows.find((r) => {
     if (r.rail && r.rail !== params.rail) return false
     if (r.corridor && r.corridor !== params.corridor) return false
-    if (r.source_currency && r.source_currency !== params.sourceCurrency) return false
-    if (r.destination_currency && r.destination_currency !== params.destinationCurrency) return false
+    if (r.source_currency && r.source_currency.toUpperCase() !== params.sourceCurrency) return false
+    if (r.destination_currency && r.destination_currency.toUpperCase() !== params.destinationCurrency)
+      return false
     return true
   })
   return match ?? null
@@ -371,13 +403,7 @@ export async function createQuote(input: QuoteInput): Promise<QuoteResult> {
   const guardrailRule = rules.find((r) => matchesRule(r, matchParams))
 
   const provider = input.provider ?? "noah"
-  const canonicalSchedule = await fetchProviderFeeSchedule({
-    provider,
-    rail: input.rail,
-    corridor: input.corridor ?? (input.countryCode ? `${input.countryCode}-${destinationCurrency}` : undefined),
-    sourceCurrency,
-    destinationCurrency,
-  })
+  const allScheduleRows = await fetchProviderFeeSchedules(provider)
 
   const providerRate = input.providerRate && input.providerRate > 0 ? input.providerRate : sourceCurrency === destinationCurrency ? 1 : 1
   const fxMarkupBpsRaw = fxRule?.markup_bps ?? 0
@@ -400,23 +426,76 @@ export async function createQuote(input: QuoteInput): Promise<QuoteResult> {
   const effectiveRate = providerRate * (1 + Number(fxMarkupBps) / 10000)
   const destinationAmount = sourceAmount * effectiveRate
 
+  const corridorResolved =
+    input.corridor ?? (input.countryCode ? `${input.countryCode}-${destinationCurrency}` : undefined)
+  const payoutCountryOpt = (input.payoutCountry || input.countryCode || "").trim().toUpperCase() || undefined
+
+  const reporting = getReportingCurrency()
+  let providerCostsBreakdown: ProviderCostsBreakdown | null = null
+  let totalProviderCostReporting: number | null = null
+  let canonicalSchedule: ProviderScheduleRow | null = null
+  let providerInputForCost: QuoteInput
+
+  if (isProviderDecompositionEnabled()) {
+    providerCostsBreakdown = buildProviderCostsBreakdown({
+      rows: allScheduleRows,
+      sourceCurrency,
+      destinationCurrency,
+      sourceAmount,
+      destinationAmount,
+      rail: input.rail,
+      corridor: corridorResolved,
+      fundingRail: input.fundingRail,
+      fundingDirection: input.fundingDirection,
+      fundingRailOutbound: input.fundingRailOutbound,
+      fundingDirectionOutbound: input.fundingDirectionOutbound,
+      payoutCountry: payoutCountryOpt,
+      payoutMethod: input.payoutMethod,
+    })
+    totalProviderCostReporting = round8(sumProviderCostsReporting(providerCostsBreakdown, reporting))
+    const pid =
+      providerCostsBreakdown.ramp_fee?.source_schedule_id ||
+      providerCostsBreakdown.funding_fee?.source_schedule_id ||
+      providerCostsBreakdown.funding_fee_outbound?.source_schedule_id ||
+      providerCostsBreakdown.local_payout_fee?.source_schedule_id
+    canonicalSchedule = pid ? (allScheduleRows.find((r) => r.id === pid) ?? null) : null
+    providerInputForCost = { ...input, providerFeePercent: 0, providerFixedFee: 0, localRailFee: 0 }
+  } else {
+    canonicalSchedule = pickSingleProviderScheduleRow(allScheduleRows, {
+      rail: input.rail,
+      corridor: corridorResolved,
+      sourceCurrency,
+      destinationCurrency,
+    })
+    providerInputForCost = {
+      ...input,
+      providerFeePercent: Number(canonicalSchedule?.variable_fee_percent ?? input.providerFeePercent ?? 0),
+      providerFixedFee: Number(canonicalSchedule?.fixed_fee_amount ?? input.providerFixedFee ?? 0),
+      localRailFee:
+        Number(canonicalSchedule?.local_rail_fee_amount ?? 0) +
+        Number(canonicalSchedule?.kyc_kyb_fee_amount ?? 0) +
+        Number(canonicalSchedule?.iban_infra_fee_amount ?? 0) +
+        (input.localRailFee ?? 0),
+    }
+    providerCostsBreakdown = null
+    totalProviderCostReporting = null
+  }
+
+  const providerCostAmount = isProviderDecompositionEnabled()
+    ? round8(
+        providerReportingToSourceAmount(
+          totalProviderCostReporting ?? 0,
+          reporting,
+          sourceCurrency,
+          providerRate
+        )
+      )
+    : computeProviderBaselineCost(providerInputForCost, sourceAmount)
+
   const payoutRaw = (payoutRule?.flat_fee ?? 0) + sourceAmount * (payoutRule?.percent_fee ?? 0)
   const payinRaw = (payinRule?.flat_fee ?? 0) + sourceAmount * (payinRule?.percent_fee ?? 0)
   const payoutFeeAmount = applyFeeBounds(payoutRaw, payoutRule?.min_fee ?? null, payoutRule?.max_fee ?? null)
   const payinFeeAmount = applyFeeBounds(payinRaw, payinRule?.min_fee ?? null, payinRule?.max_fee ?? null)
-  const providerInputForCost: QuoteInput = {
-    ...input,
-    providerFeePercent:
-      canonicalSchedule?.variable_fee_percent ?? input.providerFeePercent ?? 0,
-    providerFixedFee:
-      canonicalSchedule?.fixed_fee_amount ?? input.providerFixedFee ?? 0,
-    localRailFee:
-      (canonicalSchedule?.local_rail_fee_amount ?? 0) +
-      (canonicalSchedule?.kyc_kyb_fee_amount ?? 0) +
-      (canonicalSchedule?.iban_infra_fee_amount ?? 0) +
-      (input.localRailFee ?? 0),
-  }
-  const providerCostAmount = computeProviderBaselineCost(providerInputForCost, sourceAmount)
   const freePayoutBenefit = entitlements.freePayoutsPerPeriod > 0 ? Math.min(payoutFeeAmount, payoutFeeAmount) : 0
   const easnerCoreTransferFee = round8(payoutFeeAmount + payinFeeAmount - freePayoutBenefit)
   const easnerFxMarkupFee = round8(Math.max(0, destinationAmount - sourceAmount * providerRate))
@@ -493,7 +572,43 @@ export async function createQuote(input: QuoteInput): Promise<QuoteResult> {
           effectiveRate,
           totalFeeAmount: round8(totalFeeAmount * competitivenessBoost),
           providerCostAmount,
+          reportingCurrency: reporting,
+          sourceCurrency,
+          providerRate,
         })
+
+  const pricingTotals: PricingTotals | null =
+    isProviderDecompositionEnabled() && totalProviderCostReporting != null
+      ? buildPricingTotals({
+          totalProviderCostReporting,
+          easnerRevenueAmount,
+          totalFeeAmount,
+          easnerFxMarkupFee,
+          destinationAmount,
+          sourceCurrency,
+          providerRate,
+        })
+      : null
+
+  const providerFeeSnapshot = (() => {
+    if (isProviderDecompositionEnabled() && providerCostsBreakdown) {
+      return {
+        ...providerCostsToLegacySnapshot(providerCostsBreakdown, sourceAmount),
+        schedule_ids: [
+          providerCostsBreakdown.ramp_fee?.source_schedule_id,
+          providerCostsBreakdown.funding_fee?.source_schedule_id,
+          providerCostsBreakdown.funding_fee_outbound?.source_schedule_id,
+          providerCostsBreakdown.local_payout_fee?.source_schedule_id,
+        ].filter(Boolean),
+      }
+    }
+    return {
+      schedule_id: canonicalSchedule?.id || null,
+      variable_percent: Number(providerInputForCost.providerFeePercent ?? 0),
+      fixed_fee: Number(providerInputForCost.providerFixedFee ?? 0),
+      local_rail_fee: Number(providerInputForCost.localRailFee ?? 0),
+    }
+  })()
 
   const expiresAt = new Date(Date.now() + Math.max(60, entitlements.rateLockSeconds) * 1000).toISOString()
   const quotePayload = {
@@ -514,6 +629,9 @@ export async function createQuote(input: QuoteInput): Promise<QuoteResult> {
       easner_premium_service_fee: easnerPremiumServiceFee,
       easner_subscription_benefit_adjustment: subscriptionBenefitAdjustment,
     },
+    providerCosts: providerCostsBreakdown,
+    totalProviderCostReporting,
+    pricingTotals,
     subscriptionEntitlements: {
       freePayoutsPerPeriod: entitlements.freePayoutsPerPeriod,
       prioritySupport: entitlements.prioritySupport,
@@ -553,12 +671,10 @@ export async function createQuote(input: QuoteInput): Promise<QuoteResult> {
       expires_at: expiresAt,
       status: "active",
       quote_payload: quotePayload,
-      provider_fee_snapshot: {
-        schedule_id: canonicalSchedule?.id || null,
-        variable_percent: Number(providerInputForCost.providerFeePercent ?? 0),
-        fixed_fee: Number(providerInputForCost.providerFixedFee ?? 0),
-        local_rail_fee: Number(providerInputForCost.localRailFee ?? 0),
-      },
+      provider_fee_snapshot: providerFeeSnapshot,
+      provider_costs: providerCostsBreakdown,
+      total_provider_cost: totalProviderCostReporting,
+      pricing_totals: pricingTotals,
       provider_fee_version: canonicalSchedule?.version ?? input.providerFeeVersion ?? "v1",
       provider_fee_timestamp: nowIso(),
       fx_timestamp: nowIso(),
@@ -609,7 +725,30 @@ export async function createQuote(input: QuoteInput): Promise<QuoteResult> {
       easner_premium_service_fee: round8(easnerPremiumServiceFee),
       easner_subscription_benefit_adjustment: round8(subscriptionBenefitAdjustment),
     },
+    providerCosts: providerCostsBreakdown,
+    totalProviderCostReporting,
+    pricingTotals,
   }
+}
+
+async function providerScheduleVersionsMatchQuote(admin: ReturnType<typeof createSupabaseAdmin>, quoteRow: Record<string, unknown>): Promise<boolean> {
+  if (process.env.PRICING_VALIDATE_PROVIDER_VERSIONS !== "true") return true
+  const costs = quoteRow.provider_costs as ProviderCostsBreakdown | null | undefined
+  if (!costs) return true
+  const lines = [costs.ramp_fee, costs.funding_fee, costs.funding_fee_outbound, costs.local_payout_fee].filter(
+    (x): x is ProviderCostLine => x != null
+  )
+  for (const line of lines) {
+    if (!line.source_schedule_id) continue
+    const { data, error } = await admin
+      .from("provider_fee_schedules")
+      .select("version")
+      .eq("id", line.source_schedule_id)
+      .maybeSingle()
+    if (error || !data) return false
+    if (String((data as { version?: string }).version ?? "") !== String(line.source_schedule_version ?? "")) return false
+  }
+  return true
 }
 
 export async function validateQuote(userId: string, quoteId: string) {
@@ -633,6 +772,17 @@ export async function validateQuote(userId: string, quoteId: string) {
       })
       .eq("id", quoteId)
     throw new Error("Quote expired")
+  }
+  const driftOk = await providerScheduleVersionsMatchQuote(admin, data as Record<string, unknown>)
+  if (!driftOk) {
+    await admin
+      .from("fee_quotes")
+      .update({
+        repricing_reason_code: "provider_fee_changed" as RepricingReasonCode,
+        updated_at: nowIso(),
+      })
+      .eq("id", quoteId)
+    throw new Error("Provider pricing changed; request a new quote")
   }
   return data
 }
@@ -658,11 +808,17 @@ export async function applyQuote(params: { userId: string; quoteId: string; tran
       payout_fee_amount: quote.payout_fee_amount,
       payin_fee_amount: quote.payin_fee_amount,
       total_fee_amount: quote.total_fee_amount,
+      provider_costs: quote.provider_costs ?? null,
+      total_provider_cost: quote.total_provider_cost ?? null,
+      pricing_totals: quote.pricing_totals ?? null,
       applied_payload: {
         ...(quote.quote_payload || {}),
         provider_fee_snapshot: quote.provider_fee_snapshot || {},
         provider_fee_version: quote.provider_fee_version || null,
         provider_fee_timestamp: quote.provider_fee_timestamp || null,
+        provider_costs: quote.provider_costs || null,
+        total_provider_cost: quote.total_provider_cost ?? null,
+        pricing_totals: quote.pricing_totals || null,
         fx_timestamp: quote.fx_timestamp || null,
         selected_route: quote.selected_route || null,
         route_selection_reason: quote.route_selection_reason || null,

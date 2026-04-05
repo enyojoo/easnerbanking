@@ -20,13 +20,6 @@ function countryNameFromCode(code: string | null): string | null {
   return match?.name ?? null
 }
 
-function slugify(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-}
-
 function defaultOrgName(email: string | undefined, fallbackId: string): string {
   const local = (email ?? "").split("@")[0]?.trim()
   if (local) return `${local} Business`
@@ -54,18 +47,18 @@ function parseName(fullName: string | null | undefined): { fullName: string | nu
 
 async function ensureOwnerMembership(params: {
   admin: ReturnType<typeof createSupabaseAdmin>
-  organizationId: string
+  businessId: string
   userId: string
   fullName: string | null
   email: string | null
 }) {
-  const { admin, organizationId, userId, fullName, email } = params
+  const { admin, businessId, userId, fullName, email } = params
   if (!email) return
 
   // Best-effort: if memberships table is not migrated yet, bootstrap should still succeed.
-  await admin.from("organization_memberships").upsert(
+  await admin.from("business_memberships").upsert(
     {
-      organization_id: organizationId,
+      business_id: businessId,
       user_id: userId,
       full_name: fullName?.trim() || "Account Owner",
       email: email.trim().toLowerCase(),
@@ -74,7 +67,7 @@ async function ensureOwnerMembership(params: {
       invited_by: userId,
       updated_at: new Date().toISOString(),
     },
-    { onConflict: "organization_id,email" },
+    { onConflict: "business_id,email" },
   )
 }
 
@@ -99,7 +92,7 @@ export async function POST(request: Request) {
 
   const { data: userRow } = await admin
     .from("users")
-    .select("id,easner_organization_id")
+    .select("id,easner_business_id")
     .eq("id", user.id)
     .maybeSingle()
 
@@ -131,52 +124,51 @@ export async function POST(request: Request) {
   }
 
   if (role === "individual") {
-    return NextResponse.json({ ok: true, role, userId: user.id, organizationId: userRow?.easner_organization_id ?? null })
+    return NextResponse.json({ ok: true, role, userId: user.id, businessId: userRow?.easner_business_id ?? null })
   }
 
-  let organizationId = userRow?.easner_organization_id ?? null
+  let businessId = userRow?.easner_business_id ?? null
 
-  if (!organizationId) {
+  if (!businessId) {
     const first = firstNameFromFullName(name.fullName)
     const orgName = first ? possessiveBusinessName(first) : defaultOrgName(user.email, user.id)
-    const slugBase = slugify(orgName) || `business-${user.id.slice(0, 8)}`
     const orgPayloadWithCountry = {
       name: orgName,
-      slug: `${slugBase}-${user.id.slice(0, 8)}`,
+      easetag: null as string | null,
       country,
     }
 
     const { data: insertedWithCountry, error: insertErrWithCountry } = await admin
-      .from("organizations")
+      .from("businesses")
       .insert(orgPayloadWithCountry)
       .select("id")
       .single()
 
     if (insertErrWithCountry) {
       const { data: insertedNoCountry, error: insertErrNoCountry } = await admin
-        .from("organizations")
+        .from("businesses")
         .insert({
           name: orgName,
-          slug: `${slugBase}-${user.id.slice(0, 8)}`,
+          easetag: null as string | null,
         })
         .select("id")
         .single()
       if (insertErrNoCountry) {
         return NextResponse.json({ ok: false, error: insertErrNoCountry.message }, { status: 500 })
       }
-      organizationId = insertedNoCountry.id
+      businessId = insertedNoCountry.id
     } else {
-      organizationId = insertedWithCountry.id
+      businessId = insertedWithCountry.id
     }
   } else if (country) {
-    await admin.from("organizations").update({ country }).eq("id", organizationId)
+    await admin.from("businesses").update({ country }).eq("id", businessId)
   }
 
   const userLinkPayload = {
     id: user.id,
     email: user.email ?? null,
     full_name: name.fullName,
-    easner_organization_id: organizationId,
+    easner_business_id: businessId,
     updated_at: new Date().toISOString(),
   }
 
@@ -192,7 +184,7 @@ export async function POST(request: Request) {
           {
             id: user.id,
             email: user.email ?? null,
-            easner_organization_id: organizationId,
+            easner_business_id: businessId,
             updated_at: new Date().toISOString(),
           },
           { onConflict: "id" },
@@ -202,7 +194,7 @@ export async function POST(request: Request) {
 
   await ensureOwnerMembership({
     admin,
-    organizationId,
+    businessId,
     userId: user.id,
     fullName: name.fullName,
     email: user.email ?? null,
@@ -212,7 +204,7 @@ export async function POST(request: Request) {
     ok: true,
     role: "business",
     userId: user.id,
-    organizationId,
+    businessId,
     country: country ?? null,
   })
 }

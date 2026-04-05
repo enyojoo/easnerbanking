@@ -9,8 +9,9 @@ import { CACHE_KEYS, dataCache } from "@/lib/cache"
 import { useCachedData } from "@/lib/use-cached-data"
 
 export type BusinessProfile = {
-  organizationId: string | null
+  businessId: string | null
   name: string
+  easetag: string | null
   logoUrl: string | null
   businessType: string
   registrationNumber: string
@@ -40,8 +41,9 @@ export type BusinessProfile = {
 }
 
 const DEFAULT_PROFILE: BusinessProfile = {
-  organizationId: null,
+  businessId: null,
   name: "",
+  easetag: null,
   logoUrl: null,
   businessType: "",
   registrationNumber: "",
@@ -74,6 +76,7 @@ function countryCodeFromName(name: string | null | undefined): string | null {
 
 export async function updateBusinessProfile(payload: {
   businessName?: string
+  easetag?: string | null
   businessLogo?: string | null
   businessType?: string
   registrationNumber?: string

@@ -131,7 +131,7 @@ export function CommercialSubscriptionsPanel() {
   const { rows, loading, error, refresh } = useCommercialSubscriptions()
   const { rows: plans } = useCommercialPlans()
   const [userId, setUserId] = useState("")
-  const [organizationId, setOrganizationId] = useState("")
+  const [businessId, setBusinessId] = useState("")
   const [planId, setPlanId] = useState("")
   const [scope, setScope] = useState("individual")
   const [freePayoutsPerPeriod, setFreePayoutsPerPeriod] = useState("0")
@@ -158,7 +158,7 @@ export function CommercialSubscriptionsPanel() {
     try {
       await commercialApi.createSubscription({
         userId: userId.trim(),
-        organizationId: organizationId.trim() || undefined,
+        businessId: businessId.trim() || undefined,
         planId: planId.trim(),
         scope,
         freePayoutsPerPeriod: Number(freePayoutsPerPeriod || 0),
@@ -171,7 +171,7 @@ export function CommercialSubscriptionsPanel() {
       })
       setNotice("Subscription created.")
       setUserId("")
-      setOrganizationId("")
+      setBusinessId("")
       await refresh()
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "Failed to create subscription")
@@ -197,8 +197,8 @@ export function CommercialSubscriptionsPanel() {
               <Input value={userId} onChange={(e) => setUserId(e.target.value)} placeholder="UUID" />
             </div>
             <div className="space-y-2">
-              <Label>Organization ID (optional)</Label>
-              <Input value={organizationId} onChange={(e) => setOrganizationId(e.target.value)} placeholder="UUID" />
+              <Label>Business ID (optional)</Label>
+              <Input value={businessId} onChange={(e) => setBusinessId(e.target.value)} placeholder="UUID" />
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -289,7 +289,7 @@ export function CommercialSubscriptionsPanel() {
                 {rows.map((subscription) => (
                   <TableRow key={subscription.id}>
                     <TableCell className="font-medium">{subscription.user_id}</TableCell>
-                    <TableCell>{subscription.organization_id || "—"}</TableCell>
+                    <TableCell>{subscription.business_id || "—"}</TableCell>
                     <TableCell>{subscription.pricing_plans?.name || subscription.plan_id}</TableCell>
                     <TableCell>{subscription.status}</TableCell>
                     <TableCell>{subscription.scope}</TableCell>

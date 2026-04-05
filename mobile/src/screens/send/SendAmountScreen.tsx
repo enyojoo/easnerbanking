@@ -27,37 +27,57 @@ import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
 import { supabase } from '../../lib/supabase'
 import { Alert } from 'react-native'
 import { useUserData } from '../../contexts/UserDataContext'
+import { recipientService } from '../../lib/recipientService'
+import { isDraftEasenetRecipient } from '../../lib/draftEasenetRecipient'
 import { useAuth } from '../../contexts/AuthContext'
+import { recordRecipientSentTouch } from '../../lib/recentSendRecipients'
 import { isTier1Complete, TIER2_COMPLETE_PLACEHOLDER } from '../../lib/compliance'
 import { mobileFxEngine } from '../../lib/fxEngine'
 import { generateTransactionId } from '../../lib/transactionId'
 import { useBalance } from '../../contexts/BalanceContext'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { getApiBaseUrl } from '../../lib/apiClient'
-import { noahService } from '../../lib/noahService'
+import { noahService, type PricingQuote } from '../../lib/noahService'
 import { getWalletAssets } from '../../lib/recipientCatalog'
+import { getPayoutCorridorCache, isRecipientPayoutCorridorActive, refreshPayoutCorridors } from '../../lib/payoutCorridors'
 import { getTokenIconUrl } from '../../lib/cryptoIcons'
+import type { Recipient } from '../../types'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 const KEYPAD_BUTTON_WIDTH = 113
 const KEYPAD_GAP = 8 // spacing[2]
 const KEYPAD_ROW_WIDTH = (KEYPAD_BUTTON_WIDTH * 3) + (KEYPAD_GAP * 2) // 113 * 3 + 8 * 2 = 355
 
-// Mock recipient data for UI/UX (matches Recipient type)
-interface MockRecipient {
-  id: string
-  user_id: string
-  full_name: string
-  account_number: string
-  currency: string
-  bank_name: string
-  phone_number?: string
-  routing_number?: string
-  sort_code?: string
-  iban?: string
-  swift_bic?: string
-  created_at: string
-  updated_at: string
+function inferCountryFromRecipientCurrency(currency: string): string | undefined {
+  const m: Record<string, string> = {
+    KES: 'KE',
+    GHS: 'GH',
+    NGN: 'NG',
+    ZAR: 'ZA',
+  }
+  return m[currency.toUpperCase()]
+}
+
+function isMobileMoneyRecipient(r: Pick<Recipient, 'bank_name' | 'mobile_provider'>): boolean {
+  const b = (r.bank_name || '').toLowerCase()
+  return b.includes('mobile money') || Boolean(r.mobile_provider)
+}
+
+function mobileMoneyPrepareHints(r: Pick<Recipient, 'mobile_provider'>): string[] | undefined {
+  const p = (r.mobile_provider || '').toLowerCase()
+  if (p.includes('mtn')) return ['mtn', 'momo']
+  if (p.includes('mpesa') || p.includes('m-pesa')) return ['mpesa']
+  return undefined
+}
+
+function normalizePayoutMethodForPricing(methodCode: string | undefined | null): string | undefined {
+  if (!methodCode) return undefined
+  const x = methodCode.toLowerCase()
+  if (x === 'mpesa' || x === 'm-pesa') return 'mobile_money_mpesa'
+  if (x === 'banktransfer' || x === 'bank_transfer') return 'bank_transfer'
+  if (x === 'mtnmomo' || x === 'mtn_momo') return 'mobile_money_mtn'
+  if (x === 'sbp') return 'sbp'
+  return methodCode
 }
 
 // Landmark/Bank Icon Component
@@ -88,17 +108,21 @@ function repricingReasonLabel(reasonCode: string): string {
 
 export default function SendAmountScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
-  const { userProfile, refreshUserProfile } = useAuth()
+  const { user, userProfile, refreshUserProfile } = useAuth()
   const noahKycStatus =
     userProfile?.noah_kyc_status ??
     (userProfile as { noah_kyc_status?: string; profile?: { noah_kyc_status?: string } })?.profile?.noah_kyc_status
-  const { exchangeRates: exchangeRatesFromContext } = useUserData()
+  const {
+    exchangeRates: exchangeRatesFromContext,
+    invalidateRecipients,
+    refreshRecipients,
+  } = useUserData()
   const { balances, updateBalanceOptimistically } = useBalance()
   // Ensure exchangeRates is always an array (fallback to empty array if undefined)
   const exchangeRates = exchangeRatesFromContext || []
   
-  // Get recipient from route params if coming from SelectRecipient
-  const recipientFromRoute = (route.params as any)?.recipient as MockRecipient | undefined
+  // Get recipient from route params if coming from the send recipient hub
+  const recipientFromRoute = (route.params as any)?.recipient as Recipient | undefined
   const preferredBalanceCurrencyFromRoute = String((route.params as any)?.preferredBalanceCurrency || '').toUpperCase()
   const selectedPaymentMethodFromRoute = (route.params as any)?.selectedPaymentMethod as
     | 'balance'
@@ -112,7 +136,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const didInitializeBalanceCurrency = useRef(false)
   
   // UI State only - no backend integration
-  const [recipient, setRecipient] = useState<MockRecipient | null>(recipientFromRoute || null)
+  const [recipient, setRecipient] = useState<Recipient | null>(recipientFromRoute || null)
+  const [payoutCorridorActive, setPayoutCorridorActive] = useState(true)
   const [sendAmount, setSendAmount] = useState('0')
   const [note, setNote] = useState('')
   const [selectedBalanceCurrency, setSelectedBalanceCurrency] = useState<string>('USD')
@@ -127,6 +152,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     selectedOtherPaymentMethodFromRoute ?? null
   )
   const [amountEntryMode, setAmountEntryMode] = useState<'receive' | 'send'>('receive')
+  const [pricingPreviewQuote, setPricingPreviewQuote] = useState<PricingQuote | null>(null)
 
   // Initialize sending balance currency once:
   // 1) honor incoming preference from prior screen flow, 2) otherwise fallback to available balance.
@@ -208,6 +234,20 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         setSelectedOtherPaymentMethod(params.selectedOtherPaymentMethod ?? null)
       }
     }, [route.params, refreshUserProfile, noahKycStatus])
+  )
+
+  useFocusEffect(
+    React.useCallback(() => {
+      void refreshPayoutCorridors().then(() => {
+        const params = route.params as { recipient?: Recipient } | undefined
+        const r = params?.recipient || recipient
+        if (r) {
+          setPayoutCorridorActive(isRecipientPayoutCorridorActive(r, getPayoutCorridorCache()))
+        } else {
+          setPayoutCorridorActive(true)
+        }
+      })
+    }, [route.params, recipient]),
   )
 
   // Run entrance animations
@@ -455,9 +495,78 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     sendAmount === '0.00' ||
     Number.parseFloat(sendAmount.replace(/,/g, '')) <= 0 ||
     !recipient ||
+    !payoutCorridorActive ||
     !selectedPaymentMethod ||
     (selectedPaymentMethod === 'otherCurrency' && (!selectedOtherCurrency || !selectedOtherPaymentMethod)) ||
     verificationBlocksSend
+
+  useEffect(() => {
+    let cancelled = false
+    const entered = Number.parseFloat(sendAmount.replace(/,/g, '') || '0')
+    if (
+      !tier1Ok ||
+      !recipient ||
+      entered <= 0 ||
+      !selectedPaymentMethod ||
+      (selectedPaymentMethod === 'otherCurrency' && (!selectedOtherCurrency || !selectedOtherPaymentMethod)) ||
+      receiveAmount <= 0 ||
+      sendingAmount <= 0
+    ) {
+      setPricingPreviewQuote(null)
+      return
+    }
+    if (sendCurrency !== receiveCurrency && (!exchangeRates || exchangeRates.length === 0)) {
+      setPricingPreviewQuote(null)
+      return
+    }
+
+    const t = setTimeout(() => {
+      void (async () => {
+        try {
+          const payoutMethodForQuote =
+            selectedPaymentMethod === 'otherCurrency'
+              ? normalizePayoutMethodForPricing(selectedOtherPaymentMethod)
+              : undefined
+          const quote = await noahService.createPricingQuote({
+            sourceCurrency: sendCurrency,
+            destinationCurrency: recipient.currency,
+            sourceAmount: sendingAmount,
+            rail:
+              selectedPaymentMethod === 'balance'
+                ? 'wallet'
+                : selectedPaymentMethod === 'otherCurrency'
+                  ? selectedOtherPaymentMethod || undefined
+                  : selectedPaymentMethod,
+            countryCode: recipient.country_code,
+            payoutCountry: recipient.country_code || inferCountryFromRecipientCurrency(recipient.currency),
+            payoutMethod: payoutMethodForQuote,
+          })
+          if (!cancelled) setPricingPreviewQuote(quote)
+        } catch {
+          if (!cancelled) setPricingPreviewQuote(null)
+        }
+      })()
+    }, 500)
+
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [
+    tier1Ok,
+    recipient?.id,
+    recipient?.currency,
+    recipient?.country_code,
+    sendAmount,
+    sendCurrency,
+    receiveCurrency,
+    selectedPaymentMethod,
+    selectedOtherCurrency,
+    selectedOtherPaymentMethod,
+    sendingAmount,
+    receiveAmount,
+    exchangeRates,
+  ])
 
   return (
     <ScreenWrapper>
@@ -520,8 +629,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   style={styles.recipientBar}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                    navigation.navigate('SelectRecipient' as never, {
-                      selectedRecipientId: recipient.id,
+                    navigation.navigate('SelectRecentRecipient' as never, {
                       preferredBalanceCurrency: selectedBalanceCurrency,
                       selectedPaymentMethod,
                       selectedOtherCurrency,
@@ -548,7 +656,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   style={styles.selectRecipientBox}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                    navigation.navigate('SelectRecipient' as never, {
+                    navigation.navigate('SelectRecentRecipient' as never, {
                       preferredBalanceCurrency: selectedBalanceCurrency,
                     } as never)
                   }}
@@ -560,6 +668,23 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   <Text style={styles.selectRecipientText}>Select Recipient</Text>
                 </TouchableOpacity>
               )}
+
+              {recipient && !payoutCorridorActive ? (
+                <View
+                  style={{
+                    marginHorizontal: spacing[4],
+                    marginBottom: spacing[3],
+                    padding: spacing[3],
+                    backgroundColor: '#fff7ed',
+                    borderRadius: borderRadius.md,
+                  }}
+                >
+                  <Text style={{ color: '#9a3412', fontSize: 14, lineHeight: 20 }}>
+                    This recipient&apos;s payout corridor is temporarily unavailable. Choose another recipient or try again
+                    later.
+                  </Text>
+                </View>
+              ) : null}
 
               {/* Amount Display - Wrapped with exchange info */}
               <View style={styles.amountSection}>
@@ -615,22 +740,38 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
                 {/* Fixed height container to prevent layout shift */}
               <View style={styles.exchangeInfo}>
-                  {recipient && sendAmount && Number.parseFloat(sendAmount.replace(/,/g, '')) > 0 && sendCurrency !== receiveCurrency ? (
-                    <View style={styles.exchangeInfoInline}>
-                      <TouchableOpacity onPress={toggleAmountDirection} activeOpacity={0.7} style={styles.exchangeToggleTouchArea}>
-                        <Ionicons name="swap-vertical" size={13} color={colors.primary.main} />
+                  {recipient && sendAmount && Number.parseFloat(sendAmount.replace(/,/g, '')) > 0 ? (
+                    <View>
+                      {sendCurrency !== receiveCurrency ? (
+                        <View style={styles.exchangeInfoInline}>
+                          <TouchableOpacity onPress={toggleAmountDirection} activeOpacity={0.7} style={styles.exchangeToggleTouchArea}>
+                            <Ionicons name="swap-vertical" size={13} color={colors.primary.main} />
+                            <Text style={styles.exchangeInfoText}>
+                              {amountEntryMode === 'receive'
+                                ? `Sending: ${formatCurrency(sendingAmount, sendCurrency)}`
+                                : `Receiving: ${formatCurrency(receiveAmount, receiveCurrency)}`}
+                            </Text>
+                          </TouchableOpacity>
+                          <Text style={styles.exchangeInfoText}>
+                            {' • '}
+                            {amountEntryMode === 'receive'
+                              ? `Rate: 1 ${sendCurrency} = ${exchangeRate.toFixed(2)} ${receiveCurrency}`
+                              : `Rate: 1 ${receiveCurrency} = ${reverseExchangeRate.toFixed(4)} ${sendCurrency}`}
+                          </Text>
+                        </View>
+                      ) : (
                         <Text style={styles.exchangeInfoText}>
-                          {amountEntryMode === 'receive'
-                            ? `Sending: ${formatCurrency(sendingAmount, sendCurrency)}`
-                            : `Receiving: ${formatCurrency(receiveAmount, receiveCurrency)}`}
+                          Receiving: {formatCurrency(receiveAmount, receiveCurrency)}
                         </Text>
-                      </TouchableOpacity>
-                      <Text style={styles.exchangeInfoText}>
-                        {' • '}
-                        {amountEntryMode === 'receive'
-                          ? `Rate: 1 ${sendCurrency} = ${exchangeRate.toFixed(2)} ${receiveCurrency}`
-                          : `Rate: 1 ${receiveCurrency} = ${reverseExchangeRate.toFixed(4)} ${sendCurrency}`}
-                      </Text>
+                      )}
+                      {pricingPreviewQuote?.pricingTotals ? (
+                        <Text style={[styles.exchangeInfoText, { marginTop: 4 }]}>
+                          {/* total_user_fee = Easner fees + provider pass-through in source currency (buildPricingTotals) */}
+                          Live quote: 1 {sendCurrency} = {Number(pricingPreviewQuote.effectiveRate).toFixed(4)}{' '}
+                          {receiveCurrency} · Fees {formatCurrency(pricingPreviewQuote.pricingTotals.total_user_fee, sendCurrency)} ·
+                          Recipient {formatCurrency(pricingPreviewQuote.pricingTotals.total_recipient_amount, receiveCurrency)}
+                        </Text>
+                      ) : null}
                     </View>
                   ) : (
                     <Text style={[styles.exchangeInfoText, { opacity: 0 }]}> </Text>
@@ -853,7 +994,12 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
               let pricingQuoteId: string | undefined
               let pricingQuoteExpiry: string | undefined
+              let pricingQuoteResult: PricingQuote | null = null
               try {
+                const payoutMethodForQuote =
+                  selectedPaymentMethod === 'otherCurrency'
+                    ? normalizePayoutMethodForPricing(selectedOtherPaymentMethod)
+                    : undefined
                 const quote = await noahService.createPricingQuote({
                   sourceCurrency: sendCurrency,
                   destinationCurrency: recipient.currency,
@@ -865,11 +1011,15 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                         ? selectedOtherPaymentMethod || undefined
                         : selectedPaymentMethod,
                   countryCode: recipient.country_code,
+                  payoutCountry: recipient.country_code || inferCountryFromRecipientCurrency(recipient.currency),
+                  payoutMethod: payoutMethodForQuote,
                 })
+                pricingQuoteResult = quote
                 pricingQuoteId = quote.quoteId
                 pricingQuoteExpiry = quote.expiresAt
-                calculatedFeeAmount = quote.totalFeeAmount
-                calculatedTotalAmount = calculatedSendingAmount + quote.totalFeeAmount
+                const feeFromQuote = quote.pricingTotals?.total_user_fee ?? quote.totalFeeAmount
+                calculatedFeeAmount = feeFromQuote
+                calculatedTotalAmount = calculatedSendingAmount + feeFromQuote
               } catch (quoteError) {
                 console.warn('Pricing quote unavailable, falling back to local calculation:', quoteError)
               }
@@ -896,28 +1046,181 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                     Alert.alert('Error', 'No wallet found. Please set up your account first.')
                     return
                   }
-                  
-                  // TODO: Get or create external account for recipient in Bridge
-                  // For now, we'll need the recipient to have a Bridge external account ID
-                  // This would typically be created when adding a recipient
-                  
-                  // Create Bridge transfer FIRST (transaction ID needed for optimistic update tracking)
-                  const transfer = await noahService.createTransfer({
-                    amount: calculatedTotalAmount.toString(),
-                    currency: selectedBalanceCurrency.toLowerCase() as 'usd' | 'eur',
-                    sourceWalletId: wallet.walletId,
-                    destinationExternalAccountId: recipient.noah_external_account_id || '', // This needs to be set when creating recipient
-                  })
+
+                  const sourceWalletId = String(wallet.sourceWalletId || wallet.walletId || '')
+                  if (!sourceWalletId) {
+                    Alert.alert('Error', 'No source wallet id from Noah.')
+                    return
+                  }
+
+                  const usdLike =
+                    String(recipient.currency || '').toUpperCase() === 'USD' &&
+                    String(recipient.country_code || '').toUpperCase() === 'US'
+                  const hasAch =
+                    Boolean(recipient.routing_number?.trim()) && Boolean(recipient.account_number?.trim())
+                  const easetag = recipient.payee_easetag?.trim().replace(/^@/, '')
+                  const eurSepa =
+                    String(recipient.currency || '').toUpperCase() === 'EUR' &&
+                    Boolean(recipient.iban?.trim())
+                  const eurCountry = (recipient.country_code || 'DE').toUpperCase()
+                  const canUseFiatBalance =
+                    selectedBalanceCurrency === 'USD' || selectedBalanceCurrency === 'EUR'
+                  const mobileCorridorCountry = (
+                    recipient.country_code ||
+                    inferCountryFromRecipientCurrency(recipient.currency) ||
+                    ''
+                  ).toUpperCase()
+                  const isMobile =
+                    isMobileMoneyRecipient(recipient) &&
+                    Boolean(mobileCorridorCountry) &&
+                    canUseFiatBalance
+
+                  let transfer
+
+                  if (easetag) {
+                    transfer = await noahService.createWalletToWalletTransfer({
+                      destinationEasetag: easetag,
+                      amount: calculatedTotalAmount.toFixed(8),
+                      currency: selectedBalanceCurrency.toLowerCase(),
+                    })
+                  } else if (recipient.noah_external_account_id?.trim()) {
+                    transfer = await noahService.createTransfer({
+                      amount: calculatedTotalAmount.toString(),
+                      currency: selectedBalanceCurrency.toLowerCase(),
+                      sourceWalletId,
+                      destinationExternalAccountId: recipient.noah_external_account_id.trim(),
+                    })
+                  } else if (isMobile) {
+                    const phone = (recipient.phone_number || recipient.account_number || '').replace(/\s/g, '')
+                    if (!phone) {
+                      Alert.alert(
+                        'Recipient not ready',
+                        'Mobile money needs a phone number on the recipient.',
+                      )
+                      return
+                    }
+                    const fiatAmount = receiveAmountValue.toFixed(2)
+                    const prep = await noahService.prepareMobileMoneyPayout({
+                      fiatAmount,
+                      countryCode: mobileCorridorCountry,
+                      currency: recipient.currency.toUpperCase(),
+                      fullName: recipient.full_name,
+                      phoneNumber: phone,
+                      paymentMethodSubstrings: mobileMoneyPrepareHints(recipient),
+                    })
+                    if (!prep.ok || !prep.formSessionId || !prep.cryptoAuthorizedAmount) {
+                      throw new Error(
+                        prep.error ||
+                          'Noah could not prepare this mobile payout. Confirm Identifier channels exist in sandbox.',
+                      )
+                    }
+                    transfer = await noahService.createTransfer({
+                      amount: fiatAmount,
+                      currency: recipient.currency.toLowerCase(),
+                      sourceWalletId,
+                      formSessionId: prep.formSessionId,
+                      cryptoAuthorizedAmount: prep.cryptoAuthorizedAmount,
+                      cryptoCurrency: prep.cryptoCurrency,
+                    })
+                  } else if (eurSepa && canUseFiatBalance) {
+                    const fiatAmount = receiveAmountValue.toFixed(2)
+                    const prep = await noahService.prepareSellPayout({
+                      fiatAmount,
+                      fullName: recipient.full_name,
+                      countryCode: eurCountry,
+                      currency: 'EUR',
+                      iban: recipient.iban!.trim(),
+                      accountType:
+                        recipient.checking_or_savings === 'savings' ? 'Savings' : 'Checking',
+                    })
+                    if (!prep.ok || !prep.formSessionId || !prep.cryptoAuthorizedAmount) {
+                      throw new Error(prep.error || 'Noah could not prepare SEPA payout.')
+                    }
+                    transfer = await noahService.createTransfer({
+                      amount: fiatAmount,
+                      currency: 'eur',
+                      sourceWalletId,
+                      formSessionId: prep.formSessionId,
+                      cryptoAuthorizedAmount: prep.cryptoAuthorizedAmount,
+                      cryptoCurrency: prep.cryptoCurrency,
+                    })
+                  } else if (usdLike && hasAch && canUseFiatBalance) {
+                    if (
+                      !recipient.address_line1?.trim() ||
+                      !recipient.city?.trim() ||
+                      !recipient.state?.trim() ||
+                      !recipient.postal_code?.trim()
+                    ) {
+                      Alert.alert(
+                        'Address required',
+                        'US bank payouts need street, city, state, and postal code on the recipient.',
+                      )
+                      return
+                    }
+                    const fiatAmount = receiveAmountValue.toFixed(2)
+                    const prep = await noahService.prepareSellPayout({
+                      fiatAmount,
+                      fullName: recipient.full_name,
+                      countryCode: 'US',
+                      currency: 'USD',
+                      accountNumber: recipient.account_number.trim(),
+                      routingNumber: recipient.routing_number!.trim(),
+                      addressLine1: recipient.address_line1.trim(),
+                      city: recipient.city.trim(),
+                      state: recipient.state.trim(),
+                      postalCode: recipient.postal_code.trim(),
+                      accountType:
+                        recipient.checking_or_savings === 'savings' ? 'Savings' : 'Checking',
+                      transferType:
+                        recipient.transfer_type === 'Wire' ? 'Wire' : 'ACH',
+                    })
+                    if (!prep.ok || !prep.formSessionId || !prep.cryptoAuthorizedAmount) {
+                      throw new Error(prep.error || 'Noah could not prepare this payout. Check recipient details.')
+                    }
+                    transfer = await noahService.createTransfer({
+                      amount: fiatAmount,
+                      currency: 'usd',
+                      sourceWalletId,
+                      formSessionId: prep.formSessionId,
+                      cryptoAuthorizedAmount: prep.cryptoAuthorizedAmount,
+                      cryptoCurrency: prep.cryptoCurrency,
+                    })
+                  } else {
+                    Alert.alert(
+                      'Recipient not ready',
+                      'Noah balance send needs: Easenet handle, saved payout id, mobile money with country, EUR IBAN, or US ACH with full address.',
+                    )
+                    return
+                  }
                   if (pricingQuoteId) {
                     const validation = await noahService.validatePricingQuote(pricingQuoteId)
                     await noahService.applyPricingQuote(pricingQuoteId, transfer.transaction_id || transfer.id)
+                    const pt = pricingQuoteResult?.pricingTotals
+                    const summaryLines =
+                      pt != null && pricingQuoteResult
+                        ? [
+                            `Recipient gets: ${formatCurrency(pt.total_recipient_amount, recipient.currency)}`,
+                            `Rate: 1 ${sendCurrency} = ${Number(pricingQuoteResult.effectiveRate).toFixed(6)} ${recipient.currency}`,
+                            // total_user_fee: Easner + provider in source currency (buildPricingTotals)
+                            `Total fees: ${formatCurrency(pt.total_user_fee, sendCurrency)}`,
+                          ].join('\n')
+                        : ''
                     if (validation.reasonCode) {
-                      Alert.alert('Quote Repriced', `Pricing was revalidated due to: ${repricingReasonLabel(validation.reasonCode)}`)
+                      Alert.alert(
+                        'Quote repriced',
+                        summaryLines
+                          ? `Pricing was revalidated due to: ${repricingReasonLabel(validation.reasonCode)}\n\n${summaryLines}`
+                          : `Pricing was revalidated due to: ${repricingReasonLabel(validation.reasonCode)}`
+                      )
                     } else if (pricingQuoteExpiry) {
                       Alert.alert(
-                        'Quote Applied',
-                        `Final fee and total have been locked for this transfer.\nQuote expiry: ${new Date(pricingQuoteExpiry).toLocaleTimeString()}`
+                        'Quote applied',
+                        summaryLines
+                          ? `Final fee and total are locked for this transfer.\nQuote expires: ${new Date(pricingQuoteExpiry).toLocaleTimeString()}\n\n${summaryLines}`
+                          : `Final fee and total are locked for this transfer.\nQuote expires: ${new Date(pricingQuoteExpiry).toLocaleTimeString()}`
                       )
+                    } else if (summaryLines) {
+                      Alert.alert('Quote applied', summaryLines)
                     }
                   }
                   
@@ -934,14 +1237,44 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   
                   // Haptic feedback for success
                   await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-                  
+
+                  let recipientForDetails: Recipient = recipient
+                  if (
+                    user?.id &&
+                    recipient?.id &&
+                    easetag &&
+                    isDraftEasenetRecipient(recipient.id) &&
+                    userProfile?.id
+                  ) {
+                    try {
+                      const tag = recipient.payee_easetag!.trim()
+                      const created = await recipientService.create(userProfile.id, {
+                        fullName: recipient.full_name,
+                        accountNumber: tag,
+                        bankName: `Easenet (@${tag})`,
+                        currency: 'USD',
+                        countryCode: 'US',
+                        payeeEasetag: tag,
+                        payeeAvatarUrl: recipient.payee_avatar_url ?? null,
+                      })
+                      await invalidateRecipients()
+                      await refreshRecipients(true)
+                      recipientForDetails = created
+                      void recordRecipientSentTouch(user.id, created.id)
+                    } catch (persistErr) {
+                      console.warn('Post-send Easenet recipient save failed:', persistErr)
+                    }
+                  } else if (user?.id && recipient?.id) {
+                    void recordRecipientSentTouch(user.id, recipient.id)
+                  }
+
                 navigation.navigate('SendTransactionDetails' as never, {
                     transactionId: transfer.transaction_id || transfer.id,
                   sendAmount: calculatedSendingAmount,
                   receiveAmount: receiveAmountValue,
                   sendCurrency: selectedBalanceCurrency,
-                  receiveCurrency: recipient.currency,
-                  recipient: recipient,
+                  receiveCurrency: recipientForDetails.currency,
+                  recipient: recipientForDetails,
                   paymentMethod: 'balance',
                     noahTransferId: transfer.id,
                   feeAmount: calculatedFeeAmount,

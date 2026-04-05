@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { joinFullName } from './userProfileHelpers'
+import { getApiBaseUrl } from './apiClient'
 
 export interface UserProfileData {
   firstName: string
@@ -52,6 +53,25 @@ export const userService = {
 
     if (error) throw error
     return data
+  },
+
+  /** Persist Easetag via business BFF (`PUT /api/username`) for validation + global uniqueness. */
+  async updateEasetag(easetag: string): Promise<void> {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) throw new Error('Not authenticated')
+    const base = getApiBaseUrl()
+    const res = await fetch(`${base}/api/username`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ easetag: easetag.replace(/^@/, '').trim().toLowerCase() }),
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(typeof (json as { error?: string }).error === 'string' ? (json as { error: string }).error : 'Failed to save Easetag')
+    }
   },
 
   async getUserStats(

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -8,9 +8,13 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Loader2, User, Mail, Phone, CreditCard, MapPin, ChevronDown } from "lucide-react"
 import type { Beneficiary } from "@/lib/recipient-types"
-import { CountryFlag } from "@/components/flags"
+import { CountryFlag, CurrencyFlag } from "@/components/flags"
+import { usePayoutCorridors } from "@/lib/use-payout-corridors"
 import { getNetworkIconUrl, getTokenIconUrl } from "@/lib/crypto-icons"
 import { createRecipient, updateRecipient, type RecipientUpsertInput } from "@/lib/recipients-store"
+import { fetchEasenetProfileByTag } from "@/lib/easenet-profile"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Card, CardContent } from "@/components/ui/card"
 
 interface RecipientFormProps {
   recipient?: any
@@ -20,8 +24,11 @@ interface RecipientFormProps {
   onSuccessWithData?: (beneficiary: Beneficiary) => void
 }
 
-function inferRecipientType(recipient?: Beneficiary): "bank" | "mobile" | "wallet" {
+function inferRecipientType(recipient?: Beneficiary): "bank" | "mobile" | "wallet" | "easenet" {
   if (!recipient) return "bank"
+  if (recipient.payeeEasetag || String(recipient.bankName || "").toLowerCase().includes("easenet")) {
+    return "easenet"
+  }
   const bankName = String(recipient.bankName || "").toLowerCase()
   if (bankName.includes("wallet") || recipient.walletNetwork || recipient.walletAsset) return "wallet"
   if (bankName.includes("mobile money") || recipient.mobileProvider) return "mobile"
@@ -89,6 +96,15 @@ const countries = [
   { name: "Uganda", currency: "UGX", code: "UG" },
   { name: "Uruguay", currency: "UYU", code: "UY" },
   { name: "Vanuatu", currency: "VUV", code: "VU" },
+  { name: "Botswana", currency: "BWP", code: "BW" },
+  { name: "Cameroon", currency: "XAF", code: "CM" },
+  { name: "Kenya", currency: "KES", code: "KE" },
+  { name: "Senegal", currency: "XOF", code: "SN" },
+  { name: "Tanzania", currency: "TZS", code: "TZ" },
+  { name: "Togo", currency: "XOF", code: "TG" },
+  { name: "Zambia", currency: "ZMW", code: "ZM" },
+  { name: "Burkina Faso", currency: "XOF", code: "BF" },
+  { name: "Mali", currency: "XOF", code: "ML" },
 ]
 
 const walletAssetNetworks: Record<string, string[]> = {
@@ -157,6 +173,7 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
     transferType: "ACH",
     checkingOrSavings: "",
     addressLine1: "",
+    easenetTag: "",
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -165,6 +182,16 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
   const [walletNetworkOpen, setWalletNetworkOpen] = useState(false)
   const [mobileProviderOpen, setMobileProviderOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [easenetResolved, setEasenetResolved] = useState<{
+    easetag: string
+    fullName: string
+    avatarUrl: string | null
+  } | null>(null)
+  const [easenetLookupLoading, setEasenetLookupLoading] = useState(false)
+  const [easenetLookupError, setEasenetLookupError] = useState<string | null>(null)
+
+  const { corridors: bankCorridors, enabled: corridorCatalogEnabled } = usePayoutCorridors("bank_transfer")
+  const { corridors: mobileCorridors } = usePayoutCorridors("mobile_money")
 
   const resolveCountryByRecipient = (r: Beneficiary) => {
     const options = (r.bankName?.toLowerCase().includes("mobile money") ? mobileMoneyCountries : countries)
@@ -187,14 +214,44 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
         ? descriptor.split("/")
         : [recipient.currency || "USDT", descriptor || ""]
       const inferredType = inferRecipientType(recipient as Beneficiary)
+      const bene = recipient as Beneficiary
+      if (inferredType === "easenet" && bene.payeeEasetag) {
+        setEasenetResolved({
+          easetag: bene.payeeEasetag,
+          fullName: bene.name || bene.payeeEasetag,
+          avatarUrl: bene.avatarUrl ?? null,
+        })
+        setEasenetLookupError(null)
+      } else {
+        setEasenetResolved(null)
+        setEasenetLookupError(null)
+      }
       const recipientCountryCode = (recipient as Beneficiary).countryCode
-      const countryOptionsForType = inferredType === "mobile" ? mobileMoneyCountries : countries
+      const bankOpts =
+        corridorCatalogEnabled && bankCorridors.length > 0
+          ? bankCorridors.map((c) => ({
+              name: c.country_name,
+              currency: c.currency_code,
+              code: c.country_code,
+            }))
+          : countries
+      const mobileOpts =
+        corridorCatalogEnabled && mobileCorridors.length > 0
+          ? mobileCorridors.map((c) => ({
+              name: c.country_name,
+              currency: c.currency_code,
+              code: c.country_code,
+            }))
+          : mobileMoneyCountries
+      const countryOptionsForType = inferredType === "mobile" ? mobileOpts : bankOpts
       const matchedCountryFromCodeInType = countryOptionsForType.find(
         (c) => c.code === recipientCountryCode,
       )
-      const matchedCountryFromCodeAny = [...countries, ...mobileMoneyCountries].find(
-        (c) => c.code === recipientCountryCode,
-      )
+      const combinedAny =
+        corridorCatalogEnabled && bankCorridors.length > 0 && mobileCorridors.length > 0
+          ? [...bankOpts, ...mobileOpts]
+          : [...countries, ...mobileMoneyCountries]
+      const matchedCountryFromCodeAny = combinedAny.find((c) => c.code === recipientCountryCode)
       const matchedCountry =
         matchedCountryFromCodeInType ||
         matchedCountryFromCodeAny ||
@@ -219,16 +276,124 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
         transferType: recipient.transferType || "ACH",
         checkingOrSavings: recipient.checkingOrSavings || "",
         addressLine1: recipient.addressLine1 || "",
+        easenetTag: inferredType === "easenet" ? bene.payeeEasetag || bene.accountNumber || "" : "",
       })
     }
-  }, [recipient, isEdit])
+  }, [recipient, isEdit, corridorCatalogEnabled, bankCorridors, mobileCorridors])
 
-  const countryOptions = formData.recipientType === "mobile" ? mobileMoneyCountries : countries
+  useEffect(() => {
+    if (formData.recipientType !== "easenet") {
+      return
+    }
+    const raw = formData.easenetTag.trim()
+    if (raw.length < 4) {
+      setEasenetResolved(null)
+      setEasenetLookupError(null)
+      setEasenetLookupLoading(false)
+      return
+    }
+    let cancelled = false
+    setEasenetLookupLoading(true)
+    setEasenetLookupError(null)
+    const t = window.setTimeout(() => {
+      void (async () => {
+        const res = await fetchEasenetProfileByTag(raw)
+        if (cancelled) return
+        setEasenetLookupLoading(false)
+        if (res.found) {
+          setEasenetResolved({
+            easetag: res.easetag,
+            fullName: res.fullName,
+            avatarUrl: res.avatarUrl,
+          })
+          setEasenetLookupError(null)
+        } else {
+          setEasenetResolved(null)
+          setEasenetLookupError(
+            res.reason === "self" ? "You cannot add yourself as a recipient." : "Easetag not found.",
+          )
+        }
+      })()
+    }, 450)
+    return () => {
+      cancelled = true
+      window.clearTimeout(t)
+    }
+  }, [formData.easenetTag, formData.recipientType])
+
+  const countriesForBankDropdown = useMemo(() => {
+    const euroAliasNames = countries.filter((c) => c.currency === "EUR").map((c) => String(c.name))
+
+    const euroOption = {
+      name: "Euro",
+      currency: "EUR",
+      code: "EURO",
+      // Used only for searching (CommandItem value). Display remains single "EUR - Euro".
+      aliases: euroAliasNames,
+    }
+
+    const filtered = countries.filter((c) => c.currency !== "EUR")
+    return [...filtered, euroOption]
+  }, [])
+
+  const bankFromApi = corridorCatalogEnabled && bankCorridors.length > 0
+  const mobileFromApi = corridorCatalogEnabled && mobileCorridors.length > 0
+
+  const bankCountriesFlat = useMemo(() => {
+    if (bankFromApi) {
+      return bankCorridors
+        .map((c) => ({ name: c.country_name, currency: c.currency_code, code: c.country_code }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+    }
+    return countries
+  }, [bankFromApi, bankCorridors])
+
+  const mobileCountriesFlat = useMemo(() => {
+    if (mobileFromApi) {
+      return mobileCorridors
+        .map((c) => ({ name: c.country_name, currency: c.currency_code, code: c.country_code }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+    }
+    return mobileMoneyCountries
+  }, [mobileFromApi, mobileCorridors])
+
+  const countryOptions = useMemo(() => {
+    if (formData.recipientType === "mobile") return mobileCountriesFlat
+    if (bankFromApi) return bankCountriesFlat
+    return countriesForBankDropdown
+  }, [formData.recipientType, mobileCountriesFlat, bankFromApi, bankCountriesFlat, countriesForBankDropdown])
+
+  const allCountriesForLookup = useMemo(() => {
+    if (bankFromApi && mobileFromApi) {
+      return [...bankCountriesFlat, ...mobileCountriesFlat]
+    }
+    return [...countries, ...mobileMoneyCountries]
+  }, [bankFromApi, mobileFromApi, bankCountriesFlat, mobileCountriesFlat])
+
   const selectedCountry = countryOptions.find((c) => c.name === formData.country)
   const currency = selectedCountry?.currency || "USD"
 
+  const mobileProviderChoices = useMemo(() => {
+    if (formData.recipientType !== "mobile") return [] as string[]
+    if (mobileFromApi && selectedCountry) {
+      const row = mobileCorridors.find(
+        (c) => c.country_code === selectedCountry.code && c.currency_code === selectedCountry.currency,
+      )
+      if (row && Array.isArray(row.providers)) return row.providers as string[]
+    }
+    return mobileMoneyProvidersByCurrency[currency] || ["Other"]
+  }, [formData.recipientType, mobileFromApi, selectedCountry, mobileCorridors, currency])
+
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
+
+    if (formData.recipientType === "easenet") {
+      if (!easenetResolved) {
+        newErrors.easenetTag = "Enter a valid Easetag and wait for the profile to load"
+      }
+      setErrors(newErrors)
+      return Object.keys(newErrors).length === 0
+    }
 
     if (!formData.name.trim()) {
       newErrors.name = "Recipient name is required"
@@ -304,7 +469,33 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
     if (isSubmitting) return
     if (!validateForm()) return
 
-    const selectedCountry = [...countries, ...mobileMoneyCountries].find((c) => c.name === formData.country)
+    if (formData.recipientType === "easenet" && easenetResolved) {
+      const payload: RecipientUpsertInput = {
+        recipientType: "easenet",
+        countryCode: "US",
+        fullName: easenetResolved.fullName,
+        accountNumber: easenetResolved.easetag,
+        bankName: "",
+        currency: "USD",
+        payeeEasetag: easenetResolved.easetag,
+        payeeAvatarUrl: easenetResolved.avatarUrl,
+      }
+      try {
+        setIsSubmitting(true)
+        const beneficiary = isEdit && recipient?.id
+          ? await updateRecipient(recipient.id, payload)
+          : await createRecipient(payload)
+        onSuccessWithData?.(beneficiary)
+        onSuccess()
+      } catch (err) {
+        console.error("Failed to save recipient:", err instanceof Error ? err.message : err)
+      } finally {
+        setIsSubmitting(false)
+      }
+      return
+    }
+
+    const selectedCountry = allCountriesForLookup.find((c) => c.name === formData.country)
     const currency = formData.recipientType === "wallet" ? formData.walletAsset : (selectedCountry?.currency || "USD")
     const isUsdBank = formData.recipientType === "bank" && currency === "USD"
     const payload: RecipientUpsertInput = {
@@ -368,19 +559,39 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
     }
   }
 
-  const selectRecipientType = (type: "bank" | "mobile" | "wallet") => {
+  const selectRecipientType = (type: "bank" | "mobile" | "wallet" | "easenet") => {
+    if (type === "easenet") {
+      handleInputChange("recipientType", "easenet")
+      handleInputChange("easenetTag", "")
+      handleInputChange("country", "United States")
+      setEasenetResolved(null)
+      setEasenetLookupError(null)
+      setEasenetLookupLoading(false)
+      return
+    }
     if (type === "bank") {
       handleInputChange("recipientType", "bank")
       handleInputChange("country", "United States")
       handleInputChange("mobileProvider", "")
+      handleInputChange("easenetTag", "")
+      setEasenetResolved(null)
+      setEasenetLookupError(null)
       return
     }
     if (type === "mobile") {
-      const firstCountry = mobileMoneyCountries[0]
-      const firstProvider = (mobileMoneyProvidersByCurrency[firstCountry.currency] || ["Other"])[0]
+      const firstCountry = mobileCountriesFlat[0] || mobileMoneyCountries[0]
+      const firstRow = mobileCorridors.find(
+        (c) => c.country_code === firstCountry.code && c.currency_code === firstCountry.currency,
+      )
+      const firstProvider = Array.isArray(firstRow?.providers) && firstRow.providers.length
+        ? (firstRow.providers as string[])[0]
+        : (mobileMoneyProvidersByCurrency[firstCountry.currency] || ["Other"])[0]
       handleInputChange("recipientType", "mobile")
       handleInputChange("country", firstCountry.name)
       handleInputChange("mobileProvider", firstProvider)
+      handleInputChange("easenetTag", "")
+      setEasenetResolved(null)
+      setEasenetLookupError(null)
       return
     }
     const firstAsset = Object.keys(walletAssetNetworks)[0] || "USDT"
@@ -388,6 +599,9 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
     handleInputChange("recipientType", "wallet")
     handleInputChange("walletAsset", firstAsset)
     handleInputChange("walletNetwork", firstNetwork)
+    handleInputChange("easenetTag", "")
+    setEasenetResolved(null)
+    setEasenetLookupError(null)
   }
 
   return (
@@ -395,12 +609,63 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="space-y-2 md:col-span-2">
           <label className="text-sm font-medium">Recipient Type</label>
-          <div className="grid grid-cols-3 gap-2 max-w-xl">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 max-w-3xl">
             <Button type="button" variant={formData.recipientType === "bank" ? "default" : "outline"} onClick={() => selectRecipientType("bank")}>Bank Account</Button>
             <Button type="button" variant={formData.recipientType === "mobile" ? "default" : "outline"} onClick={() => selectRecipientType("mobile")}>Mobile Money</Button>
             <Button type="button" variant={formData.recipientType === "wallet" ? "default" : "outline"} onClick={() => selectRecipientType("wallet")}>Wallet Address</Button>
+            <Button type="button" variant={formData.recipientType === "easenet" ? "default" : "outline"} onClick={() => selectRecipientType("easenet")}>Easenet</Button>
           </div>
         </div>
+
+        {formData.recipientType === "easenet" && (
+          <div className="space-y-4 md:col-span-2">
+            <div className="space-y-2">
+              <Label htmlFor="easenetTag">Easenet handle</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">@</span>
+                <Input
+                  id="easenetTag"
+                  value={formData.easenetTag}
+                  onChange={(e) => handleInputChange("easenetTag", e.target.value.replace(/^@+/, ""))}
+                  placeholder="handle"
+                  className={`h-12 pl-8 ${errors.easenetTag ? "border-red-500" : ""}`}
+                  autoComplete="off"
+                />
+                {easenetLookupLoading ? (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                ) : null}
+              </div>
+              {errors.easenetTag ? (
+                <p className="text-xs text-red-500">{errors.easenetTag}</p>
+              ) : easenetLookupError ? (
+                <p className="text-xs text-red-500">{easenetLookupError}</p>
+              ) : null}
+            </div>
+            {easenetResolved ? (
+              <Card>
+                <CardContent className="flex items-center gap-4 pt-6">
+                  <Avatar className="h-14 w-14">
+                    <AvatarImage src={easenetResolved.avatarUrl || undefined} alt="" />
+                    <AvatarFallback>
+                      {easenetResolved.fullName
+                        .split(/\s+/)
+                        .filter(Boolean)
+                        .map((p) => p[0])
+                        .join("")
+                        .slice(0, 2)
+                        .toUpperCase() || "?"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="font-medium">{easenetResolved.fullName}</p>
+                    <p className="text-sm text-muted-foreground">@{easenetResolved.easetag}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null}
+          </div>
+        )}
+
         {formData.recipientType === "bank" && (
         <div className="space-y-2">
           <label className="text-sm font-medium flex items-center gap-2">
@@ -458,18 +723,26 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
         <div className="space-y-2">
           <label className="text-sm font-medium flex items-center gap-2">
             <MapPin className="h-4 w-4 text-muted-foreground" />
-            Country / Currency
+            Country
           </label>
           <Popover open={countryOpen} onOpenChange={setCountryOpen}>
             <PopoverTrigger asChild>
               <button className={`flex h-12 w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus:outline-none focus:ring-0 focus:ring-offset-0 focus:border-ring disabled:cursor-not-allowed disabled:opacity-50 transition-[border-color] ${errors.country ? "border-red-500" : ""}`}>
                 {selectedCountry ? (
                   <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <CountryFlag code={selectedCountry.code} size={22} />
-                    <span className="truncate text-xs sm:text-sm">{selectedCountry.currency} - {selectedCountry.name}</span>
+                    {selectedCountry.currency === "EUR" && selectedCountry.code === "EURO" ? (
+                      <CurrencyFlag currency="EUR" size={22} />
+                    ) : (
+                      <CountryFlag code={selectedCountry.code} size={22} />
+                    )}
+                    <span className="truncate text-xs sm:text-sm">
+                      {bankFromApi || mobileFromApi
+                        ? `${selectedCountry.name} · ${selectedCountry.currency}`
+                        : `${selectedCountry.currency} - ${selectedCountry.currency === "EUR" ? "Euro" : selectedCountry.name}`}
+                    </span>
                   </div>
                 ) : (
-                  <span className="text-xs text-muted-foreground">Select country / currency</span>
+                  <span className="text-xs text-muted-foreground">Select country</span>
                 )}
                 <ChevronDown className="h-4 w-4 opacity-50" />
               </button>
@@ -487,20 +760,36 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
                   <CommandGroup>
                         {countryOptions.map((country) => (
                       <CommandItem
-                        key={country.name}
-                        value={`${country.currency} ${country.name}`}
+                        key={`${country.code}-${country.name}`}
+                        value={`${country.currency} ${country.name}${(country as any).aliases?.length ? ` ${(country as any).aliases.join(" ")}` : ""}`}
                         onSelect={() => {
-                          handleInputChange("country", country.name)
+                          const selectedCountryName =
+                            country.currency === "EUR" && country.code === "EURO" ? "Euro" : country.name
+                          handleInputChange("country", selectedCountryName)
                           if (formData.recipientType === "mobile") {
-                            const firstProvider = (mobileMoneyProvidersByCurrency[country.currency] || ["Other"])[0]
+                            const row = mobileCorridors.find(
+                              (c) => c.country_code === country.code && c.currency_code === country.currency,
+                            )
+                            const firstProvider =
+                              Array.isArray(row?.providers) && row!.providers!.length
+                                ? (row!.providers as string[])[0]
+                                : (mobileMoneyProvidersByCurrency[country.currency] || ["Other"])[0]
                             handleInputChange("mobileProvider", firstProvider)
                           }
                           setCountryOpen(false)
                         }}
                       >
                         <div className="flex items-center gap-2 w-full min-w-0">
-                          <CountryFlag code={country.code} size={22} />
-                          <span className="flex-1 min-w-0 truncate text-xs sm:text-sm">{country.currency} - {country.name}</span>
+                          {country.currency === "EUR" && country.code === "EURO" ? (
+                            <CurrencyFlag currency="EUR" size={22} />
+                          ) : (
+                            <CountryFlag code={country.code} size={22} />
+                          )}
+                          <span className="flex-1 min-w-0 truncate text-xs sm:text-sm">
+                            {bankFromApi || mobileFromApi
+                              ? `${country.name} · ${country.currency}`
+                              : `${country.currency} - ${country.currency === "EUR" ? "Euro" : country.name}`}
+                          </span>
                         </div>
                       </CommandItem>
                     ))}
@@ -536,7 +825,7 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
                         <CommandList className="max-h-[260px] overflow-y-auto overscroll-contain">
                           <CommandEmpty>No providers found.</CommandEmpty>
                           <CommandGroup>
-                            {(mobileMoneyProvidersByCurrency[currency] || ["Other"]).map((provider) => (
+                            {mobileProviderChoices.map((provider) => (
                               <CommandItem
                                 key={provider}
                                 value={provider}
@@ -735,7 +1024,10 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
         {formData.recipientType === "bank" && currency === "USD" && (
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2 col-span-2">
-              <label className="text-xs text-muted-foreground">Transfer Type</label>
+              <label className="text-xs text-muted-foreground">Transfer type</label>
+              <p className="text-xs text-muted-foreground/80">
+                ACH or US domestic wire (Fedwire). Use the routing number that matches the rail.
+              </p>
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   type="button"
@@ -749,7 +1041,7 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
                   variant={formData.transferType === "Wire" ? "default" : "outline"}
                   onClick={() => handleInputChange("transferType", "Wire")}
                 >
-                  Wire
+                  Fedwire
                 </Button>
               </div>
               {errors.transferType && <p className="text-xs text-red-500">{errors.transferType}</p>}
