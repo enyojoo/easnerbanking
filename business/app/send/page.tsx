@@ -20,7 +20,17 @@ import {
   type OtherCurrencyCode,
   type PaymentMethodCode,
 } from "@/lib/send-payment-methods"
-import { ChevronDown, Check, ChevronRight, ArrowLeft, Landmark, Link2, AlertCircle, Coins } from "lucide-react"
+import {
+  ChevronDown,
+  Check,
+  ChevronRight,
+  ArrowLeft,
+  ArrowUpDown,
+  Landmark,
+  Link2,
+  AlertCircle,
+  Coins,
+} from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -33,22 +43,11 @@ import { useBusinessProfile } from "@/lib/use-business-profile"
 import {
   TIER2_COMPLETE_PLACEHOLDER,
 } from "@/lib/compliance-placeholders"
-
-const SEND_FLOW_STATE_KEY = "send_flow_state"
-
-interface SendFlowState {
-  recipient: Beneficiary
-  amount: number
-  receiveCurrency: string
-  sendAmount: number
-  sendCurrency: string
-  sourceAccountId?: string
-  paymentMethod: PaymentMethodCode
-  otherCurrency?: OtherCurrencyCode | "STABLECOIN"
-  otherPaymentMethod?: string
-  note: string
-  transactionId: string
-}
+import {
+  type SendFlowState,
+  SEND_FLOW_STATE_KEY,
+  persistSendFlowState,
+} from "@/lib/send-flow-session"
 
 function getConversionRate(fromCurrency: string, toCurrency: string): number {
   if (fromCurrency === toCurrency) return 1
@@ -106,7 +105,7 @@ export default function SendPage() {
       try {
         const s = JSON.parse(raw) as SendFlowState
         setRecipient(s.recipient)
-        setAmountStr(formatAmountForDisplay(String(s.amount)))
+        setAmountStr(s.amount > 0 ? formatAmountForDisplay(String(s.amount)) : "")
         setSourceAccountId(s.sourceAccountId ?? null)
         setPaymentMethod(s.paymentMethod ?? "balance")
         setOtherCurrency(s.otherCurrency ?? null)
@@ -155,10 +154,10 @@ export default function SendPage() {
       : `1 ${receiveCurrency} = ${reverseRate.toFixed(4)} ${sendCurrency}`
     : null
 
-  const afterTransferBalance =
-    sourceAccount && receiveAmount > 0 && paymentMethod === "balance"
-      ? sourceAccount.availableBalance - sendAmount
-      : sourceAccount?.availableBalance ?? 0
+  const displayBalanceForSource =
+    sourceAccount && paymentMethod === "balance"
+      ? sourceAccount.availableBalance - (sendAmount > 0 ? sendAmount : 0)
+      : 0
 
   const suggestedAccount = useMemo(() => {
     const usdAccount = mockAccounts.find((a) => a.currency === "USD")
@@ -250,7 +249,8 @@ export default function SendPage() {
 
   const getSourceDisplayLabel = () => {
     if (paymentMethod === "balance" && sourceAccount) {
-      return `${sourceAccount.currency} Balance • ${currencySymbols[sourceAccount.currency] ?? ""}${sourceAccount.availableBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}`
+      const fig = displayBalanceForSource.toLocaleString("en-US", { minimumFractionDigits: 2 })
+      return `${sourceAccount.currency} Balance • ${currencySymbols[sourceAccount.currency] ?? ""}${fig}`
     }
     if (paymentMethod === "usdc") return "Pay with USDC"
     if (paymentMethod === "usdt") return "Pay with USDT"
@@ -279,7 +279,7 @@ export default function SendPage() {
       note: note.trim(),
       transactionId: generateTransactionId(),
     }
-    sessionStorage.setItem(SEND_FLOW_STATE_KEY, JSON.stringify(state))
+    persistSendFlowState(state)
 
     if (isBalanceSource) {
       router.push("/send/confirm")
@@ -322,35 +322,49 @@ export default function SendPage() {
 
       {recipient && (
         <div className="space-y-2">
-          <div className="flex items-center justify-between gap-4">
-            <Label className="text-muted-foreground shrink-0">
+          <div
+            className={`flex items-center justify-between gap-3 ${
+              receiveCurrency !== sendCurrency ? "min-h-[2.5rem]" : ""
+            }`}
+          >
+            <Label className="text-muted-foreground mb-0 shrink-0 text-sm font-medium leading-none">
               Amount ({amountEntryMode === "receive" ? receiveCurrency : sendCurrency})
             </Label>
-            {hasFx && rateDisplay && (
-              <div className="text-sm text-muted-foreground text-right flex items-center justify-end gap-1">
-                <button
-                  type="button"
-                  onClick={handleToggleAmountDirection}
-                  className="inline-flex items-center gap-1 hover:text-foreground"
-                >
-                  <span>↕</span>
-                  <span>
-                    {amountEntryMode === "receive" ? "Sending" : "Receiving"}:{" "}
-                    {currencySymbols[amountEntryMode === "receive" ? sendCurrency : receiveCurrency] ??
-                      (amountEntryMode === "receive" ? sendCurrency : receiveCurrency)}
-                    {(amountEntryMode === "receive" ? sendAmount : receiveAmount).toLocaleString("en-US", {
-                      minimumFractionDigits:
-                        Math.abs((amountEntryMode === "receive" ? sendAmount : receiveAmount) % 1) >= 0.01 ? 2 : 0,
-                      maximumFractionDigits: 2,
-                    })}
+            {receiveCurrency !== sendCurrency ? (
+              <div className="flex min-w-0 flex-1 items-center justify-end text-sm text-muted-foreground">
+                {hasFx && rateDisplay ? (
+                  <div className="flex max-w-full items-center justify-end gap-x-1 whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={handleToggleAmountDirection}
+                      className="inline-flex min-w-0 max-w-full items-center gap-1 hover:text-foreground"
+                    >
+                      <ArrowUpDown className="h-3.5 w-3.5 shrink-0 text-primary" strokeWidth={2} aria-hidden />
+                      <span className="min-w-0 truncate">
+                        {amountEntryMode === "receive" ? "Sending" : "Receiving"}:{" "}
+                        {currencySymbols[amountEntryMode === "receive" ? sendCurrency : receiveCurrency] ??
+                          (amountEntryMode === "receive" ? sendCurrency : receiveCurrency)}
+                        {(amountEntryMode === "receive" ? sendAmount : receiveAmount).toLocaleString("en-US", {
+                          minimumFractionDigits:
+                            Math.abs((amountEntryMode === "receive" ? sendAmount : receiveAmount) % 1) >= 0.01
+                              ? 2
+                              : 0,
+                          maximumFractionDigits: 2,
+                        })}
+                      </span>
+                    </button>
+                    <span className="shrink-0">• Rate: {rateDisplay}</span>
+                  </div>
+                ) : (
+                  <span className="pointer-events-none select-none text-sm leading-none opacity-0" aria-hidden>
+                    .
                   </span>
-                </button>
-                <span>• Rate: {rateDisplay}</span>
+                )}
               </div>
-            )}
+            ) : null}
           </div>
           <div
-            className="flex items-center justify-center min-h-[100px] py-6 px-6 rounded-xl border-2 border-input bg-background focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-colors gap-0.5"
+            className="flex h-[100px] shrink-0 items-center justify-center box-border rounded-xl border-2 border-input bg-background px-6 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-colors gap-0.5"
             style={{ fontVariantNumeric: "tabular-nums" }}
           >
             <span className="font-black text-foreground select-none shrink-0 text-5xl">
@@ -407,21 +421,18 @@ export default function SendPage() {
                 )}
               </span>
               <div>
-                <p className="font-medium">{getSourceDisplayLabel()}</p>
-                {paymentMethod === "balance" && sourceAccount && receiveAmount > 0 &&
-                  (hasInsufficientBalance ? (
-                    <p className="text-sm text-destructive font-medium">
-                      Insufficient balance — short by {currencySymbols[sourceAccount.currency] ?? ""}
-                      {shortfallAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                    </p>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      After: {currencySymbols[sourceAccount.currency] ?? ""}
-                      {afterTransferBalance.toLocaleString("en-US", {
-                        minimumFractionDigits: 2,
-                      })}
-                    </p>
-                  ))}
+                <p
+                  className={`font-medium${
+                    paymentMethod === "balance" &&
+                    sourceAccount &&
+                    sendAmount > 0 &&
+                    displayBalanceForSource < 0
+                      ? " text-destructive"
+                      : ""
+                  }`}
+                >
+                  {getSourceDisplayLabel()}
+                </p>
               </div>
             </div>
             <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />

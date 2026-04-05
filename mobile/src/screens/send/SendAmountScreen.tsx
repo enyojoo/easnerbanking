@@ -1426,7 +1426,15 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   <Text style={styles.paymentSectionTitle}>From Balance</Text>
                   {availableCurrencies.map((item) => {
                     const balance = parseFloat(balances[item.code as 'USD' | 'EUR'] || '0')
-                    const balanceFormatted = balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                    const showLiveRemaining =
+                      selectedPaymentMethod === 'balance' &&
+                      sendingAmount > 0 &&
+                      item.code === selectedBalanceCurrency
+                    const displayBalance = showLiveRemaining ? balance - sendingAmount : balance
+                    const balanceFormatted = displayBalance.toLocaleString('en-US', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })
                     const isSelected = selectedBalanceCurrency === item.code && selectedPaymentMethod === 'balance'
                     return (
                       <TouchableOpacity
@@ -1447,7 +1455,12 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                         </View>
                         <View style={styles.currencyItemInfo}>
                           <Text style={styles.currencyItemCode}>{item.code} Balance</Text>
-                          <Text style={styles.currencyItemBalance}>
+                          <Text
+                            style={[
+                              styles.currencyItemBalance,
+                              showLiveRemaining && displayBalance < 0 && { color: colors.semantic.destructive },
+                            ]}
+                          >
                             {item.symbol}{balanceFormatted}
                           </Text>
                         </View>
