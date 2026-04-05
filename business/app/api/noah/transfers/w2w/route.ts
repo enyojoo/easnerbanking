@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server"
-import { requireAuth, requireNoahEnv } from "../../_helpers"
-import { resolveNoahContext } from "../../_helpers"
+import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "../../_helpers"
 import { noahFetch } from "@/lib/noah/http"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { normalizeEasetag } from "@/lib/easetag-validation"
+import { isUndefinedEasetagColumnError } from "@/lib/easetag-global"
 import { getNoahWalletTransferPath } from "@/lib/noah/config"
+import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 
 /**
  * Wallet-to-wallet (Easetag P2P): resolve payee Easetag → Noah wallet id, then POST Noah internal transfer.
@@ -33,27 +34,84 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "destinationEasetag and positive amount required." }, { status: 400 })
   }
 
-  const ctx = resolveNoahContext(user.id, request)
+  const ctx = await resolveNoahContextAsync(user.id, request)
+  if (!ctx.ok) return ctx.response
+
   const cleanTag = normalizeEasetag(tag)
   const admin = createSupabaseAdmin()
-  const { data: payeeRow } = await admin
+
+  const { data: meRow, error: meErr } = await admin
+    .from("users")
+    .select("id,easner_business_id")
+    .eq("id", user.id)
+    .maybeSingle()
+  if (meErr) {
+    return NextResponse.json({ error: meErr.message }, { status: 400 })
+  }
+  const myBusinessId = (meRow?.easner_business_id as string | null | undefined) ?? null
+
+  const { data: payeeUser, error: payeeUserErr } = await admin
     .from("users")
     .select("id,easetag,noah_wallet_id")
     .eq("easetag", cleanTag)
     .maybeSingle()
-  if (!payeeRow) {
-    return NextResponse.json({ error: "Easetag not found." }, { status: 404 })
+  if (payeeUserErr && !isUndefinedEasetagColumnError(payeeUserErr)) {
+    return NextResponse.json({ error: payeeUserErr.message }, { status: 400 })
   }
-  if (payeeRow.id === user.id) {
-    return NextResponse.json({ error: "Cannot send to your own Easetag." }, { status: 400 })
+
+  const resolvedPayeeUser =
+    payeeUserErr && isUndefinedEasetagColumnError(payeeUserErr) ? null : payeeUser
+
+  let payeeWalletId: string | null = null
+  let payeeEasetagResolved = cleanTag
+  let payeeUserId: string | undefined
+  let payeeBusinessId: string | undefined
+
+  if (resolvedPayeeUser) {
+    if (resolvedPayeeUser.id === user.id) {
+      return NextResponse.json({ error: "You cannot add yourself as a recipient." }, { status: 400 })
+    }
+    payeeWalletId = resolvedPayeeUser.noah_wallet_id as string | null
+    payeeEasetagResolved = resolvedPayeeUser.easetag as string
+    payeeUserId = resolvedPayeeUser.id
+  } else {
+    const { data: biz, error: bizErr } = await admin
+      .from("businesses")
+      .select("id,easetag,noah_wallet_id")
+      .eq("easetag", cleanTag)
+      .maybeSingle()
+    if (bizErr) {
+      return NextResponse.json({ error: bizErr.message }, { status: 400 })
+    }
+    if (!biz) {
+      return NextResponse.json({ error: "Easetag not found." }, { status: 404 })
+    }
+    if (myBusinessId && biz.id === myBusinessId) {
+      return NextResponse.json({ error: "You cannot add yourself as a recipient." }, { status: 400 })
+    }
+    payeeWalletId = biz.noah_wallet_id as string | null
+    payeeEasetagResolved = biz.easetag as string
+    payeeBusinessId = biz.id as string
+    const ownerUserId = await resolveOrgOwnerUserId(admin, biz.id as string, user.id)
+    payeeUserId = ownerUserId
   }
-  const payeeWalletId = payeeRow.noah_wallet_id as string | null
+
   if (!payeeWalletId) {
     return NextResponse.json({ error: "Payee has no provisioned Noah wallet yet." }, { status: 400 })
   }
 
-  const { data: sender } = await admin.from("users").select("noah_wallet_id").eq("id", user.id).maybeSingle()
-  const sourceWalletId = sender?.noah_wallet_id as string | undefined
+  let sourceWalletId: string | undefined
+  if (ctx.scope === "business" && ctx.businessId) {
+    const { data: senderBiz } = await admin
+      .from("businesses")
+      .select("noah_wallet_id")
+      .eq("id", ctx.businessId)
+      .maybeSingle()
+    sourceWalletId = senderBiz?.noah_wallet_id as string | undefined
+  } else {
+    const { data: sender } = await admin.from("users").select("noah_wallet_id").eq("id", user.id).maybeSingle()
+    sourceWalletId = sender?.noah_wallet_id as string | undefined
+  }
   if (!sourceWalletId) {
     return NextResponse.json({ error: "Sender has no Noah wallet yet." }, { status: 400 })
   }
@@ -95,7 +153,11 @@ export async function POST(request: Request) {
       ok: false,
       error: lastErr,
       hint: `Noah rejected wallet transfer on ${path}. Confirm NOAH_WALLET_TRANSFER_PATH and payload with Noah for your program; Easetag resolution succeeded.`,
-      payeePreview: { easetag: payeeRow.easetag, userId: payeeRow.id },
+      payeePreview: {
+        easetag: payeeEasetagResolved,
+        userId: payeeUserId,
+        ...(payeeBusinessId ? { businessId: payeeBusinessId } : {}),
+      },
     },
     { status: 502 },
   )

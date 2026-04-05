@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Loader2, User, Phone, CreditCard, MapPin, ChevronDown } from "lucide-react"
+import { sortByEasnerCountryPickerOrder } from "@easner/shared"
 import type { Beneficiary } from "@/lib/recipient-types"
 import { CountryFlag } from "@/components/flags"
 import { usePayoutCorridors } from "@/lib/use-payout-corridors"
@@ -15,6 +16,14 @@ import { createRecipient, updateRecipient, type RecipientUpsertInput } from "@/l
 import { fetchEasenetProfileByTag } from "@/lib/easenet-profile"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent } from "@/components/ui/card"
+import { cn } from "@/lib/utils"
+
+const RECIPIENT_TYPE_TABS = [
+  { id: "bank" as const, label: "Bank Account" },
+  { id: "mobile" as const, label: "Mobile Money" },
+  { id: "wallet" as const, label: "Wallet Address" },
+  { id: "easenet" as const, label: "Easetag" },
+]
 
 type RailCountryOption = { name: string; currency: string; code: string }
 
@@ -228,15 +237,21 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
   const mobileFromApi = corridorCatalogEnabled && mobileCorridors.length > 0
 
   const bankCountriesFlat = useMemo(() => {
-    return bankCorridors
-      .map((c) => ({ name: c.country_name, currency: c.currency_code, code: c.country_code }))
-      .sort((a, b) => a.name.localeCompare(b.name))
+    const rows = bankCorridors.map((c) => ({
+      name: c.country_name,
+      currency: c.currency_code,
+      code: c.country_code,
+    }))
+    return sortByEasnerCountryPickerOrder(rows, (r) => r.code, (r) => r.name, (r) => r.currency)
   }, [bankCorridors])
 
   const mobileCountriesFlat = useMemo(() => {
-    return mobileCorridors
-      .map((c) => ({ name: c.country_name, currency: c.currency_code, code: c.country_code }))
-      .sort((a, b) => a.name.localeCompare(b.name))
+    const rows = mobileCorridors.map((c) => ({
+      name: c.country_name,
+      currency: c.currency_code,
+      code: c.country_code,
+    }))
+    return sortByEasnerCountryPickerOrder(rows, (r) => r.code, (r) => r.name, (r) => r.currency)
   }, [mobileCorridors])
 
   const countryOptions = useMemo(() => {
@@ -331,6 +346,10 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
 
     if (formData.recipientType === "bank" && currency === "GBP" && !formData.sortCode.trim()) {
       newErrors.sortCode = "Sort code is required for GBP"
+    }
+
+    if (formData.recipientType === "bank" && currency === "CAD" && !formData.routingNumber.trim()) {
+      newErrors.routingNumber = "Routing number is required for CAD (CPA format)"
     }
 
     setErrors(newErrors)
@@ -484,19 +503,48 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
     setEasenetLookupError(null)
   }
 
+  const recipientTypeIndex = Math.max(
+    0,
+    RECIPIENT_TYPE_TABS.findIndex((t) => t.id === formData.recipientType),
+  )
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="space-y-2 md:col-span-2">
-          <label className="text-sm font-medium">Recipient Type</label>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 max-w-3xl">
-            <Button type="button" variant={formData.recipientType === "bank" ? "default" : "outline"} onClick={() => selectRecipientType("bank")}>Bank Account</Button>
-            <Button type="button" variant={formData.recipientType === "mobile" ? "default" : "outline"} onClick={() => selectRecipientType("mobile")}>Mobile Money</Button>
-            <Button type="button" variant={formData.recipientType === "wallet" ? "default" : "outline"} onClick={() => selectRecipientType("wallet")}>Wallet Address</Button>
-            <Button type="button" variant={formData.recipientType === "easenet" ? "default" : "outline"} onClick={() => selectRecipientType("easenet")}>Easetag</Button>
-          </div>
+      <div className="space-y-2 max-w-3xl">
+        <label className="text-sm font-medium">Recipient Type</label>
+        <div className="relative flex rounded-xl border border-input bg-muted/45 p-1 shadow-inner">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute top-1 bottom-1 left-1 rounded-lg bg-background shadow-sm ring-1 ring-border/60 motion-safe:transition-[transform] motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.32,0.72,0,1)]"
+            style={{
+              width: "calc((100% - 0.5rem) / 4)",
+              transform: `translateX(calc(${recipientTypeIndex} * 100%))`,
+            }}
+          />
+          {RECIPIENT_TYPE_TABS.map((t) => (
+            <Button
+              key={t.id}
+              type="button"
+              variant="ghost"
+              className={cn(
+                "relative z-10 h-10 flex-1 shrink-0 rounded-lg border-0 px-2 text-xs font-medium shadow-none sm:text-sm motion-safe:transition-colors motion-safe:duration-200",
+                formData.recipientType === t.id
+                  ? "text-foreground"
+                  : "text-muted-foreground hover:bg-transparent hover:text-foreground",
+              )}
+              onClick={() => selectRecipientType(t.id)}
+            >
+              {t.label}
+            </Button>
+          ))}
         </div>
+      </div>
 
+      <div
+        key={formData.recipientType}
+        className="space-y-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-300 motion-safe:ease-out"
+      >
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {formData.recipientType === "easenet" && (
           <div className="space-y-4 md:col-span-2">
             <div className="space-y-2">
@@ -717,7 +765,7 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
         )}
       </div>
 
-      <div className="space-y-6">
+      <div className="space-y-6 border-t border-border/60 pt-6 md:border-0 md:pt-0">
         {formData.recipientType === "bank" && (
         <div className="flex items-center gap-2 text-sm font-medium">
           <CreditCard className="h-4 w-4 text-muted-foreground" />
@@ -990,7 +1038,35 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
           </div>
         )}
 
-        {formData.recipientType === "bank" && !["USD", "EUR", "GBP"].includes(currency) && (
+        {formData.recipientType === "bank" && currency === "CAD" && (
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-xs text-muted-foreground">Routing number (CPA)</label>
+              <Input
+                value={formData.routingNumber || ""}
+                onChange={(e) => handleInputChange("routingNumber", e.target.value.replace(/\D/g, "").slice(0, 9))}
+                placeholder="9 digits (0 + institution + transit)"
+                className={`h-12 font-mono text-sm placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.routingNumber ? "border-red-500" : ""}`}
+                required
+                inputMode="numeric"
+              />
+              {errors.routingNumber && <p className="text-xs text-red-500">{errors.routingNumber}</p>}
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs text-muted-foreground">Account Number</label>
+              <Input
+                value={formData.accountNumber}
+                onChange={(e) => handleInputChange("accountNumber", e.target.value)}
+                placeholder="Account number"
+                className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 normal-case ${errors.accountNumber ? "border-red-500" : ""}`}
+                required
+              />
+              {errors.accountNumber && <p className="text-xs text-red-500">{errors.accountNumber}</p>}
+            </div>
+          </div>
+        )}
+
+        {formData.recipientType === "bank" && !["USD", "EUR", "GBP", "CAD"].includes(currency) && (
           <div className="space-y-2">
             <label className="text-xs text-muted-foreground">Account Number</label>
             <Input
@@ -1015,6 +1091,7 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
           />
           {errors.bankName && <p className="text-xs text-red-500">{errors.bankName}</p>}
         </div>}
+      </div>
       </div>
 
       <div className="flex justify-end gap-3">

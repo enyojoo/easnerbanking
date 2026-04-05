@@ -1,4 +1,4 @@
-import type { PayoutCorridorPublic } from '@easner/shared'
+import { sortByEasnerCountryPickerOrder, type PayoutCorridorPublic } from '@easner/shared'
 
 export type RecipientType = 'bank' | 'mobile_money' | 'wallet'
 export type RailStatus = 'supported' | 'coming_soon'
@@ -67,6 +67,7 @@ const walletFields: RecipientFieldSpec[] = [
 
 const noahBankCountryCurrencies: Array<{ countryCode: string; countryName: string; currencyCode: string; currencyName: string }> = [
   { countryCode: 'US', countryName: 'United States', currencyCode: 'USD', currencyName: 'US Dollar' },
+  { countryCode: 'CA', countryName: 'Canada', currencyCode: 'CAD', currencyName: 'Canadian Dollar' },
   { countryCode: 'AR', countryName: 'Argentina', currencyCode: 'ARS', currencyName: 'Argentine Peso' },
   { countryCode: 'AU', countryName: 'Australia', currencyCode: 'AUD', currencyName: 'Australian Dollar' },
   { countryCode: 'AT', countryName: 'Austria', currencyCode: 'EUR', currencyName: 'Euro' },
@@ -147,6 +148,20 @@ export function getBankFieldsForCurrency(currencyCode: string): RecipientFieldSp
       { key: 'accountNumber', label: 'Account number', placeholder: 'Account number', required: true, keyboardType: 'number-pad' },
     ]
   }
+  if (currencyCode === 'CAD') {
+    return [
+      { key: 'fullName', label: 'Account name', placeholder: 'Account name', required: true },
+      { key: 'bankName', label: 'Bank name', placeholder: 'Bank name', required: true },
+      {
+        key: 'routingNumber',
+        label: 'Routing number (CPA)',
+        placeholder: '9 digits (0 + institution + transit)',
+        required: true,
+        keyboardType: 'number-pad',
+      },
+      { key: 'accountNumber', label: 'Account number', placeholder: 'Account number', required: true, keyboardType: 'number-pad' },
+    ]
+  }
   if (currencyCode === 'GBP') {
     return [
       { key: 'fullName', label: 'Account name', placeholder: 'Account name', required: true },
@@ -192,6 +207,15 @@ function corridorsToRecipientEntries(corridors: PayoutCorridorPublic[], kind: 'b
     providers: kind === 'mobile_money' && Array.isArray(c.providers) ? (c.providers as string[]) : undefined,
     fields: kind === 'bank' ? getBankFieldsForCurrency(c.currency_code) : mobileMoneyFields,
   }))
+}
+
+function sortRecipientCatalogEntries(entries: RecipientCatalogEntry[]): RecipientCatalogEntry[] {
+  return sortByEasnerCountryPickerOrder(
+    entries,
+    (e) => e.countryCode,
+    (e) => e.countryName,
+    (e) => e.currencyCode,
+  )
 }
 
 export const recipientCatalog: RecipientCatalogEntry[] = [
@@ -246,17 +270,17 @@ export function getCatalogByRecipientTypeWithJurisdiction(
 
 export function getCatalogByRecipientType(recipientType: RecipientType): RecipientCatalogEntry[] {
   if (recipientType === 'wallet') {
-    return recipientCatalog.filter((entry) => entry.recipientType === 'wallet')
+    return sortRecipientCatalogEntries(recipientCatalog.filter((entry) => entry.recipientType === 'wallet'))
   }
   if (usePayoutCorridorsApi() && payoutCorridorCache) {
     if (recipientType === 'bank' && payoutCorridorCache.bank.length) {
-      return corridorsToRecipientEntries(payoutCorridorCache.bank, 'bank')
+      return sortRecipientCatalogEntries(corridorsToRecipientEntries(payoutCorridorCache.bank, 'bank'))
     }
     if (recipientType === 'mobile_money' && payoutCorridorCache.mobile.length) {
-      return corridorsToRecipientEntries(payoutCorridorCache.mobile, 'mobile_money')
+      return sortRecipientCatalogEntries(corridorsToRecipientEntries(payoutCorridorCache.mobile, 'mobile_money'))
     }
   }
-  return recipientCatalog.filter((entry) => entry.recipientType === recipientType)
+  return sortRecipientCatalogEntries(recipientCatalog.filter((entry) => entry.recipientType === recipientType))
 }
 
 export function getRecipientFormFields(

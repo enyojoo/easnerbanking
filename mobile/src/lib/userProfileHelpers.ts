@@ -74,6 +74,7 @@ export function mapUsersRowToUser(ru: Record<string, unknown>): User {
     noah_eur_virtual_account_id: (ru.noah_eur_virtual_account_id as string) ?? null,
     noah_kyb_customer_id: (ru.noah_kyb_customer_id as string) ?? null,
     noah_kyb_status: (ru.noah_kyb_status as string) ?? null,
+    easetag: typeof ru.easetag === 'string' && ru.easetag.trim() ? ru.easetag.trim().toLowerCase() : undefined,
     status: 'active',
     base_currency: 'USD',
     created_at: String(ru.created_at ?? ''),

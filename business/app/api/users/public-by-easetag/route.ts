@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { normalizeEasetag } from "@/lib/easetag-validation"
+import { isUndefinedEasetagColumnError } from "@/lib/easetag-global"
 
 /**
- * Authenticated lookup of another user's public Easetag profile (for add-recipient preview).
+ * Authenticated lookup of another party's public Easetag profile (user or business).
  * Does not expose email, phone, or Noah ids.
  */
 export async function GET(request: Request) {
@@ -20,27 +21,66 @@ export async function GET(request: Request) {
   const excludeSelf = url.searchParams.get("excludeSelf") !== "false"
 
   const admin = createSupabaseAdmin()
-  const { data: row, error } = await admin
+
+  const { data: me, error: meErr } = await admin
+    .from("users")
+    .select("id,easner_business_id")
+    .eq("id", user.id)
+    .maybeSingle()
+
+  if (meErr) {
+    return NextResponse.json({ error: meErr.message }, { status: 400 })
+  }
+
+  const myBusinessId = (me?.easner_business_id as string | null | undefined) ?? null
+
+  const { data: userRow, error: uerr } = await admin
     .from("users")
     .select("id,easetag,full_name,avatar_url")
     .eq("easetag", clean)
     .maybeSingle()
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 })
-  }
-  if (!row) {
-    return NextResponse.json({ ok: true, found: false }, { status: 200 })
-  }
-  if (excludeSelf && row.id === user.id) {
-    return NextResponse.json({ ok: true, found: false, reason: "self" }, { status: 200 })
+  if (uerr && !isUndefinedEasetagColumnError(uerr)) {
+    return NextResponse.json({ error: uerr.message }, { status: 400 })
   }
 
-  return NextResponse.json({
-    ok: true,
-    found: true,
-    easetag: row.easetag as string,
-    fullName: String(row.full_name || "").trim() || clean,
-    avatarUrl: (row.avatar_url as string | null) || null,
-  })
+  const resolvedUserRow = uerr && isUndefinedEasetagColumnError(uerr) ? null : userRow
+
+  if (resolvedUserRow) {
+    if (excludeSelf && resolvedUserRow.id === user.id) {
+      return NextResponse.json({ ok: true, found: false, reason: "self" }, { status: 200 })
+    }
+    return NextResponse.json({
+      ok: true,
+      found: true,
+      easetag: resolvedUserRow.easetag as string,
+      fullName: String(resolvedUserRow.full_name || "").trim() || clean,
+      avatarUrl: (resolvedUserRow.avatar_url as string | null) || null,
+    })
+  }
+
+  const { data: bizRow, error: berr } = await admin
+    .from("businesses")
+    .select("id,easetag,name,logo_url")
+    .eq("easetag", clean)
+    .maybeSingle()
+
+  if (berr) {
+    return NextResponse.json({ error: berr.message }, { status: 400 })
+  }
+
+  if (bizRow) {
+    if (excludeSelf && myBusinessId && bizRow.id === myBusinessId) {
+      return NextResponse.json({ ok: true, found: false, reason: "self" }, { status: 200 })
+    }
+    return NextResponse.json({
+      ok: true,
+      found: true,
+      easetag: bizRow.easetag as string,
+      fullName: String(bizRow.name || "").trim() || clean,
+      avatarUrl: (bizRow.logo_url as string | null) || null,
+    })
+  }
+
+  return NextResponse.json({ ok: true, found: false }, { status: 200 })
 }

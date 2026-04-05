@@ -3,7 +3,7 @@ import { normalizeEasetag } from "@/lib/easetag-validation"
 
 type Admin = SupabaseClient
 
-function isUndefinedEasetagColumnError(err: { code?: string; message?: string } | null): boolean {
+export function isUndefinedEasetagColumnError(err: { code?: string; message?: string } | null): boolean {
   if (!err) return false
   const code = String(err.code ?? "")
   if (code === "42703") return true

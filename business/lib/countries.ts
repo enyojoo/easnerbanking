@@ -1,9 +1,9 @@
+import { EASNER_COUNTRY_PICKER_PRIORITY } from "@easner/shared"
+
 export interface Country {
   name: string
   code: string
 }
-
-const PRIORITY_COUNTRY_CODES = ["US", "EE", "NG", "GB", "CA"] // USA, Estonia, Nigeria, UK, Canada
 
 const countriesRaw: Country[] = [
   { name: "Afghanistan", code: "AF" },
@@ -203,8 +203,9 @@ const countriesRaw: Country[] = [
   { name: "Zimbabwe", code: "ZW" },
 ]
 
-const priorityCountries = PRIORITY_COUNTRY_CODES.map(
-  (code) => countriesRaw.find((c) => c.code === code)!
+const prioritySet = new Set<string>([...EASNER_COUNTRY_PICKER_PRIORITY])
+const priorityCountries = EASNER_COUNTRY_PICKER_PRIORITY.map((code) => countriesRaw.find((c) => c.code === code)).filter(
+  (c): c is Country => Boolean(c),
 )
-const otherCountries = countriesRaw.filter((c) => !PRIORITY_COUNTRY_CODES.includes(c.code))
+const otherCountries = countriesRaw.filter((c) => !prioritySet.has(c.code))
 export const countries: Country[] = [...priorityCountries, ...otherCountries]

@@ -98,7 +98,7 @@ export function SendRecipientPicker({
         } else {
           setHubSearchEasenet(null)
           setHubSearchError(
-            res.reason === "self" ? "You cannot pay yourself." : "Easetag not found.",
+            res.reason === "self" ? "You cannot add yourself as a recipient." : "Easetag not found.",
           )
         }
       })()

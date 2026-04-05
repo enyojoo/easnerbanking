@@ -223,7 +223,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
         } else {
           setHubSearchEasenet(null)
           setHubSearchError(
-            res.reason === 'self' ? 'You cannot pay yourself.' : 'Easetag not found.',
+            res.reason === 'self' ? 'You cannot add yourself as a recipient.' : 'Easetag not found.',
           )
         }
       })()
