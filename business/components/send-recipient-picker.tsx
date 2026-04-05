@@ -13,11 +13,13 @@ import {
 import { RecipientForm } from "@/components/recipient-form"
 import type { Beneficiary } from "@/lib/recipient-types"
 import { Label } from "@/components/ui/label"
-import { Search, Plus, User, ChevronDown } from "lucide-react"
+import { Search, Plus, User, ChevronDown, Loader2 } from "lucide-react"
 import { CountryFlag, CurrencyFlag } from "@/components/flags"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { listRecipients } from "@/lib/recipients-store"
-import { useAuth } from "@/lib/auth-context"
+import { useRecipientsCached } from "@/hooks/use-recipients-cached"
+import { fetchEasenetProfileByTag } from "@/lib/easenet-profile"
+import { buildDraftEasetagBeneficiary } from "@/lib/draft-easetag-beneficiary"
+import { filterBeneficiariesBySearch } from "@/lib/send-hub-recipient-search"
 
 interface SendRecipientPickerProps {
   selected: Beneficiary | null
@@ -32,57 +34,104 @@ export function SendRecipientPicker({
   beneficiaries: initialBeneficiaries,
   label = "Recipient",
 }: SendRecipientPickerProps) {
-  const { user, isLoading } = useAuth()
+  const explicitRecipientList = initialBeneficiaries !== undefined
+  const {
+    data: cachedBeneficiaries,
+    setData: setCachedBeneficiaries,
+  } = useRecipientsCached(!explicitRecipientList)
+
+  const [localBeneficiaries, setLocalBeneficiaries] = useState<Beneficiary[]>(
+    () => initialBeneficiaries ?? [],
+  )
+
+  const beneficiaries = explicitRecipientList ? localBeneficiaries : cachedBeneficiaries
+  const setBeneficiaries = explicitRecipientList ? setLocalBeneficiaries : setCachedBeneficiaries
+
   const [searchTerm, setSearchTerm] = useState("")
   const [isPickerOpen, setIsPickerOpen] = useState(false)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
-  const [beneficiaries, setBeneficiaries] = useState<Beneficiary[]>(
-    () => initialBeneficiaries ?? []
-  )
+
+  /** Hub search (@…) live lookup — same pattern as mobile send hub. */
+  const [hubSearchEasenet, setHubSearchEasenet] = useState<{
+    easetag: string
+    fullName: string
+    avatarUrl: string | null
+  } | null>(null)
+  const [hubSearchLoading, setHubSearchLoading] = useState(false)
+  const [hubSearchError, setHubSearchError] = useState<string | null>(null)
 
   useEffect(() => {
-    let isMounted = true
-    if (initialBeneficiaries && initialBeneficiaries.length) {
-      setBeneficiaries(initialBeneficiaries)
+    if (!explicitRecipientList) return
+    setLocalBeneficiaries(initialBeneficiaries ?? [])
+  }, [explicitRecipientList, initialBeneficiaries])
+
+  useEffect(() => {
+    const t = searchTerm.trim()
+    if (!t.startsWith("@")) {
+      setHubSearchEasenet(null)
+      setHubSearchLoading(false)
+      setHubSearchError(null)
       return
     }
-    if (isLoading || !user?.id) return
-    void listRecipients(user.id)
-      .then((rows) => {
-        if (isMounted) setBeneficiaries(rows)
-      })
-      .catch((err) => {
-        const message = err instanceof Error ? err.message : String(err)
-        if (message.toLowerCase().includes("bad request")) {
-          if (isMounted) setBeneficiaries([])
-          return
-        }
-        console.error("Failed to load recipients:", message)
-      })
-    return () => {
-      isMounted = false
+    const raw = t.replace(/^@+/, "").trim()
+    if (raw.length < 4) {
+      setHubSearchEasenet(null)
+      setHubSearchLoading(false)
+      setHubSearchError(null)
+      return
     }
-  }, [initialBeneficiaries, isLoading, user?.id])
+    let cancelled = false
+    setHubSearchLoading(true)
+    setHubSearchError(null)
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        const res = await fetchEasenetProfileByTag(raw)
+        if (cancelled) return
+        setHubSearchLoading(false)
+        if (res.found) {
+          setHubSearchEasenet({
+            easetag: res.easetag,
+            fullName: res.fullName,
+            avatarUrl: res.avatarUrl,
+          })
+          setHubSearchError(null)
+        } else {
+          setHubSearchEasenet(null)
+          setHubSearchError(
+            res.reason === "self" ? "You cannot pay yourself." : "Easetag not found.",
+          )
+        }
+      })()
+    }, 450)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [searchTerm])
 
-  const recipientSearchHaystack = (b: Beneficiary) =>
-    [
-      b.name,
-      b.bankName,
-      b.country,
-      b.email,
-      b.payeeEasetag ? `@${b.payeeEasetag}` : "",
-      b.accountNumber,
-      b.fullAccountNumber,
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase()
+  const hubDisplayRecipients = useMemo(
+    () => filterBeneficiariesBySearch(beneficiaries, searchTerm),
+    [beneficiaries, searchTerm],
+  )
 
-  const filteredBeneficiaries = useMemo(() => {
-    if (!searchTerm.trim()) return beneficiaries
-    const term = searchTerm.toLowerCase()
-    return beneficiaries.filter((b) => recipientSearchHaystack(b).includes(term))
-  }, [beneficiaries, searchTerm])
+  const hubVirtualRecipient = useMemo(() => {
+    if (!hubSearchEasenet) return null
+    const tag = hubSearchEasenet.easetag.trim().toLowerCase()
+    const alreadySaved = hubDisplayRecipients.some(
+      (r) => (r.payeeEasetag || "").trim().toLowerCase() === tag,
+    )
+    if (alreadySaved) return null
+    return buildDraftEasetagBeneficiary({
+      easetag: hubSearchEasenet.easetag,
+      fullName: hubSearchEasenet.fullName,
+      avatarUrl: hubSearchEasenet.avatarUrl,
+    })
+  }, [hubSearchEasenet, hubDisplayRecipients])
+
+  const pickerRecipients = useMemo(() => {
+    if (!hubVirtualRecipient) return hubDisplayRecipients
+    return [hubVirtualRecipient, ...hubDisplayRecipients]
+  }, [hubVirtualRecipient, hubDisplayRecipients])
 
   const handleAddSuccess = (newBeneficiary?: Beneficiary) => {
     if (newBeneficiary) {
@@ -161,7 +210,18 @@ export function SendRecipientPicker({
         <ChevronDown className="h-4 w-4 text-muted-foreground" />
       </button>
 
-      <Dialog open={isPickerOpen} onOpenChange={setIsPickerOpen}>
+      <Dialog
+        open={isPickerOpen}
+        onOpenChange={(open) => {
+          setIsPickerOpen(open)
+          if (!open) {
+            setSearchTerm("")
+            setHubSearchEasenet(null)
+            setHubSearchLoading(false)
+            setHubSearchError(null)
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Select recipient</DialogTitle>
@@ -171,14 +231,30 @@ export function SendRecipientPicker({
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search by name, bank, Easetag, or country..."
+                placeholder="Search @easetag or recipients"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9"
+                className="pl-9 pr-9"
               />
+              {searchTerm.trim().startsWith("@") && hubSearchLoading ? (
+                <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+              ) : null}
             </div>
+            {searchTerm.trim().startsWith("@") && hubSearchError && !hubSearchLoading ? (
+              <p className="text-xs text-destructive">{hubSearchError}</p>
+            ) : null}
             <div className="max-h-[280px] overflow-y-auto space-y-1">
-              {filteredBeneficiaries.map((b) => (
+              {pickerRecipients.length === 0 ? (
+                <div className="px-3 py-6 text-center space-y-1">
+                  <p className="text-sm text-muted-foreground font-medium">
+                    {searchTerm.trim() ? "No matches" : "No recipients yet"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {searchTerm.trim() ? "Try another search" : "Add a recipient to send money"}
+                  </p>
+                </div>
+              ) : null}
+              {pickerRecipients.map((b) => (
                 <button
                   key={b.id}
                   type="button"

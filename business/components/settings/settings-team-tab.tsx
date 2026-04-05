@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Trash2, Users } from "lucide-react"
+import { Loader2, Trash2, Users } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
@@ -346,7 +346,10 @@ export function SettingsTeamTab() {
               Add another
             </Button>
             <Button onClick={() => void submitInvites()} disabled={submittingInvites}>
-              {submittingInvites ? "Inviting..." : "Send invites"}
+              {submittingInvites ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+              ) : null}
+              Send invites
             </Button>
           </DialogFooter>
         </DialogContent>

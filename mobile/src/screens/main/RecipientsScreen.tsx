@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import {
   View,
   Text,
@@ -37,7 +37,14 @@ import { validateRequired, validateAccountNumber, validateIBAN } from '../../uti
 import { formatIBAN, formatSortCode, formatRoutingNumber, formatAccountNumber } from '../../utils/formatters'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
 import { getAllCountryCurrencies, searchCountryCurrencies, CountryCurrency } from '../../lib/countryCurrencyMapping'
-import { getCatalogByRecipientType, getRecipientProviders, getWalletAssets, getWalletNetworksForAsset } from '../../lib/recipientCatalog'
+import {
+  getCatalogByRecipientTypeWithJurisdiction,
+  getRecipientProviders,
+  getWalletAssets,
+  getWalletNetworksForAsset,
+  type RecipientType,
+} from '../../lib/recipientCatalog'
+import { getAllowedCountriesCached } from '../../lib/jurisdictionCountryPolicy'
 import { getNetworkIconUrl, getTokenIconUrl } from '../../lib/cryptoIcons'
 import { Wallet, Building2, Smartphone, AtSign } from 'lucide-react-native'
 import { fetchEasenetPublicProfile } from '../../lib/easenetProfile'
@@ -84,6 +91,23 @@ function RecipientsContent({ navigation }: NavigationProps) {
   } | null>(null)
   const [easenetLookupLoading, setEasenetLookupLoading] = useState(false)
   const [easenetLookupError, setEasenetLookupError] = useState<string | null>(null)
+  const [jurisdictionUnrestricted, setJurisdictionUnrestricted] = useState(true)
+  const [jurisdictionCodes, setJurisdictionCodes] = useState<string[] | null>(null)
+
+  const jurisdictionPolicy = useMemo(
+    () => ({ unrestricted: jurisdictionUnrestricted, codes: jurisdictionCodes }),
+    [jurisdictionUnrestricted, jurisdictionCodes],
+  )
+
+  useEffect(() => {
+    void getAllowedCountriesCached('kyb').then((p) => {
+      setJurisdictionUnrestricted(p.unrestricted)
+      setJurisdictionCodes(p.codes)
+    })
+  }, [])
+
+  const recipientCatalogFor = (type: RecipientType) =>
+    getCatalogByRecipientTypeWithJurisdiction(type, jurisdictionPolicy)
 
   // Animation refs
   const headerAnim = useRef(new Animated.Value(0)).current
@@ -234,7 +258,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
       : selectedRecipientType === 'easenet'
         ? 'bank'
         : (selectedRecipientType || 'bank')
-  const filteredCurrencies = getCatalogByRecipientType(recipientTypeKey as any).filter(currency => {
+  const filteredCurrencies = recipientCatalogFor(recipientTypeKey as RecipientType).filter((currency) => {
     if (currencySearchTerm) {
       return (
         currency.currencyName.toLowerCase().includes(currencySearchTerm.toLowerCase()) ||
@@ -244,9 +268,10 @@ function RecipientsContent({ navigation }: NavigationProps) {
     }
     return true
   })
-  const selectedCatalogEntry = getCatalogByRecipientType(recipientTypeKey as any).find(
-    (item) => item.currencyCode === newRecipient.currency && item.countryCode === selectedCountryCurrency?.countryCode,
-  ) || getCatalogByRecipientType(recipientTypeKey as any).find((item) => item.currencyCode === newRecipient.currency)
+  const selectedCatalogEntry =
+    recipientCatalogFor(recipientTypeKey as RecipientType).find(
+      (item) => item.currencyCode === newRecipient.currency && item.countryCode === selectedCountryCurrency?.countryCode,
+    ) || recipientCatalogFor(recipientTypeKey as RecipientType).find((item) => item.currencyCode === newRecipient.currency)
   const isAnyDropdownOpen = showCountryDropdown || showProviderDropdown || showWalletAssetDropdown || showWalletNetworkDropdown
   const closeAllDropdowns = () => {
     setShowCountryDropdown(false)
@@ -279,7 +304,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
         const createdRecipient = await recipientService.create(userProfile.id, {
           fullName: easenetProfile.fullName,
           accountNumber: tag,
-          bankName: `Easenet (@${tag})`,
+          bankName: `Easetag (@${tag})`,
           currency: 'USD',
           countryCode: 'US',
           payeeEasetag: tag,
@@ -314,7 +339,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
         bankName: bankNameForType,
         currency: newRecipient.currency,
         countryCode: selectedCountryCurrency?.countryCode,
-        phoneNumber: newRecipient.phoneNumber || undefined,
+        phoneNumber: selectedRecipientType === 'mobile' ? newRecipient.phoneNumber || undefined : undefined,
         mobileProvider: selectedRecipientType === 'mobile' ? newRecipient.provider : undefined,
         walletNetwork: selectedRecipientType === 'wallet' ? newRecipient.network : undefined,
         walletMemoTag: selectedRecipientType === 'wallet' ? newRecipient.memoTag : undefined,
@@ -359,7 +384,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
         ? 'wallet'
         : bank.includes('mobile money')
           ? 'mobile'
-          : bank.includes('easenet')
+          : bank.includes('easenet') || bank.includes('easetag')
             ? 'easenet'
             : 'bank'
     setSelectedRecipientType(inferredType)
@@ -394,10 +419,10 @@ function RecipientsContent({ navigation }: NavigationProps) {
     const recipientTypeKey =
       inferredType === 'mobile' ? 'mobile_money' : inferredType === 'easenet' ? 'bank' : inferredType
     const catalogMatch =
-      getCatalogByRecipientType(recipientTypeKey as any).find(
+      recipientCatalogFor(recipientTypeKey as RecipientType).find(
         (cc) => cc.currencyCode === recipient.currency && (!recipient.country_code || cc.countryCode === recipient.country_code),
       ) ||
-      getCatalogByRecipientType(recipientTypeKey as any).find((cc) => cc.currencyCode === recipient.currency) ||
+      recipientCatalogFor(recipientTypeKey as RecipientType).find((cc) => cc.currencyCode === recipient.currency) ||
       null
     const countryCurrency = catalogMatch
       ? {
@@ -424,7 +449,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
       sortCode: recipient.sort_code || '',
       iban: recipient.iban || '',
       swiftBic: recipient.swift_bic || '',
-      phoneNumber: recipient.phone_number || (inferredType === 'mobile' ? recipient.account_number || '' : ''),
+      phoneNumber: inferredType === 'mobile' ? recipient.phone_number || recipient.account_number || '' : '',
       provider: recipient.mobile_provider || (inferredType === 'mobile' ? providerFromBank : '') || '',
       walletAddress: recipient.account_number || '',
       network: recipient.wallet_network || (inferredType === 'wallet' ? walletNetworkFromBank || '' : ''),
@@ -469,7 +494,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
         const updatedRecipient = await recipientService.update(editingRecipient.id, user.id, {
           fullName: easenetProfile.fullName,
           accountNumber: tag,
-          bankName: `Easenet (@${tag})`,
+          bankName: `Easetag (@${tag})`,
           countryCode: 'US',
           payeeEasetag: tag,
           payeeAvatarUrl: easenetProfile.avatarUrl,
@@ -500,7 +525,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
         fullName: newRecipient.fullName,
         accountNumber: accountNumberForType,
         bankName: bankNameForType,
-        phoneNumber: newRecipient.phoneNumber || undefined,
+        phoneNumber: selectedRecipientType === 'mobile' ? newRecipient.phoneNumber : '',
         mobileProvider: selectedRecipientType === 'mobile' ? newRecipient.provider : undefined,
         walletNetwork: selectedRecipientType === 'wallet' ? newRecipient.network : undefined,
         walletMemoTag: selectedRecipientType === 'wallet' ? newRecipient.memoTag : undefined,
@@ -1082,7 +1107,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                 style={styles.recipientTypeOption}
                 onPress={async () => {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                  const firstMobile = getCatalogByRecipientType('mobile_money' as any)[0]
+                  const firstMobile = recipientCatalogFor('mobile_money')[0]
                   const firstCurrency = firstMobile?.currencyCode || 'KES'
                   const firstProvider = getRecipientProviders(firstCurrency, 'mobile_money', firstMobile?.countryCode)[0] || ''
                   setSelectedRecipientType('mobile')
@@ -1108,7 +1133,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                 </View>
               </TouchableOpacity>
 
-              {/* Easenet (P2P) */}
+              {/* Easetag (P2P wallet) */}
               <TouchableOpacity
                 style={styles.recipientTypeOption}
                 onPress={async () => {
@@ -1140,7 +1165,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                   <AtSign size={24} color={colors.primary.main} strokeWidth={2} />
                 </View>
                 <View style={styles.recipientTypeContent}>
-                  <Text style={styles.recipientTypeTitle}>Easenet</Text>
+                  <Text style={styles.recipientTypeTitle}>Easetag</Text>
                   <Text style={styles.recipientTypeSubtitle}>Pay someone by their @handle (wallet transfer)</Text>
                 </View>
               </TouchableOpacity>
@@ -1188,7 +1213,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                   : selectedRecipientType === 'mobile'
                     ? editingRecipient ? 'Edit Mobile Money' : 'Add Mobile Money'
                     : selectedRecipientType === 'easenet'
-                      ? editingRecipient ? 'Edit Easenet recipient' : 'Add Easenet recipient'
+                      ? editingRecipient ? 'Edit Easetag recipient' : 'Add Easetag recipient'
                     : editingRecipient ? 'Edit Bank Account' : 'Add Bank Account'}
               </Text>
               <TouchableOpacity
@@ -1262,7 +1287,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                       nestedScrollEnabled={true}
                       keyboardShouldPersistTaps="handled"
                     >
-                      {(countrySearchTerm ? filteredCurrencies : getCatalogByRecipientType(recipientTypeKey as any)).map((item) => {
+                      {(countrySearchTerm ? filteredCurrencies : recipientCatalogFor(recipientTypeKey as RecipientType)).map((item) => {
                         const isSelected =
                           newRecipient.currency === item.currencyCode &&
                           selectedCountryCurrency?.countryCode === item.countryCode
@@ -1327,7 +1352,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                 <>
                   <Text style={styles.modalHint}>Send money to someone by @easetag</Text>
                   <Text style={[styles.modalHint, styles.modalHintSecondary]}>
-                    Wallet transfers use USD. Enter the payee&apos;s Easenet handle.
+                    Wallet transfers use USD. Enter the payee&apos;s Easetag.
                   </Text>
                   <View style={styles.easenetInputRow}>
                     <Text style={styles.easenetAt}>@</Text>

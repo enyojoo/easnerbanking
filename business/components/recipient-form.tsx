@@ -6,15 +6,17 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { Loader2, User, Mail, Phone, CreditCard, MapPin, ChevronDown } from "lucide-react"
+import { Loader2, User, Phone, CreditCard, MapPin, ChevronDown } from "lucide-react"
 import type { Beneficiary } from "@/lib/recipient-types"
-import { CountryFlag, CurrencyFlag } from "@/components/flags"
+import { CountryFlag } from "@/components/flags"
 import { usePayoutCorridors } from "@/lib/use-payout-corridors"
 import { getNetworkIconUrl, getTokenIconUrl } from "@/lib/crypto-icons"
 import { createRecipient, updateRecipient, type RecipientUpsertInput } from "@/lib/recipients-store"
 import { fetchEasenetProfileByTag } from "@/lib/easenet-profile"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent } from "@/components/ui/card"
+
+type RailCountryOption = { name: string; currency: string; code: string }
 
 interface RecipientFormProps {
   recipient?: any
@@ -26,7 +28,8 @@ interface RecipientFormProps {
 
 function inferRecipientType(recipient?: Beneficiary): "bank" | "mobile" | "wallet" | "easenet" {
   if (!recipient) return "bank"
-  if (recipient.payeeEasetag || String(recipient.bankName || "").toLowerCase().includes("easenet")) {
+  const bname = String(recipient.bankName || "").toLowerCase()
+  if (recipient.payeeEasetag || bname.includes("easenet") || bname.includes("easetag")) {
     return "easenet"
   }
   const bankName = String(recipient.bankName || "").toLowerCase()
@@ -34,78 +37,6 @@ function inferRecipientType(recipient?: Beneficiary): "bank" | "mobile" | "walle
   if (bankName.includes("mobile money") || recipient.mobileProvider) return "mobile"
   return "bank"
 }
-
-const countries = [
-  { name: "United States", currency: "USD", code: "US" },
-  { name: "Argentina", currency: "ARS", code: "AR" },
-  { name: "Australia", currency: "AUD", code: "AU" },
-  { name: "Austria", currency: "EUR", code: "AT" },
-  { name: "Belgium", currency: "EUR", code: "BE" },
-  { name: "Benin", currency: "XOF", code: "BJ" },
-  { name: "Brazil", currency: "BRL", code: "BR" },
-  { name: "Switzerland", currency: "CHF", code: "CH" },
-  { name: "Chile", currency: "CLP", code: "CL" },
-  { name: "Colombia", currency: "COP", code: "CO" },
-  { name: "Republic of the Congo", currency: "XAF", code: "CG" },
-  { name: "Cote D'Ivoire", currency: "XOF", code: "CI" },
-  { name: "Croatia", currency: "EUR", code: "HR" },
-  { name: "Czech Republic", currency: "CZK", code: "CZ" },
-  { name: "Denmark", currency: "DKK", code: "DK" },
-  { name: "Dominican Republic", currency: "DOP", code: "DO" },
-  { name: "Ecuador", currency: "USD", code: "EC" },
-  { name: "Estonia", currency: "EUR", code: "EE" },
-  { name: "Ethiopia", currency: "ETB", code: "ET" },
-  { name: "Finland", currency: "EUR", code: "FI" },
-  { name: "Fiji", currency: "FJD", code: "FJ" },
-  { name: "France", currency: "EUR", code: "FR" },
-  { name: "Gabon", currency: "XAF", code: "GA" },
-  { name: "Germany", currency: "EUR", code: "DE" },
-  { name: "Ghana", currency: "GHS", code: "GH" },
-  { name: "Greece", currency: "EUR", code: "GR" },
-  { name: "Hong Kong", currency: "HKD", code: "HK" },
-  { name: "India", currency: "INR", code: "IN" },
-  { name: "Indonesia", currency: "IDR", code: "ID" },
-  { name: "Ireland", currency: "EUR", code: "IE" },
-  { name: "Italy", currency: "EUR", code: "IT" },
-  { name: "Latvia", currency: "EUR", code: "LV" },
-  { name: "Lithuania", currency: "EUR", code: "LT" },
-  { name: "Luxembourg", currency: "EUR", code: "LU" },
-  { name: "Malawi", currency: "MWK", code: "MW" },
-  { name: "Malaysia", currency: "MYR", code: "MY" },
-  { name: "Mexico", currency: "MXN", code: "MX" },
-  { name: "Netherlands", currency: "EUR", code: "NL" },
-  { name: "New Zealand", currency: "NZD", code: "NZ" },
-  { name: "Nigeria", currency: "NGN", code: "NG" },
-  { name: "Philippines", currency: "PHP", code: "PH" },
-  { name: "Poland", currency: "PLN", code: "PL" },
-  { name: "Portugal", currency: "EUR", code: "PT" },
-  { name: "Paraguay", currency: "PYG", code: "PY" },
-  { name: "Romania", currency: "RON", code: "RO" },
-  { name: "Rwanda", currency: "RWF", code: "RW" },
-  { name: "Singapore", currency: "SGD", code: "SG" },
-  { name: "Sierra Leone", currency: "SLL", code: "SL" },
-  { name: "Slovakia", currency: "EUR", code: "SK" },
-  { name: "Slovenia", currency: "EUR", code: "SI" },
-  { name: "South Korea", currency: "KRW", code: "KR" },
-  { name: "Spain", currency: "EUR", code: "ES" },
-  { name: "Sweden", currency: "SEK", code: "SE" },
-  { name: "Thailand", currency: "THB", code: "TH" },
-  { name: "Turkey", currency: "TRY", code: "TR" },
-  { name: "United Arab Emirates", currency: "AED", code: "AE" },
-  { name: "United Kingdom", currency: "GBP", code: "GB" },
-  { name: "Uganda", currency: "UGX", code: "UG" },
-  { name: "Uruguay", currency: "UYU", code: "UY" },
-  { name: "Vanuatu", currency: "VUV", code: "VU" },
-  { name: "Botswana", currency: "BWP", code: "BW" },
-  { name: "Cameroon", currency: "XAF", code: "CM" },
-  { name: "Kenya", currency: "KES", code: "KE" },
-  { name: "Senegal", currency: "XOF", code: "SN" },
-  { name: "Tanzania", currency: "TZS", code: "TZ" },
-  { name: "Togo", currency: "XOF", code: "TG" },
-  { name: "Zambia", currency: "ZMW", code: "ZM" },
-  { name: "Burkina Faso", currency: "XOF", code: "BF" },
-  { name: "Mali", currency: "XOF", code: "ML" },
-]
 
 const walletAssetNetworks: Record<string, string[]> = {
   USDT: ["Base", "Bitcoin", "Celo", "Ethereum"],
@@ -131,27 +62,6 @@ const mobileMoneyProvidersByCurrency: Record<string, string[]> = {
   INR: ["UPI"],
 }
 
-const mobileMoneyCountries = [
-  { name: "Benin", currency: "XOF", code: "BJ" },
-  { name: "Botswana", currency: "BWP", code: "BW" },
-  { name: "Cameroon", currency: "XAF", code: "CM" },
-  { name: "Ivory Coast", currency: "XOF", code: "CI" },
-  { name: "Kenya", currency: "KES", code: "KE" },
-  { name: "Malawi", currency: "MWK", code: "MW" },
-  { name: "Rwanda", currency: "RWF", code: "RW" },
-  { name: "Senegal", currency: "XOF", code: "SN" },
-  { name: "Tanzania", currency: "TZS", code: "TZ" },
-  { name: "Togo", currency: "XOF", code: "TG" },
-  { name: "Uganda", currency: "UGX", code: "UG" },
-  { name: "Zambia", currency: "ZMW", code: "ZM" },
-  { name: "Burkina Faso", currency: "XOF", code: "BF" },
-  { name: "Gabon", currency: "XAF", code: "GA" },
-  { name: "Mali", currency: "XOF", code: "ML" },
-  { name: "Philippines", currency: "PHP", code: "PH" },
-  { name: "Indonesia", currency: "IDR", code: "ID" },
-  { name: "India", currency: "INR", code: "IN" },
-]
-
 export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessWithData }: RecipientFormProps) {
   const [formData, setFormData] = useState({
     recipientType: isEdit && recipient ? inferRecipientType(recipient as Beneficiary) : "bank",
@@ -163,7 +73,6 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
     bic: "",
     sortCode: "",
     country: "United States",
-    email: "",
     phone: "",
     walletAsset: "USDT",
     walletNetwork: "",
@@ -190,15 +99,18 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
   const [easenetLookupLoading, setEasenetLookupLoading] = useState(false)
   const [easenetLookupError, setEasenetLookupError] = useState<string | null>(null)
 
-  const { corridors: bankCorridors, enabled: corridorCatalogEnabled } = usePayoutCorridors("bank_transfer")
-  const { corridors: mobileCorridors } = usePayoutCorridors("mobile_money")
+  const { corridors: bankCorridors, enabled: corridorCatalogEnabled, loading: bankCorridorsLoading } =
+    usePayoutCorridors("bank_transfer")
+  const { corridors: mobileCorridors, loading: mobileCorridorsLoading } = usePayoutCorridors("mobile_money")
 
-  const resolveCountryByRecipient = (r: Beneficiary) => {
-    const options = (r.bankName?.toLowerCase().includes("mobile money") ? mobileMoneyCountries : countries)
-    const byName = options.find((c) => c.name.toLowerCase() === String(r.country || "").toLowerCase())
-    if (byName) return byName
-    const byCurrency = options.find((c) => c.currency === r.currency)
-    return byCurrency || options[0]
+  /** When corridors are empty, infer a single row from saved recipient fields (edit mode). */
+  const resolveCountryByRecipient = (r: Beneficiary): RailCountryOption | undefined => {
+    const code = r.countryCode
+    const name = String(r.country || "").trim()
+    const cur = r.currency || "USD"
+    if (code && name) return { name, currency: cur, code }
+    if (code) return { name: code, currency: cur, code }
+    return undefined
   }
 
   useEffect(() => {
@@ -227,30 +139,21 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
         setEasenetLookupError(null)
       }
       const recipientCountryCode = (recipient as Beneficiary).countryCode
-      const bankOpts =
-        corridorCatalogEnabled && bankCorridors.length > 0
-          ? bankCorridors.map((c) => ({
-              name: c.country_name,
-              currency: c.currency_code,
-              code: c.country_code,
-            }))
-          : countries
-      const mobileOpts =
-        corridorCatalogEnabled && mobileCorridors.length > 0
-          ? mobileCorridors.map((c) => ({
-              name: c.country_name,
-              currency: c.currency_code,
-              code: c.country_code,
-            }))
-          : mobileMoneyCountries
+      const bankOpts = bankCorridors.map((c) => ({
+        name: c.country_name,
+        currency: c.currency_code,
+        code: c.country_code,
+      }))
+      const mobileOpts = mobileCorridors.map((c) => ({
+        name: c.country_name,
+        currency: c.currency_code,
+        code: c.country_code,
+      }))
       const countryOptionsForType = inferredType === "mobile" ? mobileOpts : bankOpts
       const matchedCountryFromCodeInType = countryOptionsForType.find(
         (c) => c.code === recipientCountryCode,
       )
-      const combinedAny =
-        corridorCatalogEnabled && bankCorridors.length > 0 && mobileCorridors.length > 0
-          ? [...bankOpts, ...mobileOpts]
-          : [...countries, ...mobileMoneyCountries]
+      const combinedAny = [...bankOpts, ...mobileOpts]
       const matchedCountryFromCodeAny = combinedAny.find((c) => c.code === recipientCountryCode)
       const matchedCountry =
         matchedCountryFromCodeInType ||
@@ -266,8 +169,8 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
         bic: recipient.bic || "",
         sortCode: recipient.sortCode || "",
         country: matchedCountry?.name || recipient.country || "United States",
-        email: recipient.email || "",
-        phone: recipient.phone || (inferredType === "mobile" ? (recipient.fullAccountNumber || recipient.accountNumber || "") : ""),
+        phone:
+          inferredType === "mobile" ? recipient.phone || (recipient.fullAccountNumber || recipient.accountNumber || "") : "",
         walletAsset: recipient.walletAsset || parsedWalletAsset || recipient.currency || "USDT",
         walletNetwork: recipient.walletNetwork || parsedWalletNetwork || "",
         walletAddress: recipient.fullAccountNumber || recipient.accountNumber || "",
@@ -321,54 +224,34 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
     }
   }, [formData.easenetTag, formData.recipientType])
 
-  const countriesForBankDropdown = useMemo(() => {
-    const euroAliasNames = countries.filter((c) => c.currency === "EUR").map((c) => String(c.name))
-
-    const euroOption = {
-      name: "Euro",
-      currency: "EUR",
-      code: "EURO",
-      // Used only for searching (CommandItem value). Display remains single "EUR - Euro".
-      aliases: euroAliasNames,
-    }
-
-    const filtered = countries.filter((c) => c.currency !== "EUR")
-    return [...filtered, euroOption]
-  }, [])
-
   const bankFromApi = corridorCatalogEnabled && bankCorridors.length > 0
   const mobileFromApi = corridorCatalogEnabled && mobileCorridors.length > 0
 
   const bankCountriesFlat = useMemo(() => {
-    if (bankFromApi) {
-      return bankCorridors
-        .map((c) => ({ name: c.country_name, currency: c.currency_code, code: c.country_code }))
-        .sort((a, b) => a.name.localeCompare(b.name))
-    }
-    return countries
-  }, [bankFromApi, bankCorridors])
+    return bankCorridors
+      .map((c) => ({ name: c.country_name, currency: c.currency_code, code: c.country_code }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [bankCorridors])
 
   const mobileCountriesFlat = useMemo(() => {
-    if (mobileFromApi) {
-      return mobileCorridors
-        .map((c) => ({ name: c.country_name, currency: c.currency_code, code: c.country_code }))
-        .sort((a, b) => a.name.localeCompare(b.name))
-    }
-    return mobileMoneyCountries
-  }, [mobileFromApi, mobileCorridors])
+    return mobileCorridors
+      .map((c) => ({ name: c.country_name, currency: c.currency_code, code: c.country_code }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [mobileCorridors])
 
   const countryOptions = useMemo(() => {
     if (formData.recipientType === "mobile") return mobileCountriesFlat
-    if (bankFromApi) return bankCountriesFlat
-    return countriesForBankDropdown
-  }, [formData.recipientType, mobileCountriesFlat, bankFromApi, bankCountriesFlat, countriesForBankDropdown])
+    if (formData.recipientType === "bank") return bankCountriesFlat
+    return []
+  }, [formData.recipientType, mobileCountriesFlat, bankCountriesFlat])
 
   const allCountriesForLookup = useMemo(() => {
-    if (bankFromApi && mobileFromApi) {
-      return [...bankCountriesFlat, ...mobileCountriesFlat]
-    }
-    return [...countries, ...mobileMoneyCountries]
-  }, [bankFromApi, mobileFromApi, bankCountriesFlat, mobileCountriesFlat])
+    return [...bankCountriesFlat, ...mobileCountriesFlat]
+  }, [bankCountriesFlat, mobileCountriesFlat])
+
+  const payoutCorridorsLoading =
+    (formData.recipientType === "mobile" && mobileCorridorsLoading) ||
+    (formData.recipientType === "bank" && bankCorridorsLoading)
 
   const selectedCountry = countryOptions.find((c) => c.name === formData.country)
   const currency = selectedCountry?.currency || "USD"
@@ -421,16 +304,6 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
       if (!formData.walletAsset.trim()) newErrors.walletAsset = "Asset is required"
       if (!formData.walletNetwork.trim()) newErrors.walletNetwork = "Network is required"
       if (!formData.walletAddress.trim()) newErrors.walletAddress = "Wallet address is required"
-    }
-
-    if (formData.recipientType === "bank" && !formData.email.trim()) {
-      newErrors.email = "Email is required"
-    } else if (formData.recipientType === "bank" && !/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = "Please enter a valid email"
-    }
-
-    if (formData.recipientType === "bank" && !formData.phone.trim()) {
-      newErrors.phone = "Phone number is required"
     }
 
     // Currency-specific validation
@@ -511,7 +384,7 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
       bankName:
         formData.recipientType === "bank" ? formData.bankName.trim() : "",
       currency,
-      phoneNumber: formData.phone.trim() || undefined,
+      phoneNumber: formData.recipientType === "mobile" ? formData.phone.trim() || undefined : undefined,
       mobileProvider: formData.recipientType === "mobile" ? formData.mobileProvider.trim() || undefined : undefined,
       walletAsset: formData.recipientType === "wallet" ? formData.walletAsset.trim() || undefined : undefined,
       walletNetwork: formData.recipientType === "wallet" ? formData.walletNetwork.trim() || undefined : undefined,
@@ -571,24 +444,31 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
     }
     if (type === "bank") {
       handleInputChange("recipientType", "bank")
-      handleInputChange("country", "United States")
+      const first = bankCountriesFlat[0]
+      handleInputChange("country", first?.name || "")
       handleInputChange("mobileProvider", "")
+      handleInputChange("phone", "")
       handleInputChange("easenetTag", "")
       setEasenetResolved(null)
       setEasenetLookupError(null)
       return
     }
     if (type === "mobile") {
-      const firstCountry = mobileCountriesFlat[0] || mobileMoneyCountries[0]
-      const firstRow = mobileCorridors.find(
-        (c) => c.country_code === firstCountry.code && c.currency_code === firstCountry.currency,
-      )
-      const firstProvider = Array.isArray(firstRow?.providers) && firstRow.providers.length
-        ? (firstRow.providers as string[])[0]
-        : (mobileMoneyProvidersByCurrency[firstCountry.currency] || ["Other"])[0]
+      const firstCountry = mobileCountriesFlat[0]
       handleInputChange("recipientType", "mobile")
-      handleInputChange("country", firstCountry.name)
-      handleInputChange("mobileProvider", firstProvider)
+      if (!firstCountry) {
+        handleInputChange("country", "")
+        handleInputChange("mobileProvider", "")
+      } else {
+        const firstRow = mobileCorridors.find(
+          (c) => c.country_code === firstCountry.code && c.currency_code === firstCountry.currency,
+        )
+        const firstProvider = Array.isArray(firstRow?.providers) && firstRow.providers.length
+          ? (firstRow.providers as string[])[0]
+          : (mobileMoneyProvidersByCurrency[firstCountry.currency] || ["Other"])[0]
+        handleInputChange("country", firstCountry.name)
+        handleInputChange("mobileProvider", firstProvider)
+      }
       handleInputChange("easenetTag", "")
       setEasenetResolved(null)
       setEasenetLookupError(null)
@@ -613,14 +493,14 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
             <Button type="button" variant={formData.recipientType === "bank" ? "default" : "outline"} onClick={() => selectRecipientType("bank")}>Bank Account</Button>
             <Button type="button" variant={formData.recipientType === "mobile" ? "default" : "outline"} onClick={() => selectRecipientType("mobile")}>Mobile Money</Button>
             <Button type="button" variant={formData.recipientType === "wallet" ? "default" : "outline"} onClick={() => selectRecipientType("wallet")}>Wallet Address</Button>
-            <Button type="button" variant={formData.recipientType === "easenet" ? "default" : "outline"} onClick={() => selectRecipientType("easenet")}>Easenet</Button>
+            <Button type="button" variant={formData.recipientType === "easenet" ? "default" : "outline"} onClick={() => selectRecipientType("easenet")}>Easetag</Button>
           </div>
         </div>
 
         {formData.recipientType === "easenet" && (
           <div className="space-y-4 md:col-span-2">
             <div className="space-y-2">
-              <Label htmlFor="easenetTag">Easenet handle</Label>
+              <Label htmlFor="easenetTag">Easetag</Label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">@</span>
                 <Input
@@ -685,41 +565,6 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
 
         {(formData.recipientType === "bank" || formData.recipientType === "mobile") && (
           <>
-            {formData.recipientType === "bank" && (
-        <div className="space-y-2">
-          <label className="text-sm font-medium flex items-center gap-2">
-            <Mail className="h-4 w-4 text-muted-foreground" />
-            Email Address
-          </label>
-          <Input
-            id="email"
-            type="email"
-            value={formData.email}
-            onChange={(e) => handleInputChange("email", e.target.value)}
-            placeholder="john.doe@example.com"
-            className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.email ? "border-red-500" : ""}`}
-          />
-          {errors.email && <p className="text-xs text-red-500">{errors.email}</p>}
-        </div>
-            )}
-
-            {formData.recipientType === "bank" && (
-        <div className="space-y-2">
-          <label className="text-sm font-medium flex items-center gap-2">
-            <Phone className="h-4 w-4 text-muted-foreground" />
-            Phone Number
-          </label>
-          <Input
-            id="phone"
-            value={formData.phone}
-            onChange={(e) => handleInputChange("phone", e.target.value)}
-            placeholder="+1 555 123 4567"
-            className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.phone ? "border-red-500" : ""}`}
-          />
-          {errors.phone && <p className="text-xs text-red-500">{errors.phone}</p>}
-        </div>
-            )}
-
         <div className="space-y-2">
           <label className="text-sm font-medium flex items-center gap-2">
             <MapPin className="h-4 w-4 text-muted-foreground" />
@@ -730,19 +575,15 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
               <button className={`flex h-12 w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus:outline-none focus:ring-0 focus:ring-offset-0 focus:border-ring disabled:cursor-not-allowed disabled:opacity-50 transition-[border-color] ${errors.country ? "border-red-500" : ""}`}>
                 {selectedCountry ? (
                   <div className="flex items-center gap-2 min-w-0 flex-1">
-                    {selectedCountry.currency === "EUR" && selectedCountry.code === "EURO" ? (
-                      <CurrencyFlag currency="EUR" size={22} />
-                    ) : (
-                      <CountryFlag code={selectedCountry.code} size={22} />
-                    )}
+                    <CountryFlag code={selectedCountry.code} size={22} />
                     <span className="truncate text-xs sm:text-sm">
-                      {bankFromApi || mobileFromApi
-                        ? `${selectedCountry.name} · ${selectedCountry.currency}`
-                        : `${selectedCountry.currency} - ${selectedCountry.currency === "EUR" ? "Euro" : selectedCountry.name}`}
+                      {`${selectedCountry.name} · ${selectedCountry.currency}`}
                     </span>
                   </div>
                 ) : (
-                  <span className="text-xs text-muted-foreground">Select country</span>
+                  <span className="text-xs text-muted-foreground">
+                    {payoutCorridorsLoading ? "Loading corridors…" : "Select country"}
+                  </span>
                 )}
                 <ChevronDown className="h-4 w-4 opacity-50" />
               </button>
@@ -756,16 +597,18 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
                       onTouchMove={(e) => e.stopPropagation()}
                     >
                     <CommandList className="max-h-none">
-                  <CommandEmpty>No country/currency found.</CommandEmpty>
+                  <CommandEmpty>
+                    {payoutCorridorsLoading
+                      ? "Loading payout corridors…"
+                      : "No payout corridors for this recipient type. Try again later or contact support."}
+                  </CommandEmpty>
                   <CommandGroup>
                         {countryOptions.map((country) => (
                       <CommandItem
-                        key={`${country.code}-${country.name}`}
-                        value={`${country.currency} ${country.name}${(country as any).aliases?.length ? ` ${(country as any).aliases.join(" ")}` : ""}`}
+                        key={`${country.code}-${country.currency}-${country.name}`}
+                        value={`${country.currency} ${country.name} ${country.code}`}
                         onSelect={() => {
-                          const selectedCountryName =
-                            country.currency === "EUR" && country.code === "EURO" ? "Euro" : country.name
-                          handleInputChange("country", selectedCountryName)
+                          handleInputChange("country", country.name)
                           if (formData.recipientType === "mobile") {
                             const row = mobileCorridors.find(
                               (c) => c.country_code === country.code && c.currency_code === country.currency,
@@ -780,15 +623,9 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
                         }}
                       >
                         <div className="flex items-center gap-2 w-full min-w-0">
-                          {country.currency === "EUR" && country.code === "EURO" ? (
-                            <CurrencyFlag currency="EUR" size={22} />
-                          ) : (
-                            <CountryFlag code={country.code} size={22} />
-                          )}
+                          <CountryFlag code={country.code} size={22} />
                           <span className="flex-1 min-w-0 truncate text-xs sm:text-sm">
-                            {bankFromApi || mobileFromApi
-                              ? `${country.name} · ${country.currency}`
-                              : `${country.currency} - ${country.currency === "EUR" ? "Euro" : country.name}`}
+                            {`${country.name} · ${country.currency}`}
                           </span>
                         </div>
                       </CommandItem>
@@ -1025,9 +862,6 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2 col-span-2">
               <label className="text-xs text-muted-foreground">Transfer type</label>
-              <p className="text-xs text-muted-foreground/80">
-                ACH or US domestic wire (Fedwire). Use the routing number that matches the rail.
-              </p>
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   type="button"

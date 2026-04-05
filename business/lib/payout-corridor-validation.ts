@@ -18,7 +18,8 @@ function isWalletRow(row: RecipientLike): boolean {
 
 function isEasenetRow(row: RecipientLike): boolean {
   const b = String(row.bank_name || "")
-  return b.toLowerCase().includes("easenet")
+  const low = b.toLowerCase()
+  return low.includes("easenet") || low.includes("easetag")
 }
 
 function isMobileRow(row: RecipientLike): boolean {

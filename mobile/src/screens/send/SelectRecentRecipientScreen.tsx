@@ -37,7 +37,14 @@ import { recipientService } from '../../lib/recipientService'
 import { getAccountTypeConfigFromCurrency } from '../../lib/currencyAccountTypes'
 import { formatIBAN, formatSortCode, formatRoutingNumber, formatAccountNumber } from '../../utils/formatters'
 import { CountryCurrency } from '../../lib/countryCurrencyMapping'
-import { getCatalogByRecipientType, getRecipientProviders, getWalletAssets, getWalletNetworksForAsset } from '../../lib/recipientCatalog'
+import {
+  getCatalogByRecipientTypeWithJurisdiction,
+  getRecipientProviders,
+  getWalletAssets,
+  getWalletNetworksForAsset,
+  type RecipientType,
+} from '../../lib/recipientCatalog'
+import { getAllowedCountriesCached } from '../../lib/jurisdictionCountryPolicy'
 import { getNetworkIconUrl, getTokenIconUrl } from '../../lib/cryptoIcons'
 import { ShimmerLoader } from '../../components/premium'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
@@ -103,6 +110,23 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   } | null>(null)
   const [hubSearchLoading, setHubSearchLoading] = useState(false)
   const [hubSearchError, setHubSearchError] = useState<string | null>(null)
+  const [jurisdictionUnrestricted, setJurisdictionUnrestricted] = useState(true)
+  const [jurisdictionCodes, setJurisdictionCodes] = useState<string[] | null>(null)
+
+  const jurisdictionPolicy = useMemo(
+    () => ({ unrestricted: jurisdictionUnrestricted, codes: jurisdictionCodes }),
+    [jurisdictionUnrestricted, jurisdictionCodes],
+  )
+
+  useEffect(() => {
+    void getAllowedCountriesCached('kyb').then((p) => {
+      setJurisdictionUnrestricted(p.unrestricted)
+      setJurisdictionCodes(p.codes)
+    })
+  }, [])
+
+  const recipientCatalogFor = (type: RecipientType) =>
+    getCatalogByRecipientTypeWithJurisdiction(type, jurisdictionPolicy)
 
   const [newRecipient, setNewRecipient] = useState({
     fullName: '',
@@ -418,7 +442,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
         const newRecipientData = await recipientService.create(userProfile.id, {
           fullName: easenetProfile.fullName,
           accountNumber: tag,
-          bankName: `Easenet (@${tag})`,
+          bankName: `Easetag (@${tag})`,
           currency: 'USD',
           countryCode: 'US',
           payeeEasetag: tag,
@@ -510,7 +534,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       : selectedRecipientType === 'easenet'
         ? 'bank'
         : (selectedRecipientType || 'bank')
-  const filteredCurrencies = getCatalogByRecipientType(recipientTypeKey as any).filter(currency => {
+  const filteredCurrencies = recipientCatalogFor(recipientTypeKey as RecipientType).filter((currency) => {
     if (currencySearchTerm) {
       return (
         currency.currencyName.toLowerCase().includes(currencySearchTerm.toLowerCase()) ||
@@ -520,9 +544,10 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     }
     return true
   })
-  const selectedCatalogEntry = getCatalogByRecipientType(recipientTypeKey as any).find(
-    (item) => item.currencyCode === newRecipient.currency && item.countryCode === selectedCountryCurrency?.countryCode,
-  ) || getCatalogByRecipientType(recipientTypeKey as any).find((item) => item.currencyCode === newRecipient.currency)
+  const selectedCatalogEntry =
+    recipientCatalogFor(recipientTypeKey as RecipientType).find(
+      (item) => item.currencyCode === newRecipient.currency && item.countryCode === selectedCountryCurrency?.countryCode,
+    ) || recipientCatalogFor(recipientTypeKey as RecipientType).find((item) => item.currencyCode === newRecipient.currency)
   const isAnyDropdownOpen = showCurrencyDropdown || showProviderDropdown || showWalletAssetDropdown || showWalletNetworkDropdown
   const closeAllDropdowns = () => {
     setShowCurrencyDropdown(false)
@@ -848,7 +873,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                 style={styles.recipientTypeOption}
                 onPress={async () => {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                  const firstMobile = getCatalogByRecipientType('mobile_money' as any)[0]
+                  const firstMobile = recipientCatalogFor('mobile_money')[0]
                   const firstCurrency = firstMobile?.currencyCode || 'KES'
                   const firstProvider = getRecipientProviders(firstCurrency, 'mobile_money', firstMobile?.countryCode)[0] || ''
                   setSelectedRecipientType('mobile')
@@ -905,7 +930,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                   <AtSign size={24} color={colors.primary.main} strokeWidth={2} />
                 </View>
                 <View style={styles.recipientTypeContent}>
-                  <Text style={styles.recipientTypeTitle}>Easenet</Text>
+                  <Text style={styles.recipientTypeTitle}>Easetag</Text>
                   <Text style={styles.recipientTypeSubtitle}>Pay by @handle (wallet transfer)</Text>
                 </View>
               </TouchableOpacity>
@@ -952,7 +977,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                   : selectedRecipientType === 'mobile'
                     ? 'Add Mobile Money'
                     : selectedRecipientType === 'easenet'
-                      ? 'Add Easenet recipient'
+                      ? 'Add Easetag recipient'
                       : 'Add Bank Account'}
               </Text>
               <TouchableOpacity
@@ -986,7 +1011,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
               <>
                 <Text style={styles.modalHint}>Send money to someone by @easetag</Text>
                 <Text style={[styles.modalHint, styles.modalHintSecondary]}>
-                  Wallet transfers use USD. Enter the payee&apos;s Easenet handle.
+                  Wallet transfers use USD. Enter the payee&apos;s Easetag.
                 </Text>
                 <View style={styles.easenetInputRow}>
                   <Text style={styles.easenetAt}>@</Text>

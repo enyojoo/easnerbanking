@@ -26,13 +26,10 @@ import { CountryFlag, CurrencyFlag } from "@/components/flags"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { deleteRecipient, listRecipients } from "@/lib/recipients-store"
 import { useAuth } from "@/lib/auth-context"
-import { CACHE_KEYS } from "@/lib/cache"
-import { useCachedData } from "@/lib/use-cached-data"
-
-const RECIPIENTS_CACHE_TTL_MS = 60 * 60 * 1000
+import { useRecipientsCached } from "@/hooks/use-recipients-cached"
 
 export default function RecipientsPage() {
-  const { user, isLoading } = useAuth()
+  const { user } = useAuth()
   const [searchTerm, setSearchTerm] = useState("")
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [selectedRecipient, setSelectedRecipient] = useState<Beneficiary | null>(null)
@@ -41,24 +38,7 @@ export default function RecipientsPage() {
     data: beneficiaries,
     setData: setBeneficiaries,
     loading: isRecipientsLoading,
-  } = useCachedData<Beneficiary[]>({
-    enabled: !isLoading && Boolean(user?.id),
-    cacheKey: user?.id ? CACHE_KEYS.RECIPIENTS(user.id) : null,
-    persistKey: user?.id ? `recipients_cache_${user.id}` : undefined,
-    initialData: [],
-    ttlMs: RECIPIENTS_CACHE_TTL_MS,
-    fetcher: async () => listRecipients(user!.id),
-    onError: (err) => {
-      const message = err instanceof Error ? err.message : String(err)
-      // Backend schema/cache drift can briefly return 400 for recipient list reads.
-      // Treat as empty state and avoid noisy console errors in the UI.
-      if (message.toLowerCase().includes("bad request")) {
-        setBeneficiaries([])
-        return
-      }
-      console.error("Failed to load recipients:", message)
-    },
-  })
+  } = useRecipientsCached(true)
 
   const reconcileRecipientsFromServer = () => {
     if (!user?.id) return

@@ -6,6 +6,7 @@ import { User, AuthUser } from '../types'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 import { analytics } from '../lib/analytics'
 import { ensureBusinessAppUserBootstrap } from '../lib/apiClient'
+import { clearJurisdictionCountryPolicyCache } from '../lib/jurisdictionCountryPolicy'
 import { clearPinAuth, updateSessionActivity, markFirstLoginAfterVerification } from '../lib/pinAuth'
 import { AUTH_INITIAL_MODE_KEY } from '../constants/auth'
 import {
@@ -480,7 +481,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setUser(null)
       setUserProfile(null)
       setLoading(false) // Also set loading to false to ensure AppNavigator doesn't wait
-      
+
+      clearJurisdictionCountryPolicyCache()
+
       // Sign out from Supabase (this will trigger onAuthStateChange which also sets user to null)
       // Do this AFTER setting user to null so navigation happens first
       await supabase.auth.signOut()

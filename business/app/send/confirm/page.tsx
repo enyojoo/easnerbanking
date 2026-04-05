@@ -40,7 +40,7 @@ function isEasenetRecipient(recipient: Beneficiary): boolean {
 }
 
 function getTransferMethod(recipient: Beneficiary, currency: string): string {
-  if (isEasenetRecipient(recipient)) return "Easenet (wallet-to-wallet)"
+  if (isEasenetRecipient(recipient)) return "Easetag (wallet-to-wallet)"
   if (currency === "USD" && recipient.country === "United States") return "ACH"
   if (currency === "EUR") return "SEPA"
   if (currency === "GBP" && recipient.country === "United Kingdom") return "Faster Payments"
@@ -49,7 +49,7 @@ function getTransferMethod(recipient: Beneficiary, currency: string): string {
 
 function getProcessingTime(method: string): string {
   switch (method) {
-    case "Easenet (wallet-to-wallet)":
+    case "Easetag (wallet-to-wallet)":
       return "Usually instant"
     case "ACH":
       return "1-3 business days"

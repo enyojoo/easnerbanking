@@ -85,7 +85,7 @@ function resolveCountryName(currency: string, countryCode?: string): string {
 
 function deriveBankName(input: RecipientUpsertInput): string {
   if (input.recipientType === "easenet" && input.payeeEasetag) {
-    return `Easenet (@${input.payeeEasetag})`
+    return `Easetag (@${input.payeeEasetag})`
   }
   if (input.recipientType === "mobile" && input.mobileProvider) {
     return `Mobile Money (${input.mobileProvider})`

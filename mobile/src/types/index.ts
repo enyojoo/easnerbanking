@@ -52,9 +52,9 @@ export interface Recipient {
   city?: string
   state?: string
   postal_code?: string
-  /** Easenet @handle for wallet-to-wallet (Noah internal transfer). */
+  /** Easetag (@handle) for wallet-to-wallet (Noah internal transfer). */
   payee_easetag?: string
-  /** Snapshot of payee `users.avatar_url` at save time (Easenet recipients). */
+  /** Snapshot of payee `users.avatar_url` at save time (Easetag / P2P recipients). */
   payee_avatar_url?: string
   transfer_type?: "ACH" | "Wire"
   checking_or_savings?: "checking" | "savings"

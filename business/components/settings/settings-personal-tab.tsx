@@ -5,7 +5,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { User, Mail, Phone, Calendar, Edit, X, Check, Key, Smartphone, Loader2, Lock } from "lucide-react"
+import {
+  User,
+  Mail,
+  Phone,
+  Calendar,
+  Edit,
+  X,
+  Check,
+  Key,
+  Smartphone,
+  Loader2,
+  Lock,
+  IdCard,
+  Shield,
+} from "lucide-react"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { useAuth } from "@/lib/auth-context"
@@ -34,6 +48,7 @@ import {
 } from "@/lib/auth-mfa"
 import { hasPin } from "@/lib/login-pin"
 import { PinSettingsDialog } from "@/components/app-lock/pin-settings-dialog"
+import { SETTINGS_CONTROL_SURFACE } from "@/lib/settings-control-surface"
 
 /** Aligns with personal settings store / dataCache freshness window. */
 const MFA_STATUS_CACHE_TTL_MS = 5 * 60 * 1000
@@ -87,6 +102,7 @@ export function SettingsPersonalTab() {
   const { user } = useAuth()
   const supabase = useMemo(() => createSupabaseBrowser(), [])
   const [editingSection, setEditingSection] = useState<string | null>(null)
+  const [savingPersonal, setSavingPersonal] = useState(false)
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -268,24 +284,29 @@ export function SettingsPersonalTab() {
 
   const handleEdit = (section: string) => setEditingSection(section)
   const handleCancel = () => setEditingSection(null)
-  const handleSave = async (section: string) => {
-    const { data } = await supabase.auth.getSession()
-    if (!data.session) return
-    const res = await fetchWithSession("/api/settings/personal", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        fullName: formData.fullName,
-        phone: formData.phone,
-        dateOfBirth: formData.dateOfBirth,
-        avatarUrl: formData.avatarUrl,
-      }),
-    })
-    if (res.ok) {
-      const next = (await res.json()) as PersonalSettingsResponse
-      setPersonalData(next)
+  const handleSave = async (_section: string) => {
+    setSavingPersonal(true)
+    try {
+      const { data } = await supabase.auth.getSession()
+      if (!data.session) return
+      const res = await fetchWithSession("/api/settings/personal", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName: formData.fullName,
+          phone: formData.phone,
+          dateOfBirth: formData.dateOfBirth,
+          avatarUrl: formData.avatarUrl,
+        }),
+      })
+      if (res.ok) {
+        const next = (await res.json()) as PersonalSettingsResponse
+        setPersonalData(next)
+      }
+      setEditingSection(null)
+    } finally {
+      setSavingPersonal(false)
     }
-    setEditingSection(null)
   }
   const handleInputChange = (field: string, value: string | null) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
@@ -297,19 +318,23 @@ export function SettingsPersonalTab() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
-              <User className="h-5 w-5" />
+              <IdCard className="h-5 w-5" aria-hidden />
               Personal Information
             </CardTitle>
             {loading ? (
               <div className="h-9 w-24 animate-pulse rounded-md bg-muted" />
             ) : editingSection === "personal" ? (
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={handleCancel}>
+                <Button variant="outline" size="sm" onClick={handleCancel} disabled={savingPersonal}>
                   <X className="h-4 w-4 mr-1" />
                   Cancel
                 </Button>
-                <Button size="sm" onClick={() => void handleSave("personal")}>
-                  <Check className="h-4 w-4 mr-1" />
+                <Button size="sm" onClick={() => void handleSave("personal")} disabled={savingPersonal}>
+                  {savingPersonal ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  ) : (
+                    <Check className="h-4 w-4" aria-hidden />
+                  )}
                   Save
                 </Button>
               </div>
@@ -336,16 +361,20 @@ export function SettingsPersonalTab() {
           )}
           <div className="space-y-2">
             <Label htmlFor="fullName">Full Name</Label>
-            {loading ? (
-              <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
-            ) : (
-              <Input
-                id="fullName"
-                value={formData.fullName}
-                onChange={(e) => handleInputChange("fullName", e.target.value)}
-                disabled={editingSection !== "personal"}
-              />
-            )}
+            <div className="flex items-center gap-2">
+              <User className="h-4 w-4 text-muted-foreground" aria-hidden />
+              {loading ? (
+                <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
+              ) : (
+                <Input
+                  id="fullName"
+                  className={SETTINGS_CONTROL_SURFACE}
+                  value={formData.fullName}
+                  onChange={(e) => handleInputChange("fullName", e.target.value)}
+                  disabled={editingSection !== "personal"}
+                />
+              )}
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="email">Email Address</Label>
@@ -356,6 +385,7 @@ export function SettingsPersonalTab() {
               ) : (
                 <Input
                   id="email"
+                  className={SETTINGS_CONTROL_SURFACE}
                   type="email"
                   value={formData.email}
                   readOnly
@@ -373,6 +403,7 @@ export function SettingsPersonalTab() {
               ) : (
                 <Input
                   id="phone"
+                  className={SETTINGS_CONTROL_SURFACE}
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => handleInputChange("phone", e.target.value)}
@@ -390,6 +421,7 @@ export function SettingsPersonalTab() {
               ) : (
                 <Input
                   id="dateOfBirth"
+                  className={SETTINGS_CONTROL_SURFACE}
                   type="date"
                   value={formData.dateOfBirth}
                   onChange={(e) => handleInputChange("dateOfBirth", e.target.value)}
@@ -403,7 +435,10 @@ export function SettingsPersonalTab() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Security Settings</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-5 w-5" aria-hidden />
+            Security Settings
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between p-4 border rounded-lg">

@@ -1,7 +1,7 @@
 export interface Beneficiary {
   id: string
   countryCode?: string
-  /** Resolved Easenet handle (lowercase, no @) when recipient is Easenet P2P */
+  /** Resolved Easetag (lowercase, no @) for payee P2P / wallet-to-wallet */
   payeeEasetag?: string
   /** Snapshot URL from payee users.avatar_url */
   avatarUrl?: string

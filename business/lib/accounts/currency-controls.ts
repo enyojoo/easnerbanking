@@ -10,6 +10,38 @@ export type CurrencyPolicy = {
 
 const ALL_CODES: CurrencyCode[] = ["USD", "EUR", "GBP", "NGN"]
 
+/** Human labels for business base currency UI (subset of tracked fiat policies). */
+export const FIAT_CURRENCY_LABELS: Record<CurrencyCode, string> = {
+  USD: "US Dollar",
+  EUR: "Euro",
+  GBP: "British Pound",
+  NGN: "Nigerian Naira",
+}
+
+export type AllowedBaseCurrencyOption = { code: CurrencyCode; label: string }
+
+/** Office-backed list: currencies enabled for selection as org **base currency** (settings + onboarding). */
+export async function getAllowedBaseCurrencyOptions(): Promise<AllowedBaseCurrencyOption[]> {
+  const policies = await getGlobalCurrencyPolicies()
+  const out: AllowedBaseCurrencyOption[] = []
+  for (const code of ALL_CODES) {
+    const p = policies[code]
+    if (p.available && p.active) {
+      out.push({ code, label: `${code} - ${FIAT_CURRENCY_LABELS[code]}` })
+    }
+  }
+  return out
+}
+
+/** True if `code` is a tracked policy currency and is both available and active. */
+export async function isAllowedBaseCurrency(code: string): Promise<boolean> {
+  const upper = String(code || "").trim().toUpperCase() as CurrencyCode
+  if (!ALL_CODES.includes(upper)) return false
+  const policies = await getGlobalCurrencyPolicies()
+  const p = policies[upper]
+  return p.available && p.active
+}
+
 function normalizeBool(v: string | null | undefined, fallback: boolean): boolean {
   if (v == null) return fallback
   const s = v.trim().toLowerCase()

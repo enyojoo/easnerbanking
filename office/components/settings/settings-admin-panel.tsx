@@ -37,6 +37,7 @@ import {
   formatFieldValue,
 } from "@/lib/currency-account-types"
 import { CurrencyFlag } from "@/components/flags"
+import { parseJurisdictionCountryPolicyJson, serializeJurisdictionPolicy } from "@easner/shared"
 
 interface SystemSetting {
   id: string
@@ -169,6 +170,10 @@ export function SettingsAdminPanel() {
     NGN: { available: false, active: true },
   })
 
+  /** Office JSON for `system_settings.jurisdiction_country_policy` — see @easner/shared parse/serialize. */
+  const [jurisdictionPolicyText, setJurisdictionPolicyText] = useState('{"v":1}')
+  const [jurisdictionSaving, setJurisdictionSaving] = useState(false)
+
   useEffect(() => {
     loadAllData()
   }, [])
@@ -260,6 +265,11 @@ export function SettingsAdminPanel() {
           case "currency_active_NGN":
             newCurrencyControls.NGN.active = setting.value === "true"
             break
+          case "jurisdiction_country_policy":
+            if (setting.value != null && String(setting.value).trim() !== "") {
+              setJurisdictionPolicyText(String(setting.value))
+            }
+            break
         }
       })
 
@@ -320,6 +330,38 @@ export function SettingsAdminPanel() {
     } catch (error) {
       console.error("Error updating system setting:", error)
       throw error
+    }
+  }
+
+  const handleSaveJurisdictionPolicy = async () => {
+    const trimmed = jurisdictionPolicyText.trim()
+    const fallback = '{"v":1}'
+    if (!trimmed) {
+      setJurisdictionSaving(true)
+      try {
+        await updateSystemSetting("jurisdiction_country_policy", fallback, "json", "platform")
+        setJurisdictionPolicyText(fallback)
+      } catch {
+        console.error("Failed to save jurisdiction policy")
+      } finally {
+        setJurisdictionSaving(false)
+      }
+      return
+    }
+    const parsed = parseJurisdictionCountryPolicyJson(trimmed)
+    if (parsed.error === "invalid_json") {
+      console.error("Invalid jurisdiction JSON")
+      return
+    }
+    const normalized = parsed.policy ? serializeJurisdictionPolicy(parsed.policy) : fallback
+    setJurisdictionSaving(true)
+    try {
+      await updateSystemSetting("jurisdiction_country_policy", normalized, "json", "platform")
+      setJurisdictionPolicyText(normalized)
+    } catch {
+      console.error("Failed to save jurisdiction policy")
+    } finally {
+      setJurisdictionSaving(false)
     }
   }
 
@@ -789,6 +831,26 @@ export function SettingsAdminPanel() {
                           ))}
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div className="space-y-2 pt-2">
+                    <Label htmlFor="jurisdiction_country_policy">Jurisdiction country policy (JSON)</Label>
+                    <p className="text-sm text-gray-500">
+                      Optional ISO2 allowlists for business signup (<code className="text-xs">allowedSignup</code>) and
+                      legal-entity country in settings (<code className="text-xs">allowedKybEntity</code>, omit or{" "}
+                      <code className="text-xs">null</code> to mirror signup). Omit lists or use{" "}
+                      <code className="text-xs">{`{"v":1}`}</code> for no restriction. Example:{" "}
+                      <code className="text-xs break-all">{`{"v":2,"allowedSignup":["US","NG","GB"]}`}</code>
+                    </p>
+                    <Textarea
+                      id="jurisdiction_country_policy"
+                      className="min-h-[120px] font-mono text-xs"
+                      value={jurisdictionPolicyText}
+                      onChange={(e) => setJurisdictionPolicyText(e.target.value)}
+                      spellCheck={false}
+                    />
+                    <Button type="button" variant="secondary" disabled={jurisdictionSaving} onClick={() => void handleSaveJurisdictionPolicy()}>
+                      {jurisdictionSaving ? "Saving…" : "Save jurisdiction policy"}
+                    </Button>
                   </div>
                 </div>
                 <div className="border-t pt-6 space-y-4">

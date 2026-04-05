@@ -4,6 +4,9 @@ import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { validateEasetag, normalizeEasetag } from "@/lib/easetag-validation"
 import { isEasetagGloballyAvailable } from "@/lib/easetag-global"
+import { isValidIndustryId } from "@/lib/business-industries"
+import { isAllowedBaseCurrency } from "@/lib/accounts/currency-controls"
+import { isCountryAllowedForSurface } from "@/lib/jurisdiction-country-policy"
 
 type UpdateBody = {
   businessName?: string
@@ -271,6 +274,20 @@ export async function PUT(request: Request) {
     body = {}
   }
 
+  if (body.businessType !== undefined) {
+    const t = typeof body.businessType === "string" ? body.businessType.trim() : ""
+    if (t.length > 0 && !isValidIndustryId(t)) {
+      return NextResponse.json({ error: "Invalid business industry" }, { status: 400 })
+    }
+  }
+
+  if (body.baseCurrency !== undefined) {
+    const raw = typeof body.baseCurrency === "string" ? body.baseCurrency.trim().toUpperCase() : ""
+    if (raw.length > 0 && !(await isAllowedBaseCurrency(raw))) {
+      return NextResponse.json({ error: "Base currency is not available" }, { status: 400 })
+    }
+  }
+
   const admin = createSupabaseAdmin()
   const businessId = await ensureOrganizationId(
     admin,
@@ -278,6 +295,16 @@ export async function PUT(request: Request) {
     user.email,
     typeof user.user_metadata?.name === "string" ? user.user_metadata.name : null,
   )
+
+  if (body.countryCode !== undefined) {
+    const cc = normalizeCountryCode(body.countryCode)
+    if (cc && !(await isCountryAllowedForSurface(admin, cc, "kyb"))) {
+      return NextResponse.json(
+        { error: "This country is not allowed for your business profile." },
+        { status: 400 },
+      )
+    }
+  }
 
   const countryCode = normalizeCountryCode(body.countryCode)
   const country = countryNameFromCode(countryCode)
@@ -309,7 +336,10 @@ export async function PUT(request: Request) {
   if (body.businessType !== undefined) updates.business_type = body.businessType?.trim() || null
   if (body.registrationNumber !== undefined) updates.registration_number = body.registrationNumber?.trim() || null
   if (body.taxId !== undefined) updates.tax_id = body.taxId?.trim() || null
-  if (body.baseCurrency !== undefined) updates.base_currency = body.baseCurrency?.trim() || null
+  if (body.baseCurrency !== undefined) {
+    const cur = body.baseCurrency?.trim() || ""
+    updates.base_currency = cur ? cur.toUpperCase() : null
+  }
   if (body.businessDescription !== undefined) updates.description = body.businessDescription?.trim() || null
   if (body.website !== undefined) updates.website = body.website?.trim() || null
   if (body.supportEmail !== undefined) updates.support_email = body.supportEmail?.trim() || null

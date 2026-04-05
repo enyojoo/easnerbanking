@@ -61,6 +61,8 @@ function ProfileEditContent({ navigation }: NavigationProps) {
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [checkingEasetag, setCheckingEasetag] = useState(false)
   const [easetagAvailable, setEasetagAvailable] = useState<boolean | null>(null)
+  const [easetagValidationError, setEasetagValidationError] = useState<string | null>(null)
+  const easetagCheckSeqRef = useRef(0)
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     // Initialize with existing date or default to 25 years ago
@@ -124,8 +126,12 @@ function ProfileEditContent({ navigation }: NavigationProps) {
 
   const handleEditProfile = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    easetagCheckSeqRef.current += 1
+    setCheckingEasetag(false)
     setEditProfileData(profileData)
     setIsEditing(true)
+    setEasetagAvailable(null)
+    setEasetagValidationError(null)
   }
 
   const handleSaveProfile = async () => {
@@ -167,6 +173,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
 
       setIsEditing(false)
       setEasetagAvailable(null)
+      setEasetagValidationError(null)
       Alert.alert('Success', 'Profile updated successfully')
     } catch (error) {
       console.error('Error updating profile:', error)
@@ -178,9 +185,12 @@ function ProfileEditContent({ navigation }: NavigationProps) {
 
   const handleCancelEdit = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    easetagCheckSeqRef.current += 1
+    setCheckingEasetag(false)
     setEditProfileData(profileData)
     setIsEditing(false)
     setEasetagAvailable(null)
+    setEasetagValidationError(null)
     if (easetagCheckTimeout.current) {
       clearTimeout(easetagCheckTimeout.current)
     }
@@ -232,19 +242,40 @@ function ProfileEditContent({ navigation }: NavigationProps) {
 
   // Check easetag availability
   const checkEasetagAvailability = async (easetag: string) => {
-    if (!easetag || easetag === profileData.easetag) {
+    const profileTag = (profileData.easetag || '').replace(/^@/, '').trim().toLowerCase()
+    const cleanTag = easetag.replace(/^@/, "").trim().toLowerCase()
+    if (!cleanTag || cleanTag === profileTag) {
       setEasetagAvailable(null)
+      setEasetagValidationError(null)
+      return
+    }
+    if (cleanTag.length < 4) {
+      setEasetagAvailable(null)
+      setEasetagValidationError(null)
       return
     }
 
     setCheckingEasetag(true)
+    setEasetagValidationError(null)
+    const seq = ++easetagCheckSeqRef.current
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return
+      if (!session) {
+        if (seq === easetagCheckSeqRef.current) {
+          setEasetagAvailable(null)
+          setEasetagValidationError(null)
+        }
+        return
+      }
 
-      const cleanTag = easetag.replace(/^@/, "").toLowerCase()
       const apiUrl = getApiBaseUrl()
-      if (!apiUrl) return
+      if (!apiUrl) {
+        if (seq === easetagCheckSeqRef.current) {
+          setEasetagAvailable(null)
+          setEasetagValidationError(null)
+        }
+        return
+      }
       const response = await fetch(
         `${apiUrl}/api/username/check?easetag=${encodeURIComponent(cleanTag)}`,
         {
@@ -254,17 +285,54 @@ function ProfileEditContent({ navigation }: NavigationProps) {
         }
       )
 
-      if (response.ok) {
-        const data = await response.json()
-        setEasetagAvailable(data.available && data.valid)
-      } else {
-        setEasetagAvailable(false)
+      let data: Record<string, unknown> = {}
+      try {
+        data = (await response.json()) as Record<string, unknown>
+      } catch {
+        if (seq === easetagCheckSeqRef.current) {
+          setEasetagAvailable(null)
+          setEasetagValidationError(null)
+        }
+        return
+      }
+
+      if (!response.ok) {
+        if (seq === easetagCheckSeqRef.current) {
+          setEasetagAvailable(null)
+          setEasetagValidationError(null)
+        }
+        return
+      }
+      const validRaw = data.valid
+      const isInvalid =
+        validRaw === false || String(validRaw).toLowerCase() === 'false' || validRaw === 0
+      if (isInvalid) {
+        if (seq === easetagCheckSeqRef.current) {
+          setEasetagAvailable(null)
+          const err = typeof data.error === 'string' ? data.error.trim() : ''
+          setEasetagValidationError(err || 'This Easetag is not valid.')
+        }
+        return
+      }
+      const availRaw = data.available
+      const isAvail =
+        availRaw === true ||
+        availRaw === 1 ||
+        (typeof availRaw === 'string' && ['true', '1'].includes(availRaw.toLowerCase()))
+      if (seq === easetagCheckSeqRef.current) {
+        setEasetagValidationError(null)
+        setEasetagAvailable(isAvail)
       }
     } catch (error) {
       console.error('Error checking easetag:', error)
-      setEasetagAvailable(false)
+      if (seq === easetagCheckSeqRef.current) {
+        setEasetagAvailable(null)
+        setEasetagValidationError(null)
+      }
     } finally {
-      setCheckingEasetag(false)
+      if (seq === easetagCheckSeqRef.current) {
+        setCheckingEasetag(false)
+      }
     }
   }
 
@@ -274,19 +342,21 @@ function ProfileEditContent({ navigation }: NavigationProps) {
     // Remove @ if user types it, we'll add it in display
     const cleanText = text.replace(/^@/, "")
     setEditProfileData(prev => ({ ...prev, easetag: cleanText }))
-    
+    setEasetagValidationError(null)
+
     // Clear previous timeout
     if (easetagCheckTimeout.current) {
       clearTimeout(easetagCheckTimeout.current)
     }
 
-    // Check availability after 500ms delay
-    if (cleanText.length >= 3) {
+    // Check availability after 500ms delay (min 4 chars matches server validation)
+    if (cleanText.length >= 4) {
       easetagCheckTimeout.current = setTimeout(() => {
         checkEasetagAvailability(cleanText)
       }, 500)
     } else {
       setEasetagAvailable(null)
+      setEasetagValidationError(null)
     }
   }
 
@@ -469,35 +539,44 @@ function ProfileEditContent({ navigation }: NavigationProps) {
     </View>
   )
 
-  const renderEasetagField = () => (
+  const renderEasetagField = () => {
+    const easetagT = editProfileData.easetag.replace(/^@/, '').trim()
+    const easetagTLen = easetagT.length
+    return (
     <View style={styles.fieldContainer}>
       <View style={styles.easetagLabelContainer}>
         <Text style={isEditing ? styles.fieldLabelEdit : styles.fieldLabel}>Easetag</Text>
-        {isEditing && editProfileData.easetag && !checkingEasetag && (
-          <View style={styles.easetagStatusContainer}>
-            {easetagAvailable === true && (
-              <>
-                <Ionicons name="checkmark-circle" size={16} color={colors.success.main} />
-                <Text style={[styles.easetagStatusTextInline, { color: colors.success.main }]}>
-                  Available
-                </Text>
-              </>
-            )}
-            {easetagAvailable === false && (
-              <>
-                <Ionicons name="close-circle" size={16} color={colors.error.main} />
-                <Text style={[styles.easetagStatusTextInline, { color: colors.error.main }]}>
-                  Taken
-                </Text>
-              </>
-            )}
-            {easetagAvailable === null && editProfileData.easetag.length < 4 && (
-              <Text style={[styles.easetagStatusTextInline, { color: colors.text.tertiary }]}>
-                Min 3 chars
-              </Text>
-            )}
+        {isEditing ? (
+          <View style={styles.easetagStatusSlot}>
+            {easetagTLen > 0 ? (
+              <View style={styles.easetagStatusContainer}>
+                {easetagTLen < 4 ? (
+                  <Text style={[styles.easetagStatusTextInline, { color: colors.text.tertiary }]}>Min 4 characters</Text>
+                ) : checkingEasetag ? (
+                  <Text style={[styles.easetagStatusTextInline, { color: colors.text.tertiary }]}>Checking…</Text>
+                ) : easetagValidationError ? (
+                  <Text style={[styles.easetagStatusTextInline, { color: colors.error.main }]} numberOfLines={2}>
+                    {easetagValidationError}
+                  </Text>
+                ) : easetagAvailable === true ? (
+                  <>
+                    <Ionicons name="checkmark-circle" size={16} color={colors.success.main} />
+                    <Text style={[styles.easetagStatusTextInline, { color: colors.success.main }]}>
+                      Available
+                    </Text>
+                  </>
+                ) : easetagAvailable === false ? (
+                  <>
+                    <Ionicons name="close-circle" size={16} color={colors.error.main} />
+                    <Text style={[styles.easetagStatusTextInline, { color: colors.error.main }]}>
+                      Taken
+                    </Text>
+                  </>
+                ) : null}
+              </View>
+            ) : null}
           </View>
-        )}
+        ) : null}
       </View>
       {isEditing ? (
         <View>
@@ -515,11 +594,9 @@ function ProfileEditContent({ navigation }: NavigationProps) {
               onSubmitEditing={() => Keyboard.dismiss()}
               maxLength={20}
             />
-            {checkingEasetag && (
-              <View style={styles.easetagSpinnerContainer}>
-                <ActivityIndicator size="small" color={colors.text.tertiary} />
-              </View>
-            )}
+            <View style={styles.easetagSpinnerSlot}>
+              {checkingEasetag ? <ActivityIndicator size="small" color={colors.text.tertiary} /> : null}
+            </View>
           </View>
           <Text style={[styles.fieldDescription, { color: colors.text.tertiary }]}>
             People can send you money for free using your Easetag.
@@ -536,7 +613,8 @@ function ProfileEditContent({ navigation }: NavigationProps) {
         </>
       )}
     </View>
-  )
+    )
+  }
 
 
   return (
@@ -982,13 +1060,22 @@ const styles = StyleSheet.create({
   easetagLabelContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: spacing[2],
+    gap: spacing[2],
+  },
+  easetagStatusSlot: {
+    width: 132,
+    minHeight: 36,
+    alignItems: 'flex-end',
   },
   easetagStatusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[1],
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    maxWidth: '100%',
   },
   easetagStatusTextInline: {
     ...textStyles.bodySmall,
@@ -1023,10 +1110,11 @@ const styles = StyleSheet.create({
       ios: { paddingVertical: 12 },
     }),
   },
-  easetagSpinnerContainer: {
-    paddingRight: spacing[3],
+  easetagSpinnerSlot: {
+    width: 36,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingRight: spacing[2],
   },
   dateInputContainer: {
     flexDirection: 'row',

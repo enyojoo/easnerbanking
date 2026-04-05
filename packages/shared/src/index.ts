@@ -19,3 +19,14 @@ export type { CurrencyCatalogEntry } from "./currencies/catalog"
 export * from "./types"
 export type { PayoutCorridorPublic, PayoutRail } from "./payout-corridor"
 export { corridorDisplayLabel, flagCodeFromCorridor } from "./payout-corridor"
+export {
+  parseJurisdictionCountryPolicyJson,
+  effectiveAllowlistForSurface,
+  filterCountriesByPolicy,
+  serializeJurisdictionPolicy,
+} from "./jurisdiction-country-policy"
+export type {
+  JurisdictionSurface,
+  JurisdictionCountryPolicyV1,
+  CountryCatalogEntry,
+} from "./jurisdiction-country-policy"

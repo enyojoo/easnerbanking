@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useMemo } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -21,6 +21,8 @@ import { Eye, EyeOff, Info, MapPin, ChevronDown } from "lucide-react"
 import Link from "next/link"
 import { countries } from "@/lib/countries"
 import { setOnboarding } from "@/lib/onboarding-store"
+import { useAllowedCountryCodes } from "@/hooks/use-allowed-country-codes"
+import { filterCountriesByPolicy } from "@easner/shared"
 import { CountryFlag } from "@/components/flags"
 
 const TERMS_URL = "https://www.easner.com/terms?from=register"
@@ -37,6 +39,11 @@ export default function SignupPage() {
   const triggerRef = useRef<HTMLButtonElement>(null)
   const { signup, signInWithGoogle } = useAuth()
   const router = useRouter()
+  const countryPolicy = useAllowedCountryCodes("signup")
+  const countriesForPicker = useMemo(
+    () => filterCountriesByPolicy(countries, countryPolicy.unrestricted ? null : countryPolicy.codes),
+    [countryPolicy.codes, countryPolicy.unrestricted],
+  )
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -80,7 +87,7 @@ export default function SignupPage() {
     }
   }
 
-  const selectedCountry = countries.find((c) => c.code === country)
+  const selectedCountry = countriesForPicker.find((c) => c.code === country)
 
   return (
     <TooltipProvider>
@@ -153,9 +160,11 @@ export default function SignupPage() {
                   <Command>
                     <CommandInput placeholder="Search..." className="h-9 text-sm" />
                     <CommandList className="max-h-[200px]">
-                      <CommandEmpty className="text-sm">No country found.</CommandEmpty>
+                      <CommandEmpty className="text-sm">
+                        {countryPolicy.loading ? "Loading countries…" : "No country found."}
+                      </CommandEmpty>
                       <CommandGroup>
-                        {countries.map((country) => (
+                        {countriesForPicker.map((country) => (
                           <CommandItem
                             key={country.code}
                             value={country.name}

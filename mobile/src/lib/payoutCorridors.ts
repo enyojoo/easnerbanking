@@ -87,7 +87,7 @@ export function isRecipientPayoutCorridorActive(
   if (!cache || (!cache.bank.length && !cache.mobile.length)) return true
   if (isWalletRecipient(r as Recipient)) return true
   const b = (r.bank_name || '').toLowerCase()
-  if (b.includes('easenet')) return true
+  if (b.includes('easenet') || b.includes('easetag')) return true
 
   const isMobile = b.includes('mobile money') || Boolean(r.mobile_provider)
   const rail = isMobile ? cache.mobile : cache.bank

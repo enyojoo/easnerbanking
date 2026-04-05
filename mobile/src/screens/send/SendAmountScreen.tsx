@@ -1188,7 +1188,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   } else {
                     Alert.alert(
                       'Recipient not ready',
-                      'Noah balance send needs: Easenet handle, saved payout id, mobile money with country, EUR IBAN, or US ACH with full address.',
+                      'Noah balance send needs: Easetag, saved payout id, mobile money with country, EUR IBAN, or US ACH with full address.',
                     )
                     return
                   }
@@ -1251,7 +1251,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       const created = await recipientService.create(userProfile.id, {
                         fullName: recipient.full_name,
                         accountNumber: tag,
-                        bankName: `Easenet (@${tag})`,
+                        bankName: `Easetag (@${tag})`,
                         currency: 'USD',
                         countryCode: 'US',
                         payeeEasetag: tag,
@@ -1262,7 +1262,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       recipientForDetails = created
                       void recordRecipientSentTouch(user.id, created.id)
                     } catch (persistErr) {
-                      console.warn('Post-send Easenet recipient save failed:', persistErr)
+                      console.warn('Post-send Easetag recipient save failed:', persistErr)
                     }
                   } else if (user?.id && recipient?.id) {
                     void recordRecipientSentTouch(user.id, recipient.id)

@@ -3,7 +3,7 @@ import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin
 import { normalizeEasetag } from "@/lib/easetag-validation"
 
 /**
- * Authenticated lookup of another user's public Easenet profile (for add-recipient preview).
+ * Authenticated lookup of another user's public Easetag profile (for add-recipient preview).
  * Does not expose email, phone, or Noah ids.
  */
 export async function GET(request: Request) {

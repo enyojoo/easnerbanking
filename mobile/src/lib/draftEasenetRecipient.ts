@@ -1,6 +1,6 @@
 import type { Recipient } from '../types'
 
-/** Prefix for Easenet recipients selected from hub search before DB persist. */
+/** Prefix for Easetag (P2P) recipients selected from hub search before DB persist. */
 export const DRAFT_EASENET_ID_PREFIX = 'draft_easenet:'
 
 export function isDraftEasenetRecipient(id: string): boolean {
@@ -21,7 +21,7 @@ export function buildDraftEasenetRecipient(params: {
     user_id: params.userId,
     full_name: params.fullName.trim() || tag,
     account_number: tag,
-    bank_name: `Easenet (@${tag})`,
+    bank_name: `Easetag (@${tag})`,
     currency: 'USD',
     country_code: 'US',
     payee_easetag: tag,

@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { PayoutCorridorPublic, PayoutRail } from "@easner/shared"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { isPayoutCorridorsCatalogEnabled } from "@/lib/payout-corridors-flag"
@@ -55,18 +55,23 @@ async function fetchCorridors(rail: PayoutRail | "all", etag?: string): Promise<
   return { status: res.status, body, etag: newEtag }
 }
 
+/** Rows hydrated synchronously from module memory or sessionStorage (same source as initial React state). */
+function initialCorridorRows(enabled: boolean, cacheKey: PayoutRail | "all"): PayoutCorridorPublic[] {
+  if (!enabled) return []
+  return memory[cacheKey]?.body?.corridors ?? readSessionRail(cacheKey)?.corridors ?? []
+}
+
 export function usePayoutCorridors(rail: PayoutRail | "all") {
   const enabled = isPayoutCorridorsCatalogEnabled()
   const cacheKey = rail
-  const [corridors, setCorridors] = useState<PayoutCorridorPublic[]>(() => {
-    if (!enabled) return []
-    return memory[cacheKey]?.body?.corridors ?? readSessionRail(cacheKey)?.corridors ?? []
-  })
+  const [corridors, setCorridors] = useState<PayoutCorridorPublic[]>(() => initialCorridorRows(enabled, cacheKey))
   const [catalogVersion, setCatalogVersion] = useState<string | undefined>(
     () => memory[cacheKey]?.body?.catalog_version ?? readSessionRail(cacheKey)?.catalog_version,
   )
-  const [loading, setLoading] = useState(enabled)
+  const [loading, setLoading] = useState(() => (enabled ? initialCorridorRows(enabled, cacheKey).length === 0 : false))
   const [error, setError] = useState<string | null>(null)
+  const corridorsRef = useRef(corridors)
+  corridorsRef.current = corridors
 
   const refresh = useCallback(async () => {
     if (!enabled) {
@@ -74,7 +79,11 @@ export function usePayoutCorridors(rail: PayoutRail | "all") {
       setLoading(false)
       return
     }
-    setLoading(true)
+    const hasCatalogToShow =
+      corridorsRef.current.length > 0 || initialCorridorRows(enabled, cacheKey).length > 0
+    if (!hasCatalogToShow) {
+      setLoading(true)
+    }
     setError(null)
     try {
       const cached = memory[cacheKey]

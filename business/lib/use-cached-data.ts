@@ -132,6 +132,10 @@ export function useCachedData<T>({
     [cacheKey, ttlMs, persistKey],
   )
 
-  return { data, setData, loading }
+  const refetch = useCallback(() => {
+    return fetchFresh()
+  }, [fetchFresh])
+
+  return { data, setData, loading, refetch }
 }
 

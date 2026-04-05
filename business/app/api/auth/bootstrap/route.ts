@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { countries } from "@/lib/countries"
+import { isCountryAllowedForSurface } from "@/lib/jurisdiction-country-policy"
 
 type BootstrapBody = {
   countryCode?: string
@@ -89,6 +90,16 @@ export async function POST(request: Request) {
   const country = countryNameFromCode(countryCode)
   const name = parseName(body.fullName ?? (typeof user.user_metadata?.name === "string" ? user.user_metadata.name : null))
   const admin = createSupabaseAdmin()
+
+  if (role === "business" && countryCode) {
+    const ok = await isCountryAllowedForSurface(admin, countryCode, "signup")
+    if (!ok) {
+      return NextResponse.json(
+        { ok: false, error: "This country is not available for registration. Choose another or contact support." },
+        { status: 400 },
+      )
+    }
+  }
 
   const { data: userRow } = await admin
     .from("users")
