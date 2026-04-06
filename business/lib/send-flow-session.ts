@@ -19,7 +19,7 @@ export interface SendFlowState {
   transactionId: string
 }
 
-/** Pre-fill send flow with a recipient (e.g. from /recipients); user finishes amount and source on /send. */
+/** Pre-fill send flow with a recipient (e.g. from Settings → Recipients); user finishes amount and source on /send. */
 export function createSendFlowSeedForRecipient(recipient: Beneficiary): SendFlowState {
   const cur = recipient.currency || "USD"
   return {

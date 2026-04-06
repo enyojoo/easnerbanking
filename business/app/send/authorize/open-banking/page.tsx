@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { currencySymbols } from "@/lib/mock-data"
+import { currencySymbols } from "@/lib/currency-meta"
 import { generateTransactionId } from "@/lib/transaction-id"
 import { ArrowLeft, Link2, Loader2, Copy, Check } from "lucide-react"
 

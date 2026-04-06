@@ -5,25 +5,75 @@ import { useParams } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Check, Copy, Download, Loader2 } from "lucide-react"
-import { getInvoiceById } from "@/lib/invoice-store"
 import { businessInfo } from "@/lib/business-info"
-import { mockAccounts, mockStablecoinAccounts } from "@/lib/mock-data"
+import type { Invoice } from "@/lib/b2b/types"
 import { formatDate, formatCurrency } from "@/lib/utils"
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge"
 import { InvoicePaymentOptions } from "@/components/invoice-payment-options"
 import { downloadInvoicePdf } from "@/lib/use-invoice-pdf"
 import { downloadInvoiceReceiptPdf } from "@/lib/use-invoice-receipt-pdf"
 import { getPaymentRecordDisplay } from "@/lib/deposits"
-import { BusinessLogo } from "@/components/brand/business-logo"
 import { BRAND } from "@/components/brand/brand-constants"
+import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
+import type { InvoicePayInPayload } from "@/lib/invoices/resolve-pay-in-for-business"
+
+const FALLBACK_ISSUER: InvoicePdfIssuer = {
+  name: businessInfo.name,
+  address: businessInfo.address,
+  city: businessInfo.city,
+  state: businessInfo.state,
+  zipCode: businessInfo.zipCode,
+  country: businessInfo.country,
+  email: businessInfo.email,
+  phone: businessInfo.phone,
+}
 
 export default function InvoiceViewPage() {
   const params = useParams()
-  const invoice = getInvoiceById(params.id as string)
+  const id = params.id as string
+  const [invoice, setInvoice] = useState<Invoice | null>(null)
+  const [issuer, setIssuer] = useState<InvoicePdfIssuer | null>(null)
+  const [payIn, setPayIn] = useState<InvoicePayInPayload>({})
+  const [loadState, setLoadState] = useState<"loading" | "error" | "ok">("loading")
   const [paymentTab, setPaymentTab] = useState<"bank" | "stablecoin">("bank")
   const [isDownloading, setIsDownloading] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
   const [copiedField, setCopiedField] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoadState("loading")
+    setInvoice(null)
+    setIssuer(null)
+    setPayIn({})
+    fetch(`/api/invoices/public/${encodeURIComponent(id)}`)
+      .then(async (r) => {
+        const data = (await r.json().catch(() => ({}))) as {
+          invoice?: Invoice
+          issuer?: InvoicePdfIssuer
+          payIn?: InvoicePayInPayload
+        }
+        if (cancelled) return
+        if (!r.ok || !data.invoice) {
+          setLoadState("error")
+          return
+        }
+        setInvoice(data.invoice)
+        setIssuer(data.issuer ?? null)
+        const pi = data.payIn ?? {}
+        setPayIn(pi)
+        setPaymentTab(pi.bankAccount ? "bank" : "stablecoin")
+        setLoadState("ok")
+      })
+      .catch(() => {
+        if (!cancelled) setLoadState("error")
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [id])
+
+  const displayIssuer = issuer ?? FALLBACK_ISSUER
 
   // Record view when page loads (API checks IP to distinguish customer vs business owner)
   useEffect(() => {
@@ -69,7 +119,15 @@ export default function InvoiceViewPage() {
     }
   }
 
-  if (!invoice) {
+  if (loadState === "loading") {
+    return (
+      <div className="w-full max-w-2xl flex justify-center py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (loadState === "error" || !invoice) {
     return (
       <div className="w-full max-w-2xl text-center">
         <Card>
@@ -84,19 +142,24 @@ export default function InvoiceViewPage() {
     )
   }
 
-  const bankAccount = mockAccounts.find((a) => a.currency === invoice.currency)
-  const stablecoinAccount = mockStablecoinAccounts.find(
-    (s) => s.currency === invoice.currency
-  )
+  const bankAccount = payIn.bankAccount
+  const stablecoinAccount = payIn.stablecoinAccount
+  const hasPayInRail = Boolean(bankAccount || stablecoinAccount)
   const showPayCard =
-    (invoice.status === "open" || invoice.status === "sent" || invoice.status === "past_due") && bankAccount
+    (invoice.status === "open" || invoice.status === "sent" || invoice.status === "past_due") &&
+    hasPayInRail
   const showReceiptCard = invoice.status === "paid"
 
   const handleDownloadPdf = async () => {
     if (!invoice) return
     setIsDownloading(true)
     try {
-      await downloadInvoicePdf(invoice, bankAccount, stablecoinAccount)
+      await downloadInvoicePdf(
+        invoice,
+        bankAccount,
+        stablecoinAccount,
+        displayIssuer,
+      )
     } catch (err) {
       console.error("Failed to download PDF:", err)
     } finally {
@@ -142,14 +205,14 @@ export default function InvoiceViewPage() {
           {/* Business info & Invoice header - two columns on all screens */}
           <div className="grid grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
             <div className="min-w-0">
-              <h2 className="text-base sm:text-lg font-semibold">{businessInfo.name}</h2>
-              <p className="text-sm text-muted-foreground mt-1">{businessInfo.address}</p>
+              <h2 className="text-base sm:text-lg font-semibold">{displayIssuer.name}</h2>
+              <p className="text-sm text-muted-foreground mt-1">{displayIssuer.address}</p>
               <p className="text-sm text-muted-foreground">
-                {businessInfo.city}, {businessInfo.state} {businessInfo.zipCode}
+                {displayIssuer.city}, {displayIssuer.state} {displayIssuer.zipCode}
               </p>
-              <p className="text-sm text-muted-foreground">{businessInfo.country}</p>
-              <p className="text-sm text-muted-foreground mt-2">{businessInfo.email}</p>
-              <p className="text-sm text-muted-foreground">{businessInfo.phone}</p>
+              <p className="text-sm text-muted-foreground">{displayIssuer.country}</p>
+              <p className="text-sm text-muted-foreground mt-2">{displayIssuer.email}</p>
+              <p className="text-sm text-muted-foreground">{displayIssuer.phone}</p>
             </div>
             <div className="text-right min-w-0">
               <h1 className="text-base sm:text-2xl font-bold">Invoice</h1>
@@ -289,11 +352,12 @@ export default function InvoiceViewPage() {
           </div>
 
           {/* Invoice payment options */}
-          {showPayCard && bankAccount && (
+          {showPayCard && (bankAccount || stablecoinAccount) && (
             <InvoicePaymentOptions
               invoice={invoice}
               bankAccount={bankAccount}
               stablecoinAccount={stablecoinAccount}
+              businessDisplayName={displayIssuer.name}
               embedded
               audience="customer"
               value={paymentTab}

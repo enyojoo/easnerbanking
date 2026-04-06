@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,13 +18,6 @@ import {
   MapPin,
   FileText
 } from "lucide-react"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -45,8 +38,10 @@ import { formatCurrency } from "@/lib/utils"
 import { useInvoices } from "@/lib/invoices-context"
 import { useCustomers } from "@/lib/customers-context"
 import { generateInvoiceId } from "@/lib/invoice-id"
-import type { Invoice } from "@/lib/mock-data"
+import type { Invoice } from "@/lib/b2b/types"
 import { AddEditCustomerDialog } from "@/components/add-edit-customer-dialog"
+import { BaseCurrencySelect } from "@/components/base-currency-select"
+import { useBusinessProfile } from "@/lib/use-business-profile"
 interface LineItem {
   id: string
   description: string
@@ -73,8 +68,10 @@ export default function CreateInvoicePage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const editId = searchParams.get("edit")
+  const customerFromUrl = searchParams.get("customer")
   const { invoices, addInvoice, updateInvoice } = useInvoices()
   const { customers, addCustomer } = useCustomers()
+  const { baseCurrency, isLoading: profileLoading } = useBusinessProfile()
   const invoiceToEdit = editId ? invoices.find((i) => i.id === editId) : null
   const isEditMode = !!invoiceToEdit
 
@@ -96,6 +93,8 @@ export default function CreateInvoicePage() {
   const [isAddCustomerDialogOpen, setIsAddCustomerDialogOpen] = useState(false)
   const [customerSearchTerm, setCustomerSearchTerm] = useState("")
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
+  /** When true, next transition to `profileLoading === false` seeds currency from base (no customer). */
+  const awaitingProfileForDefaultCurrency = useRef(true)
 
   // Calculate totals
   const subtotal = formData.lineItems.reduce((sum, item) => sum + item.amount, 0)
@@ -141,6 +140,8 @@ export default function CreateInvoicePage() {
   // Select customer
   const selectCustomer = (customer: (typeof customers)[0]) => {
     const hasCompany = !!customer.company?.trim()
+    const invoiceCurrency =
+      customer.currency?.trim() || baseCurrency?.trim() || "USD"
     setFormData(prev => ({
       ...prev,
       customerId: customer.id,
@@ -150,6 +151,7 @@ export default function CreateInvoicePage() {
       customerAddress: customer.address || "",
       customerPhone: customer.phone || "",
       billToType: hasCompany ? "company" : "individual",
+      currency: invoiceCurrency,
     }))
     setIsCustomerDialogOpen(false)
     setCustomerSearchTerm("")
@@ -176,7 +178,10 @@ export default function CreateInvoicePage() {
     const subtotal = lineItems.reduce((sum, item) => sum + item.amount, 0)
     const tax = subtotal * (formData.taxRate / 100)
     const total = subtotal + tax
+    const customerId =
+      formData.customerId.trim().length > 0 ? formData.customerId.trim() : undefined
     const base = {
+      ...(customerId ? { customerId } : {}),
       customerName: formData.customerName || "Unknown",
       customerEmail: formData.customerEmail || "",
       subtotal,
@@ -197,6 +202,7 @@ export default function CreateInvoicePage() {
       return {
         ...invoiceToEdit,
         ...base,
+        customerId: customerId ?? invoiceToEdit.customerId,
         createdDate: invoiceToEdit.createdDate,
         finalizedDate: status === "draft" ? null : (invoiceToEdit.finalizedDate || now),
         notes: invoiceToEdit.notes,
@@ -214,25 +220,25 @@ export default function CreateInvoicePage() {
     }
   }
 
-  const handleSaveDraft = () => {
+  const handleSaveDraft = async () => {
     const invoice = createInvoiceFromForm("draft")
     if (isEditMode) {
-      updateInvoice(invoice.id, invoice)
+      await updateInvoice(invoice.id, invoice)
       router.push(`/invoices/${invoice.id}`)
     } else {
-      addInvoice(invoice)
-      router.push(`/invoices/${invoice.id}`)
+      const created = await addInvoice(invoice)
+      if (created) router.push(`/invoices/${created.id}`)
     }
   }
 
-  const handleSendInvoice = () => {
+  const handleSendInvoice = async () => {
     const invoice = createInvoiceFromForm("open")
     if (isEditMode) {
-      updateInvoice(invoice.id, invoice)
+      await updateInvoice(invoice.id, invoice)
       router.push(`/invoices/${invoice.id}`)
     } else {
-      addInvoice(invoice)
-      router.push(`/invoices/${invoice.id}`)
+      const created = await addInvoice(invoice)
+      if (created) router.push(`/invoices/${created.id}`)
     }
   }
 
@@ -240,7 +246,10 @@ export default function CreateInvoicePage() {
   useEffect(() => {
     if (invoiceToEdit) {
       setFormData({
-        customerId: customers.find((c) => c.email === invoiceToEdit.customerEmail)?.id ?? "invoice",
+        customerId:
+          invoiceToEdit.customerId ??
+          customers.find((c) => c.email === invoiceToEdit.customerEmail)?.id ??
+          "",
         billToType: (invoiceToEdit.billToType as "individual" | "company") || "individual",
         customerName: invoiceToEdit.customerName,
         customerEmail: invoiceToEdit.customerEmail,
@@ -272,6 +281,44 @@ export default function CreateInvoicePage() {
       }))
     }
   }, [])
+
+  // Default invoice currency to business base currency when no customer (same as Add Customer dialog).
+  // Only on initial profile load — not on every baseCurrency change — so manual picks are preserved.
+  useEffect(() => {
+    if (isEditMode || formData.customerId) {
+      awaitingProfileForDefaultCurrency.current = profileLoading
+      return
+    }
+    if (profileLoading) {
+      awaitingProfileForDefaultCurrency.current = true
+      return
+    }
+    if (awaitingProfileForDefaultCurrency.current) {
+      awaitingProfileForDefaultCurrency.current = false
+      const code = baseCurrency?.trim() || "USD"
+      setFormData((prev) => (prev.currency === code ? prev : { ...prev, currency: code }))
+    }
+  }, [isEditMode, formData.customerId, profileLoading, baseCurrency])
+
+  // Deep link from Settings → Customers: ?customer=<b2b_customer id>
+  useEffect(() => {
+    if (!customerFromUrl || isEditMode) return
+    const c = customers.find((x) => x.id === customerFromUrl)
+    if (!c) return
+    const hasCompany = !!c.company?.trim()
+    const invoiceCurrency = c.currency?.trim() || baseCurrency?.trim() || "USD"
+    setFormData((prev) => ({
+      ...prev,
+      customerId: c.id,
+      customerName: c.name,
+      customerEmail: c.email,
+      customerCompany: c.company || "",
+      customerAddress: c.address || "",
+      customerPhone: c.phone || "",
+      currency: invoiceCurrency,
+      billToType: hasCompany ? "company" : "individual",
+    }))
+  }, [customerFromUrl, customers, isEditMode, baseCurrency])
 
   return (
     <div className="space-y-6">
@@ -344,19 +391,12 @@ export default function CreateInvoicePage() {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-3">
-                  <Label htmlFor="currency">Currency</Label>
-                  <Select value={formData.currency} onValueChange={(value) => setFormData(prev => ({ ...prev, currency: value }))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="USD">USD - US Dollar</SelectItem>
-                      <SelectItem value="EUR">EUR - Euro</SelectItem>
-                      <SelectItem value="GBP">GBP - British Pound</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                <BaseCurrencySelect
+                  id="invoice-currency"
+                  label="Currency"
+                  value={formData.currency}
+                  onValueChange={(value) => setFormData((prev) => ({ ...prev, currency: value }))}
+                />
                 <div className="space-y-3">
                   <Label htmlFor="dueDate">Due Date</Label>
                   <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
@@ -566,10 +606,12 @@ export default function CreateInvoicePage() {
       <AddEditCustomerDialog
         open={isAddCustomerDialogOpen}
         onOpenChange={setIsAddCustomerDialogOpen}
-        onSave={(c) => {
-          addCustomer(c)
-          selectCustomer(c)
-          setIsAddCustomerDialogOpen(false)
+        onSave={async (c) => {
+          const created = await addCustomer(c)
+          if (created) {
+            selectCustomer(created)
+            setIsAddCustomerDialogOpen(false)
+          }
         }}
       />
     </div>

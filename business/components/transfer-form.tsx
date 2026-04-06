@@ -8,12 +8,13 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { mockAccounts } from "@/lib/mock-data"
 import { formatCurrency } from "@/lib/utils"
 import { useRouter } from "next/navigation"
+import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 
 export function TransferForm() {
   const router = useRouter()
+  const { accountRows: sourceAccounts } = useBusinessAccountRows()
   const [transferType, setTransferType] = useState<"ach" | "wire" | "book">("ach")
   const [amount, setAmount] = useState("")
   const [fromAccount, setFromAccount] = useState("")
@@ -54,7 +55,7 @@ export function TransferForm() {
                     <SelectValue placeholder="Select account" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockAccounts.map((acc) => (
+                    {sourceAccounts.map((acc) => (
                       <SelectItem key={acc.id} value={acc.id}>
                         {acc.accountName} {acc.accountNumber} - {formatCurrency(acc.balance, acc.currency)}
                       </SelectItem>
@@ -139,7 +140,7 @@ export function TransferForm() {
                     <SelectValue placeholder="Select account" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockAccounts.map((acc) => (
+                    {sourceAccounts.map((acc) => (
                       <SelectItem key={acc.id} value={acc.id}>
                         {acc.accountName} {acc.accountNumber} - {formatCurrency(acc.balance, acc.currency)}
                       </SelectItem>
@@ -224,7 +225,7 @@ export function TransferForm() {
                     <SelectValue placeholder="Select account" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockAccounts.map((acc) => (
+                    {sourceAccounts.map((acc) => (
                       <SelectItem key={acc.id} value={acc.id}>
                         {acc.accountName} {acc.accountNumber} - {formatCurrency(acc.balance, acc.currency)}
                       </SelectItem>
@@ -240,7 +241,7 @@ export function TransferForm() {
                     <SelectValue placeholder="Select account" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockAccounts
+                    {sourceAccounts
                       .filter((acc) => acc.id !== fromAccount)
                       .map((acc) => (
                         <SelectItem key={acc.id} value={acc.id}>

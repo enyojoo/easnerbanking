@@ -8,15 +8,10 @@ import {
   Image,
   StyleSheet,
 } from "@react-pdf/renderer"
-import {
-  mockTransactions,
-  mockCardTransactions,
-  mockStablecoinDeposits,
-  type Invoice,
-  type Transaction,
-  type StablecoinDeposit,
-} from "@/lib/mock-data"
+import type { Invoice } from "@/lib/b2b/types"
+import type { Transaction } from "@/lib/finance-types"
 import { formatCurrency, formatDate } from "@/lib/utils"
+import { getPaymentRecordDisplay } from "@/lib/deposits"
 
 const styles = StyleSheet.create({
   page: {
@@ -137,16 +132,6 @@ const styles = StyleSheet.create({
   },
 })
 
-function findTransactionById(id: string): Transaction | undefined {
-  const t = mockTransactions.find((x) => x.id === id)
-  if (t) return t
-  return mockCardTransactions.find((x) => x.id === id)
-}
-
-function findStablecoinDepositById(id: string): StablecoinDeposit | undefined {
-  return mockStablecoinDeposits.find((d) => d.id === id)
-}
-
 function TableRow({
   label,
   value,
@@ -160,14 +145,15 @@ function TableRow({
   isLast?: boolean
   rowStyle?: object
 }) {
+  const base = isLast ? styles.tableRowLast : styles.tableRow
   return (
     <View
-      style={[
-        isLast ? styles.tableRowLast : styles.tableRow,
-        isFirst && styles.tableRowFirst,
-        isLast && styles.tableRowLastRounded,
-        rowStyle,
-      ]}
+      style={{
+        ...base,
+        ...(isFirst ? styles.tableRowFirst : {}),
+        ...(isLast ? styles.tableRowLastRounded : {}),
+        ...(rowStyle && typeof rowStyle === "object" ? rowStyle : {}),
+      }}
     >
       <Text style={styles.tableCell}>{label}</Text>
       <Text style={styles.tableCellValue}>{value}</Text>
@@ -178,50 +164,42 @@ function TableRow({
 interface InvoiceReceiptPDFDocumentProps {
   invoice: Invoice
   logoUrl: string
+  /** Ledger rows from GET /api/transactions to resolve Easner payment ids. */
+  ledgerTransactions?: Transaction[]
 }
 
 export function InvoiceReceiptPDFDocument({
   invoice,
   logoUrl,
+  ledgerTransactions = [],
 }: InvoiceReceiptPDFDocumentProps) {
-  const txn =
-    invoice.paymentInfo?.method === "easner" &&
-    invoice.paymentInfo.transactionId
-      ? findTransactionById(invoice.paymentInfo.transactionId)
-      : undefined
-  const deposit =
-    invoice.paymentInfo?.method === "easner" &&
-    invoice.paymentInfo.transactionId
-      ? findStablecoinDepositById(invoice.paymentInfo.transactionId)
-      : undefined
+  const record = getPaymentRecordDisplay(invoice, ledgerTransactions)
 
   const heroAmount =
-    txn != null
-      ? formatCurrency(txn.amount, invoice.currency)
-      : deposit != null
-        ? formatCurrency(deposit.amount, deposit.currency)
-        : formatCurrency(invoice.total, invoice.currency)
+    record?.method === "easner" && record.amount != null && record.currency != null ?
+      formatCurrency(record.amount, record.currency)
+    : formatCurrency(invoice.total, invoice.currency)
 
   const heroDateStr =
-    txn != null
-      ? formatDate(txn.date, {
-          month: "long",
-          day: "numeric",
-          year: "numeric",
-        })
-      : deposit != null
-        ? formatDate(deposit.date, {
-            month: "long",
-            day: "numeric",
-            year: "numeric",
-          })
-        : invoice.paymentInfo
-          ? formatDate(invoice.paymentInfo.paidAt, {
-              month: "long",
-              day: "numeric",
-              year: "numeric",
-            })
-          : "-"
+    record?.method === "easner" && record.date ?
+      formatDate(record.date, {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      })
+    : record?.paidAt ?
+      formatDate(record.paidAt, {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      })
+    : invoice.paymentInfo ?
+      formatDate(invoice.paymentInfo.paidAt, {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "-"
 
   const rows: { label: string; value: string }[] = [
     { label: "Invoice Number", value: invoice.invoiceNumber },
@@ -236,40 +214,16 @@ export function InvoiceReceiptPDFDocument({
         label: "Payment Method",
         value: "Cash or other method",
       },
-      ...(invoice.paymentInfo.cashNote
-        ? [{ label: "Note", value: invoice.paymentInfo.cashNote }]
-        : []),
+      ...(invoice.paymentInfo.cashNote ?
+        [{ label: "Note", value: invoice.paymentInfo.cashNote }]
+      : []),
     ]
-  } else if (
-    invoice.paymentInfo?.method === "easner" &&
-    invoice.paymentInfo.transactionId
-  ) {
-    if (txn) {
-      const method =
-        txn.type === "ach"
-          ? "ACH"
-          : txn.type === "wire"
-            ? "Wire"
-            : txn.type === "book"
-              ? "Book"
-              : txn.type.toUpperCase()
+  } else if (invoice.paymentInfo?.method === "easner" && invoice.paymentInfo.transactionId) {
+    if (record?.method === "easner" && record.paymentMethod) {
       paymentSection = [
-        { label: "Payment Method", value: method },
-        ...(txn.reference ? [{ label: "Reference", value: txn.reference }] : []),
-        { label: "Description", value: txn.description },
-      ]
-    } else if (deposit) {
-      const methodLabel = `${deposit.stablecoin} on ${deposit.chain}`
-      paymentSection = [
-        { label: "Payment Method", value: methodLabel },
-        ...(deposit.reference || deposit.memo
-          ? [
-              {
-                label: "Reference",
-                value: deposit.reference ?? deposit.memo ?? "-",
-              },
-            ]
-          : []),
+        { label: "Payment Method", value: record.paymentMethod },
+        ...(record.reference ? [{ label: "Reference", value: record.reference }] : []),
+        ...(record.description ? [{ label: "Description", value: record.description }] : []),
       ]
     } else {
       paymentSection = [

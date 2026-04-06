@@ -1,37 +1,90 @@
 import { NextRequest, NextResponse } from "next/server"
-import { mockAccounts, mockStablecoinAccounts } from "@/lib/mock-data"
+import { mapRowToInvoice, type B2bInvoiceRow } from "@/lib/b2b/map-invoice"
+import { requireBusinessOrg } from "@/lib/b2b/resolve-org"
 import { generateInvoicePdfBuffer } from "@/lib/generate-invoice-pdf"
+import { fetchInvoiceIssuerForBusiness } from "@/lib/invoices/issuer"
+import { resolvePayInForBusiness } from "@/lib/invoices/resolve-pay-in-for-business"
 import { sendInvoiceEmail } from "@/lib/invoice-email-service"
-import type { Invoice } from "@/lib/mock-data"
+import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import {
+  canProvisionInvoiceDepositInstructions,
+  TIER2_COMPLETE_PLACEHOLDER,
+} from "@/lib/compliance-placeholders"
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const invoice = body.invoice as Invoice | undefined
+    const ctx = await requireBusinessOrg(request)
+    if (!ctx.ok) return ctx.response
 
-    if (!invoice?.id) {
-      return NextResponse.json(
-        { error: "Invoice is required" },
-        { status: 400 }
-      )
+    const body = await request.json().catch(() => ({})) as {
+      invoiceId?: string
+      invoice?: { id?: string }
     }
+    const invoiceId =
+      (typeof body.invoiceId === "string" && body.invoiceId.trim()) ||
+      (typeof body.invoice?.id === "string" && body.invoice.id.trim()) ||
+      ""
+
+    if (!invoiceId) {
+      return NextResponse.json({ error: "invoiceId is required" }, { status: 400 })
+    }
+
+    const admin = createSupabaseAdmin()
+    const { data: row, error } = await admin
+      .from("invoices")
+      .select("*")
+      .eq("id", invoiceId)
+      .maybeSingle()
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+    if (!row) {
+      return NextResponse.json({ error: "Invoice not found" }, { status: 404 })
+    }
+
+    const b2b = row as B2bInvoiceRow
+    if (b2b.business_id !== ctx.businessId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    const invoice = mapRowToInvoice(b2b)
 
     if (!invoice.customerEmail?.trim()) {
       return NextResponse.json(
         { error: "Invoice has no customer email" },
-        { status: 400 }
+        { status: 400 },
       )
     }
 
-    const bankAccount = mockAccounts.find((a) => a.currency === invoice.currency)
-    const stablecoinAccount = mockStablecoinAccounts.find(
-      (s) => s.currency === invoice.currency
+    const { data: biz } = await admin
+      .from("businesses")
+      .select("noah_kyb_status")
+      .eq("id", ctx.businessId)
+      .maybeSingle()
+
+    const tier1Complete =
+      (biz?.noah_kyb_status as string | null | undefined) === "approved"
+
+    const canProvision = canProvisionInvoiceDepositInstructions(
+      invoice.currency,
+      tier1Complete,
+      TIER2_COMPLETE_PLACEHOLDER,
     )
+
+    const payIn = canProvision
+      ? await resolvePayInForBusiness(ctx.businessId, invoice.currency, {
+          persistVirtualAccount: true,
+        })
+      : {}
+
+    const issuer = await fetchInvoiceIssuerForBusiness(admin, ctx.businessId)
 
     const pdfBuffer = await generateInvoicePdfBuffer(
       invoice,
-      bankAccount,
-      stablecoinAccount
+      canProvision ? payIn.bankAccount : undefined,
+      canProvision ? payIn.stablecoinAccount : undefined,
+      issuer,
     )
 
     const origin =
@@ -41,12 +94,14 @@ export async function POST(request: NextRequest) {
     const baseUrl = origin.startsWith("http") ? origin : `https://${origin}`
     const invoiceViewUrl = `${baseUrl}/invoice-view/${invoice.id}`
 
-    const result = await sendInvoiceEmail(invoice, invoiceViewUrl, pdfBuffer)
+    const result = await sendInvoiceEmail(invoice, invoiceViewUrl, pdfBuffer, {
+      businessName: issuer.name,
+    })
 
     if (!result.success) {
       return NextResponse.json(
         { error: result.error || "Failed to send email" },
-        { status: 500 }
+        { status: 500 },
       )
     }
 
@@ -61,7 +116,7 @@ export async function POST(request: NextRequest) {
         error: "Failed to send invoice email",
         details: err instanceof Error ? err.message : "Unknown error",
       },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }

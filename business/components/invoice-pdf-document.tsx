@@ -9,10 +9,11 @@ import {
   Link,
   StyleSheet,
 } from "@react-pdf/renderer"
-import type { Invoice } from "@/lib/mock-data"
-import type { Account } from "@/lib/mock-data"
-import type { StablecoinAccount } from "@/lib/mock-data"
-import { businessInfo } from "@/lib/business-info"
+import type { Invoice } from "@/lib/b2b/types"
+import type { Account } from "@/lib/finance-types"
+import type { StablecoinAccount } from "@/lib/finance-types"
+import { businessInfo as defaultBusinessInfo } from "@/lib/business-info"
+import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
 import { formatDate, formatCurrency } from "@/lib/utils"
 import { getPaymentInstructions } from "@/lib/payment-instructions"
 
@@ -294,6 +295,8 @@ interface InvoicePDFDocumentProps {
   invoice: Invoice
   bankAccount?: Account
   stablecoinAccount?: StablecoinAccount
+  /** When omitted, uses static `business-info` defaults. */
+  issuer?: InvoicePdfIssuer
   logoUrl: string
   qrDataUrl?: string
 }
@@ -302,9 +305,20 @@ export function InvoicePDFDocument({
   invoice,
   bankAccount,
   stablecoinAccount,
+  issuer,
   logoUrl,
   qrDataUrl,
 }: InvoicePDFDocumentProps) {
+  const biz = issuer ?? {
+    name: defaultBusinessInfo.name,
+    address: defaultBusinessInfo.address,
+    city: defaultBusinessInfo.city,
+    state: defaultBusinessInfo.state,
+    zipCode: defaultBusinessInfo.zipCode,
+    country: defaultBusinessInfo.country,
+    email: defaultBusinessInfo.email,
+    phone: defaultBusinessInfo.phone,
+  }
   const showPayCard =
     (invoice.status === "open" || invoice.status === "sent" || invoice.status === "past_due") && bankAccount
 
@@ -327,14 +341,14 @@ export function InvoicePDFDocument({
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.businessInfo}>
-            <Text style={styles.businessName}>{businessInfo.name}</Text>
-            <Text style={styles.businessText}>{businessInfo.address}</Text>
+            <Text style={styles.businessName}>{biz.name}</Text>
+            <Text style={styles.businessText}>{biz.address}</Text>
             <Text style={styles.businessText}>
-              {businessInfo.city}, {businessInfo.state} {businessInfo.zipCode}
+              {biz.city}, {biz.state} {biz.zipCode}
             </Text>
-            <Text style={styles.businessText}>{businessInfo.country}</Text>
-            <Text style={styles.businessText}>{businessInfo.email}</Text>
-            <Text style={styles.businessText}>{businessInfo.phone}</Text>
+            <Text style={styles.businessText}>{biz.country}</Text>
+            <Text style={styles.businessText}>{biz.email}</Text>
+            <Text style={styles.businessText}>{biz.phone}</Text>
           </View>
           <View style={styles.invoiceHeader}>
             <Text style={styles.invoiceTitle}>Invoice</Text>

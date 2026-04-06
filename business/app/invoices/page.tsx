@@ -41,10 +41,12 @@ import { useInvoices } from "@/lib/invoices-context"
 import { generateInvoiceId } from "@/lib/invoice-id"
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge"
 import { downloadInvoicePdf } from "@/lib/use-invoice-pdf"
-import { mockAccounts, mockStablecoinAccounts } from "@/lib/mock-data"
 import { toast } from "sonner"
-import type { Invoice } from "@/lib/mock-data"
+import type { Invoice } from "@/lib/b2b/types"
 import { useBusinessProfile } from "@/lib/use-business-profile"
+import { fetchWithSession } from "@/lib/fetch-with-session"
+import { issuerFromBusinessProfile } from "@/lib/invoices/issuer"
+import type { Account, StablecoinAccount } from "@/lib/finance-types"
 import {
   TIER2_COMPLETE_PLACEHOLDER,
   canProvisionInvoiceDepositInstructions,
@@ -52,16 +54,20 @@ import {
 export default function InvoicesPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { tier1Complete } = useBusinessProfile()
-  const { invoices, updateInvoice, addInvoice, deleteInvoice } = useInvoices()
+  const profile = useBusinessProfile()
+  const { tier1Complete } = profile
+  const issuer = issuerFromBusinessProfile(profile)
+  const { invoices, loading, error: invoicesError, updateInvoice, addInvoice, deleteInvoice } =
+    useInvoices()
   const [activeTab, setActiveTab] = useState("all")
 
   useEffect(() => {
     const deletedId = searchParams.get("deleted")
-    if (deletedId) {
-      deleteInvoice(deletedId)
+    if (!deletedId) return
+    void (async () => {
+      await deleteInvoice(deletedId)
       router.replace("/invoices")
-    }
+    })()
   }, [searchParams, deleteInvoice, router])
 
   const [searchTerm, setSearchTerm] = useState("")
@@ -113,7 +119,7 @@ export default function InvoicesPage() {
     router.push(`/invoices/create?edit=${invoice.id}`)
   }
 
-  const handleDuplicate = (invoice: Invoice, e: React.MouseEvent) => {
+  const handleDuplicate = async (invoice: Invoice, e: React.MouseEvent) => {
     e.stopPropagation()
     const newId = generateInvoiceId()
     const newInvoiceNumber = `EINV-${newId.slice(4)}`
@@ -128,9 +134,13 @@ export default function InvoicesPage() {
       statusHistory: [],
       archived: false,
     }
-    addInvoice(duplicate)
-    toast.success("Invoice duplicated")
-    router.push(`/invoices/create?edit=${duplicate.id}`)
+    const created = await addInvoice(duplicate)
+    if (created) {
+      toast.success("Invoice duplicated")
+      router.push(`/invoices/create?edit=${created.id}`)
+    } else {
+      toast.error("Could not duplicate invoice")
+    }
   }
 
   const handleEmailInvoice = async (invoice: Invoice, e: React.MouseEvent) => {
@@ -141,10 +151,10 @@ export default function InvoicesPage() {
     }
     setSendingId(invoice.id)
     try {
-      const res = await fetch("/api/invoices/send-email", {
+      const res = await fetchWithSession("/api/invoices/send-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ invoice }),
+        body: JSON.stringify({ invoiceId: invoice.id }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Failed to send email")
@@ -162,19 +172,34 @@ export default function InvoicesPage() {
 
   const handleDownloadPdf = async (invoice: Invoice, e: React.MouseEvent) => {
     e.stopPropagation()
-    const bankAccount = mockAccounts.find((a) => a.currency === invoice.currency)
-    const stablecoinAccount = mockStablecoinAccounts.find((s) => s.currency === invoice.currency)
     const canProvision = canProvisionInvoiceDepositInstructions(
       invoice.currency,
       tier1Complete,
       TIER2_COMPLETE_PLACEHOLDER,
     )
+    let bankAccount: Account | undefined
+    let stablecoinAccount: StablecoinAccount | undefined
+    if (canProvision) {
+      const res = await fetchWithSession(
+        `/api/business/b2b/invoice-pay-in?currency=${encodeURIComponent(invoice.currency)}`,
+        { headers: { "X-Easner-Noah-Scope": "business" } },
+      )
+      const data = (await res.json().catch(() => ({}))) as {
+        bankAccount?: Account
+        stablecoinAccount?: StablecoinAccount
+      }
+      if (res.ok) {
+        bankAccount = data.bankAccount
+        stablecoinAccount = data.stablecoinAccount
+      }
+    }
     setDownloadingId(invoice.id)
     try {
       await downloadInvoicePdf(
         invoice,
         canProvision ? bankAccount : undefined,
         canProvision ? stablecoinAccount : undefined,
+        issuer,
       )
     } catch (err) {
       console.error("Failed to download PDF:", err)
@@ -202,9 +227,10 @@ export default function InvoicesPage() {
     setDeleteDialogOpen(true)
   }
 
-  const handleDeleteConfirm = () => {
-    if (invoiceToDelete) {
-      deleteInvoice(invoiceToDelete.id)
+  const handleDeleteConfirm = async () => {
+    if (!invoiceToDelete) return
+    const ok = await deleteInvoice(invoiceToDelete.id)
+    if (ok) {
       toast.success("Invoice deleted")
       setInvoiceToDelete(null)
       setDeleteDialogOpen(false)
@@ -213,6 +239,14 @@ export default function InvoicesPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      {invoicesError ? (
+        <p className="text-sm text-destructive" role="status">
+          {invoicesError}
+        </p>
+      ) : null}
+      {loading ? (
+        <p className="text-sm text-muted-foreground">Loading invoices…</p>
+      ) : null}
       {/* Header + Tabs - sticky so content doesn't scroll through */}
       <div className="sticky top-0 z-20 flex flex-col gap-4 shrink-0 pb-4 bg-background border-b">
         <div className="flex items-center justify-between">
@@ -220,18 +254,12 @@ export default function InvoicesPage() {
             <h1 className="text-2xl font-semibold text-foreground">Invoices</h1>
             <p className="text-sm text-muted-foreground mt-1">Manage your billing and invoicing</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm">
-              <Download className="h-4 w-4 mr-2" />
-              Export
+          <Link href="/invoices/create">
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              Create invoice
             </Button>
-            <Link href="/invoices/create">
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                Create invoice
-              </Button>
-            </Link>
-          </div>
+          </Link>
         </div>
         <div className="flex space-x-1">
           {statusTabs.map((tab) => (
@@ -265,17 +293,9 @@ export default function InvoicesPage() {
                   <DollarSign className="h-6 w-6 text-muted-foreground" />
                 </div>
                 <h3 className="text-lg font-semibold mb-2">No invoices found</h3>
-                <p className="text-sm text-muted-foreground mb-4">
+                <p className="text-sm text-muted-foreground">
                   {searchTerm ? "Try adjusting your search terms" : "Get started by creating your first invoice"}
                 </p>
-                {!searchTerm && (
-                  <Link href="/invoices/create">
-                    <Button>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Create invoice
-                    </Button>
-                  </Link>
-                )}
               </div>
             </div>
           ) : (

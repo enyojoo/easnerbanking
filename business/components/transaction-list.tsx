@@ -1,4 +1,4 @@
-import type { Transaction } from "@/lib/mock-data"
+import type { Transaction } from "@/lib/finance-types"
 import { formatCurrency } from "@/lib/utils"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"

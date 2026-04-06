@@ -7,8 +7,10 @@ import { SettingsPersonalTab } from "@/components/settings/settings-personal-tab
 import { SettingsBusinessTab } from "@/components/settings/settings-business-tab"
 import { SettingsTeamTab } from "@/components/settings/settings-team-tab"
 import { SettingsCommunicationTab } from "@/components/settings/settings-communication-tab"
+import { SettingsRecipientsTab } from "@/components/settings/settings-recipients-tab"
+import { SettingsCustomersTab } from "@/components/settings/settings-customers-tab"
 
-const TABS = ["personal", "business", "team", "communication"] as const
+const TABS = ["personal", "business", "team", "recipients", "customers", "communication"] as const
 type TabValue = (typeof TABS)[number]
 
 function SettingsContent() {
@@ -27,6 +29,9 @@ function SettingsContent() {
     setActiveTab(value as TabValue)
     const next = new URLSearchParams(searchParams.toString())
     next.set("tab", value)
+    if (value !== "customers") {
+      next.delete("customer")
+    }
     if (typeof window !== "undefined") {
       window.history.replaceState(null, "", `/settings?${next.toString()}`)
     }
@@ -44,6 +49,8 @@ function SettingsContent() {
           <TabsTrigger value="personal">Personal</TabsTrigger>
           <TabsTrigger value="business">Business</TabsTrigger>
           <TabsTrigger value="team">Team</TabsTrigger>
+          <TabsTrigger value="recipients">Recipients</TabsTrigger>
+          <TabsTrigger value="customers">Customers</TabsTrigger>
           <TabsTrigger value="communication">Communication</TabsTrigger>
         </TabsList>
 
@@ -55,6 +62,12 @@ function SettingsContent() {
         </TabsContent>
         <TabsContent value="team" className="mt-6">
           <SettingsTeamTab />
+        </TabsContent>
+        <TabsContent value="recipients" className="mt-6">
+          <SettingsRecipientsTab />
+        </TabsContent>
+        <TabsContent value="customers" className="mt-6">
+          <SettingsCustomersTab />
         </TabsContent>
         <TabsContent value="communication" className="mt-6">
           <SettingsCommunicationTab />

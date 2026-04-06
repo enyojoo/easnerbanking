@@ -6,7 +6,7 @@ import {
   type InvoiceEmailData,
 } from "@/lib/invoice-email-template"
 import { businessInfo } from "@/lib/business-info"
-import type { Invoice } from "@/lib/mock-data"
+import type { Invoice } from "@/lib/b2b/types"
 
 let apiKeyInitialized = false
 
@@ -30,7 +30,8 @@ export interface SendInvoiceEmailResult {
 export async function sendInvoiceEmail(
   invoice: Invoice,
   invoiceViewUrl: string,
-  pdfBuffer: Buffer
+  pdfBuffer: Buffer,
+  options?: { businessName?: string },
 ): Promise<SendInvoiceEmailResult> {
   if (!invoice.customerEmail?.trim()) {
     return { success: false, error: "Invoice has no customer email" }
@@ -41,7 +42,7 @@ export async function sendInvoiceEmail(
 
     const fromEmail = process.env.SENDGRID_FROM_EMAIL || "invoices@easner.com"
     const fromName = process.env.SENDGRID_FROM_NAME || "Easner Business"
-    const businessName = businessInfo.name
+    const businessName = options?.businessName?.trim() || businessInfo.name
 
     const data: InvoiceEmailData = {
       invoice,

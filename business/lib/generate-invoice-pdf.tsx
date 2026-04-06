@@ -2,14 +2,16 @@ import { renderToBuffer } from "@react-pdf/renderer"
 import QRCode from "qrcode"
 import { InvoicePDFDocument } from "@/components/invoice-pdf-document"
 import { PDF_LOGO_DATA_URL } from "@/lib/pdf-logo-base64"
-import type { Invoice } from "@/lib/mock-data"
-import type { Account } from "@/lib/mock-data"
-import type { StablecoinAccount } from "@/lib/mock-data"
+import type { Invoice } from "@/lib/b2b/types"
+import type { Account } from "@/lib/finance-types"
+import type { StablecoinAccount } from "@/lib/finance-types"
+import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
 
 export async function generateInvoicePdfBuffer(
   invoice: Invoice,
   bankAccount?: Account,
-  stablecoinAccount?: StablecoinAccount
+  stablecoinAccount?: StablecoinAccount,
+  issuer?: InvoicePdfIssuer,
 ): Promise<Buffer> {
   const logoUrl = PDF_LOGO_DATA_URL
 
@@ -30,6 +32,7 @@ export async function generateInvoicePdfBuffer(
       invoice={invoice}
       bankAccount={bankAccount}
       stablecoinAccount={stablecoinAccount}
+      issuer={issuer}
       logoUrl={logoUrl}
       qrDataUrl={qrDataUrl}
     />

@@ -8,7 +8,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { PinChallengeDialog } from "@/components/app-lock/pin-challenge-dialog"
 import { useAuth } from "@/lib/auth-context"
 import { hasPin, isLoginPinModuleAvailable } from "@/lib/login-pin"
-import { mockAccounts, currencySymbols } from "@/lib/mock-data"
+import { currencySymbols } from "@/lib/currency-meta"
+import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 import type { Beneficiary } from "@/lib/recipient-types"
 import { generateTransactionId } from "@/lib/transaction-id"
 import { fetchWithSession } from "@/lib/fetch-with-session"
@@ -66,6 +67,7 @@ export default function SendConfirmPage() {
   const router = useRouter()
   const { user } = useAuth()
   const { tier1Complete, isLoading: profileLoading } = useBusinessProfile()
+  const { accountRows: sourceAccounts } = useBusinessAccountRows()
   const [state, setState] = useState<SendFlowState | null>(null)
   const [showPinDialog, setShowPinDialog] = useState(false)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
@@ -191,7 +193,7 @@ export default function SendConfirmPage() {
     )
   }
 
-  const sourceAccount = mockAccounts.find((a) => a.id === state.sourceAccountId!)
+  const sourceAccount = sourceAccounts.find((a) => a.id === state.sourceAccountId!)
   const transferMethod = getTransferMethod(state.recipient, state.receiveCurrency)
   const processingTime = getProcessingTime(transferMethod)
   const easenetSend = isEasenetRecipient(state.recipient)

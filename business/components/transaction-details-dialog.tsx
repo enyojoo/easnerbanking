@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { type Transaction, mockCards } from "@/lib/mock-data"
+import type { Transaction } from "@/lib/finance-types"
 import { formatCurrency } from "@/lib/utils"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
@@ -28,7 +28,7 @@ export function TransactionDetailsDialog({
 
   if (!transaction) return null
 
-  const card = transaction.cardId ? mockCards.find((c) => c.id === transaction.cardId) : null
+  const cardLast4 = transaction.cardLast4
 
   const handleCopy = async (text: string, key: string) => {
     try {
@@ -43,7 +43,7 @@ export function TransactionDetailsDialog({
   const handleDownloadReceipt = async () => {
     setDownloadingReceipt(true)
     try {
-      await downloadTransactionReceiptPdf(transaction, card?.last4)
+      await downloadTransactionReceiptPdf(transaction, cardLast4)
     } finally {
       setDownloadingReceipt(false)
     }
@@ -136,10 +136,10 @@ export function TransactionDetailsDialog({
               </div>
             )}
 
-            {card ? (
+            {cardLast4 ? (
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Card</span>
-                <span className="font-medium">•••• {card.last4}</span>
+                <span className="font-medium">•••• {cardLast4}</span>
               </div>
             ) : transaction.category ? (
               <div className="flex justify-between text-sm">

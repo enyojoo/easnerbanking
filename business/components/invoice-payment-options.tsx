@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Copy, Check, Share2 } from "lucide-react"
 import { QRCodeSVG } from "qrcode.react"
-import type { Account } from "@/lib/mock-data"
-import type { Invoice } from "@/lib/mock-data"
-import { formatCurrency } from "@/lib/utils"
+import type { Account } from "@/lib/finance-types"
+import type { Invoice } from "@/lib/b2b/types"
+import { cn, formatCurrency } from "@/lib/utils"
 import { businessInfo } from "@/lib/business-info"
 
 interface StablecoinAccount {
@@ -109,8 +109,10 @@ function PaymentInstructions({
 
 interface InvoicePaymentOptionsProps {
   invoice: Invoice
-  bankAccount: Account
+  bankAccount?: Account
   stablecoinAccount?: StablecoinAccount
+  /** Overrides “from” name in share text; defaults to static `businessInfo`. */
+  businessDisplayName?: string
   /** When true, render without Card wrapper (e.g. inside invoice frame) */
   embedded?: boolean
   /** "customer" = invoice view; "business" = invoice detail page */
@@ -130,13 +132,16 @@ export function InvoicePaymentOptions({
   invoice,
   bankAccount,
   stablecoinAccount,
+  businessDisplayName,
   embedded = false,
   audience = "customer",
   value,
   onValueChange,
 }: InvoicePaymentOptionsProps) {
   const [copiedField, setCopiedField] = useState<string | null>(null)
+  const hasBank = bankAccount !== undefined
   const hasStablecoin = stablecoinAccount !== undefined
+  const brandName = businessDisplayName?.trim() || businessInfo.name
 
   const copyToClipboard = async (text: string, field?: string) => {
     try {
@@ -163,7 +168,7 @@ export function InvoicePaymentOptions({
 
   const getShareContent = (type: "bank" | "stablecoin") => {
     const details =
-      type === "bank"
+      type === "bank" && bankAccount
         ? [
             `Amount: ${formatCurrency(invoice.total, invoice.currency)}`,
             `Account Name: ${bankAccount.accountName}`,
@@ -199,7 +204,7 @@ export function InvoicePaymentOptions({
   const handleShare = async (type: "bank" | "stablecoin") => {
     const { details, url } = getShareContent(type)
     const body = url ? `${details}\n\nView invoice: ${url}` : details
-    const fullText = `Invoice ${invoice.invoiceNumber} from ${businessInfo.name}\n\nPayment Details:\n${body}`
+    const fullText = `Invoice ${invoice.invoiceNumber} from ${brandName}\n\nPayment Details:\n${body}`
 
     if (navigator.share) {
       try {
@@ -234,44 +239,52 @@ export function InvoicePaymentOptions({
             onValueChange: (v: string) =>
               onValueChange(v as "bank" | "stablecoin"),
           }
-        : { defaultValue: "bank" })}
+        : { defaultValue: hasBank ? "bank" : "stablecoin" })}
       className="w-full"
     >
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="bank">
-              {bankAccount.currency === "USD"
-                ? "US Bank Account"
-                : bankAccount.currency === "EUR"
-                  ? "EU Bank Account"
-                  : "Bank transfer"}
-            </TabsTrigger>
+          <TabsList
+            className={cn(
+              "grid w-full",
+              hasBank && hasStablecoin ? "grid-cols-2" : "grid-cols-1",
+            )}
+          >
+            {hasBank ? (
+              <TabsTrigger value="bank">
+                {bankAccount!.currency === "USD"
+                  ? "US Bank Account"
+                  : bankAccount!.currency === "EUR"
+                    ? "EU Bank Account"
+                    : "Bank transfer"}
+              </TabsTrigger>
+            ) : null}
             <TabsTrigger value="stablecoin" disabled={!hasStablecoin}>
               Stablecoin
             </TabsTrigger>
           </TabsList>
 
+          {hasBank ? (
           <TabsContent value="bank" className="space-y-4 mt-4">
             <div className="space-y-4">
               <CopyableField
                 label="Account Name"
-                value={bankAccount.accountName}
+                value={bankAccount!.accountName}
                 copiedField={copiedField}
                 fieldId="inv-bank-name"
                 onCopy={copyToClipboard}
               />
-              {bankAccount.currency === "EUR" && bankAccount.iban ? (
+              {bankAccount!.currency === "EUR" && bankAccount.iban ? (
                 <>
                   <CopyableField
                     label="IBAN"
-                    value={bankAccount.iban}
+                    value={bankAccount!.iban}
                     copiedField={copiedField}
                     fieldId="inv-iban"
                     onCopy={copyToClipboard}
                   />
-                  {bankAccount.bic && (
+                  {bankAccount!.bic && (
                     <CopyableField
                       label="BIC/SWIFT"
-                      value={bankAccount.bic}
+                      value={bankAccount!.bic}
                       copiedField={copiedField}
                       fieldId="inv-bic"
                       onCopy={copyToClipboard}
@@ -282,24 +295,24 @@ export function InvoicePaymentOptions({
                 <>
                   <CopyableField
                     label="Account Number"
-                    value={bankAccount.fullAccountNumber}
+                    value={bankAccount!.fullAccountNumber}
                     copiedField={copiedField}
                     fieldId="inv-acc"
                     onCopy={copyToClipboard}
                   />
-                  {bankAccount.routingNumber && (
+                  {bankAccount!.routingNumber && (
                     <CopyableField
                       label="Routing Number"
-                      value={bankAccount.routingNumber}
+                      value={bankAccount!.routingNumber}
                       copiedField={copiedField}
                       fieldId="inv-routing"
                       onCopy={copyToClipboard}
                     />
                   )}
-                  {bankAccount.sortCode && (
+                  {bankAccount!.sortCode && (
                     <CopyableField
                       label="Sort Code"
-                      value={bankAccount.sortCode}
+                      value={bankAccount!.sortCode}
                       copiedField={copiedField}
                       fieldId="inv-sort"
                       onCopy={copyToClipboard}
@@ -309,15 +322,15 @@ export function InvoicePaymentOptions({
               )}
               <CopyableField
                 label="Bank Name"
-                value={bankAccount.bankName}
+                value={bankAccount!.bankName}
                 copiedField={copiedField}
                 fieldId="inv-bank"
                 onCopy={copyToClipboard}
               />
-              {bankAccount.bankAddress && (
+              {bankAccount!.bankAddress && (
                 <CopyableField
                   label="Address"
-                  value={bankAccount.bankAddress}
+                  value={bankAccount!.bankAddress}
                   copiedField={copiedField}
                   fieldId="inv-bank-addr"
                   onCopy={copyToClipboard}
@@ -342,6 +355,7 @@ export function InvoicePaymentOptions({
               <PaymentInstructions currency={invoice.currency} type="bank" />
             </div>
           </TabsContent>
+          ) : null}
 
           <TabsContent value="stablecoin" className="space-y-4 mt-4">
             {hasStablecoin && stablecoinAccount ? (

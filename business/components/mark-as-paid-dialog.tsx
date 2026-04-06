@@ -14,7 +14,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Banknote, Building2, Check, Search } from "lucide-react"
 import { getInboundDeposits, type InboundDeposit } from "@/lib/deposits"
 import { formatCurrency, formatDate } from "@/lib/utils"
-import type { Invoice, InvoicePaymentInfo } from "@/lib/mock-data"
+import type { Invoice, InvoicePaymentInfo } from "@/lib/b2b/types"
+import { useTransactionsCached } from "@/hooks/use-transactions-cached"
 
 type PaymentMethodChoice = "cash" | "easner" | null
 
@@ -31,12 +32,13 @@ export function MarkAsPaidDialog({
   onOpenChange,
   onSuccess,
 }: MarkAsPaidDialogProps) {
+  const { data: ledgerRows } = useTransactionsCached()
   const [step, setStep] = useState<PaymentMethodChoice>(null)
   const [cashNote, setCashNote] = useState("")
   const [selectedDeposit, setSelectedDeposit] = useState<InboundDeposit | null>(null)
   const [search, setSearch] = useState("")
 
-  const deposits = getInboundDeposits(invoice, search || undefined)
+  const deposits = getInboundDeposits(invoice, ledgerRows, search || undefined)
 
   useEffect(() => {
     if (open) {

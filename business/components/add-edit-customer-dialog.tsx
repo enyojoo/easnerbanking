@@ -11,20 +11,15 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import type { Customer } from "@/lib/mock-data"
+import { BaseCurrencySelect } from "@/components/base-currency-select"
+import type { Customer } from "@/lib/b2b/types"
+import { useBusinessProfile } from "@/lib/use-business-profile"
 
 interface AddEditCustomerDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   customer?: Customer | null
-  onSave: (customer: Customer) => void
+  onSave: (customer: Customer) => void | Promise<void>
 }
 
 export function AddEditCustomerDialog({
@@ -33,6 +28,7 @@ export function AddEditCustomerDialog({
   customer,
   onSave,
 }: AddEditCustomerDialogProps) {
+  const profile = useBusinessProfile()
   const isEdit = !!customer
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
@@ -57,11 +53,11 @@ export function AddEditCustomerDialog({
         setPhone("")
         setCompany("")
         setAddress("")
-        setCurrency("USD")
+        setCurrency(profile.baseCurrency || "USD")
       }
       setError(null)
     }
-  }, [open, customer])
+  }, [open, customer, profile.baseCurrency])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -94,7 +90,7 @@ export function AddEditCustomerDialog({
           currency: currency,
         }
       : {
-          id: `cust_${Date.now()}`,
+          id: "",
           name: trimmedName,
           email: trimmedEmail,
           phone: phone.trim(),
@@ -103,6 +99,7 @@ export function AddEditCustomerDialog({
           totalInvoices: 0,
           totalPaid: 0,
           currency: currency,
+          status: "active",
           lastInvoiceDate: "",
         }
 
@@ -163,19 +160,12 @@ export function AddEditCustomerDialog({
               placeholder="Company name"
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="currency">Currency</Label>
-            <Select value={currency} onValueChange={setCurrency}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="USD">USD - US Dollar</SelectItem>
-                <SelectItem value="EUR">EUR - Euro</SelectItem>
-                <SelectItem value="GBP">GBP - British Pound</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <BaseCurrencySelect
+            id="customerCurrency"
+            label="Currency"
+            value={currency}
+            onValueChange={setCurrency}
+          />
           <div className="space-y-2">
             <Label htmlFor="address">Address</Label>
             <Input

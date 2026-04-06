@@ -5,12 +5,9 @@ import { Button } from "@/components/ui/button"
 import {
   CreditCard,
   LayoutDashboard,
-  ArrowRightLeft,
   List,
   Wallet,
-  UsersRound,
   ReceiptText,
-  Contact,
   ChevronDown,
   ChevronRight,
   Send,
@@ -40,12 +37,8 @@ export function DashboardNav() {
 
   const getInitialOpenGroups = () => {
     const openGroups = new Set<string>()
-    if (pathname.startsWith("/send") || pathname.startsWith("/recipients")) {
-      openGroups.add("payments")
-    }
     if (
       pathname.startsWith("/invoices") ||
-      pathname.startsWith("/customers") ||
       pathname.startsWith("/terminal") ||
       pathname.startsWith("/autopayout")
     ) {
@@ -74,16 +67,7 @@ export function DashboardNav() {
 
   const menuItems = [
     { href: "/dashboard", label: "Home", icon: LayoutDashboard, type: "single" as const },
-    {
-      key: "payments",
-      label: "Payments",
-      icon: ArrowRightLeft,
-      type: "group" as const,
-      items: [
-        { href: "/send", label: "Send", icon: Send },
-        { href: "/recipients", label: "Recipients", icon: UsersRound },
-      ],
-    },
+    { href: "/send", label: "Send", icon: Send, type: "single" as const },
     { href: "/cards", label: "Cards", icon: CreditCard, type: "single" as const },
     {
       key: "collections",
@@ -92,7 +76,6 @@ export function DashboardNav() {
       type: "group" as const,
       items: [
         { href: "/invoices", label: "Invoices", icon: ReceiptText },
-        { href: "/customers", label: "Customers", icon: Contact },
         { href: "/terminal", label: "Terminal", icon: SmartphoneNfc },
         { href: "/autopayout", label: "Auto Payout", icon: QrCode },
       ],
@@ -131,17 +114,18 @@ export function DashboardNav() {
         )}
       </div>
 
-      <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
+      <nav className="flex flex-1 flex-col gap-2.5 px-3 py-6 overflow-y-auto">
         {menuItems.map((item) => {
           if (item.type === "single") {
             const Icon = item.icon
-            const isActive = pathname === item.href
+            const isActive =
+              item.href === "/send" ? pathname === "/send" || pathname.startsWith("/send/") : pathname === item.href
             return (
               <Link key={item.href} href={item.href || "#"}>
                 <Button
                   variant="ghost"
                   className={cn(
-                    "w-full justify-start gap-3 px-3 py-3 h-auto text-sm font-medium rounded-md transition-all duration-200",
+                    "w-full justify-start gap-3 px-3 py-3 min-h-11 h-auto text-sm font-medium rounded-md transition-all duration-200",
                     isActive
                       ? "bg-accent text-accent-foreground"
                       : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
@@ -157,12 +141,12 @@ export function DashboardNav() {
             const hasActiveChild = item.items?.some((child) => pathname === child.href) || false
 
             return (
-              <div key={item.key} className="space-y-1">
+              <div key={item.key} className="flex flex-col gap-2.5">
                 <Button
                   variant="ghost"
                   onClick={() => toggleGroup(item.key || "")}
                   className={cn(
-                    "w-full justify-between gap-3 px-3 py-3 h-auto text-sm font-medium rounded-md transition-all duration-200",
+                    "w-full justify-between gap-3 px-3 py-3 min-h-11 h-auto text-sm font-medium rounded-md transition-all duration-200",
                     hasActiveChild
                       ? "bg-accent text-accent-foreground"
                       : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
@@ -180,7 +164,7 @@ export function DashboardNav() {
                 </Button>
 
                 {isOpen && (
-                  <div className="ml-4 space-y-1">
+                  <div className="ml-4 flex flex-col gap-2.5 border-l border-sidebar-border pl-2">
                     {item.items?.map((child) => {
                       const ChildIcon = child.icon
                       const isActive = pathname === child.href
@@ -189,7 +173,7 @@ export function DashboardNav() {
                           <Button
                             variant="ghost"
                             className={cn(
-                              "w-full justify-start gap-3 px-3 py-3 h-auto text-sm font-medium rounded-md transition-all duration-200",
+                              "w-full justify-start gap-3 px-3 py-3 min-h-11 h-auto text-sm font-medium rounded-md transition-all duration-200",
                               isActive
                                 ? "bg-accent text-accent-foreground"
                                 : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",

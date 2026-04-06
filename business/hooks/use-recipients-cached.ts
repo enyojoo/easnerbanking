@@ -21,7 +21,7 @@ async function fetchRecipientsSafe(userId: string): Promise<Beneficiary[]> {
 }
 
 /**
- * Shared recipient list cache (memory + localStorage) for /recipients, /send picker, etc.
+ * Shared recipient list cache (memory + localStorage) for Settings recipients, /send picker, etc.
  * When {@param enabled} is false, no fetch runs (e.g. parent supplies an explicit list).
  */
 export function useRecipientsCached(enabled: boolean) {

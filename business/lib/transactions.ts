@@ -1,8 +1,4 @@
-import {
-  mockTransactions,
-  mockCardTransactions,
-  type Transaction,
-} from "@/lib/mock-data"
+import type { Transaction } from "@/lib/finance-types"
 import type { TimePeriod } from "@/components/date-range-filter"
 
 export type TransactionSource = "account" | "card"
@@ -66,28 +62,13 @@ export function getDateRange(options: DateRangeOptions): { start: Date; end: Dat
 }
 
 /**
- * Merge account and card transactions, add source, sort by date desc.
- */
-export function getAllTransactions(): TransactionWithSource[] {
-  const accountTxns: TransactionWithSource[] = mockTransactions.map((t) => ({
-    ...t,
-    source: "account" as TransactionSource,
-  }))
-  const cardTxns: TransactionWithSource[] = mockCardTransactions.map((t) => ({
-    ...t,
-    source: "card" as TransactionSource,
-  }))
-  const merged = [...accountTxns, ...cardTxns]
-  return merged.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-}
-
-/**
  * Filter transactions by date range, source, type, status, search, and cardId.
  */
-export function getTransactionsFiltered(
+export function filterTransactions(
+  transactions: TransactionWithSource[],
   options: GetTransactionsFilteredOptions
 ): TransactionWithSource[] {
-  let result = getAllTransactions()
+  let result = [...transactions]
 
   const {
     start,
@@ -119,7 +100,7 @@ export function getTransactionsFiltered(
     return true
   })
 
-  result = [...result].sort((a, b) => {
+  result = result.sort((a, b) => {
     if (sortBy === "date") {
       const diff = new Date(a.date).getTime() - new Date(b.date).getTime()
       return sortOrder === "desc" ? -diff : diff
@@ -129,18 +110,4 @@ export function getTransactionsFiltered(
   })
 
   return result
-}
-
-/**
- * Get most recent N transactions within date range. For dashboard.
- */
-export function getRecentTransactions(
-  count: number,
-  dateRange: { start: Date; end: Date }
-): TransactionWithSource[] {
-  const filtered = getTransactionsFiltered({
-    start: dateRange.start,
-    end: dateRange.end,
-  })
-  return filtered.slice(0, count)
 }

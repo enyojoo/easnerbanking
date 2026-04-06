@@ -4,10 +4,11 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { currencySymbols } from "@/lib/mock-data"
-import { mockStablecoinAccounts } from "@/lib/mock-data"
+import { currencySymbols } from "@/lib/currency-meta"
+import type { StablecoinAccount } from "@/lib/finance-types"
 import { getStablecoinPaymentInstructions } from "@/lib/payment-instructions"
 import { generateTransactionId } from "@/lib/transaction-id"
+import { fetchWithSession } from "@/lib/fetch-with-session"
 import { ArrowLeft, Copy, Check } from "lucide-react"
 import { QRCodeSVG } from "qrcode.react"
 
@@ -28,6 +29,8 @@ export default function StablecoinAuthorizePage() {
   const [state, setState] = useState<SendFlowState | null>(null)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [paymentConfirmed, setPaymentConfirmed] = useState(false)
+  const [stablecoinAccount, setStablecoinAccount] = useState<StablecoinAccount | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     const raw = sessionStorage.getItem(SEND_FLOW_STATE_KEY)
@@ -47,11 +50,46 @@ export default function StablecoinAuthorizePage() {
     }
   }, [router])
 
-  const stablecoinType =
-    state?.paymentMethod === "usdc" ? "USDC" : state?.paymentMethod === "usdt" ? "USDT" : "USDC"
-  const stablecoinAccount = mockStablecoinAccounts.find(
-    (s) => s.stablecoin === stablecoinType
-  )
+  useEffect(() => {
+    if (!state) return
+    let cancelled = false
+    ;(async () => {
+      setLoadError(null)
+      try {
+        const res = await fetchWithSession("/api/noah/wallets", {
+          headers: { "X-Easner-Noah-Scope": "business" },
+        })
+        const data = (await res.json().catch(() => ({}))) as {
+          wallets?: Array<{ address?: string }>
+          error?: string
+        }
+        if (!res.ok) {
+          throw new Error(data.error || "Could not load wallet")
+        }
+        const addr = data.wallets?.[0]?.address?.trim()
+        if (!addr) {
+          throw new Error("No deposit address found")
+        }
+        const stablecoinType =
+          state.paymentMethod === "usdc" ? "USDC" : state.paymentMethod === "usdt" ? "USDT" : "USDC"
+        if (cancelled) return
+        setStablecoinAccount({
+          currency: "USD",
+          stablecoin: stablecoinType,
+          chain: "Solana",
+          address: addr,
+          memo: "",
+        })
+      } catch (e) {
+        if (!cancelled) {
+          setLoadError(e instanceof Error ? e.message : "Could not load wallet")
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [state])
 
   const handleCopy = async (text: string, key: string) => {
     try {
@@ -72,13 +110,19 @@ export default function StablecoinAuthorizePage() {
     )
   }
 
-  if (!state || !stablecoinAccount) {
+  const stablecoinType =
+    state?.paymentMethod === "usdc" ? "USDC" : state?.paymentMethod === "usdt" ? "USDT" : "USDC"
+
+  if (!state || loadError || !stablecoinAccount) {
     return (
       <div className="max-w-2xl mx-auto space-y-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 w-48 bg-muted rounded" />
-          <div className="h-32 bg-muted rounded" />
-        </div>
+        {loadError ?
+          <p className="text-sm text-destructive">{loadError}</p>
+        : <div className="animate-pulse space-y-4">
+            <div className="h-8 w-48 bg-muted rounded" />
+            <div className="h-32 bg-muted rounded" />
+          </div>
+        }
       </div>
     )
   }
@@ -106,11 +150,9 @@ export default function StablecoinAuthorizePage() {
               className="flex items-center gap-2 font-mono text-sm font-medium hover:text-primary transition-colors"
             >
               {state?.transactionId ?? generateTransactionId()}
-              {copiedKey === "transactionId" ? (
+              {copiedKey === "transactionId" ?
                 <Check className="h-4 w-4 text-primary shrink-0" />
-              ) : (
-                <Copy className="h-4 w-4 shrink-0" />
-              )}
+              : <Copy className="h-4 w-4 shrink-0" />}
             </button>
           </div>
           <div className="flex justify-between items-center pb-4 border-b">
@@ -177,11 +219,9 @@ export default function StablecoinAuthorizePage() {
             onClick={() => handleCopy(stablecoinAccount.address, "address")}
             className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
           >
-            {copiedKey === "address" ? (
+            {copiedKey === "address" ?
               <Check className="h-4 w-4 text-primary" />
-            ) : (
-              <Copy className="h-4 w-4" />
-            )}
+            : <Copy className="h-4 w-4" />}
           </button>
         </div>
       </div>

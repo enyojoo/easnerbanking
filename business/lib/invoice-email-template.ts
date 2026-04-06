@@ -1,6 +1,6 @@
 import { businessInfo } from "@/lib/business-info"
 import { formatDate, formatCurrency } from "@/lib/utils"
-import type { Invoice } from "@/lib/mock-data"
+import type { Invoice } from "@/lib/b2b/types"
 
 export interface InvoiceEmailData {
   invoice: Invoice

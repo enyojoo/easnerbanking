@@ -1,0 +1,116 @@
+export interface Account {
+  id: string
+  currency: "USD" | "EUR" | "GBP" | "NGN"
+  accountName: string
+  bankName: string
+  accountNumber: string
+  fullAccountNumber: string
+  routingNumber?: string
+  sortCode?: string
+  iban?: string
+  bic?: string
+  bankAddress?: string
+  balance: number
+  availableBalance: number
+  status: "active" | "pending" | "closed"
+  stablecoinAddress?: string
+  stablecoinChain?: string
+  stablecoinToken?: "USDC" | "EURC"
+}
+
+export interface Card {
+  id: string
+  type: "debit" | "credit"
+  form: "virtual" | "physical"
+  last4: string
+  fullCardNumber: string
+  cvv: string
+  status: "active" | "inactive" | "blocked"
+  expiryDate: string
+  cardholderName: string
+  balance: number
+  billingAddress: {
+    street: string
+    city: string
+    state: string
+    postalCode: string
+    country: string
+  }
+}
+
+export interface Transaction {
+  id: string
+  type: "ach" | "wire" | "book" | "card"
+  amount: number
+  description: string
+  date: string
+  status: "completed" | "pending" | "processing" | "failed"
+  direction: "credit" | "debit"
+  cardId?: string
+  /** When the ledger row includes masked card tail (e.g. future card product). */
+  cardLast4?: string
+  category?: string
+  fee?: number
+  reference?: string
+  transferId?: string
+  invoiceId?: string
+  collectionChannel?: string
+  autopayoutConfigId?: string
+  displayCurrency?: string
+}
+
+export interface StablecoinAccount {
+  currency: "USD" | "EUR"
+  stablecoin: "USDC" | "EURC" | "USDT"
+  chain: string
+  address: string
+  memo: string
+}
+
+export interface StablecoinDeposit {
+  id: string
+  amount: number
+  currency: "USD" | "EUR"
+  stablecoin: "USDC" | "EURC"
+  chain: string
+  date: string
+  senderAddress?: string
+  memo?: string
+  reference?: string
+}
+
+export interface Beneficiary {
+  id: string
+  name: string
+  bankName: string
+  accountNumber: string
+  fullAccountNumber: string
+  routingNumber?: string
+  iban?: string
+  bic?: string
+  sortCode?: string
+  country: string
+  currency: string
+  email: string
+  phone: string
+  transferType?: "ACH" | "Wire"
+  checkingOrSavings?: "checking" | "savings"
+  addressLine1?: string
+  mobileProvider?: string
+  walletAsset?: string
+  walletNetwork?: string
+  walletMemoTag?: string
+  createdAt: string
+  lastUsed: string
+}
+
+export interface PendingItem {
+  id: string
+  type: "approval" | "failed" | "action_required"
+  title: string
+  description: string
+  amount?: number
+  currency?: string
+  createdAt: string
+  href?: string
+}

@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
-import { currencySymbols } from '@/lib/mock-data'
+import { currencySymbols } from "@/lib/currency-meta"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))

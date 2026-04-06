@@ -8,7 +8,7 @@ import {
   Image,
   StyleSheet,
 } from "@react-pdf/renderer"
-import type { Transaction } from "@/lib/mock-data"
+import type { Transaction } from "@/lib/finance-types"
 import { formatCurrency } from "@/lib/utils"
 
 const statusLabels: Record<string, string> = {

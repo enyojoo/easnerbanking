@@ -7,11 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { SendRecipientPicker } from "@/components/send-recipient-picker"
-import {
-  mockAccounts,
-  currencySymbols,
-  currencyRates,
-} from "@/lib/mock-data"
+import { currencyRates, currencySymbols } from "@/lib/currency-meta"
+import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 import type { Beneficiary } from "@/lib/recipient-types"
 import {
   otherCurrencies,
@@ -89,6 +86,7 @@ function parseAmountFromDisplay(display: string): number {
 export default function SendPage() {
   const router = useRouter()
   const { tier1Complete } = useBusinessProfile()
+  const { accountRows: sourceAccounts } = useBusinessAccountRows()
   const [recipient, setRecipient] = useState<Beneficiary | null>(null)
   const [amountStr, setAmountStr] = useState("")
   const [amountEntryMode, setAmountEntryMode] = useState<"receive" | "send">("receive")
@@ -119,7 +117,7 @@ export default function SendPage() {
 
   const enteredAmount = parseAmountFromDisplay(amountStr)
   const receiveCurrency = recipient?.currency ?? "USD"
-  const sourceAccount = mockAccounts.find((a) => a.id === sourceAccountId)
+  const sourceAccount = sourceAccounts.find((a) => a.id === sourceAccountId)
 
   const sendCurrency = useMemo(() => {
     if (paymentMethod === "balance" && sourceAccount) return sourceAccount.currency
@@ -160,15 +158,15 @@ export default function SendPage() {
       : 0
 
   const suggestedAccount = useMemo(() => {
-    const usdAccount = mockAccounts.find((a) => a.currency === "USD")
-    if (!recipient || receiveAmount <= 0) return usdAccount ?? mockAccounts[0]
-    const matching = mockAccounts.find(
+    const usdAccount = sourceAccounts.find((a) => a.currency === "USD")
+    if (!recipient || receiveAmount <= 0) return usdAccount ?? sourceAccounts[0]
+    const matching = sourceAccounts.find(
       (a) => a.currency === receiveCurrency && a.availableBalance >= sendAmount
     )
     if (matching) return matching
-    const sufficient = mockAccounts.find((a) => a.availableBalance >= sendAmount)
-    return sufficient ?? usdAccount ?? mockAccounts[0]
-  }, [recipient, receiveAmount, receiveCurrency, sendAmount])
+    const sufficient = sourceAccounts.find((a) => a.availableBalance >= sendAmount)
+    return sufficient ?? usdAccount ?? sourceAccounts[0]
+  }, [recipient, receiveAmount, receiveCurrency, sendAmount, sourceAccounts])
 
   useEffect(() => {
     if (recipient && !sourceAccountId && paymentMethod === "balance" && suggestedAccount) {
@@ -475,7 +473,7 @@ export default function SendPage() {
               <div>
                 <p className="text-sm font-medium text-muted-foreground mb-2">From Balance</p>
                 <div className="space-y-1">
-                  {mockAccounts.map((acc) => {
+                  {sourceAccounts.map((acc) => {
                     const sufficient = acc.availableBalance >= sendAmount
                     const isSelected =
                       paymentMethod === "balance" && sourceAccountId === acc.id

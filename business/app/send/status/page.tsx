@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { useState } from "react"
 import { CheckCircle2, Clock, ArrowLeft, Copy, Check } from "lucide-react"
 import Link from "next/link"
-import { currencySymbols } from "@/lib/mock-data"
+import { currencySymbols } from "@/lib/currency-meta"
 import { Suspense } from "react"
 
 const METHOD_MESSAGES: Record<string, { title: string; description: string }> = {

@@ -7,7 +7,7 @@ import { AmountKeypad } from "@/components/app-lock/amount-keypad"
 import { formatAmountForDisplay, parseAmountFromDisplay } from "@/lib/amount-display"
 import { resolveTerminalPayFiatCurrency } from "@/lib/noah/terminal-pay-fiat"
 import { useBusinessProfile } from "@/lib/use-business-profile"
-import { currencySymbols } from "@/lib/mock-data"
+import { currencySymbols } from "@/lib/currency-meta"
 import { ArrowRight } from "lucide-react"
 
 const PAY_AMOUNT_KEY = "easner_terminal_pay_amount"

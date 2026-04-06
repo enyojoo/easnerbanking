@@ -2,7 +2,7 @@
 
 import { pdf } from "@react-pdf/renderer"
 import { TransactionReceiptPDFDocument } from "@/components/transaction-receipt-pdf-document"
-import type { Transaction } from "@/lib/mock-data"
+import type { Transaction } from "@/lib/finance-types"
 import { PDF_LOGO_DATA_URL } from "@/lib/pdf-logo-base64"
 
 async function getLogoDataUrl(): Promise<string> {

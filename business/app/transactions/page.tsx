@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { useSearchParams } from "next/navigation"
+import { useSearchParams, useRouter } from "next/navigation"
 import { getDateRange } from "@/lib/transactions"
 import type { TransactionWithSource } from "@/lib/transactions"
 import { Card, CardContent } from "@/components/ui/card"
@@ -22,6 +22,7 @@ import { DateRangeFilter, type TimePeriod } from "@/components/date-range-filter
 import { Button } from "@/components/ui/button"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { useTransactionsCached } from "@/hooks/use-transactions-cached"
+import { useBusinessProfile } from "@/lib/use-business-profile"
 
 function exportToCsv(
   transactions: {
@@ -61,7 +62,10 @@ function exportToCsv(
 
 export default function TransactionsPage() {
   const { data: rows, loading: listLoading } = useTransactionsCached()
+  const { baseCurrency: profileBaseCurrency } = useBusinessProfile()
+  const baseCurrencyCode = (profileBaseCurrency || "USD").toUpperCase()
   const searchParams = useSearchParams()
+  const router = useRouter()
   const [statusFilter, setStatusFilter] = useState("all")
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedTransaction, setSelectedTransaction] = useState<TransactionWithSource | null>(null)
@@ -79,6 +83,22 @@ export default function TransactionsPage() {
     if (status && ["completed", "pending", "processing", "failed"].includes(status)) setStatusFilter(status)
     if (period && ["7d", "30d", "90d", "1y", "custom"].includes(period)) setTimePeriod(period as TimePeriod)
   }, [searchParams])
+
+  useEffect(() => {
+    if (listLoading) return
+    const id = searchParams.get("txnId") || searchParams.get("transaction")
+    if (!id) return
+    const match = rows.find((t) => t.id === id)
+    const next = new URLSearchParams(searchParams.toString())
+    next.delete("txnId")
+    next.delete("transaction")
+    const qs = next.toString()
+    router.replace(qs ? `/transactions?${qs}` : "/transactions", { scroll: false })
+    if (match) {
+      setSelectedTransaction(match)
+      setTransactionDetailsOpen(true)
+    }
+  }, [listLoading, rows, searchParams, router])
 
   const { start, end } = getDateRange({ timePeriod, customDateRange })
 
@@ -113,6 +133,8 @@ export default function TransactionsPage() {
   const totalDebit = filteredTransactions
     .filter((t) => t.direction === "debit")
     .reduce((sum, t) => sum + Math.abs(t.amount), 0)
+
+  const summaryCurrency = totalsCurrency ?? baseCurrencyCode
 
   const handleFilterChange = (setter: (value: string) => void) => (value: string) => {
     setter(value)
@@ -187,12 +209,12 @@ export default function TransactionsPage() {
                 <p className="text-sm text-muted-foreground">Money in</p>
               </div>
               <p className="text-3xl font-semibold tracking-tight text-green-600">
-                {totalsCurrency ?
-                  `+${formatCurrency(totalCredit, totalsCurrency)}`
-                : `+${totalCredit.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+                +{formatCurrency(totalCredit, summaryCurrency)}
               </p>
               {!totalsCurrency && filteredTransactions.length > 0 ?
-                <p className="mt-1 text-xs text-muted-foreground">Mixed currencies (not FX-adjusted)</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Mixed currencies (totals shown in {baseCurrencyCode})
+                </p>
               : null}
             </div>
             <div className="text-center">
@@ -201,9 +223,7 @@ export default function TransactionsPage() {
                 <p className="text-sm text-muted-foreground">Money out</p>
               </div>
               <p className="text-3xl font-semibold tracking-tight text-red-600">
-                {totalsCurrency ?
-                  `-${formatCurrency(totalDebit, totalsCurrency)}`
-                : `-${totalDebit.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+                -{formatCurrency(totalDebit, summaryCurrency)}
               </p>
             </div>
           </div>

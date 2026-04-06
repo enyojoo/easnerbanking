@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
-import { currencySymbols } from "@/lib/mock-data"
+import { currencySymbols } from "@/lib/currency-meta"
 import { generateTransactionId } from "@/lib/transaction-id"
 import { ArrowLeft, Smartphone, Copy, Check } from "lucide-react"
 

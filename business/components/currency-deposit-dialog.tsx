@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Copy, Check, Plus, Share2 } from "lucide-react"
-import { mockStablecoinAccounts, type Account } from "@/lib/mock-data"
+import type { Account } from "@/lib/finance-types"
 import { QRCodeSVG } from "qrcode.react"
 import { CurrencyFlag } from "@/components/flags"
 import { useBusinessProfile } from "@/lib/use-business-profile"
@@ -116,7 +116,6 @@ interface CurrencyDepositDialogProps {
 
 export function CurrencyDepositDialog({ account, copiedField, onCopy }: CurrencyDepositDialogProps) {
   const { tier1Complete } = useBusinessProfile()
-  const mockStable = mockStablecoinAccounts.find((s) => s.currency === account.currency)
   const stablecoinAccount =
     account.stablecoinAddress && account.stablecoinToken
       ? {
@@ -126,7 +125,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
           address: account.stablecoinAddress,
           memo: "",
         }
-      : mockStable
+      : undefined
   const hasStablecoin = stablecoinAccount !== undefined
 
   const isNgn = account.currency === "NGN"

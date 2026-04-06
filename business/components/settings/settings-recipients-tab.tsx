@@ -2,10 +2,10 @@
 
 import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Plus, Search, MoreVertical, Edit, Trash2, User, Send } from "lucide-react"
+import { Plus, Search, MoreVertical, Edit, Trash2, User, Send, Users } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,7 +30,7 @@ import { useAuth } from "@/lib/auth-context"
 import { useRecipientsCached } from "@/hooks/use-recipients-cached"
 import { createSendFlowSeedForRecipient, persistSendFlowState } from "@/lib/send-flow-session"
 
-export default function RecipientsPage() {
+export function SettingsRecipientsTab() {
   const router = useRouter()
   const { user } = useAuth()
   const [searchTerm, setSearchTerm] = useState("")
@@ -129,34 +129,38 @@ export default function RecipientsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">Recipients</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage your saved recipients for quick transfers</p>
-        </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Recipient
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Add New Recipient</DialogTitle>
-              <DialogDescription>
-                Enter the recipient's details to save them for future transfers.
-              </DialogDescription>
-            </DialogHeader>
-            <RecipientForm onSuccess={handleCreateSuccess} onSuccessWithData={handleCreateSuccessWithData} />
-          </DialogContent>
-        </Dialog>
-      </div>
-
       <Card>
-        <CardContent className="p-0">
+        <CardHeader>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-1.5">
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5 shrink-0" aria-hidden />
+                Recipients
+              </CardTitle>
+              <CardDescription>Manage your saved recipients for quick transfers</CardDescription>
+            </div>
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="shrink-0 self-start sm:self-auto">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Recipient
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Add New Recipient</DialogTitle>
+                  <DialogDescription>
+                    Enter the recipient&apos;s details to save them for future transfers.
+                  </DialogDescription>
+                </DialogHeader>
+                <RecipientForm onSuccess={handleCreateSuccess} onSuccessWithData={handleCreateSuccessWithData} />
+              </DialogContent>
+            </Dialog>
+          </div>
+        </CardHeader>
+        <CardContent>
           {isRecipientsLoading ? (
-            <div className="space-y-4 p-4">
+            <div className="space-y-4">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -171,32 +175,29 @@ export default function RecipientsPage() {
               <div className="h-20 w-full animate-pulse rounded-lg bg-muted" />
             </div>
           ) : filteredBeneficiaries.length === 0 ? (
-            <div className="py-12 text-center">
+            <div className="rounded-lg border p-8 text-center">
               <User className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No recipients found</h3>
-              <p className="text-sm text-muted-foreground mb-4">
+              <p className="font-medium text-foreground">No recipients found</p>
+              <p className="text-sm text-muted-foreground mt-2">
                 {searchTerm ? "Try adjusting your search terms" : "Get started by adding your first recipient"}
               </p>
             </div>
           ) : (
-            <>
-              <div className="p-4 border-b">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search recipients..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-9"
-                  />
-                </div>
+            <div className="space-y-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search recipients..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9"
+                />
               </div>
-              <div className="divide-y">
-                {filteredBeneficiaries.map((recipient) => (
-                  <div
-                    key={recipient.id}
-                    className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors"
-                  >
+              {filteredBeneficiaries.map((recipient) => (
+                <div
+                  key={recipient.id}
+                  className="flex items-center justify-between gap-3 p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                >
                     <div className="flex items-center gap-3">
                       <div className="relative mr-1">
                         {recipient.avatarUrl ? (
@@ -205,9 +206,9 @@ export default function RecipientsPage() {
                             <AvatarFallback>{recipientInitials(recipient)}</AvatarFallback>
                           </Avatar>
                         ) : (
-                        <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                          <User className="h-5 w-5 text-primary" />
-                        </div>
+                          <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                            <User className="h-5 w-5 text-primary" />
+                          </div>
                         )}
                         <div className="absolute -bottom-0.5 -right-0.5 h-5 w-5 overflow-hidden rounded-full border-2 border-background bg-background">
                           {recipient.countryCode ? (
@@ -269,20 +270,16 @@ export default function RecipientsPage() {
                     </div>
                   </div>
                 ))}
-              </div>
-            </>
+            </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Recipient</DialogTitle>
-            <DialogDescription>
-              Update the recipient's details.
-            </DialogDescription>
+            <DialogDescription>Update the recipient&apos;s details.</DialogDescription>
           </DialogHeader>
           <RecipientForm
             recipient={selectedRecipient}
@@ -295,4 +292,3 @@ export default function RecipientsPage() {
     </div>
   )
 }
-

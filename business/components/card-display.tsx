@@ -1,4 +1,4 @@
-import type { Card as CardType } from "@/lib/mock-data"
+import type { Card as CardType } from "@/lib/finance-types"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { CreditCard } from "lucide-react"

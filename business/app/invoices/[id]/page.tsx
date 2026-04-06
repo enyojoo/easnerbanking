@@ -46,8 +46,6 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Textarea } from "@/components/ui/textarea"
 import Link from "next/link"
-import { mockAccounts, mockStablecoinAccounts } from "@/lib/mock-data"
-import { businessInfo } from "@/lib/business-info"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { useInvoices } from "@/lib/invoices-context"
 import { generateInvoiceId } from "@/lib/invoice-id"
@@ -57,8 +55,12 @@ import { MarkAsPaidDialog } from "@/components/mark-as-paid-dialog"
 import { downloadInvoicePdf } from "@/lib/use-invoice-pdf"
 import { downloadInvoiceReceiptPdf } from "@/lib/use-invoice-receipt-pdf"
 import { getPaymentRecordDisplay } from "@/lib/deposits"
-import type { Invoice } from "@/lib/mock-data"
+import type { Invoice } from "@/lib/b2b/types"
 import { useBusinessProfile } from "@/lib/use-business-profile"
+import { useInvoicePayIn } from "@/hooks/use-invoice-pay-in"
+import { useTransactionsCached } from "@/hooks/use-transactions-cached"
+import { issuerFromBusinessProfile } from "@/lib/invoices/issuer"
+import { fetchWithSession } from "@/lib/fetch-with-session"
 import {
   TIER2_COMPLETE_PLACEHOLDER,
   canProvisionInvoiceDepositInstructions,
@@ -149,8 +151,11 @@ const getActivityIcon = (type: string) => {
 export default function InvoiceDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const { tier1Complete } = useBusinessProfile()
-  const { invoices, updateInvoice, addInvoice } = useInvoices()
+  const profile = useBusinessProfile()
+  const { tier1Complete } = profile
+  const issuer = issuerFromBusinessProfile(profile)
+  const { invoices, loading: invoicesLoading, updateInvoice, addInvoice } = useInvoices()
+  const { data: ledgerRows } = useTransactionsCached()
   const invoice = invoices.find((i) => i.id === params.id)
   const [showMoreActivities, setShowMoreActivities] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
@@ -163,12 +168,30 @@ export default function InvoiceDetailPage() {
   const [markAsPaidOpen, setMarkAsPaidOpen] = useState(false)
   const [customerViewUrl, setCustomerViewUrl] = useState("")
 
-  const bankAccount = invoice ? mockAccounts.find((a) => a.currency === invoice.currency) : undefined
-  const stablecoinAccount = invoice ? mockStablecoinAccounts.find((s) => s.currency === invoice.currency) : undefined
-
   const canProvisionDepositInstructions = invoice
     ? canProvisionInvoiceDepositInstructions(invoice.currency, tier1Complete, TIER2_COMPLETE_PLACEHOLDER)
     : false
+
+  const payInQueryEnabled = Boolean(
+    invoice &&
+      !invoice.archived &&
+      invoice.status !== "draft" &&
+      invoice.status !== "paid" &&
+      invoice.status !== "void" &&
+      canProvisionDepositInstructions,
+  )
+
+  const {
+    bankAccount,
+    stablecoinAccount,
+    loading: payInLoading,
+  } = useInvoicePayIn({
+    currency: invoice?.currency ?? "USD",
+    tier1Complete,
+    enabled: payInQueryEnabled,
+  })
+
+  const hasAnyPayIn = Boolean(bankAccount || stablecoinAccount)
 
   useEffect(() => {
     if (!invoice?.id) return
@@ -201,17 +224,19 @@ export default function InvoiceDetailPage() {
   const handleStatusChange = (newStatus: Invoice["status"]) => {
     if (!invoice) return
     const entry = { status: newStatus, timestamp: new Date().toISOString() }
-    updateInvoice(invoice.id, {
+    void updateInvoice(invoice.id, {
       status: newStatus,
       statusHistory: [...(invoice.statusHistory ?? []), entry],
     })
   }
 
   const handleEdit = () => {
+    if (!invoice) return
     router.push(`/invoices/create?edit=${invoice.id}`)
   }
 
-  const handleDuplicate = () => {
+  const handleDuplicate = async () => {
+    if (!invoice) return
     const newId = generateInvoiceId()
     const newInvoiceNumber = `EINV-${newId.slice(4)}`
     const now = new Date().toISOString().split("T")[0]
@@ -225,23 +250,30 @@ export default function InvoiceDetailPage() {
       statusHistory: [],
       archived: false,
     }
-    addInvoice(duplicate)
-    toast.success("Invoice duplicated")
-    router.push(`/invoices/create?edit=${duplicate.id}`)
+    const created = await addInvoice(duplicate)
+    if (created) {
+      toast.success("Invoice duplicated")
+      router.push(`/invoices/create?edit=${created.id}`)
+    } else {
+      toast.error("Could not duplicate invoice")
+    }
   }
 
   const handleArchive = () => {
-    updateInvoice(invoice.id, { archived: true })
+    if (!invoice) return
+    void updateInvoice(invoice.id, { archived: true })
     toast.success("Invoice archived")
     router.push("/invoices")
   }
 
   const handleUnarchive = () => {
-    updateInvoice(invoice.id, { archived: false, status: "draft" })
+    if (!invoice) return
+    void updateInvoice(invoice.id, { archived: false, status: "draft" })
     toast.success("Invoice restored")
   }
 
   const handleDelete = () => {
+    if (!invoice) return
     const id = invoice.id
     setDeleteDialogOpen(false)
     toast.success("Invoice deleted")
@@ -281,6 +313,14 @@ export default function InvoiceDetailPage() {
       hour: "2-digit",
       minute: "2-digit",
     })
+  }
+
+  if (invoicesLoading) {
+    return (
+      <div className="flex justify-center py-24">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
   }
 
   if (!invoice) {
@@ -372,10 +412,10 @@ export default function InvoiceDetailPage() {
                 if (!invoice) return
                 setIsSendingEmail(true)
                 try {
-                  const res = await fetch("/api/invoices/send-email", {
+                  const res = await fetchWithSession("/api/invoices/send-email", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ invoice }),
+                    body: JSON.stringify({ invoiceId: invoice.id }),
                   })
                   const data = await res.json()
                   if (!res.ok) {
@@ -413,6 +453,7 @@ export default function InvoiceDetailPage() {
                     invoice,
                     canProvisionDepositInstructions ? bankAccount : undefined,
                     canProvisionDepositInstructions ? stablecoinAccount : undefined,
+                    issuer,
                   )
                 } catch (err) {
                   console.error("Failed to download PDF:", err)
@@ -467,14 +508,14 @@ export default function InvoiceDetailPage() {
               {/* Business info | Bill to */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 mb-6 sm:mb-8">
                 <div className="min-w-0">
-                  <h2 className="text-sm sm:text-base font-semibold">{businessInfo.name}</h2>
-                  <p className="text-xs sm:text-sm text-muted-foreground mt-1">{businessInfo.address}</p>
+                  <h2 className="text-sm sm:text-base font-semibold">{issuer.name}</h2>
+                  <p className="text-xs sm:text-sm text-muted-foreground mt-1">{issuer.address}</p>
                   <p className="text-xs sm:text-sm text-muted-foreground">
-                    {businessInfo.city}, {businessInfo.state} {businessInfo.zipCode}
+                    {issuer.city}, {issuer.state} {issuer.zipCode}
                   </p>
-                  <p className="text-xs sm:text-sm text-muted-foreground">{businessInfo.country}</p>
-                  <p className="text-xs sm:text-sm text-muted-foreground mt-2">{businessInfo.email}</p>
-                  <p className="text-xs sm:text-sm text-muted-foreground">{businessInfo.phone}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">{issuer.country}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground mt-2">{issuer.email}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">{issuer.phone}</p>
                 </div>
                 <div className="min-w-0">
                   <h3 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wide">Bill to</h3>
@@ -598,15 +639,36 @@ export default function InvoiceDetailPage() {
           {!invoice.archived &&
             invoice.status !== "draft" &&
             invoice.status !== "paid" &&
-            bankAccount &&
-            (canProvisionDepositInstructions ? (
+            payInQueryEnabled &&
+            (payInLoading ? (
+              <Card className="border-dashed bg-muted/20">
+                <CardContent className="py-8 flex justify-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </CardContent>
+              </Card>
+            ) : hasAnyPayIn ? (
               <InvoicePaymentOptions
                 invoice={invoice}
                 bankAccount={bankAccount}
                 stablecoinAccount={stablecoinAccount}
+                businessDisplayName={issuer.name}
                 audience="business"
               />
-            ) : (
+            ) : canProvisionDepositInstructions ? (
+              <Card className="border-dashed bg-muted/20">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Customer payment instructions</CardTitle>
+                </CardHeader>
+                <CardContent className="text-sm text-muted-foreground">
+                  <p>No virtual account or wallet is available for this currency yet. Open an account or complete setup in Accounts.</p>
+                </CardContent>
+              </Card>
+            ) : null)}
+          {!invoice.archived &&
+            invoice.status !== "draft" &&
+            invoice.status !== "paid" &&
+            !payInQueryEnabled &&
+            (canProvisionDepositInstructions ? null : (
               <Card className="border-dashed bg-muted/20">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base">Customer payment instructions</CardTitle>
@@ -627,7 +689,7 @@ export default function InvoiceDetailPage() {
 
           {/* Invoice receipt - when paid */}
           {!invoice.archived && invoice.status === "paid" && (() => {
-            const paymentRecord = getPaymentRecordDisplay(invoice)
+            const paymentRecord = getPaymentRecordDisplay(invoice, ledgerRows)
             return (
               <div className="rounded-lg border bg-muted/30 p-4 sm:p-6 space-y-4">
                 <h3 className="text-sm font-semibold">Invoice Receipt</h3>

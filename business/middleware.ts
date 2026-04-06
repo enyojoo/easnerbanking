@@ -24,8 +24,8 @@ export function middleware(request: NextRequest) {
 
   const response = NextResponse.next()
 
-  // Set business owner IP when they visit the invoices section
-  if (pathname.startsWith("/invoices")) {
+  // Set business owner IP when they visit invoicing or customer settings
+  if (pathname.startsWith("/invoices") || pathname.startsWith("/settings")) {
     const ip = getClientIp(request)
     response.cookies.set("easner_business_owner_ip", ip, {
       path: "/",
@@ -38,5 +38,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/invoices/:path*", "/api/:path*"],
+  matcher: ["/invoices/:path*", "/settings", "/settings/:path*", "/api/:path*"],
 }

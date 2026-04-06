@@ -11,8 +11,8 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import type { Account } from "@/lib/mock-data"
-import { currencySymbols } from "@/lib/mock-data"
+import type { Account } from "@/lib/finance-types"
+import { currencySymbols } from "@/lib/currency-meta"
 import { Repeat } from "lucide-react"
 import {
   Select,

@@ -1,11 +1,5 @@
-import {
-  mockTransactions,
-  mockCardTransactions,
-  mockStablecoinDeposits,
-  type Invoice,
-  type Transaction,
-  type StablecoinDeposit,
-} from "@/lib/mock-data"
+import type { Invoice } from "@/lib/b2b/types"
+import type { Transaction } from "@/lib/finance-types"
 
 export type InboundDepositSource = "bank" | "stablecoin"
 
@@ -15,55 +9,38 @@ export interface InboundDeposit {
   currency: string
   date: string
   source: InboundDepositSource
-  /** Display label: bank = description; stablecoin = "USDC on Solana" etc */
   label: string
   reference?: string
 }
 
-function bankTransactionToDeposit(t: Transaction): InboundDeposit | null {
+function ledgerCreditToInboundDeposit(t: Transaction): InboundDeposit | null {
   if (t.direction !== "credit") return null
   if (t.type === "card") return null
   const method =
     t.type === "ach" ? "ACH" : t.type === "wire" ? "Wire" : t.type === "book" ? "Book" : t.type
+  const cur = t.displayCurrency || "USD"
   return {
     id: t.id,
-    amount: t.amount,
-    currency: "USD",
+    amount: Math.abs(t.amount),
+    currency: cur,
     date: t.date,
     source: "bank",
-    label: t.description || `${method} Transfer`,
+    label: t.description || `${method} transfer`,
     reference: t.reference,
   }
 }
 
-function stablecoinToDeposit(d: StablecoinDeposit): InboundDeposit {
-  const label = `${d.stablecoin} on ${d.chain}`
-  return {
-    id: d.id,
-    amount: d.amount,
-    currency: d.currency,
-    date: d.date,
-    source: "stablecoin",
-    label,
-    reference: d.reference ?? d.memo,
-  }
-}
-
 /**
- * Get inbound deposits (bank credits + stablecoin) for linking to an invoice.
- * Filters by currency, amount >= invoice total, and optional search term.
+ * Inbound credits from the business ledger that can be linked to a paid invoice.
  */
 export function getInboundDeposits(
   invoice: Invoice,
+  creditTransactions: Transaction[],
   search?: string
 ): InboundDeposit[] {
-  const bankDeposits = mockTransactions
-    .map(bankTransactionToDeposit)
+  let merged: InboundDeposit[] = creditTransactions
+    .map(ledgerCreditToInboundDeposit)
     .filter((d): d is InboundDeposit => d !== null)
-
-  const stableDeposits = mockStablecoinDeposits.map(stablecoinToDeposit)
-
-  let merged: InboundDeposit[] = [...bankDeposits, ...stableDeposits]
 
   merged = merged.filter((d) => {
     if (d.currency !== invoice.currency) return false
@@ -83,41 +60,31 @@ export function getInboundDeposits(
   return merged
 }
 
-function findTransactionById(id: string): Transaction | undefined {
-  const t = mockTransactions.find((x) => x.id === id)
-  if (t) return t
-  return mockCardTransactions.find((x) => x.id === id)
-}
-
-function findStablecoinDepositById(id: string): StablecoinDeposit | undefined {
-  return mockStablecoinDeposits.find((d) => d.id === id)
+function findTransactionById(id: string, transactions: Transaction[]): Transaction | undefined {
+  return transactions.find((x) => x.id === id)
 }
 
 export interface PaymentRecordDisplay {
   method: "easner" | "cash"
   paidAt: string
-  /** For easner: payment method label (ACH, Wire, USDC on Solana, etc.) */
   paymentMethod?: string
-  /** For easner: transaction/deposit amount */
   amount?: number
-  /** For easner: transaction/deposit currency */
   currency?: string
-  /** For easner: transaction/deposit date */
   date?: string
-  /** For easner: reference or memo */
   reference?: string
-  /** For easner: description (e.g. "Client Payment") */
   description?: string
-  /** For easner: transaction ID */
   transactionId?: string
-  /** For cash: optional note */
   cashNote?: string
 }
 
 /**
- * Get payment record display info for a paid invoice.
+ * Display info for a paid invoice. Pass `ledgerTransactions` (e.g. from GET /api/transactions)
+ * to resolve Easner payment details by id.
  */
-export function getPaymentRecordDisplay(invoice: Invoice): PaymentRecordDisplay | null {
+export function getPaymentRecordDisplay(
+  invoice: Invoice,
+  ledgerTransactions: Transaction[] = []
+): PaymentRecordDisplay | null {
   const info = invoice.paymentInfo
   if (!info || invoice.status !== "paid") return null
 
@@ -130,8 +97,7 @@ export function getPaymentRecordDisplay(invoice: Invoice): PaymentRecordDisplay 
   }
 
   if (info.method === "easner" && info.transactionId) {
-    const txn = findTransactionById(info.transactionId)
-    const deposit = findStablecoinDepositById(info.transactionId)
+    const txn = findTransactionById(info.transactionId, ledgerTransactions)
 
     if (txn) {
       const method =
@@ -146,27 +112,12 @@ export function getPaymentRecordDisplay(invoice: Invoice): PaymentRecordDisplay 
         method: "easner",
         paidAt: info.paidAt,
         paymentMethod: method,
-        amount: txn.amount,
-        currency: "USD",
+        amount: Math.abs(txn.amount),
+        currency: txn.displayCurrency || invoice.currency,
         date: txn.date,
         reference: txn.reference,
         description: txn.description,
         transactionId: txn.id,
-      }
-    }
-
-    if (deposit) {
-      const methodLabel = `${deposit.stablecoin} on ${deposit.chain}`
-      return {
-        method: "easner",
-        paidAt: info.paidAt,
-        paymentMethod: methodLabel,
-        amount: deposit.amount,
-        currency: deposit.currency,
-        date: deposit.date,
-        reference: deposit.reference ?? deposit.memo,
-        description: methodLabel,
-        transactionId: deposit.id,
       }
     }
 
