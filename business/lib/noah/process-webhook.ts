@@ -62,6 +62,7 @@ export async function recordNoahWebhookDelivery(payload: unknown): Promise<{ ski
         const externalIdRaw = txData.ExternalID ?? txData.externalID ?? txData.ExternalId
         const externalId =
           externalIdRaw != null && String(externalIdRaw).trim() ? String(externalIdRaw).trim() : null
+        let autopayoutConfigId: string | null = null
         if (externalId) {
           const { data: terminalSession } = await admin
             .from("terminal_sessions")
@@ -85,24 +86,55 @@ export async function recordNoahWebhookDelivery(payload: unknown): Promise<{ ski
                 .update({ status: nextStatus, updated_at: new Date().toISOString() })
                 .eq("id", externalId)
             }
+          } else {
+            const { data: autopayoutRow } = await admin
+              .from("autopayout_configs")
+              .select("id")
+              .eq("id", externalId)
+              .maybeSingle()
+            if (autopayoutRow?.id) {
+              autopayoutConfigId = String(autopayoutRow.id)
+            }
           }
         }
 
         if (userId) {
+          const noahTxId = id || null
+          let existingMeta: Record<string, unknown> = {}
+          if (noahTxId) {
+            const { data: existingTx } = await admin
+              .from("transactions")
+              .select("metadata")
+              .eq("provider", "noah")
+              .eq("noah_transaction_id", noahTxId)
+              .maybeSingle()
+            const raw = existingTx?.metadata
+            if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+              existingMeta = { ...(raw as Record<string, unknown>) }
+            }
+          }
+
+          const metadata: Record<string, unknown> = {
+            ...existingMeta,
+            source: "webhook_transaction",
+          }
+          if (autopayoutConfigId) {
+            metadata.collection_channel = "autopayout"
+            metadata.autopayout_config_id = autopayoutConfigId
+          }
+
           const { error: txErr } = await admin.from("transactions").upsert(
             {
               user_id: userId,
               business_id: businessId,
               provider: "noah",
-              noah_transaction_id: id || null,
+              noah_transaction_id: noahTxId,
               status,
               amount,
               currency,
               direction,
               payload: txData,
-              metadata: {
-                source: "webhook_transaction",
-              },
+              metadata,
             },
             { onConflict: "provider,noah_transaction_id" },
           )

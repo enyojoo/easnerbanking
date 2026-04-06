@@ -64,7 +64,8 @@ export function TransactionDetailsDialog({
               <p
                 className={`text-2xl font-semibold ${transaction.direction === "credit" ? "text-green-600" : "text-foreground"}`}
               >
-                {transaction.direction === "credit" ? "+" : "-"}{formatCurrency(Math.abs(transaction.amount), "USD")}
+                {transaction.direction === "credit" ? "+" : "-"}
+                {formatCurrency(Math.abs(transaction.amount), transaction.displayCurrency || "USD")}
               </p>
             </div>
             <Badge
@@ -163,10 +164,27 @@ export function TransactionDetailsDialog({
             {transaction.fee !== undefined && transaction.fee > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Fee</span>
-                <span className="font-medium">{formatCurrency(transaction.fee, "USD")}</span>
+                <span className="font-medium">
+                  {formatCurrency(transaction.fee, transaction.displayCurrency || "USD")}
+                </span>
               </div>
             )}
           </div>
+
+          {transaction.collectionChannel === "autopayout" && transaction.autopayoutConfigId ?
+            <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-3 text-sm">
+              <p className="font-medium text-foreground">Stablecoin Auto Payout</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Collected via an in-person placard linked to your Auto Payout configuration.
+              </p>
+              <p className="mt-2 font-mono text-xs text-muted-foreground">
+                Config: {transaction.autopayoutConfigId}
+              </p>
+              <Button variant="link" className="h-auto px-0 pt-2 text-primary" asChild>
+                <Link href="/autopayout">Open Auto Payout</Link>
+              </Button>
+            </div>
+          : null}
 
           {/* Contextual Links */}
           <div className="pt-4 border-t space-y-2">

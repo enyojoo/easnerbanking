@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 
@@ -40,20 +40,39 @@ function isIos(): boolean {
   return typeof navigator !== "undefined" && /iphone|ipad|ipod/i.test(navigator.userAgent)
 }
 
-/** Install affordance for `/pay`: `beforeinstallprompt` when available; iOS manual copy. */
+type BeforeInstallPromptEvent = Event & { prompt: () => Promise<void> }
+
+/**
+ * Install UX only on `/pay`: we always `preventDefault` on `beforeinstallprompt` so the browser
+ * does not promote install on other routes; stored prompt is only surfaced and `prompt()` is only
+ * called from this UI on `/pay`.
+ */
 export function PwaInstallProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || ""
-  const [deferredPrompt, setDeferredPrompt] = useState<
-    Event & { prompt: () => Promise<void> }
-  | null>(null)
+  const pathnameRef = useRef(pathname)
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [showAndroid, setShowAndroid] = useState(false)
   const [showIosCard, setShowIosCard] = useState(false)
+
+  useEffect(() => {
+    pathnameRef.current = pathname
+  }, [pathname])
+
+  useEffect(() => {
+    if (typeof window === "undefined" || isStandalone()) return
+
+    const onBip = (e: Event) => {
+      e.preventDefault()
+      setDeferredPrompt(e as BeforeInstallPromptEvent)
+    }
+    window.addEventListener("beforeinstallprompt", onBip)
+    return () => window.removeEventListener("beforeinstallprompt", onBip)
+  }, [])
 
   useEffect(() => {
     if (!pathname.startsWith("/pay")) {
       setShowAndroid(false)
       setShowIosCard(false)
-      setDeferredPrompt(null)
       return
     }
     if (isStandalone() || readDismissed()) {
@@ -68,15 +87,9 @@ export function PwaInstallProvider({ children }: { children: React.ReactNode }) 
       return
     }
 
-    const onBip = (e: Event) => {
-      e.preventDefault()
-      const ev = e as Event & { prompt: () => Promise<void> }
-      setDeferredPrompt(ev)
-      setShowAndroid(true)
-    }
-    window.addEventListener("beforeinstallprompt", onBip)
-    return () => window.removeEventListener("beforeinstallprompt", onBip)
-  }, [pathname])
+    setShowIosCard(false)
+    setShowAndroid(Boolean(deferredPrompt))
+  }, [pathname, deferredPrompt])
 
   const dismiss = () => {
     writeDismissed()
@@ -86,7 +99,7 @@ export function PwaInstallProvider({ children }: { children: React.ReactNode }) 
   }
 
   const install = async () => {
-    if (!deferredPrompt) return
+    if (!pathnameRef.current.startsWith("/pay") || !deferredPrompt) return
     try {
       await deferredPrompt.prompt()
     } catch {

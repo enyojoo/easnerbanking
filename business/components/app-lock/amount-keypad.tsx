@@ -1,5 +1,6 @@
 "use client"
 
+import { memo } from "react"
 import { Delete } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -18,10 +19,11 @@ const KEYS = [
   "backspace",
 ] as const
 
+/** Snappy touch feedback: no color transition (avoids laggy :active on mobile); hover only for fine pointers. */
 const keyBase =
-  "flex min-h-[52px] w-full touch-manipulation items-center justify-center bg-background text-xl font-semibold tabular-nums text-foreground transition-colors hover:bg-muted/90 active:bg-muted sm:min-h-14 sm:text-2xl"
+  "flex min-h-[52px] w-full touch-manipulation items-center justify-center bg-background text-xl font-semibold tabular-nums text-foreground [-webkit-tap-highlight-color:transparent] active:bg-muted [@media(hover:hover)_and_(pointer:fine)]:hover:bg-muted/90 sm:min-h-14 sm:text-2xl"
 
-export function AmountKeypad({
+export const AmountKeypad = memo(function AmountKeypad({
   onDigit,
   onDecimal,
   onBackspace,
@@ -53,7 +55,7 @@ export function AmountKeypad({
                 disabled={disabled}
                 className={cn(
                   keyBase,
-                  "text-destructive hover:bg-destructive/10 active:bg-destructive/15",
+                  "text-destructive [@media(hover:hover)_and_(pointer:fine)]:hover:bg-destructive/10 active:bg-destructive/20",
                 )}
                 onClick={onBackspace}
                 aria-label="Backspace"
@@ -90,4 +92,4 @@ export function AmountKeypad({
       </div>
     </div>
   )
-}
+})

@@ -55,6 +55,12 @@ export interface Transaction {
   transferId?: string
   /** When linked to an invoice */
   invoiceId?: string
+  /** Noah / API: inbound collection channel */
+  collectionChannel?: string
+  /** Stablecoin Autopayout config id when `collectionChannel` is autopayout */
+  autopayoutConfigId?: string
+  /** ISO currency for amount display (defaults to USD in UI) */
+  displayCurrency?: string
 }
 
 export const mockAccounts: Account[] = [

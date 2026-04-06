@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useCallback, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { AmountKeypad } from "@/components/app-lock/amount-keypad"
@@ -26,23 +26,23 @@ export default function PayAmountPage() {
     }
   })
 
-  const appendDigit = (d: string) => {
+  const appendDigit = useCallback((d: string) => {
     setAmountStr((prev) => formatAmountForDisplay(prev + d))
-  }
+  }, [])
 
-  const appendDecimal = () => {
+  const appendDecimal = useCallback(() => {
     setAmountStr((prev) => {
       if (prev.includes(".")) return prev
       return prev ? `${prev}.` : "0."
     })
-  }
+  }, [])
 
-  const backspace = () => {
+  const backspace = useCallback(() => {
     setAmountStr((prev) => {
       const next = prev.slice(0, -1)
       return formatAmountForDisplay(next)
     })
-  }
+  }, [])
 
   const fiatAmount = parseAmountFromDisplay(amountStr)
 
@@ -60,7 +60,8 @@ export default function PayAmountPage() {
   return (
     <div className="flex w-full flex-col gap-5 sm:gap-6">
       <div>
-        <h1 className="text-3xl font-bold leading-none tracking-tight sm:text-4xl md:text-[2.5rem]">
+        <p className="text-xs font-semibold uppercase tracking-wider text-primary">Stablecoin Auto Payout</p>
+        <h1 className="mt-2 text-3xl font-bold leading-none tracking-tight sm:text-4xl md:text-[2.5rem]">
           Charge amount
         </h1>
         <p className="mt-3 text-lg leading-snug text-muted-foreground sm:mt-2 sm:text-xl">
@@ -69,7 +70,7 @@ export default function PayAmountPage() {
       </div>
 
       <div
-        className="box-border flex h-[88px] shrink-0 items-center justify-center gap-0.5 rounded-xl border-2 border-input bg-background px-4 transition-colors focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 sm:h-[100px] sm:px-6"
+        className="box-border flex h-[88px] shrink-0 items-center justify-center gap-0.5 rounded-xl border-2 border-input bg-background px-4 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 sm:h-[100px] sm:px-6"
         style={{ fontVariantNumeric: "tabular-nums" }}
       >
         <span className="shrink-0 select-none text-4xl font-black text-foreground sm:text-5xl">

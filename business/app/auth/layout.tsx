@@ -1,4 +1,5 @@
 import { BusinessLogo } from "@/components/brand/business-logo"
+import { AuthSessionRedirect } from "@/components/auth/auth-session-redirect"
 
 export default function AuthLayout({
   children,
@@ -11,7 +12,7 @@ export default function AuthLayout({
         <BusinessLogo size="lg" href="/" />
       </div>
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        {children}
+        <AuthSessionRedirect>{children}</AuthSessionRedirect>
       </div>
     </div>
   )

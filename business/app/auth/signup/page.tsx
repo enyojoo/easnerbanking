@@ -120,8 +120,7 @@ export default function SignupPage() {
                   </TooltipTrigger>
                   <TooltipContent>
                     <p className="max-w-xs text-sm">
-                      Select the country or region where your business is incorporated. 
-                      If you're an individual, select where you're doing business from.
+                      Select the country where your business is incorporated or registered.
                     </p>
                   </TooltipContent>
                 </Tooltip>

@@ -9,7 +9,7 @@ import {
   prepareSellTransaction,
 } from "@/lib/noah/payout-prepare"
 
-type RecipientRow = {
+export type RecipientSellPrepareRow = {
   country_code?: string | null
   full_name: string
   account_number: string
@@ -24,7 +24,7 @@ type RecipientRow = {
   mobile_provider?: string | null
 }
 
-function isMobileRecipient(row: RecipientRow): boolean {
+function isMobileRecipient(row: RecipientSellPrepareRow): boolean {
   if (row.mobile_provider?.trim()) return true
   return /^mobile money/i.test(row.bank_name || "")
 }
@@ -33,7 +33,7 @@ function isMobileRecipient(row: RecipientRow): boolean {
  * Noah sell/prepare for a saved recipient row (bank US/EUR or identifier / mobile).
  */
 export async function prepareSellFromRecipientRow(input: {
-  row: RecipientRow
+  row: RecipientSellPrepareRow
   fiatAmount: number
   cryptoCurrency: string
   noahCustomerId: string

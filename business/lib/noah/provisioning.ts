@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js"
 import { noahFetch } from "./http"
 import { fetchAllPaymentMethodsForCustomer } from "./list-payment-methods"
 import { hasPayinBank, matchesCurrency } from "./payment-method-map"
@@ -215,4 +216,32 @@ export async function getNoahLiquidationAddressForCustomer(opts: {
     memo: snap?.memo ?? undefined,
     walletId: wallet?.walletId,
   }
+}
+
+/** Address stored for Easner’s provisioned Noah wallet row (used as autopayout source / trigger wallet). */
+export async function readProvisionedWalletAddressFromDb(
+  admin: SupabaseClient,
+  opts: { subjectUserId: string; subjectBusinessId: string | null },
+): Promise<string | null> {
+  const { subjectUserId, subjectBusinessId } = opts
+  let wid: string | undefined
+  if (subjectBusinessId) {
+    const { data: bizRow } = await admin
+      .from("businesses")
+      .select("noah_wallet_id")
+      .eq("id", subjectBusinessId)
+      .maybeSingle()
+    wid = bizRow?.noah_wallet_id as string | undefined
+  } else {
+    const { data: userRow } = await admin
+      .from("users")
+      .select("noah_wallet_id")
+      .eq("id", subjectUserId)
+      .maybeSingle()
+    wid = userRow?.noah_wallet_id as string | undefined
+  }
+  if (!wid) return null
+  const { data: w } = await admin.from("wallets").select("address").eq("noah_wallet_id", wid).maybeSingle()
+  const addr = w?.address != null ? String(w.address).trim() : ""
+  return addr || null
 }

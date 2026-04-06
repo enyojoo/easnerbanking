@@ -12,6 +12,7 @@ import type { Beneficiary } from "@/lib/recipient-types"
 import { CountryFlag } from "@/components/flags"
 import { usePayoutCorridors } from "@/lib/use-payout-corridors"
 import { getNetworkIconUrl, getTokenIconUrl } from "@/lib/crypto-icons"
+import { WALLET_ASSET_NETWORKS, DEFAULT_WALLET_ASSET } from "@/lib/wallet-asset-networks"
 import { createRecipient, updateRecipient, type RecipientUpsertInput } from "@/lib/recipients-store"
 import { fetchEasenetProfileByTag } from "@/lib/easenet-profile"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -56,15 +57,6 @@ function inferRecipientType(recipient?: Beneficiary): "bank" | "mobile" | "walle
   return "bank"
 }
 
-const walletAssetNetworks: Record<string, string[]> = {
-  USDT: ["Base", "Bitcoin", "Celo", "Ethereum"],
-  USDC: ["Base", "Bitcoin", "Celo", "Ethereum", "FlowEvm", "Gnosis", "Lightning"],
-  EURC: ["Solana"],
-  BTC: ["Bitcoin"],
-  SOL: ["Solana"],
-  PYUSD: ["Base", "Bitcoin"],
-}
-
 const mobileMoneyProvidersByCurrency: Record<string, string[]> = {
   BWP: ["MyZaka"],
   XOF: ["MTN", "Orange", "Moov Money", "Wave", "Free"],
@@ -107,7 +99,7 @@ export function RecipientForm({
     sortCode: "",
     country: "United States",
     phone: "",
-    walletAsset: "USDT",
+    walletAsset: DEFAULT_WALLET_ASSET,
     walletNetwork: "",
     walletAddress: "",
     walletMemoTag: "",
@@ -517,8 +509,8 @@ export function RecipientForm({
       setEasenetLookupError(null)
       return
     }
-    const firstAsset = Object.keys(walletAssetNetworks)[0] || "USDT"
-    const firstNetwork = (walletAssetNetworks[firstAsset] || [])[0] || ""
+    const firstAsset = Object.keys(WALLET_ASSET_NETWORKS)[0] || DEFAULT_WALLET_ASSET
+    const firstNetwork = (WALLET_ASSET_NETWORKS[firstAsset] || [])[0] || ""
     handleInputChange("recipientType", "wallet")
     handleInputChange("walletAsset", firstAsset)
     handleInputChange("walletNetwork", firstNetwork)
@@ -847,12 +839,12 @@ export function RecipientForm({
                     <CommandList className="max-h-[260px] overflow-y-auto overscroll-contain">
                       <CommandEmpty>No asset found.</CommandEmpty>
                       <CommandGroup>
-                        {Object.keys(walletAssetNetworks).map((asset) => (
+                        {Object.keys(WALLET_ASSET_NETWORKS).map((asset) => (
                           <CommandItem
                             key={asset}
                             value={asset}
                             onSelect={() => {
-                              const networks = walletAssetNetworks[asset] || []
+                              const networks = WALLET_ASSET_NETWORKS[asset] || []
                               handleInputChange("walletAsset", asset)
                               handleInputChange("walletNetwork", networks[0] || "")
                               setWalletAssetOpen(false)
@@ -897,7 +889,7 @@ export function RecipientForm({
                     <CommandList className="max-h-[260px] overflow-y-auto overscroll-contain">
                       <CommandEmpty>No network found.</CommandEmpty>
                       <CommandGroup>
-                        {(walletAssetNetworks[formData.walletAsset] || []).map((network) => (
+                        {(WALLET_ASSET_NETWORKS[formData.walletAsset] || []).map((network) => (
                           <CommandItem
                             key={network}
                             value={network}

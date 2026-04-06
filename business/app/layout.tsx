@@ -8,7 +8,6 @@ import { ChunkLoadErrorHandler } from "@/components/chunk-load-error-handler"
 import { PostHogProvider } from "@/components/posthog-provider"
 import { Providers } from "@/components/providers"
 import { Suspense } from "react"
-import { LoadingSpinner } from "@/components/loading-spinner"
 import { PwaStandaloneRoot } from "@/components/pwa/pwa-standalone-root"
 import { PwaInstallProvider } from "@/components/pwa/pwa-install-provider"
 import "./globals.css"
@@ -47,7 +46,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
         <ChunkLoadErrorHandler />
-        <Suspense fallback={<LoadingSpinner />}>
+        <Suspense fallback={null}>
           <PostHogProvider>
             <ClientAuthProvider>
               <PwaStandaloneRoot />

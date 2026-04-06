@@ -16,7 +16,7 @@ import {
   Send,
   Inbox,
   Building2,
-  SmartphoneNfc,
+  QrCode,
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -45,7 +45,7 @@ export function DashboardNav() {
     if (
       pathname.startsWith("/invoices") ||
       pathname.startsWith("/customers") ||
-      pathname.startsWith("/terminal")
+      pathname.startsWith("/autopayout")
     ) {
       openGroups.add("collections")
     }
@@ -91,7 +91,7 @@ export function DashboardNav() {
       items: [
         { href: "/invoices", label: "Invoices", icon: ReceiptText },
         { href: "/customers", label: "Customers", icon: Contact },
-        { href: "/terminal", label: "Terminal", icon: SmartphoneNfc },
+        { href: "/autopayout", label: "Auto Payout", icon: QrCode },
       ],
     },
     { href: "/transactions", label: "Transactions", icon: List, type: "single" as const },

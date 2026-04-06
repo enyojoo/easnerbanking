@@ -1,17 +1,12 @@
 "use client"
 
 import { AuthProvider } from "@/lib/auth-context"
-import { ClientOnly } from "@/components/client-only"
-import { LoadingSpinner } from "@/components/loading-spinner"
 
 interface ClientAuthProviderProps {
   children: React.ReactNode
 }
 
+/** Auth shell renders immediately; AuthProvider handles SSR-safe hydration (see `mounted` gate there). */
 export function ClientAuthProvider({ children }: ClientAuthProviderProps) {
-  return (
-    <ClientOnly fallback={<LoadingSpinner />}>
-      <AuthProvider>{children}</AuthProvider>
-    </ClientOnly>
-  )
+  return <AuthProvider>{children}</AuthProvider>
 }
