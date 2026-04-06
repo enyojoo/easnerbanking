@@ -27,12 +27,21 @@ const RECIPIENT_TYPE_TABS = [
 
 type RailCountryOption = { name: string; currency: string; code: string }
 
+export type RecipientFormRecipientKind = "bank" | "mobile" | "wallet" | "easenet"
+
 interface RecipientFormProps {
   recipient?: any
   onSuccess: () => void
   isEdit?: boolean
   /** When provided and in add mode, called with the new beneficiary before onSuccess */
   onSuccessWithData?: (beneficiary: Beneficiary) => void
+  /**
+   * Limits the Recipient Type control (e.g. terminal payouts: bank + mobile only).
+   * When omitted, all types are available.
+   */
+  allowedRecipientTypes?: RecipientFormRecipientKind[]
+  /** Overrides primary submit label in add mode (e.g. "Save payout"). */
+  submitButtonLabel?: string
 }
 
 function inferRecipientType(recipient?: Beneficiary): "bank" | "mobile" | "wallet" | "easenet" {
@@ -71,7 +80,22 @@ const mobileMoneyProvidersByCurrency: Record<string, string[]> = {
   INR: ["UPI"],
 }
 
-export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessWithData }: RecipientFormProps) {
+export function RecipientForm({
+  recipient,
+  onSuccess,
+  isEdit = false,
+  onSuccessWithData,
+  allowedRecipientTypes,
+  submitButtonLabel,
+}: RecipientFormProps) {
+  const recipientTypeTabs = useMemo(() => {
+    if (!allowedRecipientTypes?.length) return RECIPIENT_TYPE_TABS
+    const allow = new Set(allowedRecipientTypes)
+    const filtered = RECIPIENT_TYPE_TABS.filter((t) => allow.has(t.id))
+    return filtered.length > 0 ? filtered : RECIPIENT_TYPE_TABS
+  }, [allowedRecipientTypes])
+
+  const recipientTabCount = Math.max(1, recipientTypeTabs.length)
   const [formData, setFormData] = useState({
     recipientType: isEdit && recipient ? inferRecipientType(recipient as Beneficiary) : "bank",
     name: "",
@@ -503,42 +527,53 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
     setEasenetLookupError(null)
   }
 
+  useEffect(() => {
+    if (!allowedRecipientTypes?.length) return
+    const allow = new Set(allowedRecipientTypes)
+    if (allow.has(formData.recipientType)) return
+    const first = recipientTypeTabs[0]?.id ?? "bank"
+    selectRecipientType(first)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectRecipientType not stable; clamp only on allow/type
+  }, [allowedRecipientTypes, formData.recipientType, recipientTypeTabs])
+
   const recipientTypeIndex = Math.max(
     0,
-    RECIPIENT_TYPE_TABS.findIndex((t) => t.id === formData.recipientType),
+    recipientTypeTabs.findIndex((t) => t.id === formData.recipientType),
   )
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="space-y-2 max-w-3xl">
-        <label className="text-sm font-medium">Recipient Type</label>
-        <div className="relative flex rounded-xl border border-input bg-muted/45 p-1 shadow-inner">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute top-1 bottom-1 left-1 rounded-lg bg-background shadow-sm ring-1 ring-border/60 motion-safe:transition-[transform] motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.32,0.72,0,1)]"
-            style={{
-              width: "calc((100% - 0.5rem) / 4)",
-              transform: `translateX(calc(${recipientTypeIndex} * 100%))`,
-            }}
-          />
-          {RECIPIENT_TYPE_TABS.map((t) => (
-            <Button
-              key={t.id}
-              type="button"
-              variant="ghost"
-              className={cn(
-                "relative z-10 h-10 flex-1 shrink-0 rounded-lg border-0 px-2 text-xs font-medium shadow-none sm:text-sm motion-safe:transition-colors motion-safe:duration-200",
-                formData.recipientType === t.id
-                  ? "text-foreground"
-                  : "text-muted-foreground hover:bg-transparent hover:text-foreground",
-              )}
-              onClick={() => selectRecipientType(t.id)}
-            >
-              {t.label}
-            </Button>
-          ))}
+      {recipientTypeTabs.length > 1 ? (
+        <div className="space-y-2 max-w-3xl">
+          <label className="text-sm font-medium">Recipient Type</label>
+          <div className="relative flex rounded-xl border border-input bg-muted/45 p-1 shadow-inner">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute top-1 bottom-1 left-1 rounded-lg bg-background shadow-sm ring-1 ring-border/60 motion-safe:transition-[transform] motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.32,0.72,0,1)]"
+              style={{
+                width: `calc((100% - 0.5rem) / ${recipientTabCount})`,
+                transform: `translateX(calc(${recipientTypeIndex} * 100%))`,
+              }}
+            />
+            {recipientTypeTabs.map((t) => (
+              <Button
+                key={t.id}
+                type="button"
+                variant="ghost"
+                className={cn(
+                  "relative z-10 h-10 flex-1 shrink-0 rounded-lg border-0 px-2 text-xs font-medium shadow-none sm:text-sm motion-safe:transition-colors motion-safe:duration-200",
+                  formData.recipientType === t.id
+                    ? "text-foreground"
+                    : "text-muted-foreground hover:bg-transparent hover:text-foreground",
+                )}
+                onClick={() => selectRecipientType(t.id)}
+              >
+                {t.label}
+              </Button>
+            ))}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <div
         key={formData.recipientType}
@@ -1097,7 +1132,11 @@ export function RecipientForm({ recipient, onSuccess, isEdit = false, onSuccessW
       <div className="flex justify-end gap-3">
         <Button type="submit" className="gap-2" disabled={isSubmitting}>
           {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          {isSubmitting ? "Saving..." : isEdit ? "Update Recipient" : "Save Recipient"}
+          {isSubmitting
+            ? "Saving..."
+            : isEdit
+              ? "Update Recipient"
+              : submitButtonLabel ?? "Save Recipient"}
         </Button>
       </div>
     </form>

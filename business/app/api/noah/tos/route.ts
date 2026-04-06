@@ -3,7 +3,7 @@ import { noahFetch } from "@/lib/noah/http"
 import { buildHostedOnboardingBody } from "@/lib/noah/hosted-onboarding"
 import { mapNoahVerificationToKycStatus } from "@/lib/noah/map-kyc"
 import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
-import { requireAuth, requireNoahEnv, resolveNoahContext } from "../_helpers"
+import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "../_helpers"
 
 /** Hosted onboarding includes Terms & Conditions — expose as legacy `tosLink` for mobile. */
 export async function POST(request: Request) {
@@ -20,7 +20,8 @@ export async function POST(request: Request) {
     /* empty */
   }
 
-  const ctx = resolveNoahContext(user.id, request, body.type)
+  const ctx = await resolveNoahContextAsync(user.id, request, body.type)
+  if (!ctx.ok) return ctx.response
 
   try {
     const session = await noahFetch<Record<string, unknown>>({
@@ -60,14 +61,21 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const _tosLinkId = searchParams.get("tosLinkId")
 
-  const ctx = resolveNoahContext(user.id, request)
+  const ctx = await resolveNoahContextAsync(user.id, request)
+  if (!ctx.ok) return ctx.response
 
   try {
     const customer = await noahFetch<Record<string, unknown>>({
       method: "GET",
       path: `/customers/${encodeURIComponent(ctx.noahCustomerId)}`,
     })
-    await syncNoahCustomerToSupabase(user.id, customer, ctx.noahCustomerId, ctx.scope)
+    await syncNoahCustomerToSupabase(
+      ctx.scope === "business" && ctx.businessId
+        ? { kind: "business", businessId: ctx.businessId }
+        : { kind: "individual", userId: user.id },
+      customer,
+      ctx.noahCustomerId,
+    )
     const kyc = mapNoahVerificationToKycStatus(customer)
     const signed = kyc === "approved"
     return NextResponse.json({

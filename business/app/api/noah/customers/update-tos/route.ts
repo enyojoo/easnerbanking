@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { requireAuth, requireNoahEnv, resolveNoahContext } from "../../_helpers"
+import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "../../_helpers"
 
 export async function PUT(request: Request) {
   const mis = requireNoahEnv()
@@ -16,7 +16,8 @@ export async function PUT(request: Request) {
     /* empty */
   }
 
-  const ctx = resolveNoahContext(user.id, request, body.type)
+  const ctx = await resolveNoahContextAsync(user.id, request, body.type)
+  if (!ctx.ok) return ctx.response
 
   const admin = createSupabaseAdmin()
   await admin

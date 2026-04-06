@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { noahFetch } from "@/lib/noah/http"
-import { requireAuth, requireNoahEnv, resolveNoahContext } from "../../_helpers"
+import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "../../_helpers"
 
 /**
  * Token Share — POST /v1/onboarding/:CustomerID/prefill (Sumsub)
@@ -24,7 +24,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "token is required" }, { status: 400 })
   }
 
-  const ctx = resolveNoahContext(user.id, request, body.type)
+  const ctx = await resolveNoahContextAsync(user.id, request, body.type)
+  if (!ctx.ok) return ctx.response
 
   try {
     const data = await noahFetch<Record<string, unknown>>({

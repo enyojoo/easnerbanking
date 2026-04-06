@@ -19,10 +19,14 @@ export async function GET(request: Request) {
   const acc = await resolveNoahAccountContext(request, user.id)
   if (!acc.ok) return acc.response
 
-  const guard = await requireNoahVerificationApproved(acc.ctx.subjectUserId, acc.ctx.scope)
+  const guard = await requireNoahVerificationApproved(
+    acc.ctx.subjectUserId,
+    acc.ctx.scope,
+    acc.ctx.subjectBusinessId,
+  )
   if (guard) return guard
 
-  const { noahCustomerId, subjectUserId } = acc.ctx
+  const { noahCustomerId, subjectUserId, subjectBusinessId } = acc.ctx
 
   let address = ""
   let blockchain_memo: string | null = null
@@ -31,16 +35,27 @@ export async function GET(request: Request) {
   try {
     await provisionNoahArtifactsForCustomer({
       subjectUserId,
+      subjectBusinessId,
       noahCustomerId,
       scope: acc.ctx.scope,
     })
     const admin = createSupabaseAdmin()
-    const { data: userRow } = await admin
-      .from("users")
-      .select("noah_wallet_id")
-      .eq("id", subjectUserId)
-      .maybeSingle()
-    const wid = userRow?.noah_wallet_id as string | undefined
+    let wid: string | undefined
+    if (subjectBusinessId) {
+      const { data: bizRow } = await admin
+        .from("businesses")
+        .select("noah_wallet_id")
+        .eq("id", subjectBusinessId)
+        .maybeSingle()
+      wid = bizRow?.noah_wallet_id as string | undefined
+    } else {
+      const { data: userRow } = await admin
+        .from("users")
+        .select("noah_wallet_id")
+        .eq("id", subjectUserId)
+        .maybeSingle()
+      wid = userRow?.noah_wallet_id as string | undefined
+    }
     if (wid) {
       provisionedNoahWalletId = wid
       const { data: w } = await admin

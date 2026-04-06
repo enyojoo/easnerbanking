@@ -30,9 +30,9 @@ export type BusinessProfile = {
   onboardingComplete: boolean
   role: "business" | "individual"
   ownerName: string
-  /** Org-level Tier 1: Owner's business KYB approved (`noah_kyb_status === 'approved'`). */
+  /** Org-level Tier 1: Business KYB approved on org (`noah_kyb_status === 'approved'`). */
   tier1Complete: boolean
-  /** Owner's `noah_kyb_status` (provider-backed; Easner-facing label via UI copy). */
+  /** Org `noah_kyb_status` from profile API (provider-backed; Easner-facing label via UI copy). */
   tier1VerificationStatus: string | null
   /** Internal reference on Owner's user row; not shown to customers in UI. */
   noahKybCustomerId: string | null

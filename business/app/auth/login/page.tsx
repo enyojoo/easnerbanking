@@ -18,6 +18,7 @@ import {
   isMfaStepRequired,
   totpFactorsFromListResponse,
 } from "@/lib/auth-mfa"
+import { getSafeNextPath } from "@/lib/auth/safe-next-path"
 
 type Step = "password" | "mfa"
 
@@ -30,6 +31,7 @@ export default function LoginPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const successMessage = searchParams.get("message")
+  const nextPath = getSafeNextPath(searchParams.get("next"))
 
   const [step, setStep] = useState<Step>("password")
   const [mfaFactorId, setMfaFactorId] = useState<string | null>(null)
@@ -67,7 +69,7 @@ export default function LoginPage() {
         setStep("mfa")
         return
       }
-      router.push("/dashboard")
+      router.push(nextPath || "/dashboard")
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Invalid credentials"
       if (message.toLowerCase().includes("email not confirmed")) {
@@ -108,7 +110,7 @@ export default function LoginPage() {
         setError(vErr.message || "Invalid code.")
         return
       }
-      router.push("/dashboard")
+      router.push(nextPath || "/dashboard")
     } finally {
       setMfaSubmitting(false)
     }

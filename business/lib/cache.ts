@@ -89,5 +89,9 @@ export const CACHE_KEYS = {
   RECIPIENTS: (userId: string) => `recipients_${userId}`,
   /** TOTP MFA status line for Security card (On / Off / error). */
   MFA_SECURITY: (userId: string) => `mfa_security_${userId}`,
+  /** Terminal hub session list (`GET /api/terminal/sessions`). */
+  TERMINAL_SESSIONS: (userId: string) => `terminal_sessions_${userId}`,
+  /** Terminal payout list + default (`GET /api/terminal/payouts` + settings). */
+  TERMINAL_PAYOUT_SETUP: (userId: string) => `terminal_payout_setup_${userId}`,
 } as const
 

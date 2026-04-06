@@ -8,9 +8,7 @@ function normalizeMembershipRole(role: string | null | undefined): "Owner" | "Ad
   return "Member"
 }
 
-/**
- * Organization Tier 1 (KYB) lives on the org Owner's `users` row. Same resolution as business profile API.
- */
+/** Resolve canonical org owner user id (memberships, then earliest user on org). */
 export async function resolveOrgOwnerUserId(
   admin: ReturnType<typeof createSupabaseAdmin>,
   orgId: string,
@@ -37,4 +35,14 @@ export async function resolveOrgOwnerUserId(
     .limit(1)
 
   return orgUsers?.[0]?.id ?? fallbackUserId
+}
+
+/** For webhooks: org owner user id for `transactions.user_id`, or null if unresolved. */
+export async function resolveBusinessOrgOwnerUserId(
+  admin: ReturnType<typeof createSupabaseAdmin>,
+  businessId: string,
+): Promise<string | null> {
+  const candidate = await resolveOrgOwnerUserId(admin, businessId, "")
+  const { data } = await admin.from("users").select("id").eq("id", candidate).maybeSingle()
+  return (data?.id as string | undefined) ?? null
 }

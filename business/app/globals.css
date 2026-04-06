@@ -194,3 +194,8 @@
 .animate-pin-shake {
   animation: pin-shake 0.45s ease-in-out;
 }
+
+/* PWA standalone: fill viewport when browser chrome is hidden */
+html[data-pwa-standalone="true"] body {
+  min-height: 100dvh;
+}

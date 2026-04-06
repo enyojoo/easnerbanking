@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { noahFetch } from "@/lib/noah/http"
 import { buildHostedOnboardingBody } from "@/lib/noah/hosted-onboarding"
-import { requireAuth, requireNoahEnv, resolveNoahContext } from "../_helpers"
+import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "../_helpers"
 
 export async function POST(request: Request) {
   const mis = requireNoahEnv()
@@ -17,7 +17,8 @@ export async function POST(request: Request) {
     /* empty */
   }
 
-  const ctx = resolveNoahContext(user.id, request, body.type)
+  const ctx = await resolveNoahContextAsync(user.id, request, body.type)
+  if (!ctx.ok) return ctx.response
 
   try {
     const session = await noahFetch<Record<string, unknown>>({

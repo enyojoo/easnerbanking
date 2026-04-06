@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server"
 import { randomUUID } from "node:crypto"
-import { requireAuth, requireNoahEnv } from "../_helpers"
+import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "../_helpers"
 import { noahFetch } from "@/lib/noah/http"
 import { pickTxAmountAndCurrency } from "@/lib/noah/map-transactions"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { resolveNoahContext } from "../_helpers"
+import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { getNoahSettlementCryptoCurrency } from "@/lib/noah/payout-prepare"
 
 export async function POST(request: Request) {
@@ -13,7 +13,8 @@ export async function POST(request: Request) {
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
   const { user } = auth
-  const noahCtx = resolveNoahContext(user.id, request)
+  const noahCtx = await resolveNoahContextAsync(user.id, request)
+  if (!noahCtx.ok) return noahCtx.response
 
   const body = (await request.json().catch(() => null)) as
     | {
@@ -125,9 +126,16 @@ export async function POST(request: Request) {
     const status = String(tx.Status ?? tx.status ?? "pending").toLowerCase()
     const { amount: txAmount, currency } = pickTxAmountAndCurrency(tx)
     const admin = createSupabaseAdmin()
+    let txUserId = user.id
+    const businessId = noahCtx.businessId
+    if (noahCtx.scope === "business" && noahCtx.businessId) {
+      const owner = await resolveBusinessOrgOwnerUserId(admin, noahCtx.businessId)
+      if (owner) txUserId = owner
+    }
     await admin.from("transactions").upsert(
       {
-        user_id: user.id,
+        user_id: txUserId,
+        business_id: businessId,
         noah_transaction_id: id || null,
         provider: "noah",
         status,

@@ -2,7 +2,8 @@ import { NextResponse } from "next/server"
 import { noahFetch } from "@/lib/noah/http"
 import { pickTxAmountAndCurrency } from "@/lib/noah/map-transactions"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { requireAuth, requireNoahEnv, resolveNoahContext } from "../_helpers"
+import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "../_helpers"
+import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 
 type TxResp = { Items?: Array<Record<string, unknown>>; PageToken?: string }
 
@@ -12,9 +13,17 @@ export async function POST(request: Request) {
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
   const { user } = auth
-  const ctx = resolveNoahContext(user.id, request)
+  const ctx = await resolveNoahContextAsync(user.id, request)
+  if (!ctx.ok) return ctx.response
   const { noahCustomerId } = ctx
   const admin = createSupabaseAdmin()
+
+  let txUserId = user.id
+  const businessId = ctx.businessId
+  if (ctx.scope === "business" && ctx.businessId) {
+    const owner = await resolveBusinessOrgOwnerUserId(admin, ctx.businessId)
+    if (owner) txUserId = owner
+  }
 
   try {
     let synced = 0
@@ -35,7 +44,8 @@ export async function POST(request: Request) {
         const status = String(tx.Status ?? "").toLowerCase() || "unknown"
         const { error } = await admin.from("transactions").upsert(
           {
-            user_id: user.id,
+            user_id: txUserId,
+            business_id: businessId,
             provider: "noah",
             noah_transaction_id: id || null,
             status,
@@ -47,7 +57,7 @@ export async function POST(request: Request) {
               source: "sync_transactions",
             },
           },
-          { onConflict: "provider,noah_transaction_id" }
+          { onConflict: "provider,noah_transaction_id" },
         )
         if (!error) synced++
       }

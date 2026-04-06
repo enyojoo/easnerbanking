@@ -35,10 +35,42 @@ export async function GET(request: Request) {
     if (page > 100) break
   }
 
-  const users = (rows ?? []).map((row: { id: string }) => ({
-    ...row,
-    email_confirmed_at: authById.get(row.id) ?? null,
-  }))
+  type UserRow = { id: string; easner_business_id?: string | null }
+  const bizIds = [
+    ...new Set(
+      (rows ?? [])
+        .map((r) => (r as UserRow).easner_business_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ]
+  const orgKybByBusinessId = new Map<string, { noah_customer_id: string | null; noah_kyb_status: string | null }>()
+  if (bizIds.length) {
+    const { data: orgs } = await admin
+      .from("businesses")
+      .select("id,noah_customer_id,noah_kyb_status")
+      .in("id", bizIds)
+    for (const o of orgs ?? []) {
+      orgKybByBusinessId.set(String(o.id), {
+        noah_customer_id: (o.noah_customer_id as string | null) ?? null,
+        noah_kyb_status: (o.noah_kyb_status as string | null) ?? null,
+      })
+    }
+  }
+
+  const users = (rows ?? []).map((row) => {
+    const r = row as UserRow
+    const org = r.easner_business_id ? orgKybByBusinessId.get(r.easner_business_id) : undefined
+    return {
+      ...row,
+      email_confirmed_at: authById.get(r.id) ?? null,
+      ...(org
+        ? {
+            noah_kyb_customer_id: org.noah_customer_id,
+            noah_kyb_status: org.noah_kyb_status,
+          }
+        : {}),
+    }
+  })
 
   return NextResponse.json({ users })
 }

@@ -3,7 +3,7 @@ import { noahFetch } from "@/lib/noah/http"
 import { buildHostedOnboardingBody } from "@/lib/noah/hosted-onboarding"
 import { mapNoahCustomerToMobileSummary, mapNoahVerificationToKycStatus } from "@/lib/noah/map-kyc"
 import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
-import { requireAuth, requireNoahEnv, resolveNoahContext } from "../_helpers"
+import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "../_helpers"
 
 export async function GET(request: Request) {
   const mis = requireNoahEnv()
@@ -11,14 +11,21 @@ export async function GET(request: Request) {
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
   const { user } = auth
-  const ctx = resolveNoahContext(user.id, request)
+  const ctx = await resolveNoahContextAsync(user.id, request)
+  if (!ctx.ok) return ctx.response
 
   try {
     const customer = await noahFetch<Record<string, unknown>>({
       method: "GET",
       path: `/customers/${encodeURIComponent(ctx.noahCustomerId)}`,
     })
-    await syncNoahCustomerToSupabase(user.id, customer, ctx.noahCustomerId, ctx.scope)
+    await syncNoahCustomerToSupabase(
+      ctx.scope === "business" && ctx.businessId
+        ? { kind: "business", businessId: ctx.businessId }
+        : { kind: "individual", userId: user.id },
+      customer,
+      ctx.noahCustomerId,
+    )
     return NextResponse.json(mapNoahCustomerToMobileSummary(customer, ctx.noahCustomerId))
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -48,7 +55,8 @@ export async function POST(request: Request) {
     /* empty */
   }
 
-  const ctx = resolveNoahContext(user.id, request, body.type)
+  const ctx = await resolveNoahContextAsync(user.id, request, body.type)
+  if (!ctx.ok) return ctx.response
 
   try {
     const session = await noahFetch<Record<string, unknown>>({
@@ -84,7 +92,13 @@ export async function POST(request: Request) {
       method: "GET",
       path: `/customers/${encodeURIComponent(ctx.noahCustomerId)}`,
     })
-    await syncNoahCustomerToSupabase(user.id, customer, ctx.noahCustomerId, ctx.scope)
+    await syncNoahCustomerToSupabase(
+      ctx.scope === "business" && ctx.businessId
+        ? { kind: "business", businessId: ctx.businessId }
+        : { kind: "individual", userId: user.id },
+      customer,
+      ctx.noahCustomerId,
+    )
     return NextResponse.json({
       customerId: ctx.noahCustomerId,
       kycStatus: mapNoahVerificationToKycStatus(customer),

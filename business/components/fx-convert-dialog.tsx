@@ -55,7 +55,7 @@ type QuoteJson = {
 
 interface FXConvertDialogProps {
   account: Account
-  /** Currencies user can move into (e.g. other account rows). Only USD/EUR get live Noah quotes. */
+  /** Currencies user can move into (e.g. other account rows). Only USD/EUR get live Easner quotes. */
   destinationCurrencies: string[]
   tier1Complete: boolean
   noahScopeHeader: Record<string, string>
@@ -152,7 +152,7 @@ export function FXConvertDialog({
         }),
       })
       if (res.status === 501) {
-        setQuoteError("Move is not available yet — execution is still being connected to Noah.")
+        setQuoteError("Move is not available yet — Easner is still enabling this workflow.")
         return
       }
       if (!res.ok) {
@@ -179,7 +179,7 @@ export function FXConvertDialog({
         <DialogHeader>
           <DialogTitle>Move funds</DialogTitle>
           <DialogDescription>
-            Convert between your USD and EUR balances (stablecoin-backed). Quotes use Noah&apos;s live rates.
+            Convert between your USD and EUR balances (stablecoin-backed). Quotes use Easner&apos;s live rates.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-6 pt-4">

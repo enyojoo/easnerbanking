@@ -213,7 +213,7 @@ export async function GET(request: Request) {
   const orgId = userRow?.easner_business_id ?? null
   let tier1Complete = false
   let tier1VerificationStatus: string | null = null
-  /** Internal: org Owner's Noah KYB customer id (same row as tier1VerificationStatus). */
+  /** Noah B2B customer id on the org (`businesses.noah_customer_id`). */
   let noahKybCustomerId: string | null = null
   let canManageBusinessVerification = true
 
@@ -221,14 +221,14 @@ export async function GET(request: Request) {
     const orgOwnerUserId = await resolveOrgOwnerUserId(admin, orgId, user.id)
     canManageBusinessVerification = await resolveCanManageBusinessVerification(admin, orgId, user.id, orgOwnerUserId)
 
-    const { data: ownerKyb } = await admin
-      .from("users")
-      .select("noah_kyb_status,noah_kyb_customer_id")
-      .eq("id", orgOwnerUserId)
+    const { data: orgKyb } = await admin
+      .from("businesses")
+      .select("noah_kyb_status,noah_customer_id")
+      .eq("id", orgId)
       .maybeSingle()
 
-    tier1VerificationStatus = (ownerKyb?.noah_kyb_status as string | null | undefined) ?? null
-    noahKybCustomerId = (ownerKyb?.noah_kyb_customer_id as string | null | undefined) ?? null
+    tier1VerificationStatus = (orgKyb?.noah_kyb_status as string | null | undefined) ?? null
+    noahKybCustomerId = (orgKyb?.noah_customer_id as string | null | undefined) ?? null
     tier1Complete = tier1VerificationStatus === "approved"
   }
 

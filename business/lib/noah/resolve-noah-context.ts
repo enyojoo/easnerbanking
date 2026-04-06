@@ -1,31 +1,83 @@
-import { noahCustomerIdFromUserId, type NoahCustomerScope } from "./customer-id"
+import { NextResponse } from "next/server"
+import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import {
+  noahCustomerIdFromBusinessId,
+  noahCustomerIdFromUserId,
+  type NoahCustomerScope,
+} from "./customer-id"
 
 /**
- * Resolve Noah customer id + API `CustomerType` for this request.
- * - Default: **individual** (mobile KYC) — `eind_{userId}` (compact UUID hex).
- * - **business** (KYB): header `X-Easner-Noah-Scope: business`, query `?noahScope=business`, or JSON `type: "business"`.
+ * Read requested Noah scope from header/query/body hint (no DB).
+ * - **business**: header `X-Easner-Noah-Scope: business`, query `?noahScope=business`, or JSON `type: "business"`.
  */
-export function resolveNoahContext(
-  userId: string,
-  request: Request,
-  bodyTypeHint?: string,
-): {
-  scope: NoahCustomerScope
-  customerType: "Individual" | "Business"
-  noahCustomerId: string
-} {
+export function readNoahScopeFromRequest(request: Request, bodyTypeHint?: string): NoahCustomerScope {
   const headers = request.headers
   const url = new URL(request.url)
   const headerScope = headers.get("x-easner-noah-scope")?.toLowerCase()
   const queryScope = url.searchParams.get("noahScope")?.toLowerCase()
   const hint = bodyTypeHint?.toLowerCase()
 
-  let scope: NoahCustomerScope = "individual"
   if (headerScope === "business" || queryScope === "business" || hint === "business") {
-    scope = "business"
+    return "business"
+  }
+  return "individual"
+}
+
+/**
+ * Resolve Noah customer id for this session (org-based `ebiz_*` when scope is business).
+ * Business scope requires `users.easner_business_id`.
+ */
+export async function resolveNoahContextAsync(
+  sessionUserId: string,
+  request: Request,
+  bodyTypeHint?: string,
+): Promise<
+  | {
+      ok: true
+      scope: NoahCustomerScope
+      customerType: "Individual" | "Business"
+      noahCustomerId: string
+      businessId: string | null
+    }
+  | { ok: false; response: NextResponse }
+> {
+  const scope = readNoahScopeFromRequest(request, bodyTypeHint)
+  const admin = createSupabaseAdmin()
+  const { data: userRow } = await admin
+    .from("users")
+    .select("easner_business_id")
+    .eq("id", sessionUserId)
+    .maybeSingle()
+
+  const businessId = (userRow?.easner_business_id as string | null | undefined) ?? null
+
+  if (scope === "business") {
+    if (!businessId) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: "Business mode requires an organization. Complete business setup first.",
+            code: "NO_ORG",
+          },
+          { status: 400 },
+        ),
+      }
+    }
+    return {
+      ok: true,
+      scope: "business",
+      customerType: "Business",
+      noahCustomerId: noahCustomerIdFromBusinessId(businessId),
+      businessId,
+    }
   }
 
-  const customerType = scope === "business" ? "Business" : "Individual"
-  const noahCustomerId = noahCustomerIdFromUserId(userId, scope)
-  return { scope, customerType, noahCustomerId }
+  return {
+    ok: true,
+    scope: "individual",
+    customerType: "Individual",
+    noahCustomerId: noahCustomerIdFromUserId(sessionUserId),
+    businessId: null,
+  }
 }

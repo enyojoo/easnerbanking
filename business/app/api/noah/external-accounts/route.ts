@@ -26,7 +26,11 @@ export async function POST(request: Request) {
 
   const acc = await resolveNoahAccountContext(request, user.id)
   if (!acc.ok) return acc.response
-  const guard = await requireNoahVerificationApproved(acc.ctx.subjectUserId, acc.ctx.scope)
+  const guard = await requireNoahVerificationApproved(
+      acc.ctx.subjectUserId,
+      acc.ctx.scope,
+      acc.ctx.subjectBusinessId,
+    )
   if (guard) return guard
 
   const body = (await request.json().catch(() => null)) as {
@@ -57,7 +61,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "fullName is required." }, { status: 400 })
   }
   if (!Number.isFinite(fiatAmount) || fiatAmount <= 0) {
-    return NextResponse.json({ error: "fiatAmount must be a positive number (used for Noah prepare validation)." }, { status: 400 })
+    return NextResponse.json(
+      { error: "fiatAmount must be a positive number (used for payout prepare validation)." },
+      { status: 400 },
+    )
   }
 
   const cryptoCurrency = getNoahSettlementCryptoCurrency()
@@ -94,7 +101,10 @@ export async function POST(request: Request) {
         preferAch,
       })
       if (!channel) {
-        return NextResponse.json({ error: "No Noah bank payout channel for country/currency pair." }, { status: 400 })
+        return NextResponse.json(
+          { error: "No bank payout channel is available for this country and currency." },
+          { status: 400 },
+        )
       }
 
       const achRail = isNoahUsAchChannel(channel.paymentMethodType)
@@ -145,7 +155,7 @@ export async function POST(request: Request) {
         note:
           paymentMethodId || prep.formSessionId
             ? undefined
-            : "Noah did not return a reusable payment method id; use prepare again with the same fiat amount before sell, or retry after KYC/channel availability.",
+            : "Easner could not save a reusable payment method. Prepare again with the same fiat amount before completing payout, or retry after verification and channel availability update.",
       })
     }
 
@@ -165,7 +175,10 @@ export async function POST(request: Request) {
         preferSepa: true,
       })
       if (!channel) {
-        return NextResponse.json({ error: "No Noah SEPA payout channel for this corridor." }, { status: 400 })
+        return NextResponse.json(
+          { error: "No SEPA payout channel is available for this corridor." },
+          { status: 400 },
+        )
       }
 
       const form = buildEurSepaSellForm({
@@ -206,7 +219,7 @@ export async function POST(request: Request) {
         note:
           paymentMethodId || prep.formSessionId
             ? undefined
-            : "Noah did not return a reusable payment method id; use prepare again with the same fiat amount before sell, or retry after KYC/channel availability.",
+            : "Easner could not save a reusable payment method. Prepare again with the same fiat amount before completing payout, or retry after verification and channel availability update.",
       })
     }
 

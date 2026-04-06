@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth, requireNoahEnv, resolveNoahContext } from "@/app/api/noah/_helpers"
+import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { noahFetch } from "@/lib/noah/http"
 
@@ -70,7 +70,8 @@ export async function POST(request: Request) {
   if (providerKey === "noah") {
     const mis = requireNoahEnv()
     if (mis) return mis
-    const noahCtx = resolveNoahContext(user.id, request)
+    const noahCtx = await resolveNoahContextAsync(user.id, request)
+    if (!noahCtx.ok) return noahCtx.response
 
     // Noah "payout" uses sell endpoint today (fiat out from wallet).
     // We keep the shape aligned with existing `/api/noah/transfers` behavior.

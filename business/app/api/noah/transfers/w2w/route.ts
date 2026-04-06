@@ -97,7 +97,7 @@ export async function POST(request: Request) {
   }
 
   if (!payeeWalletId) {
-    return NextResponse.json({ error: "Payee has no provisioned Noah wallet yet." }, { status: 400 })
+    return NextResponse.json({ error: "Payee does not have an Easner wallet ready yet." }, { status: 400 })
   }
 
   let sourceWalletId: string | undefined
@@ -113,7 +113,7 @@ export async function POST(request: Request) {
     sourceWalletId = sender?.noah_wallet_id as string | undefined
   }
   if (!sourceWalletId) {
-    return NextResponse.json({ error: "Sender has no Noah wallet yet." }, { status: 400 })
+    return NextResponse.json({ error: "Your account does not have an Easner wallet ready yet." }, { status: 400 })
   }
 
   const path = getNoahWalletTransferPath()
@@ -134,7 +134,7 @@ export async function POST(request: Request) {
     cryptoCurrency,
   }
 
-  let lastErr = "Noah wallet transfer failed."
+  let lastErr = "Wallet transfer failed."
   for (const json of [pascalBody, camelBody]) {
     try {
       const tx = await noahFetch<Record<string, unknown>>({
@@ -152,7 +152,7 @@ export async function POST(request: Request) {
     {
       ok: false,
       error: lastErr,
-      hint: `Noah rejected wallet transfer on ${path}. Confirm NOAH_WALLET_TRANSFER_PATH and payload with Noah for your program; Easetag resolution succeeded.`,
+      hint: `Transfer was rejected on ${path}. Confirm configuration with your administrator if this persists; Easetag resolution succeeded.`,
       payeePreview: {
         easetag: payeeEasetagResolved,
         userId: payeeUserId,

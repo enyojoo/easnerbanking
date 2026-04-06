@@ -213,7 +213,7 @@ async function fetchUserContext(
   const admin = createSupabaseAdmin()
   const { data: userData } = await admin
     .from("users")
-    .select("easner_role, noah_kyc_status, noah_kyb_status")
+    .select("easner_role, noah_kyc_status, noah_kyb_status, easner_business_id")
     .eq("id", userId)
     .maybeSingle()
 
@@ -244,10 +244,16 @@ async function fetchUserContext(
     }
   }
   const role = typeof userData.easner_role === "string" ? userData.easner_role : undefined
-  const status =
-    role === "business"
-      ? (userData.noah_kyb_status as string | undefined)
-      : (userData.noah_kyc_status as string | undefined)
+  let businessKyb = userData.noah_kyb_status as string | undefined
+  if (role === "business" && userData.easner_business_id) {
+    const { data: biz } = await admin
+      .from("businesses")
+      .select("noah_kyb_status")
+      .eq("id", userData.easner_business_id as string)
+      .maybeSingle()
+    if (biz?.noah_kyb_status) businessKyb = biz.noah_kyb_status as string
+  }
+  const status = role === "business" ? businessKyb : (userData.noah_kyc_status as string | undefined)
   return {
     userType: role,
     kycStatus: status,

@@ -15,7 +15,11 @@ export async function GET(request: Request) {
   const acc = await resolveNoahAccountContext(request, user.id)
   if (!acc.ok) return acc.response
 
-  const guard = await requireNoahVerificationApproved(acc.ctx.subjectUserId, acc.ctx.scope)
+  const guard = await requireNoahVerificationApproved(
+      acc.ctx.subjectUserId,
+      acc.ctx.scope,
+      acc.ctx.subjectBusinessId,
+    )
   if (guard) return guard
 
   const url = new URL(request.url)
@@ -35,6 +39,7 @@ export async function GET(request: Request) {
 
   const result = await getNoahLiquidationAddressForCustomer({
     subjectUserId: acc.ctx.subjectUserId,
+    subjectBusinessId: acc.ctx.subjectBusinessId,
     noahCustomerId: acc.ctx.noahCustomerId,
     currency,
     ensureCreated: false,
@@ -60,7 +65,11 @@ export async function POST(request: Request) {
   const acc = await resolveNoahAccountContext(request, user.id)
   if (!acc.ok) return acc.response
 
-  const guard = await requireNoahVerificationApproved(acc.ctx.subjectUserId, acc.ctx.scope)
+  const guard = await requireNoahVerificationApproved(
+      acc.ctx.subjectUserId,
+      acc.ctx.scope,
+      acc.ctx.subjectBusinessId,
+    )
   if (guard) return guard
 
   let body: { currency?: string; chain?: string } = {}
@@ -85,6 +94,7 @@ export async function POST(request: Request) {
 
   const result = await getNoahLiquidationAddressForCustomer({
     subjectUserId: acc.ctx.subjectUserId,
+    subjectBusinessId: acc.ctx.subjectBusinessId,
     noahCustomerId: acc.ctx.noahCustomerId,
     currency,
     ensureCreated: true,

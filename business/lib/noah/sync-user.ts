@@ -1,25 +1,23 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import type { NoahCustomerScope } from "./customer-id"
 import { mapNoahVerificationToKycStatus } from "./map-kyc"
 
 export async function syncNoahCustomerToSupabase(
-  userId: string,
+  target: { kind: "individual"; userId: string } | { kind: "business"; businessId: string },
   customer: Record<string, unknown>,
   customerId: string,
-  scope: NoahCustomerScope = "individual"
 ): Promise<void> {
   const admin = createSupabaseAdmin()
   const kyc = mapNoahVerificationToKycStatus(customer)
 
-  if (scope === "business") {
+  if (target.kind === "business") {
     await admin
-      .from("users")
+      .from("businesses")
       .update({
-        noah_kyb_customer_id: customerId,
+        noah_customer_id: customerId,
         noah_kyb_status: kyc,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", userId)
+      .eq("id", target.businessId)
     return
   }
 
@@ -30,5 +28,5 @@ export async function syncNoahCustomerToSupabase(
       noah_kyc_status: kyc,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", userId)
+    .eq("id", target.userId)
 }

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server"
 import { noahFetch } from "@/lib/noah/http"
-import { parseNoahScopeFromPathCustomerId } from "@/lib/noah/customer-id"
+import { customerIdAllowedForSession } from "@/lib/noah/customer-id"
 import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
+import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireAuth, requireNoahEnv } from "../../_helpers"
 
 type Ctx = { params: Promise<{ customerId: string }> }
@@ -14,7 +15,18 @@ export async function GET(request: Request, ctx: Ctx) {
   const { user } = auth
   const { customerId } = await ctx.params
 
-  const scope = parseNoahScopeFromPathCustomerId(user.id, customerId)
+  const admin = createSupabaseAdmin()
+  const { data: u } = await admin
+    .from("users")
+    .select("easner_business_id")
+    .eq("id", user.id)
+    .maybeSingle()
+
+  const scope = customerIdAllowedForSession({
+    sessionUserId: user.id,
+    easnerBusinessId: (u?.easner_business_id as string | null) ?? null,
+    customerId,
+  })
   if (!scope) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
@@ -24,7 +36,13 @@ export async function GET(request: Request, ctx: Ctx) {
       method: "GET",
       path: `/customers/${encodeURIComponent(customerId)}`,
     })
-    await syncNoahCustomerToSupabase(user.id, customer, customerId, scope)
+    await syncNoahCustomerToSupabase(
+      scope === "business" && u?.easner_business_id
+        ? { kind: "business", businessId: u.easner_business_id as string }
+        : { kind: "individual", userId: user.id },
+      customer,
+      customerId,
+    )
     return NextResponse.json(customer)
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)

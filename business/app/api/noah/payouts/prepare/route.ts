@@ -24,7 +24,11 @@ export async function POST(request: Request) {
 
   const acc = await resolveNoahAccountContext(request, user.id)
   if (!acc.ok) return acc.response
-  const guard = await requireNoahVerificationApproved(acc.ctx.subjectUserId, acc.ctx.scope)
+  const guard = await requireNoahVerificationApproved(
+      acc.ctx.subjectUserId,
+      acc.ctx.scope,
+      acc.ctx.subjectBusinessId,
+    )
   if (guard) return guard
 
   const body = (await request.json().catch(() => null)) as {
@@ -101,7 +105,10 @@ export async function POST(request: Request) {
         preferAch,
       })
       if (!channel) {
-        return NextResponse.json({ error: "No Noah bank payout channel for US USD." }, { status: 400 })
+        return NextResponse.json(
+          { error: "No US dollar bank payout channel is available for this account." },
+          { status: 400 },
+        )
       }
       const achRail = isNoahUsAchChannel(channel.paymentMethodType)
       const form = buildUsBankSellForm({
@@ -142,7 +149,7 @@ export async function POST(request: Request) {
       })
       if (!channel) {
         return NextResponse.json(
-          { error: "No Noah SEPA payout channel for this country and EUR." },
+          { error: "No SEPA payout channel is available for this country and EUR." },
           { status: 400 },
         )
       }

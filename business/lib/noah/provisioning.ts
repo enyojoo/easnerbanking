@@ -113,12 +113,14 @@ async function upsertWalletData(
   wallet: WalletSnapshot | null,
   usdc: LiquidationSnapshot | null,
   eurc: LiquidationSnapshot | null,
+  subjectBusinessId: string | null,
 ): Promise<void> {
   if (!wallet) return
   const admin = createSupabaseAdmin()
   await admin.from("wallets").upsert(
     {
       user_id: subjectUserId,
+      business_id: subjectBusinessId,
       noah_wallet_id: wallet.walletId,
       address: wallet.address,
       blockchain_memo: wallet.blockchainMemo,
@@ -131,18 +133,26 @@ async function upsertWalletData(
     { onConflict: "noah_wallet_id" },
   )
 
-  await admin
-    .from("users")
-    .update({ noah_wallet_id: wallet.walletId, updated_at: new Date().toISOString() })
-    .eq("id", subjectUserId)
+  if (subjectBusinessId) {
+    await admin
+      .from("businesses")
+      .update({ noah_wallet_id: wallet.walletId, updated_at: new Date().toISOString() })
+      .eq("id", subjectBusinessId)
+  } else {
+    await admin
+      .from("users")
+      .update({ noah_wallet_id: wallet.walletId, updated_at: new Date().toISOString() })
+      .eq("id", subjectUserId)
+  }
 }
 
 export async function provisionNoahArtifactsForCustomer(opts: {
   subjectUserId: string
+  subjectBusinessId?: string | null
   noahCustomerId: string
   scope: Scope
 }): Promise<ProvisionSummary> {
-  const { subjectUserId, noahCustomerId } = opts
+  const { subjectUserId, subjectBusinessId = null, noahCustomerId } = opts
   const paymentMethods = await fetchAllPaymentMethodsForCustomer(noahCustomerId)
 
   const usdPm = paymentMethods.find((pm) => hasPayinBank(pm, "US"))
@@ -153,16 +163,16 @@ export async function provisionNoahArtifactsForCustomer(opts: {
   })
   const gbpPm = paymentMethods.find((pm) => hasPayinBank(pm, "GB"))
 
-  if (usdPm) await persistVirtualAccountFromPaymentMethod(subjectUserId, "usd", usdPm)
-  if (eurPm) await persistVirtualAccountFromPaymentMethod(subjectUserId, "eur", eurPm)
-  if (gbpPm) await persistVirtualAccountFromPaymentMethod(subjectUserId, "gbp", gbpPm)
+  if (usdPm) await persistVirtualAccountFromPaymentMethod(subjectUserId, "usd", usdPm, subjectBusinessId)
+  if (eurPm) await persistVirtualAccountFromPaymentMethod(subjectUserId, "eur", eurPm, subjectBusinessId)
+  if (gbpPm) await persistVirtualAccountFromPaymentMethod(subjectUserId, "gbp", gbpPm, subjectBusinessId)
 
   const wallet = await tryFetchWallet(noahCustomerId)
   const usdc = (await tryFetchLiquidationAddress(noahCustomerId, "usdc")) ??
     (await tryCreateLiquidationAddress(noahCustomerId, "usdc"))
   const eurc = (await tryFetchLiquidationAddress(noahCustomerId, "eurc")) ??
     (await tryCreateLiquidationAddress(noahCustomerId, "eurc"))
-  await upsertWalletData(subjectUserId, wallet, usdc, eurc)
+  await upsertWalletData(subjectUserId, wallet, usdc, eurc, subjectBusinessId)
 
   return {
     walletCreated: Boolean(wallet),
@@ -180,11 +190,12 @@ export async function provisionNoahArtifactsForCustomer(opts: {
 
 export async function getNoahLiquidationAddressForCustomer(opts: {
   subjectUserId: string
+  subjectBusinessId?: string | null
   noahCustomerId: string
   currency: LiquidationCurrency
   ensureCreated?: boolean
 }): Promise<{ hasAddress: boolean; address?: string; memo?: string; walletId?: string }> {
-  const { subjectUserId, noahCustomerId, currency, ensureCreated = false } = opts
+  const { subjectUserId, subjectBusinessId = null, noahCustomerId, currency, ensureCreated = false } = opts
   const fetched = await tryFetchLiquidationAddress(noahCustomerId, currency)
   const created = !fetched && ensureCreated ? await tryCreateLiquidationAddress(noahCustomerId, currency) : null
   const snap = fetched ?? created
@@ -195,6 +206,7 @@ export async function getNoahLiquidationAddressForCustomer(opts: {
     wallet,
     currency === "usdc" ? snap : null,
     currency === "eurc" ? snap : null,
+    subjectBusinessId,
   )
 
   return {

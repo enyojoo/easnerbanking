@@ -44,7 +44,11 @@ export async function POST(request: Request) {
   const acc = await resolveNoahAccountContext(request, user.id)
   if (!acc.ok) return acc.response
 
-  const guard = await requireNoahVerificationApproved(acc.ctx.subjectUserId, acc.ctx.scope)
+  const guard = await requireNoahVerificationApproved(
+      acc.ctx.subjectUserId,
+      acc.ctx.scope,
+      acc.ctx.subjectBusinessId,
+    )
   if (guard) return guard
 
   const { noahCustomerId, subjectUserId, scope } = acc.ctx
@@ -75,7 +79,7 @@ export async function POST(request: Request) {
           { status: 400 },
         )
       }
-      await persistVirtualAccountFromPaymentMethod(subjectUserId, "gbp", gbpPm)
+      await persistVirtualAccountFromPaymentMethod(subjectUserId, "gbp", gbpPm, acc.ctx.subjectBusinessId)
       await appendEnabledExtraCurrency(subjectUserId, scope, "GBP")
       return NextResponse.json({ success: true, currency: "GBP", provider: "noah" })
     } catch (e: unknown) {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { noahFetch } from "@/lib/noah/http"
 import { mapNoahTransactionToMobileDetail } from "@/lib/noah/map-transactions"
-import { requireAuth, requireNoahEnv, resolveNoahContext } from "../../_helpers"
+import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "../../_helpers"
 
 type Props = { params: Promise<{ transactionId: string }> }
 
@@ -11,7 +11,8 @@ export async function GET(request: Request, routeCtx: Props) {
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
   const { user } = auth
-  const noahCtx = resolveNoahContext(user.id, request)
+  const noahCtx = await resolveNoahContextAsync(user.id, request)
+  if (!noahCtx.ok) return noahCtx.response
   const { noahCustomerId } = noahCtx
 
   const { transactionId } = await routeCtx.params

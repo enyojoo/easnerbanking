@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { noahFetch } from "@/lib/noah/http"
 import { mapNoahTransactionToMobileItem } from "@/lib/noah/map-transactions"
-import { requireAuth, requireNoahEnv, resolveNoahContext } from "../_helpers"
+import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "../_helpers"
 
 type TxResp = { Items?: Array<Record<string, unknown>>; PageToken?: string }
 
@@ -11,7 +11,8 @@ export async function GET(request: Request) {
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
   const { user } = auth
-  const ctx = resolveNoahContext(user.id, request)
+  const ctx = await resolveNoahContextAsync(user.id, request)
+  if (!ctx.ok) return ctx.response
   const { noahCustomerId } = ctx
 
   const url = new URL(request.url)

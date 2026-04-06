@@ -21,12 +21,17 @@ export async function GET(request: Request) {
   const acc = await resolveNoahAccountContext(request, user.id)
   if (!acc.ok) return acc.response
 
-  const guard = await requireNoahVerificationApproved(acc.ctx.subjectUserId, acc.ctx.scope)
+  const guard = await requireNoahVerificationApproved(
+      acc.ctx.subjectUserId,
+      acc.ctx.scope,
+      acc.ctx.subjectBusinessId,
+    )
   if (guard) return guard
 
-  const { noahCustomerId, subjectUserId } = acc.ctx
+  const { noahCustomerId, subjectUserId, subjectBusinessId } = acc.ctx
   await provisionNoahArtifactsForCustomer({
     subjectUserId,
+    subjectBusinessId,
     noahCustomerId,
     scope: acc.ctx.scope,
   })
@@ -59,7 +64,7 @@ export async function GET(request: Request) {
     }
 
     const display = mapPaymentMethodToVirtualAccountDisplay(pm, currency)
-    await persistVirtualAccountFromPaymentMethod(subjectUserId, currency, pm)
+    await persistVirtualAccountFromPaymentMethod(subjectUserId, currency, pm, subjectBusinessId)
 
     return NextResponse.json({
       hasAccount: true,

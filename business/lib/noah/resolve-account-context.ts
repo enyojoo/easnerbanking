@@ -1,19 +1,21 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
-import { noahCustomerIdFromUserId, type NoahCustomerScope } from "./customer-id"
-import { resolveNoahContext } from "./resolve-noah-context"
+import { noahCustomerIdFromBusinessId, noahCustomerIdFromUserId, type NoahCustomerScope } from "./customer-id"
+import { readNoahScopeFromRequest } from "./resolve-noah-context"
 
 export type NoahAccountContext = {
   scope: NoahCustomerScope
   customerType: "Individual" | "Business"
   noahCustomerId: string
-  /** Easner user id that owns the Noah customer (org owner for business when org exists). */
+  /** Org id for B2B Noah customer; null for individual. */
+  subjectBusinessId: string | null
+  /** Easner user authorized as org owner (B2B) or the consumer (individual). */
   subjectUserId: string
 }
 
 /**
- * For **business** scope: only the organization owner may call; Noah customer id uses the **owner's** user id.
+ * For **business** scope: only the organization owner may call; Noah `CustomerID` is `ebiz_{businesses.id}`.
  * For **individual**: subject is the session user.
  */
 export async function resolveNoahAccountContext(
@@ -21,13 +23,16 @@ export async function resolveNoahAccountContext(
   sessionUserId: string,
   bodyTypeHint?: string,
 ): Promise<{ ok: true; ctx: NoahAccountContext } | { ok: false; response: NextResponse }> {
-  const base = resolveNoahContext(sessionUserId, request, bodyTypeHint)
+  const scope = readNoahScopeFromRequest(request, bodyTypeHint)
 
-  if (base.scope !== "business") {
+  if (scope !== "business") {
     return {
       ok: true,
       ctx: {
-        ...base,
+        scope: "individual",
+        customerType: "Individual",
+        noahCustomerId: noahCustomerIdFromUserId(sessionUserId),
+        subjectBusinessId: null,
         subjectUserId: sessionUserId,
       },
     }
@@ -43,13 +48,14 @@ export async function resolveNoahAccountContext(
   const orgId = userRow?.easner_business_id as string | null | undefined
   if (!orgId) {
     return {
-      ok: true,
-      ctx: {
-        scope: "business",
-        customerType: "Business",
-        noahCustomerId: noahCustomerIdFromUserId(sessionUserId, "business"),
-        subjectUserId: sessionUserId,
-      },
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: "Business mode requires an organization. Complete business setup first.",
+          code: "NO_ORG",
+        },
+        { status: 400 },
+      ),
     }
   }
 
@@ -69,7 +75,8 @@ export async function resolveNoahAccountContext(
     ctx: {
       scope: "business",
       customerType: "Business",
-      noahCustomerId: noahCustomerIdFromUserId(ownerUserId, "business"),
+      noahCustomerId: noahCustomerIdFromBusinessId(orgId),
+      subjectBusinessId: orgId,
       subjectUserId: ownerUserId,
     },
   }

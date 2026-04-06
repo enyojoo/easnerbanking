@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -27,8 +28,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { deleteRecipient, listRecipients } from "@/lib/recipients-store"
 import { useAuth } from "@/lib/auth-context"
 import { useRecipientsCached } from "@/hooks/use-recipients-cached"
+import { createSendFlowSeedForRecipient, persistSendFlowState } from "@/lib/send-flow-session"
 
 export default function RecipientsPage() {
+  const router = useRouter()
   const { user } = useAuth()
   const [searchTerm, setSearchTerm] = useState("")
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
@@ -80,6 +83,11 @@ export default function RecipientsPage() {
   const handleEdit = (recipient: Beneficiary) => {
     setSelectedRecipient(recipient)
     setIsEditDialogOpen(true)
+  }
+
+  const handleSendMoney = (recipient: Beneficiary) => {
+    persistSendFlowState(createSendFlowSeedForRecipient(recipient))
+    router.push("/send")
   }
 
   const handleDelete = (recipientId: string) => {
@@ -227,7 +235,13 @@ export default function RecipientsPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" className="gap-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="gap-1"
+                        onClick={() => handleSendMoney(recipient)}
+                      >
                         <Send className="h-3 w-3" />
                         Send
                       </Button>

@@ -2,13 +2,13 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { mapPaymentMethodToVirtualAccountDisplay } from "./payment-method-map"
 
 /**
- * Upsert `virtual_accounts` and set `users.noah_usd_virtual_account_id` / `noah_eur_virtual_account_id`.
- * Uses service role; `subjectUserId` is the Easner user who owns the Noah customer row (individual or org owner for business).
+ * Upsert `virtual_accounts` and mirror VA ids on `users` or `businesses`.
  */
 export async function persistVirtualAccountFromPaymentMethod(
   subjectUserId: string,
   currency: "usd" | "eur" | "gbp",
   pm: Record<string, unknown>,
+  businessId?: string | null,
 ): Promise<void> {
   const pmId = String(pm.ID ?? "").trim()
   if (!pmId) return
@@ -20,6 +20,7 @@ export async function persistVirtualAccountFromPaymentMethod(
   const { error: upsertErr } = await admin.from("virtual_accounts").upsert(
     {
       user_id: subjectUserId,
+      business_id: businessId ?? null,
       noah_virtual_account_id: pmId,
       currency: fiat,
       account_number: display.accountNumber ?? null,
@@ -41,13 +42,18 @@ export async function persistVirtualAccountFromPaymentMethod(
 
   if (currency === "usd" || currency === "eur") {
     const col = currency === "usd" ? "noah_usd_virtual_account_id" : "noah_eur_virtual_account_id"
-    const { error: userErr } = await admin
-      .from("users")
-      .update({ [col]: pmId, updated_at: new Date().toISOString() })
-      .eq("id", subjectUserId)
-
-    if (userErr) {
-      console.error("[persistVirtualAccountFromPaymentMethod] update users:", userErr)
+    if (businessId) {
+      const { error: bizErr } = await admin
+        .from("businesses")
+        .update({ [col]: pmId, updated_at: new Date().toISOString() })
+        .eq("id", businessId)
+      if (bizErr) console.error("[persistVirtualAccountFromPaymentMethod] update businesses:", bizErr)
+    } else {
+      const { error: userErr } = await admin
+        .from("users")
+        .update({ [col]: pmId, updated_at: new Date().toISOString() })
+        .eq("id", subjectUserId)
+      if (userErr) console.error("[persistVirtualAccountFromPaymentMethod] update users:", userErr)
     }
   }
 }
