@@ -258,35 +258,37 @@ export function TerminalPayoutSetupPanel({
     savedDefaultId,
   ])
 
+  const dialogHeaderClass = "shrink-0 space-y-1.5 pr-10 text-left sm:pr-12"
+
   const headerBlock =
     listLoading && !embedded ? (
-      <DialogHeader>
-        <DialogTitle>Terminal payout accounts</DialogTitle>
-        <DialogDescription className="sr-only">
-          Manage bank and mobile money payout destinations and optional default for terminal.
+      <DialogHeader className={dialogHeaderClass}>
+        <DialogTitle className="text-xl font-semibold leading-snug">Terminal payout accounts</DialogTitle>
+        <DialogDescription>
+          Bank and mobile money destinations for terminal settlements.
         </DialogDescription>
       </DialogHeader>
     ) : listLoading ? null
     : embedded ? (
       <div className="sr-only">Manage bank and mobile money payout destinations.</div>
     ) : (
-      <DialogHeader>
-        <DialogTitle>Terminal payout accounts</DialogTitle>
-        <DialogDescription className="sr-only">
-          Manage bank and mobile money payout destinations and optional default for terminal.
+      <DialogHeader className={dialogHeaderClass}>
+        <DialogTitle className="text-xl font-semibold leading-snug">Terminal payout accounts</DialogTitle>
+        <DialogDescription>
+          Bank and mobile money destinations for terminal settlements.
         </DialogDescription>
       </DialogHeader>
     )
 
   return (
-    <div className={cn("w-full", className)}>
+    <div className={cn("w-full", !embedded && "flex flex-col gap-6", className)}>
       {headerBlock}
 
       {listLoading ?
         <div className="flex justify-center py-8 text-muted-foreground">
           <Loader2 className="h-8 w-8 animate-spin" aria-hidden />
         </div>
-      : <div className={cn("mx-auto w-full space-y-4", !embedded && "max-w-sm")}>
+      : <div className={cn("mx-auto w-full min-w-0 space-y-5", !embedded && "max-w-md")}>
           {noDefaultChosen ?
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-center text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
               Mark one account below as your default so we know where to send payouts.
@@ -394,7 +396,7 @@ export function TerminalPayoutSetupPanel({
             </div>
           }
 
-          <div className="border-t pt-4">
+          <div className={cn("border-t", embedded ? "pt-4" : "pt-5")}>
             <Button
               type="button"
               variant="outline"

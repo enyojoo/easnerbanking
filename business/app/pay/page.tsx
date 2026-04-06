@@ -59,9 +59,8 @@ export default function PayAmountPage() {
 
   return (
     <div className="flex w-full flex-col gap-5 sm:gap-6">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-primary">Stablecoin Auto Payout</p>
-        <h1 className="mt-2 text-3xl font-bold leading-none tracking-tight sm:text-4xl md:text-[2.5rem]">
+      <div className="mt-4 sm:mt-6">
+        <h1 className="text-3xl font-bold leading-none tracking-tight sm:text-4xl md:text-[2.5rem]">
           Charge amount
         </h1>
         <p className="mt-3 text-lg leading-snug text-muted-foreground sm:mt-2 sm:text-xl">

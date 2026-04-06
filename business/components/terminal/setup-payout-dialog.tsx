@@ -15,7 +15,7 @@ export function SetupPayoutDialog() {
           Setup payout
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-lg gap-0 p-6 sm:p-8">
         <TerminalPayoutSetupPanel active={open} variant="manage-default" embedded={false} />
       </DialogContent>
     </Dialog>

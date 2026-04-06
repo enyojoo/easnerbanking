@@ -83,8 +83,7 @@ export default function PayAssetPage() {
   return (
     <div className="flex w-full flex-col gap-5 sm:gap-6">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-primary">Stablecoin Auto Payout</p>
-        <h1 className="mt-2 text-xl font-semibold tracking-tight sm:text-2xl">Stablecoin &amp; network</h1>
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Stablecoin &amp; network</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Customer pays {fiatAmount.toFixed(2)} {chargeFiatCurrency} in:
         </p>
