@@ -10,8 +10,10 @@ import { toast } from "sonner"
 
 export const TRANSACTIONS_LIST_CACHE_TTL_MS = 5 * 60 * 1000
 
+const LEDGER_BUSINESS_HEADERS = { "X-Easner-Noah-Scope": "business" } as const
+
 async function fetchTransactionsList(): Promise<TransactionWithSource[]> {
-  const res = await fetchWithSession("/api/transactions")
+  const res = await fetchWithSession("/api/transactions", { headers: { ...LEDGER_BUSINESS_HEADERS } })
   const body = (await res.json().catch(() => ({}))) as {
     transactions?: TransactionWithSource[]
     error?: string

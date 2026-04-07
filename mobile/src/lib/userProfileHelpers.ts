@@ -61,7 +61,7 @@ export function mapUsersRowToUser(ru: Record<string, unknown>): User {
     phone: (ru.phone as string) ?? null,
     date_of_birth: (ru.date_of_birth as string) ?? null,
     avatar_url: (ru.avatar_url as string) ?? null,
-    easner_role: ru.easner_role === 'business' || ru.easner_role === 'individual' ? ru.easner_role : undefined,
+    role: ru.role === "business" || ru.role === "individual" ? ru.role : undefined,
     easner_business_id: (ru.easner_business_id as string) ?? null,
     enabled_extra_account_currencies: Array.isArray(extra) ? (extra as string[]) : [],
     noah_customer_id: (ru.noah_customer_id as string) ?? null,

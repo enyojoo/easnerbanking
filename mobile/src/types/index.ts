@@ -164,7 +164,7 @@ export interface User {
   phone?: string | null
   date_of_birth?: string | null
   avatar_url?: string | null
-  easner_role?: "individual" | "business"
+  role?: "individual" | "business"
   easner_business_id?: string | null
   enabled_extra_account_currencies?: string[]
   noah_customer_id?: string | null
@@ -213,7 +213,7 @@ export interface AuthUser {
   noah_kyc_rejection_reasons?: unknown
   noah_signed_agreement_id?: string | null
   noah_kyb_status?: string | null
-  easner_role?: "individual" | "business"
+  role?: "individual" | "business"
   easner_business_id?: string | null
   bridge_kyc_status?: string
   bridge_customer_id?: string

@@ -30,7 +30,7 @@ import { NavigationProps, Transaction } from '../../types'
 import { analytics } from '../../lib/analytics'
 import { useAuth } from '../../contexts/AuthContext'
 import { useFocusRefreshAll } from '../../hooks/useFocusRefresh'
-import { apiGet, apiPost } from '../../lib/apiClient'
+import { apiGet, apiPost, NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
 import { getTransactionStatusDisplay } from '../../utils/formatters'
@@ -368,8 +368,9 @@ function TransactionsContent({ navigation }: NavigationProps) {
       // Try bridge transactions API first, fallback to combined transactions
       let response = await apiGet(`/api/noah/transactions?${params.toString()}`)
       if (!response.ok || (response as any).isNetworkError) {
-        // Fallback to combined transactions API
-        response = await apiGet(`/api/transactions?${params.toString()}`)
+        response = await apiGet(`/api/transactions?${params.toString()}`, {
+          headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
+        })
       }
       
       if (response.ok && !(response as any).isNetworkError) {

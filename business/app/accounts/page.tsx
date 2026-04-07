@@ -13,7 +13,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { CurrencyDepositDialog } from "@/components/currency-deposit-dialog"
-import { FXConvertDialog } from "@/components/fx-convert-dialog"
 import { StatementDownloadDialog } from "@/components/statement-download-dialog"
 import { CurrencyFlag } from "@/components/flags"
 import { MoreVertical, FileText, Ban, Trash2 } from "lucide-react"
@@ -26,7 +25,6 @@ export default function AccountsPage() {
     accountRows,
     loading,
     loadError,
-    tier1Complete,
     profileLoading,
     refreshAccounts,
     noahHeaders,
@@ -92,13 +90,6 @@ export default function AccountsPage() {
                     account={account}
                     copiedField={copiedField}
                     onCopy={copyToClipboard}
-                  />
-                  <FXConvertDialog
-                    account={account}
-                    destinationCurrencies={accountRows.map((a) => a.currency)}
-                    tier1Complete={tier1Complete}
-                    noahScopeHeader={noahHeaders}
-                    onAfterMove={() => void refreshAccounts()}
                   />
 
                   <DropdownMenu>

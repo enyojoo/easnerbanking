@@ -159,19 +159,19 @@ export async function GET(request: Request) {
   const admin = createSupabaseAdmin()
   const { data: userRowWithName, error: userRowErr } = await admin
     .from("users")
-    .select("id,easner_role,easner_business_id,full_name")
+    .select("id,role,easner_business_id,full_name")
     .eq("id", user.id)
     .maybeSingle()
   const { data: userRowFallback } = userRowErr
-    ? await admin.from("users").select("id,easner_role,easner_business_id").eq("id", user.id).maybeSingle()
-    : { data: null as { id: string; easner_role: string | null; easner_business_id: string | null } | null }
+    ? await admin.from("users").select("id,role,easner_business_id").eq("id", user.id).maybeSingle()
+    : { data: null as { id: string; role: string | null; easner_business_id: string | null } | null }
   const userRow = (userRowWithName ??
     (userRowFallback
       ? { ...userRowFallback, full_name: null }
       : null)) as
     | {
         id: string
-        easner_role: string | null
+        role: string | null
         easner_business_id: string | null
         full_name: string | null
       }
@@ -256,7 +256,7 @@ export async function GET(request: Request) {
       })(),
       countryCode: countryCodeFromName(displayCountryFromBusinessSetting(org?.country) || org?.country),
       onboardingComplete,
-      role: userRow?.easner_role ?? "business",
+      role: userRow?.role ?? "business",
       ownerName,
       tier1Complete,
       tier1VerificationStatus,

@@ -11,6 +11,7 @@ import { removePin } from "@/lib/login-pin"
 import { resetSessionActivity } from "@/lib/session-activity"
 import { IdleSessionBridge } from "@/components/idle-session-bridge"
 import { analytics } from "@/lib/analytics"
+import { ensureBusinessWebSurface } from "@/lib/auth/validate-surface-client"
 
 interface AuthContextType {
   user: User | null
@@ -114,6 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       analytics.identify(data.user.id, { email: data.user.email || email.trim() })
       analytics.trackSignIn("email", { userId: data.user.id })
     }
+    await ensureBusinessWebSurface(supabase)
   }
 
   const signup = async (email: string, password: string, name: string) => {

@@ -160,11 +160,14 @@ export const apiRequest = async (
   }
 }
 
+/** Noah ledger/API scope: mobile consumer flows use individual (personal wallet), not org terminal. */
+export const NOAH_SCOPE_INDIVIDUAL_HEADERS = { 'X-Easner-Noah-Scope': 'individual' } as const
+
 /**
- * Helper for GET requests
+ * Helper for GET requests (`init` merges into fetch options, e.g. extra headers).
  */
-export const apiGet = async (endpoint: string): Promise<Response> => {
-  return apiRequest(endpoint, { method: 'GET' })
+export const apiGet = async (endpoint: string, init?: RequestInit): Promise<Response> => {
+  return apiRequest(endpoint, { method: 'GET', ...init })
 }
 
 /**

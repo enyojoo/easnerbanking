@@ -15,6 +15,7 @@ import {
   totpFactorsFromListResponse,
 } from '../lib/auth-mfa'
 import { mapUsersRowToUser } from '../lib/userProfileHelpers'
+import { ensureConsumerMobileAccess } from '../lib/validateAppSurface'
 
 function mapNameFromMetadata(meta: Record<string, unknown> | undefined): {
   first_name: string
@@ -144,6 +145,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return { error: new Error(vErr.message || 'Invalid code.') }
       }
       setMfaPending(null)
+      const surfaceGate = await ensureConsumerMobileAccess()
+      if (surfaceGate.error) {
+        return { error: surfaceGate.error }
+      }
       return { error: null }
     },
     [],
@@ -157,6 +162,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     try {
       console.log('AuthContext: Fetching user profile for userId:', userId)
+
+      const surfaceGate = await ensureConsumerMobileAccess()
+      if (surfaceGate.error) {
+        console.warn('AuthContext: App surface denied:', surfaceGate.error.message)
+        setUser(null)
+        setUserProfile(null)
+        setLoading(false)
+        return null
+      }
 
       await ensureBusinessAppUserBootstrap()
 
@@ -198,7 +212,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           noah_kyc_rejection_reasons: profile.noah_kyc_rejection_reasons,
           noah_signed_agreement_id: profile.noah_signed_agreement_id,
           noah_kyb_status: profile.noah_kyb_status,
-          easner_role: profile.easner_role,
+          role: profile.role,
           easner_business_id: profile.easner_business_id,
           bridge_kyc_status: row.bridge_kyc_status as string | undefined,
           bridge_customer_id: row.bridge_customer_id as string | undefined,
@@ -211,23 +225,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return regularUser
       }
 
-      // Check admin_users table
-      const { data: adminUser, error: adminError } = await supabase
-        .from('admin_users')
-        .select('*')
-        .eq('id', userId)
-        .single()
-
-      if (adminUser && !adminError) {
-        // Admin users cannot access mobile app - sign them out
-        console.log('Admin user detected, signing out from mobile app')
-        await supabase.auth.signOut()
-        setUser(null)
-        setUserProfile(null)
-        return null
-      }
-
-      console.log('AuthContext: No user found in either table')
+      console.log('AuthContext: No user row in public.users yet')
       // If user not found in either table, clear state
       setUser(null)
       setUserProfile(null)
@@ -414,7 +412,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
       }
 
-      // The auth state change handler will manage the loading state
+      const surfaceGate = await ensureConsumerMobileAccess()
+      if (surfaceGate.error) {
+        return { error: { message: surfaceGate.error.message } }
+      }
+
       return { error: null }
     } catch (error) {
       console.error('Sign in error:', error)

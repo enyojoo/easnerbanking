@@ -960,35 +960,6 @@ export const noahService = {
   },
 
   /**
-   * Noah internal FX move execute — may return 501 until wired.
-   */
-  async postFxConvert(body: {
-    sourceCurrency: string
-    destinationCurrency: string
-    sourceAmount: string
-  }): Promise<{ ok?: boolean; error?: string }> {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
-
-    const response = await fetch(`${apiUrl()}/api/noah/fx/convert`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify(body),
-    })
-    const data = await response.json().catch(() => ({}))
-    if (response.status === 501) {
-      return { error: (data as { error?: string }).error || 'Move is not available yet' }
-    }
-    if (!response.ok) {
-      throw new Error((data as { error?: string }).error || 'Move failed')
-    }
-    return { ok: true }
-  },
-
-  /**
    * Download account statement PDF for a single account (date range).
    */
   async downloadStatementPdf(params: {

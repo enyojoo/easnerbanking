@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import type { EmailOtpType } from "@supabase/supabase-js"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { ensureBusinessWebSurface } from "@/lib/auth/validate-surface-client"
 
 function AuthCallbackContent() {
   const router = useRouter()
@@ -40,7 +41,17 @@ function AuthCallbackContent() {
 
         const { data } = await supabase.auth.getSession()
         if (data.session) {
-          router.replace("/dashboard")
+          try {
+            await ensureBusinessWebSurface(supabase)
+            router.replace("/dashboard")
+          } catch {
+            router.replace(
+              "/auth/login?message=" +
+                encodeURIComponent(
+                  "This account cannot access the Business dashboard. Use the Easner mobile app for personal accounts.",
+                ),
+            )
+          }
         } else {
           router.replace("/auth/login?message=Email confirmed. Please sign in.")
         }

@@ -41,7 +41,7 @@ interface UserData {
   phone: string | null
   date_of_birth: string | null
   avatar_url: string | null
-  easner_role: string
+  role: string
   easner_business_id: string | null
   created_at: string
   updated_at: string
@@ -240,7 +240,7 @@ export default function AdminUsersPage() {
             phone: (row.phone as string | null) ?? null,
             date_of_birth: (row.date_of_birth as string | null) ?? null,
             avatar_url: (row.avatar_url as string | null) ?? null,
-            easner_role: String(row.easner_role || "individual"),
+            role: String(row.role || "individual"),
             easner_business_id: (row.easner_business_id as string | null) ?? null,
             created_at: String(row.created_at),
             updated_at: String(row.updated_at),
@@ -324,7 +324,7 @@ export default function AdminUsersPage() {
     const em = (user.email || "").toLowerCase()
     const matchesSearch = !q || name.includes(q) || em.includes(q) || user.id.toLowerCase().includes(q)
 
-    const role = String(user.easner_role || "individual").toLowerCase()
+    const role = String(user.role || "individual").toLowerCase()
     const matchesRole = roleFilter === "all" || role === roleFilter
     // Filter by noah_kyc_status
     const noahKycStatus = user.noahKycStatus || user.noah_kyc_status || "not_started"
@@ -347,7 +347,7 @@ export default function AdminUsersPage() {
   })
 
   function accountTypeLabel(user: UserData): "Consumer" | "Business" | "Both" | null {
-    const role = String(user.easner_role || "").toLowerCase()
+    const role = String(user.role || "").toLowerCase()
     const hasOrg = Boolean(user.easner_business_id)
     const isBusiness = role === "business" || hasOrg
     const isConsumer = role === "individual" || user.totalTransactions > 0
@@ -411,7 +411,7 @@ export default function AdminUsersPage() {
   const renderVerificationCell = (u: UserData) => (
     <div className="flex flex-col items-center gap-1">
       {getVerificationBadge(u)}
-      {String(u.easner_role).toLowerCase() === "business" && u.noah_kyb_status ? (
+      {String(u.role).toLowerCase() === "business" && u.noah_kyb_status ? (
         <span className="text-xs text-muted-foreground text-center max-w-[160px] leading-tight">
           Business: {formatBusinessVerificationLabel(u.noah_kyb_status)}
         </span>
@@ -437,7 +437,7 @@ export default function AdminUsersPage() {
           `"${(u.full_name || "").replace(/"/g, '""')}"`,
           u.email || "",
           u.phone || "",
-          u.easner_role || "individual",
+          u.role || "individual",
           u.easner_business_id || "",
           u.email_confirmed_at ? "yes" : "no",
           u.noah_kyc_status || "",
@@ -697,7 +697,7 @@ export default function AdminUsersPage() {
                                         </div>
                                         <div className="flex justify-between gap-4">
                                           <span className="text-gray-600">Account type</span>
-                                          {getEasnerRoleBadge(selectedUser.easner_role)}
+                                          {getEasnerRoleBadge(selectedUser.role)}
                                         </div>
                                         <div className="flex justify-between gap-4 items-center">
                                           <span className="text-gray-600">Identity verification</span>

@@ -19,7 +19,7 @@ import ScreenWrapper from '../../components/ScreenWrapper'
 import { ShimmerLoader } from '../../components/premium'
 import { NavigationProps } from '../../types'
 import { colors, textStyles, borderRadius, spacing, shadows } from '../../theme'
-import { apiGet } from '../../lib/apiClient'
+import { apiGet, NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
 import { useUserData } from '../../contexts/UserDataContext'
 
 interface LedgerTransaction {
@@ -152,8 +152,9 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
       // Try bridge transactions API first
       let response = await apiGet(`/api/noah/transactions/${transactionId}`)
       if (!response.ok || (response as any).isNetworkError) {
-        // Fallback to combined transactions API
-        response = await apiGet(`/api/transactions/${transactionId}`)
+        response = await apiGet(`/api/transactions/${encodeURIComponent(transactionId)}`, {
+          headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
+        })
       }
 
       if (response.ok && !(response as any).isNetworkError) {

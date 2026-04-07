@@ -39,7 +39,7 @@ import { useFocusRefreshAll } from '../../hooks/useFocusRefresh'
 import { useUserData } from '../../contexts/UserDataContext'
 import { useFocusEffect } from '@react-navigation/native'
 import { useBalance } from '../../contexts/BalanceContext'
-import { apiGet, apiPost } from '../../lib/apiClient'
+import { apiGet, apiPost, NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
 import { ShimmerLoader } from '../../components/premium'
 import { getTransactionStatusDisplay } from '../../utils/formatters'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
@@ -212,14 +212,41 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
       const params = new URLSearchParams()
       params.append('limit', '5') // Only fetch 5 most recent for dashboard
 
-      const response = await apiGet(`/api/noah/transactions?${params.toString()}`)
-      
+      let response = await apiGet(`/api/noah/transactions?${params.toString()}`)
+      let listBody: { transactions?: unknown[] } | null = null
+      let fetchFailed = false
+
       if (response.ok && !(response as any).isNetworkError) {
-        const data = await response.json()
-        const transactionsList = (data.transactions || []).map((tx: any) => ({
+        listBody = (await response.json().catch(() => ({}))) as { transactions?: unknown[] }
+      } else {
+        const fallback = await apiGet(`/api/transactions?${params.toString()}`, {
+          headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
+        })
+        if (fallback.ok && !(fallback as any).isNetworkError) {
+          listBody = (await fallback.json().catch(() => ({}))) as { transactions?: unknown[] }
+        } else if ((response as any).isNetworkError || (fallback as any).isNetworkError) {
+          console.warn('Network error fetching transactions, keeping cached data')
+          if (!cached) {
+            setRecentTransactions([])
+          }
+          setHasAttemptedLoad(true)
+          fetchFailed = true
+        } else {
+          if (!cached) {
+            setRecentTransactions([])
+          }
+          setHasAttemptedLoad(true)
+          fetchFailed = true
+        }
+      }
+
+      if (!fetchFailed && listBody != null) {
+        const raw = listBody.transactions
+        const arr = Array.isArray(raw) ? raw : []
+        const transactionsList = arr.map((tx: any) => ({
           id: tx.id,
           transaction_id: tx.transaction_id,
-          type: tx.transaction_type,
+          type: tx.transaction_type ?? tx.type,
           amount: tx.amount,
           currency: tx.currency,
           name: tx.name,
@@ -230,24 +257,10 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
           source_liquidation_address_id: tx.source_liquidation_address_id,
           metadata: tx.metadata,
         }))
-        
         setRecentTransactions(transactionsList)
         await setCachedData(CACHE_KEY, transactionsList)
         setHasAttemptedLoad(true)
         dataLoadedRef.current = true
-      } else if ((response as any).isNetworkError) {
-        // Network error - keep cached data if available
-        console.warn("Network error fetching transactions, keeping cached data")
-        if (!cached) {
-          setRecentTransactions([])
-        }
-        setHasAttemptedLoad(true)
-      } else {
-        // Other error - set empty if no cache
-        if (!cached) {
-          setRecentTransactions([])
-        }
-        setHasAttemptedLoad(true)
       }
     } catch (error: any) {
       if (error?.message?.includes('Network request failed') || error?.name === 'TypeError') {

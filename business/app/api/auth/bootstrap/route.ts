@@ -117,7 +117,7 @@ export async function POST(request: Request) {
   // Support both migrated and pre-migration schemas.
   const { error: upsertErrWithRole } = await admin
     .from("users")
-    .upsert({ ...baseUserPayload, easner_role: role }, { onConflict: "id" })
+    .upsert({ ...baseUserPayload, role }, { onConflict: "id" })
   if (upsertErrWithRole) {
     const { error: upsertErrNoRole } = await admin.from("users").upsert(baseUserPayload, { onConflict: "id" })
     if (upsertErrNoRole) {
@@ -185,7 +185,7 @@ export async function POST(request: Request) {
 
   const { error: linkErrWithRole } = await admin
     .from("users")
-    .upsert({ ...userLinkPayload, easner_role: "business" }, { onConflict: "id" })
+    .upsert({ ...userLinkPayload, role: "business" }, { onConflict: "id" })
   if (linkErrWithRole) {
     const { error: linkErrNoRole } = await admin.from("users").upsert(userLinkPayload, { onConflict: "id" })
     if (linkErrNoRole) {

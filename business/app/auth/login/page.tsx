@@ -19,6 +19,7 @@ import {
   totpFactorsFromListResponse,
 } from "@/lib/auth-mfa"
 import { getSafeNextPath } from "@/lib/auth/safe-next-path"
+import { ensureBusinessWebSurface } from "@/lib/auth/validate-surface-client"
 
 type Step = "password" | "mfa"
 
@@ -74,6 +75,14 @@ export default function LoginPage() {
       const message = err instanceof Error ? err.message : "Invalid credentials"
       if (message.toLowerCase().includes("email not confirmed")) {
         setError("Please confirm your email before signing in.")
+      } else if (
+        message.includes("Easner") ||
+        message.includes("mobile app") ||
+        message.includes("Office") ||
+        message.includes("Business web") ||
+        message.includes("Organization accounts")
+      ) {
+        setError(message)
       } else {
         setError("Invalid credentials")
       }
@@ -108,6 +117,12 @@ export default function LoginPage() {
       })
       if (vErr) {
         setError(vErr.message || "Invalid code.")
+        return
+      }
+      try {
+        await ensureBusinessWebSurface(supabase)
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "This account cannot access Easner Business.")
         return
       }
       router.push(nextPath || "/dashboard")

@@ -66,7 +66,6 @@ import MobileMoneyScreen from '../screens/send/MobileMoneyScreen'
 
 // Receive Money Flow Screens
 import ReceiveMoneyScreen from '../screens/receive/ReceiveMoneyScreen'
-import MoveFundsScreen from '../screens/receive/MoveFundsScreen'
 import ReceiveTransactionDetailsScreen from '../screens/receive/ReceiveTransactionDetailsScreen'
 
 // Verification Screens
@@ -690,14 +689,6 @@ function MainStack() {
         name="OpenCurrencyAccount"
         component={OpenCurrencyAccountScreen}
         options={{
-          headerShown: false,
-          ...getTransitionConfig(),
-        }}
-      />
-      <Stack.Screen 
-        name="MoveFunds" 
-        component={MoveFundsScreen}
-        options={{ 
           headerShown: false,
           ...getTransitionConfig(),
         }}
