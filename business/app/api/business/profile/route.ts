@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { countries } from "@/lib/countries"
+import { countries, displayCountryFromBusinessSetting } from "@/lib/countries"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { validateEasetag, normalizeEasetag } from "@/lib/easetag-validation"
@@ -250,8 +250,11 @@ export async function GET(request: Request) {
       city: org?.city ?? "",
       state: org?.state ?? "",
       postalCode: org?.postal_code ?? "",
-      country: org?.country ?? null,
-      countryCode: countryCodeFromName(org?.country),
+      country: (() => {
+        const d = displayCountryFromBusinessSetting(org?.country)
+        return d || null
+      })(),
+      countryCode: countryCodeFromName(displayCountryFromBusinessSetting(org?.country) || org?.country),
       onboardingComplete,
       role: userRow?.easner_role ?? "business",
       ownerName,
@@ -296,20 +299,31 @@ export async function PUT(request: Request) {
     typeof user.user_metadata?.name === "string" ? user.user_metadata.name : null,
   )
 
-  if (body.countryCode !== undefined) {
-    const cc = normalizeCountryCode(body.countryCode)
-    if (cc && !(await isCountryAllowedForSurface(admin, cc, "kyb"))) {
-      return NextResponse.json(
-        { error: "This country is not allowed for your business profile." },
-        { status: 400 },
-      )
-    }
-  }
-
-  const countryCode = normalizeCountryCode(body.countryCode)
-  const country = countryNameFromCode(countryCode)
   const updates: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
+  }
+
+  if (body.countryCode !== undefined) {
+    if (typeof body.countryCode !== "string") {
+      return NextResponse.json({ error: "Invalid country code" }, { status: 400 })
+    }
+    const raw = body.countryCode.trim()
+    if (raw === "") {
+      updates.country = null
+    } else {
+      const cc = normalizeCountryCode(body.countryCode)
+      if (!cc) {
+        return NextResponse.json({ error: "Invalid country code" }, { status: 400 })
+      }
+      if (!(await isCountryAllowedForSurface(admin, cc, "kyb"))) {
+        return NextResponse.json(
+          { error: "This country is not allowed for your business profile." },
+          { status: 400 },
+        )
+      }
+      const name = countryNameFromCode(cc)
+      if (name) updates.country = name
+    }
   }
 
   if (body.easetag !== undefined) {
@@ -348,7 +362,6 @@ export async function PUT(request: Request) {
   if (body.city !== undefined) updates.city = body.city?.trim() || null
   if (body.state !== undefined) updates.state = body.state?.trim() || null
   if (body.postalCode !== undefined) updates.postal_code = body.postalCode?.trim() || null
-  if (country !== null) updates.country = country
 
   const { error } = await admin.from("businesses").update(updates).eq("id", businessId)
   if (error) {

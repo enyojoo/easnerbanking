@@ -10,7 +10,7 @@ export const businessInfo = {
   city: "",
   state: "",
   zipCode: "",
-  country: "United States",
+  country: "",
   email: "support@easner.com",
   phone: "",
   website: "https://easner.com",

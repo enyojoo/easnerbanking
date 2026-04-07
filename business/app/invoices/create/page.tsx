@@ -350,7 +350,7 @@ export default function CreateInvoicePage() {
     }
   }, [isEditMode, formData.customerId, profileLoading, baseCurrency])
 
-  // Deep link from Settings → Customers: ?customer=<b2b_customer id>
+  // Deep link from Settings → Customers: ?customer=<business_customers.id>
   useEffect(() => {
     if (!customerFromUrl || isEditMode) return
     const c = customers.find((x) => x.id === customerFromUrl)

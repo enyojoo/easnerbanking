@@ -209,3 +209,18 @@ const priorityCountries = EASNER_COUNTRY_PICKER_PRIORITY.map((code) => countries
 )
 const otherCountries = countriesRaw.filter((c) => !prioritySet.has(c.code))
 export const countries: Country[] = [...priorityCountries, ...otherCountries]
+
+/**
+ * Normalize `businesses.country` for invoices/PDFs: use full country name, mapping ISO 3166-1 alpha-2
+ * when the DB still holds a two-letter code (legacy or imports).
+ */
+export function displayCountryFromBusinessSetting(stored: string | null | undefined): string {
+  const t = (stored ?? "").trim()
+  if (!t) return ""
+  if (/^[A-Za-z]{2}$/.test(t)) {
+    const code = t.toUpperCase()
+    const m = countries.find((c) => c.code === code)
+    return m?.name ?? t
+  }
+  return t
+}

@@ -36,14 +36,17 @@ export interface RecipientCatalogEntry {
   fields: RecipientFieldSpec[]
 }
 
-/** Noah payout network names (docs.noah.com/products/global-payouts-api). EURC/SOL → Solana; BTC → Bitcoin. */
+/**
+ * Noah production `Network` strings (same catalog as business `WALLET_ASSET_NETWORKS`).
+ * Polygon PoS → `PolygonPos` per Noah automated payout / on-chain workflow schema.
+ */
 export const walletAssetNetworkMap: Record<string, string[]> = {
-  USDT: ['Base', 'Bitcoin', 'Celo', 'Ethereum'],
-  USDC: ['Base', 'Bitcoin', 'Celo', 'Ethereum', 'FlowEvm', 'Gnosis', 'Lightning'],
-  EURC: ['Solana'],
+  USDC: ['Base', 'Celo', 'Ethereum', 'Gnosis', 'PolygonPos', 'Solana', 'Tron'],
+  USDT: ['Celo', 'Ethereum', 'PolygonPos', 'Tron'],
   BTC: ['Bitcoin'],
+  EURC: ['Solana'],
   SOL: ['Solana'],
-  PYUSD: ['Base', 'Bitcoin'],
+  PYUSD: ['FlowEvm', 'Solana'],
 }
 
 const bankDefaultFields: RecipientFieldSpec[] = [
@@ -244,7 +247,7 @@ export const recipientCatalog: RecipientCatalogEntry[] = [
   { countryCode: 'ID', countryName: 'Indonesia', currencyCode: 'IDR', currencyName: 'Indonesian Rupiah', recipientType: 'mobile_money', status: 'supported', providers: ['DANA', 'OVO', 'GoPay'], fields: mobileMoneyFields },
   { countryCode: 'IN', countryName: 'India', currencyCode: 'INR', currencyName: 'Indian Rupee', recipientType: 'mobile_money', status: 'supported', providers: ['UPI'], fields: mobileMoneyFields },
   { countryCode: 'NG', countryName: 'Nigeria', currencyCode: 'USDT', currencyName: 'Tether USD', recipientType: 'wallet', status: 'supported', providers: ['TRON', 'Ethereum', 'Solana'], fields: walletFields },
-  { countryCode: 'KE', countryName: 'Kenya', currencyCode: 'USDC', currencyName: 'USD Coin', recipientType: 'wallet', status: 'supported', providers: ['Ethereum', 'Solana', 'Polygon'], fields: walletFields },
+  { countryCode: 'KE', countryName: 'Kenya', currencyCode: 'USDC', currencyName: 'USD Coin', recipientType: 'wallet', status: 'supported', providers: ['Ethereum', 'Solana', 'PolygonPos'], fields: walletFields },
   { countryCode: 'US', countryName: 'United States', currencyCode: 'EURC', currencyName: 'Euro Coin', recipientType: 'wallet', status: 'supported', providers: ['Solana'], fields: walletFields },
   { countryCode: 'US', countryName: 'United States', currencyCode: 'BTC', currencyName: 'Bitcoin', recipientType: 'wallet', status: 'supported', providers: ['Bitcoin'], fields: walletFields },
   { countryCode: 'US', countryName: 'United States', currencyCode: 'SOL', currencyName: 'Solana', recipientType: 'wallet', status: 'supported', providers: ['Solana'], fields: walletFields },

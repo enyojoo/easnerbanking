@@ -16,7 +16,7 @@ export async function GET() {
   try {
     const admin = createSupabaseAdmin()
     const { data: rows, error } = await admin
-      .from("b2b_customers")
+      .from("business_customers")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(200)

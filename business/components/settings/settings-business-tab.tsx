@@ -43,6 +43,22 @@ function getCountryFromCode(code: string) {
   return countries.find((c) => c.code === code)
 }
 
+/** Prefer API code; derive from stored country name so we never fall back to a guess like US. */
+function countryCodeFromProfile(profile: Pick<BusinessProfile, "countryCode" | "country">): string {
+  const fromApi = profile.countryCode?.trim().toUpperCase()
+  if (fromApi && getCountryFromCode(fromApi)) return fromApi
+  const stored = profile.country?.trim()
+  if (stored) {
+    if (/^[A-Za-z]{2}$/.test(stored)) {
+      const iso = stored.toUpperCase()
+      if (getCountryFromCode(iso)) return iso
+    }
+    const m = countries.find((c) => c.name.toLowerCase() === stored.toLowerCase())
+    if (m) return m.code
+  }
+  return ""
+}
+
 type BusinessSettingsForm = {
   businessName: string
   easetag: string
@@ -71,7 +87,7 @@ export function SettingsBusinessTab() {
     error: baseCurrenciesError,
   } = useAllowedBaseCurrencies()
   const kybCountryPolicy = useAllowedCountryCodes("kyb")
-  const [countryCode, setCountryCode] = useState("US")
+  const [countryCode, setCountryCode] = useState("")
   const [countryOpen, setCountryOpen] = useState(false)
   const countriesForKybPicker = useMemo(() => {
     const base = filterCountriesByPolicy(
@@ -111,10 +127,10 @@ export function SettingsBusinessTab() {
     if (profile.isLoading) return
     // Avoid overwriting Easetag (and racing the availability check) while editing business details.
     if (editingSection === "business") return
-    const code = profile.countryCode ?? "US"
+    const code = countryCodeFromProfile(profile)
     setCountryCode(code)
     const c = getCountryFromCode(code)
-    if (c) setFormData((prev) => ({ ...prev, country: c.name }))
+    const countryLabel = profile.country?.trim() || c?.name || ""
     setFormData((prev) => ({
       ...prev,
       businessName: profile.name || prev.businessName,
@@ -132,7 +148,7 @@ export function SettingsBusinessTab() {
       city: profile.city || prev.city,
       state: profile.state || prev.state,
       zipCode: profile.postalCode || prev.zipCode,
-      country: profile.country || prev.country,
+      country: countryLabel,
     }))
   }, [
     profile.isLoading,
@@ -190,7 +206,7 @@ export function SettingsBusinessTab() {
         })
       } else if (section === "legal") {
         updated = await updateBusinessProfile({
-          countryCode,
+          ...(countryCode.trim() ? { countryCode } : {}),
           registrationNumber: formData.registrationNumber,
           taxId: formData.taxId,
         })
@@ -200,7 +216,6 @@ export function SettingsBusinessTab() {
           city: formData.city,
           state: formData.state,
           postalCode: formData.zipCode,
-          countryCode,
         })
       } else if (section === "public") {
         updated = await updateBusinessProfile({
@@ -216,7 +231,7 @@ export function SettingsBusinessTab() {
     if (!updated) return
 
     const p = updated
-    const nextCountryCode = p.countryCode ?? "US"
+    const nextCountryCode = countryCodeFromProfile(p)
     setCountryCode(nextCountryCode)
     const countryRow = getCountryFromCode(nextCountryCode)
     setFormData((prev) => ({
@@ -236,7 +251,7 @@ export function SettingsBusinessTab() {
       city: p.city || prev.city,
       state: p.state || prev.state,
       zipCode: p.postalCode || prev.zipCode,
-      country: p.country || countryRow?.name || prev.country,
+      country: p.country?.trim() || countryRow?.name || prev.country,
     }))
     setEditingSection(null)
   }

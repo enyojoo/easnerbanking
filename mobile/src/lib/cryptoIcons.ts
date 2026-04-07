@@ -14,7 +14,7 @@ const networkIcons: Record<string, string> = {
   Ethereum: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png",
   FlowEvm: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png",
   Gnosis: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/xdai/info/logo.png",
-  Lightning: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/bitcoin/info/logo.png",
+  PolygonPos: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png",
   Solana: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/solana/info/logo.png",
   Tron: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/tron/info/logo.png",
 }

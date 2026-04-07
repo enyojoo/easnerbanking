@@ -1,4 +1,5 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { displayCountryFromBusinessSetting } from "@/lib/countries"
 import type { BusinessProfile } from "@/lib/use-business-profile"
 
 /** Header block for invoice PDF + customer-facing invoice HTML (matches `InvoicePDFDocument` fields). */
@@ -25,13 +26,17 @@ const EMPTY_ISSUER: InvoicePdfIssuer = {
 }
 
 export function issuerFromBusinessProfile(profile: BusinessProfile): InvoicePdfIssuer {
+  const country =
+    displayCountryFromBusinessSetting(profile.country) ||
+    displayCountryFromBusinessSetting(profile.countryCode) ||
+    ""
   return {
     name: profile.name?.trim() || "Business",
     address: profile.addressLine1?.trim() || "",
     city: profile.city?.trim() || "",
     state: profile.state?.trim() || "",
     zipCode: profile.postalCode?.trim() || "",
-    country: profile.country?.trim() || "",
+    country,
     email: profile.supportEmail?.trim() || "",
     phone: profile.supportPhone?.trim() || "",
   }
@@ -51,13 +56,14 @@ export async function fetchInvoiceIssuerForBusiness(
 
   if (error || !org) return { ...EMPTY_ISSUER, name: "Business" }
 
+  const countryRaw = (org.country as string | null)?.trim() || ""
   return {
     name: (org.name as string | null)?.trim() || "Business",
     address: (org.address_line1 as string | null)?.trim() || "",
     city: (org.city as string | null)?.trim() || "",
     state: (org.state as string | null)?.trim() || "",
     zipCode: (org.postal_code as string | null)?.trim() || "",
-    country: (org.country as string | null)?.trim() || "",
+    country: displayCountryFromBusinessSetting(countryRaw || null) || "",
     email: (org.support_email as string | null)?.trim() || "",
     phone: (org.support_phone as string | null)?.trim() || "",
   }

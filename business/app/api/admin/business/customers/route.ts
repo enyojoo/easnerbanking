@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   const businessId = searchParams.get("businessId")
 
   const admin = createSupabaseAdmin()
-  let q = admin.from("b2b_customers").select("*").order("created_at", { ascending: false })
+  let q = admin.from("business_customers").select("*").order("created_at", { ascending: false })
   if (businessId) {
     q = q.eq("business_id", businessId)
   }

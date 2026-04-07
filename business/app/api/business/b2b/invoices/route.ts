@@ -58,7 +58,7 @@ export async function POST(request: Request) {
 
   if (customerId) {
     const { data: cust } = await admin
-      .from("b2b_customers")
+      .from("business_customers")
       .select("id")
       .eq("id", customerId)
       .eq("business_id", ctx.businessId)

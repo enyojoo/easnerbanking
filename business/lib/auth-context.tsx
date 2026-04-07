@@ -68,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!data.session) return
 
       const onboarding = getOnboarding()
-      const countryCode = onboarding?.countryCode || "US"
+      const countryCode = onboarding?.countryCode?.trim() || undefined
       const role = "business"
       const fullNameFromMeta =
         typeof user.user_metadata?.name === "string"
@@ -79,7 +79,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await fetchWithSession("/api/auth/bootstrap", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ countryCode, role, fullName: fullNameFromMeta || null }),
+          body: JSON.stringify({
+            ...(countryCode ? { countryCode } : {}),
+            role,
+            fullName: fullNameFromMeta || null,
+          }),
         })
       } catch (error) {
         console.error("auth bootstrap failed", error)

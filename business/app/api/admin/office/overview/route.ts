@@ -29,7 +29,7 @@ export async function GET(request: Request) {
       .select("id", { count: "exact", head: true })
       .gte("created_at", sinceIso)
       .lte("created_at", untilIso),
-    admin.from("b2b_customers").select("id", { count: "exact", head: true }),
+    admin.from("business_customers").select("id", { count: "exact", head: true }),
     admin.from("invoices").select("id", { count: "exact", head: true }),
   ])
 

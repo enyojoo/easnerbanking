@@ -45,7 +45,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   if (customerId) {
     const { data: cust } = await admin
-      .from("b2b_customers")
+      .from("business_customers")
       .select("id")
       .eq("id", customerId)
       .eq("business_id", ctx.businessId)

@@ -13,7 +13,7 @@ import { useAuth } from "@/lib/auth-context"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { useCachedData } from "@/lib/use-cached-data"
 
-const B2B_CUSTOMERS_CACHE_TTL_MS = 60 * 60 * 1000
+const BUSINESS_CUSTOMERS_CACHE_TTL_MS = 60 * 60 * 1000
 
 interface CustomersContextValue {
   customers: Customer[]
@@ -54,10 +54,10 @@ export function CustomersProvider({ children }: { children: ReactNode }) {
     refetch,
   } = useCachedData<Customer[]>({
     enabled: !authLoading && Boolean(user?.id),
-    cacheKey: user?.id ? CACHE_KEYS.B2B_CUSTOMERS(user.id) : null,
-    persistKey: user?.id ? `easner_b2b_customers_${user.id}` : undefined,
+    cacheKey: user?.id ? CACHE_KEYS.BUSINESS_CUSTOMERS(user.id) : null,
+    persistKey: user?.id ? `easner_business_customers_${user.id}` : undefined,
     initialData: [],
-    ttlMs: B2B_CUSTOMERS_CACHE_TTL_MS,
+    ttlMs: BUSINESS_CUSTOMERS_CACHE_TTL_MS,
     fetcher: fetchCustomers,
     onError: onLoadError,
   })
@@ -167,9 +167,9 @@ export function CustomersProvider({ children }: { children: ReactNode }) {
   )
 }
 
-/** Invalidate cached B2B customers for a user (e.g. after org switch). */
-export function invalidateB2bCustomersCache(userId: string) {
-  dataCache.invalidate(CACHE_KEYS.B2B_CUSTOMERS(userId))
+/** Invalidate cached business customers for a user (e.g. after org switch). */
+export function invalidateBusinessCustomersCache(userId: string) {
+  dataCache.invalidate(CACHE_KEYS.BUSINESS_CUSTOMERS(userId))
 }
 
 export function useCustomers() {

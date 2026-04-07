@@ -234,9 +234,10 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
     // For crypto deposits (liquidation address), show "USDC on SOL" or "EURC on SOL" format
     if (transaction.source_type === 'liquidation_address') {
       const railMap: Record<string, string> = {
-        'solana': 'SOL',
-        'ethereum': 'ETH',
-        'polygon': 'MATIC',
+        solana: 'SOL',
+        ethereum: 'ETH',
+        polygon: 'MATIC',
+        polygonpos: 'MATIC',
       }
       const railDisplay = railMap[railLower] || railLower.toUpperCase()
       // Map USD->USDC, EUR->EURC from metadata or transaction currency

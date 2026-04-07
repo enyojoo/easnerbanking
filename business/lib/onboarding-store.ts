@@ -39,7 +39,7 @@ export function mergeOnboarding(data: Partial<OnboardingData>) {
   try {
     const prev = getOnboarding()
     const next: OnboardingData = {
-      countryCode: data.countryCode ?? prev?.countryCode ?? "US",
+      countryCode: data.countryCode ?? prev?.countryCode ?? "",
       businessName: data.businessName !== undefined ? data.businessName : prev?.businessName,
       businessLogo: data.businessLogo !== undefined ? data.businessLogo : prev?.businessLogo,
       businessType: data.businessType !== undefined ? data.businessType : prev?.businessType,

@@ -171,9 +171,9 @@ export async function POST(request: Request) {
     } else {
       businessId = insertedWithCountry.id
     }
-  } else if (country) {
-    await admin.from("businesses").update({ country }).eq("id", businessId)
   }
+  // Do not overwrite `businesses.country` on existing orgs: settings / onboarding may diverge from
+  // signup localStorage, and the client defaults a missing code to US — that would revert KYB country.
 
   const userLinkPayload = {
     id: user.id,

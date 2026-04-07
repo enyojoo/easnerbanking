@@ -10,7 +10,7 @@ export async function GET(request: Request) {
 
   const admin = createSupabaseAdmin()
   const { data, error } = await admin
-    .from("b2b_customers")
+    .from("business_customers")
     .select("*")
     .eq("business_id", ctx.businessId)
     .order("created_at", { ascending: false })
@@ -56,7 +56,7 @@ export async function POST(request: Request) {
 
   const admin = createSupabaseAdmin()
   const { data, error } = await admin
-    .from("b2b_customers")
+    .from("business_customers")
     .insert({
       business_id: ctx.businessId,
       name,

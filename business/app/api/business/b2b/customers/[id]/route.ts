@@ -19,7 +19,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const admin = createSupabaseAdmin()
   const { data: existing, error: fetchErr } = await admin
-    .from("b2b_customers")
+    .from("business_customers")
     .select("id")
     .eq("id", id)
     .eq("business_id", ctx.businessId)
@@ -48,7 +48,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 
   const { data, error } = await admin
-    .from("b2b_customers")
+    .from("business_customers")
     .update(updates)
     .eq("id", id)
     .eq("business_id", ctx.businessId)
@@ -69,7 +69,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
 
   const admin = createSupabaseAdmin()
   const { error } = await admin
-    .from("b2b_customers")
+    .from("business_customers")
     .delete()
     .eq("id", id)
     .eq("business_id", ctx.businessId)

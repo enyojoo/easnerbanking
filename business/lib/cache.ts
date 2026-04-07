@@ -101,8 +101,8 @@ export const CACHE_KEYS = {
   AUTOPAYOUT_PAYER_WALLETS: (userId: string) => `autopayout_payer_wallets_${userId}`,
   /** Ledger transactions for the business (`GET /api/transactions`). */
   TRANSACTIONS_LIST: (userId: string) => `transactions_list_${userId}`,
-  /** B2B customer list (`GET /api/business/b2b/customers`). */
-  B2B_CUSTOMERS: (userId: string) => `b2b_customers_${userId}`,
+  /** Business customer directory (`GET /api/business/b2b/customers`; table `business_customers`). */
+  BUSINESS_CUSTOMERS: (userId: string) => `business_customers_${userId}`,
   /** B2B invoice list (`GET /api/business/b2b/invoices`). */
   B2B_INVOICES: (userId: string) => `b2b_invoices_${userId}`,
   /** Pay-in details per org user + invoice fiat currency (VA + wallet). */
