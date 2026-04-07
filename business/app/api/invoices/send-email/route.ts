@@ -6,6 +6,7 @@ import { fetchInvoiceIssuerForBusiness } from "@/lib/invoices/issuer"
 import { resolvePayInForBusiness } from "@/lib/invoices/resolve-pay-in-for-business"
 import { sendInvoiceEmail } from "@/lib/invoice-email-service"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { invoicePublicViewPath } from "@/lib/invoice-public-url"
 import {
   canProvisionInvoiceDepositInstructions,
   TIER2_COMPLETE_PLACEHOLDER,
@@ -92,7 +93,16 @@ export async function POST(request: NextRequest) {
       request.headers.get("x-forwarded-host") ||
       "http://localhost:3000"
     const baseUrl = origin.startsWith("http") ? origin : `https://${origin}`
-    const invoiceViewUrl = `${baseUrl}/invoice-view/${invoice.id}`
+    const { data: bizRow } = await admin
+      .from("businesses")
+      .select("easetag")
+      .eq("id", ctx.businessId)
+      .maybeSingle()
+    const easetag =
+      typeof bizRow?.easetag === "string" && bizRow.easetag.trim() ? bizRow.easetag.trim() : null
+    const invoiceViewUrl = easetag
+      ? `${baseUrl}${invoicePublicViewPath(easetag, invoice.invoiceNumber)}`
+      : `${baseUrl}/invoice-view/${invoice.id}`
 
     const result = await sendInvoiceEmail(invoice, invoiceViewUrl, pdfBuffer, {
       businessName: issuer.name,

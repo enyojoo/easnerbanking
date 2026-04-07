@@ -17,8 +17,9 @@ const ICON =
 
 export const metadata: Metadata = {
   title: "Easner Business Banking",
-  description: "Easner Business Banking - Modern banking built on Column infrastructure",
-  generator: "v0.app",
+  description:
+    "Stablecoin-powered banking infrastructure with multi-currency accounts, cards, invoicing, and payments collections.",
+  generator: "Easner",
   icons: {
     icon: ICON,
     apple: [{ url: ICON }],

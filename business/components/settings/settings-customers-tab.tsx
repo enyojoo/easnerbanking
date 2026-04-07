@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import Link from "next/link"
-import { useRouter, useSearchParams } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
   Card,
   CardContent,
@@ -58,10 +58,13 @@ import { getCustomerStats } from "@/lib/b2b/customer-stats"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { Customer, Invoice } from "@/lib/b2b/types"
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge"
+import { currentLocationPath, withReturnTo } from "@/lib/invoice-navigation"
 
 export function SettingsCustomersTab() {
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
+  const settingsHere = currentLocationPath(pathname, searchParams)
   const detailId = searchParams.get("customer")?.trim() || null
 
   const { customers, loading, error, addCustomer, updateCustomer, deleteCustomer } = useCustomers()
@@ -417,7 +420,7 @@ function CustomerDetailInSettings({
                     <Pencil className="h-4 w-4 mr-2" />
                     Edit
                   </Button>
-                  <Link href={`/invoices/create?customer=${customer.id}`}>
+                  <Link href={withReturnTo(`/invoices/create?customer=${customer.id}`, settingsHere)}>
                     <Button size="sm">
                       <Plus className="h-4 w-4 mr-2" />
                       Create Invoice
@@ -472,7 +475,7 @@ function CustomerDetailInSettings({
                   {customerInvoices.map((invoice) => (
                     <Link
                       key={invoice.id}
-                      href={`/invoices/${invoice.id}`}
+                      href={withReturnTo(`/invoices/${invoice.id}`, settingsHere)}
                       className="flex items-center justify-between py-4 hover:bg-muted/50 -mx-4 px-4 rounded-lg transition-colors"
                     >
                       <div>

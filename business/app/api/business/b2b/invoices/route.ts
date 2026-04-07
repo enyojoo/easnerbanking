@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server"
-import { mapRowToInvoice, invoiceToDbPayload, type B2bInvoiceRow } from "@/lib/b2b/map-invoice"
+import {
+  mapRowToInvoice,
+  invoiceToDbPayload,
+  isUuid,
+  type B2bInvoiceRow,
+} from "@/lib/b2b/map-invoice"
 import { requireBusinessOrg } from "@/lib/b2b/resolve-org"
 import type { Invoice } from "@/lib/b2b/types"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
@@ -33,14 +38,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
   }
 
-  if (!invoice.invoiceNumber?.trim()) {
+  const rawInvNum =
+    typeof invoice.invoiceNumber === "string"
+      ? invoice.invoiceNumber.trim()
+      : invoice.invoiceNumber != null && typeof invoice.invoiceNumber === "number"
+        ? String(invoice.invoiceNumber)
+        : ""
+  if (!rawInvNum) {
     return NextResponse.json({ error: "invoiceNumber is required" }, { status: 400 })
   }
 
-  const customerId =
-    typeof invoice.customerId === "string" && invoice.customerId.length > 0
-      ? invoice.customerId
+  const rawCustomerId =
+    typeof invoice.customerId === "string" && invoice.customerId.trim().length > 0
+      ? invoice.customerId.trim()
       : null
+  const customerId = rawCustomerId && isUuid(rawCustomerId) ? rawCustomerId : null
 
   const admin = createSupabaseAdmin()
 
@@ -56,16 +68,31 @@ export async function POST(request: Request) {
     }
   }
 
-  const payload = invoiceToDbPayload({
-    businessId: ctx.businessId,
-    customerId,
-    invoice,
-  })
+  let payload: Record<string, unknown>
+  try {
+    payload = invoiceToDbPayload({
+      businessId: ctx.businessId,
+      customerId,
+      invoice,
+    })
+  } catch (e) {
+    console.error("invoiceToDbPayload:", e)
+    const msg = e instanceof Error ? e.message : "Invalid invoice payload"
+    return NextResponse.json({ error: msg }, { status: 400 })
+  }
   delete (payload as { updated_at?: string }).updated_at
   const { data, error } = await admin.from("invoices").insert(payload).select("*").single()
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error("invoices POST insert:", error)
+    return NextResponse.json(
+      {
+        error: error.message,
+        code: error.code,
+        details: error.details,
+      },
+      { status: 500 },
+    )
   }
 
   return NextResponse.json({ invoice: mapRowToInvoice(data as B2bInvoiceRow) })

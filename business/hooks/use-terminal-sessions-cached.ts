@@ -13,6 +13,7 @@ export type TerminalSessionListItem = {
   fiat_currency: string
   crypto_currency: string
   network: string
+  crypto_amount_expected: string | null
   destination_address: string | null
   created_at: string
 }

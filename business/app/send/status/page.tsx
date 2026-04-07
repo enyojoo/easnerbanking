@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { useState } from "react"
 import { CheckCircle2, Clock, ArrowLeft, Copy, Check } from "lucide-react"
 import Link from "next/link"
-import { currencySymbols } from "@/lib/currency-meta"
+import { getCurrencySymbol } from "@/lib/utils"
 import { Suspense } from "react"
 
 const METHOD_MESSAGES: Record<string, { title: string; description: string }> = {
@@ -45,7 +45,7 @@ function TransferStatusContent() {
     }
   }
   const amount = searchParams.get("amount")
-  const currency = searchParams.get("currency") as keyof typeof currencySymbols
+  const currency = searchParams.get("currency") || ""
   const recipient = searchParams.get("recipient")
   const method = searchParams.get("method")
   const methodInfo = method ? METHOD_MESSAGES[method] : null
@@ -111,7 +111,7 @@ function TransferStatusContent() {
           <div className="flex justify-between items-center pb-4 border-b">
             <span className="text-sm text-muted-foreground">Amount</span>
             <span className="text-xl font-semibold">
-              {currencySymbols[currency]}
+              {getCurrencySymbol(currency)}
               {Number.parseFloat(amount || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })}
             </span>
           </div>

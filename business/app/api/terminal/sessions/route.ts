@@ -4,9 +4,16 @@ import { requireNoahEnv, requireAuth } from "@/app/api/noah/_helpers"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
 import { requireEasnerBusinessId } from "@/lib/terminal/context"
+import { isTerminalChargeFiatSupported } from "@/lib/noah/terminal-charge-fiats"
+import { resolveChargeToPayoutFiatAmount } from "@/lib/noah/terminal-charge-fx"
 import { resolveTerminalPayFiatCurrency } from "@/lib/noah/terminal-pay-fiat"
 import { isAllowedTerminalPair } from "@/lib/terminal-allowed-pairs"
 import { prepareSellFromRecipientRow } from "@/lib/terminal/recipient-sell-prepare"
+import {
+  isTerminalBalanceSettlementEnabled,
+  parseDefaultBalanceCurrency,
+  parseTerminalSettlementDestination,
+} from "@/lib/terminal/settlement-destination"
 import {
   pickDestinationAddress,
   pickTriggerCryptoAmount,
@@ -24,7 +31,7 @@ export async function GET(request: Request) {
   const { data, error } = await admin
     .from("terminal_sessions")
     .select(
-      "id, status, fiat_amount, fiat_currency, crypto_currency, network, destination_address, created_at, recipient_id, source_address, external_id, expires_at",
+      "id, status, fiat_amount, fiat_currency, crypto_currency, network, crypto_amount_expected, destination_address, created_at, recipient_id, source_address, external_id, expires_at, settlement_destination, balance_currency",
     )
     .eq("business_id", ctx.businessId)
     .order("created_at", { ascending: false })
@@ -61,6 +68,8 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => null)) as {
     fiat_amount?: string | number
+    /** ISO charge / counter currency (keypad). Falls back to org terminal fiat mapping when omitted. */
+    fiat_currency?: string
     crypto_currency?: string
     network?: string
     /** Resolve via `terminal_payouts` (preferred). */
@@ -90,8 +99,45 @@ export async function POST(request: Request) {
     .select("base_currency")
     .eq("id", biz.businessId)
     .maybeSingle()
-  /** Counter charge denomination only (`/pay` UI / session row). Bank payout currency = recipient from terminal setup. */
-  const fiatCurrency = resolveTerminalPayFiatCurrency(businessRow?.base_currency as string | null)
+  const bodyFiat = String(body?.fiat_currency || "").trim().toUpperCase()
+  const chargeFiatCurrency =
+    bodyFiat && isTerminalChargeFiatSupported(bodyFiat) ?
+      bodyFiat
+    : resolveTerminalPayFiatCurrency(businessRow?.base_currency as string | null)
+
+  const { data: terminalSettingsRow } = await admin
+    .from("terminal_settings")
+    .select("settlement_destination, default_balance_currency, default_terminal_payout_id")
+    .eq("business_id", biz.businessId)
+    .maybeSingle()
+
+  const settlementDestination = parseTerminalSettlementDestination(
+    terminalSettingsRow?.settlement_destination as string | null | undefined,
+  )
+  const snapshotBalanceCurrency = parseDefaultBalanceCurrency(
+    terminalSettingsRow?.default_balance_currency as string | null | undefined,
+  )
+
+  if (settlementDestination === "easner_balance") {
+    if (!isTerminalBalanceSettlementEnabled()) {
+      return NextResponse.json(
+        {
+          error:
+            "Settling to your Easner account balance is not available yet. Choose Bank or mobile payout in Setup payout, or contact support.",
+          code: "TERMINAL_BALANCE_SETTLEMENT_DISABLED",
+        },
+        { status: 501 },
+      )
+    }
+    return NextResponse.json(
+      {
+        error:
+          "Easner balance settlement requires Noah pay-in integration. This environment is not fully configured.",
+        code: "TERMINAL_BALANCE_SETTLEMENT_PENDING",
+      },
+      { status: 501 },
+    )
+  }
 
   let recipientId = String(body?.recipient_id || "").trim() || null
   const terminalPayoutIdBody = String(body?.terminal_payout_id || "").trim() || null
@@ -111,12 +157,7 @@ export async function POST(request: Request) {
   }
 
   if (!recipientId) {
-    const { data: settingsRow } = await admin
-      .from("terminal_settings")
-      .select("default_terminal_payout_id")
-      .eq("business_id", biz.businessId)
-      .maybeSingle()
-    const defPid = (settingsRow?.default_terminal_payout_id as string | null) ?? null
+    const defPid = (terminalSettingsRow?.default_terminal_payout_id as string | null) ?? null
     if (defPid) {
       recipientId = await resolveRecipientFromPayoutId(defPid)
     }
@@ -154,11 +195,34 @@ export async function POST(request: Request) {
     )
   }
 
+  const payoutFiat = String(recipientRow.currency || "USD")
+    .trim()
+    .toUpperCase()
+  let prepareFiatAmount: number
+  try {
+    const amtStr = await resolveChargeToPayoutFiatAmount({
+      userId: user.id,
+      chargeFiat: chargeFiatCurrency,
+      chargeAmount: fiatAmount,
+      payoutFiat,
+    })
+    prepareFiatAmount = Number.parseFloat(amtStr)
+    if (!Number.isFinite(prepareFiatAmount) || prepareFiatAmount <= 0) {
+      return NextResponse.json(
+        { error: "Could not compute payout amount for this currency pair." },
+        { status: 400 },
+      )
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return NextResponse.json({ error: msg }, { status: 400 })
+  }
+
   let prep: Awaited<ReturnType<typeof prepareSellFromRecipientRow>>
   try {
     prep = await prepareSellFromRecipientRow({
       row: recipientRow,
-      fiatAmount,
+      fiatAmount: prepareFiatAmount,
       cryptoCurrency,
       noahCustomerId: acc.ctx.noahCustomerId,
     })
@@ -184,7 +248,9 @@ export async function POST(request: Request) {
       crypto_currency: cryptoCurrency,
       network,
       fiat_amount: fiatAmount,
-      fiat_currency: fiatCurrency,
+      fiat_currency: chargeFiatCurrency,
+      settlement_destination: settlementDestination,
+      balance_currency: snapshotBalanceCurrency,
       crypto_amount_expected: prep.prep.cryptoAuthorizedAmount || prep.prep.cryptoAmountEstimate || null,
       status: "creating_workflow",
       noah_form_session_id: formSessionId,
@@ -209,7 +275,7 @@ export async function POST(request: Request) {
     workflowRaw = await startOnchainDepositToPaymentWorkflow({
       customerId: acc.ctx.noahCustomerId,
       cryptoCurrency,
-      fiatAmount: fiatAmount.toFixed(2),
+      fiatAmount: prepareFiatAmount.toFixed(2),
       formSessionId,
       externalId: sessionId,
       network,
@@ -248,6 +314,6 @@ export async function POST(request: Request) {
     crypto_currency: cryptoCurrency,
     network,
     fiat_amount: fiatAmount,
-    fiat_currency: fiatCurrency,
+    fiat_currency: chargeFiatCurrency,
   })
 }

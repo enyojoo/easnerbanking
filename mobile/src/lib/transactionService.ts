@@ -5,6 +5,17 @@ import type { TransactionData } from '../types'
 
 export type { TransactionData }
 
+async function emailNotificationHeaders(): Promise<Record<string, string>> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (session?.access_token) {
+    headers.Authorization = `Bearer ${session.access_token}`
+  }
+  return headers
+}
+
 export const transactionService = {
   async create(transactionData: {
     userId: string
@@ -57,13 +68,11 @@ export const transactionService = {
     try {
       console.log('Sending initial pending email for transaction:', data.transaction_id)
       const baseUrl = process.env.EXPO_PUBLIC_API_URL || 'https://app.easner.com'
-      
+      const headers = await emailNotificationHeaders()
       // Use fetch to call the email API endpoint
       fetch(`${baseUrl}/api/send-email-notification`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           type: 'transaction',
           transactionId: data.transaction_id,
@@ -87,13 +96,11 @@ export const transactionService = {
     try {
       console.log('Sending admin notification for new transaction:', data.transaction_id)
       const baseUrl = process.env.EXPO_PUBLIC_API_URL || 'https://app.easner.com'
-      
+      const headers = await emailNotificationHeaders()
       // Use fetch to call the admin notification API endpoint
       fetch(`${baseUrl}/api/send-email-notification`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           type: 'admin-transaction',
           transactionId: data.transaction_id,
@@ -197,13 +204,11 @@ export const transactionService = {
     try {
       console.log('Sending status update email for transaction:', transactionId, 'status:', status)
       const baseUrl = process.env.EXPO_PUBLIC_API_URL || 'https://app.easner.com'
-      
+      const headers = await emailNotificationHeaders()
       // Use fetch to call the email API endpoint
       fetch(`${baseUrl}/api/send-email-notification`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           type: 'transaction',
           transactionId: transactionId,

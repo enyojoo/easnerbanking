@@ -1,9 +1,8 @@
 import type { Metadata } from "next"
-import { businessInfo } from "@/lib/business-info"
 
+/** Per-invoice title uses the real business name in [id]/layout.tsx `generateMetadata`. */
 export const metadata: Metadata = {
-  title: `Invoice from ${businessInfo.name}`,
-  description: `View your invoice from ${businessInfo.name}`,
+  description: "View your invoice",
 }
 
 export default function InvoiceViewLayout({

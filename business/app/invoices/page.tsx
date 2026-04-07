@@ -35,10 +35,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import Link from "next/link"
-import { useRouter, useSearchParams } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { formatDate, formatCurrency } from "@/lib/utils"
 import { useInvoices } from "@/lib/invoices-context"
-import { generateInvoiceId } from "@/lib/invoice-id"
+import { formatInvoiceNumberFromClientId, generateInvoiceId } from "@/lib/invoice-id"
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge"
 import { downloadInvoicePdf } from "@/lib/use-invoice-pdf"
 import { toast } from "sonner"
@@ -51,9 +51,12 @@ import {
   TIER2_COMPLETE_PLACEHOLDER,
   canProvisionInvoiceDepositInstructions,
 } from "@/lib/compliance-placeholders"
+import { currentLocationPath, withReturnTo } from "@/lib/invoice-navigation"
 export default function InvoicesPage() {
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
+  const listHere = currentLocationPath(pathname, searchParams)
   const profile = useBusinessProfile()
   const { tier1Complete } = profile
   const issuer = issuerFromBusinessProfile(profile)
@@ -116,20 +119,20 @@ export default function InvoicesPage() {
 
   const handleEdit = (invoice: Invoice, e: React.MouseEvent) => {
     e.stopPropagation()
-    router.push(`/invoices/create?edit=${invoice.id}`)
+    router.push(withReturnTo(`/invoices/create?edit=${invoice.id}`, listHere))
   }
 
   const handleDuplicate = async (invoice: Invoice, e: React.MouseEvent) => {
     e.stopPropagation()
     const newId = generateInvoiceId()
-    const newInvoiceNumber = `EINV-${newId.slice(4)}`
-    const now = new Date().toISOString().split("T")[0]
+    const newInvoiceNumber = formatInvoiceNumberFromClientId(newId)
+    const nowIso = new Date().toISOString()
     const duplicate: Invoice = {
       ...invoice,
       id: newId,
       invoiceNumber: newInvoiceNumber,
       status: "draft",
-      createdDate: now,
+      createdDate: nowIso,
       finalizedDate: null,
       statusHistory: [],
       archived: false,
@@ -137,7 +140,7 @@ export default function InvoicesPage() {
     const created = await addInvoice(duplicate)
     if (created) {
       toast.success("Invoice duplicated")
-      router.push(`/invoices/create?edit=${created.id}`)
+      router.push(withReturnTo(`/invoices/create?edit=${created.id}`, listHere))
     } else {
       toast.error("Could not duplicate invoice")
     }
@@ -254,7 +257,7 @@ export default function InvoicesPage() {
             <h1 className="text-2xl font-semibold text-foreground">Invoices</h1>
             <p className="text-sm text-muted-foreground mt-1">Manage your billing and invoicing</p>
           </div>
-          <Link href="/invoices/create">
+          <Link href={withReturnTo("/invoices/create", listHere)}>
             <Button>
               <Plus className="h-4 w-4 mr-2" />
               Create invoice
@@ -323,7 +326,11 @@ export default function InvoicesPage() {
                 </thead>
                 <tbody className="divide-y">
                   {filteredInvoices.map((invoice) => (
-                    <tr key={invoice.id} className="hover:bg-muted/50 cursor-pointer" onClick={() => router.push(`/invoices/${invoice.id}`)}>
+                    <tr
+                      key={invoice.id}
+                      className="hover:bg-muted/50 cursor-pointer"
+                      onClick={() => router.push(withReturnTo(`/invoices/${invoice.id}`, listHere))}
+                    >
                       <td className="p-4 align-middle min-w-0">
                         <span className="font-medium text-sm block truncate">
                           {invoice.customerCompany?.trim() || invoice.customerName}
@@ -331,7 +338,7 @@ export default function InvoicesPage() {
                       </td>
                       <td className="p-4 align-middle min-w-0">
                         <Link
-                          href={`/invoices/${invoice.id}`}
+                          href={withReturnTo(`/invoices/${invoice.id}`, listHere)}
                           className="font-mono text-xs hover:text-primary transition-colors block truncate"
                           onClick={(e) => e.stopPropagation()}
                         >
@@ -366,7 +373,12 @@ export default function InvoicesPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); router.push(`/invoices/${invoice.id}`) }}>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                router.push(withReturnTo(`/invoices/${invoice.id}`, listHere))
+                              }}
+                            >
                               <Eye className="h-4 w-4 mr-2" />
                               View
                             </DropdownMenuItem>

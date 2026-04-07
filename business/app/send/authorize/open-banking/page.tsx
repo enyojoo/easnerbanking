@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { currencySymbols } from "@/lib/currency-meta"
+import { getCurrencySymbol } from "@/lib/utils"
 import { generateTransactionId } from "@/lib/transaction-id"
 import { ArrowLeft, Link2, Loader2, Copy, Check } from "lucide-react"
 
@@ -107,7 +107,7 @@ export default function OpenBankingPage() {
           <div className="flex justify-between items-center pb-4 border-b">
             <span className="text-sm text-muted-foreground">You send</span>
             <span className="font-semibold">
-              {currencySymbols[state.sendCurrency] ?? state.sendCurrency}
+              {getCurrencySymbol(state.sendCurrency)}
               {state.sendAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}{" "}
               {state.sendCurrency}
             </span>
@@ -115,7 +115,7 @@ export default function OpenBankingPage() {
           <div className="flex justify-between items-center pb-4 border-b">
             <span className="text-sm text-muted-foreground">Recipient gets</span>
             <span className="font-semibold">
-              {currencySymbols[state.receiveCurrency] ?? state.receiveCurrency}
+              {getCurrencySymbol(state.receiveCurrency)}
               {state.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}{" "}
               {state.receiveCurrency}
             </span>

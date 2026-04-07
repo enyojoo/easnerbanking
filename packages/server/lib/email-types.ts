@@ -45,4 +45,7 @@ export interface SendGridResponse {
   success: boolean
   messageId?: string
   error?: string
+  /** Present when the message was not sent because of communication_preferences */
+  skipped?: boolean
+  skipReason?: string
 }

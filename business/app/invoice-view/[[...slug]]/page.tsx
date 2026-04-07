@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useParams } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -8,12 +8,15 @@ import { Check, Copy, Download, Loader2 } from "lucide-react"
 import { businessInfo } from "@/lib/business-info"
 import type { Invoice } from "@/lib/b2b/types"
 import { formatDate, formatCurrency } from "@/lib/utils"
+import { getInvoiceDiscountAmount } from "@/lib/b2b/invoice-totals"
+import { invoicePublicViewPath } from "@/lib/invoice-public-url"
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge"
 import { InvoicePaymentOptions } from "@/components/invoice-payment-options"
 import { downloadInvoicePdf } from "@/lib/use-invoice-pdf"
 import { downloadInvoiceReceiptPdf } from "@/lib/use-invoice-receipt-pdf"
 import { getPaymentRecordDisplay } from "@/lib/deposits"
 import { BRAND } from "@/components/brand/brand-constants"
+import { LoadingSpinner } from "@/components/loading-spinner"
 import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
 import type { InvoicePayInPayload } from "@/lib/invoices/resolve-pay-in-for-business"
 
@@ -30,8 +33,14 @@ const FALLBACK_ISSUER: InvoicePdfIssuer = {
 
 export default function InvoiceViewPage() {
   const params = useParams()
-  const id = params.id as string
+  const parts = useMemo(() => {
+    const raw = params.slug
+    if (raw == null) return [] as string[]
+    return Array.isArray(raw) ? raw : [String(raw)]
+  }, [params.slug])
+
   const [invoice, setInvoice] = useState<Invoice | null>(null)
+  const [publicEasetag, setPublicEasetag] = useState<string | null>(null)
   const [issuer, setIssuer] = useState<InvoicePdfIssuer | null>(null)
   const [payIn, setPayIn] = useState<InvoicePayInPayload>({})
   const [loadState, setLoadState] = useState<"loading" | "error" | "ok">("loading")
@@ -44,14 +53,27 @@ export default function InvoiceViewPage() {
     let cancelled = false
     setLoadState("loading")
     setInvoice(null)
+    setPublicEasetag(null)
     setIssuer(null)
     setPayIn({})
-    fetch(`/api/invoices/public/${encodeURIComponent(id)}`)
+
+    if (parts.length !== 1 && parts.length !== 2) {
+      setLoadState("error")
+      return
+    }
+
+    const url =
+      parts.length === 1
+        ? `/api/invoices/public/by-id/${encodeURIComponent(parts[0])}`
+        : `/api/invoices/public/${encodeURIComponent(parts[0])}/${encodeURIComponent(parts[1])}`
+
+    fetch(url)
       .then(async (r) => {
         const data = (await r.json().catch(() => ({}))) as {
           invoice?: Invoice
           issuer?: InvoicePdfIssuer
           payIn?: InvoicePayInPayload
+          businessEasetag?: string | null
         }
         if (cancelled) return
         if (!r.ok || !data.invoice) {
@@ -59,6 +81,11 @@ export default function InvoiceViewPage() {
           return
         }
         setInvoice(data.invoice)
+        setPublicEasetag(
+          typeof data.businessEasetag === "string" && data.businessEasetag.trim()
+            ? data.businessEasetag.trim()
+            : null,
+        )
         setIssuer(data.issuer ?? null)
         const pi = data.payIn ?? {}
         setPayIn(pi)
@@ -71,24 +98,29 @@ export default function InvoiceViewPage() {
     return () => {
       cancelled = true
     }
-  }, [id])
+  }, [parts])
 
   const displayIssuer = issuer ?? FALLBACK_ISSUER
 
-  // Record view when page loads (API checks IP to distinguish customer vs business owner)
   useEffect(() => {
     if (invoice?.id) {
-      fetch(`/api/invoices/${invoice.id}/record-view`, { method: "POST" }).catch(
-        () => {}
-      )
+      fetch(`/api/invoices/${invoice.id}/record-view`, { method: "POST" }).catch(() => {})
     }
   }, [invoice?.id])
 
+  const publicViewUrl = useMemo(() => {
+    if (typeof window === "undefined" || !invoice) return ""
+    const origin = window.location.origin
+    if (publicEasetag) {
+      return `${origin}${invoicePublicViewPath(publicEasetag, invoice.invoiceNumber)}`
+    }
+    return `${origin}/invoice-view/${invoice.id}`
+  }, [invoice, publicEasetag])
+
   const handleCopyLink = async () => {
-    if (typeof window === "undefined" || !invoice) return
-    const url = `${window.location.origin}/invoice-view/${invoice.id}`
+    if (typeof window === "undefined" || !invoice || !publicViewUrl) return
     try {
-      await navigator.clipboard.writeText(url)
+      await navigator.clipboard.writeText(publicViewUrl)
       setCopiedLink(true)
       setTimeout(() => setCopiedLink(false), 2000)
     } catch (err) {
@@ -120,11 +152,7 @@ export default function InvoiceViewPage() {
   }
 
   if (loadState === "loading") {
-    return (
-      <div className="w-full max-w-2xl flex justify-center py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    )
+    return <LoadingSpinner />
   }
 
   if (loadState === "error" || !invoice) {
@@ -154,12 +182,7 @@ export default function InvoiceViewPage() {
     if (!invoice) return
     setIsDownloading(true)
     try {
-      await downloadInvoicePdf(
-        invoice,
-        bankAccount,
-        stablecoinAccount,
-        displayIssuer,
-      )
+      await downloadInvoicePdf(invoice, bankAccount, stablecoinAccount, displayIssuer)
     } catch (err) {
       console.error("Failed to download PDF:", err)
     } finally {
@@ -171,7 +194,6 @@ export default function InvoiceViewPage() {
     <div className="w-full max-w-2xl">
       <Card className="print:shadow-none print:border">
         <CardContent className="p-4 pt-1 pb-0.5 sm:p-6 sm:pt-2 sm:pb-1 lg:p-8 lg:pt-3 lg:pb-2">
-          {/* Copy & Download - top left & top right, inside frame */}
           <div className="flex justify-between items-center mb-6 print:hidden">
             <Button
               variant="outline"
@@ -202,7 +224,6 @@ export default function InvoiceViewPage() {
             </Button>
           </div>
 
-          {/* Business info & Invoice header - two columns on all screens */}
           <div className="grid grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
             <div className="min-w-0">
               <h2 className="text-base sm:text-lg font-semibold">{displayIssuer.name}</h2>
@@ -221,7 +242,6 @@ export default function InvoiceViewPage() {
             </div>
           </div>
 
-          {/* Bill to & Details */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 mb-6 sm:mb-8">
             <div className="text-left">
               <h3 className="text-xs font-semibold mb-2 text-muted-foreground uppercase tracking-wide">Bill to</h3>
@@ -271,9 +291,7 @@ export default function InvoiceViewPage() {
             </div>
           )}
 
-          {/* Line items - card layout on mobile, table on desktop */}
           <div className="mb-6">
-            {/* Mobile: card layout */}
             <div className="sm:hidden border rounded-lg overflow-hidden">
               <div className="flex justify-between items-center px-3 py-2.5 bg-muted text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 <span>Description</span>
@@ -296,7 +314,6 @@ export default function InvoiceViewPage() {
                 </div>
               ))}
             </div>
-            {/* Desktop: table */}
             <div className="hidden sm:block border rounded-lg overflow-hidden">
               <table className="w-full">
                 <thead className="bg-muted">
@@ -325,21 +342,38 @@ export default function InvoiceViewPage() {
             </div>
           </div>
 
-          {/* Total */}
           <div className="flex justify-end mb-6">
             <div className="text-right space-y-1">
-              {(invoice.tax ?? 0) > 0 && invoice.subtotal != null && (
+              {invoice.subtotal != null &&
+                ((invoice.tax ?? 0) > 0 ||
+                  (invoice.taxRate ?? 0) > 0 ||
+                  getInvoiceDiscountAmount(invoice) > 0) && (
                 <>
                   <div className="flex justify-between gap-8 text-sm">
                     <span className="text-muted-foreground">Subtotal</span>
                     <span>{formatCurrency(invoice.subtotal, invoice.currency)}</span>
                   </div>
-                  <div className="flex justify-between gap-8 text-sm">
-                    <span className="text-muted-foreground">
-                      Tax{invoice.taxRate != null && invoice.taxRate > 0 ? ` (${invoice.taxRate}%)` : ""}
-                    </span>
-                    <span>{formatCurrency(invoice.tax!, invoice.currency)}</span>
-                  </div>
+                  {getInvoiceDiscountAmount(invoice) > 0 && (
+                    <div className="flex justify-between gap-8 text-sm">
+                      <span className="text-muted-foreground">
+                        Discount
+                        {invoice.discountRate != null && invoice.discountRate > 0
+                          ? ` (${invoice.discountRate}%)`
+                          : ""}
+                      </span>
+                      <span>
+                        −{formatCurrency(getInvoiceDiscountAmount(invoice), invoice.currency)}
+                      </span>
+                    </div>
+                  )}
+                  {((invoice.tax ?? 0) > 0 || (invoice.taxRate ?? 0) > 0) && (
+                    <div className="flex justify-between gap-8 text-sm">
+                      <span className="text-muted-foreground">
+                        Tax{invoice.taxRate != null && invoice.taxRate > 0 ? ` (${invoice.taxRate}%)` : ""}
+                      </span>
+                      <span>{formatCurrency(invoice.tax ?? 0, invoice.currency)}</span>
+                    </div>
+                  )}
                 </>
               )}
               <div className="flex justify-between gap-8 items-baseline pt-1">
@@ -351,7 +385,6 @@ export default function InvoiceViewPage() {
             </div>
           </div>
 
-          {/* Invoice payment options */}
           {showPayCard && (bankAccount || stablecoinAccount) && (
             <InvoicePaymentOptions
               invoice={invoice}
@@ -362,105 +395,105 @@ export default function InvoiceViewPage() {
               audience="customer"
               value={paymentTab}
               onValueChange={setPaymentTab}
+              publicInvoiceEasetag={publicEasetag}
             />
           )}
 
-          {/* Invoice receipt - when paid */}
-          {showReceiptCard && (() => {
-            const paymentRecord = getPaymentRecordDisplay(invoice)
-            return (
-              <div className="rounded-lg border bg-muted/30 p-4 sm:p-6 space-y-4">
-                <h3 className="text-sm font-semibold">Invoice Receipt</h3>
-                {paymentRecord && (
-                  <div className="rounded-lg border bg-background p-4 space-y-3">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      Payment record
-                    </p>
-                    {paymentRecord.method === "easner" ? (
-                      <div className="space-y-2 text-sm">
-                        {paymentRecord.paymentMethod && (
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Method</span>
-                            <span>{paymentRecord.paymentMethod}</span>
-                          </div>
-                        )}
-                        {paymentRecord.amount != null && paymentRecord.currency && (
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Amount</span>
-                            <span>{formatCurrency(paymentRecord.amount, paymentRecord.currency)}</span>
-                          </div>
-                        )}
-                        {paymentRecord.date && (
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Date</span>
-                            <span>{formatDate(paymentRecord.date)}</span>
-                          </div>
-                        )}
-                        {paymentRecord.reference && (
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Reference</span>
-                            <span>{paymentRecord.reference}</span>
-                          </div>
-                        )}
-                        {paymentRecord.transactionId && (
-                          <div className="flex justify-between items-center">
-                            <span className="text-muted-foreground">Transaction ID</span>
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono text-xs">{paymentRecord.transactionId}</span>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0"
-                                onClick={() => copyToClipboard(paymentRecord.transactionId!, "payment-txn-id")}
-                              >
-                                {copiedField === "payment-txn-id" ? (
-                                  <Check className="h-3 w-3 text-green-600" />
-                                ) : (
-                                  <Copy className="h-3 w-3" />
-                                )}
-                              </Button>
+          {showReceiptCard &&
+            (() => {
+              const paymentRecord = getPaymentRecordDisplay(invoice)
+              return (
+                <div className="rounded-lg border bg-muted/30 p-4 sm:p-6 space-y-4">
+                  <h3 className="text-sm font-semibold">Invoice Receipt</h3>
+                  {paymentRecord && (
+                    <div className="rounded-lg border bg-background p-4 space-y-3">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                        Payment record
+                      </p>
+                      {paymentRecord.method === "easner" ? (
+                        <div className="space-y-2 text-sm">
+                          {paymentRecord.paymentMethod && (
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Method</span>
+                              <span>{paymentRecord.paymentMethod}</span>
                             </div>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="text-sm">
-                        <p className="text-muted-foreground">Payment received by cash or other method</p>
-                        {paymentRecord.cashNote && (
-                          <p className="mt-2 p-2 rounded bg-muted/50 text-sm">{paymentRecord.cashNote}</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={async () => {
-                    if (!invoice) return
-                    setIsDownloading(true)
-                    try {
-                      await downloadInvoiceReceiptPdf(invoice)
-                    } catch (err) {
-                      console.error("Failed to download receipt:", err)
-                    } finally {
-                      setIsDownloading(false)
-                    }
-                  }}
-                  disabled={isDownloading}
-                >
-                  {isDownloading ? (
-                    <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2 animate-spin" />
-                  ) : (
-                    <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+                          )}
+                          {paymentRecord.amount != null && paymentRecord.currency && (
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Amount</span>
+                              <span>{formatCurrency(paymentRecord.amount, paymentRecord.currency)}</span>
+                            </div>
+                          )}
+                          {paymentRecord.date && (
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Date</span>
+                              <span>{formatDate(paymentRecord.date)}</span>
+                            </div>
+                          )}
+                          {paymentRecord.reference && (
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Reference</span>
+                              <span>{paymentRecord.reference}</span>
+                            </div>
+                          )}
+                          {paymentRecord.transactionId && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-muted-foreground">Transaction ID</span>
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-xs">{paymentRecord.transactionId}</span>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => copyToClipboard(paymentRecord.transactionId!, "payment-txn-id")}
+                                >
+                                  {copiedField === "payment-txn-id" ? (
+                                    <Check className="h-3 w-3 text-green-600" />
+                                  ) : (
+                                    <Copy className="h-3 w-3" />
+                                  )}
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-sm">
+                          <p className="text-muted-foreground">Payment received by cash or other method</p>
+                          {paymentRecord.cashNote && (
+                            <p className="mt-2 p-2 rounded bg-muted/50 text-sm">{paymentRecord.cashNote}</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
-                  Download Receipt
-                </Button>
-              </div>
-            )
-          })()}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      if (!invoice) return
+                      setIsDownloading(true)
+                      try {
+                        await downloadInvoiceReceiptPdf(invoice)
+                      } catch (err) {
+                        console.error("Failed to download receipt:", err)
+                      } finally {
+                        setIsDownloading(false)
+                      }
+                    }}
+                    disabled={isDownloading}
+                  >
+                    {isDownloading ? (
+                      <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2 animate-spin" />
+                    ) : (
+                      <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+                    )}
+                    Download Receipt
+                  </Button>
+                </div>
+              )
+            })()}
 
-          {/* Powered by - bottom of frame, matches PDF */}
           <div className="flex items-center justify-center gap-1.5 mt-8 pt-6 pb-0 border-t text-xs text-muted-foreground">
             <span>Powered by</span>
             <a

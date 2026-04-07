@@ -31,3 +31,12 @@ export type {
   JurisdictionCountryPolicyV1,
   CountryCatalogEntry,
 } from "./jurisdiction-country-policy"
+export {
+  parseCommunicationPreferences,
+  DEFAULT_COMMUNICATION_PREFERENCES,
+  COMMUNICATION_PREFERENCES_DISCLAIMER,
+} from "./communication-preferences"
+export type {
+  CommunicationPreferences,
+  CommunicationChannels,
+} from "./communication-preferences"

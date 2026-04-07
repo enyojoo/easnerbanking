@@ -86,6 +86,8 @@ export const CACHE_KEYS = {
   BUSINESS_PROFILE: (userId: string) => `business_profile_${userId}`,
   TEAM_MEMBERS: (userId: string) => `team_members_${userId}`,
   PERSONAL_SETTINGS: (userId: string) => `personal_settings_${userId}`,
+  /** Email / notification prefs (`GET/PATCH /api/settings/communication`). */
+  COMMUNICATION_PREFERENCES: (userId: string) => `communication_preferences_${userId}`,
   RECIPIENTS: (userId: string) => `recipients_${userId}`,
   /** TOTP MFA status line for Security card (On / Off / error). */
   MFA_SECURITY: (userId: string) => `mfa_security_${userId}`,

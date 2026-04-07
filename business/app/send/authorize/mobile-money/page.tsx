@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
-import { currencySymbols } from "@/lib/currency-meta"
+import { getCurrencySymbol } from "@/lib/utils"
 import { generateTransactionId } from "@/lib/transaction-id"
 import { ArrowLeft, Smartphone, Copy, Check } from "lucide-react"
 
@@ -111,7 +111,7 @@ export default function MobileMoneyPage() {
           <div className="flex justify-between items-center pb-4 border-b">
             <span className="text-sm text-muted-foreground">You pay</span>
             <span className="font-semibold">
-              {currencySymbols[state.sendCurrency] ?? state.sendCurrency}
+              {getCurrencySymbol(state.sendCurrency)}
               {state.sendAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}{" "}
               {state.sendCurrency}
             </span>
@@ -119,7 +119,7 @@ export default function MobileMoneyPage() {
           <div className="flex justify-between items-center pb-4 border-b">
             <span className="text-sm text-muted-foreground">Recipient gets</span>
             <span className="font-semibold">
-              {currencySymbols[state.receiveCurrency] ?? state.receiveCurrency}
+              {getCurrencySymbol(state.receiveCurrency)}
               {state.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}{" "}
               {state.receiveCurrency}
             </span>
@@ -168,7 +168,7 @@ export default function MobileMoneyPage() {
           onClick={handleConfirmPayment}
           disabled={!phoneNumber.trim() || paymentConfirmed}
         >
-          {paymentConfirmed ? "Processing..." : `Pay ${currencySymbols[state.sendCurrency] ?? ""}${state.sendAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+          {paymentConfirmed ? "Processing..." : `Pay ${getCurrencySymbol(state.sendCurrency)}${state.sendAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
         </Button>
       </div>
     </div>

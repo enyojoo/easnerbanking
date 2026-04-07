@@ -91,6 +91,16 @@ class PushNotificationService {
     return this.expoPushToken
   }
 
+  /** Clear cached Expo token (e.g. user disabled push). Does not revoke OS permission. */
+  async clearLocalPushToken(): Promise<void> {
+    this.expoPushToken = null
+    try {
+      await AsyncStorage.removeItem('expoPushToken')
+    } catch (e) {
+      console.warn('clearLocalPushToken:', e)
+    }
+  }
+
   async sendLocalNotification(notification: PushNotificationData): Promise<void> {
     const Notifications = getNotifications()
     if (!Notifications) return

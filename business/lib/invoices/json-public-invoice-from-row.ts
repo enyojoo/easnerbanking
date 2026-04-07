@@ -1,28 +1,14 @@
-import { NextResponse } from "next/server"
 import { mapRowToInvoice, type B2bInvoiceRow } from "@/lib/b2b/map-invoice"
 import { fetchInvoiceIssuerForBusiness } from "@/lib/invoices/issuer"
 import { resolvePayInForBusiness } from "@/lib/invoices/resolve-pay-in-for-business"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 
-/** Public read by id (share link). UUID acts as an unguessable capability token. */
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 })
-
-  const admin = createSupabaseAdmin()
-  const { data, error } = await admin.from("invoices").select("*").eq("id", id).maybeSingle()
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-  if (!data) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 })
-  }
-
-  const row = data as B2bInvoiceRow
+export async function jsonPublicInvoiceFromRow(
+  admin: ReturnType<typeof createSupabaseAdmin>,
+  row: B2bInvoiceRow,
+) {
   const invoice = mapRowToInvoice(row)
   const businessId = row.business_id
-
   const issuer = await fetchInvoiceIssuerForBusiness(admin, businessId)
 
   const payableStatuses = ["open", "sent", "past_due"] as const
@@ -37,5 +23,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     })
   }
 
-  return NextResponse.json({ invoice, issuer, payIn })
+  const { data: bizRow } = await admin
+    .from("businesses")
+    .select("easetag")
+    .eq("id", businessId)
+    .maybeSingle()
+  const businessEasetag =
+    typeof bizRow?.easetag === "string" && bizRow.easetag.trim() ? bizRow.easetag.trim() : null
+
+  return { invoice, issuer, payIn, businessEasetag }
 }

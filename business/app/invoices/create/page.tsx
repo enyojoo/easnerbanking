@@ -12,11 +12,12 @@ import {
   Trash2, 
   Search,
   Calendar as CalendarIcon,
-  DollarSign,
+  List,
   User,
   Mail,
   MapPin,
-  FileText
+  FileText,
+  Loader2,
 } from "lucide-react"
 import {
   Dialog,
@@ -37,17 +38,38 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { formatCurrency } from "@/lib/utils"
 import { useInvoices } from "@/lib/invoices-context"
 import { useCustomers } from "@/lib/customers-context"
-import { generateInvoiceId } from "@/lib/invoice-id"
+import { formatInvoiceNumberFromClientId, generateInvoiceId } from "@/lib/invoice-id"
 import type { Invoice } from "@/lib/b2b/types"
+import { computeInvoiceTotals } from "@/lib/b2b/invoice-totals"
 import { AddEditCustomerDialog } from "@/components/add-edit-customer-dialog"
 import { BaseCurrencySelect } from "@/components/base-currency-select"
 import { useBusinessProfile } from "@/lib/use-business-profile"
+import { invoiceBackHref, withReturnTo } from "@/lib/invoice-navigation"
+
+/** Digits only for quantity (empty allowed while typing). */
+function filterQuantityInput(s: string): string {
+  return s.replace(/\D/g, "")
+}
+
+/** Digits and at most one decimal point (empty allowed). */
+function filterUnitPriceInput(s: string): string {
+  const t = s.replace(/[^\d.]/g, "")
+  const parts = t.split(".")
+  if (parts.length <= 1) return t
+  return parts[0] + "." + parts.slice(1).join("")
+}
+
+function lineItemAmount(item: { quantity: string; unitPrice: string }): number {
+  const q = parseFloat(item.quantity) || 0
+  const p = parseFloat(item.unitPrice) || 0
+  return q * p
+}
+
 interface LineItem {
   id: string
   description: string
-  quantity: number
-  unitPrice: number
-  amount: number
+  quantity: string
+  unitPrice: string
 }
 
 interface InvoiceForm {
@@ -61,6 +83,7 @@ interface InvoiceForm {
   currency: string
   dueDate: string
   taxRate: number
+  discountRate: number
   lineItems: LineItem[]
 }
 
@@ -86,35 +109,39 @@ export default function CreateInvoicePage() {
     currency: "USD",
     dueDate: "",
     taxRate: 0,
-    lineItems: [{ id: "1", description: "", quantity: 1, unitPrice: 0, amount: 0 }]
+    discountRate: 0,
+    lineItems: [{ id: "1", description: "", quantity: "", unitPrice: "" }]
   })
 
   const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false)
   const [isAddCustomerDialogOpen, setIsAddCustomerDialogOpen] = useState(false)
   const [customerSearchTerm, setCustomerSearchTerm] = useState("")
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
+  /** Which primary action is running (shows loading on both buttons). */
+  const [invoiceAction, setInvoiceAction] = useState<null | "draft" | "create">(null)
   /** When true, next transition to `profileLoading === false` seeds currency from base (no customer). */
   const awaitingProfileForDefaultCurrency = useRef(true)
 
-  // Calculate totals
-  const subtotal = formData.lineItems.reduce((sum, item) => sum + item.amount, 0)
-  const tax = subtotal * (formData.taxRate / 100)
-  const total = subtotal + tax
+  const backHref = invoiceBackHref(searchParams)
 
-  // Update line item
-  const updateLineItem = (id: string, field: keyof LineItem, value: string | number) => {
-    setFormData(prev => ({
+  // Calculate totals
+  const subtotal = formData.lineItems.reduce((sum, item) => sum + lineItemAmount(item), 0)
+  const { discount, tax, total } = computeInvoiceTotals({
+    subtotal,
+    taxRate: formData.taxRate,
+    discountRate: formData.discountRate,
+  })
+
+  // Update line item (qty / unit price are numeric-only strings so the field can be cleared while typing)
+  const updateLineItem = (id: string, field: keyof LineItem, value: string) => {
+    setFormData((prev) => ({
       ...prev,
-      lineItems: prev.lineItems.map(item => {
-        if (item.id === id) {
-          const updated = { ...item, [field]: value }
-          if (field === 'quantity' || field === 'unitPrice') {
-            updated.amount = updated.quantity * updated.unitPrice
-          }
-          return updated
-        }
-        return item
-      })
+      lineItems: prev.lineItems.map((item) => {
+        if (item.id !== id) return item
+        if (field === "quantity") return { ...item, quantity: filterQuantityInput(value) }
+        if (field === "unitPrice") return { ...item, unitPrice: filterUnitPriceInput(value) }
+        return { ...item, [field]: value }
+      }),
     }))
   }
 
@@ -123,7 +150,7 @@ export default function CreateInvoicePage() {
     const newId = (formData.lineItems.length + 1).toString()
     setFormData(prev => ({
       ...prev,
-      lineItems: [...prev.lineItems, { id: newId, description: "", quantity: 1, unitPrice: 0, amount: 0 }]
+      lineItems: [...prev.lineItems, { id: newId, description: "", quantity: "", unitPrice: "" }]
     }))
   }
 
@@ -166,18 +193,27 @@ export default function CreateInvoicePage() {
   )
 
   const createInvoiceFromForm = (status: "draft" | "open"): Invoice => {
-    const now = new Date().toISOString().split("T")[0]
+    const dateOnly = new Date().toISOString().slice(0, 10)
+    const nowIso = new Date().toISOString()
     const lineItems = formData.lineItems
-      .filter((item) => item.description.trim() && item.amount > 0)
-      .map(({ description, quantity, unitPrice, amount }) => ({
-        description,
-        quantity,
-        unitPrice,
-        amount,
-      }))
+      .filter((item) => item.description.trim() && lineItemAmount(item) > 0)
+      .map((item) => {
+        const quantity = parseFloat(item.quantity) || 0
+        const unitPrice = parseFloat(item.unitPrice) || 0
+        const amount = quantity * unitPrice
+        return {
+          description: item.description,
+          quantity,
+          unitPrice,
+          amount,
+        }
+      })
     const subtotal = lineItems.reduce((sum, item) => sum + item.amount, 0)
-    const tax = subtotal * (formData.taxRate / 100)
-    const total = subtotal + tax
+    const { discount, tax, total } = computeInvoiceTotals({
+      subtotal,
+      taxRate: formData.taxRate,
+      discountRate: formData.discountRate,
+    })
     const customerId =
       formData.customerId.trim().length > 0 ? formData.customerId.trim() : undefined
     const base = {
@@ -185,12 +221,14 @@ export default function CreateInvoicePage() {
       customerName: formData.customerName || "Unknown",
       customerEmail: formData.customerEmail || "",
       subtotal,
+      discountRate: formData.discountRate,
+      discount,
       taxRate: formData.taxRate,
       tax,
       total,
       currency: formData.currency,
       status,
-      dueDate: formData.dueDate || now,
+      dueDate: formData.dueDate || dateOnly,
       frequency: null,
       lineItems,
       billToType: formData.billToType,
@@ -204,7 +242,7 @@ export default function CreateInvoicePage() {
         ...base,
         customerId: customerId ?? invoiceToEdit.customerId,
         createdDate: invoiceToEdit.createdDate,
-        finalizedDate: status === "draft" ? null : (invoiceToEdit.finalizedDate || now),
+        finalizedDate: status === "draft" ? null : (invoiceToEdit.finalizedDate || nowIso),
         notes: invoiceToEdit.notes,
         statusHistory: invoiceToEdit.statusHistory,
         archived: invoiceToEdit.archived,
@@ -213,32 +251,44 @@ export default function CreateInvoicePage() {
     const id = generateInvoiceId()
     return {
       id,
-      invoiceNumber: `EINV-${id.slice(4)}`,
-      createdDate: now,
-      finalizedDate: status === "draft" ? null : now,
+      invoiceNumber: formatInvoiceNumberFromClientId(id),
+      createdDate: nowIso,
+      finalizedDate: status === "draft" ? null : nowIso,
       ...base,
     }
   }
 
   const handleSaveDraft = async () => {
-    const invoice = createInvoiceFromForm("draft")
-    if (isEditMode) {
-      await updateInvoice(invoice.id, invoice)
-      router.push(`/invoices/${invoice.id}`)
-    } else {
-      const created = await addInvoice(invoice)
-      if (created) router.push(`/invoices/${created.id}`)
+    if (invoiceAction) return
+    setInvoiceAction("draft")
+    try {
+      const invoice = createInvoiceFromForm("draft")
+      if (isEditMode) {
+        await updateInvoice(invoice.id, invoice)
+        router.push(withReturnTo(`/invoices/${invoice.id}`, backHref))
+      } else {
+        const created = await addInvoice(invoice)
+        if (created) router.push(withReturnTo(`/invoices/${created.id}`, backHref))
+      }
+    } finally {
+      setInvoiceAction(null)
     }
   }
 
   const handleSendInvoice = async () => {
-    const invoice = createInvoiceFromForm("open")
-    if (isEditMode) {
-      await updateInvoice(invoice.id, invoice)
-      router.push(`/invoices/${invoice.id}`)
-    } else {
-      const created = await addInvoice(invoice)
-      if (created) router.push(`/invoices/${created.id}`)
+    if (invoiceAction) return
+    setInvoiceAction("create")
+    try {
+      const invoice = createInvoiceFromForm("open")
+      if (isEditMode) {
+        await updateInvoice(invoice.id, invoice)
+        router.push(withReturnTo(`/invoices/${invoice.id}`, backHref))
+      } else {
+        const created = await addInvoice(invoice)
+        if (created) router.push(withReturnTo(`/invoices/${created.id}`, backHref))
+      }
+    } finally {
+      setInvoiceAction(null)
     }
   }
 
@@ -259,12 +309,12 @@ export default function CreateInvoicePage() {
         currency: invoiceToEdit.currency,
         dueDate: invoiceToEdit.dueDate,
         taxRate: invoiceToEdit.taxRate ?? 0,
+        discountRate: invoiceToEdit.discountRate ?? 0,
         lineItems: invoiceToEdit.lineItems.map((item, i) => ({
           id: (i + 1).toString(),
           description: item.description,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          amount: item.amount,
+          quantity: String(item.quantity),
+          unitPrice: String(item.unitPrice),
         })),
       })
     }
@@ -324,7 +374,7 @@ export default function CreateInvoicePage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link href="/invoices">
+        <Link href={backHref}>
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-4 w-4" />
           </Button>
@@ -433,15 +483,18 @@ export default function CreateInvoicePage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5" />
+                <List className="h-5 w-5" />
                 Items
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-6">
                 {formData.lineItems.map((item, index) => (
-                  <div key={item.id} className="grid grid-cols-12 gap-4 items-end">
-                    <div className="col-span-5 space-y-2">
+                  <div
+                    key={item.id}
+                    className="grid min-w-0 gap-4 items-end [grid-template-columns:5fr_1fr_2fr_3.5fr_0.5fr]"
+                  >
+                    <div className="min-w-0 space-y-2">
                       <Label>Description</Label>
                       <Input
                         placeholder="Item description"
@@ -449,39 +502,43 @@ export default function CreateInvoicePage() {
                         onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
                       />
                     </div>
-                    <div className="col-span-2 space-y-2">
+                    <div className="min-w-0 space-y-2">
                       <Label>Qty</Label>
                       <Input
-                        type="number"
-                        min="1"
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="off"
                         value={item.quantity}
-                        onChange={(e) => updateLineItem(item.id, 'quantity', parseInt(e.target.value) || 1)}
+                        onChange={(e) => updateLineItem(item.id, "quantity", e.target.value)}
+                        className="tabular-nums min-w-0"
                       />
                     </div>
-                    <div className="col-span-2 space-y-2">
+                    <div className="min-w-0 space-y-2">
                       <Label>Unit Price</Label>
                       <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
+                        type="text"
+                        inputMode="decimal"
+                        autoComplete="off"
                         value={item.unitPrice}
-                        onChange={(e) => updateLineItem(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                        onChange={(e) => updateLineItem(item.id, "unitPrice", e.target.value)}
+                        className="tabular-nums min-w-0"
                       />
                     </div>
-                    <div className="col-span-2 space-y-2">
+                    <div className="min-w-0 space-y-2">
                       <Label>Amount</Label>
                       <Input
-                        value={`$${item.amount.toFixed(2)}`}
+                        value={formatCurrency(lineItemAmount(item), formData.currency)}
                         disabled
-                        className="bg-muted"
+                        className="bg-muted min-w-0"
                       />
                     </div>
-                    <div className="col-span-1">
+                    <div className="flex min-w-0 justify-end">
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => removeLineItem(item.id)}
                         disabled={formData.lineItems.length === 1}
+                        className="shrink-0"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -502,11 +559,36 @@ export default function CreateInvoicePage() {
         <div className="space-y-6">
           {/* Action buttons - above Invoice Summary */}
           <div className="flex gap-2">
-            <Button variant="outline" className="flex-1" onClick={handleSaveDraft}>
-              Save as Draft
+            <Button
+              variant="outline"
+              className="flex-1"
+              disabled={!!invoiceAction}
+              onClick={handleSaveDraft}
+            >
+              {invoiceAction === "draft" ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Draft
+                </>
+              ) : (
+                "Draft"
+              )}
             </Button>
-            <Button className="flex-1" onClick={handleSendInvoice}>
-              {isEditMode ? "Save Changes" : "Create Invoice"}
+            <Button
+              className="flex-1"
+              disabled={!!invoiceAction}
+              onClick={handleSendInvoice}
+            >
+              {invoiceAction === "create" ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {isEditMode ? "Save" : "Create"}
+                </>
+              ) : isEditMode ? (
+                "Save"
+              ) : (
+                "Create"
+              )}
             </Button>
           </div>
 
@@ -519,6 +601,33 @@ export default function CreateInvoicePage() {
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Subtotal</span>
                 <span>{formatCurrency(subtotal, formData.currency)}</span>
+              </div>
+              <div className="flex items-center justify-between gap-4 text-sm">
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="discountRate" className="text-muted-foreground text-sm font-normal">
+                    Discount (%)
+                  </Label>
+                  <Input
+                    id="discountRate"
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.1}
+                    value={formData.discountRate || ""}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value)
+                      setFormData((p) => ({
+                        ...p,
+                        discountRate: isNaN(v) ? 0 : Math.min(100, Math.max(0, v)),
+                      }))
+                    }}
+                    placeholder="0"
+                    className="w-20 h-8 text-sm"
+                  />
+                </div>
+                <span className="tabular-nums">
+                  {discount > 0 ? `−${formatCurrency(discount, formData.currency)}` : formatCurrency(0, formData.currency)}
+                </span>
               </div>
               <div className="flex items-center justify-between gap-4 text-sm">
                 <div className="flex items-center gap-2">

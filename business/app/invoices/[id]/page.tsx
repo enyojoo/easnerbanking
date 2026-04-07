@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
@@ -47,8 +47,9 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import Link from "next/link"
 import { formatCurrency, formatDate } from "@/lib/utils"
+import { getInvoiceDiscountAmount } from "@/lib/b2b/invoice-totals"
 import { useInvoices } from "@/lib/invoices-context"
-import { generateInvoiceId } from "@/lib/invoice-id"
+import { formatInvoiceNumberFromClientId, generateInvoiceId } from "@/lib/invoice-id"
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge"
 import { InvoicePaymentOptions } from "@/components/invoice-payment-options"
 import { MarkAsPaidDialog } from "@/components/mark-as-paid-dialog"
@@ -65,6 +66,8 @@ import {
   TIER2_COMPLETE_PLACEHOLDER,
   canProvisionInvoiceDepositInstructions,
 } from "@/lib/compliance-placeholders"
+import { currentLocationPath, invoiceBackHref, withReturnTo } from "@/lib/invoice-navigation"
+import { invoicePublicViewPath } from "@/lib/invoice-public-url"
 const STATUS_ACTIVITY_DESCRIPTIONS: Record<string, string> = {
   sent: "Invoice was sent to customer",
   paid: "Invoice was marked as paid",
@@ -150,9 +153,13 @@ const getActivityIcon = (type: string) => {
 
 export default function InvoiceDetailPage() {
   const params = useParams()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const router = useRouter()
+  const backHref = invoiceBackHref(searchParams)
+  const here = currentLocationPath(pathname, searchParams)
   const profile = useBusinessProfile()
-  const { tier1Complete } = profile
+  const { tier1Complete, easetag: orgEasetag } = profile
   const issuer = issuerFromBusinessProfile(profile)
   const { invoices, loading: invoicesLoading, updateInvoice, addInvoice } = useInvoices()
   const { data: ledgerRows } = useTransactionsCached()
@@ -216,10 +223,14 @@ export default function InvoiceDetailPage() {
   }, [invoice, customerViews])
 
   useEffect(() => {
-    if (invoice?.id && typeof window !== "undefined") {
-      setCustomerViewUrl(`${window.location.origin}/invoice-view/${invoice.id}`)
+    if (!invoice?.id || typeof window === "undefined") return
+    const origin = window.location.origin
+    if (orgEasetag?.trim()) {
+      setCustomerViewUrl(`${origin}${invoicePublicViewPath(orgEasetag.trim(), invoice.invoiceNumber)}`)
+    } else {
+      setCustomerViewUrl(`${origin}/invoice-view/${invoice.id}`)
     }
-  }, [invoice?.id])
+  }, [invoice?.id, invoice?.invoiceNumber, orgEasetag])
 
   const handleStatusChange = (newStatus: Invoice["status"]) => {
     if (!invoice) return
@@ -232,20 +243,20 @@ export default function InvoiceDetailPage() {
 
   const handleEdit = () => {
     if (!invoice) return
-    router.push(`/invoices/create?edit=${invoice.id}`)
+    router.push(withReturnTo(`/invoices/create?edit=${invoice.id}`, here))
   }
 
   const handleDuplicate = async () => {
     if (!invoice) return
     const newId = generateInvoiceId()
-    const newInvoiceNumber = `EINV-${newId.slice(4)}`
-    const now = new Date().toISOString().split("T")[0]
+    const newInvoiceNumber = formatInvoiceNumberFromClientId(newId)
+    const nowIso = new Date().toISOString()
     const duplicate: Invoice = {
       ...invoice,
       id: newId,
       invoiceNumber: newInvoiceNumber,
       status: "draft",
-      createdDate: now,
+      createdDate: nowIso,
       finalizedDate: null,
       statusHistory: [],
       archived: false,
@@ -253,7 +264,7 @@ export default function InvoiceDetailPage() {
     const created = await addInvoice(duplicate)
     if (created) {
       toast.success("Invoice duplicated")
-      router.push(`/invoices/create?edit=${created.id}`)
+      router.push(withReturnTo(`/invoices/create?edit=${created.id}`, here))
     } else {
       toast.error("Could not duplicate invoice")
     }
@@ -263,7 +274,7 @@ export default function InvoiceDetailPage() {
     if (!invoice) return
     void updateInvoice(invoice.id, { archived: true })
     toast.success("Invoice archived")
-    router.push("/invoices")
+    router.push(backHref)
   }
 
   const handleUnarchive = () => {
@@ -326,7 +337,7 @@ export default function InvoiceDetailPage() {
   if (!invoice) {
     return (
       <div className="space-y-6">
-        <Link href="/invoices">
+        <Link href={backHref}>
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-4 w-4" />
           </Button>
@@ -336,8 +347,8 @@ export default function InvoiceDetailPage() {
           <p className="text-sm text-muted-foreground mt-2">
             The invoice you&apos;re looking for doesn&apos;t exist or has been removed.
           </p>
-          <Link href="/invoices">
-            <Button className="mt-4">Back to invoices</Button>
+          <Link href={backHref}>
+            <Button className="mt-4">Go back</Button>
           </Link>
         </div>
       </div>
@@ -348,7 +359,7 @@ export default function InvoiceDetailPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link href="/invoices">
+        <Link href={backHref}>
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-4 w-4" />
           </Button>
@@ -610,18 +621,36 @@ export default function InvoiceDetailPage() {
 
               <div className="flex justify-end">
                 <div className="text-right space-y-1">
-                  {(invoice.tax ?? 0) > 0 && invoice.subtotal != null && (
+                  {invoice.subtotal != null &&
+                    ((invoice.tax ?? 0) > 0 ||
+                      (invoice.taxRate ?? 0) > 0 ||
+                      getInvoiceDiscountAmount(invoice) > 0) && (
                     <>
                       <div className="flex justify-between gap-8 text-sm">
                         <span className="text-muted-foreground">Subtotal</span>
                         <span>{formatCurrency(invoice.subtotal, invoice.currency)}</span>
                       </div>
-                      <div className="flex justify-between gap-8 text-sm">
-                        <span className="text-muted-foreground">
-                          Tax{invoice.taxRate != null && invoice.taxRate > 0 ? ` (${invoice.taxRate}%)` : ""}
-                        </span>
-                        <span>{formatCurrency(invoice.tax!, invoice.currency)}</span>
-                      </div>
+                      {getInvoiceDiscountAmount(invoice) > 0 && (
+                        <div className="flex justify-between gap-8 text-sm">
+                          <span className="text-muted-foreground">
+                            Discount
+                            {invoice.discountRate != null && invoice.discountRate > 0
+                              ? ` (${invoice.discountRate}%)`
+                              : ""}
+                          </span>
+                          <span>
+                            −{formatCurrency(getInvoiceDiscountAmount(invoice), invoice.currency)}
+                          </span>
+                        </div>
+                      )}
+                      {((invoice.tax ?? 0) > 0 || (invoice.taxRate ?? 0) > 0) && (
+                        <div className="flex justify-between gap-8 text-sm">
+                          <span className="text-muted-foreground">
+                            Tax{invoice.taxRate != null && invoice.taxRate > 0 ? ` (${invoice.taxRate}%)` : ""}
+                          </span>
+                          <span>{formatCurrency(invoice.tax ?? 0, invoice.currency)}</span>
+                        </div>
+                      )}
                     </>
                   )}
                   <div className="flex justify-between gap-8 items-baseline pt-1">
@@ -653,6 +682,7 @@ export default function InvoiceDetailPage() {
                 stablecoinAccount={stablecoinAccount}
                 businessDisplayName={issuer.name}
                 audience="business"
+                publicInvoiceEasetag={orgEasetag}
               />
             ) : canProvisionDepositInstructions ? (
               <Card className="border-dashed bg-muted/20">
@@ -807,7 +837,15 @@ export default function InvoiceDetailPage() {
                     <Button variant="ghost" size="sm" onClick={() => copyToClipboard(customerViewUrl, "invoice-link")}>
                       {copiedField === "invoice-link" ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3" />}
                     </Button>
-                    <Link href={`/invoice-view/${invoice.id}`} target="_blank" rel="noopener noreferrer">
+                    <Link
+                      href={
+                        orgEasetag?.trim()
+                          ? invoicePublicViewPath(orgEasetag.trim(), invoice.invoiceNumber)
+                          : `/invoice-view/${invoice.id}`
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
                       <Button variant="ghost" size="sm">
                         <ExternalLink className="h-3 w-3" />
                       </Button>

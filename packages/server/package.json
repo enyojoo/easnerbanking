@@ -1,5 +1,15 @@
 {
   "name": "@easner/server",
   "version": "0.0.0",
-  "private": true
+  "private": true,
+  "main": "./lib/index.ts",
+  "types": "./lib/index.ts",
+  "exports": {
+    ".": "./lib/index.ts"
+  },
+  "dependencies": {
+    "@easner/shared": "*",
+    "@sendgrid/mail": "^8.1.6",
+    "@supabase/supabase-js": "^2.57.2"
+  }
 }

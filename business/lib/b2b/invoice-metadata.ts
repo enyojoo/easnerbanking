@@ -3,6 +3,8 @@ import type { Invoice, InvoicePaymentInfo } from "@/lib/b2b/types"
 /** Stored in `invoices.metadata` jsonb (plus top-level snapshot columns). */
 export type InvoiceMetadata = {
   subtotal?: number
+  discountRate?: number
+  discount?: number
   tax?: number
   archived?: boolean
   memo?: string

@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { usePathname, useSearchParams } from "next/navigation"
 import type { Transaction } from "@/lib/finance-types"
 import { formatCurrency } from "@/lib/utils"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -9,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Copy, Check, Download, FileText, Activity } from "lucide-react"
 import { downloadTransactionReceiptPdf } from "@/lib/use-transaction-receipt-pdf"
+import { currentLocationPath, withReturnTo } from "@/lib/invoice-navigation"
 
 interface TransactionDetailsDialogProps {
   open: boolean
@@ -23,6 +25,9 @@ export function TransactionDetailsDialog({
   transaction,
   hideType = false,
 }: TransactionDetailsDialogProps) {
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const txHere = currentLocationPath(pathname, searchParams)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [downloadingReceipt, setDownloadingReceipt] = useState(false)
 
@@ -190,7 +195,7 @@ export function TransactionDetailsDialog({
           <div className="pt-4 border-t space-y-2">
             {transaction.invoiceId && (
               <Button variant="outline" className="w-full gap-2 bg-transparent" asChild>
-                <Link href={`/invoices/${transaction.invoiceId}`}>
+                <Link href={withReturnTo(`/invoices/${transaction.invoiceId}`, txHere)}>
                   <FileText className="h-4 w-4" />
                   View invoice
                 </Link>

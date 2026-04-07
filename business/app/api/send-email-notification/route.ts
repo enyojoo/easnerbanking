@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server"
-import sgMail from "@sendgrid/mail"
-import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { EmailNotificationService } from "@easner/server"
+import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { requireOfficeAdmin } from "@/lib/api/admin-auth"
 
 /**
- * Office-triggered transaction status email to end user (SendGrid optional).
+ * - `type: admin-transaction` — office staff, or the transaction owner (Bearer) notifying ops.
+ * - `type: transaction` (default) — user JWT must own the transaction, **or** office staff.
  */
 export async function POST(request: Request) {
-  const auth = await requireOfficeAdmin(request)
-  if (!auth.ok) return auth.response
-
   let body: { type?: string; transactionId?: string; status?: string }
   try {
     body = await request.json()
@@ -17,22 +15,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
   }
 
-  const apiKey = process.env.SENDGRID_API_KEY
-  if (!apiKey) {
-    return NextResponse.json({
-      success: true,
-      skipped: true,
-      message: "SENDGRID_API_KEY not set — notification not sent",
-    })
-  }
-
-  sgMail.setApiKey(apiKey)
-
-  const admin = createSupabaseAdmin()
+  const type = body.type ?? "transaction"
   const txId = body.transactionId
   if (!txId) {
     return NextResponse.json({ error: "transactionId required" }, { status: 400 })
   }
+
+  const status = body.status ?? ""
+  if (!status) {
+    return NextResponse.json({ error: "status required" }, { status: 400 })
+  }
+
+  const admin = createSupabaseAdmin()
 
   let { data: tx } = await admin
     .from("transactions")
@@ -51,22 +45,32 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Transaction not found" }, { status: 404 })
   }
 
-  const { data: user } = await admin.from("users").select("email, first_name").eq("id", tx.user_id).maybeSingle()
-  const to = user?.email
-  if (!to) {
-    return NextResponse.json({ error: "User email not found" }, { status: 400 })
+  const user = await getUserFromApiRequest(request)
+  const ownerOk = !!(user && user.id === tx.user_id)
+
+  if (type === "admin-transaction") {
+    if (ownerOk) {
+      await EmailNotificationService.sendAdminTransactionNotification(txId, status)
+      return NextResponse.json({ success: true })
+    }
+    const auth = await requireOfficeAdmin(request)
+    if (!auth.ok) return auth.response
+    await EmailNotificationService.sendAdminTransactionNotification(txId, status)
+    return NextResponse.json({ success: true })
   }
 
-  const fromEmail = process.env.SENDGRID_FROM_EMAIL || "noreply@easner.com"
-  const fromName = process.env.SENDGRID_FROM_NAME || "Easner"
+  if (ownerOk) {
+    await EmailNotificationService.sendTransactionStatusEmail(txId, status)
+    return NextResponse.json({ success: true })
+  }
 
-  await sgMail.send({
-    to,
-    from: { email: fromEmail, name: fromName },
-    subject: `Transaction ${body.status ?? tx.status ?? ""} — Easner`,
-    text: `Your transaction ${tx.transaction_id ?? txId} status is now ${body.status ?? tx.status ?? "updated"}.`,
-    html: `<p>Hi ${user?.first_name ?? ""},</p><p>Your transaction <strong>${tx.transaction_id ?? txId}</strong> is now <strong>${body.status ?? tx.status ?? "updated"}</strong>.</p>`,
-  })
+  const adminAuth = await requireOfficeAdmin(request)
+  if (adminAuth.ok) {
+    await EmailNotificationService.sendTransactionStatusEmail(txId, status)
+    return NextResponse.json({ success: true })
+  }
 
-  return NextResponse.json({ success: true })
+  return NextResponse.json({
+    error: "Unauthorized — sign in or use office staff access.",
+  }, { status: 401 })
 }

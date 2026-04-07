@@ -10,6 +10,7 @@ import type { Account } from "@/lib/finance-types"
 import type { Invoice } from "@/lib/b2b/types"
 import { cn, formatCurrency } from "@/lib/utils"
 import { businessInfo } from "@/lib/business-info"
+import { invoicePublicViewPath } from "@/lib/invoice-public-url"
 
 interface StablecoinAccount {
   currency: string
@@ -120,6 +121,8 @@ interface InvoicePaymentOptionsProps {
   /** Controlled tab value - when provided, parent tracks selection */
   value?: "bank" | "stablecoin"
   onValueChange?: (value: "bank" | "stablecoin") => void
+  /** When set, public “view invoice” links use `/invoice-view/{easetag}/{invoiceNumber}` instead of row id. */
+  publicInvoiceEasetag?: string | null
 }
 
 const audienceDescriptions = {
@@ -137,6 +140,7 @@ export function InvoicePaymentOptions({
   audience = "customer",
   value,
   onValueChange,
+  publicInvoiceEasetag,
 }: InvoicePaymentOptionsProps) {
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const hasBank = bankAccount !== undefined
@@ -196,7 +200,9 @@ export function InvoicePaymentOptions({
           : ""
     const url =
       typeof window !== "undefined"
-        ? `${window.location.origin}/invoice-view/${invoice.id}`
+        ? publicInvoiceEasetag?.trim()
+          ? `${window.location.origin}${invoicePublicViewPath(publicInvoiceEasetag.trim(), invoice.invoiceNumber)}`
+          : `${window.location.origin}/invoice-view/${invoice.id}`
         : ""
     return { details, url }
   }

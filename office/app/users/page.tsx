@@ -31,6 +31,7 @@ import { kycService, KYCSubmission } from "@/lib/kyc-service"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/lib/auth-context"
+import type { CommunicationPreferences } from "@easner/shared"
 
 /** Mirrors `public.users` (+ `email_confirmed_at` merged from auth). */
 interface UserData {
@@ -57,6 +58,9 @@ interface UserData {
   noah_kyb_status?: string | null
   enabled_extra_account_currencies?: string[]
   email_confirmed_at?: string | null
+  /** Parsed from API (not raw jsonb). */
+  communicationPreferences?: CommunicationPreferences
+  hasExpoPushToken?: boolean
   totalTransactions: number
   totalVolume: number
   verificationStatus?: string
@@ -68,6 +72,38 @@ function userDisplayName(user: Pick<UserData, "id" | "email" | "full_name">) {
   if (n) return n
   if (user.email) return user.email
   return `${user.id.slice(0, 8)}…`
+}
+
+function CommsSummary({ user }: { user: UserData }) {
+  const p = user.communicationPreferences
+  if (!p) {
+    return <span className="text-xs text-muted-foreground">—</span>
+  }
+  const typeBits = [p.productUpdates ? "Prod" : null, p.securityAlerts ? "Sec" : null, p.marketingEmails ? "Mkt" : null].filter(
+    (x): x is string => x != null,
+  )
+  const ch = [p.channels.email ? "Email" : null, p.channels.push ? "Push" : null].filter(
+    (x): x is string => x != null,
+  )
+  return (
+    <div className="flex flex-col items-center gap-0.5 text-center max-w-[160px] mx-auto">
+      <div className="flex flex-wrap justify-center gap-0.5">
+        {typeBits.length > 0 ? (
+          typeBits.map((t) => (
+            <Badge key={t} variant="secondary" className="text-[10px] px-1 py-0 font-normal">
+              {t}
+            </Badge>
+          ))
+        ) : (
+          <span className="text-[10px] text-muted-foreground">No types</span>
+        )}
+      </div>
+      <span className="text-[10px] text-muted-foreground leading-tight">
+        {ch.length ? ch.join(" · ") : "No channels"}
+        {user.hasExpoPushToken ? " · device" : ""}
+      </span>
+    </div>
+  )
 }
 
 interface TransactionData {
@@ -221,6 +257,8 @@ export default function AdminUsersPage() {
             noah_kyb_status: row.noah_kyb_status as string | null | undefined,
             enabled_extra_account_currencies: row.enabled_extra_account_currencies as string[] | undefined,
             email_confirmed_at: row.email_confirmed_at as string | null | undefined,
+            communicationPreferences: row.communicationPreferences as CommunicationPreferences | undefined,
+            hasExpoPushToken: Boolean(row.hasExpoPushToken),
             totalTransactions: 0,
             totalVolume: 0,
             verificationStatus: noahKycStatus === "approved" ? "verified" : "pending",
@@ -598,6 +636,7 @@ export default function AdminUsersPage() {
                   <TableHead className="min-w-[180px]">Email</TableHead>
                   <TableHead className="w-[130px] text-center">Account type</TableHead>
                   <TableHead className="w-[160px] text-center">Verification</TableHead>
+                  <TableHead className="w-[168px] text-center">Comms</TableHead>
                   <TableHead className="w-[100px] text-center">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -610,6 +649,9 @@ export default function AdminUsersPage() {
                     </TableCell>
                     <TableCell className="text-center">{getAccountTypeBadge(user)}</TableCell>
                     <TableCell className="text-center">{renderVerificationCell(user)}</TableCell>
+                    <TableCell className="text-center align-top py-3">
+                      <CommsSummary user={user} />
+                    </TableCell>
                     <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-2">
                         <Dialog>
@@ -671,6 +713,32 @@ export default function AdminUsersPage() {
                                         </div>
                                       </div>
                                     </div>
+                                    {selectedUser.communicationPreferences ? (
+                                      <div>
+                                        <label className="text-sm font-medium text-gray-600">Communication preferences</label>
+                                        <p className="text-xs text-muted-foreground mt-1 mb-2">
+                                          Managed by the user in the Easner mobile or business app.
+                                        </p>
+                                        <div className="mt-2 rounded-md border bg-muted/30 p-3 text-sm space-y-2">
+                                          <div className="flex flex-wrap gap-2">
+                                            <Badge variant={selectedUser.communicationPreferences.productUpdates ? "default" : "secondary"}>
+                                              Product {selectedUser.communicationPreferences.productUpdates ? "on" : "off"}
+                                            </Badge>
+                                            <Badge variant={selectedUser.communicationPreferences.securityAlerts ? "default" : "secondary"}>
+                                              Security {selectedUser.communicationPreferences.securityAlerts ? "on" : "off"}
+                                            </Badge>
+                                            <Badge variant={selectedUser.communicationPreferences.marketingEmails ? "default" : "secondary"}>
+                                              Marketing {selectedUser.communicationPreferences.marketingEmails ? "on" : "off"}
+                                            </Badge>
+                                          </div>
+                                          <div className="text-xs text-muted-foreground">
+                                            Email channel: {selectedUser.communicationPreferences.channels.email ? "on" : "off"} · Push
+                                            channel: {selectedUser.communicationPreferences.channels.push ? "on" : "off"}
+                                            {selectedUser.hasExpoPushToken ? " · Push token registered" : ""}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ) : null}
                                   </div>
                                   <div className="space-y-4">
                                     <div>

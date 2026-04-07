@@ -1,123 +1,80 @@
-import React from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  FlatList,
+  ActivityIndicator,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
-import { 
-  Calendar,
-  ArrowDownLeft,
-  ArrowUpRight,
-  Grid3x3,
-  Hash,
-  Apple,
-  Car,
-  TrendingUp,
-  UtensilsCrossed,
-  Backpack,
-  Heart,
-  Receipt,
-} from 'lucide-react-native'
+import { ArrowDownLeft, ArrowUpRight } from 'lucide-react-native'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
-import { colors, textStyles, borderRadius, spacing, shadows } from '../../theme'
-
-// Mock data
-const MOCK_EXPENSES = {
-  amount: 8318.27,
-  currency: 'USD',
-}
-
-const MOCK_TRANSACTION_COUNT = 66
-const MOCK_CATEGORIES_COUNT = 8
-const MOCK_TAGS_COUNT = 3
-
-const MOCK_CATEGORIES = [
-  {
-    id: '1',
-    name: 'Groceries',
-    icon: Apple,
-    transactions: 18,
-    amount: 3410.49,
-    percentage: 41,
-    color: colors.primary.main,
-  },
-  {
-    id: '2',
-    name: 'Car',
-    icon: Car,
-    transactions: 12,
-    amount: 1580.47,
-    percentage: 19,
-    color: colors.primary.main,
-  },
-  {
-    id: '3',
-    name: 'Investments',
-    icon: TrendingUp,
-    transactions: 2,
-    amount: 831.82,
-    percentage: 10,
-    color: colors.primary.main,
-  },
-  {
-    id: '4',
-    name: 'Restaurants',
-    icon: UtensilsCrossed,
-    transactions: 6,
-    amount: 665.46,
-    percentage: 8,
-    color: colors.primary.main,
-  },
-  {
-    id: '5',
-    name: 'Travels',
-    icon: Backpack,
-    transactions: 3,
-    amount: 582.27,
-    percentage: 7,
-    color: colors.primary.main,
-  },
-  {
-    id: '6',
-    name: 'Beauty & Health',
-    icon: Heart,
-    transactions: 3,
-    amount: 499.09,
-    percentage: 6,
-    color: colors.primary.main,
-  },
-  {
-    id: '7',
-    name: 'Bills',
-    icon: Receipt,
-    transactions: 3,
-    amount: 415.91,
-    percentage: 5,
-    color: colors.primary.main,
-  },
-]
+import { colors, textStyles, borderRadius, spacing } from '../../theme'
+import { noahService } from '../../lib/noahService'
 
 function AnalyticsContent({ navigation }: NavigationProps) {
   const insets = useSafeAreaInsets()
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [income, setIncome] = useState(0)
+  const [expenses, setExpenses] = useState(0)
+  const [count, setCount] = useState(0)
+  const [primaryCurrency, setPrimaryCurrency] = useState('USD')
 
-  const formatCurrency = (amount: number, currency: string = 'USD') => {
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const rows = await noahService.listTransactions(100)
+      let inc = 0
+      let exp = 0
+      const curCounts: Record<string, number> = {}
+      for (const r of rows) {
+        const t = String(r.transaction_type ?? r.type ?? '')
+        const amt = typeof r.amount === 'number' ? r.amount : parseFloat(String(r.amount ?? 0))
+        const c = String(r.currency ?? 'USD')
+        curCounts[c] = (curCounts[c] ?? 0) + 1
+        if (t === 'receive') {
+          inc += Math.abs(amt)
+        } else {
+          exp += Math.abs(amt)
+        }
+      }
+      const topCurrency =
+        Object.entries(curCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'USD'
+      setPrimaryCurrency(topCurrency)
+      setIncome(inc)
+      setExpenses(exp)
+      setCount(rows.length)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not load activity')
+      setIncome(0)
+      setExpenses(0)
+      setCount(0)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const formatCurrency = (amount: number, currency: string = primaryCurrency) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: currency,
+      currency: currency.length === 3 ? currency : 'USD',
       minimumFractionDigits: 2,
     }).format(amount)
   }
 
   const renderCard = (type: 'income' | 'expenses') => {
     const isIncome = type === 'income'
-    const data = isIncome ? MOCK_INCOME : MOCK_EXPENSES
+    const val = isIncome ? income : expenses
     const Icon = isIncome ? ArrowDownLeft : ArrowUpRight
     const iconColor = isIncome ? '#10b981' : '#ef4444'
     const bgColor = isIncome ? '#d1fae5' : '#fee2e2'
@@ -129,37 +86,12 @@ function AnalyticsContent({ navigation }: NavigationProps) {
             <View style={[styles.cardIconContainer, { backgroundColor: bgColor }]}>
               <Icon size={24} color={iconColor} strokeWidth={2} />
             </View>
-            <Text style={styles.cardLabel}>{isIncome ? 'Incomes' : 'Expenses'}</Text>
+            <Text style={styles.cardLabel}>{isIncome ? 'Money in' : 'Money out'}</Text>
           </View>
           <Text style={styles.cardAmount}>
-            {isIncome ? '' : '-'} {formatCurrency(data.amount, data.currency)}
+            {isIncome ? '' : '−'}
+            {formatCurrency(val)}
           </Text>
-        </View>
-      </View>
-    )
-  }
-
-  const renderCategoryItem = ({ item }: { item: typeof MOCK_CATEGORIES[0] }) => {
-    const Icon = item.icon
-
-    return (
-      <View style={styles.categoryItem}>
-        <View style={[styles.categoryIconContainer, { backgroundColor: item.color + '20' }]}>
-          <Icon size={20} color={item.color} strokeWidth={2} />
-        </View>
-        <View style={styles.categoryInfo}>
-          <View style={styles.categoryHeader}>
-            <Text style={styles.categoryName}>{item.name}</Text>
-            <Text style={styles.categoryPercentage}>{item.percentage}%</Text>
-          </View>
-          <View style={styles.categoryDetails}>
-            <Text style={styles.categoryTransactions}>
-              {item.transactions} transaction{item.transactions !== 1 ? 's' : ''}
-            </Text>
-            <Text style={styles.categoryAmount}>
-              - {formatCurrency(item.amount, 'USD')}
-            </Text>
-          </View>
         </View>
       </View>
     )
@@ -173,7 +105,6 @@ function AnalyticsContent({ navigation }: NavigationProps) {
           contentContainerStyle={{ paddingBottom: insets.bottom + spacing[5] }}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity
               onPress={async () => {
@@ -186,36 +117,37 @@ function AnalyticsContent({ navigation }: NavigationProps) {
               <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
             </TouchableOpacity>
             <View style={styles.headerContent}>
-              <Text style={styles.title}>Expense Insights</Text>
-              <Text style={styles.dateRange}>1 July - 31 July 2025</Text>
+              <Text style={styles.title}>Expense insights</Text>
+              <Text style={styles.dateRange}>Totals from your Noah-linked activity</Text>
             </View>
-            <TouchableOpacity
-              style={styles.calendarButton}
-              onPress={async () => {
-                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                // TODO: Open date picker
-              }}
-              activeOpacity={0.7}
-            >
-              <Calendar size={20} color={colors.text.primary} strokeWidth={2} />
-            </TouchableOpacity>
           </View>
 
-          {/* Expenses Card */}
-          <View style={styles.cardContainer}>
-            {renderCard('expenses')}
-          </View>
+          {loading ? (
+            <View style={styles.loading}>
+              <ActivityIndicator size="large" color={colors.primary.main} />
+            </View>
+          ) : error ? (
+            <View style={styles.honestEmpty}>
+              <Text style={styles.honestTitle}>Insights unavailable</Text>
+              <Text style={styles.honestBody}>{error}</Text>
+            </View>
+          ) : (
+            <>
+              <View style={styles.cardContainer}>
+                {renderCard('income')}
+                <View style={{ height: spacing[3] }} />
+                {renderCard('expenses')}
+              </View>
 
-          {/* Categories List */}
-          <View style={styles.categoriesSection}>
-            <FlatList
-              data={MOCK_CATEGORIES}
-              renderItem={renderCategoryItem}
-              keyExtractor={(item) => item.id}
-              scrollEnabled={false}
-              ItemSeparatorComponent={() => <View style={styles.separator} />}
-            />
-          </View>
+              <View style={styles.honestEmpty}>
+                <Text style={styles.honestTitle}>Categories</Text>
+                <Text style={styles.honestBody}>
+                  Merchant categories are not available from this activity feed yet. {count} transaction
+                  {count === 1 ? '' : 's'} in the current view.
+                </Text>
+              </View>
+            </>
+          )}
         </ScrollView>
       </View>
     </ScreenWrapper>
@@ -260,14 +192,9 @@ const styles = StyleSheet.create({
     ...textStyles.bodyMedium,
     color: colors.text.secondary,
   },
-  calendarButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.neutral.white,
-    justifyContent: 'center',
+  loading: {
+    paddingVertical: spacing[10],
     alignItems: 'center',
-    ...shadows.sm,
   },
   cardContainer: {
     paddingHorizontal: spacing[5],
@@ -308,63 +235,26 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontFamily: 'Outfit-SemiBold',
   },
-  categoriesSection: {
+  honestEmpty: {
     marginHorizontal: spacing[5],
+    padding: spacing[5],
+    backgroundColor: colors.frame.background,
+    borderRadius: borderRadius.lg,
+    borderWidth: 0.5,
+    borderColor: colors.frame.border,
   },
-  categoryItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[3],
-    paddingVertical: spacing[3],
-  },
-  categoryIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  categoryInfo: {
-    flex: 1,
-  },
-  categoryHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing[1],
-  },
-  categoryName: {
-    ...textStyles.bodyMedium,
+  honestTitle: {
+    ...textStyles.titleMedium,
     color: colors.text.primary,
-    fontWeight: '500',
+    marginBottom: spacing[2],
   },
-  categoryPercentage: {
-    ...textStyles.bodySmall,
-    color: colors.text.secondary,
-    fontWeight: '500',
-  },
-  categoryDetails: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  categoryTransactions: {
-    ...textStyles.bodySmall,
-    color: colors.text.secondary,
-  },
-  categoryAmount: {
+  honestBody: {
     ...textStyles.bodyMedium,
-    color: colors.text.primary,
-    fontWeight: '600',
-  },
-  separator: {
-    height: 1,
-    backgroundColor: colors.border.light,
-    marginLeft: 52,
+    color: colors.text.secondary,
+    lineHeight: 22,
   },
 })
 
 export default function AnalyticsScreen(props: NavigationProps) {
   return <AnalyticsContent {...props} />
 }
-

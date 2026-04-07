@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { SendRecipientPicker } from "@/components/send-recipient-picker"
-import { currencyRates, currencySymbols } from "@/lib/currency-meta"
+import { getCurrencySymbol } from "@/lib/utils"
+import { sendFlowReferenceUsdPerUnit } from "@/lib/send-flow-reference-rates"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 import type { Beneficiary } from "@/lib/recipient-types"
 import {
@@ -48,8 +49,8 @@ import {
 
 function getConversionRate(fromCurrency: string, toCurrency: string): number {
   if (fromCurrency === toCurrency) return 1
-  const fromPerUsd = 1 / (currencyRates[fromCurrency] ?? 1)
-  const toPerUsd = 1 / (currencyRates[toCurrency] ?? 1)
+  const fromPerUsd = 1 / (sendFlowReferenceUsdPerUnit[fromCurrency] ?? 1)
+  const toPerUsd = 1 / (sendFlowReferenceUsdPerUnit[toCurrency] ?? 1)
   return toPerUsd / fromPerUsd
 }
 
@@ -248,7 +249,7 @@ export default function SendPage() {
   const getSourceDisplayLabel = () => {
     if (paymentMethod === "balance" && sourceAccount) {
       const fig = displayBalanceForSource.toLocaleString("en-US", { minimumFractionDigits: 2 })
-      return `${sourceAccount.currency} Balance • ${currencySymbols[sourceAccount.currency] ?? ""}${fig}`
+      return `${sourceAccount.currency} Balance • ${getCurrencySymbol(sourceAccount.currency)}${fig}`
     }
     if (paymentMethod === "usdc") return "Pay with USDC"
     if (paymentMethod === "usdt") return "Pay with USDT"
@@ -340,8 +341,7 @@ export default function SendPage() {
                       <ArrowUpDown className="h-3.5 w-3.5 shrink-0 text-primary" strokeWidth={2} aria-hidden />
                       <span className="min-w-0 truncate">
                         {amountEntryMode === "receive" ? "Sending" : "Receiving"}:{" "}
-                        {currencySymbols[amountEntryMode === "receive" ? sendCurrency : receiveCurrency] ??
-                          (amountEntryMode === "receive" ? sendCurrency : receiveCurrency)}
+                        {getCurrencySymbol(amountEntryMode === "receive" ? sendCurrency : receiveCurrency)}
                         {(amountEntryMode === "receive" ? sendAmount : receiveAmount).toLocaleString("en-US", {
                           minimumFractionDigits:
                             Math.abs((amountEntryMode === "receive" ? sendAmount : receiveAmount) % 1) >= 0.01
@@ -366,7 +366,7 @@ export default function SendPage() {
             style={{ fontVariantNumeric: "tabular-nums" }}
           >
             <span className="font-black text-foreground select-none shrink-0 text-5xl">
-              {currencySymbols[amountInputCurrency] ?? amountInputCurrency}
+              {getCurrencySymbol(amountInputCurrency)}
             </span>
             <input
               type="text"
@@ -388,7 +388,7 @@ export default function SendPage() {
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>
                 Insufficient {sourceAccount.currency} balance. You need{" "}
-                {currencySymbols[sourceAccount.currency] ?? ""}
+                {getCurrencySymbol(sourceAccount.currency)}
                 {shortfallAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })} more, or choose another source.
               </span>
             </div>
@@ -497,13 +497,13 @@ export default function SendPage() {
                         <div className="flex-1 min-w-0">
                           <p className="font-medium">{acc.currency} Balance</p>
                           <p className={`text-sm ${sufficient ? "text-muted-foreground" : "text-destructive"}`}>
-                            {currencySymbols[acc.currency] ?? ""}
+                            {getCurrencySymbol(acc.currency)}
                             {acc.availableBalance.toLocaleString("en-US", {
                               minimumFractionDigits: 2,
                             })}
                             {!sufficient && receiveAmount > 0 && (
                               <span className="block mt-0.5">
-                                Short by {currencySymbols[acc.currency] ?? ""}
+                                Short by {getCurrencySymbol(acc.currency)}
                                 {(sendAmount - acc.availableBalance).toLocaleString("en-US", {
                                   minimumFractionDigits: 2,
                                 })}

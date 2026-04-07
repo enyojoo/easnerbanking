@@ -2,6 +2,7 @@
 
 import sgMail from '@sendgrid/mail'
 import { emailTemplates } from './email-templates'
+import { shouldSendTemplatedEmail } from './communication-email-guard'
 import type { 
   EmailData, 
   EmailServiceConfig, 
@@ -35,9 +36,24 @@ export class EmailService {
 
   /**
    * Send a generic email using a template
+   * @param communicationPreferences — from `users.communication_preferences` (raw jsonb); omit to send without a preference check (avoid for user-facing mail).
    */
-  async sendEmail(emailData: EmailData): Promise<SendGridResponse> {
+  async sendEmail(
+    emailData: EmailData,
+    communicationPreferences?: unknown,
+  ): Promise<SendGridResponse> {
     try {
+      const { send, reason } = shouldSendTemplatedEmail(
+        emailData.template,
+        communicationPreferences,
+      )
+      if (!send) {
+        console.info(
+          `[email] skipped template=${emailData.template} to=${emailData.to}: ${reason ?? 'opt-out'}`,
+        )
+        return { success: true, skipped: true, skipReason: reason }
+      }
+
       ensureSendGridInitialized()
       const template = emailTemplates[emailData.template]
       if (!template) {
@@ -74,12 +90,18 @@ export class EmailService {
   /**
    * Send welcome email to new user
    */
-  async sendWelcomeEmail(userData: WelcomeEmailData): Promise<SendGridResponse> {
-    return this.sendEmail({
-      to: userData.email,
-      template: 'welcome',
-      data: userData
-    })
+  async sendWelcomeEmail(
+    userData: WelcomeEmailData,
+    communicationPreferences?: unknown,
+  ): Promise<SendGridResponse> {
+    return this.sendEmail(
+      {
+        to: userData.email,
+        template: 'welcome',
+        data: userData,
+      },
+      communicationPreferences,
+    )
   }
 
   /**
@@ -88,7 +110,8 @@ export class EmailService {
   async sendTransactionNotification(
     userEmail: string, 
     transactionData: TransactionEmailData, 
-    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
+    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled',
+    communicationPreferences?: unknown,
   ): Promise<SendGridResponse> {
     const templateMap = {
       pending: 'transactionPending',
@@ -103,49 +126,72 @@ export class EmailService {
       throw new Error(`Invalid transaction status: ${status}`)
     }
 
-    return this.sendEmail({
-      to: userEmail,
-      template: templateName,
-      data: {
-        ...transactionData,
-        status
-      }
-    })
+    return this.sendEmail(
+      {
+        to: userEmail,
+        template: templateName,
+        data: {
+          ...transactionData,
+          status
+        }
+      },
+      communicationPreferences,
+    )
   }
 
   /**
    * Send transaction pending email
    */
-  async sendTransactionPendingEmail(userEmail: string, transactionData: TransactionEmailData): Promise<SendGridResponse> {
-    return this.sendTransactionNotification(userEmail, transactionData, 'pending')
+  async sendTransactionPendingEmail(
+    userEmail: string,
+    transactionData: TransactionEmailData,
+    communicationPreferences?: unknown,
+  ): Promise<SendGridResponse> {
+    return this.sendTransactionNotification(userEmail, transactionData, 'pending', communicationPreferences)
   }
 
   /**
    * Send transaction processing email
    */
-  async sendTransactionProcessingEmail(userEmail: string, transactionData: TransactionEmailData): Promise<SendGridResponse> {
-    return this.sendTransactionNotification(userEmail, transactionData, 'processing')
+  async sendTransactionProcessingEmail(
+    userEmail: string,
+    transactionData: TransactionEmailData,
+    communicationPreferences?: unknown,
+  ): Promise<SendGridResponse> {
+    return this.sendTransactionNotification(userEmail, transactionData, 'processing', communicationPreferences)
   }
 
   /**
    * Send transaction completed email
    */
-  async sendTransactionCompletedEmail(userEmail: string, transactionData: TransactionEmailData): Promise<SendGridResponse> {
-    return this.sendTransactionNotification(userEmail, transactionData, 'completed')
+  async sendTransactionCompletedEmail(
+    userEmail: string,
+    transactionData: TransactionEmailData,
+    communicationPreferences?: unknown,
+  ): Promise<SendGridResponse> {
+    return this.sendTransactionNotification(userEmail, transactionData, 'completed', communicationPreferences)
   }
 
   /**
    * Send transaction failed email
    */
-  async sendTransactionFailedEmail(userEmail: string, transactionData: TransactionEmailData): Promise<SendGridResponse> {
-    return this.sendTransactionNotification(userEmail, transactionData, 'failed')
+  async sendTransactionFailedEmail(
+    userEmail: string,
+    transactionData: TransactionEmailData,
+    communicationPreferences?: unknown,
+  ): Promise<SendGridResponse> {
+    return this.sendTransactionNotification(userEmail, transactionData, 'failed', communicationPreferences)
   }
 
   /**
    * Send transaction cancelled email
    */
-  async sendTransactionCancelledEmail(userEmail: string, transactionData: TransactionEmailData): Promise<SendGridResponse> {
-    return this.sendTransactionNotification(userEmail, transactionData, 'cancelled')
+  async sendTransactionCancelledEmail(
+    userEmail: string,
+    transactionData: TransactionEmailData,
+    communicationPreferences?: unknown,
+  ): Promise<SendGridResponse> {
+    return this.sendTransactionNotification(userEmail, transactionData, 'cancelled', communicationPreferences)
   }
 
   /**

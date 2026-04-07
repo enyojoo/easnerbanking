@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { parseCommunicationPreferences } from "@easner/shared"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireOfficeAdmin } from "@/lib/api/admin-auth"
 
@@ -58,10 +59,21 @@ export async function GET(request: Request) {
   }
 
   const users = (rows ?? []).map((row) => {
-    const r = row as UserRow
+    const r = row as UserRow & {
+      communication_preferences?: unknown
+      expo_push_token?: string | null
+    }
     const org = r.easner_business_id ? orgKybByBusinessId.get(r.easner_business_id) : undefined
+    const token = r.expo_push_token
+    const hasExpoPushToken = typeof token === "string" && token.length > 0
+    const { expo_push_token: _omitToken, communication_preferences: commRaw, ...rest } = row as Record<
+      string,
+      unknown
+    >
     return {
-      ...row,
+      ...rest,
+      communicationPreferences: parseCommunicationPreferences(commRaw),
+      hasExpoPushToken,
       email_confirmed_at: authById.get(r.id) ?? null,
       ...(org
         ? {

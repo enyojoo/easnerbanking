@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server"
-import { mapRowToInvoice, invoiceToDbPayload, type B2bInvoiceRow } from "@/lib/b2b/map-invoice"
+import {
+  mapRowToInvoice,
+  invoiceToDbPayload,
+  isUuid,
+  type B2bInvoiceRow,
+} from "@/lib/b2b/map-invoice"
 import { requireBusinessOrg } from "@/lib/b2b/resolve-org"
 import type { Invoice } from "@/lib/b2b/types"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
@@ -32,10 +37,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "Invoice not found" }, { status: 404 })
   }
 
-  const customerId =
-    typeof invoice.customerId === "string" && invoice.customerId.length > 0
-      ? invoice.customerId
+  const rawCustomerId =
+    typeof invoice.customerId === "string" && invoice.customerId.trim().length > 0
+      ? invoice.customerId.trim()
       : null
+  const customerId = rawCustomerId && isUuid(rawCustomerId) ? rawCustomerId : null
 
   if (customerId) {
     const { data: cust } = await admin
@@ -65,7 +71,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     .single()
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error("invoices PATCH:", error)
+    return NextResponse.json(
+      { error: error.message, code: error.code, details: error.details },
+      { status: 500 },
+    )
   }
   return NextResponse.json({ invoice: mapRowToInvoice(data as B2bInvoiceRow) })
 }

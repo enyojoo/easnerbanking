@@ -161,7 +161,8 @@ function TransactionItem({
     }).start()
   }
 
-  // Bridge transactions use transaction_type, legacy uses type
+  // Noah-backed rows use `transaction_type`; older `transactions` rows use `type`. Detail uses
+  // TransactionDetails when Noah id is present, else LegacyTransactionDetails for legacy sends.
   const transactionType = item.transaction_type || item.type || 'send'
   const statusDisplay = getTransactionStatusDisplay(item.status)
   const statusColor = statusDisplay?.color || colors.neutral[500]

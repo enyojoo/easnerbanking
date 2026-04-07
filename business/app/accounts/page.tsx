@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { currencySymbols } from "@/lib/currency-meta"
+import { getCurrencySymbol } from "@/lib/utils"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -81,7 +81,7 @@ export default function AccountsPage() {
                   <div className="mb-10">
                     <p className="text-xs text-muted-foreground mb-1">Available Balance</p>
                     <p className="text-3xl font-semibold">
-                      {currencySymbols[account.currency]}
+                      {getCurrencySymbol(account.currency)}
                       {account.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                     </p>
                   </div>

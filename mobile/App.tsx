@@ -24,6 +24,7 @@ import { deepLinkService } from './src/services/DeepLinkService'
 import { pushNotificationService } from './src/lib/pushNotificationService'
 import AppNavigator from './src/navigation/AppNavigator'
 import CustomSplashScreen from './src/components/SplashScreen'
+import { PushNotificationBootstrap } from './src/components/PushNotificationBootstrap'
 import { colors } from './src/theme'
 
 // Keep the splash screen visible while we load fonts
@@ -143,59 +144,40 @@ export default function App() {
     deepLinkService.initialize()
   }, [])
 
-  // Initialize push notifications
+  // Foreground/tap listeners only; token registration is gated on user prefs in PushNotificationBootstrap
   useEffect(() => {
-    const initializePushNotifications = async () => {
-      try {
-        // Register for push notifications
-        const token = await pushNotificationService.registerForPushNotifications()
-        
-        if (token) {
-          console.log('Push notification token registered:', token)
-          // TODO: Send token to backend API
-          // await apiClient.post('/users/push-token', { token })
+    try {
+      const receivedSubscription = pushNotificationService.addNotificationReceivedListener(
+        async (notification) => {
+          console.log('Notification received:', notification)
         }
+      )
 
-        // Handle notification received while app is in foreground
-        const receivedSubscription = pushNotificationService.addNotificationReceivedListener(
-          async (notification) => {
-            console.log('Notification received:', notification)
-            // Update badge count
-            // The notification will be added to in-app notifications via context
+      const responseSubscription = pushNotificationService.addNotificationResponseReceivedListener(
+        (response) => {
+          console.log('Notification tapped:', response)
+          const data = response.notification.request.content.data
+
+          if (data?.transactionId && (global as any).rootNavigationRef?.current) {
+            ;(global as any).rootNavigationRef.current.navigate('TransactionDetails', {
+              transactionId: data.transactionId,
+              fromScreen: 'PushNotification',
+            })
+          } else if (data?.type === 'card_transaction' && (global as any).rootNavigationRef?.current) {
+            ;(global as any).rootNavigationRef.current.navigate('TransactionCard', {})
+          } else if ((global as any).rootNavigationRef?.current) {
+            ;(global as any).rootNavigationRef.current.navigate('InAppNotifications', {})
           }
-        )
-
-        // Handle notification tapped
-        const responseSubscription = pushNotificationService.addNotificationResponseReceivedListener(
-          (response) => {
-            console.log('Notification tapped:', response)
-            const data = response.notification.request.content.data
-            
-            // Navigate based on notification type using global navigation ref
-            // This will be handled by AppNavigator when app is active
-            if (data?.transactionId && (global as any).rootNavigationRef?.current) {
-              (global as any).rootNavigationRef.current.navigate('TransactionDetails', {
-                transactionId: data.transactionId,
-                fromScreen: 'PushNotification'
-              })
-            } else if (data?.type === 'card_transaction' && (global as any).rootNavigationRef?.current) {
-              (global as any).rootNavigationRef.current.navigate('TransactionCard', {})
-            } else if ((global as any).rootNavigationRef?.current) {
-              (global as any).rootNavigationRef.current.navigate('InAppNotifications', {})
-            }
-          }
-        )
-
-        return () => {
-          pushNotificationService.removeNotificationSubscription(receivedSubscription)
-          pushNotificationService.removeNotificationSubscription(responseSubscription)
         }
-      } catch (error) {
-        console.error('Error initializing push notifications:', error)
+      )
+
+      return () => {
+        pushNotificationService.removeNotificationSubscription(receivedSubscription)
+        pushNotificationService.removeNotificationSubscription(responseSubscription)
       }
+    } catch (error) {
+      console.error('Error initializing push listeners:', error)
     }
-
-    initializePushNotifications()
   }, [])
 
   // Track app state changes for session management
@@ -223,6 +205,7 @@ export default function App() {
         <SafeAreaProvider>
           <PostHogProvider>
             <AuthProvider>
+              <PushNotificationBootstrap />
               <BalanceProvider>
               <UserDataProvider>
                 <NotificationsProvider>

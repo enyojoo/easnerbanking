@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { dataCache } from "@/lib/cache"
 
 type SetStateAction<T> = T | ((prev: T) => T)
@@ -35,9 +35,19 @@ export function useCachedData<T>({
   const [data, setDataState] = useState<T>(initialData)
   const [loading, setLoading] = useState<boolean>(enabled)
 
+  // Callers often pass `initialData: []` or inline objects — new references each render.
+  // If `initialData` is a dependency of the cache effect, that causes an infinite update loop.
+  const initialDataRef = useRef(initialData)
+  initialDataRef.current = initialData
+
+  const fetcherRef = useRef(fetcher)
+  fetcherRef.current = fetcher
+  const onErrorRef = useRef(onError)
+  onErrorRef.current = onError
+
   const fetchFresh = useCallback(() => {
     if (!enabled || !cacheKey) return Promise.resolve()
-    return fetcher()
+    return fetcherRef.current()
       .then((fresh) => {
         setDataState(fresh)
         setLoading(false)
@@ -52,13 +62,17 @@ export function useCachedData<T>({
       })
       .catch((error) => {
         setLoading(false)
-        onError?.(error)
+        onErrorRef.current?.(error)
       })
-  }, [enabled, cacheKey, fetcher, ttlMs, persistKey, onError])
+  }, [enabled, cacheKey, ttlMs, persistKey])
+
+  /** Avoid putting `fetchFresh` in effect deps (Turbopack/HMR can make dependency length look unstable). */
+  const fetchFreshRef = useRef(fetchFresh)
+  fetchFreshRef.current = fetchFresh
 
   useEffect(() => {
     if (!enabled || !cacheKey) {
-      setDataState(initialData)
+      setDataState(initialDataRef.current)
       setLoading(false)
       return
     }
@@ -69,7 +83,7 @@ export function useCachedData<T>({
       setLoading(false)
       // Return cached data instantly, then refresh in background if stale.
       if (dataCache.isStale(cacheKey)) {
-        void fetchFresh()
+        void fetchFreshRef.current()
       }
       return
     }
@@ -93,18 +107,18 @@ export function useCachedData<T>({
     }
 
     setLoading(true)
-    void fetchFresh()
+    void fetchFreshRef.current()
 
     return () => {
       // no-op
     }
-  }, [enabled, cacheKey, initialData, fetchFresh, persistKey, persistMaxAgeMs, ttlMs])
+  }, [enabled, cacheKey, persistKey, persistMaxAgeMs, ttlMs])
 
   useEffect(() => {
     if (!enabled || !cacheKey || typeof window === "undefined") return
     const revalidateIfStale = () => {
       if (document.visibilityState === "hidden") return
-      if (dataCache.isStale(cacheKey)) void fetchFresh()
+      if (dataCache.isStale(cacheKey)) void fetchFreshRef.current()
     }
     window.addEventListener("focus", revalidateIfStale)
     document.addEventListener("visibilitychange", revalidateIfStale)
@@ -112,7 +126,7 @@ export function useCachedData<T>({
       window.removeEventListener("focus", revalidateIfStale)
       document.removeEventListener("visibilitychange", revalidateIfStale)
     }
-  }, [enabled, cacheKey, fetchFresh])
+  }, [enabled, cacheKey])
 
   const setData = useCallback(
     (next: SetStateAction<T>) => {

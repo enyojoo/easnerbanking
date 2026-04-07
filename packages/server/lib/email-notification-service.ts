@@ -61,11 +61,24 @@ export class EmailNotificationService {
 
       // Get user email
       console.log('Fetching user data...')
-      const { data: user, error: userError } = await supabase
+      let user: { email?: string; communication_preferences?: unknown } | null = null
+      let userError = null as { message?: string } | null
+      const u1 = await supabase
         .from('users')
-        .select('email')
+        .select('email, communication_preferences')
         .eq('id', transaction.user_id)
         .single()
+      user = u1.data
+      userError = u1.error
+      if (userError?.message?.includes('communication_preferences') || (userError as { code?: string })?.code === '42703') {
+        const u2 = await supabase
+          .from('users')
+          .select('email')
+          .eq('id', transaction.user_id)
+          .single()
+        user = u2.data
+        userError = u2.error
+      }
 
       if (userError || !user?.email) {
         console.error('User not found:', userError)
@@ -103,17 +116,19 @@ export class EmailNotificationService {
       // Send email based on status
       console.log('Sending email to:', user.email, 'with status:', status)
       
+      const comm = (user as { communication_preferences?: unknown }).communication_preferences
+
       let result
       if (status === 'completed') {
-        result = await emailService.sendTransactionCompletedEmail(user.email, emailData)
+        result = await emailService.sendTransactionCompletedEmail(user.email, emailData, comm)
       } else if (status === 'processing') {
-        result = await emailService.sendTransactionProcessingEmail(user.email, emailData)
+        result = await emailService.sendTransactionProcessingEmail(user.email, emailData, comm)
       } else if (status === 'pending') {
-        result = await emailService.sendTransactionPendingEmail(user.email, emailData)
+        result = await emailService.sendTransactionPendingEmail(user.email, emailData, comm)
       } else if (status === 'failed') {
-        result = await emailService.sendTransactionFailedEmail(user.email, emailData)
+        result = await emailService.sendTransactionFailedEmail(user.email, emailData, comm)
       } else if (status === 'cancelled') {
-        result = await emailService.sendTransactionCancelledEmail(user.email, emailData)
+        result = await emailService.sendTransactionCancelledEmail(user.email, emailData, comm)
       } else {
         console.log('Unknown status:', status)
         return
@@ -147,7 +162,7 @@ export class EmailNotificationService {
         .select(`
           *,
           crypto_wallet:crypto_wallets(*, recipient:recipients(*)),
-          user:users(first_name, last_name, email)
+          user:users(first_name, last_name, email, communication_preferences)
         `)
         .eq('transaction_id', transactionId)
         .single()
@@ -162,6 +177,9 @@ export class EmailNotificationService {
         console.error('User email not found')
         return
       }
+
+      const comm = (transaction.user as { communication_preferences?: unknown } | undefined)
+        ?.communication_preferences
 
       // Map crypto receive status to transaction email status
       let emailStatus: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' = 'processing'
@@ -191,13 +209,13 @@ export class EmailNotificationService {
       // Send email based on status
       let result
       if (status === 'deposited') {
-        result = await emailService.sendTransactionCompletedEmail(userEmail, emailData)
+        result = await emailService.sendTransactionCompletedEmail(userEmail, emailData, comm)
       } else if (status === 'converting' || status === 'converted' || status === 'confirmed') {
-        result = await emailService.sendTransactionProcessingEmail(userEmail, emailData)
+        result = await emailService.sendTransactionProcessingEmail(userEmail, emailData, comm)
       } else if (status === 'pending') {
-        result = await emailService.sendTransactionPendingEmail(userEmail, emailData)
+        result = await emailService.sendTransactionPendingEmail(userEmail, emailData, comm)
       } else if (status === 'failed') {
-        result = await emailService.sendTransactionFailedEmail(userEmail, emailData)
+        result = await emailService.sendTransactionFailedEmail(userEmail, emailData, comm)
       } else {
         console.log('Unknown crypto receive status:', status)
         return
@@ -221,14 +239,30 @@ export class EmailNotificationService {
     firstName: string
   ): Promise<void> {
     try {
+      let prefs: unknown
+      try {
+        const supabase = createServerClient()
+        const { data: row } = await supabase
+          .from('users')
+          .select('communication_preferences')
+          .eq('email', userEmail)
+          .maybeSingle()
+        prefs = row?.communication_preferences
+      } catch {
+        prefs = undefined
+      }
+
       const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.easner.com'
-      const result = await emailService.sendWelcomeEmail({
-        firstName,
-        lastName: '',
-        email: userEmail,
-        baseCurrency: 'USD',
-        dashboardUrl: `${appUrl}/dashboard`
-      })
+      const result = await emailService.sendWelcomeEmail(
+        {
+          firstName,
+          lastName: '',
+          email: userEmail,
+          baseCurrency: 'USD',
+          dashboardUrl: `${appUrl}/dashboard`,
+        },
+        prefs,
+      )
       
       if (result.success) {
         console.log('Welcome email sent to:', userEmail)

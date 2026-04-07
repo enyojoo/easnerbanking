@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { PinChallengeDialog } from "@/components/app-lock/pin-challenge-dialog"
 import { useAuth } from "@/lib/auth-context"
 import { hasPin, isLoginPinModuleAvailable } from "@/lib/login-pin"
-import { currencySymbols } from "@/lib/currency-meta"
+import { getCurrencySymbol } from "@/lib/utils"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 import type { Beneficiary } from "@/lib/recipient-types"
 import { generateTransactionId } from "@/lib/transaction-id"
@@ -233,7 +233,7 @@ export default function SendConfirmPage() {
           <div className="flex items-center justify-between border-b pb-4">
             <span className="text-sm text-muted-foreground">Amount</span>
             <span className="text-xl font-semibold">
-              {currencySymbols[state.receiveCurrency] ?? state.receiveCurrency}
+              {getCurrencySymbol(state.receiveCurrency)}
               {state.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
             </span>
           </div>
@@ -241,7 +241,7 @@ export default function SendConfirmPage() {
             <div className="flex items-center justify-between border-b pb-4">
               <span className="text-sm text-muted-foreground">You send</span>
               <span className="font-medium">
-                {currencySymbols[state.sendCurrency] ?? state.sendCurrency}
+                {getCurrencySymbol(state.sendCurrency)}
                 {state.sendAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
               </span>
             </div>
@@ -272,7 +272,7 @@ export default function SendConfirmPage() {
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Transfer fee</span>
             <span className="font-semibold">
-              {currencySymbols[state.sendCurrency] ?? state.sendCurrency}
+              {getCurrencySymbol(state.sendCurrency)}
               {transferFee.toLocaleString("en-US", { minimumFractionDigits: 2 })}
             </span>
           </div>
@@ -283,14 +283,14 @@ export default function SendConfirmPage() {
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Payout fee</span>
             <span className="font-semibold">
-              {currencySymbols[state.receiveCurrency] ?? state.receiveCurrency}
+              {getCurrencySymbol(state.receiveCurrency)}
               {payoutFee.toLocaleString("en-US", { minimumFractionDigits: 2 })}
             </span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Total recipient amount</span>
             <span className="font-semibold">
-              {currencySymbols[state.receiveCurrency] ?? state.receiveCurrency}
+              {getCurrencySymbol(state.receiveCurrency)}
               {state.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
             </span>
           </div>

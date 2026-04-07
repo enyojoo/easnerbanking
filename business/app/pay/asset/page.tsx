@@ -1,10 +1,11 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { TERMINAL_ALLOWED_PAIRS, type TerminalAllowedPair } from "@/lib/terminal-allowed-pairs"
 import { useAuth } from "@/lib/auth-context"
+import { isTerminalChargeFiatSupported } from "@/lib/noah/terminal-charge-fiats"
 import { resolveTerminalPayFiatCurrency } from "@/lib/noah/terminal-pay-fiat"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { CACHE_KEYS, dataCache } from "@/lib/cache"
@@ -18,15 +19,64 @@ export default function PayAssetPage() {
   const searchParams = useSearchParams()
   const { user } = useAuth()
   const { tier1Complete, baseCurrency } = useBusinessProfile()
-  /** Counter charge label only; API derives the same from org `base_currency`. Payout currency = Setup payout recipient. */
-  const chargeFiatCurrency = resolveTerminalPayFiatCurrency(baseCurrency)
+  const paramFiat = (searchParams.get("fiat_currency") || "").trim().toUpperCase()
+  const chargeFiatCurrency =
+    paramFiat && isTerminalChargeFiatSupported(paramFiat) ?
+      paramFiat
+    : resolveTerminalPayFiatCurrency(baseCurrency)
   const amountStr = searchParams.get("amount") || ""
   const fiatAmount = Number.parseFloat(amountStr)
 
   const [selected, setSelected] = useState<TerminalAllowedPair | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [estimate, setEstimate] = useState<{ crypto: string; amount: string } | null>(null)
+  const [estimateLoading, setEstimateLoading] = useState(false)
 
   const pairs = useMemo(() => TERMINAL_ALLOWED_PAIRS, [])
+
+  useEffect(() => {
+    if (!tier1Complete || !selected || !Number.isFinite(fiatAmount) || fiatAmount <= 0) {
+      setEstimate(null)
+      setEstimateLoading(false)
+      return
+    }
+    let cancelled = false
+    setEstimateLoading(true)
+    setEstimate(null)
+    const q = new URLSearchParams({
+      terminalCrypto: selected.cryptoCurrency,
+      chargeFiat: chargeFiatCurrency,
+      terminalFiatAmount: fiatAmount.toFixed(2),
+    })
+    void fetchWithSession(`/api/noah/prices?${q.toString()}`, {
+      headers: { "X-Easner-Noah-Scope": "business" },
+    })
+      .then(async (res) => {
+        const body = (await res.json().catch(() => ({}))) as {
+          estimatedCryptoAmount?: string
+          cryptoCurrency?: string
+          error?: string
+        }
+        if (cancelled) return
+        if (!res.ok || !body.estimatedCryptoAmount?.trim()) {
+          setEstimate(null)
+          return
+        }
+        setEstimate({
+          crypto: body.cryptoCurrency || selected.cryptoCurrency,
+          amount: body.estimatedCryptoAmount.trim(),
+        })
+      })
+      .catch(() => {
+        if (!cancelled) setEstimate(null)
+      })
+      .finally(() => {
+        if (!cancelled) setEstimateLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [tier1Complete, selected, fiatAmount, chargeFiatCurrency])
 
   const onCreateSession = async () => {
     if (!tier1Complete || !selected) return
@@ -44,6 +94,7 @@ export default function PayAssetPage() {
         },
         body: JSON.stringify({
           fiat_amount: fiatAmount,
+          fiat_currency: chargeFiatCurrency,
           crypto_currency: selected.cryptoCurrency,
           network: selected.network,
         }),
@@ -111,6 +162,28 @@ export default function PayAssetPage() {
           )
         })}
       </ul>
+      {selected ? (
+        <div className="rounded-xl border border-dashed bg-muted/20 px-4 py-3 text-left text-sm">
+          {estimateLoading ? (
+            <p className="text-muted-foreground">Fetching indicative rate…</p>
+          ) : estimate ? (
+            <>
+              <p className="text-foreground">
+                Indicative: about{" "}
+                <span className="font-mono font-medium tabular-nums">
+                  {estimate.amount} {estimate.crypto}
+                </span>{" "}
+                for this total (fees and final quote may differ).
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                The payment screen shows the minimum crypto amount from Noah when the charge is created.
+              </p>
+            </>
+          ) : (
+            <p className="text-xs text-muted-foreground">Indicative rate unavailable for this pair in preview.</p>
+          )}
+        </div>
+      ) : null}
       <Button
         type="button"
         className="h-12 w-full touch-manipulation"

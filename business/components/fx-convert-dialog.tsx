@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import type { Account } from "@/lib/finance-types"
-import { currencySymbols } from "@/lib/currency-meta"
+import { getCurrencySymbol } from "@/lib/utils"
 import { Repeat } from "lucide-react"
 import {
   Select,
@@ -190,7 +190,7 @@ export function FXConvertDialog({
               style={{ fontVariantNumeric: "tabular-nums" }}
             >
               <span className="font-black text-foreground select-none shrink-0 text-4xl">
-                {currencySymbols[fromCurrency] ?? fromCurrency}
+                {getCurrencySymbol(fromCurrency)}
               </span>
               <input
                 type="text"
@@ -248,7 +248,7 @@ export function FXConvertDialog({
             )}
             <p className="text-sm text-muted-foreground pt-2">Estimated amount credited</p>
             <p className="text-2xl font-bold">
-              {toCurrency ? currencySymbols[toCurrency] : ""}
+              {toCurrency ? getCurrencySymbol(toCurrency) : ""}
               {destAmountDisplay
                 ? Number.parseFloat(destAmountDisplay).toLocaleString("en-US", {
                     minimumFractionDigits: 2,

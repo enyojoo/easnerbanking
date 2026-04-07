@@ -19,6 +19,7 @@ import Link from "next/link"
 import { TransactionDetailsDialog } from "@/components/transaction-details-dialog"
 import { DateRangeFilter, type TimePeriod } from "@/components/date-range-filter"
 import { cn, formatCurrency } from "@/lib/utils"
+import { withReturnTo } from "@/lib/invoice-navigation"
 import { useTransactionsCached } from "@/hooks/use-transactions-cached"
 import { getDateRange, type TransactionWithSource } from "@/lib/transactions"
 import {
@@ -131,7 +132,7 @@ export default function DashboardPage() {
                 </Link>
               </Button>
               <Button variant="outline" asChild size="sm">
-                <Link href="/invoices/create" className="flex items-center gap-2">
+                <Link href={withReturnTo("/invoices/create", "/dashboard")} className="flex items-center gap-2">
                   <Plus className="h-4 w-4" />
                   Create Invoice
                 </Link>

@@ -2,7 +2,7 @@ import type { Invoice } from "@/lib/b2b/types"
 
 /**
  * Legacy module-local cache for invoice PDF / tooling.
- * Prefer loading from `/api/invoices/public/:id` or B2B APIs.
+ * Prefer loading from `/api/invoices/public/by-id/:id` or B2B APIs.
  */
 let store: Invoice[] = []
 
@@ -30,6 +30,7 @@ export function removeInvoiceFromStore(id: string) {
   store = store.filter((inv) => inv.id !== id)
 }
 
-export function syncInvoicesFromMock() {
+/** Clears the in-memory invoice cache (e.g. on sign-out). */
+export function clearInvoiceStore() {
   store = []
 }

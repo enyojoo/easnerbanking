@@ -20,12 +20,17 @@ export interface Invoice {
   customerName: string
   customerEmail: string
   subtotal?: number
+  /** Invoice-level discount as percent of subtotal (0–100). */
+  discountRate?: number
+  /** Absolute discount amount (subtotal × discountRate / 100). */
+  discount?: number
   taxRate?: number
   tax?: number
   total: number
   currency: string
   status: "draft" | "open" | "sent" | "past_due" | "paid" | "void" | "uncollectible" | "failed"
   dueDate: string
+  /** Creation instant: full ISO from `invoices.created_at` after load; date-only possible briefly from client-only state. */
   createdDate: string
   finalizedDate: string | null
   frequency: string | null

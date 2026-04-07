@@ -15,6 +15,7 @@ import type { StablecoinAccount } from "@/lib/finance-types"
 import { businessInfo as defaultBusinessInfo } from "@/lib/business-info"
 import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
 import { formatDate, formatCurrency } from "@/lib/utils"
+import { getInvoiceDiscountAmount } from "@/lib/b2b/invoice-totals"
 import { getPaymentInstructions } from "@/lib/payment-instructions"
 
 const statusLabels: Record<string, string> = {
@@ -447,7 +448,7 @@ export function InvoicePDFDocument({
           ))}
         </View>
 
-        {/* Subtotal, Tax, Total - always show full breakdown like invoice pages */}
+        {/* Subtotal, Discount, Tax, Total - always show full breakdown like invoice pages */}
         <View style={styles.totalRow}>
           <View style={styles.totalBox}>
             <View style={styles.totalSubRow}>
@@ -459,6 +460,19 @@ export function InvoicePDFDocument({
                 )}
               </Text>
             </View>
+            {getInvoiceDiscountAmount(invoice) > 0 ? (
+              <View style={styles.totalSubRow}>
+                <Text style={styles.totalSubLabel}>
+                  Discount
+                  {invoice.discountRate != null && invoice.discountRate > 0
+                    ? ` (${invoice.discountRate}%)`
+                    : ""}
+                </Text>
+                <Text style={styles.totalSubAmount}>
+                  {`-${formatCurrency(getInvoiceDiscountAmount(invoice), invoice.currency)}`}
+                </Text>
+              </View>
+            ) : null}
             <View style={styles.totalSubRow}>
               <Text style={styles.totalSubLabel}>
                 Tax{invoice.taxRate != null && invoice.taxRate > 0 ? ` (${invoice.taxRate}%)` : ""}

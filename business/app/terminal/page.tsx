@@ -15,22 +15,31 @@ import {
   useTerminalSessionsCached,
   type TerminalSessionListItem,
 } from "@/hooks/use-terminal-sessions-cached"
+import { cn } from "@/lib/utils"
 
 function shortSessionRef(id: string): string {
   return id.replace(/-/g, "").slice(0, 8).toUpperCase()
 }
 
+function statusClassName(status: string): string {
+  if (status === "failed" || status === "expired") return "text-destructive font-medium"
+  if (status === "payout_complete") return "text-emerald-600 dark:text-emerald-400 font-medium"
+  if (status === "creating_workflow") return "text-muted-foreground"
+  return "text-foreground"
+}
+
 function SessionsTable({ sessions }: { sessions: TerminalSessionListItem[] }) {
   return (
     <div className="min-h-0 flex-1 overflow-auto">
-      <table className="w-full min-w-[800px] table-fixed">
+      <table className="w-full min-w-[960px] table-fixed">
         <colgroup>
-          <col style={{ width: "15%" }} />
+          <col style={{ width: "12%" }} />
+          <col style={{ width: "10%" }} />
           <col style={{ width: "12%" }} />
           <col style={{ width: "14%" }} />
-          <col style={{ width: "24%" }} />
-          <col style={{ width: "15%" }} />
           <col style={{ width: "20%" }} />
+          <col style={{ width: "14%" }} />
+          <col style={{ width: "18%" }} />
         </colgroup>
         <thead className="border-b">
           <tr>
@@ -39,7 +48,10 @@ function SessionsTable({ sessions }: { sessions: TerminalSessionListItem[] }) {
             </th>
             <th className="p-4 text-left align-middle text-xs font-medium text-muted-foreground">Ref</th>
             <th className="p-4 text-left align-middle text-xs font-medium text-muted-foreground">
-              Amount
+              Fiat
+            </th>
+            <th className="p-4 text-left align-middle text-xs font-medium text-muted-foreground">
+              Min. crypto
             </th>
             <th className="p-4 text-left align-middle text-xs font-medium text-muted-foreground">
               Asset / network
@@ -70,12 +82,21 @@ function SessionsTable({ sessions }: { sessions: TerminalSessionListItem[] }) {
                   {String(s.fiat_amount)} {s.fiat_currency}
                 </span>
               </td>
+              <td className="min-w-0 p-4 align-middle tabular-nums">
+                <span className="font-mono text-xs">
+                  {s.crypto_amount_expected?.trim()
+                    ? `${s.crypto_amount_expected} ${s.crypto_currency}`
+                    : "—"}
+                </span>
+              </td>
               <td className="min-w-0 p-4 align-middle">
                 <span className="block truncate text-sm">{s.crypto_currency}</span>
                 <span className="block truncate text-xs text-muted-foreground">{s.network}</span>
               </td>
               <td className="min-w-0 p-4 align-middle">
-                <span className="text-sm capitalize">{s.status.replace(/_/g, " ")}</span>
+                <span className={cn("text-sm capitalize", statusClassName(s.status))}>
+                  {s.status.replace(/_/g, " ")}
+                </span>
               </td>
               <td className="min-w-0 p-4 align-middle" onClick={(e) => e.stopPropagation()}>
                 <Link
@@ -128,8 +149,8 @@ export default function TerminalPage() {
           <div>
             <h1 className="text-2xl font-semibold text-foreground">Terminal</h1>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Accept in-person stablecoin payments using a virtual terminal. Customer stablecoin deposits settle through
-              automated payout to the bank account you select in Setup payout.
+              Accept in-person stablecoin payments using a virtual terminal. Before taking payments, use Setup payout to
+              add a payout method and set it as the default for this terminal.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 lg:shrink-0">
@@ -163,7 +184,7 @@ export default function TerminalPage() {
               <div className="text-center">
                 <h3 className="mb-2 text-lg font-semibold">No charges yet</h3>
                 <p className="max-w-sm text-sm text-muted-foreground">
-                  Set up payout, then use the counter link or Copy URL above to take an in-person payment.
+                  Use Setup payout to add a method and set the default, then open the counter or copy its URL.
                 </p>
               </div>
             </div>

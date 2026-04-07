@@ -3,6 +3,7 @@
 import { useCallback } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { CACHE_KEYS } from "@/lib/cache"
+import type { TerminalSettlementDestination } from "@/lib/terminal/settlement-destination"
 import { useCachedData } from "@/lib/use-cached-data"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 
@@ -21,6 +22,8 @@ export type TerminalPayoutSetupData = {
   payouts: TerminalPayoutRow[]
   /** Resolved default id, or null if unset or not in the current payout list. */
   defaultTerminalPayoutId: string | null
+  settlementDestination: TerminalSettlementDestination
+  defaultBalanceCurrency: "USD" | "EUR" | null
 }
 
 export const TERMINAL_PAYOUT_SETUP_CACHE_TTL_MS = 60 * 60 * 1000
@@ -41,6 +44,8 @@ export async function fetchTerminalPayoutSetup(): Promise<TerminalPayoutSetupDat
 
   const settingsBody = (await settingsRes.json().catch(() => ({}))) as {
     default_terminal_payout_id?: string | null
+    settlement_destination?: TerminalSettlementDestination
+    default_balance_currency?: "USD" | "EUR" | null
     error?: string
   }
   if (!settingsRes.ok) {
@@ -51,8 +56,18 @@ export async function fetchTerminalPayoutSetup(): Promise<TerminalPayoutSetupDat
   const defRaw = settingsBody.default_terminal_payout_id ?? null
   const defaultTerminalPayoutId =
     defRaw && payouts.some((p) => p.id === defRaw) ? defRaw : null
+  const settlementDestination =
+    settingsBody.settlement_destination === "easner_balance" ? "easner_balance" : "bank_payout"
+  const rawBal = settingsBody.default_balance_currency
+  const defaultBalanceCurrency = rawBal === "EUR" || rawBal === "USD" ? rawBal : null
 
-  return { payouts, defaultTerminalPayoutId }
+  return {
+    payouts,
+    defaultTerminalPayoutId,
+    settlementDestination,
+    defaultBalanceCurrency:
+      settlementDestination === "easner_balance" ? (defaultBalanceCurrency ?? "USD") : defaultBalanceCurrency,
+  }
 }
 
 /**
@@ -68,7 +83,12 @@ export function useTerminalPayoutSetupCached() {
     enabled: Boolean(user?.id) && !isLoading,
     cacheKey: user?.id ? CACHE_KEYS.TERMINAL_PAYOUT_SETUP(user.id) : null,
     persistKey: user?.id ? `terminal_payout_setup_${user.id}` : undefined,
-    initialData: { payouts: [], defaultTerminalPayoutId: null },
+    initialData: {
+      payouts: [],
+      defaultTerminalPayoutId: null,
+      settlementDestination: "bank_payout",
+      defaultBalanceCurrency: null,
+    },
     ttlMs: TERMINAL_PAYOUT_SETUP_CACHE_TTL_MS,
     fetcher,
     onError: (err) => {

@@ -4,6 +4,9 @@ import { requireAuth, requireNoahEnv } from "../_helpers"
 import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { uiFiatToNoahPriceTicker } from "@/lib/noah/fx-tickers"
+import { isTerminalChargeFiatSupported } from "@/lib/noah/terminal-charge-fiats"
+import { resolveChargeForTerminalNoahPrices } from "@/lib/noah/terminal-charge-fx"
+import { TERMINAL_ALLOWED_PAIRS } from "@/lib/terminal-allowed-pairs"
 
 type PricesResponse = Record<string, unknown>
 
@@ -25,6 +28,61 @@ export async function GET(request: Request) {
   if (guard) return guard
 
   const url = new URL(request.url)
+  const terminalCrypto = (url.searchParams.get("terminalCrypto") || "").trim()
+  const chargeFiat = (url.searchParams.get("chargeFiat") || "").trim().toUpperCase()
+  const terminalFiatAmountStr = url.searchParams.get("terminalFiatAmount")?.trim()
+
+  if (terminalCrypto || chargeFiat || terminalFiatAmountStr) {
+    if (!terminalCrypto || !chargeFiat || !terminalFiatAmountStr) {
+      return NextResponse.json(
+        { error: "terminalCrypto, chargeFiat, and terminalFiatAmount are required together." },
+        { status: 400 },
+      )
+    }
+    if (!isTerminalChargeFiatSupported(chargeFiat)) {
+      return NextResponse.json({ error: "Unsupported chargeFiat for terminal preview." }, { status: 400 })
+    }
+    const terminalAmt = Number.parseFloat(terminalFiatAmountStr)
+    if (!Number.isFinite(terminalAmt) || terminalAmt <= 0) {
+      return NextResponse.json({ error: "terminalFiatAmount must be positive" }, { status: 400 })
+    }
+    const cryptoOk = TERMINAL_ALLOWED_PAIRS.some((p) => p.cryptoCurrency === terminalCrypto)
+    if (!cryptoOk) {
+      return NextResponse.json({ error: "Unsupported terminal crypto for price preview." }, { status: 400 })
+    }
+    try {
+      const anchor = await resolveChargeForTerminalNoahPrices({
+        userId: user.id,
+        chargeFiat,
+        chargeAmount: terminalAmt,
+      })
+      const data = await noahFetch<PricesResponse>({
+        method: "GET",
+        path: "/prices",
+        query: {
+          SourceCurrency: terminalCrypto,
+          DestinationCurrency: anchor.destinationTicker,
+          DestinationAmount: anchor.destinationAmount,
+        },
+      })
+      const est = data.SourceAmount != null ? String(data.SourceAmount) : ""
+      return NextResponse.json({
+        kind: "terminal_estimate",
+        chargeFiat,
+        fiatAmount: terminalAmt.toFixed(2),
+        noahDestinationAmount: anchor.destinationAmount,
+        cryptoCurrency: terminalCrypto,
+        estimatedCryptoAmount: est,
+        disclaimer:
+          "Indicative only. The amount on the payment screen comes from Noah when you create the charge.",
+        noah: data,
+      })
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e)
+      return NextResponse.json({ error: msg }, { status: 400 })
+    }
+  }
+
   const sourceCurrency = (url.searchParams.get("sourceCurrency") || "").toUpperCase()
   const destinationCurrency = (url.searchParams.get("destinationCurrency") || "").toUpperCase()
   const sourceAmount = url.searchParams.get("sourceAmount")?.trim()
