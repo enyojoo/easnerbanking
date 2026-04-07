@@ -15,7 +15,7 @@ import { dataCache, CACHE_KEYS } from "@/lib/cache"
 
 const BUSINESS_NOAH_HEADERS = { "X-Easner-Noah-Scope": "business" } as const
 
-export default function CreateAutopayoutPlacardPage() {
+export default function QrPayCreatePlacardPage() {
   const router = useRouter()
   const { user } = useAuth()
   const [payerWalletId, setPayerWalletId] = useState<string | null>(null)
@@ -74,7 +74,7 @@ export default function CreateAutopayoutPlacardPage() {
         dataCache.invalidate(CACHE_KEYS.AUTOPAYOUT_LIST(user.id))
         dataCache.invalidate(CACHE_KEYS.AUTOPAYOUT_PAYER_WALLETS(user.id))
       }
-      router.push("/autopayout")
+      router.push("/qr-pay")
     } finally {
       setSubmitting(false)
     }
@@ -85,7 +85,7 @@ export default function CreateAutopayoutPlacardPage() {
       <div>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" className="shrink-0 -ml-2 text-muted-foreground" asChild>
-            <Link href="/autopayout" aria-label="Back to Auto Payout">
+            <Link href="/qr-pay" aria-label="Back to QR Pay">
               <ArrowLeft className="h-5 w-5" aria-hidden />
             </Link>
           </Button>
@@ -133,7 +133,7 @@ export default function CreateAutopayoutPlacardPage() {
 
       <div className="flex flex-wrap justify-end gap-2">
         <Button type="button" variant="outline" asChild>
-          <Link href="/autopayout">Cancel</Link>
+          <Link href="/qr-pay">Cancel</Link>
         </Button>
         <Button type="button" onClick={() => void handleSubmit()} disabled={submitting}>
           {submitting ? "Creating…" : "Create placard"}

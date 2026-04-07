@@ -26,7 +26,7 @@ async function fetchAutopayoutList(): Promise<AutopayoutListRow[]> {
   const res = await fetchWithSession("/api/autopayout")
   const body = (await res.json().catch(() => ({}))) as { autopayouts?: AutopayoutListRow[]; error?: string }
   if (!res.ok) {
-    throw new Error(body.error || "Failed to load Auto Payout list")
+    throw new Error(body.error || "Failed to load QR Pay list")
   }
   return body.autopayouts ?? []
 }
@@ -45,7 +45,7 @@ export function useAutopayoutCached() {
     fetcher,
     onError: (err) => {
       const message = err instanceof Error ? err.message : String(err)
-      console.error("Auto Payout list load failed:", message)
+      console.error("QR Pay list load failed:", message)
     },
   })
 }

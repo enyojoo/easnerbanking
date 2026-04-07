@@ -40,7 +40,7 @@ export function DashboardNav() {
     if (
       pathname.startsWith("/invoices") ||
       pathname.startsWith("/terminal") ||
-      pathname.startsWith("/autopayout")
+      pathname.startsWith("/qr-pay")
     ) {
       openGroups.add("collections")
     }
@@ -77,7 +77,7 @@ export function DashboardNav() {
       items: [
         { href: "/invoices", label: "Invoices", icon: ReceiptText },
         { href: "/terminal", label: "Terminal", icon: SmartphoneNfc },
-        { href: "/autopayout", label: "Auto Payout", icon: QrCode },
+        { href: "/qr-pay", label: "QR Pay", icon: QrCode },
       ],
     },
     { href: "/transactions", label: "Transactions", icon: List, type: "single" as const },

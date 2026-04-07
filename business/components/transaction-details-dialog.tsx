@@ -178,15 +178,15 @@ export function TransactionDetailsDialog({
 
           {transaction.collectionChannel === "autopayout" && transaction.autopayoutConfigId ?
             <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-3 text-sm">
-              <p className="font-medium text-foreground">Stablecoin Auto Payout</p>
+              <p className="font-medium text-foreground">QR Pay</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Collected via an in-person placard linked to your Auto Payout configuration.
+                Collected via an in-person placard linked to your QR Pay configuration.
               </p>
               <p className="mt-2 font-mono text-xs text-muted-foreground">
                 Config: {transaction.autopayoutConfigId}
               </p>
               <Button variant="link" className="h-auto px-0 pt-2 text-primary" asChild>
-                <Link href="/autopayout">Open Auto Payout</Link>
+                <Link href="/qr-pay">Open QR Pay</Link>
               </Button>
             </div>
           : null}

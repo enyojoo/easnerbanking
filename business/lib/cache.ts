@@ -95,9 +95,9 @@ export const CACHE_KEYS = {
   TERMINAL_SESSIONS: (userId: string) => `terminal_sessions_${userId}`,
   /** Terminal payout list + default (`GET /api/terminal/payouts` + settings). */
   TERMINAL_PAYOUT_SETUP: (userId: string) => `terminal_payout_setup_${userId}`,
-  /** Auto Payout config list (`GET /api/autopayout`). */
+  /** QR Pay (autopayout) config list (`GET /api/autopayout`). */
   AUTOPAYOUT_LIST: (userId: string) => `autopayout_list_${userId}`,
-  /** Auto Payout saved payer wallets (`GET /api/autopayout/payer-wallets`). */
+  /** QR Pay saved payer wallets (`GET /api/autopayout/payer-wallets`). */
   AUTOPAYOUT_PAYER_WALLETS: (userId: string) => `autopayout_payer_wallets_${userId}`,
   /** Ledger transactions for the business (`GET /api/transactions`). */
   TRANSACTIONS_LIST: (userId: string) => `transactions_list_${userId}`,

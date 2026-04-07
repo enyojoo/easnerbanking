@@ -56,7 +56,7 @@ function tokenIconSymbol(crypto: string): string {
 export type AutopayoutPayerWalletPanelProps = {
   selectedWalletId: string | null
   onSelectWalletId: (id: string) => void
-  /** Invalidate payer-wallet cache and refetch when mounted (fresh list on /autopayout/create). */
+  /** Invalidate payer-wallet cache and refetch when mounted (fresh list on /qr-pay/create). */
   syncListsOnMount?: boolean
   className?: string
 }

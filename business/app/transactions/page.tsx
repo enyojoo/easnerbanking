@@ -270,7 +270,7 @@ export default function TransactionsPage() {
                           <p className="text-xs text-muted-foreground truncate">
                             {txn.type.toUpperCase()} • Account • {new Date(txn.date).toLocaleDateString()} •{" "}
                             {txn.status.charAt(0).toUpperCase() + txn.status.slice(1)}
-                            {txn.collectionChannel === "autopayout" ? " • Auto Payout" : ""}
+                            {txn.collectionChannel === "autopayout" ? " • QR Pay" : ""}
                           </p>
                         </div>
                       </div>

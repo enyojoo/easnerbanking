@@ -1,7 +1,7 @@
 import { WALLET_ASSET_NETWORKS } from "@/lib/wallet-asset-networks"
 
 /**
- * Merchant-facing deposit options for Stablecoin Terminal / Auto Payout.
+ * Merchant-facing deposit options for Stablecoin Terminal / QR Pay.
  * Built from the same asset×network catalog as Add recipient → Wallet address, plus optional sandbox pair.
  */
 export type TerminalAllowedPair = {

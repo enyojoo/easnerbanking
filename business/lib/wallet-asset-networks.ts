@@ -1,6 +1,6 @@
 /**
  * Wallet-type recipient options (Add recipient → Wallet address).
- * Shared by {@link RecipientForm} and Auto Payout placard “Add wallet address”.
+ * Shared by {@link RecipientForm} and QR Pay placard “Add wallet address”.
  */
 export const WALLET_ASSET_NETWORKS: Record<string, string[]> = {
   USDT: ["Base", "Bitcoin", "Celo", "Ethereum"],

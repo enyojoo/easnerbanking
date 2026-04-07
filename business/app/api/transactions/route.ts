@@ -55,7 +55,7 @@ export async function GET(request: Request) {
 
     const description =
       nameFromPayload ||
-      (meta?.collection_channel === "autopayout" ? "Stablecoin Auto Payout" : "Stablecoin activity")
+      (meta?.collection_channel === "autopayout" ? "Stablecoin QR Pay" : "Stablecoin activity")
 
     const created = row.created_at != null ? String(row.created_at) : new Date().toISOString()
 
