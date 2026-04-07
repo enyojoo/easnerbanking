@@ -4,9 +4,8 @@ import { requireNoahEnv, requireAuth } from "@/app/api/noah/_helpers"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
 import { requireEasnerBusinessId } from "@/lib/terminal/context"
-import { isTerminalChargeFiatSupported } from "@/lib/noah/terminal-charge-fiats"
+import { resolveTerminalChargeFiatFromBusinessBase } from "@/lib/noah/terminal-charge-fiats"
 import { resolveChargeToPayoutFiatAmount } from "@/lib/noah/terminal-charge-fx"
-import { resolveTerminalPayFiatCurrency } from "@/lib/noah/terminal-pay-fiat"
 import { isAllowedTerminalPair } from "@/lib/terminal-allowed-pairs"
 import { prepareSellFromRecipientRow } from "@/lib/terminal/recipient-sell-prepare"
 import {
@@ -68,7 +67,7 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => null)) as {
     fiat_amount?: string | number
-    /** ISO charge / counter currency (keypad). Falls back to org terminal fiat mapping when omitted. */
+    /** Ignored; counter currency is always derived from org `base_currency` in settings. */
     fiat_currency?: string
     crypto_currency?: string
     network?: string
@@ -99,11 +98,9 @@ export async function POST(request: Request) {
     .select("base_currency")
     .eq("id", biz.businessId)
     .maybeSingle()
-  const bodyFiat = String(body?.fiat_currency || "").trim().toUpperCase()
-  const chargeFiatCurrency =
-    bodyFiat && isTerminalChargeFiatSupported(bodyFiat) ?
-      bodyFiat
-    : resolveTerminalPayFiatCurrency(businessRow?.base_currency as string | null)
+  const chargeFiatCurrency = resolveTerminalChargeFiatFromBusinessBase(
+    businessRow?.base_currency as string | null,
+  )
 
   const { data: terminalSettingsRow } = await admin
     .from("terminal_settings")

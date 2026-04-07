@@ -5,8 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { TERMINAL_ALLOWED_PAIRS, type TerminalAllowedPair } from "@/lib/terminal-allowed-pairs"
 import { useAuth } from "@/lib/auth-context"
-import { isTerminalChargeFiatSupported } from "@/lib/noah/terminal-charge-fiats"
-import { resolveTerminalPayFiatCurrency } from "@/lib/noah/terminal-pay-fiat"
+import { resolveTerminalChargeFiatFromBusinessBase } from "@/lib/noah/terminal-charge-fiats"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { CACHE_KEYS, dataCache } from "@/lib/cache"
 import { fetchWithSession } from "@/lib/fetch-with-session"
@@ -19,11 +18,7 @@ export default function PayAssetPage() {
   const searchParams = useSearchParams()
   const { user } = useAuth()
   const { tier1Complete, baseCurrency } = useBusinessProfile()
-  const paramFiat = (searchParams.get("fiat_currency") || "").trim().toUpperCase()
-  const chargeFiatCurrency =
-    paramFiat && isTerminalChargeFiatSupported(paramFiat) ?
-      paramFiat
-    : resolveTerminalPayFiatCurrency(baseCurrency)
+  const chargeFiatCurrency = resolveTerminalChargeFiatFromBusinessBase(baseCurrency)
   const amountStr = searchParams.get("amount") || ""
   const fiatAmount = Number.parseFloat(amountStr)
 
@@ -94,7 +89,6 @@ export default function PayAssetPage() {
         },
         body: JSON.stringify({
           fiat_amount: fiatAmount,
-          fiat_currency: chargeFiatCurrency,
           crypto_currency: selected.cryptoCurrency,
           network: selected.network,
         }),
