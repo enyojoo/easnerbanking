@@ -16,6 +16,9 @@ const CURRENCY_SYMBOL_OVERRIDES: Record<string, string> = {
   KES: "KSh",
   GHS: "₵",
   RUB: "₽",
+  /** Intl narrowSymbol is F CFA / FCFA; corridor UIs expect the ISO code. */
+  XOF: "XOF",
+  XAF: "XAF",
 }
 
 /** Currency symbol for UI (send, pay, invoices, formatCurrency). */
