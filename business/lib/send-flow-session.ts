@@ -1,4 +1,5 @@
 import type { Beneficiary } from "@/lib/recipient-types"
+import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
 import { generateTransactionId } from "@/lib/transaction-id"
 import type { OtherCurrencyCode, PaymentMethodCode } from "@/lib/send-payment-methods"
 
@@ -21,9 +22,10 @@ export interface SendFlowState {
 
 /** Pre-fill send flow with a recipient (e.g. from Settings → Recipients); user finishes amount and source on /send. */
 export function createSendFlowSeedForRecipient(recipient: Beneficiary): SendFlowState {
-  const cur = recipient.currency || "USD"
+  const normalized = coerceBeneficiaryEasenetDisplay(recipient)
+  const cur = normalized.currency || "USD"
   return {
-    recipient,
+    recipient: normalized,
     amount: 0,
     receiveCurrency: cur,
     sendAmount: 0,

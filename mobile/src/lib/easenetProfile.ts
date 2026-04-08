@@ -1,8 +1,9 @@
 import { getApiBaseUrl } from './apiClient'
 import { supabase } from './supabase'
+import type { PayeeAccountKind } from './easnerBrand'
 
 export type EasenetPublicProfile =
-  | { found: true; easetag: string; fullName: string; avatarUrl: string | null }
+  | { found: true; easetag: string; fullName: string; avatarUrl: string | null; accountKind: PayeeAccountKind }
   | { found: false; reason?: string }
 
 /**
@@ -36,14 +37,17 @@ export async function fetchEasenetPublicProfile(rawTag: string): Promise<Easenet
     easetag?: string
     fullName?: string
     avatarUrl?: string | null
+    accountKind?: string
   }
   if (!res.ok || !data.found) {
     return { found: false, reason: data.reason }
   }
+  const accountKind: PayeeAccountKind = data.accountKind === 'business' ? 'business' : 'personal'
   return {
     found: true,
     easetag: String(data.easetag || clean),
     fullName: String(data.fullName || clean).trim() || clean,
     avatarUrl: data.avatarUrl ?? null,
+    accountKind,
   }
 }

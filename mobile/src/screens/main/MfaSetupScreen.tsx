@@ -517,11 +517,6 @@ const styles = StyleSheet.create({
   title: {
     ...textStyles.headlineMedium,
     color: colors.text.primary,
-    marginBottom: 2,
-  },
-  subtitle: {
-    ...textStyles.bodyMedium,
-    color: colors.text.secondary,
   },
   enrollIntro: {
     ...textStyles.bodyMedium,

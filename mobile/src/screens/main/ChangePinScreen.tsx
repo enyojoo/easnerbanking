@@ -263,13 +263,6 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
         ? appPinStrings.settingsNewPin
         : appPinStrings.settingsConfirmNew
 
-  const subtitleText =
-    step === 'verify'
-      ? appPinStrings.dialogAuthorizeDesc
-      : step === 'pin'
-        ? appPinStrings.setupSubtitle
-        : appPinStrings.confirmSubtitle
-
   const currentPinDisplay = step === 'verify' ? verifyDigits : step === 'pin' ? pin : confirmPin
   const filledCount = currentPinDisplay.filter((d) => d !== '').length
 
@@ -314,7 +307,7 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
         <View style={styles.content}>
           <View style={styles.titleBlock}>
             <Text style={styles.title}>{titleText}</Text>
-            <Text style={styles.subtitle}>{subtitleText}</Text>
+            <Text style={styles.subtitle}>{helpBody}</Text>
           </View>
 
           {lockedOut ? (
@@ -459,7 +452,6 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     paddingHorizontal: spacing[4],
-    marginBottom: spacing[8],
     gap: spacing[3],
   },
   title: {
@@ -469,13 +461,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Outfit-Bold',
     fontWeight: '700',
     textAlign: 'center',
-    width: '100%',
-  },
-  subtitle: {
-    ...textStyles.bodyMedium,
-    color: colors.text.secondary,
-    textAlign: 'center',
-    lineHeight: 22,
     width: '100%',
   },
   lockout: {

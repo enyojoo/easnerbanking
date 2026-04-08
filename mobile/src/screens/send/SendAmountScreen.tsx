@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { MessageSquareText, ChevronDown, User, Coins } from 'lucide-react-native'
+import { MessageSquareText, ChevronDown, User, Coins, RotateCcw } from 'lucide-react-native'
 import Svg, { Path } from 'react-native-svg'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
@@ -36,12 +36,15 @@ import { mobileFxEngine } from '../../lib/fxEngine'
 import { generateTransactionId } from '../../lib/transactionId'
 import { useBalance } from '../../contexts/BalanceContext'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
+import { CountryFlag } from '../../components/flags/CountryFlag'
+import { getCountryCodeForCurrency } from '@easner/shared'
 import { getApiBaseUrl } from '../../lib/apiClient'
 import { noahService, type PricingQuote } from '../../lib/noahService'
 import { getWalletAssets } from '../../lib/recipientCatalog'
 import { getPayoutCorridorCache, isRecipientPayoutCorridorActive, refreshPayoutCorridors } from '../../lib/payoutCorridors'
 import { getTokenIconUrl } from '../../lib/cryptoIcons'
 import type { Recipient } from '../../types'
+import { EasenetSubtitleRow } from '../../lib/easenetRecipientUi'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 const KEYPAD_BUTTON_WIDTH = 113
@@ -267,10 +270,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   }, [headerAnim, contentAnim])
 
   const getInitials = (fullName: string) => {
-    const names = fullName.trim().split(' ').filter(name => name.length > 0)
-    if (names.length === 0) return '??'
-    if (names.length === 1) return names[0][0].toUpperCase()
-    return names.slice(0, 2).map(name => name[0]).join('').toUpperCase()
+    const parts = fullName.trim().split(' ').filter(Boolean)
+    if (parts.length === 0) return '??'
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase()
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
   }
 
   // Format amount with commas, optional decimal, max 2 decimals.
@@ -419,7 +422,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       ? (selectedOtherPaymentMethod?.toUpperCase() || selectedBalanceCurrency)
       : selectedOtherCurrency
     : selectedBalanceCurrency
-  
+
+  const showCrossCurrencyExchangeUi =
+    String(sendCurrency || '').toUpperCase() !== String(receiveCurrency || '').toUpperCase()
+
   // Get exchange rate using FX Engine (with safety check)
   const rateData = exchangeRates && Array.isArray(exchangeRates) && exchangeRates.length > 0
     ? mobileFxEngine.getRate(exchangeRates, sendCurrency, receiveCurrency)
@@ -515,7 +521,11 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       setPricingPreviewQuote(null)
       return
     }
-    if (sendCurrency !== receiveCurrency && (!exchangeRates || exchangeRates.length === 0)) {
+    if (!showCrossCurrencyExchangeUi) {
+      setPricingPreviewQuote(null)
+      return
+    }
+    if (!exchangeRates || exchangeRates.length === 0) {
       setPricingPreviewQuote(null)
       return
     }
@@ -566,7 +576,11 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     sendingAmount,
     receiveAmount,
     exchangeRates,
+    showCrossCurrencyExchangeUi,
   ])
+
+  const exchangeInfoAmountPositive =
+    !!(recipient && sendAmount && Number.parseFloat(sendAmount.replace(/,/g, '')) > 0)
 
   return (
     <ScreenWrapper>
@@ -621,7 +635,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 }
               ]}
             >
-
+              <View style={styles.sendFormTop}>
               {/* Recipient Section */}
               {recipient ? (
                 // Selected Recipient View
@@ -639,16 +653,31 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   activeOpacity={0.7}
                 >
                   <Text style={styles.recipientLabel}>To:</Text>
-                  <View style={styles.recipientAvatar}>
-                    <Text style={styles.recipientInitials}>{getInitials(recipient.full_name)}</Text>
-                  </View>
+                  <SendRecipientAvatar recipient={recipient} getInitials={getInitials} />
                   <View style={styles.recipientInfo}>
-                    <Text style={styles.recipientName}>{recipient.full_name}</Text>
-                    <Text style={styles.recipientDetails} numberOfLines={1} ellipsizeMode="tail">
-                      {recipient.currency} • {recipient.account_number}
+                    <Text style={styles.recipientName} numberOfLines={1} ellipsizeMode="tail">
+                      {recipient.full_name}
                     </Text>
+                    {recipient.payee_easetag?.trim() ? (
+                      <EasenetSubtitleRow
+                        easetag={recipient.payee_easetag}
+                        accountKind={recipient.payee_account_kind}
+                        textStyle={styles.recipientDetails}
+                        gap={4}
+                      />
+                    ) : (
+                      <Text style={styles.recipientDetails} numberOfLines={1} ellipsizeMode="tail">
+                        {`${recipient.currency} • ${recipient.iban?.trim() || recipient.account_number || ''}`}
+                      </Text>
+                    )}
                   </View>
-                  <Text style={styles.changeText}>Change</Text>
+                  <RotateCcw
+                    size={17}
+                    color={colors.text.primary}
+                    strokeWidth={2}
+                    style={styles.changeRecipientIcon}
+                    accessibilityLabel="Change recipient"
+                  />
                 </TouchableOpacity>
               ) : (
                 // Select Recipient Box
@@ -738,47 +767,54 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               </View>
           </View>
 
-                {/* Fixed height container to prevent layout shift */}
-              <View style={styles.exchangeInfo}>
-                  {recipient && sendAmount && Number.parseFloat(sendAmount.replace(/,/g, '')) > 0 ? (
-                    <View>
-                      {sendCurrency !== receiveCurrency ? (
-                        <View style={styles.exchangeInfoInline}>
-                          <TouchableOpacity onPress={toggleAmountDirection} activeOpacity={0.7} style={styles.exchangeToggleTouchArea}>
-                            <Ionicons name="swap-vertical" size={13} color={colors.primary.main} />
-                            <Text style={styles.exchangeInfoText}>
-                              {amountEntryMode === 'receive'
-                                ? `Sending: ${formatCurrency(sendingAmount, sendCurrency)}`
-                                : `Receiving: ${formatCurrency(receiveAmount, receiveCurrency)}`}
-                            </Text>
-                          </TouchableOpacity>
+                {/* Reserved height: keeps method + note positions stable (same-currency hides copy but not space). */}
+                <View style={styles.exchangeInfoSlot}>
+                  {!exchangeInfoAmountPositive ? (
+                    <Text style={[styles.exchangeInfoText, styles.exchangeInfoPlaceholder]}> </Text>
+                  ) : showCrossCurrencyExchangeUi ? (
+                    <View style={styles.exchangeInfoColumn}>
+                      <View style={styles.exchangeInfoInline}>
+                        <TouchableOpacity
+                          onPress={toggleAmountDirection}
+                          activeOpacity={0.7}
+                          style={styles.exchangeToggleTouchArea}
+                        >
+                          <Ionicons name="swap-vertical" size={13} color={colors.primary.main} />
                           <Text style={styles.exchangeInfoText}>
-                            {' • '}
                             {amountEntryMode === 'receive'
-                              ? `Rate: 1 ${sendCurrency} = ${exchangeRate.toFixed(2)} ${receiveCurrency}`
-                              : `Rate: 1 ${receiveCurrency} = ${reverseExchangeRate.toFixed(4)} ${sendCurrency}`}
+                              ? `Sending: ${formatCurrency(sendingAmount, sendCurrency)}`
+                              : `Receiving: ${formatCurrency(receiveAmount, receiveCurrency)}`}
                           </Text>
-                        </View>
-                      ) : (
+                        </TouchableOpacity>
                         <Text style={styles.exchangeInfoText}>
-                          Receiving: {formatCurrency(receiveAmount, receiveCurrency)}
+                          {' • '}
+                          {amountEntryMode === 'receive'
+                            ? `Rate: 1 ${sendCurrency} = ${exchangeRate.toFixed(2)} ${receiveCurrency}`
+                            : `Rate: 1 ${receiveCurrency} = ${reverseExchangeRate.toFixed(4)} ${sendCurrency}`}
                         </Text>
-                      )}
-                      {pricingPreviewQuote?.pricingTotals ? (
-                        <Text style={[styles.exchangeInfoText, { marginTop: 4 }]}>
-                          {/* total_user_fee = Easner fees + provider pass-through in source currency (buildPricingTotals) */}
-                          Live quote: 1 {sendCurrency} = {Number(pricingPreviewQuote.effectiveRate).toFixed(4)}{' '}
-                          {receiveCurrency} · Fees {formatCurrency(pricingPreviewQuote.pricingTotals.total_user_fee, sendCurrency)} ·
-                          Recipient {formatCurrency(pricingPreviewQuote.pricingTotals.total_recipient_amount, receiveCurrency)}
-                        </Text>
-                      ) : null}
+                      </View>
+                      <View style={styles.exchangeQuoteLine}>
+                        {pricingPreviewQuote?.pricingTotals ? (
+                          <Text
+                            style={[styles.exchangeInfoText, styles.exchangeQuoteText]}
+                            numberOfLines={2}
+                            ellipsizeMode="tail"
+                          >
+                            Live quote: 1 {sendCurrency} = {Number(pricingPreviewQuote.effectiveRate).toFixed(4)}{' '}
+                            {receiveCurrency} · Fees{' '}
+                            {formatCurrency(pricingPreviewQuote.pricingTotals.total_user_fee, sendCurrency)} · Recipient{' '}
+                            {formatCurrency(pricingPreviewQuote.pricingTotals.total_recipient_amount, receiveCurrency)}
+                          </Text>
+                        ) : null}
+                      </View>
                     </View>
-                  ) : (
-                    <Text style={[styles.exchangeInfoText, { opacity: 0 }]}> </Text>
-                  )}
-            </View>
+                  ) : null}
                 </View>
+                </View>
+              </View>
 
+              {/* Method + note + keypad: stacked under exchange row (tight gap); space below group stays inside KAV above bottomContainer. */}
+              <View style={styles.sendMethodNoteKeypadGroup}>
               {/* Sending Method - Currency Balance Selector (Centered) */}
               <View style={styles.balanceSection}>
                 <TouchableOpacity
@@ -919,12 +955,18 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               </View>
               </View>
             </View>
+              </View>
             </Animated.View>
           </View>
         </KeyboardAvoidingView>
         
         {/* Send/Authorize Button */}
-        <View style={[styles.bottomContainer, { paddingTop: 25, paddingBottom: Math.max(insets.bottom, 20) }]}>
+        <View
+          style={[
+            styles.bottomContainer,
+            { paddingTop: spacing[2], paddingBottom: Math.max(insets.bottom, spacing[4]) },
+          ]}
+        >
           {!tier1Ok ? (
             <TouchableOpacity
               style={styles.verifyInlineCta}
@@ -1256,6 +1298,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                         countryCode: 'US',
                         payeeEasetag: tag,
                         payeeAvatarUrl: recipient.payee_avatar_url ?? null,
+                        payeeAccountKind: recipient.payee_account_kind,
                       })
                       await invalidateRecipients()
                       await refreshRecipients(true)
@@ -1633,7 +1676,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[5],
     paddingTop: spacing[2],
     flex: 1,
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
+  },
+  sendFormTop: {
+    flexShrink: 0,
+  },
+  /** Method + note + keypad: no `marginTop: 'auto'` (that pushed the block into the bottom bar). Flow sits under the rate row with a small gap. */
+  sendMethodNoteKeypadGroup: {
+    marginTop: 0,
+    marginBottom: spacing[5],
+    flexShrink: 0,
+    width: '100%',
   },
   // Select Recipient Box (when no recipient)
   selectRecipientBox: {
@@ -1685,18 +1738,28 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontFamily: 'Outfit-Medium',
   },
-  recipientAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.primary.main,
+  recipientAvatarCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary.main + '15',
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+    borderWidth: 0.5,
+    borderColor: '#E2E2E2',
   },
-  recipientInitials: {
+  /** Full-bleed inside circular clip (flag, token, or easetag photo) */
+  recipientAvatarFill: {
+    width: 36,
+    height: 36,
+    borderRadius: 0,
+  },
+  recipientAvatarInitials: {
     ...textStyles.titleSmall,
-    color: colors.text.inverse,
+    color: colors.primary.main,
     fontFamily: 'Outfit-SemiBold',
+    fontWeight: '700',
   },
   recipientInfo: {
     flex: 1,
@@ -1716,14 +1779,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Outfit-Regular',
     lineHeight: 16,
   },
-  changeText: {
-    ...textStyles.bodyMedium,
-    color: colors.text.primary,
-    fontFamily: 'Outfit-Medium',
+  changeRecipientIcon: {
+    marginLeft: 'auto',
   },
   amountSection: {
     marginTop: 8,
-    marginBottom: 25,
+    marginBottom: spacing[2],
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
@@ -1787,14 +1848,35 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     opacity: 0.6,
   },
-  exchangeInfo: {
+  /** Fixed vertical band so same-currency / quote loading does not move method selector or note. */
+  exchangeInfoSlot: {
     marginTop: 0,
-    height: 18,
+    minHeight: 58,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing[2],
+  },
+  exchangeInfoColumn: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  exchangeQuoteLine: {
+    marginTop: 4,
+    minHeight: 22,
+    width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
   },
+  exchangeQuoteText: {
+    textAlign: 'center',
+  },
+  exchangeInfoPlaceholder: {
+    opacity: 0,
+  },
   exchangeInfoInline: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1813,7 +1895,7 @@ const styles = StyleSheet.create({
   },
   balanceSection: {
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: 0,
     marginBottom: 0,
   },
   balanceSelector: {
@@ -1859,7 +1941,6 @@ const styles = StyleSheet.create({
   },
   noteKeypadWrapper: {
     width: '100%',
-    marginTop: 'auto',
     marginBottom: 0,
   },
   noteContainer: {
@@ -1939,8 +2020,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing[2],
-    marginBottom: spacing[3],
+    flexWrap: 'wrap',
+    gap: spacing[1],
+    paddingVertical: spacing[1],
+    marginBottom: spacing[2],
+    alignSelf: 'center',
+    maxWidth: '100%',
   },
   verifyInlineText: {
     ...textStyles.bodySmall,
@@ -2122,3 +2207,44 @@ const styles = StyleSheet.create({
     height: 24,
   },
 })
+
+function SendRecipientAvatar({
+  recipient,
+  getInitials,
+}: {
+  recipient: Recipient
+  getInitials: (name: string) => string
+}) {
+  const isEasenet = Boolean(recipient.payee_easetag?.trim())
+  const isWalletRecipient = String(recipient.bank_name || '').toLowerCase().includes('wallet')
+  const tokenIcon = getTokenIconUrl(recipient.currency)
+  const countryCode =
+    recipient.country_code ||
+    (recipient.currency === 'EUR' ? 'EU' : getCountryCodeForCurrency(recipient.currency) || 'US')
+
+  if (isEasenet) {
+    return (
+      <View style={styles.recipientAvatarCircle}>
+        {recipient.payee_avatar_url ? (
+          <Image
+            source={{ uri: recipient.payee_avatar_url }}
+            style={styles.recipientAvatarFill}
+            resizeMode="cover"
+          />
+        ) : (
+          <Text style={styles.recipientAvatarInitials}>{getInitials(recipient.full_name)}</Text>
+        )}
+      </View>
+    )
+  }
+
+  return (
+    <View style={styles.recipientAvatarCircle}>
+      {isWalletRecipient && tokenIcon ? (
+        <Image source={{ uri: tokenIcon }} style={styles.recipientAvatarFill} resizeMode="cover" />
+      ) : (
+        <CountryFlag code={countryCode} size={36} style={styles.recipientAvatarFill} />
+      )}
+    </View>
+  )
+}

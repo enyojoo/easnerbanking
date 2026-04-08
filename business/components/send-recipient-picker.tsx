@@ -20,6 +20,9 @@ import { useRecipientsCached } from "@/hooks/use-recipients-cached"
 import { fetchEasenetProfileByTag } from "@/lib/easenet-profile"
 import { buildDraftEasetagBeneficiary } from "@/lib/draft-easetag-beneficiary"
 import { filterBeneficiariesBySearch } from "@/lib/send-hub-recipient-search"
+import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
+import { EasenetRecipientProfileRowHydrated } from "@/components/easenet-recipient-profile-row-hydrated"
+import { cn } from "@/lib/utils"
 
 interface SendRecipientPickerProps {
   selected: Beneficiary | null
@@ -40,11 +43,15 @@ export function SendRecipientPicker({
     setData: setCachedBeneficiaries,
   } = useRecipientsCached(!explicitRecipientList)
 
-  const [localBeneficiaries, setLocalBeneficiaries] = useState<Beneficiary[]>(
-    () => initialBeneficiaries ?? [],
+  const [localBeneficiaries, setLocalBeneficiaries] = useState<Beneficiary[]>(() =>
+    (initialBeneficiaries ?? []).map(coerceBeneficiaryEasenetDisplay),
   )
 
-  const beneficiaries = explicitRecipientList ? localBeneficiaries : cachedBeneficiaries
+  const beneficiariesRaw = explicitRecipientList ? localBeneficiaries : cachedBeneficiaries
+  const beneficiaries = useMemo(
+    () => beneficiariesRaw.map(coerceBeneficiaryEasenetDisplay),
+    [beneficiariesRaw],
+  )
   const setBeneficiaries = explicitRecipientList ? setLocalBeneficiaries : setCachedBeneficiaries
 
   const [searchTerm, setSearchTerm] = useState("")
@@ -56,13 +63,14 @@ export function SendRecipientPicker({
     easetag: string
     fullName: string
     avatarUrl: string | null
+    accountKind: "business" | "personal"
   } | null>(null)
   const [hubSearchLoading, setHubSearchLoading] = useState(false)
   const [hubSearchError, setHubSearchError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!explicitRecipientList) return
-    setLocalBeneficiaries(initialBeneficiaries ?? [])
+    setLocalBeneficiaries((initialBeneficiaries ?? []).map(coerceBeneficiaryEasenetDisplay))
   }, [explicitRecipientList, initialBeneficiaries])
 
   useEffect(() => {
@@ -93,6 +101,7 @@ export function SendRecipientPicker({
             easetag: res.easetag,
             fullName: res.fullName,
             avatarUrl: res.avatarUrl,
+            accountKind: res.accountKind,
           })
           setHubSearchError(null)
         } else {
@@ -116,17 +125,13 @@ export function SendRecipientPicker({
 
   const hubVirtualRecipient = useMemo(() => {
     if (!hubSearchEasenet) return null
-    const tag = hubSearchEasenet.easetag.trim().toLowerCase()
-    const alreadySaved = hubDisplayRecipients.some(
-      (r) => (r.payeeEasetag || "").trim().toLowerCase() === tag,
-    )
-    if (alreadySaved) return null
     return buildDraftEasetagBeneficiary({
       easetag: hubSearchEasenet.easetag,
       fullName: hubSearchEasenet.fullName,
       avatarUrl: hubSearchEasenet.avatarUrl,
+      accountKind: hubSearchEasenet.accountKind,
     })
-  }, [hubSearchEasenet, hubDisplayRecipients])
+  }, [hubSearchEasenet])
 
   const pickerRecipients = useMemo(() => {
     if (!hubVirtualRecipient) return hubDisplayRecipients
@@ -143,7 +148,7 @@ export function SendRecipientPicker({
   }
 
   const handleSelect = (b: Beneficiary) => {
-    onSelect(b)
+    onSelect(coerceBeneficiaryEasenetDisplay(b))
     setIsPickerOpen(false)
   }
 
@@ -165,44 +170,57 @@ export function SendRecipientPicker({
         className="flex w-full items-center justify-between rounded-lg border border-input bg-background px-4 py-3 text-left transition-colors hover:bg-muted/50 focus:outline-none focus:ring-0 focus:ring-offset-0 focus:border-ring"
       >
         {selected ? (
-          <div className="flex items-center gap-3">
-            <div className="relative mr-1 shrink-0">
-              {selected.avatarUrl ? (
-                <Avatar className="h-10 w-10 border border-border">
-                  <AvatarImage src={selected.avatarUrl} alt="" />
-                  <AvatarFallback>{recipientInitials(selected)}</AvatarFallback>
-                </Avatar>
-              ) : (
-                <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                  <User className="h-5 w-5 text-primary" />
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            {selected.payeeEasetag ? (
+              <EasenetRecipientProfileRowHydrated
+                fullName={selected.name}
+                easetag={selected.payeeEasetag}
+                accountKind={selected.payeeAccountKind}
+                avatarUrl={selected.avatarUrl}
+                className="min-w-0 flex-1"
+                subtitleClassName="text-sm text-muted-foreground"
+              />
+            ) : (
+              <>
+                <div className="relative mr-1 shrink-0">
+                  {selected.avatarUrl ? (
+                    <Avatar className="h-10 w-10 border border-border">
+                      <AvatarImage src={selected.avatarUrl} alt="" />
+                      <AvatarFallback>{recipientInitials(selected)}</AvatarFallback>
+                    </Avatar>
+                  ) : (
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                      <User className="h-5 w-5 text-primary" />
+                    </div>
+                  )}
+                  <div
+                    className={cn(
+                      "absolute -bottom-0.5 -right-0.5 h-5 w-5 overflow-hidden rounded-full border-2 border-background bg-background p-0.5",
+                    )}
+                  >
+                    {selected.countryCode ? (
+                      <CountryFlag
+                        code={selected.countryCode}
+                        size={24}
+                        className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-none"
+                      />
+                    ) : (
+                      <CurrencyFlag
+                        currency={selected.currency}
+                        size={24}
+                        className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-none"
+                      />
+                    )}
+                  </div>
                 </div>
-              )}
-              <div className="absolute -bottom-0.5 -right-0.5 h-5 w-5 overflow-hidden rounded-full border-2 border-background bg-background">
-                {selected.countryCode ? (
-                  <CountryFlag
-                    code={selected.countryCode}
-                    size={24}
-                    className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-none"
-                  />
-                ) : (
-                  <CurrencyFlag
-                    currency={selected.currency}
-                    size={24}
-                    className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-none"
-                  />
-                )}
-              </div>
-            </div>
-            <div>
-              <p className="font-medium">{selected.name}</p>
-              <p className="text-sm text-muted-foreground">
-                <span>
-                  {selected.payeeEasetag
-                    ? `@${selected.payeeEasetag} • ${selected.currency}`
-                    : `${selected.currency} • ${selected.fullAccountNumber}`}
-                </span>
-              </p>
-            </div>
+                <div className="min-w-0">
+                  <p className="font-medium">{selected.name}</p>
+                  <p className="min-w-0 text-sm text-muted-foreground">
+                    <span className="truncate">{`${selected.currency} • ${selected.fullAccountNumber}`}</span>
+                  </p>
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <span className="text-muted-foreground">Select recipient</span>
@@ -261,43 +279,56 @@ export function SendRecipientPicker({
                   onClick={() => handleSelect(b)}
                   className="flex w-full items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left transition-colors hover:bg-muted hover:border-input"
                 >
-                  <div className="relative mr-1 shrink-0">
-                    {b.avatarUrl ? (
-                      <Avatar className="h-10 w-10 border border-border">
-                        <AvatarImage src={b.avatarUrl} alt="" />
-                        <AvatarFallback>{recipientInitials(b)}</AvatarFallback>
-                      </Avatar>
-                    ) : (
-                      <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                        <User className="h-5 w-5 text-primary" />
+                  {b.payeeEasetag ? (
+                    <EasenetRecipientProfileRowHydrated
+                      fullName={b.name}
+                      easetag={b.payeeEasetag}
+                      accountKind={b.payeeAccountKind}
+                      avatarUrl={b.avatarUrl}
+                      className="min-w-0 flex-1"
+                      subtitleClassName="text-xs text-muted-foreground"
+                    />
+                  ) : (
+                    <>
+                      <div className="relative mr-1 shrink-0">
+                        {b.avatarUrl ? (
+                          <Avatar className="h-10 w-10 border border-border">
+                            <AvatarImage src={b.avatarUrl} alt="" />
+                            <AvatarFallback>{recipientInitials(b)}</AvatarFallback>
+                          </Avatar>
+                        ) : (
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                            <User className="h-5 w-5 text-primary" />
+                          </div>
+                        )}
+                        <div
+                          className={cn(
+                            "absolute -bottom-0.5 -right-0.5 h-5 w-5 overflow-hidden rounded-full border-2 border-background bg-background p-0.5",
+                          )}
+                        >
+                          {b.countryCode ? (
+                            <CountryFlag
+                              code={b.countryCode}
+                              size={24}
+                              className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-none"
+                            />
+                          ) : (
+                            <CurrencyFlag
+                              currency={b.currency}
+                              size={24}
+                              className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-none"
+                            />
+                          )}
+                        </div>
                       </div>
-                    )}
-                    <div className="absolute -bottom-0.5 -right-0.5 h-5 w-5 overflow-hidden rounded-full border-2 border-background bg-background">
-                      {b.countryCode ? (
-                        <CountryFlag
-                          code={b.countryCode}
-                          size={24}
-                          className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-none"
-                        />
-                      ) : (
-                        <CurrencyFlag
-                          currency={b.currency}
-                          size={24}
-                          className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-none"
-                        />
-                      )}
-                    </div>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium truncate">{b.name}</p>
-                    <p className="text-sm text-muted-foreground min-w-0">
-                      <span className="truncate">
-                        {b.payeeEasetag
-                          ? `@${b.payeeEasetag} • ${b.currency}`
-                          : `${b.bankName} • ${b.currency}`}
-                      </span>
-                    </p>
-                  </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium">{b.name}</p>
+                        <p className="min-w-0 text-sm text-muted-foreground">
+                          <span className="truncate">{`${b.bankName} • ${b.currency}`}</span>
+                        </p>
+                      </div>
+                    </>
+                  )}
                 </button>
               ))}
             </div>

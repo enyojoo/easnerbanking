@@ -26,6 +26,7 @@ export interface RecipientData {
   postalCode?: string
   payeeEasetag?: string
   payeeAvatarUrl?: string | null
+  payeeAccountKind?: 'personal' | 'business'
   noahExternalAccountId?: string
 }
 
@@ -140,6 +141,7 @@ export const recipientService = {
       postal_code: recipientData.postalCode || undefined,
       payee_easetag: recipientData.payeeEasetag || undefined,
       payee_avatar_url: recipientData.payeeAvatarUrl || undefined,
+      payee_account_kind: recipientData.payeeAccountKind || undefined,
       mobile_provider: recipientData.mobileProvider || undefined,
       wallet_network: recipientData.walletNetwork || undefined,
       wallet_memo_tag: recipientData.walletMemoTag || undefined,
@@ -169,6 +171,7 @@ export const recipientService = {
           postal_code: recipientData.postalCode || null,
           payee_easetag: recipientData.payeeEasetag || null,
           payee_avatar_url: recipientData.payeeAvatarUrl ?? null,
+          payee_account_kind: recipientData.payeeAccountKind || null,
           noah_external_account_id: recipientData.noahExternalAccountId || null,
         }
       const { data, error } = await supabase
@@ -253,6 +256,7 @@ export const recipientService = {
       postalCode?: string
       payeeEasetag?: string
       payeeAvatarUrl?: string | null
+      payeeAccountKind?: 'personal' | 'business'
     },
   ): Promise<Recipient> {
     const derivedSwiftBic = updates.swiftBic ?? updates.walletMemoTag
@@ -285,6 +289,7 @@ export const recipientService = {
     if (updates.postalCode !== undefined) updateData.postal_code = updates.postalCode || null
     if (updates.payeeEasetag !== undefined) updateData.payee_easetag = updates.payeeEasetag || null
     if (updates.payeeAvatarUrl !== undefined) updateData.payee_avatar_url = updates.payeeAvatarUrl ?? null
+    if (updates.payeeAccountKind !== undefined) updateData.payee_account_kind = updates.payeeAccountKind || null
     updateData.updated_at = now()
 
     try {
@@ -301,6 +306,7 @@ export const recipientService = {
       if (isMissingColumnError(e)) {
         const fallback = { ...updateData }
         delete fallback.country_code
+        delete fallback.payee_account_kind
         const { data, error } = await supabase
           .from('recipients')
           .update(fallback)

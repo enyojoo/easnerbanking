@@ -22,6 +22,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { Wallet, Building2, Smartphone, AtSign, Search } from 'lucide-react-native'
 import { fetchEasenetPublicProfile } from '../../lib/easenetProfile'
+import { EASNER_MARK_URL } from '../../lib/easnerBrand'
+import { EasenetLookupPreview } from '../../components/EasenetLookupPreview'
+import { EasenetSubtitleRow } from '../../lib/easenetRecipientUi'
 import {
   mergeLastSentMaps,
   sortRecipientsForSendHub,
@@ -98,6 +101,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     easetag: string
     fullName: string
     avatarUrl: string | null
+    accountKind: 'business' | 'personal'
   } | null>(null)
   const [easenetLookupLoading, setEasenetLookupLoading] = useState(false)
   const [easenetLookupError, setEasenetLookupError] = useState<string | null>(null)
@@ -107,6 +111,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     easetag: string
     fullName: string
     avatarUrl: string | null
+    accountKind: 'business' | 'personal'
   } | null>(null)
   const [hubSearchLoading, setHubSearchLoading] = useState(false)
   const [hubSearchError, setHubSearchError] = useState<string | null>(null)
@@ -218,6 +223,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
             easetag: res.easetag,
             fullName: res.fullName,
             avatarUrl: res.avatarUrl,
+            accountKind: res.accountKind,
           })
           setHubSearchError(null)
         } else {
@@ -236,18 +242,14 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
 
   const hubVirtualRecipient = useMemo(() => {
     if (!hubSearchEasenet || !userProfile?.id) return null
-    const tag = hubSearchEasenet.easetag.trim().toLowerCase()
-    const alreadySaved = hubDisplayRecipients.some(
-      (r) => (r.payee_easetag || '').trim().toLowerCase() === tag,
-    )
-    if (alreadySaved) return null
     return buildDraftEasenetRecipient({
       easetag: hubSearchEasenet.easetag,
       fullName: hubSearchEasenet.fullName,
       avatarUrl: hubSearchEasenet.avatarUrl,
+      accountKind: hubSearchEasenet.accountKind,
       userId: userProfile.id,
     })
-  }, [hubSearchEasenet, hubDisplayRecipients, userProfile?.id])
+  }, [hubSearchEasenet, userProfile?.id])
 
   const sendHubFlatListData = useMemo(() => {
     if (!hubVirtualRecipient) return hubDisplayRecipients
@@ -278,6 +280,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
             easetag: res.easetag,
             fullName: res.fullName,
             avatarUrl: res.avatarUrl,
+            accountKind: res.accountKind,
           })
           setEasenetLookupError(null)
         } else {
@@ -447,6 +450,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
           countryCode: 'US',
           payeeEasetag: tag,
           payeeAvatarUrl: easenetProfile.avatarUrl,
+          payeeAccountKind: easenetProfile.accountKind,
         })
         await invalidateRecipients()
         await refreshRecipients(true)
@@ -572,7 +576,11 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
           <View style={styles.avatarContainer}>
             <View style={styles.recipientAvatar}>
               {item.payee_avatar_url ? (
-                <Image source={{ uri: item.payee_avatar_url }} style={styles.recipientAvatarPhoto} />
+                <Image
+                  source={{ uri: item.payee_avatar_url }}
+                  style={styles.recipientAvatarPhoto}
+                  resizeMode="cover"
+                />
               ) : (
                 <Text style={styles.recipientAvatarText}>
                   {getInitials(item.full_name)}
@@ -580,17 +588,21 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
               )}
             </View>
             <View style={styles.avatarFlagBadge}>
-              <View style={styles.flagContainer}>
-                {isWalletRecipient && tokenIcon ? (
-                  <Image source={{ uri: tokenIcon }} style={styles.flagImage} />
-                ) : (
-                  <CountryFlag
-                    code={item.country_code || (item.currency === 'EUR' ? 'EU' : getCountryCodeForCurrency(item.currency) || 'US')}
-                    size={20}
-                    style={styles.flagImage}
-                  />
-                )}
-              </View>
+              {isEasenet ? (
+                <Image source={{ uri: EASNER_MARK_URL }} style={styles.easnerMarkBadgeImage} resizeMode="cover" />
+              ) : (
+                <View style={styles.flagContainer}>
+                  {isWalletRecipient && tokenIcon ? (
+                    <Image source={{ uri: tokenIcon }} style={styles.flagImage} resizeMode="cover" />
+                  ) : (
+                    <CountryFlag
+                      code={item.country_code || (item.currency === 'EUR' ? 'EU' : getCountryCodeForCurrency(item.currency) || 'US')}
+                      size={20}
+                      style={styles.flagImage}
+                    />
+                  )}
+                </View>
+              )}
             </View>
           </View>
 
@@ -600,23 +612,35 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                 {item.full_name}
               </Text>
               {showRecentBadge ? (
-                <View style={styles.recentBadge}>
+                <View style={[styles.recentBadge, styles.recipientMetaBadge]}>
                   <Text style={styles.recentBadgeText}>Recent</Text>
                 </View>
               ) : null}
               {isDraftEasenet ? (
-                <View style={styles.newRecipientBadge}>
+                <View style={[styles.newRecipientBadge, styles.recipientMetaBadge]}>
                   <Text style={styles.newRecipientBadgeText}>New</Text>
                 </View>
               ) : null}
             </View>
-            <Text style={styles.recipientBank} numberOfLines={1} ellipsizeMode="tail">
-              {isEasenet ? `@${item.payee_easetag} • ${item.currency}` : item.bank_name}
-            </Text>
-            <Text style={styles.recipientAccount} numberOfLines={1} ellipsizeMode="tail">
-              {isEasenet ? '' : item.iban || item.account_number || ''}
-            </Text>
-            <Text style={styles.recipientCurrency}>{item.currency}</Text>
+            {isEasenet ? (
+              <EasenetSubtitleRow
+                easetag={item.payee_easetag}
+                accountKind={item.payee_account_kind}
+                textStyle={styles.recipientBank}
+              />
+            ) : (
+              <Text style={styles.recipientBank} numberOfLines={1} ellipsizeMode="tail">
+                {item.bank_name}
+              </Text>
+            )}
+            {!isEasenet ? (
+              <>
+                <Text style={styles.recipientAccount} numberOfLines={1} ellipsizeMode="tail">
+                  {item.iban || item.account_number || ''}
+                </Text>
+                <Text style={styles.recipientCurrency}>{item.currency}</Text>
+              </>
+            ) : null}
           </View>
 
           <Ionicons name="chevron-forward" size={20} color={colors.text.secondary} />
@@ -694,11 +718,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
             </TouchableOpacity>
           ) : null}
         </View>
-        {searchTerm.trim().startsWith('@') &&
-        hubSearchError &&
-        !hubSearchLoading &&
-        !hubVirtualRecipient &&
-        hubDisplayRecipients.length === 0 ? (
+        {searchTerm.trim().startsWith('@') && hubSearchError && !hubSearchLoading && !hubVirtualRecipient ? (
           <Text style={styles.searchErrorText}>{hubSearchError}</Text>
         ) : null}
       </Animated.View>
@@ -736,7 +756,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     <ScreenWrapper>
       <View style={styles.container}>
         {recipientsLoading && recipients.length === 0 ? (
-          <View style={[styles.scrollContent, { paddingHorizontal: spacing[5], paddingTop: spacing[4] }]}>
+          <View style={[styles.scrollContent, { paddingTop: spacing[4] }]}>
             {[1, 2, 3, 4].map((i) => (
               <ShimmerLoader
                 key={i}
@@ -817,7 +837,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                 <Ionicons name="close" size={24} color={colors.text.secondary} />
               </TouchableOpacity>
             </View>
-            <Text style={styles.addFlowEasetagHint}>Send money to someone by @easetag</Text>
 
             <View style={styles.recipientTypeOptions}>
               <TouchableOpacity
@@ -931,7 +950,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                 </View>
                 <View style={styles.recipientTypeContent}>
                   <Text style={styles.recipientTypeTitle}>Easetag</Text>
-                  <Text style={styles.recipientTypeSubtitle}>Pay by @handle (wallet transfer)</Text>
+                  <Text style={styles.recipientTypeSubtitle}>Send cash via Easner handle</Text>
                 </View>
               </TouchableOpacity>
             </View>
@@ -1009,14 +1028,10 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
               
             {selectedRecipientType === 'easenet' && (
               <>
-                <Text style={styles.modalHint}>Send money to someone by @easetag</Text>
-                <Text style={[styles.modalHint, styles.modalHintSecondary]}>
-                  Wallet transfers use USD. Enter the payee&apos;s Easetag.
-                </Text>
-                <View style={styles.easenetInputRow}>
-                  <Text style={styles.easenetAt}>@</Text>
+                <View style={styles.easenetInputShell}>
+                  <Text style={styles.easenetAtInside}>@</Text>
                   <TextInput
-                    style={[styles.modalInput, styles.easenetInput]}
+                    style={styles.easenetInputInner}
                     value={newRecipient.payeeEasetag}
                     onChangeText={(text) =>
                       setNewRecipient((prev) => ({ ...prev, payeeEasetag: text.replace(/^@+/, '') }))
@@ -1026,26 +1041,27 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                     autoCapitalize="none"
                     autoCorrect={false}
                     editable={!isSubmitting}
+                    underlineColorAndroid="transparent"
                   />
                   {easenetLookupLoading ? (
-                    <ActivityIndicator size="small" color={colors.primary.main} style={styles.easenetSpinner} />
+                    <ActivityIndicator
+                      size="small"
+                      color={colors.primary.main}
+                      style={styles.easenetSpinnerInside}
+                    />
                   ) : null}
                 </View>
                 {easenetLookupError ? <Text style={styles.errorText}>{easenetLookupError}</Text> : null}
                 {easenetProfile ? (
-                  <View style={styles.easenetPreview}>
-                    {easenetProfile.avatarUrl ? (
-                      <Image source={{ uri: easenetProfile.avatarUrl }} style={styles.easenetAvatarImg} />
-                    ) : (
-                      <View style={styles.easenetAvatarFallback}>
-                        <Text style={styles.easenetAvatarInitials}>{getInitials(easenetProfile.fullName)}</Text>
-                      </View>
-                    )}
-                    <View style={styles.easenetPreviewText}>
-                      <Text style={styles.easenetPreviewName}>{easenetProfile.fullName}</Text>
-                      <Text style={styles.easenetPreviewTag}>@{easenetProfile.easetag}</Text>
-                    </View>
-                  </View>
+                  <EasenetLookupPreview
+                    profile={{
+                      fullName: easenetProfile.fullName,
+                      easetag: easenetProfile.easetag,
+                      accountKind: easenetProfile.accountKind,
+                      avatarUrl: easenetProfile.avatarUrl,
+                    }}
+                    getInitials={getInitials}
+                  />
                 ) : null}
               </>
             )}
@@ -1725,11 +1741,11 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingTop: 0,
+    paddingHorizontal: spacing[5],
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing[5],
     paddingTop: spacing[4],
     paddingBottom: spacing[4],
   },
@@ -1753,7 +1769,6 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   searchContainer: {
-    paddingHorizontal: spacing[5],
     marginBottom: spacing[3],
   },
   searchWrapper: {
@@ -1769,10 +1784,17 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    ...textStyles.bodyMedium,
+    ...textStyles.textInputMedium,
     color: colors.text.primary,
     fontFamily: 'Outfit-Regular',
-    paddingVertical: spacing[2],
+    paddingVertical: 0,
+    ...Platform.select({
+      android: {
+        textAlignVertical: 'center' as const,
+        includeFontPadding: false,
+      },
+      default: {},
+    }),
   },
   searchErrorText: {
     ...textStyles.bodySmall,
@@ -1780,13 +1802,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Outfit-Regular',
     marginTop: spacing[2],
     paddingHorizontal: spacing[1],
-  },
-  addFlowEasetagHint: {
-    ...textStyles.bodySmall,
-    color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
-    paddingHorizontal: spacing[5],
-    paddingBottom: spacing[3],
   },
   recipientSelectorContainer: {
     paddingHorizontal: spacing[5],
@@ -1909,13 +1924,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing[2],
     marginBottom: spacing[1],
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
+    minWidth: 0,
+  },
+  recipientMetaBadge: {
+    flexShrink: 0,
+  },
+  easnerMarkBadgeImage: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
   },
   recipientName: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
     fontFamily: 'Outfit-SemiBold',
     flexShrink: 1,
+    minWidth: 0,
   },
   recentBadge: {
     backgroundColor: colors.primary.main + '18',
@@ -2092,77 +2117,45 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  modalHint: {
-    ...textStyles.bodySmall,
-    color: colors.text.secondary,
-    marginBottom: spacing[1],
-    fontFamily: 'Outfit-Regular',
-  },
-  modalHintSecondary: {
-    marginTop: 0,
-    marginBottom: spacing[2],
-    opacity: 0.9,
-  },
-  easenetInputRow: {
+  easenetInputShell: {
     flexDirection: 'row',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E2E2',
+    borderRadius: borderRadius.lg,
+    backgroundColor: '#F9F9F9',
+    minHeight: 48,
     marginBottom: spacing[2],
   },
-  easenetAt: {
+  easenetAtInside: {
     ...textStyles.bodyMedium,
     color: colors.text.secondary,
-    marginRight: spacing[1],
     fontFamily: 'Outfit-Regular',
+    paddingLeft: spacing[4],
+    paddingRight: spacing[1],
   },
-  easenetInput: {
+  easenetInputInner: {
     flex: 1,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+    paddingVertical: spacing[3],
+    paddingRight: spacing[2],
     marginBottom: 0,
-  },
-  easenetSpinner: {
-    marginLeft: spacing[2],
-  },
-  easenetPreview: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing[3],
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.frame.border,
-    backgroundColor: colors.frame.background,
-    marginBottom: spacing[3],
-  },
-  easenetAvatarImg: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-  },
-  easenetAvatarFallback: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: colors.primary.main + '18',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  easenetAvatarInitials: {
-    ...textStyles.titleSmall,
-    color: colors.primary.main,
-    fontFamily: 'Outfit-SemiBold',
-  },
-  easenetPreviewText: {
-    marginLeft: spacing[3],
-    flex: 1,
-  },
-  easenetPreviewName: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
-  },
-  easenetPreviewTag: {
-    ...textStyles.bodySmall,
-    color: colors.text.secondary,
-    marginTop: 2,
     fontFamily: 'Outfit-Regular',
+    fontSize: 13,
+    minHeight: 48,
+    lineHeight: 18,
+    textAlignVertical: 'center',
+    ...Platform.select({
+      android: {
+        includeFontPadding: false,
+      },
+    }),
+  },
+  easenetSpinnerInside: {
+    marginRight: spacing[3],
   },
   modalButtons: {
     flexDirection: 'row',

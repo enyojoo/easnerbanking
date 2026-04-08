@@ -46,6 +46,7 @@ import {
   SEND_FLOW_STATE_KEY,
   persistSendFlowState,
 } from "@/lib/send-flow-session"
+import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
 
 function getConversionRate(fromCurrency: string, toCurrency: string): number {
   if (fromCurrency === toCurrency) return 1
@@ -266,7 +267,7 @@ export default function SendPage() {
     if (!canContinue || !recipient) return
 
     const state: SendFlowState = {
-      recipient,
+      recipient: coerceBeneficiaryEasenetDisplay(recipient),
       amount: receiveAmount,
       receiveCurrency,
       sendAmount,

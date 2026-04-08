@@ -99,7 +99,7 @@ export default function SupportScreen({ navigation }: NavigationProps) {
     )
   }
 
-  const renderContactButton = (title: string, subtitle: string, onPress: () => void, icon: string, isLast: boolean = false) => (
+  const renderContactButton = (title: string, onPress: () => void, icon: string, isLast: boolean = false) => (
     <TouchableOpacity
       style={[styles.contactButton, isLast && styles.contactButtonLast]}
       onPress={async () => {
@@ -111,7 +111,6 @@ export default function SupportScreen({ navigation }: NavigationProps) {
       <Text style={styles.contactIcon}>{icon}</Text>
       <View style={styles.contactInfo}>
         <Text style={styles.contactTitle}>{title}</Text>
-        <Text style={styles.contactSubtitle}>{subtitle}</Text>
       </View>
       <Ionicons name="chevron-forward" size={20} color={colors.neutral[400]} />
     </TouchableOpacity>
@@ -151,9 +150,8 @@ export default function SupportScreen({ navigation }: NavigationProps) {
               <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
             <View style={styles.headerContent}>
-        <Text style={styles.title}>Support</Text>
-        <Text style={styles.subtitle}>We're here to help you</Text>
-      </View>
+              <Text style={styles.title}>Support</Text>
+            </View>
           </Animated.View>
 
           <Animated.View
@@ -247,11 +245,6 @@ const styles = StyleSheet.create({
   title: {
     ...textStyles.headlineMedium,
     color: colors.text.primary,
-    marginBottom: 2,
-  },
-  subtitle: {
-    ...textStyles.bodyMedium,
-    color: colors.text.secondary,
   },
   content: {
     padding: spacing[5],
@@ -294,11 +287,6 @@ const styles = StyleSheet.create({
     ...textStyles.bodyMedium,
     fontWeight: '500',
     color: colors.text.primary,
-    marginBottom: spacing[0],
-  },
-  contactSubtitle: {
-    ...textStyles.bodySmall,
-    color: colors.text.secondary,
   },
   inputContainer: {
     marginBottom: 16,

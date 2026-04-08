@@ -17,7 +17,6 @@ import {
 } from 'react-native'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { Ionicons } from '@expo/vector-icons'
-import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -172,6 +171,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
       }
 
       setIsEditing(false)
+      setShowDatePicker(false)
       setEasetagAvailable(null)
       setEasetagValidationError(null)
       Alert.alert('Success', 'Profile updated successfully')
@@ -189,6 +189,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
     setCheckingEasetag(false)
     setEditProfileData(profileData)
     setIsEditing(false)
+    setShowDatePicker(false)
     setEasetagAvailable(null)
     setEasetagValidationError(null)
     if (easetagCheckTimeout.current) {
@@ -423,25 +424,25 @@ function ProfileEditContent({ navigation }: NavigationProps) {
   }
 
   const renderProfileField = (label: string, value: string, onChangeText: (text: string) => void, disabled: boolean = false) => {
-    // In edit mode, show TextInput unless the field is explicitly disabled
-    const showInput = isEditing && !disabled
-    
+    const isEmailField = label.trim().toLowerCase() === 'email'
     return (
       <View style={styles.fieldContainer}>
         <Text style={isEditing ? styles.fieldLabelEdit : styles.fieldLabel}>
           {label}
         </Text>
-        {showInput ? (
+        {isEditing ? (
           <TextInput
-            style={styles.fieldInput}
+            style={[styles.fieldInput, disabled && styles.fieldInputReadOnly]}
             value={value}
             onChangeText={onChangeText}
             placeholder={`Enter ${label.toLowerCase()}`}
             placeholderTextColor={colors.text.tertiary}
             returnKeyType="done"
             onSubmitEditing={() => Keyboard.dismiss()}
-            editable={true}
-            autoCapitalize="words"
+            editable={!disabled}
+            autoCapitalize={isEmailField ? 'none' : 'words'}
+            autoCorrect={isEmailField ? false : true}
+            keyboardType={isEmailField ? 'email-address' : 'default'}
           />
         ) : (
           <Text style={[styles.fieldValue, disabled && { color: colors.text.tertiary }]}>
@@ -478,58 +479,16 @@ function ProfileEditContent({ navigation }: NavigationProps) {
             </Text>
             <Ionicons name="calendar-outline" size={18} color={colors.text.secondary} />
           </TouchableOpacity>
-          
-          {Platform.OS === 'ios' ? (
-            <Modal
-              visible={showDatePicker}
-              animationType="slide"
-              transparent={true}
-              onRequestClose={handleDatePickerCancel}
-            >
-              <View style={styles.dateModalOverlay}>
-                <View style={[styles.dateModalContent, { paddingBottom: insets.bottom }]}>
-                  <View style={styles.dateModalHeader}>
-                    <TouchableOpacity
-                      style={styles.dateCancelButton}
-                      onPress={handleDatePickerCancel}
-                    >
-                      <Text style={styles.dateCancelButtonText}>Cancel</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.dateModalTitle}>Select Date of Birth</Text>
-                    <TouchableOpacity
-                      style={styles.dateConfirmButtonHeader}
-                      onPress={handleDatePickerConfirm}
-                    >
-                      <Text style={styles.dateConfirmButtonTextHeader}>Done</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <View style={styles.datePickerWrapper}>
-                    <DateTimePicker
-                      value={selectedDate}
-                      mode="date"
-                      display="spinner"
-                      onChange={handleDateChange}
-                      maximumDate={new Date()}
-                      minimumDate={new Date(1900, 0, 1)}
-                      textColor={colors.text.primary}
-                      style={styles.datePicker}
-                    />
-                  </View>
-                </View>
-              </View>
-            </Modal>
-          ) : (
-            showDatePicker && (
-              <DateTimePicker
-                value={selectedDate}
-                mode="date"
-                display="default"
-                onChange={handleDateChange}
-                maximumDate={new Date()}
-                minimumDate={new Date(1900, 0, 1)}
-              />
-            )
-          )}
+          {Platform.OS === 'android' && showDatePicker ? (
+            <DateTimePicker
+              value={selectedDate}
+              mode="date"
+              display="default"
+              onChange={handleDateChange}
+              maximumDate={new Date()}
+              minimumDate={new Date(1900, 0, 1)}
+            />
+          ) : null}
         </>
       ) : (
         <Text style={styles.fieldValue}>
@@ -542,11 +501,25 @@ function ProfileEditContent({ navigation }: NavigationProps) {
   const renderEasetagField = () => {
     const easetagT = editProfileData.easetag.replace(/^@/, '').trim()
     const easetagTLen = easetagT.length
+
+    if (!isEditing) {
+      return (
+        <View style={styles.fieldContainer}>
+          <Text style={styles.fieldLabel}>Easetag</Text>
+          <Text style={styles.fieldValue}>
+            {profileData.easetag ? `@${profileData.easetag}` : 'Not set'}
+          </Text>
+          <Text style={[styles.fieldDescription, { color: colors.text.tertiary }]}>
+            People can send you money for free using your Easetag.
+          </Text>
+        </View>
+      )
+    }
+
     return (
-    <View style={styles.fieldContainer}>
-      <View style={styles.easetagLabelContainer}>
-        <Text style={isEditing ? styles.fieldLabelEdit : styles.fieldLabel}>Easetag</Text>
-        {isEditing ? (
+      <View style={styles.fieldContainer}>
+        <View style={styles.easetagLabelContainer}>
+          <Text style={[styles.fieldLabelEdit, styles.easetagFieldLabel]}>Easetag</Text>
           <View style={styles.easetagStatusSlot}>
             {easetagTLen > 0 ? (
               <View style={styles.easetagStatusContainer}>
@@ -555,19 +528,23 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                 ) : checkingEasetag ? (
                   <Text style={[styles.easetagStatusTextInline, { color: colors.text.tertiary }]}>Checking…</Text>
                 ) : easetagValidationError ? (
-                  <Text style={[styles.easetagStatusTextInline, { color: colors.error.main }]} numberOfLines={2}>
+                  <Text
+                    style={[styles.easetagStatusTextInline, { color: colors.error.main }]}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
                     {easetagValidationError}
                   </Text>
                 ) : easetagAvailable === true ? (
                   <>
-                    <Ionicons name="checkmark-circle" size={16} color={colors.success.main} />
+                    <Ionicons name="checkmark-circle" size={14} color={colors.success.main} />
                     <Text style={[styles.easetagStatusTextInline, { color: colors.success.main }]}>
                       Available
                     </Text>
                   </>
                 ) : easetagAvailable === false ? (
                   <>
-                    <Ionicons name="close-circle" size={16} color={colors.error.main} />
+                    <Ionicons name="close-circle" size={14} color={colors.error.main} />
                     <Text style={[styles.easetagStatusTextInline, { color: colors.error.main }]}>
                       Taken
                     </Text>
@@ -576,9 +553,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
               </View>
             ) : null}
           </View>
-        ) : null}
-      </View>
-      {isEditing ? (
+        </View>
         <View>
           <View style={styles.easetagInputContainer}>
             <Text style={styles.easetagPrefix}>@</Text>
@@ -594,25 +569,12 @@ function ProfileEditContent({ navigation }: NavigationProps) {
               onSubmitEditing={() => Keyboard.dismiss()}
               maxLength={20}
             />
-            <View style={styles.easetagSpinnerSlot}>
-              {checkingEasetag ? <ActivityIndicator size="small" color={colors.text.tertiary} /> : null}
-            </View>
           </View>
-          <Text style={[styles.fieldDescription, { color: colors.text.tertiary }]}>
+          <Text style={[styles.easetagHelperText, { color: colors.text.tertiary }]}>
             People can send you money for free using your Easetag.
           </Text>
         </View>
-      ) : (
-        <>
-          <Text style={styles.fieldValue}>
-            {profileData.easetag ? `@${profileData.easetag}` : 'Not set'}
-          </Text>
-          <Text style={[styles.fieldDescription, { color: colors.text.tertiary }]}>
-            People can send you money for free using your Easetag.
-          </Text>
-        </>
-      )}
-    </View>
+      </View>
     )
   }
 
@@ -652,7 +614,6 @@ function ProfileEditContent({ navigation }: NavigationProps) {
             </TouchableOpacity>
             <View style={styles.headerContent}>
               <Text style={styles.title}>Your Profile</Text>
-              <Text style={styles.subtitle}>Manage your personal information</Text>
             </View>
           </Animated.View>
 
@@ -670,14 +631,75 @@ function ProfileEditContent({ navigation }: NavigationProps) {
               }
             ]}
           >
-            {/* Profile Information */}
             <View style={styles.profileCard}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Profile Information</Text>
+              <View style={styles.profileTopRow}>
+                <View style={styles.avatarColumn}>
+                  {isEditing ? (
+                    <TouchableOpacity
+                      style={styles.avatarEditTouchable}
+                      onPress={async () => {
+                        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                        void handlePickProfilePhoto()
+                      }}
+                      disabled={uploadingAvatar || loading}
+                      activeOpacity={0.9}
+                      accessibilityRole="button"
+                      accessibilityLabel="Upload or change profile photo"
+                    >
+                      <View
+                        style={[
+                          userAvatarStyles.circle,
+                          styles.profileAvatarCircle,
+                          styles.avatarEditCircle,
+                          !editProfileData.avatarUrl?.trim() && styles.avatarEditCircleEmpty,
+                        ]}
+                      >
+                        {editProfileData.avatarUrl?.trim() ? (
+                          <>
+                            <Image source={{ uri: editProfileData.avatarUrl.trim() }} style={userAvatarStyles.image} />
+                            <View style={styles.avatarEditPhotoOverlay} pointerEvents="none">
+                              <Ionicons name="camera" size={22} color={colors.text.inverse} />
+                            </View>
+                          </>
+                        ) : (
+                          <View style={styles.avatarEditPlaceholder}>
+                            <Ionicons name="image-outline" size={26} color={colors.primary.main} />
+                            <Text style={styles.avatarEditPlaceholderText}>Tap to upload</Text>
+                          </View>
+                        )}
+                        {uploadingAvatar ? (
+                          <View style={styles.avatarUploading}>
+                            <ActivityIndicator color={colors.text.inverse} size="small" />
+                          </View>
+                        ) : null}
+                      </View>
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={[userAvatarStyles.circle, styles.profileAvatarCircle]}>
+                      {profileData.avatarUrl?.trim() ? (
+                        <Image
+                          source={{ uri: profileData.avatarUrl.trim() }}
+                          style={userAvatarStyles.image}
+                        />
+                      ) : (
+                        <Text style={userAvatarStyles.initials}>{profilePhotoInitials()}</Text>
+                      )}
+                    </View>
+                  )}
+                  {isEditing && editProfileData.avatarUrl?.trim() ? (
+                    <TouchableOpacity
+                      onPress={() => setEditProfileData((p) => ({ ...p, avatarUrl: null }))}
+                      disabled={uploadingAvatar || loading}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.avatarRemoveText}>Remove</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
                 <View style={styles.buttonContainer}>
                   {!isEditing ? (
-                    <TouchableOpacity 
-                      onPress={handleEditProfile} 
+                    <TouchableOpacity
+                      onPress={handleEditProfile}
                       style={styles.actionButton}
                       activeOpacity={0.7}
                     >
@@ -685,16 +707,16 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                     </TouchableOpacity>
                   ) : (
                     <>
-                      <TouchableOpacity 
-                        onPress={handleCancelEdit} 
+                      <TouchableOpacity
+                        onPress={handleCancelEdit}
                         disabled={loading}
                         activeOpacity={0.7}
                         style={styles.actionButtonSecondary}
                       >
                         <Text style={styles.actionButtonTextSecondary}>Discard</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity 
-                        onPress={handleSaveProfile} 
+                      <TouchableOpacity
+                        onPress={handleSaveProfile}
                         disabled={loading}
                         activeOpacity={0.7}
                         style={[styles.actionButton, loading && styles.actionButtonDisabled]}
@@ -710,48 +732,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                 </View>
               </View>
 
-              <View style={styles.profileContent}>
-                <View style={styles.avatarRow}>
-                  <View style={[userAvatarStyles.circle, styles.profileAvatarCircle]}>
-                    {(isEditing ? editProfileData.avatarUrl : profileData.avatarUrl) ? (
-                      <Image
-                        source={{ uri: (isEditing ? editProfileData.avatarUrl : profileData.avatarUrl) as string }}
-                        style={userAvatarStyles.image}
-                      />
-                    ) : (
-                      <Text style={userAvatarStyles.initials}>{profilePhotoInitials()}</Text>
-                    )}
-                    {uploadingAvatar ? (
-                      <View style={styles.avatarUploading}>
-                        <ActivityIndicator color={colors.text.inverse} size="small" />
-                      </View>
-                    ) : null}
-                  </View>
-                  {isEditing ? (
-                    <View style={styles.avatarActions}>
-                      <TouchableOpacity
-                        onPress={() => void handlePickProfilePhoto()}
-                        disabled={uploadingAvatar || loading}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.avatarActionText}>
-                          {(isEditing ? editProfileData.avatarUrl : profileData.avatarUrl)
-                            ? 'Change photo'
-                            : 'Add photo'}
-                        </Text>
-                      </TouchableOpacity>
-                      {(isEditing ? editProfileData.avatarUrl : profileData.avatarUrl) ? (
-                        <TouchableOpacity
-                          onPress={() => setEditProfileData((p) => ({ ...p, avatarUrl: null }))}
-                          disabled={uploadingAvatar || loading}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={styles.avatarRemoveText}>Remove</Text>
-                        </TouchableOpacity>
-                      ) : null}
-                    </View>
-                  ) : null}
-                </View>
+              <View>
 
                 {isEditing ? (
                   <>
@@ -812,15 +793,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                       <Text style={styles.fieldLabel}>Date of Birth</Text>
                       <Text style={styles.fieldValue}>{formatDateOfBirth(profileData.dateOfBirth)}</Text>
                     </View>
-                    <View style={styles.fieldContainer}>
-                      <Text style={styles.fieldLabel}>Easetag</Text>
-                      <Text style={styles.fieldValue}>
-                        {profileData.easetag ? `@${profileData.easetag}` : 'Not set'}
-                      </Text>
-                      <Text style={[styles.fieldDescription, { color: colors.text.tertiary }]}>
-                        People can send you money for free using your Easetag.
-                      </Text>
-                    </View>
+                    {renderEasetagField()}
                   </>
                 )}
               </View>
@@ -876,6 +849,41 @@ function ProfileEditContent({ navigation }: NavigationProps) {
           </View>
         </View>
       </Modal>
+
+      {Platform.OS === 'ios' ? (
+        <Modal
+          visible={showDatePicker && isEditing}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={handleDatePickerCancel}
+        >
+          <View style={styles.dateModalOverlay}>
+            <View style={[styles.dateModalContent, { paddingBottom: insets.bottom }]}>
+              <View style={styles.dateModalHeader}>
+                <TouchableOpacity style={styles.dateCancelButton} onPress={handleDatePickerCancel}>
+                  <Text style={styles.dateCancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <Text style={styles.dateModalTitle}>Select Date of Birth</Text>
+                <TouchableOpacity style={styles.dateConfirmButtonHeader} onPress={handleDatePickerConfirm}>
+                  <Text style={styles.dateConfirmButtonTextHeader}>Done</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.datePickerWrapper}>
+                <DateTimePicker
+                  value={selectedDate}
+                  mode="date"
+                  display="spinner"
+                  onChange={handleDateChange}
+                  maximumDate={new Date()}
+                  minimumDate={new Date(1900, 0, 1)}
+                  textColor={colors.text.primary}
+                  style={styles.datePicker}
+                />
+              </View>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
     </ScreenWrapper>
   )
 }
@@ -912,25 +920,21 @@ const styles = StyleSheet.create({
   title: {
     ...textStyles.headlineLarge,
     color: colors.text.primary,
-    marginBottom: spacing[1],
-  },
-  subtitle: {
-    ...textStyles.bodyMedium,
-    color: colors.text.secondary,
   },
   content: {
     padding: spacing[5],
     gap: spacing[4],
   },
-  sectionHeader: {
+  /** Avatar + photo actions left, Edit / Discard+Save right; tops align with each other */
+  profileTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing[2],
+    alignItems: 'flex-start',
+    marginBottom: spacing[3],
   },
-  sectionTitle: {
-    ...textStyles.titleLarge,
-    color: colors.text.primary,
+  avatarColumn: {
+    alignItems: 'flex-start',
+    gap: spacing[2],
   },
   buttonContainer: {
     flexDirection: 'row',
@@ -981,19 +985,45 @@ const styles = StyleSheet.create({
     padding: spacing[4],
     marginBottom: spacing[3],
   },
-  profileContent: {
-    gap: spacing[2],
-  },
-  avatarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing[3],
-    gap: spacing[4],
-  },
   profileAvatarCircle: {
     width: PROFILE_EDIT_AVATAR_SIZE,
     height: PROFILE_EDIT_AVATAR_SIZE,
     borderRadius: PROFILE_EDIT_AVATAR_SIZE / 2,
+  },
+  avatarEditTouchable: {
+    borderRadius: PROFILE_EDIT_AVATAR_SIZE / 2,
+  },
+  avatarEditCircle: {
+    borderWidth: 1,
+    borderColor: colors.frame.border,
+  },
+  avatarEditCircleEmpty: {
+    borderStyle: 'dashed',
+    borderColor: colors.primary.main + '66',
+    backgroundColor: colors.primary.main + '0a',
+  },
+  avatarEditPlaceholder: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing[2],
+    gap: spacing[1],
+  },
+  avatarEditPlaceholderText: {
+    fontSize: 11,
+    color: colors.text.secondary,
+    fontFamily: 'Outfit-Medium',
+    textAlign: 'center',
+    textTransform: 'none',
+    letterSpacing: 0.2,
+  },
+  /** Dim veil over photo so the camera reads as centered “tap to change” */
+  avatarEditPhotoOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   avatarUploading: {
     ...StyleSheet.absoluteFillObject,
@@ -1001,22 +1031,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarActions: {
-    flex: 1,
-    gap: spacing[2],
-  },
-  avatarActionText: {
-    ...textStyles.labelLarge,
-    color: colors.primary.main,
-    fontWeight: '600',
-  },
   avatarRemoveText: {
     ...textStyles.labelMedium,
     color: colors.error.main,
     fontWeight: '500',
   },
+  /** Uniform space between every form group (same as phone → DOB and DOB → easetag) */
   fieldContainer: {
-    marginBottom: spacing[2],
+    marginBottom: spacing[3],
   },
   fieldLabel: {
     ...textStyles.labelSmall,
@@ -1047,6 +1069,11 @@ const styles = StyleSheet.create({
       ios: { paddingVertical: 12 },
     }),
   },
+  /** Edit mode, non-editable (e.g. email): same frame as other inputs */
+  fieldInputReadOnly: {
+    backgroundColor: colors.frame.background,
+    color: colors.text.secondary,
+  },
   fieldValue: {
     ...textStyles.bodyLarge,
     color: colors.text.primary,
@@ -1057,23 +1084,48 @@ const styles = StyleSheet.create({
     ...textStyles.bodySmall,
     marginTop: spacing[1],
   },
+  /** Same top margin as other field hints; separate token for Easetag edit copy */
+  easetagHelperText: {
+    ...textStyles.bodySmall,
+    marginTop: spacing[1],
+  },
+  /**
+   * Same rhythm as DOB: `fieldLabelEdit` uses marginBottom below the label — here the label + status
+   * sit on the row bottom (flex-end) so there’s no extra air under “Easetag” inside the row.
+   * Fixed height keeps status from moving the @ field; gap to the box is only easetagInput marginTop.
+   */
   easetagLabelContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: spacing[2],
+    alignItems: 'flex-end',
+    height: 16,
+    marginBottom: 0,
     gap: spacing[2],
   },
+  /** Same line box as other edit labels; no extra bottom margin (spacing lives on the input). */
+  easetagFieldLabel: {
+    marginBottom: 0,
+    flexShrink: 0,
+    lineHeight: 14,
+    paddingVertical: 0,
+    ...Platform.select({
+      android: { includeFontPadding: false },
+    }),
+  },
+  /** Default column: alignItems = horizontal axis → flex-end pins status to the right */
   easetagStatusSlot: {
-    width: 132,
-    minHeight: 36,
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    height: '100%',
     alignItems: 'flex-end',
+    justifyContent: 'flex-end',
   },
   easetagStatusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[1],
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
     justifyContent: 'flex-end',
     maxWidth: '100%',
   },
@@ -1085,6 +1137,10 @@ const styles = StyleSheet.create({
   easetagInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    height: 48,
+    minHeight: 48,
+    maxHeight: 48,
+    marginTop: spacing[1],
     borderWidth: 0.5,
     borderColor: '#E2E2E2',
     borderRadius: borderRadius.xl,
@@ -1095,26 +1151,20 @@ const styles = StyleSheet.create({
     ...textStyles.bodyLarge,
     color: colors.text.secondary,
     paddingLeft: spacing[3],
-    paddingRight: spacing[1],
+    paddingRight: spacing[2],
     fontWeight: '500',
   },
   easetagInput: {
     flex: 1,
-    paddingVertical: spacing[3],
+    alignSelf: 'stretch',
     paddingRight: spacing[3],
-    minHeight: 48,
+    minHeight: 0,
     ...textStyles.textInputSingleLine,
     color: colors.text.primary,
     ...Platform.select({
-      android: { includeFontPadding: false, textAlignVertical: 'center' },
+      android: { includeFontPadding: false, textAlignVertical: 'center', paddingVertical: 0 },
       ios: { paddingVertical: 12 },
     }),
-  },
-  easetagSpinnerSlot: {
-    width: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingRight: spacing[2],
   },
   dateInputContainer: {
     flexDirection: 'row',

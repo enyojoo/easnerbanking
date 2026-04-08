@@ -3,6 +3,7 @@
 import type { Beneficiary } from "@/lib/recipient-types"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { getCountryCodeForCurrency } from "@easner/shared"
+import type { PayeeAccountKind } from "@/lib/easner-brand"
 
 type RecipientRow = {
   id: string
@@ -25,6 +26,7 @@ type RecipientRow = {
   wallet_memo_tag?: string | null
   payee_easetag?: string | null
   payee_avatar_url?: string | null
+  payee_account_kind?: string | null
   created_at: string
   updated_at: string
 }
@@ -51,6 +53,7 @@ export type RecipientUpsertInput = {
   /** Normalized easetag (no @); required for easenet */
   payeeEasetag?: string
   payeeAvatarUrl?: string | null
+  payeeAccountKind?: "personal" | "business"
 }
 
 const countryByCurrency: Record<string, string> = {
@@ -119,7 +122,53 @@ function toWritePayload(input: RecipientUpsertInput) {
     wallet_memo_tag: input.walletMemoTag || null,
     payee_easetag: input.recipientType === "easenet" ? input.payeeEasetag || null : null,
     payee_avatar_url: input.recipientType === "easenet" ? input.payeeAvatarUrl ?? null : null,
+    payee_account_kind:
+      input.recipientType === "easenet"
+        ? input.payeeAccountKind || null
+        : null,
   }
+}
+
+/** Normalized handle from our canonical `Easetag (@handle)` label or looser legacy copies. */
+function parseEasetagFromBankLabel(bankName: string): string | undefined {
+  const bn = String(bankName || "").trim()
+  if (!bn) return undefined
+  const strict = bn.match(/^Easetag\s*\(\s*@?([^)]+?)\s*\)\s*$/i)
+  if (strict?.[1]) {
+    const t = strict[1].trim().replace(/^@+/, "").toLowerCase()
+    return t || undefined
+  }
+  const loose = bn.match(/Easetag\s*\(\s*@?([^)]+?)\s*\)/i)
+  if (loose?.[1]) {
+    const t = loose[1].trim().replace(/^@+/, "").toLowerCase()
+    return t || undefined
+  }
+  return undefined
+}
+
+/** When the label is ambiguous, Easenet rows still store the tag in `account_number`. */
+function easetagFromAccountIfEasenetRow(row: RecipientRow, bankNameTrimmed: string): string | undefined {
+  const low = bankNameTrimmed.toLowerCase()
+  if (!low.includes("easetag") && !low.includes("easenet")) return undefined
+  const acct = String(row.account_number || "").trim().replace(/^@+/, "").toLowerCase()
+  if (!acct) return undefined
+  if (/^[a-z0-9][a-z0-9_-]*$/.test(acct)) return acct
+  return undefined
+}
+
+/**
+ * Ensures `payeeEasetag` is set when the row is clearly an Easetag recipient but DB columns were empty
+ * (e.g. old mobile writes or cached client objects).
+ */
+export function coerceBeneficiaryEasenetDisplay(b: Beneficiary): Beneficiary {
+  if (String(b.payeeEasetag || "").trim()) return b
+  const fromLabel = parseEasetagFromBankLabel(b.bankName)
+  if (fromLabel) return { ...b, payeeEasetag: fromLabel }
+  const low = String(b.bankName || "").toLowerCase()
+  if (!low.includes("easetag") && !low.includes("easenet")) return b
+  const acct = String(b.fullAccountNumber || b.accountNumber || "").trim().replace(/^@+/, "").toLowerCase()
+  if (acct && /^[a-z0-9][a-z0-9_-]*$/.test(acct)) return { ...b, payeeEasetag: acct }
+  return b
 }
 
 async function parseApiError(res: Response): Promise<string> {
@@ -138,25 +187,32 @@ async function parseApiError(res: Response): Promise<string> {
 }
 
 export function toBeneficiary(row: RecipientRow): Beneficiary {
-  const mobileInnerMatch = row.bank_name.match(/^Mobile Money \((.*)\)$/i)
+  const bankNameTrimmed = String(row.bank_name ?? "").trim()
+  const easetagFromBankName =
+    parseEasetagFromBankLabel(bankNameTrimmed) ?? easetagFromAccountIfEasenetRow(row, bankNameTrimmed)
+  const mobileInnerMatch = bankNameTrimmed.match(/^Mobile Money \((.*)\)$/i)
   const mobileInner = mobileInnerMatch?.[1] || ""
   const mobileProvider = mobileInner.includes("|CC:") ? mobileInner.split("|CC:")[0] : mobileInner
   const legacyCountryCodeFromMobile = mobileInner.includes("|CC:")
     ? mobileInner.split("|CC:")[1]?.trim().toUpperCase()
     : undefined
-  const walletMatch = row.bank_name.match(/^Wallet \((.*)\)$/i)
+  const walletMatch = bankNameTrimmed.match(/^Wallet \((.*)\)$/i)
   const walletDescriptor = walletMatch?.[1] || ""
   const [walletAssetFromLabel, walletNetworkFromLabel] = walletDescriptor.includes("/")
     ? walletDescriptor.split("/")
     : [undefined, walletDescriptor || undefined]
   const normalizedCountryCode = (row.country_code || legacyCountryCodeFromMobile || "").trim().toUpperCase() || undefined
+  const rawKind = String(row.payee_account_kind || "").toLowerCase()
+  const payeeAccountKind: PayeeAccountKind | undefined =
+    rawKind === "business" || rawKind === "personal" ? (rawKind as PayeeAccountKind) : undefined
   return {
     id: row.id,
     countryCode: normalizedCountryCode,
-    payeeEasetag: row.payee_easetag || undefined,
+    payeeEasetag: row.payee_easetag || easetagFromBankName || undefined,
+    payeeAccountKind,
     avatarUrl: row.payee_avatar_url || undefined,
     name: row.full_name,
-    bankName: mobileInnerMatch ? `Mobile Money (${mobileProvider})` : row.bank_name,
+    bankName: mobileInnerMatch ? `Mobile Money (${mobileProvider})` : bankNameTrimmed,
     accountNumber: row.account_number,
     fullAccountNumber: row.account_number,
     routingNumber: row.routing_number || undefined,
@@ -186,7 +242,7 @@ export async function listRecipients(userId?: string): Promise<Beneficiary[]> {
     throw new Error(await parseApiError(res))
   }
   const body = (await res.json()) as { recipients?: RecipientRow[] }
-  return (body.recipients || []).map(toBeneficiary)
+  return (body.recipients || []).map(toBeneficiary).map(coerceBeneficiaryEasenetDisplay)
 }
 
 export async function createRecipient(input: RecipientUpsertInput): Promise<Beneficiary> {
@@ -199,7 +255,7 @@ export async function createRecipient(input: RecipientUpsertInput): Promise<Bene
     throw new Error(await parseApiError(res))
   }
   const body = (await res.json()) as { recipient: RecipientRow }
-  return toBeneficiary(body.recipient)
+  return coerceBeneficiaryEasenetDisplay(toBeneficiary(body.recipient))
 }
 
 export async function updateRecipient(recipientId: string, input: RecipientUpsertInput): Promise<Beneficiary> {
@@ -212,7 +268,7 @@ export async function updateRecipient(recipientId: string, input: RecipientUpser
     throw new Error(await parseApiError(res))
   }
   const body = (await res.json()) as { recipient: RecipientRow }
-  return toBeneficiary(body.recipient)
+  return coerceBeneficiaryEasenetDisplay(toBeneficiary(body.recipient))
 }
 
 export async function deleteRecipient(recipientId: string): Promise<void> {

@@ -13,12 +13,7 @@ import {
   Platform,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { 
-  PieChart,
-  ArrowDownLeft, 
-  ArrowUpRight, 
-  Monitor,
-} from 'lucide-react-native'
+import { ArrowDownLeft, ArrowUpRight, Monitor } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { ShimmerLoader } from '../../components/premium'
@@ -31,7 +26,13 @@ import { analytics } from '../../lib/analytics'
 import { useAuth } from '../../contexts/AuthContext'
 import { useFocusRefreshAll } from '../../hooks/useFocusRefresh'
 import { apiGet, apiPost, NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import {
+  buildUserCacheKey,
+  readUserCache,
+  writeUserCache,
+  isCacheStale,
+  CacheTTL,
+} from '../../lib/userCache'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
 import { getTransactionStatusDisplay } from '../../utils/formatters'
 
@@ -276,7 +277,7 @@ function TransactionsSkeleton() {
 function TransactionsContent({ navigation }: NavigationProps) {
   const { userProfile } = useAuth()
   const currencies = useCurrencies()
-  const { transactions: userTransactions, refreshStaleData } = useUserData()
+  const { transactions: userTransactions, refreshStaleData, financialFeedsEpoch } = useUserData()
   
   const [transactions, setTransactions] = useState<CombinedTransaction[]>([])
   const [loading, setLoading] = useState(true)
@@ -301,38 +302,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
     analytics.trackScreenView('Transactions')
   }, [])
 
-  // Financially sensitive feed: keep cache short and rely on realtime updates.
-  const CACHE_TTL = 60 * 1000
-  const CACHE_KEY = `easner_combined_transactions_${userProfile?.id || ''}`
-
-  // Helper to get cached data (use useCallback to ensure stable reference)
-  const getCachedData = React.useCallback(async <T,>(key: string): Promise<{ data: T; timestamp: number } | null> => {
-    try {
-      const cached = await AsyncStorage.getItem(key)
-      if (!cached) return null
-      return JSON.parse(cached)
-    } catch {
-      return null
-    }
-  }, [])
-
-  // Helper to set cached data (use useCallback to ensure stable reference)
-  const setCachedData = React.useCallback(async <T,>(key: string, data: T): Promise<void> => {
-    try {
-      await AsyncStorage.setItem(key, JSON.stringify({
-        data,
-        timestamp: Date.now(),
-      }))
-    } catch (error) {
-      console.warn(`[Transactions] Error caching ${key}:`, error)
-    }
-  }, [])
-
-  // Helper to check if data is stale (use useCallback to ensure stable reference)
-  const isStale = React.useCallback((timestamp: number | undefined, ttl: number): boolean => {
-    if (!timestamp) return true
-    return Date.now() - timestamp > ttl
-  }, [])
+  const cacheKey = buildUserCacheKey('combinedTxList', userProfile?.id)
 
   // Fetch transactions with caching (stale-while-revalidate pattern)
   const fetchTransactions = React.useCallback(async (force = false, silent = false) => {
@@ -342,8 +312,8 @@ function TransactionsContent({ navigation }: NavigationProps) {
 
     // Try to load from cache first (stale-while-revalidate)
     if (!force) {
-      cached = await getCachedData<CombinedTransaction[]>(CACHE_KEY)
-      if (cached && !isStale(cached.timestamp, CACHE_TTL)) {
+      cached = await readUserCache<CombinedTransaction[]>(cacheKey)
+      if (cached && !isCacheStale(cached.timestamp, CacheTTL.COMBINED_TX_LIST)) {
         // Data is fresh, use cache
         setTransactions(cached.data)
         setLoading(false)
@@ -378,7 +348,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
         const transactionsList = data.transactions || []
         
         setTransactions(transactionsList)
-        await setCachedData(CACHE_KEY, transactionsList)
+        await writeUserCache(cacheKey, transactionsList)
         setError(null)
       } else if ((response as any).isNetworkError) {
         // Network error - keep cached data if available
@@ -410,13 +380,19 @@ function TransactionsContent({ navigation }: NavigationProps) {
     } finally {
       setLoading(false)
     }
-  }, [userProfile?.id, CACHE_KEY, getCachedData, setCachedData, isStale])
+  }, [userProfile?.id, cacheKey])
 
   // Initial load
   useEffect(() => {
     if (!userProfile?.id) return
     fetchTransactions(false)
   }, [userProfile?.id, fetchTransactions])
+
+  // Refetch combined list when a transaction row changes in Supabase (receives, card funding sync, etc.).
+  useEffect(() => {
+    if (!userProfile?.id || financialFeedsEpoch === 0) return
+    fetchTransactions(false, true).catch(() => {})
+  }, [financialFeedsEpoch, userProfile?.id, fetchTransactions])
 
   // Refresh stale data when screen comes into focus
   useFocusRefreshAll(false) // Only refresh if stale (> 5 minutes)
@@ -520,19 +496,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
           <View style={styles.headerContent}>
             <View>
               <Text style={styles.title}>Transactions</Text>
-              <Text style={styles.subtitle}>Your complete history</Text>
             </View>
-            <TouchableOpacity
-              style={styles.insightsButton}
-              onPress={async () => {
-                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                navigation.navigate('ExpenseInsights')
-              }}
-              activeOpacity={0.7}
-            >
-              <PieChart size={18} color={colors.primary.main} strokeWidth={2} />
-              <Text style={styles.insightsButtonText}>Expense Insights</Text>
-            </TouchableOpacity>
           </View>
         </Animated.View>
 
@@ -636,32 +600,12 @@ const styles = StyleSheet.create({
     paddingBottom: spacing[2],
   },
   headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
   title: {
     ...textStyles.headlineLarge,
     color: colors.text.primary,
-    marginBottom: 4,
   },
-  subtitle: {
-    ...textStyles.bodyMedium,
-    color: colors.text.secondary,
-  },
-  insightsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-  },
-  insightsButtonText: {
-    ...textStyles.labelMedium,
-    color: colors.primary.main,
-    fontWeight: '600',
-  },
-  
   // Search
   searchContainer: {
     paddingHorizontal: spacing[5],

@@ -33,6 +33,27 @@ import {
 function MoreContent({ navigation }: NavigationProps) {
   const { user, userProfile, refreshUserProfile, signOut } = useAuth()
   const insets = useSafeAreaInsets()
+
+  /** Main stack screens (ProfileEdit, Notifications, …) are siblings of `MainTabs`. Prefer parent `navigate` so taps work from the More tab. */
+  const navigateFromMoreTab = useCallback(
+    (routeName: string, params?: Record<string, unknown>) => {
+      const parent = navigation.getParent?.()
+      if (parent?.navigate) {
+        if (params && Object.keys(params).length > 0) {
+          parent.navigate(routeName as never, params as never)
+        } else {
+          parent.navigate(routeName as never)
+        }
+      } else {
+        if (params && Object.keys(params).length > 0) {
+          navigation.navigate(routeName as never, params as never)
+        } else {
+          navigation.navigate(routeName as never)
+        }
+      }
+    },
+    [navigation],
+  )
   const [kycSubmissions, setKycSubmissions] = useState<KYCSubmission[]>([])
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
@@ -189,10 +210,10 @@ function MoreContent({ navigation }: NavigationProps) {
 
   const handleMfaRowPress = () => {
     if (!mfaStatusKnown) return
-    navigation.navigate('MfaSetup' as never, {
+    navigateFromMoreTab('MfaSetup', {
       autoStartEnroll: mfaStatusLine === 'Off',
       mfaVerifiedOnCard: mfaStatusLine === 'On',
-    } as never)
+    })
   }
 
   const renderMenuItem = (
@@ -239,7 +260,6 @@ function MoreContent({ navigation }: NavigationProps) {
           ]}
         >
           <Text style={styles.title}>More</Text>
-          <Text style={styles.subtitle}>Manage your account information</Text>
         </Animated.View>
 
         <ScrollView
@@ -267,7 +287,7 @@ function MoreContent({ navigation }: NavigationProps) {
             <View style={styles.sectionContent}>
               {renderMenuItem(
                 'Your Profile',
-                () => navigation.navigate('ProfileEdit'),
+                () => navigation.navigate('ProfileEdit' as never),
                 undefined,
                 false,
                 false
@@ -278,7 +298,7 @@ function MoreContent({ navigation }: NavigationProps) {
                   // Only allow navigation if verification is not complete
                   if (!isVerificationComplete) {
                     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                    navigation.navigate('AccountVerification')
+                    navigateFromMoreTab('AccountVerification')
                   }
                   // If approved, do nothing (menu item is disabled)
                 }}
@@ -308,14 +328,14 @@ function MoreContent({ navigation }: NavigationProps) {
               </TouchableOpacity>
               {renderMenuItem(
                 'Notifications',
-                () => navigation.navigate('Notifications'),
+                () => navigation.navigate('Notifications' as never),
                 undefined,
                 false,
                 false
               )}
               {renderMenuItem(
                 'Recipients',
-                () => navigation.navigate('Recipients'),
+                () => navigateFromMoreTab('Recipients'),
                 undefined,
                 false,
                 true
@@ -329,14 +349,14 @@ function MoreContent({ navigation }: NavigationProps) {
             <View style={styles.sectionContent}>
               {renderMenuItem(
                 'Change PIN',
-                () => navigation.navigate('ChangePin' as never),
+                () => navigateFromMoreTab('ChangePin'),
                 undefined,
                 false,
                 false
               )}
               {renderMenuItem(
                 'Change password',
-                () => navigation.navigate('ChangePassword'),
+                () => navigateFromMoreTab('ChangePassword'),
                 undefined,
                 false,
                 false
@@ -367,7 +387,7 @@ function MoreContent({ navigation }: NavigationProps) {
             <View style={styles.sectionContent}>
               {renderMenuItem(
                 'Support',
-                () => navigation.navigate('Support'),
+                () => navigateFromMoreTab('Support'),
                 undefined,
                 false,
                 false
@@ -482,11 +502,6 @@ const styles = StyleSheet.create({
   title: {
     ...textStyles.headlineLarge,
     color: colors.text.primary,
-    marginBottom: spacing[1],
-  },
-  subtitle: {
-    ...textStyles.bodyMedium,
-    color: colors.text.secondary,
   },
   content: {
     padding: spacing[5],

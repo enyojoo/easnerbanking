@@ -30,7 +30,7 @@ export function useRecipientsCached(enabled: boolean) {
   return useCachedData<Beneficiary[]>({
     enabled: enabled && !isLoading && Boolean(user?.id),
     cacheKey: user?.id ? CACHE_KEYS.RECIPIENTS(user.id) : null,
-    persistKey: user?.id ? `recipients_cache_${user.id}` : undefined,
+    persistKey: user?.id ? `recipients_cache_v2_${user.id}` : undefined,
     initialData: [],
     ttlMs: RECIPIENTS_CACHE_TTL_MS,
     fetcher: async () => fetchRecipientsSafe(user!.id),

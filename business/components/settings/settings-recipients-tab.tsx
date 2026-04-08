@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,10 +25,12 @@ import { RecipientForm } from "@/components/recipient-form"
 import type { Beneficiary } from "@/lib/recipient-types"
 import { CountryFlag, CurrencyFlag } from "@/components/flags"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { deleteRecipient, listRecipients } from "@/lib/recipients-store"
+import { coerceBeneficiaryEasenetDisplay, deleteRecipient, listRecipients } from "@/lib/recipients-store"
 import { useAuth } from "@/lib/auth-context"
 import { useRecipientsCached } from "@/hooks/use-recipients-cached"
 import { createSendFlowSeedForRecipient, persistSendFlowState } from "@/lib/send-flow-session"
+import { cn } from "@/lib/utils"
+import { EasenetRecipientProfileRowHydrated } from "@/components/easenet-recipient-profile-row-hydrated"
 
 export function SettingsRecipientsTab() {
   const router = useRouter()
@@ -38,10 +40,15 @@ export function SettingsRecipientsTab() {
   const [selectedRecipient, setSelectedRecipient] = useState<Beneficiary | null>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const {
-    data: beneficiaries,
+    data: beneficiariesRaw,
     setData: setBeneficiaries,
     loading: isRecipientsLoading,
   } = useRecipientsCached(true)
+
+  const beneficiaries = useMemo(
+    () => beneficiariesRaw.map(coerceBeneficiaryEasenetDisplay),
+    [beneficiariesRaw],
+  )
 
   const reconcileRecipientsFromServer = () => {
     if (!user?.id) return
@@ -198,42 +205,58 @@ export function SettingsRecipientsTab() {
                   key={recipient.id}
                   className="flex items-center justify-between gap-3 p-4 border rounded-lg hover:bg-muted/50 transition-colors"
                 >
-                    <div className="flex items-center gap-3">
-                      <div className="relative mr-1">
-                        {recipient.avatarUrl ? (
-                          <Avatar className="h-10 w-10 border border-border">
-                            <AvatarImage src={recipient.avatarUrl} alt="" />
-                            <AvatarFallback>{recipientInitials(recipient)}</AvatarFallback>
-                          </Avatar>
-                        ) : (
-                          <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                            <User className="h-5 w-5 text-primary" />
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      {recipient.payeeEasetag ? (
+                        <EasenetRecipientProfileRowHydrated
+                          fullName={recipient.name}
+                          easetag={recipient.payeeEasetag}
+                          accountKind={recipient.payeeAccountKind}
+                          avatarUrl={recipient.avatarUrl}
+                          className="min-w-0 flex-1"
+                          nameClassName="font-semibold text-sm"
+                          subtitleClassName="text-xs text-muted-foreground"
+                        />
+                      ) : (
+                        <>
+                          <div className="relative mr-1 shrink-0">
+                            {recipient.avatarUrl ? (
+                              <Avatar className="h-10 w-10 border border-border">
+                                <AvatarImage src={recipient.avatarUrl} alt="" />
+                                <AvatarFallback>{recipientInitials(recipient)}</AvatarFallback>
+                              </Avatar>
+                            ) : (
+                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                                <User className="h-5 w-5 text-primary" />
+                              </div>
+                            )}
+                            <div
+                              className={cn(
+                                "absolute -bottom-0.5 -right-0.5 h-5 w-5 overflow-hidden rounded-full border-2 border-background bg-background p-0.5",
+                              )}
+                            >
+                              {recipient.countryCode ? (
+                                <CountryFlag
+                                  code={recipient.countryCode}
+                                  size={24}
+                                  className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-none"
+                                />
+                              ) : (
+                                <CurrencyFlag
+                                  currency={recipient.currency}
+                                  size={24}
+                                  className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-none"
+                                />
+                              )}
+                            </div>
                           </div>
-                        )}
-                        <div className="absolute -bottom-0.5 -right-0.5 h-5 w-5 overflow-hidden rounded-full border-2 border-background bg-background">
-                          {recipient.countryCode ? (
-                            <CountryFlag
-                              code={recipient.countryCode}
-                              size={24}
-                              className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-none"
-                            />
-                          ) : (
-                            <CurrencyFlag
-                              currency={recipient.currency}
-                              size={24}
-                              className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-none"
-                            />
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-sm">{recipient.name}</h3>
-                        <p className="text-xs text-muted-foreground">
-                          {recipient.payeeEasetag
-                            ? `@${recipient.payeeEasetag} • ${recipient.currency}`
-                            : `${recipient.bankName} • ${recipient.fullAccountNumber} • ${recipient.currency}`}
-                        </p>
-                      </div>
+                          <div className="min-w-0 flex-1">
+                            <h3 className="text-sm font-semibold">{recipient.name}</h3>
+                            <p className="min-w-0 text-xs text-muted-foreground">
+                              {`${recipient.bankName} • ${recipient.fullAccountNumber} • ${recipient.currency}`}
+                            </p>
+                          </div>
+                        </>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <Button

@@ -44,6 +44,13 @@ import { ShimmerLoader } from '../../components/premium'
 import { getTransactionStatusDisplay } from '../../utils/formatters'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import { isTier1Complete } from '../../lib/compliance'
+import {
+  buildUserCacheKey,
+  readUserCache,
+  writeUserCache,
+  isCacheStale,
+  CacheTTL,
+} from '../../lib/userCache'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 const DASHBOARD_SELECTED_CURRENCY_KEY_PREFIX = 'easner_dashboard_selected_currency_'
@@ -66,7 +73,7 @@ interface DashboardTransaction {
 
 export default function DashboardScreen({ navigation }: NavigationProps) {
   const { user, userProfile, refreshUserProfile } = useAuth()
-  const { refreshStaleData, refreshing: dataRefreshing } = useUserData()
+  const { refreshStaleData, refreshing: dataRefreshing, financialFeedsEpoch } = useUserData()
   const { balances, refreshBalances } = useBalance()
   const insets = useSafeAreaInsets()
   const [selectedCurrency, setSelectedCurrency] = useState<'USD' | 'EUR' | 'GBP'>('USD')
@@ -141,38 +148,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     }
   }, [userProfile?.id, user?.id])
 
-  // Financially sensitive feed: keep cache short and rely on realtime updates.
-  const CACHE_TTL = 60 * 1000
-  const CACHE_KEY = `easner_dashboard_transactions_${userProfile?.id || ''}`
-
-  // Helper to get cached data
-  const getCachedData = useCallback(async <T,>(key: string): Promise<{ data: T; timestamp: number } | null> => {
-    try {
-      const cached = await AsyncStorage.getItem(key)
-      if (!cached) return null
-      return JSON.parse(cached)
-    } catch {
-      return null
-    }
-  }, [])
-
-  // Helper to set cached data
-  const setCachedData = useCallback(async <T,>(key: string, data: T): Promise<void> => {
-    try {
-      await AsyncStorage.setItem(key, JSON.stringify({
-        data,
-        timestamp: Date.now(),
-      }))
-    } catch (error) {
-      console.warn(`[Dashboard] Error caching ${key}:`, error)
-    }
-  }, [])
-
-  // Helper to check if data is stale
-  const isStale = useCallback((timestamp: number | undefined, ttl: number): boolean => {
-    if (!timestamp) return true
-    return Date.now() - timestamp > ttl
-  }, [])
+  const cacheKey = buildUserCacheKey('dashboardCombinedTx', userProfile?.id)
 
   // Fetch recent transactions with caching
   const fetchRecentTransactions = useCallback(async (force = false, silent = false) => {
@@ -183,8 +159,8 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     // Try to load from cache first (stale-while-revalidate)
     // Note: Cache is already loaded on mount, so this is mainly for refresh scenarios
     if (!force) {
-      cached = await getCachedData<DashboardTransaction[]>(CACHE_KEY)
-      if (cached && !isStale(cached.timestamp, CACHE_TTL)) {
+      cached = await readUserCache<DashboardTransaction[]>(cacheKey)
+      if (cached && !isCacheStale(cached.timestamp, CacheTTL.DASHBOARD_COMBINED_TX)) {
         // Data is fresh, use cache (only update if different to avoid unnecessary re-renders)
         if (JSON.stringify(cached.data) !== JSON.stringify(recentTransactions)) {
           setRecentTransactions(cached.data)
@@ -258,7 +234,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
           metadata: tx.metadata,
         }))
         setRecentTransactions(transactionsList)
-        await setCachedData(CACHE_KEY, transactionsList)
+        await writeUserCache(cacheKey, transactionsList)
         setHasAttemptedLoad(true)
         dataLoadedRef.current = true
       }
@@ -283,7 +259,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
       // Always stop loading after API attempt completes
       setLoadingTransactions(false)
     }
-  }, [userProfile?.id, CACHE_KEY, getCachedData, setCachedData, isStale, hasAttemptedLoad, recentTransactions])
+  }, [userProfile?.id, cacheKey, hasAttemptedLoad, recentTransactions])
 
   // Load cached transactions immediately on mount (like balances - instant display)
   useEffect(() => {
@@ -297,7 +273,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     // Load cache first (like BalanceContext) - show immediately if available
     const loadCachedTransactions = async () => {
       try {
-        const cached = await getCachedData<DashboardTransaction[]>(CACHE_KEY)
+        const cached = await readUserCache<DashboardTransaction[]>(cacheKey)
         if (cached && cached.data && cached.data.length > 0) {
           // Show cached data immediately, even if stale (stale-while-revalidate)
           setRecentTransactions(cached.data)
@@ -317,7 +293,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     }
     
     loadCachedTransactions()
-  }, [userProfile?.id, CACHE_KEY, getCachedData])
+  }, [userProfile?.id, cacheKey])
 
   // Initial load - rely on webhooks and real-time for instant updates
   // Only sync for backfill on first load (once per session)
@@ -351,6 +327,12 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     // Only sync once per session for backfill (webhooks handle new transactions)
     triggerSync()
   }, [userProfile?.id, fetchRecentTransactions])
+
+  // Refetch dashboard combined feed when a transaction row changes in Supabase (deposits, synced activity).
+  useEffect(() => {
+    if (!userProfile?.id || financialFeedsEpoch === 0) return
+    fetchRecentTransactions(false, true).catch(() => {})
+  }, [financialFeedsEpoch, userProfile?.id, fetchRecentTransactions])
 
   // Refresh balances on focus only if stale (don't fetch every time)
   useFocusEffect(

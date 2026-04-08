@@ -36,7 +36,6 @@ import PinSetupPrompt from '../components/PinSetupPrompt'
 import DashboardScreen from '../screens/main/DashboardScreen'
 import RecipientsScreen from '../screens/main/RecipientsScreen'
 import TransactionsScreen from '../screens/main/TransactionsScreen'
-import ExpenseInsightsScreen from '../screens/main/ExpenseInsightsScreen'
 import MoreScreen from '../screens/main/MoreScreen'
 import OpenCurrencyAccountScreen from '../screens/main/OpenCurrencyAccountScreen'
 import ProfileEditScreen from '../screens/main/ProfileEditScreen'
@@ -728,14 +727,6 @@ function MainStack() {
       <Stack.Screen 
         name="TransactionCard" 
         component={TransactionCardScreen}
-        options={{ 
-          headerShown: false,
-          ...getTransitionConfig(),
-        }}
-      />
-      <Stack.Screen 
-        name="ExpenseInsights" 
-        component={ExpenseInsightsScreen}
         options={{ 
           headerShown: false,
           ...getTransitionConfig(),

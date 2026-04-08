@@ -19,7 +19,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { NavigationProps } from '../../types'
 import { colors, textStyles, borderRadius, spacing, fontSize, fontFamily, lineHeight } from '../../theme'
 import { AUTH_INITIAL_MODE_KEY } from '../../constants/auth'
-import GradientBackground from '../../components/GradientBackground'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 
@@ -106,7 +105,7 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
   }
 
   return (
-    <GradientBackground>
+    <View style={styles.screen}>
       <StatusBar style="light" />
       <View style={styles.container}>
         {/* Progress Dots - Top */}
@@ -209,11 +208,15 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
           </Text>
         </TouchableOpacity>
       </View>
-    </GradientBackground>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: colors.neutral.black,
+  },
   container: {
     flex: 1,
   },

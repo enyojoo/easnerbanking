@@ -10,45 +10,46 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native'
+import { useFocusEffect } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { CommunicationPreferences } from '@easner/shared'
 import { COMMUNICATION_PREFERENCES_DISCLAIMER } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
+import { useAuth } from '../../contexts/AuthContext'
+import { useUserData } from '../../contexts/UserDataContext'
 import { NavigationProps } from '../../types'
 import { colors, textStyles, spacing } from '../../theme'
-import { apiGet, apiPatch, apiPost } from '../../lib/apiClient'
+import { apiPatch, apiPost } from '../../lib/apiClient'
 import { pushNotificationService } from '../../lib/pushNotificationService'
 
 export default function NotificationsScreen({ navigation }: NavigationProps) {
   const insets = useSafeAreaInsets()
-  const [loading, setLoading] = useState(true)
-  const [prefs, setPrefs] = useState<CommunicationPreferences | null>(null)
+  const { user } = useAuth()
+  const {
+    communicationPreferences,
+    communicationPreferencesLoading,
+    refreshCommunicationPreferences,
+    commitCommunicationPreferences,
+  } = useUserData()
+
   const [saving, setSaving] = useState(false)
+  const [optimisticOverride, setOptimisticOverride] = useState<CommunicationPreferences | null>(null)
+
+  const prefs = optimisticOverride ?? communicationPreferences
+  const loadingPrefs =
+    communicationPreferencesLoading && !communicationPreferences && !optimisticOverride
 
   const headerAnim = useRef(new Animated.Value(0)).current
   const contentAnim = useRef(new Animated.Value(0)).current
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await apiGet('/api/settings/communication')
-      const j = (await res.json()) as { preferences?: CommunicationPreferences; error?: string }
-      if (!res.ok) {
-        throw new Error(j.error || 'Could not load preferences')
-      }
-      if (j.preferences) setPrefs(j.preferences)
-    } catch (e) {
-      console.warn('communication prefs:', e)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    load()
-  }, [load])
+  useFocusEffect(
+    useCallback(() => {
+      setOptimisticOverride(null)
+      void refreshCommunicationPreferences(false)
+    }, [refreshCommunicationPreferences]),
+  )
 
   useEffect(() => {
     Animated.stagger(100, [
@@ -74,13 +75,14 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
     })
     const j = (await res.json()) as { preferences?: CommunicationPreferences; error?: string }
     if (!res.ok) throw new Error(j.error || 'Save failed')
-    if (j.preferences) setPrefs(j.preferences)
+    if (j.preferences) {
+      await commitCommunicationPreferences(j.preferences)
+    }
   }
 
   const patch = async (partial: Partial<CommunicationPreferences>) => {
     if (!prefs || saving) return
     setSaving(true)
-    const prev = prefs
     const optimistic: CommunicationPreferences = {
       ...prefs,
       ...partial,
@@ -88,11 +90,12 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
         ? { ...prefs.channels, ...partial.channels }
         : prefs.channels,
     }
-    setPrefs(optimistic)
+    setOptimisticOverride(optimistic)
     try {
       await patchPrefs(optimistic)
+      setOptimisticOverride(null)
     } catch {
-      setPrefs(prev)
+      setOptimisticOverride(null)
     } finally {
       setSaving(false)
     }
@@ -101,17 +104,16 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
   const handlePushToggle = async (wantPush: boolean) => {
     if (!prefs || saving) return
     setSaving(true)
-    const prev = prefs
     if (wantPush) {
       const optimistic: CommunicationPreferences = {
         ...prefs,
         channels: { ...prefs.channels, push: true },
       }
-      setPrefs(optimistic)
+      setOptimisticOverride(optimistic)
       try {
         const token = await pushNotificationService.registerForPushNotifications()
         if (!token) {
-          setPrefs(prev)
+          setOptimisticOverride(null)
           Alert.alert(
             'Push notifications',
             'Push was not enabled. Use a physical device and allow notifications in Settings if you previously denied them.',
@@ -124,8 +126,9 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
           ...optimistic,
           channels: { ...optimistic.channels, push: true },
         })
+        setOptimisticOverride(null)
       } catch {
-        setPrefs(prev)
+        setOptimisticOverride(null)
       } finally {
         setSaving(false)
       }
@@ -134,13 +137,14 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
         ...prefs,
         channels: { ...prefs.channels, push: false },
       }
-      setPrefs(optimistic)
+      setOptimisticOverride(optimistic)
       try {
         await patchPrefs(optimistic)
         await pushNotificationService.clearLocalPushToken()
         await apiPost('/api/settings/push-token', { expoPushToken: null })
+        setOptimisticOverride(null)
       } catch {
-        setPrefs(prev)
+        setOptimisticOverride(null)
       } finally {
         setSaving(false)
       }
@@ -161,7 +165,7 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
       </View>
       <Switch
         value={value}
-        disabled={saving || loading}
+        disabled={saving || loadingPrefs}
         onValueChange={async (v) => {
           await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
           onValueChange(v)
@@ -209,9 +213,6 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
             </TouchableOpacity>
             <View style={styles.headerContent}>
               <Text style={styles.title}>Notifications</Text>
-              <Text style={styles.subtitle}>
-                Choose push and email channels, then fine-tune what we send
-              </Text>
             </View>
           </Animated.View>
 
@@ -231,13 +232,17 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
               },
             ]}
           >
-            {loading ? (
+            {loadingPrefs ? (
               <View style={styles.loading}>
                 <ActivityIndicator color={colors.primary.main} />
               </View>
+            ) : !user ? (
+              <Text style={styles.fallback}>
+                Sign in to load your preferences.
+              </Text>
             ) : !prefs ? (
               <Text style={styles.fallback}>
-                Sign in to load your preferences. If this keeps showing, check your connection.
+                Preferences could not be loaded. Check your connection and try again.
               </Text>
             ) : (
               <>
@@ -249,22 +254,6 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
                       'Alerts on this device when enabled (requires permission)',
                       prefs.channels.push,
                       (v) => void handlePushToggle(v),
-                      true,
-                    )}
-                  </View>
-                </View>
-
-                <View style={styles.sectionCard}>
-                  <Text style={styles.sectionTitle}>Email</Text>
-                  <View style={styles.sectionContent}>
-                    {renderToggleItem(
-                      'Email',
-                      'Preference-based and operational messages by email',
-                      prefs.channels.email,
-                      (v) =>
-                        patch({
-                          channels: { ...prefs.channels, email: v },
-                        }),
                       true,
                     )}
                   </View>
@@ -295,7 +284,7 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
                   </View>
                 </View>
 
-                <Text style={styles.note}>{COMMUNICATION_PREFERENCES_DISCLAIMER}</Text>
+                <Text style={styles.disclaimer}>{COMMUNICATION_PREFERENCES_DISCLAIMER}</Text>
               </>
             )}
           </Animated.View>
@@ -337,11 +326,6 @@ const styles = StyleSheet.create({
   title: {
     ...textStyles.headlineMedium,
     color: colors.text.primary,
-    marginBottom: 2,
-  },
-  subtitle: {
-    ...textStyles.bodyMedium,
-    color: colors.text.secondary,
   },
   content: {
     padding: spacing[5],
@@ -356,10 +340,12 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     lineHeight: 22,
   },
-  note: {
-    ...textStyles.bodySmall,
+  /** Slightly smaller than bodySmall for legal-style footer copy ("We may still…"). */
+  disclaimer: {
+    fontFamily: textStyles.bodySmall.fontFamily,
+    fontSize: 10,
+    lineHeight: 14,
     color: colors.text.secondary,
-    lineHeight: 20,
     opacity: 0.9,
   },
   sectionCard: {

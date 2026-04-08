@@ -11,9 +11,7 @@ import { Suspense } from "react"
 import { PwaStandaloneRoot } from "@/components/pwa/pwa-standalone-root"
 import { PwaInstallProvider } from "@/components/pwa/pwa-install-provider"
 import "./globals.css"
-
-const ICON =
-  "https://seeqjiebmrnolcyydewj.supabase.co/storage/v1/object/public/brand/Easner%20Favicon.svg"
+import { BRAND } from "@easner/shared"
 
 export const metadata: Metadata = {
   title: "Easner Business Banking",
@@ -21,8 +19,8 @@ export const metadata: Metadata = {
     "Stablecoin-powered banking infrastructure with multi-currency accounts, cards, invoicing, and payments collections.",
   generator: "Easner",
   icons: {
-    icon: ICON,
-    apple: [{ url: ICON }],
+    icon: BRAND.favicon,
+    apple: [{ url: BRAND.favicon }],
   },
   appleWebApp: {
     capable: true,

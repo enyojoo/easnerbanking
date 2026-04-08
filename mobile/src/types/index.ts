@@ -56,6 +56,8 @@ export interface Recipient {
   payee_easetag?: string
   /** Snapshot of payee `users.avatar_url` at save time (Easetag / P2P recipients). */
   payee_avatar_url?: string
+  /** Easetag profile: personal user vs business (from public lookup). */
+  payee_account_kind?: 'business' | 'personal'
   transfer_type?: "ACH" | "Wire"
   checking_or_savings?: "checking" | "savings"
   mobile_provider?: string

@@ -11,6 +11,8 @@ import { hasPin, isLoginPinModuleAvailable } from "@/lib/login-pin"
 import { getCurrencySymbol } from "@/lib/utils"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 import type { Beneficiary } from "@/lib/recipient-types"
+import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
+import { EasenetRecipientProfileRowHydrated } from "@/components/easenet-recipient-profile-row-hydrated"
 import { generateTransactionId } from "@/lib/transaction-id"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { ArrowLeft, User, Copy, Check, Loader2 } from "lucide-react"
@@ -100,7 +102,10 @@ export default function SendConfirmPage() {
           router.replace("/send")
           return
         }
-        setState(parsed)
+        setState({
+          ...parsed,
+          recipient: coerceBeneficiaryEasenetDisplay(parsed.recipient),
+        })
       } catch {
         router.replace("/send")
       }
@@ -246,11 +251,24 @@ export default function SendConfirmPage() {
               </span>
             </div>
           )}
-          <div className="flex items-center justify-between border-b pb-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
             <span className="text-sm text-muted-foreground">Recipient</span>
-            <div className="flex items-center gap-2">
-              <User className="h-4 w-4 text-muted-foreground" />
-              <span className="font-medium">{state.recipient.name}</span>
+            <div className="flex min-w-0 flex-1 justify-end">
+              {isEasenetRecipient(state.recipient) && state.recipient.payeeEasetag ? (
+                <EasenetRecipientProfileRowHydrated
+                  className="max-w-full"
+                  fullName={state.recipient.name}
+                  easetag={state.recipient.payeeEasetag}
+                  accountKind={state.recipient.payeeAccountKind}
+                  avatarUrl={state.recipient.avatarUrl}
+                  subtitleClassName="text-sm text-muted-foreground"
+                />
+              ) : (
+                <div className="flex max-w-full items-center gap-2">
+                  <User className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate font-medium">{state.recipient.name}</span>
+                </div>
+              )}
             </div>
           </div>
           {sourceAccount && (

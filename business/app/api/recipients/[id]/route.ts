@@ -21,6 +21,7 @@ type RecipientWritePayload = {
   wallet_memo_tag?: string | null
   payee_easetag?: string | null
   payee_avatar_url?: string | null
+  payee_account_kind?: string | null
 }
 
 function looksLikeMissingStructuredColumn(error: unknown): boolean {

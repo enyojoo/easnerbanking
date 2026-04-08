@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useRef } from 'react'
 import {
   View,
   Text,
@@ -6,83 +6,242 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
+  Platform,
+  Animated,
+  Image,
 } from 'react-native'
-import { Plus } from 'lucide-react-native'
+import { LinearGradient } from 'expo-linear-gradient'
+import { BlurView } from 'expo-blur'
 import * as Haptics from 'expo-haptics'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import Svg, { Path } from 'react-native-svg'
+import { Plus, Snowflake, Settings, Eye } from 'lucide-react-native'
+import Svg, { Circle, Defs, Path, Pattern, Rect } from 'react-native-svg'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
-import { colors, textStyles, borderRadius, spacing, shadows } from '../../theme'
+import { colors, textStyles, borderRadius, spacing } from '../../theme'
+import { EASNER_CARD_ICON_URL } from '../../lib/easnerBrand'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
+const CARD_SPACING = spacing[1]
 
-/** Preview placeholder until Easner cards launch. */
-const PREVIEW = {
-  last4: '0000',
-  holder: 'CARDHOLDER',
+const COMING_SOON_COPY = 'Easner Card is coming soon'
+
+/** Preview — single placeholder until API-backed carousel; layout stays multi-card ready. */
+const MOCK_CARDS = [
+  {
+    id: '2',
+    form: 'physical' as const,
+    last4: '1234',
+    cardholderName: 'Samuel Adeyemi',
+  },
+]
+
+function gradientForForm(form: 'virtual' | 'physical'): [string, string, string] {
+  return form === 'physical'
+    ? ['#005a99', '#007ACC', '#0099e6']
+    : ['#0F172A', '#1E293B', '#334155']
 }
 
-function VisaLogo({ width = 56, height = 18 }: { width?: number; height?: number }) {
+function CardPattern({ cardId, width, height }: { cardId: string; width: number; height: number }) {
+  const sid = cardId.replace(/\W/g, '') || 'c'
   return (
-    <Svg width={width} height={height} viewBox="0 0 780 500" fill="none">
-      <Path
-        d="M489.823 143.111C442.988 143.111 401.134 167.393 401.134 212.256C401.134 263.706 475.364 267.259 475.364 293.106C475.364 303.989 462.895 313.731 441.6 313.731C411.377 313.731 388.789 300.119 388.789 300.119L379.123 345.391C379.123 345.391 405.145 356.889 439.692 356.889C490.898 356.889 531.19 331.415 531.19 285.784C531.19 231.419 456.652 227.971 456.652 203.981C456.652 195.455 466.887 186.114 488.122 186.114C512.081 186.114 531.628 196.014 531.628 196.014L541.087 152.289C541.087 152.289 519.818 143.111 489.823 143.111Z"
-        fill="#FFFFFF"
-      />
+    <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={styles.cardPatternSvg}>
+      <Defs>
+        <Pattern id={`dots-${sid}`} x={0} y={0} width={40} height={40} patternUnits="userSpaceOnUse">
+          <Circle cx={2} cy={2} r={1.5} fill="white" />
+        </Pattern>
+        <Pattern id={`lines-${sid}`} x={0} y={0} width={60} height={60} patternUnits="userSpaceOnUse">
+          <Path d="M0 60 L60 0" stroke="white" strokeWidth={0.5} />
+        </Pattern>
+      </Defs>
+      <Rect width={width} height={height} fill={`url(#dots-${sid})`} />
+      <Rect width={width} height={height} fill={`url(#lines-${sid})`} />
     </Svg>
   )
 }
 
-export default function CardScreen({ navigation }: NavigationProps) {
-  const insets = useSafeAreaInsets()
-  const cardWidth = Math.min(SCREEN_WIDTH - spacing[5] * 2, 340)
+function MastercardMark() {
+  return (
+    <Svg width={56} height={36} viewBox="0 0 56 36" fill="none">
+      <Circle cx={20} cy={18} r={14} fill="#EB001B" />
+      <Circle cx={36} cy={18} r={14} fill="#F79E1B" />
+    </Svg>
+  )
+}
+
+export default function CardScreen({ navigation: _navigation }: NavigationProps) {
+  const CARD_WIDTH = Math.min(SCREEN_WIDTH - spacing[5] * 2, 323)
+  const CARD_HEIGHT = Math.round(CARD_WIDTH / 1.586)
+  const cardStride = CARD_WIDTH + CARD_SPACING * 2
+
+  const scrollX = useRef(new Animated.Value(0)).current
+
+  const actionsComingSoon = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+  }
+
+  const handleCardScroll = Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], {
+    useNativeDriver: false,
+  })
 
   return (
     <ScreenWrapper>
       <View style={styles.container}>
-        <View style={[styles.header, { paddingTop: insets.top + spacing[4] }]}>
-          <Text style={styles.headerTitle}>My cards</Text>
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-            accessibilityRole="button"
-            accessibilityLabel="Add card"
-          >
-            <Plus size={20} color={colors.text.primary} strokeWidth={2.5} />
-          </TouchableOpacity>
+        <View style={styles.header}>
+          <View style={styles.headerContent}>
+            <Text style={styles.title}>My Cards</Text>
+            <TouchableOpacity
+              style={styles.iconBtn}
+              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Add card"
+            >
+              <Plus size={20} color={colors.text.primary} strokeWidth={2.5} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <ScrollView
-          contentContainerStyle={{
-            paddingBottom: insets.bottom + spacing[8],
-            paddingHorizontal: spacing[5],
-          }}
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          <View style={[styles.cardWrap, { width: cardWidth, alignSelf: 'center' }]}>
-            <View style={[styles.cardFace, { width: cardWidth }]}>
-              <View style={styles.cardPattern} />
-              <View style={styles.comingSoonOverlay}>
-                <Text style={styles.comingSoonText}>
-                  Easner cards are coming soon.
-                </Text>
+          <View style={[styles.carouselContainer, { height: CARD_HEIGHT + spacing[8] }]}>
+            <Animated.ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onScroll={handleCardScroll}
+              scrollEventThrottle={16}
+              snapToInterval={cardStride}
+              decelerationRate="fast"
+              contentContainerStyle={[
+                styles.carouselContent,
+                { paddingHorizontal: (SCREEN_WIDTH - CARD_WIDTH) / 2, gap: CARD_SPACING * 2 },
+              ]}
+              contentInsetAdjustmentBehavior="never"
+            >
+              {MOCK_CARDS.map((card, index) => {
+                const inputRange = [(index - 1) * cardStride, index * cardStride, (index + 1) * cardStride]
+                const scale = scrollX.interpolate({
+                  inputRange,
+                  outputRange: [0.96, 1, 0.96],
+                  extrapolate: 'clamp',
+                })
+                const heightScale = scrollX.interpolate({
+                  inputRange,
+                  outputRange: [0.96, 1, 0.96],
+                  extrapolate: 'clamp',
+                })
+                const opacity = scrollX.interpolate({
+                  inputRange,
+                  outputRange: [0.8, 1, 0.8],
+                  extrapolate: 'clamp',
+                })
+                const gradient = gradientForForm(card.form)
+
+                return (
+                  <Animated.View
+                    key={card.id}
+                    style={[
+                      styles.cardWrapper,
+                      {
+                        width: CARD_WIDTH,
+                        marginRight: CARD_SPACING,
+                        transform: [{ scale }],
+                        height: Animated.multiply(CARD_HEIGHT, heightScale),
+                        opacity,
+                      },
+                    ]}
+                  >
+                    <LinearGradient
+                      colors={gradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={[styles.card, { width: CARD_WIDTH, height: CARD_HEIGHT }]}
+                    >
+                      <View style={styles.patternLayer}>
+                        <CardPattern cardId={card.id} width={CARD_WIDTH} height={CARD_HEIGHT} />
+                      </View>
+
+                      <View style={styles.cardInner}>
+                        <View style={styles.cardTopRow}>
+                          <View style={styles.brandRow}>
+                            <Image
+                              source={{ uri: EASNER_CARD_ICON_URL }}
+                              style={styles.brandIcon}
+                              resizeMode="contain"
+                              accessibilityIgnoresInvertColors
+                            />
+                            <View style={styles.formBadge}>
+                              <Text style={styles.formBadgeText}>{card.form}</Text>
+                            </View>
+                          </View>
+                          <MastercardMark />
+                        </View>
+
+                        <View style={styles.panBlock}>
+                          <Text style={styles.panText} numberOfLines={1}>
+                            •••• •••• •••• {card.last4}
+                          </Text>
+                        </View>
+
+                        <View style={styles.cardBottomMeta}>
+                          <View style={styles.metaCol}>
+                            <Text style={styles.metaLabel}>Card holder</Text>
+                            <Text style={styles.metaValue} numberOfLines={1}>
+                              {card.cardholderName.toUpperCase()}
+                            </Text>
+                          </View>
+                          <View style={[styles.metaCol, styles.metaColEnd]}>
+                            <Text style={styles.metaLabel}>Expires</Text>
+                            <Text style={styles.metaValue}>••/••</Text>
+                          </View>
+                        </View>
+                      </View>
+                    </LinearGradient>
+
+                    <View style={styles.comingSoonWrap} pointerEvents="auto">
+                      <BlurView
+                        intensity={Platform.OS === 'ios' ? 8 : 24}
+                        tint="dark"
+                        experimentalBlurMethod={
+                          Platform.OS === 'android' ? 'dimezisBlurView' : undefined
+                        }
+                        style={StyleSheet.absoluteFill}
+                      />
+                      <View style={styles.comingSoonScrim} pointerEvents="none" />
+                      <View style={styles.comingSoonTextCol} pointerEvents="none">
+                        <Text style={styles.comingSoonText}>{COMING_SOON_COPY}</Text>
+                      </View>
+                    </View>
+                  </Animated.View>
+                )
+              })}
+            </Animated.ScrollView>
+          </View>
+
+          <View style={styles.actionButtons}>
+            <TouchableOpacity style={styles.actionButton} onPress={actionsComingSoon} activeOpacity={0.7}>
+              <View style={[styles.actionIconContainer, styles.actionIconDisabled]}>
+                <Eye size={20} color={colors.text.tertiary} strokeWidth={2.5} />
               </View>
-              <View style={styles.cardInner}>
-                <View style={styles.cardTop}>
-                  <Text style={styles.brand}>Easner</Text>
-                  <Text style={styles.chip}>virtual</Text>
-                </View>
-                <Text style={styles.pan}>•••• •••• •••• {PREVIEW.last4}</Text>
-                <View style={styles.cardBottom}>
-                  <View>
-                    <Text style={styles.label}>Card holder</Text>
-                    <Text style={styles.holder}>{PREVIEW.holder}</Text>
-                  </View>
-                  <VisaLogo />
-                </View>
+              <Text style={styles.actionButtonTextDisabled}>View</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.actionButton} onPress={actionsComingSoon} activeOpacity={0.7}>
+              <View style={[styles.actionIconContainer, styles.actionIconDisabled]}>
+                <Snowflake size={20} color={colors.text.tertiary} strokeWidth={2.5} />
               </View>
-            </View>
+              <Text style={styles.actionButtonTextDisabled}>Freeze</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.actionButton} onPress={actionsComingSoon} activeOpacity={0.7}>
+              <View style={[styles.actionIconContainer, styles.actionIconDisabled]}>
+                <Settings size={20} color={colors.text.tertiary} strokeWidth={2.5} />
+              </View>
+              <Text style={styles.actionButtonTextDisabled}>Settings</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.section}>
@@ -104,12 +263,25 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background.primary,
   },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: spacing[5],
+  },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: spacing[5],
-    marginBottom: spacing[2],
+    paddingTop: spacing[4],
+    paddingBottom: spacing[2],
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  title: {
+    ...textStyles.headlineLarge,
+    color: colors.text.primary,
   },
   iconBtn: {
     width: 44,
@@ -117,102 +289,196 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: colors.frame.background,
+    borderWidth: 0.5,
+    borderColor: colors.frame.border,
   },
-  headerTitle: {
-    ...textStyles.titleLarge,
-    color: colors.text.primary,
-  },
-  cardWrap: {
-    marginTop: spacing[4],
-  },
-  cardFace: {
-    aspectRatio: 1.586,
-    borderRadius: borderRadius.xl,
-    overflow: 'hidden',
-    backgroundColor: '#0F172A',
-    ...shadows.md,
-  },
-  cardPattern: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 0.12,
-    backgroundColor: '#0099e6',
-  },
-  comingSoonOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    zIndex: 6,
+  carouselContainer: {
+    marginTop: spacing[3],
+    marginBottom: 2,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: spacing[5],
   },
-  comingSoonText: {
-    ...textStyles.bodyMedium,
-    color: '#fff',
-    textAlign: 'center',
-    fontFamily: 'Outfit-Medium',
+  carouselContent: {
+    alignItems: 'center',
+  },
+  cardWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 24,
+    overflow: 'hidden',
+  },
+  card: {
+    borderRadius: 24,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  cardPatternSvg: {
+    opacity: 1,
+  },
+  patternLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1,
+    opacity: 0.1,
   },
   cardInner: {
     flex: 1,
-    padding: spacing[5],
-    justifyContent: 'space-between',
     zIndex: 2,
-  },
-  cardTop: {
-    flexDirection: 'row',
+    paddingHorizontal: spacing[6],
+    paddingTop: spacing[6],
+    paddingBottom: spacing[6],
     justifyContent: 'space-between',
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  brandRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing[2],
+    flexShrink: 1,
   },
-  brand: {
-    color: 'rgba(255,255,255,0.95)',
-    fontFamily: 'Outfit-SemiBold',
-    fontSize: 18,
+  brandIcon: {
+    height: 40,
+    width: 40,
+    opacity: 0.9,
+    tintColor: '#FFFFFF',
   },
-  chip: {
+  formBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  formBadgeText: {
     fontSize: 10,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.85)',
-    textTransform: 'uppercase',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    fontWeight: '500',
+    color: 'rgba(255, 255, 255, 0.9)',
+    textTransform: 'lowercase',
+    letterSpacing: 0.5,
+    fontFamily: 'Outfit-Medium',
   },
-  pan: {
+  panBlock: {
+    paddingVertical: spacing[4],
+  },
+  panText: {
     fontFamily: 'DMMono-Regular',
-    fontSize: 16,
-    letterSpacing: 2,
-    color: '#fff',
+    fontSize: 14,
+    letterSpacing: 3.2,
+    color: '#FFFFFF',
   },
-  cardBottom: {
+  cardBottomMeta: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
+    gap: spacing[4],
   },
-  label: {
+  metaCol: {
+    flexShrink: 1,
+  },
+  metaColEnd: {
+    alignItems: 'flex-end',
+  },
+  metaLabel: {
     fontSize: 10,
-    color: 'rgba(255,255,255,0.6)',
+    fontWeight: '500',
+    color: 'rgba(255, 255, 255, 0.6)',
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    fontFamily: 'Outfit-Medium',
     marginBottom: 4,
   },
-  holder: {
-    fontSize: 13,
+  metaValue: {
+    fontSize: 14,
     fontWeight: '600',
-    color: '#fff',
-    letterSpacing: 1,
+    color: '#FFFFFF',
+    fontFamily: 'Outfit-SemiBold',
+    letterSpacing: 0.6,
+  },
+  comingSoonWrap: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 10,
+    borderRadius: 24,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  comingSoonScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+  },
+  comingSoonTextCol: {
+    maxWidth: 280,
+    paddingHorizontal: spacing[5],
+    zIndex: 2,
+  },
+  comingSoonText: {
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    fontFamily: 'Outfit-Medium',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing[3],
+    paddingHorizontal: spacing[5],
+    marginTop: 2,
+    marginBottom: spacing[4],
+  },
+  actionButton: {
+    flex: 1,
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  actionIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: colors.background.secondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 0.5,
+    borderColor: colors.frame.border,
+  },
+  actionIconDisabled: {
+    opacity: 0.55,
+  },
+  actionButtonTextDisabled: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.text.tertiary,
+    fontFamily: 'Outfit-Medium',
   },
   section: {
-    marginTop: spacing[8],
+    marginTop: spacing[4],
+    paddingHorizontal: spacing[5],
   },
   sectionTitle: {
-    ...textStyles.titleMedium,
+    ...textStyles.headingSmall,
     color: colors.text.primary,
+    fontFamily: 'Outfit-SemiBold',
     marginBottom: spacing[3],
   },
   emptyBox: {
-    backgroundColor: '#F9F9F9',
+    backgroundColor: colors.frame.background,
     borderRadius: 24,
     borderWidth: 0.5,
-    borderColor: '#E2E2E2',
+    borderColor: colors.frame.border,
     padding: spacing[5],
   },
   emptyText: {

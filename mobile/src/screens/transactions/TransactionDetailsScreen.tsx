@@ -10,7 +10,6 @@ import {
   Alert,
   Animated,
 } from 'react-native'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -21,6 +20,13 @@ import { NavigationProps } from '../../types'
 import { colors, textStyles, borderRadius, spacing, shadows } from '../../theme'
 import { apiGet, NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
 import { useUserData } from '../../contexts/UserDataContext'
+import {
+  transactionDetailCacheKey,
+  readUserCache,
+  writeUserCache,
+  isCacheStale,
+  CacheTTL,
+} from '../../lib/userCache'
 
 interface LedgerTransaction {
   id: string
@@ -65,9 +71,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   const headerAnim = useRef(new Animated.Value(0)).current
   const contentAnim = useRef(new Animated.Value(0)).current
 
-  // Cache TTL (10 minutes - same as other screens)
-  const CACHE_TTL = 10 * 60 * 1000
-  const CACHE_KEY = `easner_transaction_details_${transactionId}`
+  const detailCacheKey = transactionDetailCacheKey(transactionId)
 
   useEffect(() => {
     Animated.stagger(100, [
@@ -84,35 +88,6 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
     ]).start()
   }, [headerAnim, contentAnim])
 
-  // Helper to get cached data
-  const getCachedData = useCallback(async <T,>(key: string): Promise<{ data: T; timestamp: number } | null> => {
-    try {
-      const cached = await AsyncStorage.getItem(key)
-      if (!cached) return null
-      return JSON.parse(cached)
-    } catch {
-      return null
-    }
-  }, [])
-
-  // Helper to set cached data
-  const setCachedData = useCallback(async <T,>(key: string, data: T): Promise<void> => {
-    try {
-      await AsyncStorage.setItem(key, JSON.stringify({
-        data,
-        timestamp: Date.now(),
-      }))
-    } catch (error) {
-      console.warn(`[TransactionDetails] Error caching ${key}:`, error)
-    }
-  }, [])
-
-  // Helper to check if data is stale
-  const isStale = useCallback((timestamp: number | undefined, ttl: number): boolean => {
-    if (!timestamp) return true
-    return Date.now() - timestamp > ttl
-  }, [])
-
   useEffect(() => {
     if (!dataLoadedRef.current) {
       fetchTransactionDetails()
@@ -127,8 +102,8 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
     // Try to load from cache first (stale-while-revalidate)
     if (!force) {
-      cached = await getCachedData<LedgerTransaction>(CACHE_KEY)
-      if (cached && !isStale(cached.timestamp, CACHE_TTL)) {
+      cached = await readUserCache<LedgerTransaction>(detailCacheKey)
+      if (cached && !isCacheStale(cached.timestamp, CacheTTL.TRANSACTION_DETAIL)) {
         // Data is fresh, use cache
         setTransaction(cached.data)
         setLoading(false)
@@ -163,7 +138,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
         
         setTransaction(transactionData)
         // Cache the transaction
-        await setCachedData(CACHE_KEY, transactionData)
+        await writeUserCache(detailCacheKey, transactionData)
         dataLoadedRef.current = true
       } else {
         setError('Transaction not found')
@@ -174,7 +149,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
     } finally {
       setLoading(false)
     }
-  }, [transactionId, CACHE_KEY, getCachedData, setCachedData, isStale])
+  }, [transactionId, detailCacheKey])
 
   const onRefresh = async () => {
     setRefreshing(true)

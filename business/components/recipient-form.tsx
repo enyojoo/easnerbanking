@@ -13,9 +13,14 @@ import { CountryFlag } from "@/components/flags"
 import { usePayoutCorridors } from "@/lib/use-payout-corridors"
 import { getNetworkIconUrl, getTokenIconUrl } from "@/lib/crypto-icons"
 import { WALLET_ASSET_NETWORKS, DEFAULT_WALLET_ASSET } from "@/lib/wallet-asset-networks"
-import { createRecipient, updateRecipient, type RecipientUpsertInput } from "@/lib/recipients-store"
+import {
+  coerceBeneficiaryEasenetDisplay,
+  createRecipient,
+  updateRecipient,
+  type RecipientUpsertInput,
+} from "@/lib/recipients-store"
 import { fetchEasenetProfileByTag } from "@/lib/easenet-profile"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { EasenetRecipientProfileRow } from "@/components/easenet-recipient-profile-row"
 import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 
@@ -89,7 +94,8 @@ export function RecipientForm({
 
   const recipientTabCount = Math.max(1, recipientTypeTabs.length)
   const [formData, setFormData] = useState({
-    recipientType: isEdit && recipient ? inferRecipientType(recipient as Beneficiary) : "bank",
+    recipientType:
+      isEdit && recipient ? inferRecipientType(coerceBeneficiaryEasenetDisplay(recipient as Beneficiary)) : "bank",
     name: "",
     bankName: "",
     accountNumber: "",
@@ -120,6 +126,7 @@ export function RecipientForm({
     easetag: string
     fullName: string
     avatarUrl: string | null
+    accountKind: "business" | "personal"
   } | null>(null)
   const [easenetLookupLoading, setEasenetLookupLoading] = useState(false)
   const [easenetLookupError, setEasenetLookupError] = useState<string | null>(null)
@@ -140,8 +147,9 @@ export function RecipientForm({
 
   useEffect(() => {
     if (recipient && isEdit) {
-      const walletMatch = recipient.bankName?.match(/^Wallet \((.*)\)$/i)
-      const mobileMatch = recipient.bankName?.match(/^Mobile Money \((.*)\)$/i)
+      const bene = coerceBeneficiaryEasenetDisplay(recipient as Beneficiary)
+      const walletMatch = bene.bankName?.match(/^Wallet \((.*)\)$/i)
+      const mobileMatch = bene.bankName?.match(/^Mobile Money \((.*)\)$/i)
       const mobileInner = mobileMatch?.[1] || ""
       const normalizedMobileProvider = mobileInner.includes("|CC:")
         ? mobileInner.split("|CC:")[0]
@@ -149,21 +157,21 @@ export function RecipientForm({
       const descriptor = walletMatch?.[1] || ""
       const [parsedWalletAsset, parsedWalletNetwork] = descriptor.includes("/")
         ? descriptor.split("/")
-        : [recipient.currency || "USDT", descriptor || ""]
-      const inferredType = inferRecipientType(recipient as Beneficiary)
-      const bene = recipient as Beneficiary
+        : [bene.currency || "USDT", descriptor || ""]
+      const inferredType = inferRecipientType(bene)
       if (inferredType === "easenet" && bene.payeeEasetag) {
         setEasenetResolved({
           easetag: bene.payeeEasetag,
           fullName: bene.name || bene.payeeEasetag,
           avatarUrl: bene.avatarUrl ?? null,
+          accountKind: bene.payeeAccountKind === "business" ? "business" : "personal",
         })
         setEasenetLookupError(null)
       } else {
         setEasenetResolved(null)
         setEasenetLookupError(null)
       }
-      const recipientCountryCode = (recipient as Beneficiary).countryCode
+      const recipientCountryCode = bene.countryCode
       const bankOpts = bankCorridors.map((c) => ({
         name: c.country_name,
         currency: c.currency_code,
@@ -183,27 +191,27 @@ export function RecipientForm({
       const matchedCountry =
         matchedCountryFromCodeInType ||
         matchedCountryFromCodeAny ||
-        resolveCountryByRecipient(recipient as Beneficiary)
+        resolveCountryByRecipient(bene)
       setFormData({
-        name: recipient.name || "",
+        name: bene.name || "",
         recipientType: inferredType,
-        bankName: recipient.bankName || "",
-        accountNumber: recipient.fullAccountNumber || recipient.accountNumber || "",
-        routingNumber: recipient.routingNumber || "",
-        iban: recipient.iban || "",
-        bic: recipient.bic || "",
-        sortCode: recipient.sortCode || "",
-        country: matchedCountry?.name || recipient.country || "United States",
+        bankName: bene.bankName || "",
+        accountNumber: bene.fullAccountNumber || bene.accountNumber || "",
+        routingNumber: bene.routingNumber || "",
+        iban: bene.iban || "",
+        bic: bene.bic || "",
+        sortCode: bene.sortCode || "",
+        country: matchedCountry?.name || bene.country || "United States",
         phone:
-          inferredType === "mobile" ? recipient.phone || (recipient.fullAccountNumber || recipient.accountNumber || "") : "",
-        walletAsset: recipient.walletAsset || parsedWalletAsset || recipient.currency || "USDT",
-        walletNetwork: recipient.walletNetwork || parsedWalletNetwork || "",
-        walletAddress: recipient.fullAccountNumber || recipient.accountNumber || "",
-        walletMemoTag: recipient.walletMemoTag || recipient.bic || "",
-        mobileProvider: recipient.mobileProvider || normalizedMobileProvider || "",
-        transferType: recipient.transferType || "ACH",
-        checkingOrSavings: recipient.checkingOrSavings || "",
-        addressLine1: recipient.addressLine1 || "",
+          inferredType === "mobile" ? bene.phone || (bene.fullAccountNumber || bene.accountNumber || "") : "",
+        walletAsset: bene.walletAsset || parsedWalletAsset || bene.currency || "USDT",
+        walletNetwork: bene.walletNetwork || parsedWalletNetwork || "",
+        walletAddress: bene.fullAccountNumber || bene.accountNumber || "",
+        walletMemoTag: bene.walletMemoTag || bene.bic || "",
+        mobileProvider: bene.mobileProvider || normalizedMobileProvider || "",
+        transferType: bene.transferType || "ACH",
+        checkingOrSavings: bene.checkingOrSavings || "",
+        addressLine1: bene.addressLine1 || "",
         easenetTag: inferredType === "easenet" ? bene.payeeEasetag || bene.accountNumber || "" : "",
       })
     }
@@ -233,6 +241,7 @@ export function RecipientForm({
             easetag: res.easetag,
             fullName: res.fullName,
             avatarUrl: res.avatarUrl,
+            accountKind: res.accountKind,
           })
           setEasenetLookupError(null)
         } else {
@@ -387,6 +396,7 @@ export function RecipientForm({
         currency: "USD",
         payeeEasetag: easenetResolved.easetag,
         payeeAvatarUrl: easenetResolved.avatarUrl,
+        payeeAccountKind: easenetResolved.accountKind,
       }
       try {
         setIsSubmitting(true)
@@ -597,26 +607,14 @@ export function RecipientForm({
               ) : null}
             </div>
             {easenetResolved ? (
-              <Card>
-                <CardContent className="flex items-center gap-4 pt-6">
-                  <Avatar className="h-14 w-14">
-                    <AvatarImage src={easenetResolved.avatarUrl || undefined} alt="" />
-                    <AvatarFallback>
-                      {easenetResolved.fullName
-                        .split(/\s+/)
-                        .filter(Boolean)
-                        .map((p) => p[0])
-                        .join("")
-                        .slice(0, 2)
-                        .toUpperCase() || "?"}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="font-medium">{easenetResolved.fullName}</p>
-                    <p className="text-sm text-muted-foreground">@{easenetResolved.easetag}</p>
-                  </div>
-                </CardContent>
-              </Card>
+              <div className="rounded-lg border border-border bg-muted/30 px-4 py-4">
+                <EasenetRecipientProfileRow
+                  fullName={easenetResolved.fullName}
+                  easetag={easenetResolved.easetag}
+                  accountKind={easenetResolved.accountKind}
+                  avatarUrl={easenetResolved.avatarUrl}
+                />
+              </div>
             ) : null}
           </div>
         )}

@@ -56,6 +56,7 @@ export async function GET(request: Request) {
       easetag: resolvedUserRow.easetag as string,
       fullName: String(resolvedUserRow.full_name || "").trim() || clean,
       avatarUrl: (resolvedUserRow.avatar_url as string | null) || null,
+      accountKind: "personal" as const,
     })
   }
 
@@ -79,6 +80,7 @@ export async function GET(request: Request) {
       easetag: bizRow.easetag as string,
       fullName: String(bizRow.name || "").trim() || clean,
       avatarUrl: (bizRow.logo_url as string | null) || null,
+      accountKind: "business" as const,
     })
   }
 

@@ -88,7 +88,8 @@ export const CACHE_KEYS = {
   PERSONAL_SETTINGS: (userId: string) => `personal_settings_${userId}`,
   /** Email / notification prefs (`GET/PATCH /api/settings/communication`). */
   COMMUNICATION_PREFERENCES: (userId: string) => `communication_preferences_${userId}`,
-  RECIPIENTS: (userId: string) => `recipients_${userId}`,
+  /** v2: client rows coerce easetag from `bank_name` when `payee_easetag` is null (legacy rows). */
+  RECIPIENTS: (userId: string) => `recipients_v2_${userId}`,
   /** TOTP MFA status line for Security card (On / Off / error). */
   MFA_SECURITY: (userId: string) => `mfa_security_${userId}`,
   /** Terminal hub session list (`GET /api/terminal/sessions`). */

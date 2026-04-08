@@ -115,7 +115,6 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
             </TouchableOpacity>
             <View style={styles.headerContent}>
               <Text style={styles.title}>Change Password</Text>
-              <Text style={styles.subtitle}>Update your account password</Text>
             </View>
           </Animated.View>
 
@@ -262,11 +261,6 @@ const styles = StyleSheet.create({
   title: {
     ...textStyles.headlineMedium,
     color: colors.text.primary,
-    marginBottom: 2,
-  },
-  subtitle: {
-    ...textStyles.bodyMedium,
-    color: colors.text.secondary,
   },
   content: {
     padding: spacing[5],

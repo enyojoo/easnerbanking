@@ -3,11 +3,14 @@
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { normalizeEasetag } from "@/lib/easetag-validation"
 
+import type { PayeeAccountKind } from "@/lib/easner-brand"
+
 export type EasenetPublicProfile = {
   found: true
   easetag: string
   fullName: string
   avatarUrl: string | null
+  accountKind: PayeeAccountKind
 }
 
 export async function fetchEasenetProfileByTag(rawTag: string): Promise<EasenetPublicProfile | { found: false; reason?: string }> {
@@ -23,14 +26,17 @@ export async function fetchEasenetProfileByTag(rawTag: string): Promise<EasenetP
     easetag?: string
     fullName?: string
     avatarUrl?: string | null
+    accountKind?: string
   }
   if (!res.ok || !data.found) {
     return { found: false, reason: data.reason }
   }
+  const accountKind: PayeeAccountKind = data.accountKind === "business" ? "business" : "personal"
   return {
     found: true,
     easetag: String(data.easetag || clean),
     fullName: String(data.fullName || clean),
     avatarUrl: data.avatarUrl ?? null,
+    accountKind,
   }
 }

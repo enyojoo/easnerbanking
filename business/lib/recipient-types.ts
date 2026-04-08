@@ -1,8 +1,12 @@
+import type { PayeeAccountKind } from "@/lib/easner-brand"
+
 export interface Beneficiary {
   id: string
   countryCode?: string
   /** Resolved Easetag (lowercase, no @) for payee P2P / wallet-to-wallet */
   payeeEasetag?: string
+  /** From public Easetag profile: user vs business */
+  payeeAccountKind?: PayeeAccountKind
   /** Snapshot URL from payee users.avatar_url */
   avatarUrl?: string
   name: string

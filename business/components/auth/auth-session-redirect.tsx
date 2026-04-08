@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, type ReactNode } from "react"
+import { Loader2 } from "lucide-react"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { isMfaStepRequired } from "@/lib/auth-mfa"
@@ -75,9 +76,14 @@ export function AuthSessionRedirect({ children }: { children: ReactNode }) {
 
   if (showRedirecting) {
     return (
-      <p className="py-12 text-center text-sm text-muted-foreground" role="status">
-        Redirecting…
-      </p>
+      <div
+        className="fixed inset-0 z-[200] flex items-center justify-center bg-background"
+        role="status"
+        aria-busy="true"
+        aria-label="Loading"
+      >
+        <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" aria-hidden />
+      </div>
     )
   }
 
