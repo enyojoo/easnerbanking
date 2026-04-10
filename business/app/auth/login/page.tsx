@@ -15,7 +15,7 @@ import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { OtpCodeInput } from "@/components/otp-code-input"
 import {
   getVerifiedTotpFactorId,
-  isMfaStepRequired,
+  resolvePostSignInMfaRequirement,
   totpFactorsFromListResponse,
 } from "@/lib/auth-mfa"
 import { getSafeNextPath } from "@/lib/auth/safe-next-path"
@@ -47,12 +47,12 @@ export default function LoginPage() {
     try {
       await login(email, password)
       const supabase = createSupabaseBrowser()
-      const { data: aal, error: aalErr } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-      if (aalErr) {
-        setError(aalErr.message || "Could not verify sign-in level.")
+      const { needsOtp, error: mfaResolveErr } = await resolvePostSignInMfaRequirement(supabase)
+      if (mfaResolveErr) {
+        setError(mfaResolveErr.message || "Could not verify sign-in level.")
         return
       }
-      if (isMfaStepRequired(aal)) {
+      if (needsOtp) {
         const { data: factors, error: facErr } = await supabase.auth.mfa.listFactors()
         if (facErr) {
           setError(facErr.message || "Could not load two-factor settings.")

@@ -111,3 +111,48 @@ export function isMfaStepRequired(aal: {
   if (!aal) return false
   return aal.currentLevel === "aal1" && aal.nextLevel === "aal2"
 }
+
+const POST_SIGN_IN_AAL_ATTEMPTS = 12
+const POST_SIGN_IN_AAL_DELAY_MS = 50
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * After `signInWithPassword`, AAL can briefly be missing or inconsistent. The login form and
+ * `AuthSessionRedirect` both consult this so we don't `replace("/dashboard")` before the MFA step
+ * is detected (which felt like "nothing happens until I submit again").
+ */
+export async function resolvePostSignInMfaRequirement(
+  client: SupabaseClient,
+): Promise<{ needsOtp: boolean; error: Error | null }> {
+  for (let i = 0; i < POST_SIGN_IN_AAL_ATTEMPTS; i++) {
+    const { data: aal, error } = await client.auth.mfa.getAuthenticatorAssuranceLevel()
+    if (error) {
+      return { needsOtp: false, error: new Error(error.message) }
+    }
+    if (isMfaStepRequired(aal)) {
+      return { needsOtp: true, error: null }
+    }
+    if (aal?.currentLevel === "aal2") {
+      return { needsOtp: false, error: null }
+    }
+    await delay(POST_SIGN_IN_AAL_DELAY_MS)
+  }
+
+  const { data: aal, error } = await client.auth.mfa.getAuthenticatorAssuranceLevel()
+  if (error) {
+    return { needsOtp: false, error: new Error(error.message) }
+  }
+  if (isMfaStepRequired(aal)) {
+    return { needsOtp: true, error: null }
+  }
+  if (aal?.currentLevel === "aal1") {
+    const { data: factors, error: fErr } = await client.auth.mfa.listFactors()
+    if (!fErr && factors && getVerifiedTotpFactorId(totpFactorsFromListResponse(factors))) {
+      return { needsOtp: true, error: null }
+    }
+  }
+  return { needsOtp: false, error: null }
+}

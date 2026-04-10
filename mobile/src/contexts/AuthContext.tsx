@@ -12,6 +12,7 @@ import { AUTH_INITIAL_MODE_KEY } from '../constants/auth'
 import {
   getVerifiedTotpFactorId,
   isMfaStepRequired,
+  resolvePostSignInMfaRequirement,
   totpFactorsFromListResponse,
 } from '../lib/auth-mfa'
 import { mapUsersRowToUser } from '../lib/userProfileHelpers'
@@ -73,34 +74,48 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true)
   const [mfaPending, setMfaPending] = useState<{ factorId: string } | null>(null)
   const profileFetchInFlightRef = useRef<Set<string>>(new Set())
+  const mfaGateSyncRef = useRef<Promise<'none' | 'pending' | 'missing_factor'> | null>(null)
 
   const syncMfaGateFromSession = useCallback(async (): Promise<'none' | 'pending' | 'missing_factor'> => {
-    const { data: aal, error: aalErr } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-    if (aalErr) {
-      console.warn('AuthContext: MFA AAL error', aalErr.message)
-      setMfaPending(null)
-      return 'none'
+    if (mfaGateSyncRef.current) {
+      return mfaGateSyncRef.current
     }
-    if (!isMfaStepRequired(aal)) {
-      setMfaPending(null)
-      return 'none'
-    }
-    const { data: factors, error: facErr } = await supabase.auth.mfa.listFactors()
-    if (facErr || !factors) {
-      setMfaPending(null)
-      return 'none'
-    }
-    const fid = getVerifiedTotpFactorId(totpFactorsFromListResponse(factors))
-    if (!fid) {
-      await supabase.auth.signOut()
-      setUser(null)
-      setUserProfile(null)
-      setMfaPending(null)
-      setLoading(false)
-      return 'missing_factor'
-    }
-    setMfaPending({ factorId: fid })
-    return 'pending'
+    const run = (async (): Promise<'none' | 'pending' | 'missing_factor'> => {
+      const { needsOtp, error: aalErr } = await resolvePostSignInMfaRequirement(supabase)
+      if (aalErr) {
+        console.warn('AuthContext: MFA AAL error', aalErr.message)
+        setMfaPending(null)
+        return 'none'
+      }
+      if (!needsOtp) {
+        setMfaPending(null)
+        return 'none'
+      }
+      const { data: factors, error: facErr } = await supabase.auth.mfa.listFactors()
+      if (facErr || !factors) {
+        setMfaPending(null)
+        return 'none'
+      }
+      const fid = getVerifiedTotpFactorId(totpFactorsFromListResponse(factors))
+      if (!fid) {
+        await supabase.auth.signOut()
+        setUser(null)
+        setUserProfile(null)
+        setMfaPending(null)
+        setLoading(false)
+        return 'missing_factor'
+      }
+      setMfaPending({ factorId: fid })
+      return 'pending'
+    })()
+
+    mfaGateSyncRef.current = run
+    void run.finally(() => {
+      if (mfaGateSyncRef.current === run) {
+        mfaGateSyncRef.current = null
+      }
+    })
+    return run
   }, [])
 
   const verifyMfa = useCallback(
@@ -412,9 +427,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
       }
 
-      const surfaceGate = await ensureConsumerMobileAccess()
-      if (surfaceGate.error) {
-        return { error: { message: surfaceGate.error.message } }
+      // Defer surface + bootstrap checks until AAL2: `verifyMfa` runs `ensureConsumerMobileAccess` after OTP.
+      if (gate !== 'pending') {
+        const surfaceGate = await ensureConsumerMobileAccess()
+        if (surfaceGate.error) {
+          return { error: { message: surfaceGate.error.message } }
+        }
       }
 
       return { error: null }

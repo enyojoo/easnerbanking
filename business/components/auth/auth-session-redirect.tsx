@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from "react"
 import { Loader2 } from "lucide-react"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
-import { isMfaStepRequired } from "@/lib/auth-mfa"
+import { resolvePostSignInMfaRequirement } from "@/lib/auth-mfa"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 
 /** Routes that must run while a session may exist (recovery, OAuth exchange, Noah returns). */
@@ -50,13 +50,13 @@ export function AuthSessionRedirect({ children }: { children: ReactNode }) {
     let cancelled = false
     ;(async () => {
       const supabase = createSupabaseBrowser()
-      const { data: aal, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+      const { needsOtp, error } = await resolvePostSignInMfaRequirement(supabase)
       if (cancelled) return
       if (error) {
         setLoginSessionChecked(true)
         return
       }
-      if (isMfaStepRequired(aal)) {
+      if (needsOtp) {
         setLoginSessionChecked(true)
         return
       }
