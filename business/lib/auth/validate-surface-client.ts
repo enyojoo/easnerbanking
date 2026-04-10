@@ -16,15 +16,15 @@ export async function ensureBusinessWebSurface(supabase: SupabaseBrowser): Promi
   const origin = typeof window !== "undefined" ? window.location.origin : ""
   let res: Response
   try {
-    // Omit cookies: Bearer is enough; Cookie + Authorization can exceed platform header limits (494).
+    // Omit cookies; put the JWT in the body so `Authorization` does not inflate headers (494 on Vercel).
     res = await fetch(`${origin}/api/auth/validate-app-surface`, {
       method: "POST",
       credentials: "omit",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ surface: "business_web" }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        surface: "business_web",
+        accessToken: session.access_token,
+      }),
     })
   } catch {
     // Offline / transient network: do not block sign-in.

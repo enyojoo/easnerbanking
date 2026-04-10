@@ -4,9 +4,15 @@ import { apiRequest } from './apiClient'
 /** Enforces mobile-only accounts (and blocks org / office-admin identities). */
 export async function ensureConsumerMobileAccess(): Promise<{ error: Error | null }> {
   try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
     const res = await apiRequest('/api/auth/validate-app-surface', {
       method: 'POST',
-      body: JSON.stringify({ surface: 'consumer_mobile' }),
+      body: JSON.stringify({
+        surface: 'consumer_mobile',
+        ...(session?.access_token ? { accessToken: session.access_token } : {}),
+      }),
     })
     if ((res as { isNetworkError?: boolean }).isNetworkError) {
       return { error: null }

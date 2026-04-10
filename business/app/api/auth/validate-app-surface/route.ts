@@ -1,38 +1,52 @@
+import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
-import { getUserFromApiRequest } from "@/lib/supabase/admin"
+import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { validateAppSurfaceAccess, type AppSurface } from "@/lib/auth/app-surface-access"
 import { applyCorsHeaders, corsPreflightResponse, getCorsAllowedOrigins } from "@/lib/cors"
 
 const SURFACES: AppSurface[] = ["business_web", "consumer_mobile"]
 
+type SurfaceBody = {
+  surface?: string
+  /** Prefer body over `Authorization` on web: long JWT in headers can trigger 494 (header too large). */
+  accessToken?: string
+}
+
 /**
- * POST body: `{ surface: "business_web" | "consumer_mobile" }`
- * Auth: Easner session cookie, Supabase cookies, or `Authorization: Bearer`.
- * Used after native Supabase sign-in from Business web or mobile (cross-origin Bearer).
+ * POST body: `{ surface: "business_web" | "consumer_mobile", accessToken?: string }`
+ * Auth: Easner session cookie, Supabase cookies, `Authorization: Bearer`, or `accessToken` in JSON body.
  */
-export async function OPTIONS(request: Request) {
+export async function OPTIONS(request: NextRequest) {
   const allowed = getCorsAllowedOrigins()
   const preflight = corsPreflightResponse(request, allowed)
   if (preflight) return preflight
   return new NextResponse(null, { status: 204 })
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const allowed = getCorsAllowedOrigins()
   const preflight = corsPreflightResponse(request, allowed)
   if (preflight) return preflight
 
-  const user = await getUserFromApiRequest(request)
+  let body: SurfaceBody = {}
+  try {
+    body = (await request.json()) as SurfaceBody
+  } catch {
+    body = {}
+  }
+
+  let user = await getUserFromApiRequest(request)
+  if (!user) {
+    const raw = typeof body.accessToken === "string" ? body.accessToken.trim() : ""
+    if (raw) {
+      const admin = createSupabaseAdmin()
+      const { data, error } = await admin.auth.getUser(raw)
+      if (!error && data.user) user = data.user
+    }
+  }
   if (!user) {
     const res = NextResponse.json({ ok: false, error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
     return applyCorsHeaders(res, request, allowed)
-  }
-
-  let body: { surface?: string } = {}
-  try {
-    body = (await request.json()) as { surface?: string }
-  } catch {
-    body = {}
   }
 
   const surfaceRaw = typeof body.surface === "string" ? body.surface.trim() : ""

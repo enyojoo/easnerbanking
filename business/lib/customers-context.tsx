@@ -32,7 +32,7 @@ export function CustomersProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
 
   const fetchCustomers = useCallback(async () => {
-    const res = await fetchWithSession("/api/business/b2b/customers")
+    const res = await fetchWithSession("/api/business/customers")
     const data = (await res.json().catch(() => ({}))) as {
       customers?: Customer[]
       error?: string
@@ -70,7 +70,7 @@ export function CustomersProvider({ children }: { children: ReactNode }) {
   const addCustomer = useCallback(
     async (customer: Customer) => {
       setError(null)
-      const res = await fetchWithSession("/api/business/b2b/customers", {
+      const res = await fetchWithSession("/api/business/customers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -103,7 +103,7 @@ export function CustomersProvider({ children }: { children: ReactNode }) {
   const updateCustomer = useCallback(
     async (id: string, updates: Partial<Customer>) => {
       setError(null)
-      const res = await fetchWithSession(`/api/business/b2b/customers/${encodeURIComponent(id)}`, {
+      const res = await fetchWithSession(`/api/business/customers/${encodeURIComponent(id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -136,7 +136,7 @@ export function CustomersProvider({ children }: { children: ReactNode }) {
     async (id: string) => {
       setError(null)
       const res = await fetchWithSession(
-        `/api/business/b2b/customers/${encodeURIComponent(id)}`,
+        `/api/business/customers/${encodeURIComponent(id)}`,
         { method: "DELETE" },
       )
       const data = (await res.json().catch(() => ({}))) as { error?: string }
