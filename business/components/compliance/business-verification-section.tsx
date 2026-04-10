@@ -43,7 +43,7 @@ export function BusinessVerificationSection() {
     businessId,
   } = useBusinessProfile()
 
-  const [busy, setBusy] = useState<null | "link" | "sync">(null)
+  const [busy, setBusy] = useState<null | "link">(null)
   const [error, setError] = useState<string | null>(null)
   const [hostedOpen, setHostedOpen] = useState(false)
   const [hostedUrl, setHostedUrl] = useState<string | null>(null)
@@ -108,16 +108,12 @@ export function BusinessVerificationSection() {
     }
   }, [])
 
-  const pullTier1StatusFromNoah = useCallback(async () => {
-    setError(null)
-    setBusy("sync")
+  /** POST /api/noah/sync-status (business scope). Silent on failure — webhooks also update Tier 1. */
+  const syncBusinessTier1FromNoah = useCallback(async (): Promise<boolean> => {
     try {
       const supabase = createSupabaseBrowser()
       const { data } = await supabase.auth.getSession()
-      if (!data.session) {
-        setError("You need to be signed in.")
-        return
-      }
+      if (!data.session) return false
       const res = await fetchWithSession("/api/noah/sync-status", {
         method: "POST",
         headers: {
@@ -126,26 +122,49 @@ export function BusinessVerificationSection() {
         },
       })
       const text = await res.text()
-      let json = {} as { error?: string; kycStatus?: string }
+      if (!res.ok) return false
       if (text) {
         try {
-          json = JSON.parse(text) as { error?: string; kycStatus?: string }
+          JSON.parse(text)
         } catch {
-          setError("Invalid response from server.")
-          return
+          return false
         }
       }
-      if (!res.ok) {
-        setError(json.error ?? "Could not refresh verification status from Noah.")
-        return
-      }
       window.dispatchEvent(new Event("business-profile-updated"))
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Something went wrong.")
-    } finally {
-      setBusy(null)
+      return true
+    } catch {
+      return false
     }
   }, [])
+
+  const lastAutoSyncMsRef = useRef(0)
+
+  /** Auto-sync Tier 1 when the section is relevant (webhook / hosted-return complement). */
+  useEffect(() => {
+    if (isLoading || !businessId || !canManageBusinessVerification || tier1Complete) return
+
+      const now = Date.now()
+      const MIN_MS = 90_000
+      if (now - lastAutoSyncMsRef.current < MIN_MS) return
+      lastAutoSyncMsRef.current = now
+
+      void syncBusinessTier1FromNoah()
+  }, [
+    isLoading,
+    businessId,
+    canManageBusinessVerification,
+    tier1Complete,
+    syncBusinessTier1FromNoah,
+  ])
+
+  /** While Tier 1 is incomplete, poll Noah occasionally (sandbox / missed webhooks). */
+  useEffect(() => {
+    if (!businessId || !canManageBusinessVerification || tier1Complete) return
+    const id = window.setInterval(() => {
+      void syncBusinessTier1FromNoah()
+    }, 5 * 60 * 1000)
+    return () => window.clearInterval(id)
+  }, [businessId, canManageBusinessVerification, tier1Complete, syncBusinessTier1FromNoah])
 
   if (isLoading) {
     return <div className="text-sm text-muted-foreground">Loading verification status…</div>
@@ -204,37 +223,19 @@ export function BusinessVerificationSection() {
                   ) : null}
                   <div className="flex flex-wrap gap-2">
                     {canManageBusinessVerification ? (
-                      <>
-                        <Button
-                          size="sm"
-                          onClick={() => void openHostedVerification()}
-                          disabled={busy !== null || tier1Complete}
-                        >
-                          {busy === "link"
-                            ? "Opening…"
-                            : tier1Complete
-                              ? "Verification complete"
-                              : "Begin verification"}
-                        </Button>
-                        {!tier1Complete ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => void pullTier1StatusFromNoah()}
-                            disabled={busy !== null}
-                          >
-                            {busy === "sync" ? "Syncing…" : "Refresh status from Noah"}
-                          </Button>
-                        ) : null}
-                      </>
+                      <Button
+                        size="sm"
+                        onClick={() => void openHostedVerification()}
+                        disabled={busy !== null || tier1Complete}
+                      >
+                        {busy === "link"
+                          ? "Opening…"
+                          : tier1Complete
+                            ? "Verification complete"
+                            : "Begin verification"}
+                      </Button>
                     ) : null}
                   </div>
-                  {canManageBusinessVerification && !tier1Complete ? (
-                    <p className="text-xs text-muted-foreground">
-                      If Noah approved your business outside the hosted link (e.g. sandbox ops), tap{" "}
-                      <span className="font-medium">Refresh status from Noah</span> to update Tier 1 here.
-                    </p>
-                  ) : null}
                 </CardContent>
               ) : null}
             </Card>
@@ -254,6 +255,7 @@ export function BusinessVerificationSection() {
             return
           }
           setHostedOpen(false)
+          void syncBusinessTier1FromNoah()
           if (clearUrlAfterCloseRef.current) clearTimeout(clearUrlAfterCloseRef.current)
           clearUrlAfterCloseRef.current = setTimeout(() => {
             setHostedUrl(null)

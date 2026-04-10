@@ -49,7 +49,22 @@ async function runSyncFromNoah(request: Request) {
     })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
-    return NextResponse.json({ error: msg }, { status: 400 })
+    const notFound = /not\s*found/i.test(msg)
+    return NextResponse.json(
+      {
+        error: msg,
+        ...(notFound
+          ? {
+              code: "NOAH_CUSTOMER_NOT_FOUND" as const,
+              noahCustomerId: ctx.noahCustomerId,
+              noahScope: ctx.scope,
+              hint:
+                "No customer in this Noah environment matches that CustomerID. Typical causes: customer not created yet; wrong sandbox vs production API URL/key; individual vs business scope mismatch; or Noah’s CustomerID differs from Easner’s (set users.noah_customer_id / businesses.noah_customer_id to Noah’s ID).",
+            }
+          : {}),
+      },
+      { status: notFound ? 404 : 400 },
+    )
   }
 }
 
