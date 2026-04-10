@@ -229,8 +229,6 @@ function ProfileContent({ navigation }: NavigationProps) {
         lastName: editProfileData.lastName,
         phone: editProfileData.phone,
       }
-      console.log('[PROFILE-SAVE] Sending update payload:', updatePayload)
-      console.log('[PROFILE-SAVE] middleName value:', editProfileData.middleName, 'type:', typeof editProfileData.middleName, 'undefined?', editProfileData.middleName === undefined)
       await userService.updateProfile(user.id, updatePayload)
 
       const nextTag = (editProfileData.easetag || '').replace(/^@/, '').trim().toLowerCase()
@@ -253,7 +251,10 @@ function ProfileContent({ navigation }: NavigationProps) {
       Alert.alert('Success', 'Profile updated successfully')
     } catch (error) {
       console.error('Error updating profile:', error)
-      Alert.alert('Error', 'Failed to update profile')
+      Alert.alert(
+        'Error',
+        error instanceof Error ? error.message : 'Failed to update profile'
+      )
     } finally {
       setLoading(false)
     }

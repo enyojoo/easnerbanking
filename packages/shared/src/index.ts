@@ -40,3 +40,11 @@ export type {
   CommunicationPreferences,
   CommunicationChannels,
 } from "./communication-preferences"
+export {
+  BUSINESS_INDUSTRY_GROUPS,
+  getAllIndustriesFlat,
+  getIndustryById,
+  isValidIndustryId,
+  getIndustryLabelForProfileValue,
+} from "./business-industries"
+export type { BusinessIndustryItem, BusinessIndustryGroup } from "./business-industries"

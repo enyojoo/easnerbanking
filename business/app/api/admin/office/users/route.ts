@@ -44,14 +44,18 @@ export async function GET(request: Request) {
         .filter((id): id is string => Boolean(id)),
     ),
   ]
-  const orgKybByBusinessId = new Map<string, { noah_customer_id: string | null; noah_kyb_status: string | null }>()
+  const orgKybByBusinessId = new Map<
+    string,
+    { name: string | null; noah_customer_id: string | null; noah_kyb_status: string | null }
+  >()
   if (bizIds.length) {
     const { data: orgs } = await admin
       .from("businesses")
-      .select("id,noah_customer_id,noah_kyb_status")
+      .select("id,name,noah_customer_id,noah_kyb_status")
       .in("id", bizIds)
     for (const o of orgs ?? []) {
       orgKybByBusinessId.set(String(o.id), {
+        name: (o.name as string | null) ?? null,
         noah_customer_id: (o.noah_customer_id as string | null) ?? null,
         noah_kyb_status: (o.noah_kyb_status as string | null) ?? null,
       })
@@ -79,6 +83,7 @@ export async function GET(request: Request) {
         ? {
             noah_kyb_customer_id: org.noah_customer_id,
             noah_kyb_status: org.noah_kyb_status,
+            linkedBusinessName: org.name,
           }
         : {}),
     }

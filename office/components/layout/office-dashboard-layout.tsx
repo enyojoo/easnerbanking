@@ -40,7 +40,8 @@ function getInitialOpenGroups(pathname: string | null): Set<string> {
   if (
     pathname.startsWith("/businesses") ||
     pathname.startsWith("/customers") ||
-    pathname.startsWith("/invoices")
+    pathname.startsWith("/invoices") ||
+    pathname.startsWith("/terminal")
   ) {
     next.add("business")
   }

@@ -397,12 +397,16 @@ export const noahService = {
 
   /**
    * Sync Noah customer status to database
-   * Fetches latest data from Noah and updates user record
-   * Returns updated status data
+   * Fetches latest data from Noah and updates user / org record (same POST as business web).
    */
-  async syncStatus(): Promise<{ success: boolean; synced: boolean; data?: { kycStatus: string; rejectionReasons?: any[] } }> {
+  async syncStatus(options?: {
+    /** `individual` = personal KYC; `business` = org KYB (requires business role + org on server). */
+    scope?: 'individual' | 'business'
+  }): Promise<{ success: boolean; synced: boolean; data?: { kycStatus: string; rejectionReasons?: any[] } }> {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) throw new Error('Not authenticated')
+
+    const scope = options?.scope ?? 'individual'
 
     // Add timeout to fetch
     const controller = new AbortController()
@@ -414,16 +418,27 @@ export const noahService = {
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
-          /** Consumer KYC on mobile — session user’s individual Noah customer (not org KYB). */
-          'X-Easner-Noah-Scope': 'individual',
+          'X-Easner-Noah-Scope': scope,
         },
         signal: controller.signal,
       })
       clearTimeout(timeoutId)
 
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to sync status')
+        const errText = await response.text()
+        let errBody: { error?: string; code?: string } = {}
+        try {
+          errBody = errText ? (JSON.parse(errText) as { error?: string; code?: string }) : {}
+        } catch {
+          errBody = {}
+        }
+        if (
+          response.status === 404 &&
+          errBody.code === 'NOAH_CUSTOMER_NOT_FOUND'
+        ) {
+          return { success: false, synced: false }
+        }
+        throw new Error(errBody.error || 'Failed to sync status')
       }
 
       const data = (await response.json()) as {

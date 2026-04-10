@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
 import { getCurrencySymbol } from "@/lib/utils"
 import {
   DropdownMenu,
@@ -23,7 +23,6 @@ export default function AccountsPage() {
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const {
     accountRows,
-    loading,
     loadError,
     profileLoading,
     refreshAccounts,
@@ -36,33 +35,29 @@ export default function AccountsPage() {
     setTimeout(() => setCopiedField(null), 2000)
   }
 
-  if (profileLoading) {
-    return <div className="text-sm text-muted-foreground">Loading…</div>
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Accounts</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="mt-1 text-sm text-muted-foreground">
             Multi-currency accounts powered by stablecoins
           </p>
         </div>
-        <OpenCurrencyAccountDialog onAdded={() => void refreshAccounts()} />
+        {profileLoading ? (
+          <Skeleton className="h-9 w-44 shrink-0 rounded-md" />
+        ) : (
+          <OpenCurrencyAccountDialog onAdded={() => void refreshAccounts()} />
+        )}
       </div>
 
       {loadError ? <p className="text-sm text-destructive">{loadError}</p> : null}
 
-      {loading ? (
-        <p className="text-sm text-muted-foreground">Loading account details…</p>
-      ) : null}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {accountRows.map((account) => (
-          <Card key={account.id} className="hover:shadow-md transition-shadow">
+          <Card key={account.id} className="transition-shadow hover:shadow-md">
             <CardContent className="p-6">
-              <div className="flex flex-col h-full">
+              <div className="flex h-full flex-col">
                 <div className="flex-1 space-y-4">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
@@ -71,13 +66,10 @@ export default function AccountsPage() {
                         <h3 className="text-lg font-semibold">{account.currency}</h3>
                       </div>
                     </div>
-                    <Badge variant="secondary" className="text-xs capitalize">
-                      {account.status}
-                    </Badge>
                   </div>
 
                   <div className="mb-10">
-                    <p className="text-xs text-muted-foreground mb-1">Available Balance</p>
+                    <p className="mb-1 text-xs text-muted-foreground">Available Balance</p>
                     <p className="text-3xl font-semibold">
                       {getCurrencySymbol(account.currency)}
                       {account.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
@@ -94,7 +86,7 @@ export default function AccountsPage() {
 
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm" className="px-2 bg-transparent">
+                      <Button variant="outline" size="sm" className="bg-transparent px-2">
                         <MoreVertical className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>

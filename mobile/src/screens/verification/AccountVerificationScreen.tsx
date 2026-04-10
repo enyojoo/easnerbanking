@@ -200,61 +200,43 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
       }
       
       const result = await noahService.syncStatus()
-      
+
       if (result.success && result.synced) {
         if (!silent) {
           console.log('[SYNC-STATUS] ✅ Status synced successfully:', result.data)
         }
-        
-        // Store sync timestamp in AsyncStorage
+
         try {
           const SYNC_CACHE_KEY = `easner_noah_sync_${userProfile.id}`
-          await AsyncStorage.setItem(SYNC_CACHE_KEY, JSON.stringify({
-            lastSyncTime: Date.now(),
-            customerId: userProfile.noah_customer_id,
-          }))
+          await AsyncStorage.setItem(
+            SYNC_CACHE_KEY,
+            JSON.stringify({
+              lastSyncTime: Date.now(),
+              customerId: userProfile.noah_customer_id,
+            })
+          )
         } catch (cacheError) {
-          // Non-critical, just log
           if (!silent) {
             console.warn('[SYNC-STATUS] Error storing sync cache:', cacheError)
           }
         }
-        
-        // Refresh user profile to get updated data
+
         if (refreshUserProfile) {
-                await refreshUserProfile()
-              }
-      } else {
-        if (!silent) {
-          console.log('[SYNC-STATUS] Sync completed but no update needed')
-            }
-          }
-        } catch (error: any) {
-      // Silently fail - webhooks will handle updates, or we'll retry later
-      if (!silent) {
-        console.warn('[SYNC-STATUS] Error syncing status:', error.message)
+          await refreshUserProfile()
+        }
       }
-        } finally {
+    } catch (error: any) {
+      const msg = error?.message ?? String(error)
+      if (!silent && !/not\s*found/i.test(msg)) {
+        console.warn('[SYNC-STATUS] Error syncing status:', msg)
+      }
+    } finally {
       syncingRef.current = false
     }
   }, [userProfile?.id, userProfile?.noah_customer_id, userProfile?.noah_kyc_status, userProfile?.noah_kyc_rejection_reasons, userProfile?.updated_at, refreshUserProfile])
 
-  // Sync Noah status on mount — check if sync is needed based on data freshness
-  // Use a ref to track if we've checked for initial sync
-  const initialSyncCheckedRef = useRef(false)
-  useEffect(() => {
-    if (!userProfile?.id || !userProfile?.noah_customer_id) {
-      initialSyncCheckedRef.current = false // Reset if customer_id is removed
-      return
-    }
-    
-    // Only check once when customer_id first becomes available
-    if (!initialSyncCheckedRef.current) {
-      initialSyncCheckedRef.current = true
-      // Check if sync is needed (will check freshness internally)
-      syncNoahStatus(true, false) // Silent, not forced - will check freshness
-    }
-  }, [userProfile?.noah_customer_id, userProfile?.id, syncNoahStatus]) // Include syncNoahStatus since we're calling it
+  // Initial Noah sync after login runs from `useConsumerKycNoahSync` (main tabs). This screen keeps
+  // periodic sync while viewing in-review/rejected flows below.
 
   // Set up periodic sync while on screen (every 5 minutes)
   // Only sync if status is rejected, under_review, or missing rejection_reasons

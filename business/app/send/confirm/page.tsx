@@ -15,6 +15,7 @@ import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
 import { EasenetRecipientProfileRowHydrated } from "@/components/easenet-recipient-profile-row-hydrated"
 import { generateTransactionId } from "@/lib/transaction-id"
 import { fetchWithSession } from "@/lib/fetch-with-session"
+import { dataCache, CACHE_KEYS, requestBusinessAccountsRefresh } from "@/lib/cache"
 import { ArrowLeft, User, Copy, Check, Loader2 } from "lucide-react"
 
 const SEND_FLOW_STATE_KEY = "send_flow_state"
@@ -160,6 +161,10 @@ export default function SendConfirmPage() {
         }
         const tx = data.transaction
         const id = String(tx?.ID ?? tx?.id ?? state.transactionId ?? generateTransactionId())
+        if (user?.id) {
+          dataCache.invalidate(CACHE_KEYS.TRANSACTIONS_LIST(user.id))
+        }
+        requestBusinessAccountsRefresh()
         finishSend(id)
       } catch (e) {
         setAuthorizeError(e instanceof Error ? e.message : "Transfer failed")

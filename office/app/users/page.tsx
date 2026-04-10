@@ -9,6 +9,15 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -17,19 +26,14 @@ import {
   Filter,
   Eye,
   Calendar,
-  CheckCircle,
-  Clock,
-  XCircle,
   User,
   Mail,
   Phone,
   UserCheck,
+  Shield,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { officeFetch } from "@/lib/api-client"
-import { kycService, KYCSubmission } from "@/lib/kyc-service"
-import { Textarea } from "@/components/ui/textarea"
-import { Label } from "@/components/ui/label"
 import { useAuth } from "@/lib/auth-context"
 import type { CommunicationPreferences } from "@easner/shared"
 
@@ -56,6 +60,8 @@ interface UserData {
   noah_gbp_virtual_account_id?: string | null
   noah_kyb_customer_id?: string | null
   noah_kyb_status?: string | null
+  /** From `public.businesses.name` via admin office users API when `easner_business_id` is set. */
+  linkedBusinessName?: string | null
   enabled_extra_account_currencies?: string[]
   email_confirmed_at?: string | null
   /** Parsed from API (not raw jsonb). */
@@ -74,36 +80,37 @@ function userDisplayName(user: Pick<UserData, "id" | "email" | "full_name">) {
   return `${user.id.slice(0, 8)}…`
 }
 
-function CommsSummary({ user }: { user: UserData }) {
-  const p = user.communicationPreferences
-  if (!p) {
-    return <span className="text-xs text-muted-foreground">—</span>
+/** Raw Noah status string for table/overview: KYB when user is in a business context, else consumer KYC. */
+function resolveOverviewVerificationStatus(user: UserData): string {
+  const role = String(user.role || "").toLowerCase()
+  const isBizContext = role === "business" || Boolean(user.easner_business_id)
+  if (isBizContext && user.noah_kyb_status) {
+    return String(user.noah_kyb_status)
   }
-  const typeBits = [p.productUpdates ? "Prod" : null, p.securityAlerts ? "Sec" : null, p.marketingEmails ? "Mkt" : null].filter(
-    (x): x is string => x != null,
-  )
-  const ch = [p.channels.email ? "Email" : null, p.channels.push ? "Push" : null].filter(
-    (x): x is string => x != null,
-  )
-  return (
-    <div className="flex flex-col items-center gap-0.5 text-center max-w-[160px] mx-auto">
-      <div className="flex flex-wrap justify-center gap-0.5">
-        {typeBits.length > 0 ? (
-          typeBits.map((t) => (
-            <Badge key={t} variant="secondary" className="text-[10px] px-1 py-0 font-normal">
-              {t}
-            </Badge>
-          ))
-        ) : (
-          <span className="text-[10px] text-muted-foreground">No types</span>
-        )}
-      </div>
-      <span className="text-[10px] text-muted-foreground leading-tight">
-        {ch.length ? ch.join(" · ") : "No channels"}
-        {user.hasExpoPushToken ? " · device" : ""}
-      </span>
-    </div>
-  )
+  return String(user.noah_kyc_status || user.noahKycStatus || "not_started")
+}
+
+function NoahVerificationBadge({ rawStatus }: { rawStatus: string }) {
+  const raw = rawStatus || "not_started"
+  const key =
+    raw === "approved"
+      ? "verified"
+      : raw === "rejected"
+        ? "rejected"
+        : raw === "under_review" || raw === "in_review"
+          ? "in_review"
+          : "pending"
+
+  const statusConfig = {
+    verified: { color: "bg-green-100 text-green-700", text: "Verified" },
+    pending: { color: "bg-amber-100 text-amber-700", text: "Pending" },
+    rejected: { color: "bg-red-100 text-red-700", text: "Rejected" },
+    in_review: { color: "bg-yellow-100 text-yellow-700", text: "In Review" },
+  }
+
+  const config = statusConfig[key as keyof typeof statusConfig] || statusConfig.pending
+
+  return <Badge className={`${config.color} hover:${config.color}`}>{config.text}</Badge>
 }
 
 interface TransactionData {
@@ -124,20 +131,16 @@ export default function AdminUsersPage() {
   const [verificationFilter, setVerificationFilter] = useState("all")
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null)
   const [userTransactions, setUserTransactions] = useState<TransactionData[]>([])
-  const [saving, setSaving] = useState(false)
-  const [kycSubmissions, setKycSubmissions] = useState<KYCSubmission[]>([])
-  const [loadingKyc, setLoadingKyc] = useState(false)
-  const [selectedKycSubmission, setSelectedKycSubmission] = useState<KYCSubmission | null>(null)
-  const [kycReviewDialogOpen, setKycReviewDialogOpen] = useState(false)
-  const [kycReviewSubDialogOpen, setKycReviewSubDialogOpen] = useState(false)
-  const [reviewStatus, setReviewStatus] = useState<"approved" | "rejected">("approved")
-  const [rejectionReason, setRejectionReason] = useState("")
-  const [updatingKyc, setUpdatingKyc] = useState(false)
-  const [userKycMap, setUserKycMap] = useState<Map<string, KYCSubmission[]>>(new Map())
-  const [linkedOrgName, setLinkedOrgName] = useState<string | null>(null)
   const [directoryUsers, setDirectoryUsers] = useState<UserData[]>([])
   const [dirLoading, setDirLoading] = useState(true)
   const [dirError, setDirError] = useState<string | null>(null)
+  const [mfaResetConfirmOpen, setMfaResetConfirmOpen] = useState(false)
+  const [mfaResetLoading, setMfaResetLoading] = useState(false)
+  const [mfaResetFeedback, setMfaResetFeedback] = useState<{ ok: boolean; message: string } | null>(null)
+  const [mfaStatus, setMfaStatus] = useState<{ loading: boolean; hasTotp: boolean | null }>({
+    loading: false,
+    hasTotp: null,
+  })
 
   const formatAmount = (amount: number | null | undefined, currencyCode: string | null | undefined): string => {
     const amt = Number(amount || 0) || 0
@@ -203,10 +206,6 @@ export default function AdminUsersPage() {
   }, [])
 
   useEffect(() => {
-    setUserKycMap(new Map())
-  }, [])
-
-  useEffect(() => {
     if (authLoading) return
     if (!isAdmin || !user) {
       setDirLoading(false)
@@ -255,6 +254,7 @@ export default function AdminUsersPage() {
             noah_gbp_virtual_account_id: row.noah_gbp_virtual_account_id as string | null | undefined,
             noah_kyb_customer_id: row.noah_kyb_customer_id as string | null | undefined,
             noah_kyb_status: row.noah_kyb_status as string | null | undefined,
+            linkedBusinessName: (row.linkedBusinessName as string | null | undefined) ?? null,
             enabled_extra_account_currencies: row.enabled_extra_account_currencies as string[] | undefined,
             email_confirmed_at: row.email_confirmed_at as string | null | undefined,
             communicationPreferences: row.communicationPreferences as CommunicationPreferences | undefined,
@@ -299,24 +299,29 @@ export default function AdminUsersPage() {
   }, [usersWithStats, fetchUserTransactions])
 
   useEffect(() => {
-    const orgId = selectedUser?.easner_business_id
-    if (!orgId) {
-      setLinkedOrgName(null)
+    if (!selectedUser?.id) {
+      setMfaStatus({ loading: false, hasTotp: null })
       return
     }
     let cancelled = false
-    void supabase
-      .from("businesses")
-      .select("name")
-      .eq("id", orgId)
-      .maybeSingle()
-      .then(({ data: row }) => {
-        if (!cancelled) setLinkedOrgName(row?.name ?? null)
+    setMfaStatus({ loading: true, hasTotp: null })
+    void officeFetch(`/api/admin/office/users/${selectedUser.id}/mfa`)
+      .then(async (r) => {
+        const d = (await r.json().catch(() => ({}))) as { hasTotp?: boolean }
+        if (cancelled) return
+        if (!r.ok) {
+          setMfaStatus({ loading: false, hasTotp: null })
+          return
+        }
+        setMfaStatus({ loading: false, hasTotp: Boolean(d.hasTotp) })
+      })
+      .catch(() => {
+        if (!cancelled) setMfaStatus({ loading: false, hasTotp: null })
       })
     return () => {
       cancelled = true
     }
-  }, [selectedUser?.easner_business_id])
+  }, [selectedUser?.id])
 
   const filteredUsers = usersWithStats.filter((user: UserData) => {
     const q = searchTerm.toLowerCase()
@@ -326,20 +331,19 @@ export default function AdminUsersPage() {
 
     const role = String(user.role || "individual").toLowerCase()
     const matchesRole = roleFilter === "all" || role === roleFilter
-    // Filter by noah_kyc_status
-    const noahKycStatus = user.noahKycStatus || user.noah_kyc_status || "not_started"
+    const overviewStatus = resolveOverviewVerificationStatus(user)
     let matchesVerification = true
     if (verificationFilter !== "all") {
       if (verificationFilter === "verified") {
-        matchesVerification = noahKycStatus === "approved"
+        matchesVerification = overviewStatus === "approved"
       } else if (verificationFilter === "pending") {
-        matchesVerification = noahKycStatus !== "approved" && noahKycStatus !== "rejected"
+        matchesVerification = overviewStatus !== "approved" && overviewStatus !== "rejected"
       } else if (verificationFilter === "rejected") {
-        matchesVerification = noahKycStatus === "rejected"
+        matchesVerification = overviewStatus === "rejected"
       } else if (verificationFilter === "in_review") {
-        matchesVerification = noahKycStatus === "under_review" || noahKycStatus === "in_review"
+        matchesVerification = overviewStatus === "under_review" || overviewStatus === "in_review"
       } else if (verificationFilter === "unverified") {
-        matchesVerification = !noahKycStatus || noahKycStatus === "not_started"
+        matchesVerification = !overviewStatus || overviewStatus === "not_started"
       }
     }
 
@@ -355,6 +359,15 @@ export default function AdminUsersPage() {
     if (isBusiness) return "Business"
     if (isConsumer) return "Consumer"
     return null
+  }
+
+  /** Which verification rows to show in the user detail dialog (mobile KYC vs business KYB). */
+  function dialogVerificationRows(user: UserData) {
+    const at = accountTypeLabel(user)
+    return {
+      showIdentity: at === "Consumer" || at === "Both" || at === null,
+      showBusiness: at === "Business" || at === "Both",
+    }
   }
 
   const getAccountTypeBadge = (user: UserData) => {
@@ -378,46 +391,6 @@ export default function AdminUsersPage() {
       </Badge>
     )
   }
-
-  const getVerificationBadge = (user: UserData & { noah_kyc_status?: string }) => {
-    // Use noah_kyc_status for KYC verification
-    const noahKycStatus = user.noah_kyc_status || "not_started"
-    const status = noahKycStatus === "approved" ? "verified" : noahKycStatus === "rejected" ? "rejected" : noahKycStatus === "under_review" ? "in_review" : "pending"
-    
-    const statusConfig = {
-      verified: { color: "bg-green-100 text-green-700", text: "Verified" },
-      pending: { color: "bg-amber-100 text-amber-700", text: "Pending" },
-      rejected: { color: "bg-red-100 text-red-700", text: "Rejected" },
-      in_review: { color: "bg-yellow-100 text-yellow-700", text: "In Review" },
-    }
-
-    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pending
-
-    return (
-      <Badge className={`${config.color} hover:${config.color}`}>
-        {config.text}
-      </Badge>
-    )
-  }
-
-  function formatBusinessVerificationLabel(st: string | null | undefined) {
-    if (!st) return ""
-    const s = String(st).toLowerCase()
-    if (s === "approved") return "Approved"
-    if (s === "rejected") return "Rejected"
-    return String(st).replace(/_/g, " ")
-  }
-
-  const renderVerificationCell = (u: UserData) => (
-    <div className="flex flex-col items-center gap-1">
-      {getVerificationBadge(u)}
-      {String(u.role).toLowerCase() === "business" && u.noah_kyb_status ? (
-        <span className="text-xs text-muted-foreground text-center max-w-[160px] leading-tight">
-          Business: {formatBusinessVerificationLabel(u.noah_kyb_status)}
-        </span>
-      ) : null}
-    </div>
-  )
 
   const handleExport = () => {
     const csvContent = [
@@ -457,62 +430,50 @@ export default function AdminUsersPage() {
 
   const handleUserSelect = (user: UserData) => {
     setSelectedUser(user)
+    setMfaResetFeedback(null)
     fetchUserTransactions(user.id)
   }
 
-  const handleKycOpen = async (user: UserData) => {
-    setSelectedUser(user)
-    // KYC data is now in users table, no need to fetch from kyc_submissions
-    setKycSubmissions([])
-    setKycReviewDialogOpen(true)
-  }
-
-  const handleKycReview = async () => {
-    if (!selectedKycSubmission || !user?.id) return
-
-    setUpdatingKyc(true)
+  const handleConfirmResetMfa = async () => {
+    if (!selectedUser) return
+    setMfaResetLoading(true)
     try {
-      await kycService.updateStatus(
-        selectedKycSubmission.id,
-        reviewStatus,
-        user.id,
-        reviewStatus === "rejected" ? rejectionReason : undefined
-      )
-      
-      // Reload KYC submissions
-      if (selectedUser) {
-        const submissions = await kycService.getByUserId(selectedUser.id)
-        setKycSubmissions(submissions)
+      const r = await officeFetch(`/api/admin/office/users/${selectedUser.id}/reset-mfa`, { method: "POST" })
+      const d = (await r.json().catch(() => ({}))) as {
+        error?: string
+        message?: string
+        removed?: number
+        ok?: boolean
       }
-      
-      setKycReviewSubDialogOpen(false)
-      setSelectedKycSubmission(null)
-      setRejectionReason("")
-    } catch (error) {
-      console.error("Error updating KYC submission:", error)
-      alert("Failed to update KYC submission")
+      if (!r.ok) {
+        const err =
+          typeof d.error === "string"
+            ? d.error
+            : r.status === 501
+              ? "This environment cannot reset MFA (Supabase admin MFA API unavailable)."
+              : "Failed to reset MFA"
+        setMfaResetFeedback({ ok: false, message: err })
+        return
+      }
+      const msg =
+        typeof d.message === "string" && d.message.trim()
+          ? d.message
+          : `Removed ${Number(d.removed ?? 0)} authenticator factor(s). User can sign in with password and set up MFA again.`
+      setMfaResetFeedback({ ok: true, message: msg })
+      setMfaResetConfirmOpen(false)
+      if (Number(d.removed ?? 0) > 0) {
+        setMfaStatus({ loading: false, hasTotp: false })
+      }
+    } catch (e: unknown) {
+      setMfaResetFeedback({ ok: false, message: e instanceof Error ? e.message : "Request failed" })
     } finally {
-      setUpdatingKyc(false)
+      setMfaResetLoading(false)
     }
   }
-
-  const getKycStatusColor = (status: string) => {
-    switch (status) {
-      case "approved":
-        return "bg-green-100 text-green-800"
-      case "in_review":
-        return "bg-yellow-100 text-yellow-800"
-      case "rejected":
-        return "bg-red-100 text-red-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
-  }
-
 
   const registrationStats = {
     totalUsers: directoryUsers.length,
-    verifiedUsers: directoryUsers.filter((u) => u.noah_kyc_status === "approved").length,
+    verifiedUsers: directoryUsers.filter((u) => resolveOverviewVerificationStatus(u) === "approved").length,
     newThisWeek: directoryUsers.filter(
       (u) => new Date(u.created_at).getTime() > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).getTime(),
     ).length,
@@ -636,7 +597,6 @@ export default function AdminUsersPage() {
                   <TableHead className="min-w-[180px]">Email</TableHead>
                   <TableHead className="w-[130px] text-center">Account type</TableHead>
                   <TableHead className="w-[160px] text-center">Verification</TableHead>
-                  <TableHead className="w-[168px] text-center">Comms</TableHead>
                   <TableHead className="w-[100px] text-center">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -648,9 +608,8 @@ export default function AdminUsersPage() {
                       {user.email || "—"}
                     </TableCell>
                     <TableCell className="text-center">{getAccountTypeBadge(user)}</TableCell>
-                    <TableCell className="text-center">{renderVerificationCell(user)}</TableCell>
-                    <TableCell className="text-center align-top py-3">
-                      <CommsSummary user={user} />
+                    <TableCell className="text-center">
+                      <NoahVerificationBadge rawStatus={resolveOverviewVerificationStatus(user)} />
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-2">
@@ -660,17 +619,22 @@ export default function AdminUsersPage() {
                               <Eye className="h-4 w-4" />
                             </Button>
                           </DialogTrigger>
-                          <DialogContent className="max-w-4xl">
-                            <DialogHeader>
+                          <DialogContent className="flex max-h-[min(88vh,920px)] max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl">
+                            <DialogHeader className="shrink-0 space-y-0 border-b px-6 py-4 pr-12 text-left">
                               <DialogTitle>User — {selectedUser ? userDisplayName(selectedUser) : ""}</DialogTitle>
                             </DialogHeader>
-                            {selectedUser && (
-                              <div className="space-y-6">
-                                <div className="grid grid-cols-2 gap-6">
-                                  <div className="space-y-4">
-                                    <div>
-                                      <label className="text-sm font-medium text-gray-600">Profile</label>
-                                      <div className="mt-2 space-y-2 text-sm">
+                            {selectedUser && (() => {
+                              const ver = dialogVerificationRows(selectedUser)
+                              const hasBizContext =
+                                Boolean(selectedUser.easner_business_id) ||
+                                String(selectedUser.role || "").toLowerCase() === "business"
+                              const usesMobileApp = Boolean(selectedUser.hasExpoPushToken)
+                              const p = selectedUser.communicationPreferences
+                              return (
+                                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+                                  <div className="space-y-6">
+                                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                                      <div className="space-y-2 text-sm">
                                         <div className="flex items-center gap-2">
                                           <User className="h-4 w-4 text-gray-400" />
                                           <span>{userDisplayName(selectedUser)}</span>
@@ -691,381 +655,210 @@ export default function AdminUsersPage() {
                                             <span>{formatDate(selectedUser.date_of_birth)}</span>
                                           </div>
                                         ) : null}
-                                        <div className="flex justify-between gap-4">
-                                          <span className="text-gray-600">Email confirmed</span>
-                                          <span>{selectedUser.email_confirmed_at ? formatTimestamp(selectedUser.email_confirmed_at) : "No"}</span>
-                                        </div>
-                                        <div className="flex justify-between gap-4">
-                                          <span className="text-gray-600">Account type</span>
-                                          {getEasnerRoleBadge(selectedUser.role)}
-                                        </div>
-                                        <div className="flex justify-between gap-4 items-center">
-                                          <span className="text-gray-600">Identity verification</span>
-                                          {getVerificationBadge(selectedUser)}
-                                        </div>
-                                        <div className="flex justify-between gap-4 items-center">
-                                          <span className="text-gray-600">Business verification</span>
-                                          <span className="text-sm">
-                                            {selectedUser.noah_kyb_status
-                                              ? formatBusinessVerificationLabel(selectedUser.noah_kyb_status)
-                                              : "—"}
-                                          </span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                    {selectedUser.communicationPreferences ? (
-                                      <div>
-                                        <label className="text-sm font-medium text-gray-600">Communication preferences</label>
-                                        <p className="text-xs text-muted-foreground mt-1 mb-2">
-                                          Managed by the user in the Easner mobile or business app.
-                                        </p>
-                                        <div className="mt-2 rounded-md border bg-muted/30 p-3 text-sm space-y-2">
-                                          <div className="flex flex-wrap gap-2">
-                                            <Badge variant={selectedUser.communicationPreferences.productUpdates ? "default" : "secondary"}>
-                                              Product {selectedUser.communicationPreferences.productUpdates ? "on" : "off"}
-                                            </Badge>
-                                            <Badge variant={selectedUser.communicationPreferences.securityAlerts ? "default" : "secondary"}>
-                                              Security {selectedUser.communicationPreferences.securityAlerts ? "on" : "off"}
-                                            </Badge>
-                                            <Badge variant={selectedUser.communicationPreferences.marketingEmails ? "default" : "secondary"}>
-                                              Marketing {selectedUser.communicationPreferences.marketingEmails ? "on" : "off"}
-                                            </Badge>
+                                        {ver.showIdentity ? (
+                                          <div className="flex justify-between gap-4 items-center">
+                                            <span className="text-gray-600">Identity verification</span>
+                                            <NoahVerificationBadge rawStatus={selectedUser.noah_kyc_status || "not_started"} />
                                           </div>
-                                          <div className="text-xs text-muted-foreground">
-                                            Email channel: {selectedUser.communicationPreferences.channels.email ? "on" : "off"} · Push
-                                            channel: {selectedUser.communicationPreferences.channels.push ? "on" : "off"}
-                                            {selectedUser.hasExpoPushToken ? " · Push token registered" : ""}
-                                          </div>
-                                        </div>
+                                        ) : null}
                                       </div>
-                                    ) : null}
-                                  </div>
-                                  <div className="space-y-4">
-                                    <div>
-                                      <label className="text-sm font-medium text-gray-600">Record</label>
-                                      <div className="mt-2 space-y-2 text-sm">
-                                        <div className="flex justify-between gap-4">
-                                          <span className="text-gray-600">User id</span>
-                                          <span className="font-mono text-xs break-all text-right">{selectedUser.id}</span>
-                                        </div>
+                                      <div className="space-y-2 text-sm">
                                         <div className="flex justify-between gap-4">
                                           <span className="text-gray-600">Created</span>
                                           <span>{formatTimestamp(selectedUser.created_at)}</span>
                                         </div>
                                         <div className="flex justify-between gap-4">
-                                          <span className="text-gray-600">Updated</span>
-                                          <span>{formatTimestamp(selectedUser.updated_at)}</span>
-                                        </div>
-                                        <div className="flex justify-between gap-4">
                                           <span className="text-gray-600">Completed transactions</span>
                                           <span className="font-medium">{selectedUser.totalTransactions}</span>
                                         </div>
-                                      </div>
-                                    </div>
-                                    <div>
-                                      <label className="text-sm font-medium text-gray-600">Wallet & provider references</label>
-                                      <div className="mt-2 space-y-1.5 text-xs font-mono break-all">
-                                        {[
-                                          ["Customer", selectedUser.noah_customer_id],
-                                          ["Wallet", selectedUser.noah_wallet_id],
-                                          ["Signed agreement", selectedUser.noah_signed_agreement_id],
-                                          ["USD virtual account", selectedUser.noah_usd_virtual_account_id],
-                                          ["EUR virtual account", selectedUser.noah_eur_virtual_account_id],
-                                          ["GBP virtual account", selectedUser.noah_gbp_virtual_account_id],
-                                          ["Business customer (KYB)", selectedUser.noah_kyb_customer_id],
-                                        ].map(([k, v]) =>
-                                          v ? (
-                                            <div key={k} className="flex flex-col border-b border-border/60 pb-1">
-                                              <span className="text-muted-foreground">{k}</span>
-                                              <span>{v}</span>
-                                            </div>
-                                          ) : null,
-                                        )}
-                                        {(selectedUser.enabled_extra_account_currencies?.length ?? 0) > 0 ? (
-                                          <div className="pt-1">
-                                            <span className="text-muted-foreground block">Extra account currencies</span>
-                                            <span>{selectedUser.enabled_extra_account_currencies?.join(", ")}</span>
+                                        <div className="flex justify-between gap-4">
+                                          <span className="text-gray-600">Account type</span>
+                                          {getEasnerRoleBadge(selectedUser.role)}
+                                        </div>
+                                        {ver.showBusiness ? (
+                                          <div className="flex justify-between gap-4 items-center">
+                                            <span className="text-gray-600">Business verification</span>
+                                            <NoahVerificationBadge rawStatus={selectedUser.noah_kyb_status || "not_started"} />
                                           </div>
                                         ) : null}
                                       </div>
                                     </div>
-                                  </div>
-                                </div>
 
-                                {selectedUser.easner_business_id ? (
-                                  <div>
-                                    <label className="text-sm font-medium text-gray-600">Businesses</label>
-                                    <div className="mt-2 rounded-md border p-3 text-sm">
-                                      <div className="flex flex-wrap items-center justify-between gap-2">
-                                        <span className="font-medium">{linkedOrgName ?? "Linked workspace"}</span>
-                                        <Link
-                                          href={`/businesses?highlight=${encodeURIComponent(selectedUser.easner_business_id)}`}
-                                          className="text-primary underline-offset-2 hover:underline"
-                                        >
-                                          Open in Businesses
-                                        </Link>
+                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:items-stretch">
+                                      <div className="flex h-full flex-col rounded-lg border bg-muted/20 p-3">
+                                        <label className="text-sm font-medium text-gray-900">Account security</label>
+                                        <div className="mt-2 flex flex-1 flex-col justify-start space-y-2">
+                                          {mfaResetFeedback ? (
+                                            <p
+                                              className={`text-sm rounded-md border px-3 py-2 ${
+                                                mfaResetFeedback.ok
+                                                  ? "border-green-200 bg-green-50 text-green-800"
+                                                  : "border-red-200 bg-red-50 text-red-800"
+                                              }`}
+                                            >
+                                              {mfaResetFeedback.message}
+                                            </p>
+                                          ) : null}
+                                          {mfaStatus.loading ? (
+                                            <Skeleton className="h-9 w-36" />
+                                          ) : mfaStatus.hasTotp ? (
+                                            <Button
+                                              type="button"
+                                              variant="outline"
+                                              size="sm"
+                                              className="border-amber-200 text-amber-900 hover:bg-amber-50"
+                                              onClick={() => {
+                                                setMfaResetFeedback(null)
+                                                setMfaResetConfirmOpen(true)
+                                              }}
+                                            >
+                                              <Shield className="h-4 w-4 mr-2" />
+                                              Reset MFA
+                                            </Button>
+                                          ) : (
+                                            <Button type="button" variant="secondary" size="sm" disabled className="font-normal">
+                                              Not active
+                                            </Button>
+                                          )}
+                                        </div>
                                       </div>
-                                    </div>
-                                  </div>
-                                ) : null}
-
-                                {/* Transaction History */}
-                                <div>
-                                  <label className="text-sm font-medium text-gray-600">Recent Transactions</label>
-                                  <div className="mt-2 max-h-64 overflow-y-auto">
-                                    <Table>
-                                      <TableHeader>
-                                        <TableRow>
-                                          <TableHead>ID</TableHead>
-                                          <TableHead>Date</TableHead>
-                                          <TableHead>Provider</TableHead>
-                                          <TableHead>Direction</TableHead>
-                                          <TableHead>Amount</TableHead>
-                                          <TableHead>Status</TableHead>
-                                        </TableRow>
-                                      </TableHeader>
-                                      <TableBody>
-                                        {userTransactions.map((transaction) => (
-                                          // Remove .slice(0, 5) to show all transactions
-                                          <TableRow key={transaction.id}>
-                                            <TableCell className="font-mono text-sm">
-                                              {transaction.provider_tx_id || transaction.id}
-                                            </TableCell>
-                                            <TableCell>
-                                              {formatTimestamp(transaction.created_at)}
-                                            </TableCell>
-                                            <TableCell>
-                                              {String(transaction.provider || "").toUpperCase() || "—"}
-                                            </TableCell>
-                                            <TableCell>
-                                              {(transaction.direction || "out").toUpperCase()}
-                                            </TableCell>
-                                            <TableCell>
-                                              <div className="font-medium">
-                                                {formatAmount(transaction.amount, transaction.currency)}
-                                              </div>
-                                            </TableCell>
-                                            <TableCell>
-                                              <Badge
-                                                className={
-                                                  transaction.status === "completed"
-                                                    ? "bg-green-100 text-green-800"
-                                                    : transaction.status === "processing"
-                                                      ? "bg-yellow-100 text-yellow-800"
-                                                      : "bg-gray-100 text-gray-800"
-                                                }
-                                              >
-                                                {transaction.status}
+                                      <div className="flex h-full flex-col rounded-lg border bg-muted/20 p-3">
+                                        <label className="text-sm font-medium text-gray-900">Communication preferences</label>
+                                        <div className="mt-2 flex flex-1 flex-col">
+                                          {p ? (
+                                            <div className="flex flex-wrap gap-1.5 text-sm">
+                                              <Badge variant={p.productUpdates ? "default" : "secondary"}>
+                                                Product {p.productUpdates ? "on" : "off"}
                                               </Badge>
-                                            </TableCell>
-                                          </TableRow>
-                                        ))}
-                                        {userTransactions.length === 0 && (
-                                          <TableRow>
-                                            <TableCell colSpan={6} className="text-center py-4 text-gray-500">
-                                              No transactions found
-                                            </TableCell>
-                                          </TableRow>
-                                        )}
-                                      </TableBody>
-                                    </Table>
+                                              <Badge variant={p.securityAlerts ? "default" : "secondary"}>
+                                                Security {p.securityAlerts ? "on" : "off"}
+                                              </Badge>
+                                              <Badge variant={p.marketingEmails ? "default" : "secondary"}>
+                                                Marketing {p.marketingEmails ? "on" : "off"}
+                                              </Badge>
+                                              {hasBizContext ? (
+                                                <>
+                                                  {usesMobileApp ? (
+                                                    <Badge
+                                                      variant="outline"
+                                                      className="border-dashed font-normal"
+                                                      title="Easner mobile app · push channel"
+                                                    >
+                                                      Mobile · Push {p.channels.push ? "on" : "off"} · Registered
+                                                    </Badge>
+                                                  ) : null}
+                                                  <Badge
+                                                    variant="outline"
+                                                    className="border-dashed font-normal"
+                                                    title="Easner business web · email channel"
+                                                  >
+                                                    Email {p.channels.email ? "on" : "off"}
+                                                  </Badge>
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <Badge
+                                                    variant="outline"
+                                                    className="border-dashed font-normal"
+                                                    title="Easner mobile app · push channel"
+                                                  >
+                                                    Mobile · Push {p.channels.push ? "on" : "off"}
+                                                    {usesMobileApp ? " · Registered" : " · No device"}
+                                                  </Badge>
+                                                  <Badge variant="outline" className="border-dashed font-normal" title="Account email notifications">
+                                                    Email {p.channels.email ? "on" : "off"}
+                                                  </Badge>
+                                                </>
+                                              )}
+                                            </div>
+                                          ) : (
+                                            <p className="text-sm text-muted-foreground">No preferences on file</p>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {selectedUser.easner_business_id ? (
+                                      <div>
+                                        <label className="text-sm font-medium text-gray-600">Linked business</label>
+                                        <div className="mt-2 rounded-md border p-3 text-sm">
+                                          <div className="flex flex-wrap items-center justify-between gap-2">
+                                            <span className="font-medium">
+                                              {selectedUser.linkedBusinessName?.trim()
+                                                ? selectedUser.linkedBusinessName
+                                                : "—"}
+                                            </span>
+                                            <Link
+                                              href={`/businesses?highlight=${encodeURIComponent(selectedUser.easner_business_id)}`}
+                                              className="text-primary underline-offset-2 hover:underline"
+                                            >
+                                              Open
+                                            </Link>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ) : null}
+
+                                    <div>
+                                      <label className="text-sm font-medium text-gray-600">Recent Transactions</label>
+                                      <div className="mt-2 max-h-64 overflow-y-auto rounded-md border">
+                                        <Table>
+                                          <TableHeader>
+                                            <TableRow>
+                                              <TableHead>ID</TableHead>
+                                              <TableHead>Date</TableHead>
+                                              <TableHead>Provider</TableHead>
+                                              <TableHead>Direction</TableHead>
+                                              <TableHead>Amount</TableHead>
+                                              <TableHead>Status</TableHead>
+                                            </TableRow>
+                                          </TableHeader>
+                                          <TableBody>
+                                            {userTransactions.map((transaction) => (
+                                              <TableRow key={transaction.id}>
+                                                <TableCell className="font-mono text-sm">
+                                                  {transaction.provider_tx_id || transaction.id}
+                                                </TableCell>
+                                                <TableCell>{formatTimestamp(transaction.created_at)}</TableCell>
+                                                <TableCell>{String(transaction.provider || "").toUpperCase() || "—"}</TableCell>
+                                                <TableCell>{(transaction.direction || "out").toUpperCase()}</TableCell>
+                                                <TableCell>
+                                                  <div className="font-medium">
+                                                    {formatAmount(transaction.amount, transaction.currency)}
+                                                  </div>
+                                                </TableCell>
+                                                <TableCell>
+                                                  <Badge
+                                                    className={
+                                                      transaction.status === "completed"
+                                                        ? "bg-green-100 text-green-800"
+                                                        : transaction.status === "processing"
+                                                          ? "bg-yellow-100 text-yellow-800"
+                                                          : "bg-gray-100 text-gray-800"
+                                                    }
+                                                  >
+                                                    {transaction.status}
+                                                  </Badge>
+                                                </TableCell>
+                                              </TableRow>
+                                            ))}
+                                            {userTransactions.length === 0 && (
+                                              <TableRow>
+                                                <TableCell colSpan={6} className="text-center py-4 text-gray-500">
+                                                  No transactions found
+                                                </TableCell>
+                                              </TableRow>
+                                            )}
+                                          </TableBody>
+                                        </Table>
+                                      </div>
+                                    </div>
                                   </div>
                                 </div>
-
-                              </div>
-                            )}
+                              )
+                            })()}
                           </DialogContent>
                         </Dialog>
-
-                        {/* KYC Dialog */}
-                        <Dialog open={kycReviewDialogOpen} onOpenChange={setKycReviewDialogOpen}>
-                          <DialogContent className="max-w-4xl">
-                            <DialogHeader>
-                              <DialogTitle>KYC — {selectedUser ? userDisplayName(selectedUser) : ""}</DialogTitle>
-                            </DialogHeader>
-                            {selectedUser && (
-                              <div className="space-y-6">
-                                <div className="border-t pt-6">
-                                  <h3 className="text-lg font-semibold mb-4">Verification status</h3>
-                                  {selectedUser.noah_kyc_status ? (
-                                    <div className="space-y-3">
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-sm text-gray-600">Status:</span>
-                                        {getVerificationBadge(selectedUser)}
-                                      </div>
-                                      {selectedUser.noah_customer_id && (
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-sm text-gray-600">Customer ID</span>
-                                          <span className="text-sm font-mono">{selectedUser.noah_customer_id}</span>
-                                        </div>
-                                      )}
-                                      {selectedUser.noah_kyc_status === "rejected" && selectedUser.noah_kyc_rejection_reasons && (
-                                        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                                          <p className="text-sm font-medium text-red-800 mb-1">Rejection Reasons:</p>
-                                          <p className="text-sm text-red-700">
-                                            {Array.isArray(selectedUser.noah_kyc_rejection_reasons) 
-                                              ? selectedUser.noah_kyc_rejection_reasons.join(", ")
-                                              : typeof selectedUser.noah_kyc_rejection_reasons === "string"
-                                              ? selectedUser.noah_kyc_rejection_reasons
-                                              : JSON.stringify(selectedUser.noah_kyc_rejection_reasons)}
-                                          </p>
-                                        </div>
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
-                                      <p className="text-gray-500 text-xs">KYC verification not started</p>
-                                    </div>
-                                  )}
-                                </div>
-
-                                {selectedUser.noah_kyc_status === "approved" && (
-                                  <>
-                                    {(selectedUser.full_name || selectedUser.date_of_birth || selectedUser.noah_kyc_metadata) && (
-                                      <div>
-                                        <label className="text-sm font-medium text-gray-600">Identity details</label>
-                                        <div className="mt-2 space-y-3 text-sm">
-                                          <div className="flex items-center justify-between mb-1">
-                                            <span className="text-gray-600">KYC</span>
-                                            <Badge className="bg-green-100 text-green-700">APPROVED</Badge>
-                                          </div>
-                                          {selectedUser.full_name ? (
-                                            <div className="flex justify-between gap-4">
-                                              <span className="text-gray-600">full_name</span>
-                                              <span className="text-right">{selectedUser.full_name}</span>
-                                            </div>
-                                          ) : null}
-                                          {selectedUser.date_of_birth ? (
-                                            <div className="flex justify-between gap-4">
-                                              <span className="text-gray-600">date_of_birth</span>
-                                              <span>{new Date(selectedUser.date_of_birth).toLocaleDateString()}</span>
-                                            </div>
-                                          ) : null}
-                                          {(() => {
-                                            const meta = selectedUser.noah_kyc_metadata as Record<string, string> | null | undefined
-                                            if (!meta) return null
-                                            return (
-                                              <div className="space-y-2 border-t pt-3">
-                                                {meta.ssn ? (
-                                                  <div className="flex justify-between">
-                                                    <span className="text-gray-600">SSN (last 4)</span>
-                                                    <span>***-**-{String(meta.ssn).slice(-4)}</span>
-                                                  </div>
-                                                ) : null}
-                                                {meta.passportNumber ? (
-                                                  <div className="flex justify-between">
-                                                    <span className="text-gray-600">Passport</span>
-                                                    <span>{meta.passportNumber}</span>
-                                                  </div>
-                                                ) : null}
-                                                {meta.nationalIdNumber ? (
-                                                  <div className="flex justify-between">
-                                                    <span className="text-gray-600">National ID</span>
-                                                    <span>{meta.nationalIdNumber}</span>
-                                                  </div>
-                                                ) : null}
-                                              </div>
-                                            )
-                                          })()}
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {(() => {
-                                      const addr = (selectedUser.noah_kyc_metadata as { address?: Record<string, string> } | null)?.address
-                                      if (!addr) {
-                                        return (
-                                          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
-                                            <p className="text-gray-500 text-xs">No structured address on file</p>
-                                          </div>
-                                        )
-                                      }
-                                      return (
-                                        <div>
-                                          <label className="text-sm font-medium text-gray-600">Address</label>
-                                          <div className="mt-2 text-xs text-gray-700 space-y-0.5">
-                                            {addr.line1 ? <div>{addr.line1}</div> : null}
-                                            {addr.line2 ? <div>{addr.line2}</div> : null}
-                                            <div>
-                                              {addr.city}
-                                              {addr.state ? `, ${addr.state}` : ""}
-                                              {addr.postal_code ? ` ${addr.postal_code}` : ""}
-                                            </div>
-                                            {addr.country ? <div>{addr.country}</div> : null}
-                                          </div>
-                                        </div>
-                                      )
-                                    })()}
-                                  </>
-                                )}
-                              </div>
-                            )}
-                          </DialogContent>
-                        </Dialog>
-
-                        {/* KYC Review Sub-Dialog */}
-                        <Dialog open={kycReviewSubDialogOpen} onOpenChange={setKycReviewSubDialogOpen}>
-                          <DialogContent className="sm:max-w-md">
-                            <DialogHeader>
-                              <DialogTitle>Review KYC Submission</DialogTitle>
-                            </DialogHeader>
-                            <div className="space-y-4 py-4">
-                              <div className="space-y-2">
-                                <Label>Decision</Label>
-                                <div className="flex gap-2">
-                                  <Button
-                                    variant={reviewStatus === "approved" ? "default" : "outline"}
-                                    onClick={() => setReviewStatus("approved")}
-                                    className="flex-1"
-                                  >
-                                    <CheckCircle className="h-4 w-4 mr-2" />
-                                    Approve
-                                  </Button>
-                                  <Button
-                                    variant={reviewStatus === "rejected" ? "default" : "outline"}
-                                    onClick={() => setReviewStatus("rejected")}
-                                    className="flex-1 text-red-600 hover:text-red-700"
-                                  >
-                                    <XCircle className="h-4 w-4 mr-2" />
-                                    Reject
-                                  </Button>
-                                </div>
-                              </div>
-                              {reviewStatus === "rejected" && (
-                                <div className="space-y-2">
-                                  <Label htmlFor="rejection-reason">Rejection Reason</Label>
-                                  <Textarea
-                                    id="rejection-reason"
-                                    placeholder="Enter reason for rejection..."
-                                    value={rejectionReason}
-                                    onChange={(e) => setRejectionReason(e.target.value)}
-                                    rows={3}
-                                  />
-                                </div>
-                              )}
-                              <div className="flex justify-end gap-2 pt-4">
-                                <Button
-                                  variant="outline"
-                                  onClick={() => {
-                                    setKycReviewSubDialogOpen(false)
-                                    setSelectedKycSubmission(null)
-                                    setRejectionReason("")
-                                  }}
-                                  disabled={updatingKyc}
-                                >
-                                  Cancel
-                                </Button>
-                                <Button onClick={handleKycReview} disabled={updatingKyc || (reviewStatus === "rejected" && !rejectionReason.trim())}>
-                                  {updatingKyc ? "Updating..." : "Submit Review"}
-                                </Button>
-                              </div>
-                            </div>
-                          </DialogContent>
-                        </Dialog>
-
-                        <Button variant="outline" size="sm" onClick={() => handleKycOpen(user)}>
-                          KYC
-                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -1078,6 +871,36 @@ export default function AdminUsersPage() {
             )}
           </CardContent>
         </Card>
+
+        <AlertDialog open={mfaResetConfirmOpen} onOpenChange={setMfaResetConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Reset authenticator MFA?</AlertDialogTitle>
+              <AlertDialogDescription className="text-left space-y-2">
+                <span className="block">
+                  This removes TOTP (authenticator app) factors for{" "}
+                  <span className="font-medium text-foreground">
+                    {selectedUser ? userDisplayName(selectedUser) : "this user"}
+                  </span>
+                  . Existing sessions may be signed out.
+                </span>
+                <span className="block text-muted-foreground">
+                  Only use this for verified support cases (lost phone, broken app, lockout).
+                </span>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={mfaResetLoading}>Cancel</AlertDialogCancel>
+              <Button
+                variant="destructive"
+                disabled={mfaResetLoading || !selectedUser}
+                onClick={() => void handleConfirmResetMfa()}
+              >
+                {mfaResetLoading ? "Resetting…" : "Reset MFA"}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </OfficeDashboardLayout>
   )

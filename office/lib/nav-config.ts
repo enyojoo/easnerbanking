@@ -11,6 +11,7 @@ import {
   LineChart,
   PanelsTopLeft,
   TrendingUp,
+  SmartphoneNfc,
 } from "lucide-react"
 
 export type NavItem = {
@@ -42,6 +43,7 @@ export const officeNavCollapsibleSections: NavCollapsibleSection[] = [
       { name: "Businesses", href: "/businesses", icon: Landmark },
       { name: "Customers", href: "/customers", icon: UsersRound },
       { name: "Invoices", href: "/invoices", icon: Receipt },
+      { name: "Terminal", href: "/terminal", icon: SmartphoneNfc },
     ],
   },
   {
@@ -83,7 +85,9 @@ export function isCollapsibleSectionActive(sectionId: NavCollapsibleSection["id"
       pathname === "/customers" ||
       pathname.startsWith("/customers/") ||
       pathname === "/invoices" ||
-      pathname.startsWith("/invoices/")
+      pathname.startsWith("/invoices/") ||
+      pathname === "/terminal" ||
+      pathname.startsWith("/terminal/")
     )
   }
   if (sectionId === "revenue") {

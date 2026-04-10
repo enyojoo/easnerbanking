@@ -90,6 +90,9 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
   const [enrollFetching, setEnrollFetching] = useState(false)
   const [verifySubmitting, setVerifySubmitting] = useState(false)
   const [turnOffSubmitting, setTurnOffSubmitting] = useState(false)
+  /** When session is AAL1, Supabase requires a TOTP challenge before `unenroll` (AAL2). */
+  const [showDisableOtp, setShowDisableOtp] = useState(false)
+  const [disableOtpCode, setDisableOtpCode] = useState('')
   const [secretJustCopied, setSecretJustCopied] = useState(false)
 
   const headerAnim = useRef(new Animated.Value(0)).current
@@ -126,6 +129,8 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
     setQrDataUrl(null)
     setSecret(null)
     setVerifyCode('')
+    setShowDisableOtp(false)
+    setDisableOtpCode('')
     setError(null)
   }, [])
 
@@ -266,6 +271,8 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
   }
 
   const confirmTurnOff = () => {
+    setShowDisableOtp(false)
+    setDisableOtpCode('')
     Alert.alert(
       'Disable two-factor authentication?',
       'You will only need your password to sign in. You can turn 2FA back on anytime.',
@@ -281,23 +288,91 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
   }
 
   const turnOffMfa = async () => {
+    setError(null)
     setTurnOffSubmitting(true)
     try {
       const { data, error: listErr } = await supabase.auth.mfa.listFactors()
       if (listErr) {
+        setError(listErr.message || 'Could not load MFA factors.')
         await loadFactors()
         return
       }
       const totp = totpFactorsFromListResponse(data)
       const id = getVerifiedTotpFactorId(totp)
       if (!id) {
+        setError('No verified authenticator found. Pull to refresh or try again.')
         await loadFactors()
         return
       }
-      const { error: uErr } = await supabase.auth.mfa.unenroll({ factorId: id })
-      if (!uErr) {
-        await loadFactors()
+      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+      const aal2 = aal?.currentLevel === 'aal2'
+      if (!aal2) {
+        setShowDisableOtp(true)
+        return
       }
+      const { error: uErr } = await supabase.auth.mfa.unenroll({ factorId: id })
+      if (uErr) {
+        const msg = (uErr.message || '').toLowerCase()
+        if (
+          msg.includes('aal') ||
+          msg.includes('assurance') ||
+          msg.includes('mfa') ||
+          msg.includes('factor')
+        ) {
+          setShowDisableOtp(true)
+          return
+        }
+        setError(uErr.message || 'Could not disable two-factor authentication.')
+        return
+      }
+      await loadFactors()
+    } finally {
+      setTurnOffSubmitting(false)
+    }
+  }
+
+  const confirmDisableWithCode = async () => {
+    const code = disableOtpCode.replace(/\D/g, '')
+    if (code.length !== 6) {
+      setError(MFA_COPY.digitCodeError)
+      return
+    }
+    setError(null)
+    setTurnOffSubmitting(true)
+    try {
+      const { data, error: listErr } = await supabase.auth.mfa.listFactors()
+      if (listErr) {
+        setError(listErr.message || 'Could not load MFA factors.')
+        return
+      }
+      const totp = totpFactorsFromListResponse(data)
+      const id = getVerifiedTotpFactorId(totp)
+      if (!id) {
+        setError('No verified authenticator found.')
+        return
+      }
+      const { data: ch, error: chErr } = await supabase.auth.mfa.challenge({ factorId: id })
+      if (chErr || !ch?.id) {
+        setError(chErr?.message || 'Could not verify the code.')
+        return
+      }
+      const { error: vErr } = await supabase.auth.mfa.verify({
+        factorId: id,
+        challengeId: ch.id,
+        code,
+      })
+      if (vErr) {
+        setError(vErr.message || 'Invalid code.')
+        return
+      }
+      const { error: uErr } = await supabase.auth.mfa.unenroll({ factorId: id })
+      if (uErr) {
+        setError(uErr.message || 'Could not disable two-factor authentication.')
+        return
+      }
+      setShowDisableOtp(false)
+      setDisableOtpCode('')
+      await loadFactors()
     } finally {
       setTurnOffSubmitting(false)
     }
@@ -398,14 +473,51 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
                 ) : showListDisable ? (
                   <>
                     <Text style={[styles.body, styles.mt]}>{MFA_COPY.alreadyEnabled}</Text>
-                    <Button
-                      title="Disable"
-                      variant="destructive"
-                      fullWidth
-                      onPress={confirmTurnOff}
-                      disabled={turnOffSubmitting || !verifiedFactorId}
-                      loading={turnOffSubmitting || !verifiedFactorId}
-                    />
+                    {showDisableOtp ? (
+                      <>
+                        <Text style={[styles.body, styles.mtSm]}>
+                          Enter the 6-digit code from your authenticator app to confirm disabling 2FA.
+                        </Text>
+                        <OtpCodeInput
+                          id="mfa-disable-code"
+                          label={MFA_COPY.digitCodeLabel}
+                          value={disableOtpCode}
+                          onChange={setDisableOtpCode}
+                          autoFocus
+                          disabled={turnOffSubmitting}
+                        />
+                        <Button
+                          title="Confirm disable"
+                          variant="destructive"
+                          fullWidth
+                          onPress={() => void confirmDisableWithCode()}
+                          disabled={turnOffSubmitting}
+                          loading={turnOffSubmitting}
+                        />
+                        <Button
+                          title="Cancel"
+                          variant="outline"
+                          fullWidth
+                          onPress={() => {
+                            setShowDisableOtp(false)
+                            setDisableOtpCode('')
+                            setError(null)
+                          }}
+                          disabled={turnOffSubmitting}
+                        />
+                      </>
+                    ) : (
+                      <Button
+                        title="Disable"
+                        variant="destructive"
+                        fullWidth
+                        onPress={confirmTurnOff}
+                        disabled={
+                          turnOffSubmitting || (!verifiedFactorId && !mfaVerifiedOnCard)
+                        }
+                        loading={turnOffSubmitting || (!verifiedFactorId && !mfaVerifiedOnCard)}
+                      />
+                    )}
                   </>
                 ) : (
                   <Text style={[styles.body, styles.mt]}>{MFA_COPY.listNotEnabledHint}</Text>
@@ -544,6 +656,10 @@ const styles = StyleSheet.create({
   mt: {
     marginTop: spacing[4],
     marginBottom: spacing[4],
+  },
+  mtSm: {
+    marginTop: spacing[2],
+    marginBottom: spacing[3],
   },
   listLoadingWrap: {
     minHeight: 120,

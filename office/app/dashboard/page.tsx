@@ -15,6 +15,7 @@ import {
   Building2,
   FileText,
   UserPlus,
+  SmartphoneNfc,
 } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -177,6 +178,14 @@ export default function AdminDashboardPage() {
                     <FileText className="h-4 w-4" /> Invoices
                   </span>
                   <span className="text-xl font-semibold mt-1">{(kpis?.invoiceCount ?? 0).toLocaleString()}</span>
+                </div>
+                <div className="flex min-w-[140px] flex-1 flex-col rounded-lg border bg-muted/30 px-4 py-3">
+                  <span className="text-muted-foreground flex items-center gap-1">
+                    <SmartphoneNfc className="h-4 w-4" /> Terminal
+                  </span>
+                  <span className="text-xl font-semibold mt-1">
+                    {(kpis?.terminalSessionCount ?? 0).toLocaleString()}
+                  </span>
                 </div>
               </div>
             )}

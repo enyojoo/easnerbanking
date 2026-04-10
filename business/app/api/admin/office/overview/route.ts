@@ -19,19 +19,21 @@ export async function GET(request: Request) {
 
   const admin = createSupabaseAdmin()
 
-  const [txLoad, usersTotalRes, usersNewRes, orgsTotalRes, orgsNewRes, customersRes, invoicesRes] = await Promise.all([
-    loadTransactionsForOverview(admin, sinceIso, untilIso, 500),
-    admin.from("users").select("id", { count: "exact", head: true }),
-    admin.from("users").select("id", { count: "exact", head: true }).gte("created_at", sinceIso).lte("created_at", untilIso),
-    admin.from("businesses").select("id", { count: "exact", head: true }),
-    admin
-      .from("businesses")
-      .select("id", { count: "exact", head: true })
-      .gte("created_at", sinceIso)
-      .lte("created_at", untilIso),
-    admin.from("business_customers").select("id", { count: "exact", head: true }),
-    admin.from("invoices").select("id", { count: "exact", head: true }),
-  ])
+  const [txLoad, usersTotalRes, usersNewRes, orgsTotalRes, orgsNewRes, customersRes, invoicesRes, terminalSessionsRes] =
+    await Promise.all([
+      loadTransactionsForOverview(admin, sinceIso, untilIso, 500),
+      admin.from("users").select("id", { count: "exact", head: true }),
+      admin.from("users").select("id", { count: "exact", head: true }).gte("created_at", sinceIso).lte("created_at", untilIso),
+      admin.from("businesses").select("id", { count: "exact", head: true }),
+      admin
+        .from("businesses")
+        .select("id", { count: "exact", head: true })
+        .gte("created_at", sinceIso)
+        .lte("created_at", untilIso),
+      admin.from("business_customers").select("id", { count: "exact", head: true }),
+      admin.from("invoices").select("id", { count: "exact", head: true }),
+      admin.from("terminal_sessions").select("id", { count: "exact", head: true }),
+    ])
 
   if (txLoad.error) {
     console.error("office overview transactions:", txLoad.error)
@@ -52,7 +54,7 @@ export async function GET(request: Request) {
   const activeUsers = usersList.filter((u) => Boolean((u as { email?: string | null }).email)).length
   const verifiedUsers = usersList.filter((u) => u.noah_kyc_status === "approved").length
 
-  const firstBizErr = customersRes.error || invoicesRes.error
+  const firstBizErr = customersRes.error || invoicesRes.error || terminalSessionsRes.error
   if (firstBizErr) {
     console.error("office overview b2b counts:", firstBizErr)
   }
@@ -75,6 +77,7 @@ export async function GET(request: Request) {
       verifiedUsers,
       b2bCustomerCount: customersRes.error ? 0 : customersRes.count ?? 0,
       invoiceCount: invoicesRes.error ? 0 : invoicesRes.count ?? 0,
+      terminalSessionCount: terminalSessionsRes.error ? 0 : terminalSessionsRes.count ?? 0,
     },
     topCurrencies,
     processingBuckets,

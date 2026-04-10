@@ -102,6 +102,8 @@ export const CACHE_KEYS = {
   AUTOPAYOUT_PAYER_WALLETS: (userId: string) => `autopayout_payer_wallets_${userId}`,
   /** Ledger transactions for the business (`GET /api/transactions`). */
   TRANSACTIONS_LIST: (userId: string) => `transactions_list_${userId}`,
+  /** Noah wallet balances + VA snapshot for `/accounts` (memory + localStorage in hook). */
+  BUSINESS_NOAH_ACCOUNT_SNAPSHOT: (userId: string) => `business_noah_accounts_${userId}`,
   /** Business customer directory (`GET /api/business/customers`; table `business_customers`). */
   BUSINESS_CUSTOMERS: (userId: string) => `business_customers_${userId}`,
   /** B2B invoice list (`GET /api/business/b2b/invoices`). */
@@ -110,4 +112,28 @@ export const CACHE_KEYS = {
   INVOICE_PAY_IN: (userId: string, currency: string) =>
     `invoice_pay_in_${userId}_${currency.trim().toUpperCase()}`,
 } as const
+
+const BUSINESS_NOAH_ACCOUNTS_LS_PREFIX = "business_noah_accounts_"
+
+export function businessNoahAccountsPersistKey(userId: string): string {
+  return `${BUSINESS_NOAH_ACCOUNTS_LS_PREFIX}${userId}`
+}
+
+/** Notify listeners (e.g. `useBusinessAccountRows`) to refetch balances without clearing cache. */
+export function requestBusinessAccountsRefresh(): void {
+  if (typeof window === "undefined") return
+  window.dispatchEvent(new CustomEvent("easner-business-accounts-refresh"))
+}
+
+/** Drop cached snapshot and ask hooks to refetch (e.g. after switching org — rare for same user). */
+export function invalidateBusinessNoahAccountsCache(userId: string): void {
+  dataCache.invalidate(CACHE_KEYS.BUSINESS_NOAH_ACCOUNT_SNAPSHOT(userId))
+  if (typeof window === "undefined") return
+  try {
+    localStorage.removeItem(businessNoahAccountsPersistKey(userId))
+  } catch {
+    /* ignore */
+  }
+  requestBusinessAccountsRefresh()
+}
 

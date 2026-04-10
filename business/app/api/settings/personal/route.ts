@@ -98,24 +98,40 @@ export async function PUT(request: Request) {
   }
 
   const admin = createSupabaseAdmin()
+  /** Partial PUT: only keys present in JSON are applied (mobile often sends fullName + phone only). */
   const updatePayload: Record<string, unknown> = {
     id: user.id,
-    email: body.email?.trim() || user.email || null,
-    full_name: body.fullName?.trim() || null,
-    phone: body.phone?.trim() || null,
-    date_of_birth: body.dateOfBirth?.trim() || null,
     updated_at: new Date().toISOString(),
+    email: user.email ?? null,
   }
 
-  if (body.avatarUrl !== undefined) {
+  if ("fullName" in body) {
+    updatePayload.full_name = body.fullName?.trim() || null
+  }
+  if ("phone" in body) {
+    updatePayload.phone = body.phone?.trim() || null
+  }
+  if ("dateOfBirth" in body) {
+    const raw = body.dateOfBirth
+    updatePayload.date_of_birth =
+      raw === null || raw === undefined || String(raw).trim() === ""
+        ? null
+        : String(raw).trim().slice(0, 10)
+  }
+  if ("email" in body) {
+    updatePayload.email = body.email?.trim() || user.email || null
+  }
+
+  if ("avatarUrl" in body) {
     const v = body.avatarUrl
-    updatePayload.avatar_url = v === null || v === "" ? null : typeof v === "string" ? v.trim() || null : null
+    updatePayload.avatar_url =
+      v === null || v === "" ? null : typeof v === "string" ? v.trim() || null : null
   }
 
   const { error } = await admin.from("users").upsert(updatePayload, { onConflict: "id" })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  if (body.avatarUrl !== undefined) {
+  if ("avatarUrl" in body) {
     const { data: cur, error: getErr } = await admin.auth.admin.getUserById(user.id)
     if (getErr) return NextResponse.json({ error: getErr.message }, { status: 500 })
     const meta = { ...(cur.user?.user_metadata ?? {}) } as Record<string, unknown>

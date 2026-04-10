@@ -177,7 +177,10 @@ function ProfileEditContent({ navigation }: NavigationProps) {
       Alert.alert('Success', 'Profile updated successfully')
     } catch (error) {
       console.error('Error updating profile:', error)
-      Alert.alert('Error', 'Failed to update profile')
+      Alert.alert(
+        'Error',
+        error instanceof Error ? error.message : 'Failed to update profile'
+      )
     } finally {
       setLoading(false)
     }

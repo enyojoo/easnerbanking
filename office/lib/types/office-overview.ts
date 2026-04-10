@@ -17,6 +17,8 @@ export type OfficeOverviewKpis = {
   verifiedUsers: number
   b2bCustomerCount: number
   invoiceCount: number
+  /** All-time count of `terminal_sessions` rows (B2B terminal checkout sessions). */
+  terminalSessionCount: number
 }
 
 export type OfficeOverviewTopCurrency = {

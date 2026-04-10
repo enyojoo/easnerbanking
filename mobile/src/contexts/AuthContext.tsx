@@ -11,7 +11,6 @@ import { clearPinAuth, updateSessionActivity, markFirstLoginAfterVerification } 
 import { AUTH_INITIAL_MODE_KEY } from '../constants/auth'
 import {
   getVerifiedTotpFactorId,
-  isMfaStepRequired,
   resolvePostSignInMfaRequirement,
   totpFactorsFromListResponse,
 } from '../lib/auth-mfa'
@@ -74,6 +73,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true)
   const [mfaPending, setMfaPending] = useState<{ factorId: string } | null>(null)
   const profileFetchInFlightRef = useRef<Set<string>>(new Set())
+  /** When `refreshUserProfile` runs while a fetch is in flight, run one more fetch after the current one finishes. */
+  const profileFetchPendingRef = useRef(false)
   const mfaGateSyncRef = useRef<Promise<'none' | 'pending' | 'missing_factor'> | null>(null)
 
   const syncMfaGateFromSession = useCallback(async (): Promise<'none' | 'pending' | 'missing_factor'> => {
@@ -130,11 +131,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (digits.length !== 6) {
         return { error: new Error('Enter the 6-digit code from your authenticator app.') }
       }
-      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-      if (!isMfaStepRequired(aal)) {
-        setMfaPending(null)
-        return { error: null }
-      }
+      /**
+       * Do not skip `mfa.verify` based on `getAuthenticatorAssuranceLevel()` alone.
+       * After password sign-in, GoTrue can briefly report AAL in a state where `isMfaStepRequired`
+       * is false even though the session is still AAL1 — that path cleared MFA without verifying
+       * and accepted any 6-digit code. Always challenge + verify the submitted code here.
+       */
       const { data: factors, error: facErr } = await supabase.auth.mfa.listFactors()
       if (facErr || !factors) {
         return { error: new Error(facErr?.message || 'Could not load two-factor settings.') }
@@ -171,6 +173,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const fetchUserProfile = async (userId: string, user?: any) => {
     if (profileFetchInFlightRef.current.has(userId)) {
+      profileFetchPendingRef.current = true
       return null
     }
     profileFetchInFlightRef.current.add(userId)
@@ -178,9 +181,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       console.log('AuthContext: Fetching user profile for userId:', userId)
 
+      const {
+        data: { session: gateSession },
+      } = await supabase.auth.getSession()
+      if (!gateSession?.user?.id || gateSession.user.id !== userId) {
+        return null
+      }
+
       const surfaceGate = await ensureConsumerMobileAccess()
       if (surfaceGate.error) {
-        console.warn('AuthContext: App surface denied:', surfaceGate.error.message)
+        if (surfaceGate.error.message !== 'Unauthorized') {
+          console.warn('AuthContext: App surface denied:', surfaceGate.error.message)
+        }
         setUser(null)
         setUserProfile(null)
         setLoading(false)
@@ -212,6 +224,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
         console.log('AuthContext: Regular user found:', regularUser.email)
         const row = regularUser as Record<string, unknown>
         const profile = mapUsersRowToUser(row)
+        const orgId =
+          typeof row.easner_business_id === 'string' ? row.easner_business_id : null
+        const role = row.role === 'business' || row.role === 'individual' ? row.role : profile.role
+        if (orgId && role === 'business') {
+          const { data: biz } = await supabase
+            .from('businesses')
+            .select('noah_kyb_status, noah_customer_id')
+            .eq('id', orgId)
+            .maybeSingle()
+          if (biz) {
+            if (typeof biz.noah_kyb_status === 'string' && biz.noah_kyb_status.trim()) {
+              profile.noah_kyb_status = biz.noah_kyb_status
+            }
+            if (typeof biz.noah_customer_id === 'string' && biz.noah_customer_id.trim()) {
+              profile.noah_kyb_customer_id = biz.noah_customer_id
+            }
+          }
+        }
         setUser(profile)
         void import('../lib/payoutCorridors').then((m) => {
           void m.hydratePayoutCorridorsFromStorage().then(() => m.refreshPayoutCorridors())
@@ -226,7 +256,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           noah_kyc_status: profile.noah_kyc_status,
           noah_kyc_rejection_reasons: profile.noah_kyc_rejection_reasons,
           noah_signed_agreement_id: profile.noah_signed_agreement_id,
-          noah_kyb_status: profile.noah_kyb_status,
+          noah_kyb_status: profile.noah_kyb_status ?? null,
           role: profile.role,
           easner_business_id: profile.easner_business_id,
           bridge_kyc_status: row.bridge_kyc_status as string | undefined,
@@ -252,6 +282,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       return null
     } finally {
       profileFetchInFlightRef.current.delete(userId)
+      if (profileFetchPendingRef.current) {
+        profileFetchPendingRef.current = false
+        void fetchUserProfile(userId, user)
+      }
     }
   }
 
@@ -272,24 +306,29 @@ export function AuthProvider({ children }: AuthProviderProps) {
         } = await supabase.auth.getSession()
 
         if (mounted && session?.user) {
-          const { first_name, last_name } = mapNameFromMetadata(session.user.user_metadata)
+          /** Resolve MFA gate before `setUser` so navigation order is always Login → MFA → PIN → app. */
+          await syncMfaGateFromSession()
+          const {
+            data: { session: afterGate },
+          } = await supabase.auth.getSession()
+          if (!mounted || !afterGate?.user) return
+
+          const { first_name, last_name } = mapNameFromMetadata(afterGate.user.user_metadata)
           const mappedUser: User = {
-            id: session.user.id,
-            email: session.user.email || '',
+            id: afterGate.user.id,
+            email: afterGate.user.email || '',
             full_name: [first_name, last_name].filter(Boolean).join(' ') || null,
             first_name,
             last_name,
-            phone: session.user.phone ?? undefined,
+            phone: afterGate.user.phone ?? undefined,
             status: 'active',
             base_currency: 'USD',
             enabled_extra_account_currencies: [],
-            created_at: session.user.created_at,
-            updated_at: session.user.updated_at || session.user.created_at,
+            created_at: afterGate.user.created_at,
+            updated_at: afterGate.user.updated_at || afterGate.user.created_at,
           }
           setUser(mappedUser)
-          void syncMfaGateFromSession()
-          // Fetch profile in background
-          fetchUserProfile(session.user.id, mappedUser).catch(error => {
+          fetchUserProfile(afterGate.user.id, mappedUser).catch(error => {
             console.error('Initial profile fetch error:', error)
           })
         }
@@ -314,25 +353,29 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       try {
         if (session?.user) {
-          console.log('AuthContext: User session found, fetching profile')
-          const { first_name, last_name } = mapNameFromMetadata(session.user.user_metadata)
+          console.log('AuthContext: User session found, resolving MFA gate then profile')
+          await syncMfaGateFromSession()
+          const {
+            data: { session: afterGate },
+          } = await supabase.auth.getSession()
+          if (!mounted || !afterGate?.user) return
+
+          const { first_name, last_name } = mapNameFromMetadata(afterGate.user.user_metadata)
           const mappedUser: User = {
-            id: session.user.id,
-            email: session.user.email || '',
+            id: afterGate.user.id,
+            email: afterGate.user.email || '',
             full_name: [first_name, last_name].filter(Boolean).join(' ') || null,
             first_name,
             last_name,
-            phone: session.user.phone ?? undefined,
+            phone: afterGate.user.phone ?? undefined,
             status: 'active',
             base_currency: 'USD',
             enabled_extra_account_currencies: [],
-            created_at: session.user.created_at,
-            updated_at: session.user.updated_at || session.user.created_at,
+            created_at: afterGate.user.created_at,
+            updated_at: afterGate.user.updated_at || afterGate.user.created_at,
           }
           setUser(mappedUser)
-          void syncMfaGateFromSession()
-          // Fetch profile in background
-          fetchUserProfile(session.user.id, mappedUser).catch(error => {
+          fetchUserProfile(afterGate.user.id, mappedUser).catch(error => {
             console.error('Background profile fetch error:', error)
           })
         } else {
@@ -348,14 +391,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // Don't clear state on error, just log it
       } finally {
         if (mounted) {
-          // Set loading to false when there's no session (user logged out)
-          // This ensures AppNavigator doesn't wait for loading state
-          if (!session?.user) {
-            setLoading(false)
-          } else if (userProfile) {
-            // User is logged in and profile is loaded
-            setLoading(false)
-          }
+          /** Do not wait for `userProfile` — PIN/MFA gates only need session + MFA state. */
+          setLoading(false)
         }
       }
     })

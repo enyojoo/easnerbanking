@@ -10,6 +10,7 @@ const PROTECTED_PATHS = [
   "/businesses",
   "/customers",
   "/invoices",
+  "/terminal",
   "/monetization",
   "/pricing-fx",
   "/platform-control",

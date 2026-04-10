@@ -17,6 +17,8 @@ import {
   dismissPinPrompt,
 } from '../lib/pinAuth'
 import { emitAppLocked, registerAppLockListener } from '../lib/app-lock-bus'
+import { useBusinessNoahSync } from '../hooks/useBusinessNoahSync'
+import { useConsumerKycNoahSync } from '../hooks/useConsumerKycNoahSync'
 
 // Onboarding Screen
 import OnboardingScreen from '../screens/onboarding/OnboardingScreen'
@@ -333,7 +335,9 @@ const tabBarStyles = StyleSheet.create({
 
 function MainTabs() {
   const insets = useSafeAreaInsets()
-  
+  useBusinessNoahSync()
+  useConsumerKycNoahSync()
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -1100,12 +1104,17 @@ export default function AppNavigator() {
     return <AuthStack key="auth-stack-logged-out" />
   }
 
-  // TOTP second step after password (AAL1 → AAL2)
+  /**
+   * Signed-in flow order (enforced in AuthContext: MFA gate resolves before `user` is set):
+   * 1. Login (email/password)
+   * 2. MFA when required (`mfaPending`)
+   * 3. App PIN create or unlock (`pinGate`)
+   * 4. Main app
+   */
   if (user && mfaPending) {
     return <MfaStack key="mfa-stack" />
   }
 
-  // Show loading while auth context is loading
   if (loading) {
     return null
   }

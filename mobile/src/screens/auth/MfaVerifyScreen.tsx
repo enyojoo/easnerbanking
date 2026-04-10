@@ -9,7 +9,6 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Button, OtpCodeInput } from '../../components/ui'
@@ -64,20 +63,13 @@ export default function MfaVerifyScreen() {
           contentContainerStyle={[
             styles.scroll,
             {
-              paddingTop: insets.top + spacing[3],
+              paddingTop: insets.top + spacing[5],
               paddingBottom: Math.max(insets.bottom, spacing[6]),
             },
           ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.topBar}>
-            <TouchableOpacity style={styles.backButton} onPress={handleBack} activeOpacity={0.7}>
-              <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-            </TouchableOpacity>
-            <View style={styles.backPlaceholder} />
-          </View>
-
           <Text style={authScreenStyles.screenTitle}>Two-factor authentication</Text>
           <Text style={[authScreenStyles.subtitle, styles.subtitleMargin]}>
             Enter the 6-digit code from your authenticator app.
@@ -130,19 +122,6 @@ const styles = StyleSheet.create({
   scroll: {
     flexGrow: 1,
     paddingHorizontal: spacing[5],
-  },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing[4],
-  },
-  backButton: {
-    padding: spacing[2],
-    marginLeft: -spacing[2],
-  },
-  backPlaceholder: {
-    width: 40,
   },
   subtitleMargin: {
     marginBottom: spacing[6],
