@@ -222,17 +222,9 @@ export function BusinessVerificationSection() {
                     </p>
                   ) : null}
                   <div className="flex flex-wrap gap-2">
-                    {canManageBusinessVerification ? (
-                      <Button
-                        size="sm"
-                        onClick={() => void openHostedVerification()}
-                        disabled={busy !== null || tier1Complete}
-                      >
-                        {busy === "link"
-                          ? "Opening…"
-                          : tier1Complete
-                            ? "Verification complete"
-                            : "Begin verification"}
+                    {canManageBusinessVerification && !tier1Complete ? (
+                      <Button size="sm" onClick={() => void openHostedVerification()} disabled={busy !== null}>
+                        {busy === "link" ? "Opening…" : "Begin verification"}
                       </Button>
                     ) : null}
                   </div>
