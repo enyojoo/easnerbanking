@@ -75,6 +75,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const profileFetchInFlightRef = useRef<Set<string>>(new Set())
   /** When `refreshUserProfile` runs while a fetch is in flight, run one more fetch after the current one finishes. */
   const profileFetchPendingRef = useRef(false)
+  /** Throttle automatic profile refetches (auth listener) for the same user; explicit `force` bypasses. */
+  const lastAutoProfileFetchAtRef = useRef<Record<string, number>>({})
   const mfaGateSyncRef = useRef<Promise<'none' | 'pending' | 'missing_factor'> | null>(null)
 
   const syncMfaGateFromSession = useCallback(async (): Promise<'none' | 'pending' | 'missing_factor'> => {
@@ -171,15 +173,33 @@ export function AuthProvider({ children }: AuthProviderProps) {
     [],
   )
 
-  const fetchUserProfile = async (userId: string, user?: any) => {
+  const fetchUserProfile = async (
+    userId: string,
+    user?: any,
+    opts?: { force?: boolean; sourceEvent?: string },
+  ) => {
+    /** Belt-and-suspenders: never pull `public.users` on token rotation (no identity change). */
+    if (opts?.sourceEvent === 'TOKEN_REFRESHED') {
+      return null
+    }
     if (profileFetchInFlightRef.current.has(userId)) {
       profileFetchPendingRef.current = true
       return null
     }
+    const force = opts?.force === true
+    if (!force) {
+      const last = lastAutoProfileFetchAtRef.current[userId] ?? 0
+      const minGapMs = 25_000
+      if (Date.now() - last < minGapMs) {
+        return null
+      }
+    }
     profileFetchInFlightRef.current.add(userId)
 
     try {
-      console.log('AuthContext: Fetching user profile for userId:', userId)
+      if (__DEV__) {
+        console.log('AuthContext: Fetching user profile for userId:', userId)
+      }
 
       const {
         data: { session: gateSession },
@@ -221,7 +241,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       if (regularUser && !regularUserError) {
-        console.log('AuthContext: Regular user found:', regularUser.email)
+        if (__DEV__) {
+          console.log('AuthContext: Regular user found:', regularUser.email)
+        }
         const row = regularUser as Record<string, unknown>
         const profile = mapUsersRowToUser(row)
         const orgId =
@@ -282,16 +304,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
       return null
     } finally {
       profileFetchInFlightRef.current.delete(userId)
+      lastAutoProfileFetchAtRef.current[userId] = Date.now()
       if (profileFetchPendingRef.current) {
         profileFetchPendingRef.current = false
-        void fetchUserProfile(userId, user)
+        /** Second caller while in flight — must not be dropped by throttle. */
+        void fetchUserProfile(userId, user, { ...(opts ?? {}), force: true, sourceEvent: opts?.sourceEvent })
       }
     }
   }
 
   const refreshUserProfile = useCallback(async () => {
     if (user?.id) {
-      await fetchUserProfile(user.id)
+      await fetchUserProfile(user.id, undefined, { force: true })
     }
   }, [user?.id])
 
@@ -328,7 +352,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             updated_at: afterGate.user.updated_at || afterGate.user.created_at,
           }
           setUser(mappedUser)
-          fetchUserProfile(afterGate.user.id, mappedUser).catch(error => {
+          fetchUserProfile(afterGate.user.id, mappedUser, { force: true }).catch(error => {
             console.error('Initial profile fetch error:', error)
           })
         }
@@ -349,11 +373,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return
 
-      console.log('AuthContext: Auth state change:', event, session?.user?.id)
+      if (__DEV__) {
+        console.log('AuthContext: Auth state change:', event, session?.user?.id)
+      }
+
+      /**
+       * Token refresh does not change identity or `public.users` row. Running full profile sync
+       * on every refresh spams the API and re-renders the tree (bad for dashboard auto-sync).
+       */
+      if (event === 'TOKEN_REFRESHED' && session?.user) {
+        if (mounted) setLoading(false)
+        return
+      }
 
       try {
         if (session?.user) {
-          console.log('AuthContext: User session found, resolving MFA gate then profile')
+          if (__DEV__) {
+            console.log('AuthContext: User session found, resolving MFA gate then profile')
+          }
           await syncMfaGateFromSession()
           const {
             data: { session: afterGate },
@@ -375,12 +412,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
             updated_at: afterGate.user.updated_at || afterGate.user.created_at,
           }
           setUser(mappedUser)
-          fetchUserProfile(afterGate.user.id, mappedUser).catch(error => {
+          const profileForce =
+            event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'PASSWORD_RECOVERY'
+          fetchUserProfile(afterGate.user.id, mappedUser, {
+            force: profileForce,
+            sourceEvent: event,
+          }).catch((error) => {
             console.error('Background profile fetch error:', error)
           })
         } else {
           // No user session - clear state immediately
           // This happens when user logs out via signOut() or session expires
+          lastAutoProfileFetchAtRef.current = {}
           setUser(null)
           setUserProfile(null)
           setMfaPending(null)

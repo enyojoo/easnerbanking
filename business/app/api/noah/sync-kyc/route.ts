@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { fetchNoahCustomerWithIndividualFallback } from "@/lib/noah/fetch-customer"
 import { noahFetch } from "@/lib/noah/http"
 import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
 import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "../_helpers"
@@ -17,16 +18,22 @@ export async function POST(request: Request) {
   if (!ctx.ok) return ctx.response
 
   try {
-    const customer = await noahFetch<Record<string, unknown>>({
-      method: "GET",
-      path: `/customers/${encodeURIComponent(ctx.noahCustomerId)}`,
-    })
+    const { customer, resolvedCustomerId } =
+      ctx.scope === "individual"
+        ? await fetchNoahCustomerWithIndividualFallback(user.id, ctx.noahCustomerId)
+        : {
+            customer: await noahFetch<Record<string, unknown>>({
+              method: "GET",
+              path: `/customers/${encodeURIComponent(ctx.noahCustomerId)}`,
+            }),
+            resolvedCustomerId: ctx.noahCustomerId,
+          }
     await syncNoahCustomerToSupabase(
       ctx.scope === "business" && ctx.businessId
         ? { kind: "business", businessId: ctx.businessId }
         : { kind: "individual", userId: user.id },
       customer,
-      ctx.noahCustomerId,
+      resolvedCustomerId,
     )
     const kyc = mapNoahVerificationToKycStatus(customer)
     let provisioned: Record<string, unknown> | undefined

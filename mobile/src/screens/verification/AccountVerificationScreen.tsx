@@ -28,6 +28,13 @@ import { supabase } from '../../lib/supabase'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
 import { CONSUMER_TIER_LADDER } from '../../lib/compliance-tier-ladder-copy'
+import { isTier1Complete } from '../../lib/compliance'
+
+/**
+ * Consumer Noah flow: hosted KYC is enough; do not fetch standalone Noah TOS links
+ * (errors like "customer exists already" and extra WebView steps).
+ */
+const SKIP_NOAH_STANDALONE_TOS = true
 
 const TIER_ICONS = {
   1: 'globe-outline',
@@ -43,16 +50,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
   const { userProfile, refreshUserProfile } = useAuth()
   const insets = useSafeAreaInsets()
   const [loading, setLoading] = useState(false)
-  
-  // Check if verification is already complete - if so, redirect back
-  useEffect(() => {
-    if (userProfile?.noah_kyc_status === 'approved') {
-      // Verification is complete, go back to More screen
-      console.log('[ACCOUNT-VERIFICATION] KYC already approved, redirecting to More screen')
-      navigation.goBack()
-    }
-  }, [userProfile?.noah_kyc_status, navigation])
-  
+
   // TOS state
   const [tosLink, setTosLink] = useState<string | null>(null)
   const [tosLinkId, setTosLinkId] = useState<string | null>(null)
@@ -111,95 +109,92 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     }
   }, [loading, headerAnim, contentAnim])
 
-  // Refresh on focus so verification-dependent screens never keep stale status.
-  useFocusEffect(
-    React.useCallback(() => {
-      if (refreshUserProfile && userProfile?.id) {
-        refreshUserProfile()
-      }
-    }, [userProfile?.id, refreshUserProfile])
-  )
-
   // Sync Noah customer status — fetches from the verification API and updates the database
   const syncNoahStatus = useCallback(async (silent: boolean = false, force: boolean = false) => {
-      if (!userProfile?.id || !userProfile?.noah_customer_id) return
-      
-    // Prevent multiple simultaneous syncs
+    /** Backend resolves `eind_{userId}` when `noah_customer_id` is null — do not require the column. */
+    if (!userProfile?.id) return
+
     if (syncingRef.current) {
       if (!silent) {
         console.log('[SYNC-STATUS] Sync already in progress, skipping')
       }
       return
     }
-    
-    // Check if we should sync based on status
-    // Sync if: status is missing, rejected, under_review, or rejection_reasons are missing for rejected status
-    const shouldSyncByStatus = 
-      !userProfile?.noah_kyc_status ||
-      userProfile?.noah_kyc_status === 'rejected' ||
-      userProfile?.noah_kyc_status === 'under_review' ||
-      (userProfile?.noah_kyc_status === 'rejected' && !userProfile?.noah_kyc_rejection_reasons)
-    
-    if (!shouldSyncByStatus && !force) {
-      if (!silent) {
-        console.log('[SYNC-STATUS] Status is approved or not_started, skipping sync')
-      }
-      return
-    }
-    
-    // Check if data is fresh (synced within last 10 minutes)
-    // This prevents unnecessary API calls when data is already up-to-date
-    if (!force) {
-        try {
-        const SYNC_CACHE_KEY = `easner_noah_sync_${userProfile.id}`
-        const cached = await AsyncStorage.getItem(SYNC_CACHE_KEY)
-          
-        if (cached) {
-          const { lastSyncTime } = JSON.parse(cached)
-          const timeSinceLastSync = Date.now() - lastSyncTime
-          const STALE_THRESHOLD = 10 * 60 * 1000 // 10 minutes
-          
-          // Also check database updated_at if available
-          let dataIsFresh = timeSinceLastSync < STALE_THRESHOLD
-          
-          if (userProfile?.updated_at) {
-            const dbUpdatedAt = new Date(userProfile.updated_at).getTime()
-            const timeSinceDbUpdate = Date.now() - dbUpdatedAt
-            // If database was updated recently (within 10 min), data is fresh
-            if (timeSinceDbUpdate < STALE_THRESHOLD) {
-              dataIsFresh = true
-            }
-          }
-          
-          // If data is fresh and we have rejection_reasons (if rejected), skip sync
-          if (dataIsFresh) {
-            const hasRejectionReasons = userProfile?.noah_kyc_status === 'rejected' 
-              ? userProfile?.noah_kyc_rejection_reasons 
-              : true // Not rejected, so we don't need rejection_reasons
-            
-            if (hasRejectionReasons) {
-              if (!silent) {
-                console.log('[SYNC-STATUS] Data is fresh (synced', Math.round(timeSinceLastSync / 1000), 'seconds ago), skipping sync')
-              }
-              return
-            }
-          }
-        }
-      } catch (cacheError) {
-        // If cache check fails, continue with sync (better to sync than skip)
-        if (!silent) {
-          console.warn('[SYNC-STATUS] Error checking sync cache:', cacheError)
-        }
-      }
-    }
-    
+
+    /**
+     * Lock **before** any await — otherwise concurrent callers all pass the guard and spam
+     * POST /api/noah/sync-status (and profile refresh) while the first is still in AsyncStorage/cache.
+     */
     syncingRef.current = true
     try {
+      const kycRaw = userProfile?.noah_kyc_status
+      const kycNorm = typeof kycRaw === 'string' ? kycRaw.trim().toLowerCase() : ''
+      /** Always pull Noah until Easner shows approved (not_started / pending must still sync). */
+      const shouldSyncByStatus = kycNorm !== 'approved'
+
+      if (!shouldSyncByStatus && !force) {
+        if (!silent) {
+          console.log('[SYNC-STATUS] Status is approved, skipping sync')
+        }
+        return
+      }
+
+      // Throttle only for in-review / rejected polling — never block not_started → approved (sandbox).
+      if (!force) {
+        try {
+          const kycPulled =
+            kycNorm === 'under_review' ||
+            kycNorm === 'in_review' ||
+            kycNorm === 'rejected'
+
+          if (kycPulled) {
+            const SYNC_CACHE_KEY = `easner_noah_sync_${userProfile.id}`
+            const cached = await AsyncStorage.getItem(SYNC_CACHE_KEY)
+
+            if (cached) {
+              const { lastSyncTime } = JSON.parse(cached) as { lastSyncTime?: number }
+              const timeSinceLastSync = Date.now() - (typeof lastSyncTime === 'number' ? lastSyncTime : 0)
+              const STALE_THRESHOLD = 10 * 60 * 1000 // 10 minutes
+
+              let dataIsFresh = timeSinceLastSync < STALE_THRESHOLD
+
+              if (userProfile?.updated_at) {
+                const dbUpdatedAt = new Date(userProfile.updated_at).getTime()
+                const timeSinceDbUpdate = Date.now() - dbUpdatedAt
+                if (timeSinceDbUpdate < STALE_THRESHOLD) {
+                  dataIsFresh = true
+                }
+              }
+
+              if (dataIsFresh) {
+                const hasRejectionReasons =
+                  kycNorm === 'rejected' ? userProfile?.noah_kyc_rejection_reasons : true
+
+                if (hasRejectionReasons) {
+                  if (!silent) {
+                    console.log(
+                      '[SYNC-STATUS] Data is fresh (synced',
+                      Math.round(timeSinceLastSync / 1000),
+                      'seconds ago), skipping sync',
+                    )
+                  }
+                  return
+                }
+              }
+            }
+          }
+        } catch (cacheError) {
+          if (!silent) {
+            console.warn('[SYNC-STATUS] Error checking sync cache:', cacheError)
+          }
+        }
+      }
+
       if (!silent) {
         console.log('[SYNC-STATUS] Syncing Noah customer status...')
       }
-      
-      const result = await noahService.syncStatus()
+
+      const result = await noahService.syncStatus({ scope: 'individual' })
 
       if (result.success && result.synced) {
         if (!silent) {
@@ -212,7 +207,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
             SYNC_CACHE_KEY,
             JSON.stringify({
               lastSyncTime: Date.now(),
-              customerId: userProfile.noah_customer_id,
+              customerId: userProfile.noah_customer_id ?? null,
             })
           )
         } catch (cacheError) {
@@ -224,6 +219,17 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
         if (refreshUserProfile) {
           await refreshUserProfile()
         }
+      } else if (!silent) {
+        if (result.code === 'NOAH_CUSTOMER_NOT_FOUND') {
+          const tried = result.triedCustomerIds?.length
+            ? ` Tried CustomerIDs: ${result.triedCustomerIds.join(', ')}`
+            : ''
+          console.log(
+            `[SYNC-STATUS] No Noah customer in this environment yet (wrong API key/sandbox or ID mismatch).${tried}`,
+          )
+        } else {
+          console.warn('[SYNC-STATUS] Sync finished without success flag; kycStatus may be missing in response')
+        }
       }
     } catch (error: any) {
       const msg = error?.message ?? String(error)
@@ -233,7 +239,28 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     } finally {
       syncingRef.current = false
     }
-  }, [userProfile?.id, userProfile?.noah_customer_id, userProfile?.noah_kyc_status, userProfile?.noah_kyc_rejection_reasons, userProfile?.updated_at, refreshUserProfile])
+  }, [
+    userProfile?.id,
+    userProfile?.noah_customer_id,
+    userProfile?.noah_kyc_status,
+    userProfile?.noah_kyc_rejection_reasons,
+    userProfile?.updated_at,
+    refreshUserProfile,
+  ])
+
+  // Force Noah pull when opening this screen (success path calls refreshUserProfile — avoid double-fetch).
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!userProfile?.id) return
+      void syncNoahStatus(false, true)
+    }, [userProfile?.id, syncNoahStatus]),
+  )
+
+  useEffect(() => {
+    if (!SKIP_NOAH_STANDALONE_TOS) return
+    setTosSigned(true)
+    setTosCompleted(true)
+  }, [])
 
   // Initial Noah sync after login runs from `useConsumerKycNoahSync` (main tabs). This screen keeps
   // periodic sync while viewing in-review/rejected flows below.
@@ -243,19 +270,15 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
   // Use a ref to track the last sync time to prevent rapid successive calls
   const lastSyncTimeRef = useRef<number>(0)
   useEffect(() => {
-    if (!userProfile?.noah_customer_id) {
-      // Clear interval if customer_id is removed
+    if (!userProfile?.id) {
       if (syncIntervalRef.current) {
         clearInterval(syncIntervalRef.current)
         syncIntervalRef.current = null
       }
       return
     }
-    
-    const shouldPeriodicSync = 
-      userProfile?.noah_kyc_status === 'rejected' ||
-      userProfile?.noah_kyc_status === 'under_review' ||
-      (userProfile?.noah_kyc_status === 'rejected' && !userProfile?.noah_kyc_rejection_reasons)
+
+    const shouldPeriodicSync = !isTier1Complete(userProfile)
     
     if (shouldPeriodicSync) {
       // Clear any existing interval first
@@ -297,12 +320,15 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
         syncIntervalRef.current = null
       }
     }
-  }, [userProfile?.noah_customer_id, userProfile?.noah_kyc_status, userProfile?.noah_kyc_rejection_reasons]) // Don't include syncNoahStatus to prevent loops
+  }, [userProfile?.id, userProfile?.noah_kyc_status, userProfile?.noah_kyc_rejection_reasons, userProfile?.role]) // Don't include syncNoahStatus to prevent loops
 
   // Check if individual KYC (Noah) is approved
-  const noahKycApproved = userProfile?.noah_kyc_status === 'approved'
-  const noahKycInReview = userProfile?.noah_kyc_status === 'under_review'
-  const noahKycRejected = userProfile?.noah_kyc_status === 'rejected'
+  const noahKycApproved = isTier1Complete(userProfile)
+  const kycStatusLower = String(userProfile?.noah_kyc_status ?? '')
+    .trim()
+    .toLowerCase()
+  const noahKycInReview = kycStatusLower === 'under_review' || kycStatusLower === 'in_review'
+  const noahKycRejected = kycStatusLower === 'rejected'
   
   // TOS should appear when KYC is approved
   const bothSubmitted = noahKycApproved
@@ -310,6 +336,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
   // Load TOS status only if noah_signed_agreement_id is empty
   // Database is source of truth - if noah_signed_agreement_id exists, TOS is signed
   useEffect(() => {
+    if (SKIP_NOAH_STANDALONE_TOS) return
     if (!bothSubmitted || !userProfile?.email || !userProfile?.id) return
 
     // Prevent duplicate calls
@@ -362,6 +389,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
   }
 
   const loadTOSStatus = async () => {
+    if (SKIP_NOAH_STANDALONE_TOS) return
     if (!userProfile?.email || !userProfile?.id) return
     
     // Prevent duplicate calls
@@ -424,6 +452,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
   }
 
   const fetchTOSStatusFromDatabase = async (silent: boolean = false) => {
+    if (SKIP_NOAH_STANDALONE_TOS) return
     if (!userProfile?.id) return
     
     try {
@@ -575,6 +604,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
   }
 
   const handleOpenTOS = async () => {
+    if (SKIP_NOAH_STANDALONE_TOS) return
     if (!userProfile?.email) return
     
     // FIRST: Check if TOS is already signed - if so, don't try to create a new link
@@ -770,7 +800,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     kycProcessedRef.current = false
     setCurrentKycFlow('kyc')
     setKycCompleted(false)
-    setTosCompleted(false)
+    setTosCompleted(SKIP_NOAH_STANDALONE_TOS)
     
     try {
       // Always sync latest Noah customer status before opening KYC
@@ -1174,9 +1204,38 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
               </View>
             )}
 
-            {/* Tier cards: 1 = Noah KYC; 2–3 = roadmap */}
+            {/* Tier cards: 1 = Noah KYC; 2–3 = roadmap — always visible (approved = read-only, like business). */}
             <View style={styles.cardsContainer}>
-              {!noahKycApproved && (
+              {noahKycApproved ? (
+                <View style={styles.card}>
+                  <View style={styles.cardContent}>
+                    <View style={styles.cardLeft}>
+                      <View style={styles.iconContainer}>
+                        <Ionicons name={TIER_ICONS[1]} size={24} color={colors.primary.main} />
+                      </View>
+                      <Text style={styles.cardTitle}>
+                        {tierTitleDisplay(CONSUMER_TIER_LADDER.tiers[0].title)}
+                      </Text>
+                      <Text style={styles.cardDescription}>
+                        {CONSUMER_TIER_LADDER.tiers[0].description}
+                      </Text>
+                    </View>
+                    <View style={styles.cardRight}>
+                      <View style={styles.tierPill}>
+                        <Text style={styles.tierPillText}>Tier 1</Text>
+                      </View>
+                      {getStatusBadge(
+                        userProfile?.noah_kyc_status ||
+                          userProfile?.profile?.noah_kyc_status ||
+                          'approved',
+                        userProfile?.noah_kyc_status ||
+                          userProfile?.profile?.noah_kyc_status ||
+                          'approved',
+                      )}
+                    </View>
+                  </View>
+                </View>
+              ) : (
                 <TouchableOpacity
                   onPress={async () => {
                     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -1527,8 +1586,12 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                             }
                           }
                           
-                          // If TOS link is available, switch to TOS flow
-                          if (kycTosLink && !tosCompleted) {
+                          // If TOS link is available, switch to TOS flow (skipped when standalone Noah TOS is disabled)
+                          if (
+                            kycTosLink &&
+                            !tosCompleted &&
+                            !SKIP_NOAH_STANDALONE_TOS
+                          ) {
                             console.log('[KYC-WEBVIEW] 🔄 Switching to TOS flow')
                             setCurrentKycFlow('tos')
                             kycProcessedRef.current = false // Reset for TOS flow

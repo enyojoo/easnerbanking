@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server"
+import {
+  fetchNoahCustomerWithIndividualFallback,
+  isNoahCustomerNotFoundError,
+  NoahCustomerNotFoundAfterTriesError,
+} from "@/lib/noah/fetch-customer"
 import { noahFetch } from "@/lib/noah/http"
 import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
 import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "../_helpers"
@@ -17,16 +22,22 @@ async function runSyncFromNoah(request: Request) {
   if (!ctx.ok) return ctx.response
 
   try {
-    const customer = await noahFetch<Record<string, unknown>>({
-      method: "GET",
-      path: `/customers/${encodeURIComponent(ctx.noahCustomerId)}`,
-    })
+    const { customer, resolvedCustomerId } =
+      ctx.scope === "individual"
+        ? await fetchNoahCustomerWithIndividualFallback(user.id, ctx.noahCustomerId)
+        : {
+            customer: await noahFetch<Record<string, unknown>>({
+              method: "GET",
+              path: `/customers/${encodeURIComponent(ctx.noahCustomerId)}`,
+            }),
+            resolvedCustomerId: ctx.noahCustomerId,
+          }
     await syncNoahCustomerToSupabase(
       ctx.scope === "business" && ctx.businessId
         ? { kind: "business", businessId: ctx.businessId }
         : { kind: "individual", userId: user.id },
       customer,
-      ctx.noahCustomerId,
+      resolvedCustomerId,
     )
     const kyc = mapNoahVerificationToKycStatus(customer)
     let provisioned: Record<string, unknown> | undefined
@@ -49,7 +60,8 @@ async function runSyncFromNoah(request: Request) {
     })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
-    const notFound = /not\s*found/i.test(msg)
+    const notFound =
+      e instanceof NoahCustomerNotFoundAfterTriesError || isNoahCustomerNotFoundError(e)
     return NextResponse.json(
       {
         error: msg,
@@ -58,8 +70,11 @@ async function runSyncFromNoah(request: Request) {
               code: "NOAH_CUSTOMER_NOT_FOUND" as const,
               noahCustomerId: ctx.noahCustomerId,
               noahScope: ctx.scope,
+              ...(e instanceof NoahCustomerNotFoundAfterTriesError
+                ? { triedCustomerIds: [...e.attemptedIds] }
+                : {}),
               hint:
-                "No customer in this Noah environment matches that CustomerID. Typical causes: customer not created yet; wrong sandbox vs production API URL/key; individual vs business scope mismatch; or Noah’s CustomerID differs from Easner’s (set users.noah_customer_id / businesses.noah_customer_id to Noah’s ID).",
+                "No customer in this Noah environment matches that CustomerID. Typical causes: NOAH_API_BASE_URL must include /v1 (e.g. https://api.sandbox.noah.com/v1); wrong sandbox vs production API key; customer created in a different Noah program; individual vs business scope mismatch; or set users.noah_customer_id to Noah’s exact CustomerID string.",
             }
           : {}),
       },

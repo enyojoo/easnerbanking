@@ -23,7 +23,7 @@ import ScreenWrapper from '../../components/ScreenWrapper'
 import { useAuth } from '../../contexts/AuthContext'
 import { useUserData } from '../../contexts/UserDataContext'
 import { NavigationProps } from '../../types'
-import { userService, UserProfileData, UserStats } from '../../lib/userService'
+import { userService, personalFromUpdateProfileResult, UserProfileData, UserStats } from '../../lib/userService'
 import {
   colors,
   shadows,
@@ -62,6 +62,12 @@ function ProfileEditContent({ navigation }: NavigationProps) {
   const [easetagAvailable, setEasetagAvailable] = useState<boolean | null>(null)
   const [easetagValidationError, setEasetagValidationError] = useState<string | null>(null)
   const easetagCheckSeqRef = useRef(0)
+  /**
+   * After save we apply `PUT /api/settings/personal` payload to local state immediately.
+   * Skip the next `userProfile`→form sync so a stale context snapshot cannot overwrite names
+   * before the parent re-renders with refreshed auth profile.
+   */
+  const skipNextProfileHydrateRef = useRef(false)
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     // Initialize with existing date or default to 25 years ago
@@ -94,34 +100,42 @@ function ProfileEditContent({ navigation }: NavigationProps) {
   }, [headerAnim, contentAnim])
 
   useEffect(() => {
-    if (userProfile) {
-      const dob = userProfile.profile.date_of_birth || ''
-      const fromFull = splitFullNameForForm(userProfile.profile.full_name)
-      const data = {
-        firstName: fromFull.firstName || userProfile.profile.first_name || '',
-        middleName: fromFull.middleName || userProfile.profile.middle_name || '',
-        lastName: fromFull.lastName || userProfile.profile.last_name || '',
-        email: userProfile.profile.email || '',
-        phone: userProfile.profile.phone || '',
-        easetag: userProfile.profile.easetag || '',
-        dateOfBirth: dob,
-        avatarUrl:
-          typeof userProfile.profile.avatar_url === 'string' && userProfile.profile.avatar_url.trim()
-            ? userProfile.profile.avatar_url.trim()
-            : null,
-      }
-      setProfileData(data)
-      setEditProfileData(data)
-      if (dob) {
-        setSelectedDate(new Date(dob))
-      } else {
-        // Default to 25 years ago if no date
-        const date = new Date()
-        date.setFullYear(date.getFullYear() - 25)
-        setSelectedDate(date)
-      }
+    if (!userProfile) return
+    /**
+     * While the user is editing, `refreshUserProfile()` (focus, Noah sync, etc.) must not
+     * overwrite `editProfileData` or typed first/middle/last names snap back to server values.
+     */
+    if (isEditing) return
+    if (skipNextProfileHydrateRef.current) {
+      skipNextProfileHydrateRef.current = false
+      return
     }
-  }, [userProfile])
+
+    const dob = userProfile.profile.date_of_birth || ''
+    const fromFull = splitFullNameForForm(userProfile.profile.full_name)
+    const data = {
+      firstName: fromFull.firstName || userProfile.profile.first_name || '',
+      middleName: fromFull.middleName || userProfile.profile.middle_name || '',
+      lastName: fromFull.lastName || userProfile.profile.last_name || '',
+      email: userProfile.profile.email || '',
+      phone: userProfile.profile.phone || '',
+      easetag: userProfile.profile.easetag || '',
+      dateOfBirth: dob,
+      avatarUrl:
+        typeof userProfile.profile.avatar_url === 'string' && userProfile.profile.avatar_url.trim()
+          ? userProfile.profile.avatar_url.trim()
+          : null,
+    }
+    setProfileData(data)
+    setEditProfileData(data)
+    if (dob) {
+      setSelectedDate(new Date(dob))
+    } else {
+      const date = new Date()
+      date.setFullYear(date.getFullYear() - 25)
+      setSelectedDate(date)
+    }
+  }, [userProfile, isEditing])
 
   const handleEditProfile = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -144,7 +158,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
     setLoading(true)
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-      await userService.updateProfile(user.id, {
+      const updateResult = await userService.updateProfile(user.id, {
         firstName: editProfileData.firstName,
         middleName: editProfileData.middleName,
         lastName: editProfileData.lastName,
@@ -159,12 +173,32 @@ function ProfileEditContent({ navigation }: NavigationProps) {
         await userService.updateEasetag(nextTag)
       }
 
-      // Update profileData with the response from the server to ensure consistency
-      const updatedProfileData = {
-        ...editProfileData,
-        dateOfBirth: editProfileData.dateOfBirth, // Keep the formatted date we just set
-      }
+      const fromServer = personalFromUpdateProfileResult(updateResult)
+      const updatedProfileData = fromServer
+        ? (() => {
+            const parts = splitFullNameForForm(fromServer.fullName)
+            return {
+              firstName: parts.firstName,
+              middleName: parts.middleName,
+              lastName: parts.lastName,
+              email: fromServer.email || editProfileData.email,
+              phone: fromServer.phone ?? '',
+              easetag: editProfileData.easetag,
+              dateOfBirth: fromServer.dateOfBirth || '',
+              avatarUrl: fromServer.avatarUrl,
+            }
+          })()
+        : {
+            ...editProfileData,
+            dateOfBirth: editProfileData.dateOfBirth,
+          }
+
       setProfileData(updatedProfileData)
+      setEditProfileData(updatedProfileData)
+      if (updatedProfileData.dateOfBirth) {
+        setSelectedDate(new Date(updatedProfileData.dateOfBirth))
+      }
+      skipNextProfileHydrateRef.current = true
 
       if (refreshUserProfile) {
         await refreshUserProfile()
@@ -428,6 +462,8 @@ function ProfileEditContent({ navigation }: NavigationProps) {
 
   const renderProfileField = (label: string, value: string, onChangeText: (text: string) => void, disabled: boolean = false) => {
     const isEmailField = label.trim().toLowerCase() === 'email'
+    const isNameField =
+      label === 'First Name' || label === 'Middle Name' || label === 'Last Name'
     return (
       <View style={styles.fieldContainer}>
         <Text style={isEditing ? styles.fieldLabelEdit : styles.fieldLabel}>
@@ -444,7 +480,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
             onSubmitEditing={() => Keyboard.dismiss()}
             editable={!disabled}
             autoCapitalize={isEmailField ? 'none' : 'words'}
-            autoCorrect={isEmailField ? false : true}
+            autoCorrect={isEmailField || isNameField ? false : true}
             keyboardType={isEmailField ? 'email-address' : 'default'}
           />
         ) : (
@@ -665,10 +701,12 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                             </View>
                           </>
                         ) : (
-                          <View style={styles.avatarEditPlaceholder}>
-                            <Ionicons name="image-outline" size={26} color={colors.primary.main} />
-                            <Text style={styles.avatarEditPlaceholderText}>Tap to upload</Text>
-                          </View>
+                          <>
+                            <Text style={userAvatarStyles.initials}>{profilePhotoInitials()}</Text>
+                            <View style={styles.avatarEditPhotoOverlay} pointerEvents="none">
+                              <Ionicons name="camera" size={22} color={colors.text.inverse} />
+                            </View>
+                          </>
                         )}
                         {uploadingAvatar ? (
                           <View style={styles.avatarUploading}>
@@ -1004,22 +1042,6 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderColor: colors.primary.main + '66',
     backgroundColor: colors.primary.main + '0a',
-  },
-  avatarEditPlaceholder: {
-    flex: 1,
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing[2],
-    gap: spacing[1],
-  },
-  avatarEditPlaceholderText: {
-    fontSize: 11,
-    color: colors.text.secondary,
-    fontFamily: 'Outfit-Medium',
-    textAlign: 'center',
-    textTransform: 'none',
-    letterSpacing: 0.2,
   },
   /** Dim veil over photo so the camera reads as centered “tap to change” */
   avatarEditPhotoOverlay: {

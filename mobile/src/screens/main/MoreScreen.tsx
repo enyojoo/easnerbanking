@@ -30,6 +30,35 @@ import {
   totpFactorsFromListResponse,
   unenrollUnverifiedTotpFactors,
 } from '../../lib/auth-mfa'
+import {
+  isTier1Complete,
+  TIER2_COMPLETE_PLACEHOLDER,
+  TIER3_COMPLETE_PLACEHOLDER,
+} from '../../lib/compliance'
+
+type TierBadge = { label: string; sub?: string; tone: 'green' | 'yellow' }
+
+function tierBadgeForProfile(
+  userProfile: Parameters<typeof isTier1Complete>[0],
+  verificationStatus: 'approved' | 'in_review' | 'take_action',
+): TierBadge {
+  const tier1 = isTier1Complete(userProfile)
+  const tier2 = TIER2_COMPLETE_PLACEHOLDER
+  const tier3 = TIER3_COMPLETE_PLACEHOLDER
+  if (tier1 && tier2 && tier3) {
+    return { label: 'Tier 3', tone: 'green' }
+  }
+  if (tier1 && tier2) {
+    return { label: 'Tier 2', tone: 'green' }
+  }
+  if (tier1) {
+    return { label: 'Tier 1', tone: 'green' }
+  }
+  if (verificationStatus === 'in_review') {
+    return { label: 'Tier 1', sub: 'In review', tone: 'yellow' }
+  }
+  return { label: 'Tier 1', sub: 'Action needed', tone: 'yellow' }
+}
 
 function MoreContent({ navigation }: NavigationProps) {
   const { user, userProfile, refreshUserProfile, signOut } = useAuth()
@@ -62,6 +91,7 @@ function MoreContent({ navigation }: NavigationProps) {
   const termsLink = useExternalLink()
   const [mfaStatusLine, setMfaStatusLine] = useState('')
   const [mfaStatusKnown, setMfaStatusKnown] = useState(false)
+  const lastKycProfileRefreshRef = useRef(0)
 
   const refreshMfaStatus = useCallback(async () => {
     const {
@@ -94,7 +124,11 @@ function MoreContent({ navigation }: NavigationProps) {
       const noahKycStatus =
         userProfile?.noah_kyc_status ?? (userProfile as { profile?: { noah_kyc_status?: string } })?.profile?.noah_kyc_status
       if (noahKycStatus !== 'approved') {
-        void refreshUserProfile()
+        const now = Date.now()
+        if (now - lastKycProfileRefreshRef.current > 60_000) {
+          lastKycProfileRefreshRef.current = now
+          void refreshUserProfile()
+        }
       }
       void refreshMfaStatus()
     }, [user?.id, userProfile?.noah_kyc_status, refreshUserProfile, refreshMfaStatus]),
@@ -171,14 +205,36 @@ function MoreContent({ navigation }: NavigationProps) {
   }, [userProfile?.id, navigation])
 
   const getVerificationStatus = (): "approved" | "in_review" | "take_action" => {
+    const role =
+      userProfile?.role ?? (userProfile as { profile?: { role?: string } })?.profile?.role
+    if (role === "business") {
+      const kyb =
+        userProfile?.noah_kyb_status ??
+        (userProfile as { profile?: { noah_kyb_status?: string } })?.profile?.noah_kyb_status
+      const s = String(kyb ?? "").trim().toLowerCase()
+      if (s === "approved") return "approved"
+      if (
+        s === "pending" ||
+        s === "in_review" ||
+        s === "under_review"
+      ) {
+        return "in_review"
+      }
+      return "take_action"
+    }
     const noahStatus =
-      userProfile?.noah_kyc_status ?? (userProfile as { profile?: { noah_kyc_status?: string } })?.profile?.noah_kyc_status
+      userProfile?.noah_kyc_status ??
+      (userProfile as { profile?: { noah_kyc_status?: string } })?.profile?.noah_kyc_status
 
     if (noahStatus === "approved") {
       return "approved"
     }
 
-    if (noahStatus === "pending" || noahStatus === "in_review" || noahStatus === "under_review") {
+    if (
+      noahStatus === "pending" ||
+      noahStatus === "in_review" ||
+      noahStatus === "under_review"
+    ) {
       return "in_review"
     }
 
@@ -186,7 +242,7 @@ function MoreContent({ navigation }: NavigationProps) {
   }
 
   const verificationStatus = getVerificationStatus()
-  const isVerificationComplete = verificationStatus === "approved"
+  const tierBadge = tierBadgeForProfile(userProfile, verificationStatus)
 
   const handleSignOut = async () => {
     setIsLoggingOut(true)
@@ -298,35 +354,26 @@ function MoreContent({ navigation }: NavigationProps) {
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={async () => {
-                  // Only allow navigation if verification is not complete
-                  if (!isVerificationComplete) {
-                    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                    navigateFromMoreTab('AccountVerification')
-                  }
-                  // If approved, do nothing (menu item is disabled)
+                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  navigateFromMoreTab('AccountVerification')
                 }}
-                activeOpacity={isVerificationComplete ? 1 : 0.7}
-                disabled={isVerificationComplete}
+                activeOpacity={0.7}
               >
                 <Text style={styles.menuItemText}>Account verification</Text>
                 <View style={styles.menuItemRight}>
-                  {verificationStatus === "approved" ? (
-                  <View style={styles.badgeGreen}>
-                      <Text style={styles.badgeTextGreen}>Approved</Text>
+                  {tierBadge.tone === 'green' ? (
+                    <View style={styles.badgeGreen}>
+                      <Text style={styles.badgeTextGreen}>{tierBadge.label}</Text>
                     </View>
-                  ) : verificationStatus === "in_review" ? (
-                    <View style={styles.badgeYellow}>
-                      <Text style={styles.badgeTextYellow}>In review</Text>
-                  </View>
-                ) : (
-                  <View style={styles.badgeYellow}>
-                    <Text style={styles.badgeTextYellow}>Take action</Text>
-                  </View>
+                  ) : (
+                    <View style={[styles.badgeYellow, tierBadge.sub && styles.badgeYellowTall]}>
+                      <Text style={styles.badgeTextYellow}>{tierBadge.label}</Text>
+                      {tierBadge.sub ? (
+                        <Text style={styles.badgeTextYellowSub}>{tierBadge.sub}</Text>
+                      ) : null}
+                    </View>
                   )}
-                  {/* Only show chevron when verification is NOT complete */}
-                  {!isVerificationComplete && (
-                    <Ionicons name="chevron-forward" size={20} color={colors.neutral[400]} />
-                  )}
+                  <Ionicons name="chevron-forward" size={20} color={colors.neutral[400]} />
                 </View>
               </TouchableOpacity>
               {renderMenuItem(
@@ -577,10 +624,22 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[1],
     borderRadius: borderRadius.sm,
   },
+  badgeYellowTall: {
+    paddingVertical: spacing[1] + 1,
+    alignItems: 'flex-end',
+  },
   badgeTextYellow: {
     ...textStyles.labelSmall,
     color: colors.warning.dark,
     fontWeight: '600',
+  },
+  badgeTextYellowSub: {
+    ...textStyles.bodySmall,
+    color: colors.warning.dark,
+    fontWeight: '500',
+    marginTop: 1,
+    fontSize: 10,
+    lineHeight: 12,
   },
   badgeMuted: {
     backgroundColor: colors.neutral[100],

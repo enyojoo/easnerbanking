@@ -1,66 +1,66 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
+import { AppState, AppStateStatus } from 'react-native'
 import { useAuth } from '../contexts/AuthContext'
 import { noahService } from '../lib/noahService'
 import { isTier1Complete } from '../lib/compliance'
 
 /**
  * Consumer (individual) KYC: POST `/api/noah/sync-status` with `individual` scope after the user
- * reaches the main app — same idea as business KYB auto-sync (`useBusinessNoahSync`), not only
- * when opening Account Verification.
+ * reaches the main app — same idea as business KYB auto-sync (`useBusinessNoahSync`).
  *
- * Skips business accounts (org KYB is handled separately). Requires `noah_customer_id` or the
- * API returns 404 (handled quietly in `noahService.syncStatus`).
+ * The backend resolves Noah customer id as `users.noah_customer_id` or deterministic `eind_{userId}`,
+ * so we **must not** require a stored `noah_customer_id` row for sync to run (sandbox often had
+ * approval in Noah before Easner stored the id).
  */
 export function useConsumerKycNoahSync(): void {
-  const { userProfile, refreshUserProfile } = useAuth()
+  const { user, userProfile, refreshUserProfile } = useAuth()
   const lastAutoSyncMsRef = useRef(0)
 
   const role = userProfile?.role ?? userProfile?.profile?.role
-  const customerId =
-    userProfile?.noah_customer_id ?? userProfile?.profile?.noah_customer_id ?? null
 
   const shouldSync =
+    !!user?.id &&
     role !== 'business' &&
-    typeof customerId === 'string' &&
-    customerId.length > 0 &&
     !isTier1Complete(userProfile)
 
-  useEffect(() => {
+  const runSync = useCallback(async () => {
     if (!shouldSync || !refreshUserProfile) return
-
     const now = Date.now()
-    const MIN_MS = 90_000
+    const MIN_MS = 15_000
     if (now - lastAutoSyncMsRef.current < MIN_MS) return
     lastAutoSyncMsRef.current = now
 
-    void (async () => {
-      try {
-        const result = await noahService.syncStatus({ scope: 'individual' })
-        if (result.success && result.synced) {
-          await refreshUserProfile()
-        }
-      } catch {
-        // Non-blocking; Account Verification / webhooks can still update.
+    try {
+      const result = await noahService.syncStatus({ scope: 'individual' })
+      if (result.success && result.synced) {
+        await refreshUserProfile()
       }
-    })()
+    } catch {
+      // Non-blocking; Account Verification / webhooks can still update.
+    }
   }, [shouldSync, refreshUserProfile])
 
   useEffect(() => {
-    if (!shouldSync || !refreshUserProfile) return
+    void runSync()
+  }, [runSync])
+
+  useEffect(() => {
+    if (!shouldSync) return
 
     const id = setInterval(() => {
-      void (async () => {
-        try {
-          const result = await noahService.syncStatus({ scope: 'individual' })
-          if (result.success && result.synced) {
-            await refreshUserProfile()
-          }
-        } catch {
-          // ignore
-        }
-      })()
+      void runSync()
     }, 5 * 60 * 1000)
 
     return () => clearInterval(id)
-  }, [shouldSync, refreshUserProfile])
+  }, [shouldSync, runSync])
+
+  /** Same as business: pull Noah when returning to the app (sandbox approvals often land while away). */
+  useEffect(() => {
+    if (!shouldSync) return
+
+    const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
+      if (next === 'active') void runSync()
+    })
+    return () => sub.remove()
+  }, [shouldSync, runSync])
 }

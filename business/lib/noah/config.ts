@@ -4,7 +4,21 @@
  */
 
 export function getNoahBaseUrl(): string {
-  return (process.env.NOAH_API_BASE_URL || "https://api.sandbox.noah.com/v1").replace(/\/$/, "")
+  const raw = (process.env.NOAH_API_BASE_URL || "https://api.sandbox.noah.com/v1").replace(/\/$/, "")
+  try {
+    const url = new URL(raw.startsWith("http") ? raw : `https://${raw}`)
+    const path = url.pathname.replace(/\/$/, "") || "/"
+    // OpenAPI paths are `/v1/customers/...`. A bare host (`https://api.sandbox.noah.com`) yields 404 on `/customers/...`.
+    if (
+      (url.hostname === "api.sandbox.noah.com" || url.hostname === "api.noah.com") &&
+      path === "/"
+    ) {
+      return `${url.origin}/v1`
+    }
+  } catch {
+    // ignore
+  }
+  return raw
 }
 
 export function getNoahApiKey(): string {

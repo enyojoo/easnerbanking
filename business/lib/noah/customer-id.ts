@@ -52,6 +52,8 @@ export function customerIdAllowedForSession(opts: {
   const userStored = userStoredNoahCustomerId?.trim()
   if (userStored && customerId === userStored) return "individual"
   if (customerId === noahCustomerIdFromUserId(sessionUserId)) return "individual"
+  /** Noah may use compact UUID as CustomerID (no `eind_` prefix) while Easner defaults to `eind_`. */
+  if (customerId === compactUuidForNoahCustomerId(sessionUserId)) return "individual"
   if (easnerBusinessId) {
     const bizStored = businessStoredNoahCustomerId?.trim()
     if (bizStored && customerId === bizStored) return "business"

@@ -14,6 +14,20 @@ function apiUrl(): string {
   )
 }
 
+/** One sync at a time (consumer hook + Account Verification + intervals share this client). */
+let syncStatusQueueTail: Promise<unknown> = Promise.resolve()
+
+/** Result of POST `/api/noah/sync-status` (mobile parses JSON; see business `app/api/noah/sync-status/route.ts`). */
+export type NoahSyncStatusResult = {
+  success: boolean
+  synced: boolean
+  /** Set when backend returns 404 `NOAH_CUSTOMER_NOT_FOUND` (no customer in this Noah env yet). */
+  code?: 'NOAH_CUSTOMER_NOT_FOUND'
+  /** Easner tried these CustomerID strings against Noah (debug env / ID mismatch). */
+  triedCustomerIds?: string[]
+  data?: { kycStatus: string; rejectionReasons?: any[] }
+}
+
 interface NoahTOSLink {
   tosLink: string
   tosLinkId: string
@@ -402,70 +416,94 @@ export const noahService = {
   async syncStatus(options?: {
     /** `individual` = personal KYC; `business` = org KYB (requires business role + org on server). */
     scope?: 'individual' | 'business'
-  }): Promise<{ success: boolean; synced: boolean; data?: { kycStatus: string; rejectionReasons?: any[] } }> {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
+  }): Promise<NoahSyncStatusResult> {
+    const run = async (): Promise<NoahSyncStatusResult> => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('Not authenticated')
 
-    const scope = options?.scope ?? 'individual'
+      const scope = options?.scope ?? 'individual'
 
-    // Add timeout to fetch
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10000)
 
-    try {
-      const response = await fetch(`${apiUrl()}/api/noah/sync-status`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-          'X-Easner-Noah-Scope': scope,
-        },
-        signal: controller.signal,
-      })
-      clearTimeout(timeoutId)
+      try {
+        const response = await fetch(`${apiUrl()}/api/noah/sync-status`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+            'X-Easner-Noah-Scope': scope,
+          },
+          signal: controller.signal,
+        })
+        clearTimeout(timeoutId)
 
-      if (!response.ok) {
-        const errText = await response.text()
-        let errBody: { error?: string; code?: string } = {}
-        try {
-          errBody = errText ? (JSON.parse(errText) as { error?: string; code?: string }) : {}
-        } catch {
-          errBody = {}
+        if (!response.ok) {
+          const errText = await response.text()
+          let errBody: {
+            error?: string
+            code?: string
+            triedCustomerIds?: string[]
+          } = {}
+          try {
+            errBody = errText
+              ? (JSON.parse(errText) as {
+                  error?: string
+                  code?: string
+                  triedCustomerIds?: string[]
+                })
+              : {}
+          } catch {
+            errBody = {}
+          }
+          if (response.status === 404 && errBody.code === 'NOAH_CUSTOMER_NOT_FOUND') {
+            return {
+              success: false,
+              synced: false,
+              code: 'NOAH_CUSTOMER_NOT_FOUND',
+              triedCustomerIds: Array.isArray(errBody.triedCustomerIds)
+                ? errBody.triedCustomerIds
+                : undefined,
+            }
+          }
+          throw new Error(errBody.error || 'Failed to sync status')
         }
-        if (
-          response.status === 404 &&
-          errBody.code === 'NOAH_CUSTOMER_NOT_FOUND'
-        ) {
-          return { success: false, synced: false }
-        }
-        throw new Error(errBody.error || 'Failed to sync status')
-      }
 
-      const data = (await response.json()) as {
-        success?: boolean
-        kycStatus?: string
-        rejectionReasons?: unknown[]
-        [key: string]: unknown
+        const data = (await response.json()) as {
+          success?: boolean
+          kycStatus?: string
+          rejectionReasons?: unknown[]
+          [key: string]: unknown
+        }
+        const success =
+          data.success === true ||
+          (typeof data.kycStatus === 'string' && data.kycStatus.length > 0)
+        return {
+          success,
+          synced: success,
+          data:
+            success && typeof data.kycStatus === 'string'
+              ? {
+                  kycStatus: data.kycStatus,
+                  rejectionReasons: data.rejectionReasons as any[] | undefined,
+                }
+              : undefined,
+        }
+      } catch (error: any) {
+        clearTimeout(timeoutId)
+        if (error.name === 'AbortError') {
+          throw new Error('Sync request timed out')
+        }
+        throw error
       }
-      const success = data.success === true
-      return {
-        success,
-        synced: success,
-        data:
-          success && typeof data.kycStatus === 'string'
-            ? {
-                kycStatus: data.kycStatus,
-                rejectionReasons: data.rejectionReasons as any[] | undefined,
-              }
-            : undefined,
-      }
-    } catch (error: any) {
-      clearTimeout(timeoutId)
-      if (error.name === 'AbortError') {
-        throw new Error('Sync request timed out')
-      }
-      throw error
     }
+
+    const p = syncStatusQueueTail.then(() => run())
+    syncStatusQueueTail = p.then(
+      () => undefined,
+      () => undefined,
+    )
+    return p
   },
 
   /**

@@ -2,6 +2,15 @@ import { supabase } from './supabase'
 import { joinFullName } from './userProfileHelpers'
 import { getApiBaseUrl } from './apiClient'
 
+/** Shape returned by `PUT /api/settings/personal` (and normalized Supabase fallback). */
+export type PersonalSettingsPayload = {
+  fullName: string
+  email: string
+  phone: string
+  dateOfBirth: string
+  avatarUrl: string | null
+}
+
 export interface UserProfileData {
   firstName: string
   middleName?: string
@@ -18,6 +27,47 @@ export interface UserStats {
   memberSince: string
 }
 
+/**
+ * Normalize `updateProfile` return value so the UI can apply authoritative server fields on save
+ * (avoids waiting on AuthContext + `userProfile` timing).
+ */
+export function personalFromUpdateProfileResult(result: unknown): PersonalSettingsPayload | null {
+  if (!result || typeof result !== 'object') return null
+  const r = result as Record<string, unknown>
+  if (r.personal && typeof r.personal === 'object') {
+    const p = r.personal as Record<string, unknown>
+    const fullName = typeof p.fullName === 'string' ? p.fullName : ''
+    const email = typeof p.email === 'string' ? p.email : ''
+    const phone = typeof p.phone === 'string' ? p.phone : ''
+    const dateOfBirth = typeof p.dateOfBirth === 'string' ? p.dateOfBirth : ''
+    const av = p.avatarUrl
+    const avatarUrl =
+      av === null || av === undefined
+        ? null
+        : typeof av === 'string' && av.trim()
+          ? av.trim()
+          : null
+    return { fullName, email, phone, dateOfBirth, avatarUrl }
+  }
+  /** Direct `users` row from Supabase `.update().select().single()` */
+  if (typeof r.id === 'string' && 'full_name' in r) {
+    const row = r as Record<string, unknown>
+    const fullName = typeof row.full_name === 'string' ? row.full_name : ''
+    const email = typeof row.email === 'string' ? row.email : ''
+    const phone = typeof row.phone === 'string' ? row.phone : ''
+    const dateOfBirth = typeof row.date_of_birth === 'string' ? row.date_of_birth : ''
+    const av = row.avatar_url
+    const avatarUrl =
+      av === null || av === undefined
+        ? null
+        : typeof av === 'string' && av.trim()
+          ? av.trim()
+          : null
+    return { fullName, email, phone, dateOfBirth, avatarUrl }
+  }
+  return null
+}
+
 export const userService = {
   /**
    * Persist profile fields. Prefer `PUT /api/settings/personal` (same as business web, service-role upsert)
@@ -26,7 +76,7 @@ export const userService = {
   async updateProfile(
     userId: string,
     updates: UserProfileData
-  ): Promise<any> {
+  ): Promise<unknown> {
     const fullName = joinFullName({
       firstName: updates.firstName,
       middleName: updates.middleName,

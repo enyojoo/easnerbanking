@@ -1,6 +1,17 @@
 import { createNoahSignatureJwt } from "./signing"
 import { getNoahApiKey, getNoahBaseUrl, getNoahSigningPrivateKey } from "./config"
 
+/** Thrown by `noahFetch` on non-OK responses; use `status` for reliable 404 detection (Noah `Detail` text varies). */
+export class NoahHttpError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message)
+    this.name = "NoahHttpError"
+  }
+}
+
 export type NoahFetchOptions = {
   method: "GET" | "POST" | "PUT"
   /** OpenAPI path only, e.g. /customers/foo or /customers/foo/bar */
@@ -72,7 +83,8 @@ export async function noahFetch<T>(opts: NoahFetchOptions): Promise<T> {
 
   if (!res.ok) {
     const err = data as { Detail?: string; Type?: string }
-    throw new Error(err?.Detail || err?.Type || `Noah API ${res.status}: ${text.slice(0, 500)}`)
+    const message = err?.Detail || err?.Type || `Noah API ${res.status}: ${text.slice(0, 500)}`
+    throw new NoahHttpError(message, res.status)
   }
 
   return data as T

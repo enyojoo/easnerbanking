@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { fetchNoahCustomerWithIndividualFallback } from "@/lib/noah/fetch-customer"
 import { noahFetch } from "@/lib/noah/http"
 import { buildHostedOnboardingBody } from "@/lib/noah/hosted-onboarding"
 import { mapNoahCustomerToMobileSummary, mapNoahVerificationToKycStatus } from "@/lib/noah/map-kyc"
@@ -15,18 +16,24 @@ export async function GET(request: Request) {
   if (!ctx.ok) return ctx.response
 
   try {
-    const customer = await noahFetch<Record<string, unknown>>({
-      method: "GET",
-      path: `/customers/${encodeURIComponent(ctx.noahCustomerId)}`,
-    })
+    const { customer, resolvedCustomerId } =
+      ctx.scope === "individual"
+        ? await fetchNoahCustomerWithIndividualFallback(user.id, ctx.noahCustomerId)
+        : {
+            customer: await noahFetch<Record<string, unknown>>({
+              method: "GET",
+              path: `/customers/${encodeURIComponent(ctx.noahCustomerId)}`,
+            }),
+            resolvedCustomerId: ctx.noahCustomerId,
+          }
     await syncNoahCustomerToSupabase(
       ctx.scope === "business" && ctx.businessId
         ? { kind: "business", businessId: ctx.businessId }
         : { kind: "individual", userId: user.id },
       customer,
-      ctx.noahCustomerId,
+      resolvedCustomerId,
     )
-    return NextResponse.json(mapNoahCustomerToMobileSummary(customer, ctx.noahCustomerId))
+    return NextResponse.json(mapNoahCustomerToMobileSummary(customer, resolvedCustomerId))
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
     if (msg.includes("404") || /not found/i.test(msg)) {
@@ -88,19 +95,25 @@ export async function POST(request: Request) {
       })
     }
 
-    const customer = await noahFetch<Record<string, unknown>>({
-      method: "GET",
-      path: `/customers/${encodeURIComponent(ctx.noahCustomerId)}`,
-    })
+    const { customer, resolvedCustomerId } =
+      ctx.scope === "individual"
+        ? await fetchNoahCustomerWithIndividualFallback(user.id, ctx.noahCustomerId)
+        : {
+            customer: await noahFetch<Record<string, unknown>>({
+              method: "GET",
+              path: `/customers/${encodeURIComponent(ctx.noahCustomerId)}`,
+            }),
+            resolvedCustomerId: ctx.noahCustomerId,
+          }
     await syncNoahCustomerToSupabase(
       ctx.scope === "business" && ctx.businessId
         ? { kind: "business", businessId: ctx.businessId }
         : { kind: "individual", userId: user.id },
       customer,
-      ctx.noahCustomerId,
+      resolvedCustomerId,
     )
     return NextResponse.json({
-      customerId: ctx.noahCustomerId,
+      customerId: resolvedCustomerId,
       kycStatus: mapNoahVerificationToKycStatus(customer),
       walletId: undefined,
       usdVirtualAccountId: undefined,

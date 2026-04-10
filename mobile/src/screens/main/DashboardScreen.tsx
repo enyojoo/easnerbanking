@@ -44,6 +44,7 @@ import { ShimmerLoader } from '../../components/premium'
 import { getTransactionStatusDisplay } from '../../utils/formatters'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import { isTier1Complete } from '../../lib/compliance'
+import { noahService } from '../../lib/noahService'
 import {
   buildUserCacheKey,
   readUserCache,
@@ -90,9 +91,8 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const [hasAttemptedLoad, setHasAttemptedLoad] = useState(false) // Track if we've attempted to load data (cache or API)
   const dataLoadedRef = useRef(false)
   const lastSyncTimeRef = useRef(0) // Track last sync time to prevent frequent syncs
-  const noahKycStatus =
-    userProfile?.noah_kyc_status ??
-    (userProfile as { profile?: { noah_kyc_status?: string } })?.profile?.noah_kyc_status
+  /** Throttle Noah sync on dashboard focus (parity with business `BusinessVerificationSection`). */
+  const lastDashboardNoahSyncRef = useRef(0)
 
   const loadAvailableCurrencies = useCallback(async () => {
     try {
@@ -337,8 +337,31 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   // Refresh balances on focus only if stale (don't fetch every time)
   useFocusEffect(
     React.useCallback(() => {
-      if (noahKycStatus !== 'approved') {
-        void refreshUserProfile()
+      /**
+       * Individual Tier 1: pull Noah → DB then refresh profile (same as business verification section
+       * on web). `refreshUserProfile` alone only re-reads Supabase; it does not call Noah.
+       */
+      const role = userProfile?.role ?? userProfile?.profile?.role
+      const needsConsumerTier1Sync =
+        !!user?.id && !!userProfile?.id && role !== 'business' && !isTier1Complete(userProfile)
+      if (needsConsumerTier1Sync) {
+        const now = Date.now()
+        const MIN_MS = 90_000
+        if (now - lastDashboardNoahSyncRef.current >= MIN_MS) {
+          lastDashboardNoahSyncRef.current = now
+          void (async () => {
+            try {
+              const r = await noahService.syncStatus({ scope: 'individual' })
+              if (r.success && r.synced) {
+                await refreshUserProfile()
+              } else {
+                await refreshUserProfile()
+              }
+            } catch {
+              await refreshUserProfile()
+            }
+          })()
+        }
       }
       // Only refresh if data is stale - fetchBalances will check cache first
       // This prevents unnecessary API calls when data is fresh
@@ -354,7 +377,14 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
       loadAvailableCurrencies().catch(() => {
         // Silently fail
       })
-    }, [refreshUserProfile, noahKycStatus, refreshBalances, fetchRecentTransactions, loadAvailableCurrencies])
+    }, [
+      user?.id,
+      userProfile,
+      refreshUserProfile,
+      refreshBalances,
+      fetchRecentTransactions,
+      loadAvailableCurrencies,
+    ])
   )
 
   const balance = parseFloat((balances as any)[selectedCurrency] || '0')
