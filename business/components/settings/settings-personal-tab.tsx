@@ -42,6 +42,7 @@ import {
   beginTotpEnrollment,
   getVerifiedTotpFactorId,
   hasEmailPasswordIdentity,
+  listFactorsForMfaStatus,
   type TotpEnrollSetup,
   totpFactorsFromListResponse,
   unenrollUnverifiedTotpFactors,
@@ -98,6 +99,12 @@ function saveMfaStatusToLocalStorage(userId: string, data: MfaStatusSnapshot) {
   }
 }
 
+const MFA_STATUS_ERROR_LINE = "Unable to load status"
+
+function isSuccessfulMfaStatusLine(line: string): boolean {
+  return line === "On" || line === "Off"
+}
+
 export function SettingsPersonalTab() {
   const { user } = useAuth()
   const supabase = useMemo(() => createSupabaseBrowser(), [])
@@ -151,6 +158,8 @@ export function SettingsPersonalTab() {
 
   const canUsePassword = hasEmailPasswordIdentity(user)
   const mfaVerifiedOn = mfaStatusLine === "On"
+  /** MFA row stays in the same loading pass as personal settings until both API + factors are ready. */
+  const mfaRowLoading = loading || !mfaStatusKnown
 
   useLayoutEffect(() => {
     mfaDialogOpenRef.current = mfaDialogOpen
@@ -207,17 +216,28 @@ export function SettingsPersonalTab() {
     const key = CACHE_KEYS.MFA_SECURITY(user.id)
     if (!options?.force) {
       const cached = dataCache.get<{ statusLine: string }>(key)
-      if (cached != null && !dataCache.isStale(key)) {
+      if (
+        cached != null &&
+        isSuccessfulMfaStatusLine(cached.statusLine) &&
+        !dataCache.isStale(key)
+      ) {
         setMfaStatusLine(cached.statusLine)
         setMfaStatusKnown(true)
         return
       }
     }
     void (async () => {
-      const { data, error } = await supabase.auth.mfa.listFactors()
+      const { data, error } = await listFactorsForMfaStatus(supabase)
       let statusLine: string
       if (error) {
-        statusLine = "Unable to load status"
+        console.warn("settings MFA status:", error.message)
+        statusLine = MFA_STATUS_ERROR_LINE
+        dataCache.invalidate(key)
+        try {
+          localStorage.removeItem(mfaStatusCacheKey(user.id))
+        } catch {
+          // ignore
+        }
       } else {
         const totp = totpFactorsFromListResponse(data)
         const id = getVerifiedTotpFactorId(totp)
@@ -229,10 +249,10 @@ export function SettingsPersonalTab() {
           }
           statusLine = "Off"
         }
+        const snapshot = { statusLine }
+        dataCache.set(key, snapshot, MFA_STATUS_CACHE_TTL_MS)
+        saveMfaStatusToLocalStorage(user.id, snapshot)
       }
-      const snapshot = { statusLine }
-      dataCache.set(key, snapshot, MFA_STATUS_CACHE_TTL_MS)
-      saveMfaStatusToLocalStorage(user.id, snapshot)
       setMfaStatusLine(statusLine)
       setMfaStatusKnown(true)
     })()
@@ -246,17 +266,27 @@ export function SettingsPersonalTab() {
     }
     const key = CACHE_KEYS.MFA_SECURITY(user.id)
     const cached = dataCache.get<{ statusLine: string }>(key)
-    if (cached != null) {
+    if (cached != null && isSuccessfulMfaStatusLine(cached.statusLine)) {
       setMfaStatusLine(cached.statusLine)
       setMfaStatusKnown(true)
       return
     }
+    if (cached?.statusLine === MFA_STATUS_ERROR_LINE) {
+      dataCache.invalidate(key)
+    }
     const local = loadMfaStatusFromLocalStorage(user.id)
-    if (local) {
+    if (local && isSuccessfulMfaStatusLine(local.statusLine)) {
       dataCache.set(key, local, MFA_STATUS_CACHE_TTL_MS)
       setMfaStatusLine(local.statusLine)
       setMfaStatusKnown(true)
       return
+    }
+    if (local?.statusLine === MFA_STATUS_ERROR_LINE) {
+      try {
+        localStorage.removeItem(mfaStatusCacheKey(user.id))
+      } catch {
+        // ignore
+      }
     }
     setMfaStatusLine("")
     setMfaStatusKnown(false)
@@ -468,10 +498,10 @@ export function SettingsPersonalTab() {
               <Smartphone className="h-5 w-5 text-muted-foreground" />
               <div>
                 <p className="font-medium">Two-Factor Authentication</p>
-                {mfaStatusKnown ? (
-                  <p className="text-sm text-muted-foreground">{mfaStatusLine}</p>
-                ) : (
+                {mfaRowLoading ? (
                   <div className="mt-1 h-4 w-12 animate-pulse rounded bg-muted" aria-hidden />
+                ) : (
+                  <p className="text-sm text-muted-foreground">{mfaStatusLine}</p>
                 )}
               </div>
             </div>
@@ -479,7 +509,7 @@ export function SettingsPersonalTab() {
               className="w-[5.75rem]"
               variant="outline"
               size="sm"
-              disabled={!mfaStatusKnown || mfaSetupPreparing}
+              disabled={mfaRowLoading || mfaSetupPreparing}
               onClick={() => {
                 if (mfaVerifiedOn) {
                   setTurnOffMfaOpen(true)
@@ -541,7 +571,7 @@ export function SettingsPersonalTab() {
         }}
         onFactorsChanged={() => void refreshMfaStatus({ force: true })}
         initialTotpVerified={mfaStatusLine === "On"}
-        mfaStatusKnown={mfaStatusKnown}
+        mfaStatusKnown={!mfaRowLoading}
         autoStartEnroll={mfaAutoStartEnroll}
         initialEnrollSetup={initialMfaEnrollSetup}
       />

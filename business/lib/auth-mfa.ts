@@ -103,6 +103,30 @@ export async function beginTotpEnrollment(client: SupabaseClient): Promise<TotpE
   }
 }
 
+/**
+ * `mfa.listFactors` can fail until the in-memory session is ready. Used by settings / More — pair
+ * with UI that does not cache "Unable to load" snapshots.
+ */
+export async function listFactorsForMfaStatus(client: SupabaseClient) {
+  const { data: sessionData } = await client.auth.getSession()
+  if (!sessionData?.session) {
+    await client.auth.refreshSession()
+  }
+
+  const attempts = 4
+  let lastError: { message: string } | null = null
+  for (let i = 0; i < attempts; i++) {
+    const { data, error } = await client.auth.mfa.listFactors()
+    if (!error) return { data, error: null as null }
+    lastError = error
+    if (i < attempts - 1) {
+      await client.auth.refreshSession()
+      await new Promise((r) => setTimeout(r, 80 * (i + 1)))
+    }
+  }
+  return { data: null, error: lastError }
+}
+
 /** After password sign-in, true when GoTrue requires MFA (TOTP) to reach AAL2. */
 export function isMfaStepRequired(aal: {
   currentLevel: string | null

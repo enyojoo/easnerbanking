@@ -26,6 +26,7 @@ import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
 import { supabase } from '../../lib/supabase'
 import {
   getVerifiedTotpFactorId,
+  listFactorsForMfaStatus,
   totpFactorsFromListResponse,
   unenrollUnverifiedTotpFactors,
 } from '../../lib/auth-mfa'
@@ -67,11 +68,13 @@ function MoreContent({ navigation }: NavigationProps) {
       data: { session },
     } = await supabase.auth.getSession()
     if (!session?.user) {
+      setMfaStatusLine('')
       setMfaStatusKnown(false)
       return
     }
-    const { data, error } = await supabase.auth.mfa.listFactors()
+    const { data, error } = await listFactorsForMfaStatus(supabase)
     if (error) {
+      console.warn('MoreScreen MFA status:', error.message)
       setMfaStatusLine('Unable to load')
       setMfaStatusKnown(true)
       return

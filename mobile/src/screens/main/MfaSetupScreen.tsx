@@ -24,6 +24,7 @@ import { supabase } from '../../lib/supabase'
 import {
   beginTotpEnrollment,
   getVerifiedTotpFactorId,
+  listFactorsForMfaStatus,
   totpFactorsFromListResponse,
   unenrollUnverifiedTotpFactors,
   type TotpFactorLike,
@@ -104,7 +105,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
   const loadFactors = useCallback(async (): Promise<TotpFactorLike[] | null> => {
     setError(null)
     try {
-      const { data, error: listErr } = await supabase.auth.mfa.listFactors()
+      const { data, error: listErr } = await listFactorsForMfaStatus(supabase)
       if (listErr) {
         setError(listErr.message || 'Could not load MFA status.')
         setMfaList({ factors: [], loaded: true })
