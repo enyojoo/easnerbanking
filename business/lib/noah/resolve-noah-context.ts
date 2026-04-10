@@ -45,11 +45,13 @@ export async function resolveNoahContextAsync(
   const admin = createSupabaseAdmin()
   const { data: userRow } = await admin
     .from("users")
-    .select("easner_business_id")
+    .select("easner_business_id, noah_customer_id")
     .eq("id", sessionUserId)
     .maybeSingle()
 
   const businessId = (userRow?.easner_business_id as string | null | undefined) ?? null
+  const userStoredNoahId =
+    (userRow?.noah_customer_id as string | null | undefined)?.trim() || null
 
   if (scope === "business") {
     if (!businessId) {
@@ -64,11 +66,18 @@ export async function resolveNoahContextAsync(
         ),
       }
     }
+    const { data: businessRow } = await admin
+      .from("businesses")
+      .select("noah_customer_id")
+      .eq("id", businessId)
+      .maybeSingle()
+    const businessStoredNoahId =
+      (businessRow?.noah_customer_id as string | null | undefined)?.trim() || null
     return {
       ok: true,
       scope: "business",
       customerType: "Business",
-      noahCustomerId: noahCustomerIdFromBusinessId(businessId),
+      noahCustomerId: businessStoredNoahId || noahCustomerIdFromBusinessId(businessId),
       businessId,
     }
   }
@@ -77,7 +86,7 @@ export async function resolveNoahContextAsync(
     ok: true,
     scope: "individual",
     customerType: "Individual",
-    noahCustomerId: noahCustomerIdFromUserId(sessionUserId),
+    noahCustomerId: userStoredNoahId || noahCustomerIdFromUserId(sessionUserId),
     businessId: null,
   }
 }

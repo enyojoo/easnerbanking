@@ -18,14 +18,27 @@ export async function GET(request: Request, ctx: Ctx) {
   const admin = createSupabaseAdmin()
   const { data: u } = await admin
     .from("users")
-    .select("easner_business_id")
+    .select("easner_business_id, noah_customer_id")
     .eq("id", user.id)
     .maybeSingle()
 
+  const easnerBusinessId = (u?.easner_business_id as string | null) ?? null
+  let businessStoredNoahId: string | null = null
+  if (easnerBusinessId) {
+    const { data: b } = await admin
+      .from("businesses")
+      .select("noah_customer_id")
+      .eq("id", easnerBusinessId)
+      .maybeSingle()
+    businessStoredNoahId = (b?.noah_customer_id as string | null) ?? null
+  }
+
   const scope = customerIdAllowedForSession({
     sessionUserId: user.id,
-    easnerBusinessId: (u?.easner_business_id as string | null) ?? null,
+    easnerBusinessId,
     customerId,
+    userStoredNoahCustomerId: (u?.noah_customer_id as string | null) ?? null,
+    businessStoredNoahCustomerId: businessStoredNoahId,
   })
   if (!scope) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })

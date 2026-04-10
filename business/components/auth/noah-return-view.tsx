@@ -31,8 +31,9 @@ export function NoahReturnView({ variant }: { variant: NoahReturnVariant }) {
       }
       try {
         await fetchWithSession("/api/noah/sync-status", {
-          method: "GET",
+          method: "POST",
           headers: {
+            "Content-Type": "application/json",
             "X-Easner-Noah-Scope": variant === "kyb" ? "business" : "individual",
           },
         })

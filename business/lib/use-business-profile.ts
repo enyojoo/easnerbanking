@@ -104,10 +104,14 @@ export async function updateBusinessProfile(payload: {
   if (!res.ok) return null
   const json = (await res.json()) as { profile?: BusinessProfile }
   if (json.profile) {
-    // Invalidate shared cache key so active pages can revalidate consistently.
     const { data: session } = await supabase.auth.getUser()
-    if (session?.user?.id) dataCache.invalidate(CACHE_KEYS.BUSINESS_PROFILE(session.user.id))
-    window.dispatchEvent(new Event("business-profile-updated"))
+    if (session?.user?.id) {
+      // Apply immediately so Settings (and any open UI) does not race `refreshProfile()` and
+      // briefly re-hydrate form state from stale profile in memory.
+      window.dispatchEvent(
+        new CustomEvent<BusinessProfile>("business-profile-updated", { detail: json.profile }),
+      )
+    }
   }
   return json.profile ?? null
 }
@@ -142,14 +146,30 @@ export function useBusinessProfile() {
   }, [setData, user?.id])
 
   useEffect(() => {
-    const onUpdate = () => {
+    const onUpdate = (e: Event) => {
       if (!user?.id) return
+      const detail = (e as CustomEvent<BusinessProfile | undefined>).detail
+      if (detail) {
+        setData(detail)
+        dataCache.set(CACHE_KEYS.BUSINESS_PROFILE(user.id), detail, PROFILE_CACHE_TTL_MS)
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem(
+              `business_profile_cache_${user.id}`,
+              JSON.stringify({ data: detail, timestamp: Date.now() }),
+            )
+          } catch {
+            // ignore
+          }
+        }
+        return
+      }
       dataCache.invalidate(CACHE_KEYS.BUSINESS_PROFILE(user.id))
       void refreshProfile()
     }
     window.addEventListener("business-profile-updated", onUpdate)
     return () => window.removeEventListener("business-profile-updated", onUpdate)
-  }, [refreshProfile, user?.id])
+  }, [refreshProfile, setData, user?.id])
 
   const profile = useMemo(
     () => ({

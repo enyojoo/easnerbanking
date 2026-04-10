@@ -37,10 +37,26 @@ export function customerIdAllowedForSession(opts: {
   sessionUserId: string
   easnerBusinessId: string | null
   customerId: string
+  /** From `users.noah_customer_id` when Noah returned a non–Easner-shaped id. */
+  userStoredNoahCustomerId?: string | null
+  /** From `businesses.noah_customer_id` for the session org. */
+  businessStoredNoahCustomerId?: string | null
 }): NoahCustomerScope | null {
-  const { sessionUserId, easnerBusinessId, customerId } = opts
+  const {
+    sessionUserId,
+    easnerBusinessId,
+    customerId,
+    userStoredNoahCustomerId,
+    businessStoredNoahCustomerId,
+  } = opts
+  const userStored = userStoredNoahCustomerId?.trim()
+  if (userStored && customerId === userStored) return "individual"
   if (customerId === noahCustomerIdFromUserId(sessionUserId)) return "individual"
-  if (easnerBusinessId && customerId === noahCustomerIdFromBusinessId(easnerBusinessId)) return "business"
+  if (easnerBusinessId) {
+    const bizStored = businessStoredNoahCustomerId?.trim()
+    if (bizStored && customerId === bizStored) return "business"
+    if (customerId === noahCustomerIdFromBusinessId(easnerBusinessId)) return "business"
+  }
   return null
 }
 

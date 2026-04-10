@@ -414,6 +414,8 @@ export const noahService = {
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
+          /** Consumer KYC on mobile — session user’s individual Noah customer (not org KYB). */
+          'X-Easner-Noah-Scope': 'individual',
         },
         signal: controller.signal,
       })
@@ -424,8 +426,24 @@ export const noahService = {
         throw new Error(error.error || 'Failed to sync status')
       }
 
-      const data = await response.json()
-      return data
+      const data = (await response.json()) as {
+        success?: boolean
+        kycStatus?: string
+        rejectionReasons?: unknown[]
+        [key: string]: unknown
+      }
+      const success = data.success === true
+      return {
+        success,
+        synced: success,
+        data:
+          success && typeof data.kycStatus === 'string'
+            ? {
+                kycStatus: data.kycStatus,
+                rejectionReasons: data.rejectionReasons as any[] | undefined,
+              }
+            : undefined,
+      }
     } catch (error: any) {
       clearTimeout(timeoutId)
       if (error.name === 'AbortError') {
@@ -447,6 +465,7 @@ export const noahService = {
       headers: {
         Authorization: `Bearer ${session.access_token}`,
         'Content-Type': 'application/json',
+        'X-Easner-Noah-Scope': 'individual',
       },
     })
     const data = await response.json().catch(() => ({}))

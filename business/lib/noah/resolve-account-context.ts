@@ -25,20 +25,28 @@ export async function resolveNoahAccountContext(
 ): Promise<{ ok: true; ctx: NoahAccountContext } | { ok: false; response: NextResponse }> {
   const scope = readNoahScopeFromRequest(request, bodyTypeHint)
 
+  const admin = createSupabaseAdmin()
+
   if (scope !== "business") {
+    const { data: userRow } = await admin
+      .from("users")
+      .select("noah_customer_id")
+      .eq("id", sessionUserId)
+      .maybeSingle()
+    const stored =
+      (userRow?.noah_customer_id as string | null | undefined)?.trim() || null
     return {
       ok: true,
       ctx: {
         scope: "individual",
         customerType: "Individual",
-        noahCustomerId: noahCustomerIdFromUserId(sessionUserId),
+        noahCustomerId: stored || noahCustomerIdFromUserId(sessionUserId),
         subjectBusinessId: null,
         subjectUserId: sessionUserId,
       },
     }
   }
 
-  const admin = createSupabaseAdmin()
   const { data: userRow } = await admin
     .from("users")
     .select("easner_business_id")
@@ -70,12 +78,20 @@ export async function resolveNoahAccountContext(
     }
   }
 
+  const { data: businessRow } = await admin
+    .from("businesses")
+    .select("noah_customer_id")
+    .eq("id", orgId)
+    .maybeSingle()
+  const businessStoredNoahId =
+    (businessRow?.noah_customer_id as string | null | undefined)?.trim() || null
+
   return {
     ok: true,
     ctx: {
       scope: "business",
       customerType: "Business",
-      noahCustomerId: noahCustomerIdFromBusinessId(orgId),
+      noahCustomerId: businessStoredNoahId || noahCustomerIdFromBusinessId(orgId),
       subjectBusinessId: orgId,
       subjectUserId: ownerUserId,
     },

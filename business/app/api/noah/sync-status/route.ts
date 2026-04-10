@@ -6,7 +6,7 @@ import { mapNoahVerificationToKycStatus } from "@/lib/noah/map-kyc"
 import { provisionNoahArtifactsForCustomer } from "@/lib/noah/provisioning"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 
-export async function POST(request: Request) {
+async function runSyncFromNoah(request: Request) {
   const mis = requireNoahEnv()
   if (mis) return mis
   const auth = await requireAuth(request)
@@ -41,9 +41,23 @@ export async function POST(request: Request) {
         })
       }
     }
-    return NextResponse.json({ success: true, noahScope: ctx.scope, provisioned })
+    return NextResponse.json({
+      success: true,
+      noahScope: ctx.scope,
+      kycStatus: kyc,
+      provisioned,
+    })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
     return NextResponse.json({ error: msg }, { status: 400 })
   }
+}
+
+/** GET supported for return-page / links; POST preferred for explicit sync. */
+export async function GET(request: Request) {
+  return runSyncFromNoah(request)
+}
+
+export async function POST(request: Request) {
+  return runSyncFromNoah(request)
 }
