@@ -2276,10 +2276,8 @@ function EasenetSendRecipientAvatar({
 
 function PayoutSendRecipientAvatar({
   recipient,
-  getInitials,
 }: {
   recipient: Recipient
-  getInitials: (name: string) => string
 }) {
   const isWalletRecipient = String(recipient.bank_name || '').toLowerCase().includes('wallet')
   const tokenIcon = getTokenIconUrl(recipient.currency)
@@ -2292,19 +2290,31 @@ function PayoutSendRecipientAvatar({
     setImgFailed(false)
   }, [uri])
 
+  const hasPhoto = Boolean(uri && !imgFailed)
+
+  /** No photo: full-bleed flag or token in the circle (same visual weight as Easenet’s full-bleed photo). */
+  if (!hasPhoto) {
+    return (
+      <View style={styles.recipientAvatarCircle}>
+        {isWalletRecipient && tokenIcon ? (
+          <Image source={{ uri: tokenIcon }} style={styles.recipientAvatarFill} resizeMode="cover" />
+        ) : (
+          <CountryFlag code={countryCode} size={36} style={styles.recipientAvatarFill} />
+        )}
+      </View>
+    )
+  }
+
+  /** Photo: match Easenet — large image in circle + small corner badge (network / country). */
   return (
     <View style={styles.recipientAvatarCircleWrap}>
       <View style={styles.recipientAvatarCircle}>
-        {uri && !imgFailed ? (
-          <Image
-            source={{ uri }}
-            style={styles.recipientAvatarFill}
-            resizeMode="cover"
-            onError={() => setImgFailed(true)}
-          />
-        ) : (
-          <Text style={styles.recipientAvatarInitials}>{getInitials(recipient.full_name)}</Text>
-        )}
+        <Image
+          source={{ uri }}
+          style={styles.recipientAvatarFill}
+          resizeMode="cover"
+          onError={() => setImgFailed(true)}
+        />
       </View>
       <View style={styles.easenetMarkBadgeSmall}>
         {isWalletRecipient && tokenIcon ? (
@@ -2332,5 +2342,5 @@ function SendRecipientAvatar({
     return <EasenetSendRecipientAvatar recipient={recipient} getInitials={getInitials} easenetPreview={easenetPreview} />
   }
 
-  return <PayoutSendRecipientAvatar recipient={recipient} getInitials={getInitials} />
+  return <PayoutSendRecipientAvatar recipient={recipient} />
 }
