@@ -1047,7 +1047,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
       case "approved":
         return (
           <View style={styles.badgeGreen}>
-            <Text style={styles.badgeTextGreen}>Done</Text>
+            <Text style={styles.badgeTextGreen}>Approved</Text>
           </View>
         )
       case "in_review":

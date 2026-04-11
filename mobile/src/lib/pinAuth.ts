@@ -3,9 +3,14 @@
  * Parity with web is checked by `npm run test:login-pin-vectors` at the repo root.
  * Stored per user on device only. Used for idle soft-lock, unlock, and action confirmations.
  * NOT server MFA / not Supabase 2FA.
+ *
+ * iOS/Android: `react-native-quick-crypto` (OpenSSL via JSI) — same KDF as web, not pure-JS @noble/hashes
+ * (100k iterations in JS was multi-second; business feels instant due to Web Crypto).
+ * Expo web: `crypto.subtle` when available.
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Platform } from 'react-native'
 import { getRandomBytes } from 'expo-crypto'
 import { pbkdf2 } from '@noble/hashes/pbkdf2.js'
 import { sha256 } from '@noble/hashes/sha2.js'
@@ -76,10 +81,52 @@ function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
   return diff === 0
 }
 
-function derivePinHash(pin: string, salt: Uint8Array): Uint8Array {
+async function derivePinHash(pin: string, salt: Uint8Array): Promise<Uint8Array> {
+  const dkLen = LOGIN_PIN_DERIVED_KEY_BITS / 8
   const enc = new TextEncoder()
   const password = enc.encode(pin)
-  const dkLen = LOGIN_PIN_DERIVED_KEY_BITS / 8
+
+  // Browser / Expo Web — same path as `business/lib/login-pin.ts`
+  if (typeof globalThis !== 'undefined' && globalThis.crypto?.subtle) {
+    const keyMaterial = await globalThis.crypto.subtle.importKey('raw', password, 'PBKDF2', false, [
+      'deriveBits',
+    ])
+    const saltBuf = salt.buffer.slice(
+      salt.byteOffset,
+      salt.byteOffset + salt.byteLength,
+    ) as ArrayBuffer
+    const bits = await globalThis.crypto.subtle.deriveBits(
+      {
+        name: 'PBKDF2',
+        salt: saltBuf,
+        iterations: LOGIN_PIN_PBKDF2_ITERATIONS,
+        hash: 'SHA-256',
+      },
+      keyMaterial,
+      LOGIN_PIN_DERIVED_KEY_BITS,
+    )
+    return new Uint8Array(bits)
+  }
+
+  // Native: OpenSSL-backed PBKDF2 (avoid multi-second pure-JS 100k iterations on Hermes)
+  if (Platform.OS !== 'web') {
+    try {
+      const { pbkdf2Sync } = require('react-native-quick-crypto') as {
+        pbkdf2Sync: (
+          password: string | Uint8Array,
+          salt: Uint8Array,
+          iterations: number,
+          keylen: number,
+          digest: string,
+        ) => Uint8Array
+      }
+      const derived = pbkdf2Sync(pin, salt, LOGIN_PIN_PBKDF2_ITERATIONS, dkLen, 'sha256')
+      return new Uint8Array(derived)
+    } catch (e) {
+      console.warn('derivePinHash: react-native-quick-crypto failed, using @noble/hashes', e)
+    }
+  }
+
   return pbkdf2(sha256, password, salt, { c: LOGIN_PIN_PBKDF2_ITERATIONS, dkLen })
 }
 
@@ -178,7 +225,7 @@ export async function setupPin(pin: string, userId?: string): Promise<PinAuthRes
       return { success: false, error: 'User not authenticated' }
     }
     const salt = getRandomBytes(LOGIN_PIN_SALT_BYTES)
-    const hash = derivePinHash(pin, salt)
+    const hash = await derivePinHash(pin, salt)
     const payload: LoginPinPayload = {
       saltB64: bytesToB64(salt),
       hashB64: bytesToB64(hash),
@@ -226,7 +273,7 @@ export async function verifyPin(pin: string, userId?: string): Promise<PinAuthRe
 
     const salt = b64ToBytes(payload.saltB64)
     const expected = b64ToBytes(payload.hashB64)
-    const derived = derivePinHash(pin, salt)
+    const derived = await derivePinHash(pin, salt)
 
     if (timingSafeEqual(derived, expected)) {
       await writeAttempts(uid, { count: 0, lockUntil: null })
