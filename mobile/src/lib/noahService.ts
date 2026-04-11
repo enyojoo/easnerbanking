@@ -2,8 +2,15 @@
 // Noah REST API: https://docs.noah.com/
 
 import * as FileSystem from 'expo-file-system/legacy'
+import type { Session } from '@supabase/supabase-js'
 import { getApiBaseUrl } from './apiClient'
-import { supabase } from './supabase'
+import { getSessionReliable } from './authSession'
+
+async function requireAuthSession(): Promise<Session> {
+  const session = await getSessionReliable()
+  if (!session?.access_token) throw new Error('Not authenticated')
+  return session
+}
 
 /** Next.js business app (`next dev` → :3000). Must match EXPO_PUBLIC_API_URL / app.config extra. */
 function apiUrl(): string {
@@ -120,8 +127,7 @@ export const noahService = {
     fundingRailOutbound?: string
     fundingDirectionOutbound?: 'inbound' | 'outbound'
   }): Promise<PricingQuote> {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
+    const session = await requireAuthSession()
 
     const response = await fetch(`${apiUrl()}/api/pricing/quote`, {
       method: 'POST',
@@ -151,8 +157,7 @@ export const noahService = {
   },
 
   async validatePricingQuote(quoteId: string): Promise<{ reasonCode?: string | null }> {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
+    const session = await requireAuthSession()
 
     const response = await fetch(`${apiUrl()}/api/pricing/validate`, {
       method: 'POST',
@@ -170,8 +175,7 @@ export const noahService = {
   },
 
   async applyPricingQuote(quoteId: string, transactionId?: string): Promise<{ reasonCode?: string | null }> {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
+    const session = await requireAuthSession()
 
     const response = await fetch(`${apiUrl()}/api/pricing/apply`, {
       method: 'POST',
@@ -192,8 +196,7 @@ export const noahService = {
    * Fetch customer by id (hosted customer object from provider API)
    */
   async getCustomer(customerId: string): Promise<Record<string, unknown>> {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
+    const session = await requireAuthSession()
 
     const response = await fetch(`${apiUrl()}/api/noah/customers/${customerId}`, {
       method: 'GET',
@@ -214,8 +217,7 @@ export const noahService = {
    * Get TOS link for user
    */
   async getTOSLink(email: string, type: 'individual' | 'business' = 'individual'): Promise<NoahTOSLink> {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
+    const session = await requireAuthSession()
 
     const response = await fetch(`${apiUrl()}/api/noah/tos`, {
       method: 'POST',
@@ -238,8 +240,7 @@ export const noahService = {
    * Check if TOS has been accepted
    */
   async checkTOSStatus(tosLinkId: string): Promise<{ signed: boolean; signedAgreementId?: string }> {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
+    const session = await requireAuthSession()
 
     const response = await fetch(`${apiUrl()}/api/noah/tos?tosLinkId=${tosLinkId}`, {
       method: 'GET',
@@ -260,8 +261,7 @@ export const noahService = {
    * Get KYC link for user
    */
   async getKycLink(full_name: string, email: string, type: 'individual' | 'business' = 'individual'): Promise<NoahKycLink> {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
+    const session = await requireAuthSession()
 
     const response = await fetch(`${apiUrl()}/api/noah/kyc-links`, {
       method: 'POST',
@@ -285,8 +285,7 @@ export const noahService = {
    * This is required because accepting TOS via hosted link doesn't automatically update the customer
    */
   async updateCustomerTOS(signedAgreementId: string): Promise<{ success: boolean; hasAcceptedTOS: boolean }> {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
+    const session = await requireAuthSession()
 
     const response = await fetch(`${apiUrl()}/api/noah/customers/update-tos`, {
       method: 'PUT',
@@ -312,8 +311,7 @@ export const noahService = {
    * @deprecated Use createCustomerWithKyc instead - it reads KYC data from database
    */
   async createCustomer(customerData: any): Promise<NoahCustomer> {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
+    const session = await requireAuthSession()
 
     const response = await fetch(`${apiUrl()}/api/noah/customers`, {
       method: 'POST',
@@ -342,8 +340,7 @@ export const noahService = {
     needsUSD?: boolean
     needsEUR?: boolean
   }): Promise<NoahCustomer> {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
+    const session = await requireAuthSession()
 
     const response = await fetch(`${apiUrl()}/api/noah/customers`, {
       method: 'POST',
@@ -370,8 +367,7 @@ export const noahService = {
    * Get customer status
    */
   async getCustomerStatus(): Promise<NoahCustomer | null> {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
+    const session = await requireAuthSession()
 
     // Add timeout to fetch
     const controller = new AbortController()
@@ -418,8 +414,7 @@ export const noahService = {
     scope?: 'individual' | 'business'
   }): Promise<NoahSyncStatusResult> {
     const run = async (): Promise<NoahSyncStatusResult> => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) throw new Error('Not authenticated')
+      const session = await requireAuthSession()
 
       const scope = options?.scope ?? 'individual'
 
@@ -510,8 +505,7 @@ export const noahService = {
    * Pull latest Noah customer (Individual scope) and upsert into Supabase — same route business uses after hosted KYB/KYC.
    */
   async syncKyc(): Promise<{ success: boolean; noahScope?: string }> {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
+    const session = await requireAuthSession()
 
     const response = await fetch(`${apiUrl()}/api/noah/sync-kyc`, {
       method: 'POST',
@@ -532,8 +526,7 @@ export const noahService = {
    * Get customer KYC status (polling)
    */
   async getCustomerKYCStatus(customerId: string): Promise<{ kycStatus: string }> {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
+    const session = await requireAuthSession()
 
     const response = await fetch(`${apiUrl()}/api/noah/customers/${customerId}/status`, {
       method: 'GET',
@@ -554,8 +547,7 @@ export const noahService = {
    * Get virtual account details
    */
   async getVirtualAccount(currency: 'usd' | 'eur' | 'gbp'): Promise<NoahVirtualAccount> {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
+    const session = await requireAuthSession()
 
     // Add timeout to fetch
     const controller = new AbortController()
@@ -597,8 +589,7 @@ export const noahService = {
     memo?: string
     liquidationAddressId?: string
   }> {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
+    const session = await requireAuthSession()
 
     // Add timeout to fetch
     const controller = new AbortController()
@@ -640,8 +631,7 @@ export const noahService = {
     memo?: string
     liquidationAddressId?: string
   }> {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
+    const session = await requireAuthSession()
 
     // Add timeout to fetch
     const controller = new AbortController()
@@ -678,8 +668,7 @@ export const noahService = {
    * Get wallet balances (USD/EUR)
    */
   async getWalletBalances(): Promise<NoahWalletBalances> {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
+    const session = await requireAuthSession()
 
     // Add timeout to fetch
     const controller = new AbortController()
@@ -755,8 +744,7 @@ export const noahService = {
     paymentMethodId: string | null
     error?: string
   }> {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
+    const session = await requireAuthSession()
     const currency = (input.currency || 'USD').toUpperCase()
     const countryCode =
       (input.countryCode || (currency === 'EUR' ? 'DE' : 'US')).toUpperCase()
@@ -822,8 +810,7 @@ export const noahService = {
     paymentMethodId: string | null
     error?: string
   }> {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
+    const session = await requireAuthSession()
     const response = await fetch(`${apiUrl()}/api/noah/payouts/prepare-mobile`, {
       method: 'POST',
       headers: {
@@ -865,8 +852,7 @@ export const noahService = {
     currency: string
     cryptoCurrency?: string
   }): Promise<NoahTransfer> {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
+    const session = await requireAuthSession()
     const response = await fetch(`${apiUrl()}/api/noah/transfers/w2w`, {
       method: 'POST',
       headers: {
@@ -908,8 +894,7 @@ export const noahService = {
     cryptoAuthorizedAmount?: string
     cryptoCurrency?: string
   }): Promise<NoahTransfer> {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
+    const session = await requireAuthSession()
 
     const response = await fetch(`${apiUrl()}/api/noah/transfers`, {
       method: 'POST',
@@ -932,8 +917,7 @@ export const noahService = {
    * Get transfer status
    */
   async getTransferStatus(transferId: string): Promise<NoahTransfer> {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
+    const session = await requireAuthSession()
 
     const response = await fetch(`${apiUrl()}/api/noah/transfers/${transferId}`, {
       method: 'GET',
@@ -954,8 +938,7 @@ export const noahService = {
    * List Noah transactions (via Easner `/api/noah/transactions`).
    */
   async listTransactions(limit = 20): Promise<Record<string, unknown>[]> {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
+    const session = await requireAuthSession()
 
     const safe = Math.min(100, Math.max(1, limit))
     const response = await fetch(`${apiUrl()}/api/noah/transactions?limit=${safe}`, {
@@ -975,8 +958,7 @@ export const noahService = {
    * Single Noah transaction (via Easner `/api/noah/transactions/:id`).
    */
   async getTransactionDetail(transactionId: string): Promise<Record<string, unknown>> {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
+    const session = await requireAuthSession()
 
     const response = await fetch(
       `${apiUrl()}/api/noah/transactions/${encodeURIComponent(transactionId)}`,
@@ -1010,8 +992,7 @@ export const noahService = {
     impliedRate?: number
     error?: string
   }> {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
+    const session = await requireAuthSession()
 
     const qs = new URLSearchParams({
       sourceCurrency: params.sourceCurrency,
@@ -1039,8 +1020,7 @@ export const noahService = {
     to: string
     currency: 'USD' | 'EUR' | 'GBP'
   }): Promise<{ uri: string; filename: string }> {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
+    const session = await requireAuthSession()
 
     const response = await fetch(`${apiUrl()}/api/noah/statements/pdf`, {
       method: 'POST',

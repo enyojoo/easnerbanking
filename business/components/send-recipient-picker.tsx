@@ -185,7 +185,7 @@ export function SendRecipientPicker({
                 <div className="relative mr-1 shrink-0">
                   {selected.avatarUrl ? (
                     <Avatar className="h-10 w-10 border border-border">
-                      <AvatarImage src={selected.avatarUrl} alt="" loading="eager" fetchPriority="high" />
+                      <AvatarImage src={selected.avatarUrl} alt="" />
                       <AvatarFallback>{recipientInitials(selected)}</AvatarFallback>
                     </Avatar>
                   ) : (
@@ -293,7 +293,7 @@ export function SendRecipientPicker({
                       <div className="relative mr-1 shrink-0">
                         {b.avatarUrl ? (
                           <Avatar className="h-10 w-10 border border-border">
-                            <AvatarImage src={b.avatarUrl} alt="" loading="eager" fetchPriority="high" />
+                            <AvatarImage src={b.avatarUrl} alt="" />
                             <AvatarFallback>{recipientInitials(b)}</AvatarFallback>
                           </Avatar>
                         ) : (

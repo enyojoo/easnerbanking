@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from './supabase'
+import { resolveRecipientEasetagForUi } from './easenetRecipientUi'
 import type { Recipient } from '../types'
 
 export type { Recipient }
@@ -102,6 +103,9 @@ function normalizeRecipient(row: Recipient): Recipient {
     ? walletDescriptor.split('/')
     : [undefined, walletDescriptor || undefined]
   const isWallet = Boolean(walletMatch)
+  const inferredEasetag = resolveRecipientEasetagForUi(row)
+  const payee_easetag =
+    String(row.payee_easetag || '').trim() || inferredEasetag || undefined
   return {
     ...row,
     bank_name: mobileParsed.normalizedBankName || bankName,
@@ -111,6 +115,8 @@ function normalizeRecipient(row: Recipient): Recipient {
     wallet_memo_tag: row.wallet_memo_tag || (walletMatch ? row.swift_bic || undefined : undefined),
     // For legacy wallet rows, bank_name may be the only source of truth for asset/network.
     currency: (isWallet ? asset || row.currency : row.currency) || row.currency,
+    /** Backfill from `Easetag (@tag)` bank label when DB column was missing on insert. */
+    payee_easetag,
   }
 }
 

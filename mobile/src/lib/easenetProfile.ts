@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { getApiBaseUrl } from './apiClient'
 import { supabase } from './supabase'
 import type { PayeeAccountKind } from './easnerBrand'
@@ -50,4 +51,117 @@ export async function fetchEasenetPublicProfile(rawTag: string): Promise<Easenet
     avatarUrl: data.avatarUrl ?? null,
     accountKind,
   }
+}
+
+/** In-memory: avoid re-reading disk on every navigation in the same session. */
+const MEMORY_TTL_MS = 24 * 60 * 60 * 1000
+/** AsyncStorage: survive app restarts; refreshed when stale. */
+const DISK_TTL_MS = 7 * 24 * 60 * 60 * 1000
+
+const PERSIST_KEY_PREFIX = 'easner_easenet_public_profile_v1_'
+
+const cachedProfiles = new Map<string, { at: number; value: EasenetPublicProfile }>()
+const inflightProfiles = new Map<string, Promise<EasenetPublicProfile>>()
+
+function cacheKeyForEasetag(rawTag: string): string {
+  return String(rawTag || '')
+    .trim()
+    .replace(/^@+/, '')
+    .toLowerCase()
+}
+
+function persistStorageKey(normalizedTag: string): string {
+  return `${PERSIST_KEY_PREFIX}${normalizedTag}`
+}
+
+async function readPersistedEasenetProfile(normalizedTag: string): Promise<EasenetPublicProfile | null> {
+  try {
+    const raw = await AsyncStorage.getItem(persistStorageKey(normalizedTag))
+    if (!raw) return null
+    const env = JSON.parse(raw) as { data: EasenetPublicProfile; timestamp: number }
+    if (Date.now() - env.timestamp > DISK_TTL_MS) {
+      await AsyncStorage.removeItem(persistStorageKey(normalizedTag))
+      return null
+    }
+    if (!env.data || !('found' in env.data) || !env.data.found) {
+      return null
+    }
+    return env.data
+  } catch {
+    return null
+  }
+}
+
+async function writePersistedEasenetProfile(normalizedTag: string, value: Extract<EasenetPublicProfile, { found: true }>): Promise<void> {
+  try {
+    await AsyncStorage.setItem(
+      persistStorageKey(normalizedTag),
+      JSON.stringify({
+        data: value,
+        timestamp: Date.now(),
+      }),
+    )
+  } catch {
+    // ignore
+  }
+}
+
+/** Clears persisted Easenet public lookups (e.g. on logout). */
+export async function clearEasenetPublicProfileCaches(): Promise<void> {
+  try {
+    const keys = await AsyncStorage.getAllKeys()
+    const toRemove = keys.filter((k) => k.startsWith(PERSIST_KEY_PREFIX))
+    if (toRemove.length > 0) {
+      await AsyncStorage.multiRemove(toRemove)
+    }
+    cachedProfiles.clear()
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Same as {@link fetchEasenetPublicProfile} but:
+ * - dedupes in-flight requests
+ * - reuses in-memory results (24h)
+ * - reuses AsyncStorage (7d) so app restarts don’t always refetch
+ */
+export async function fetchEasenetPublicProfileCached(rawTag: string): Promise<EasenetPublicProfile> {
+  const key = cacheKeyForEasetag(rawTag)
+  if (key.length < 4) {
+    return { found: false }
+  }
+
+  const mem = cachedProfiles.get(key)
+  if (mem && Date.now() - mem.at < MEMORY_TTL_MS) {
+    return mem.value
+  }
+
+  const disk = await readPersistedEasenetProfile(key)
+  if (disk?.found) {
+    cachedProfiles.set(key, { at: Date.now(), value: disk })
+    return disk
+  }
+
+  const pending = inflightProfiles.get(key)
+  if (pending) {
+    return pending
+  }
+
+  const promise = fetchEasenetPublicProfile(key)
+    .then(async (v) => {
+      cachedProfiles.set(key, { at: Date.now(), value: v })
+      inflightProfiles.delete(key)
+      if (v.found) {
+        await writePersistedEasenetProfile(key, v)
+      }
+      return v
+    })
+    .catch((e) => {
+      inflightProfiles.delete(key)
+      throw e
+    })
+
+  inflightProfiles.set(key, promise)
+  return promise
 }

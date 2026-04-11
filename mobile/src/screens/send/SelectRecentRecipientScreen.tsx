@@ -21,10 +21,11 @@ import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { Wallet, Building2, Smartphone, AtSign, Search } from 'lucide-react-native'
-import { fetchEasenetPublicProfile } from '../../lib/easenetProfile'
-import { EASNER_MARK_URL } from '../../lib/easnerBrand'
+import { fetchEasenetPublicProfileCached } from '../../lib/easenetProfile'
 import { EasenetLookupPreview } from '../../components/EasenetLookupPreview'
-import { EasenetSubtitleRow } from '../../lib/easenetRecipientUi'
+import { EasenetRecipientHydratedPreview } from '../../components/EasenetRecipientHydratedPreview'
+import { RecipientPayoutPreview } from '../../components/RecipientPayoutPreview'
+import { isEasenetRecipientRecord, resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
 import {
   mergeLastSentMaps,
   sortRecipientsForSendHub,
@@ -215,7 +216,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     setHubSearchError(null)
     const timer = setTimeout(() => {
       void (async () => {
-        const res = await fetchEasenetPublicProfile(raw)
+        const res = await fetchEasenetPublicProfileCached(raw)
         if (cancelled) return
         setHubSearchLoading(false)
         if (res.found) {
@@ -272,7 +273,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     setEasenetLookupError(null)
     const t = setTimeout(() => {
       void (async () => {
-        const res = await fetchEasenetPublicProfile(raw)
+        const res = await fetchEasenetPublicProfileCached(raw)
         if (cancelled) return
         setEasenetLookupLoading(false)
         if (res.found) {
@@ -563,9 +564,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   const renderRecipient = ({ item }: { item: Recipient }) => {
     const isDraftEasenet = isDraftEasenetRecipient(item.id)
     const showRecentBadge = recentIds.has(item.id) && !isDraftEasenet
-    const isWalletRecipient = String(item.bank_name || '').toLowerCase().includes('wallet')
-    const tokenIcon = getTokenIconUrl(item.currency)
-    const isEasenet = Boolean(item.payee_easetag?.trim())
+    const isEasenet = isEasenetRecipientRecord(item)
     return (
       <TouchableOpacity
         style={styles.recipientItem}
@@ -573,77 +572,53 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
         activeOpacity={0.7}
       >
         <View style={styles.recipientRow}>
-          <View style={styles.avatarContainer}>
-            <View style={styles.recipientAvatar}>
-              {item.payee_avatar_url ? (
-                <Image
-                  source={{ uri: item.payee_avatar_url }}
-                  style={styles.recipientAvatarPhoto}
-                  resizeMode="cover"
-                />
-              ) : (
-                <Text style={styles.recipientAvatarText}>
-                  {getInitials(item.full_name)}
-                </Text>
-              )}
-            </View>
-            <View style={styles.avatarFlagBadge}>
-              {isEasenet ? (
-                <Image source={{ uri: EASNER_MARK_URL }} style={styles.easnerMarkBadgeImage} resizeMode="cover" />
-              ) : (
-                <View style={styles.flagContainer}>
-                  {isWalletRecipient && tokenIcon ? (
-                    <Image source={{ uri: tokenIcon }} style={styles.flagImage} resizeMode="cover" />
-                  ) : (
-                    <CountryFlag
-                      code={item.country_code || (item.currency === 'EUR' ? 'EU' : getCountryCodeForCurrency(item.currency) || 'US')}
-                      size={20}
-                      style={styles.flagImage}
-                    />
-                  )}
-                </View>
-              )}
-            </View>
-          </View>
-
-          <View style={styles.recipientInfo}>
-            <View style={styles.recipientNameRow}>
-              <Text style={styles.recipientName} numberOfLines={1}>
-                {item.full_name}
-              </Text>
-              {showRecentBadge ? (
-                <View style={[styles.recentBadge, styles.recipientMetaBadge]}>
-                  <Text style={styles.recentBadgeText}>Recent</Text>
-                </View>
-              ) : null}
-              {isDraftEasenet ? (
-                <View style={[styles.newRecipientBadge, styles.recipientMetaBadge]}>
-                  <Text style={styles.newRecipientBadgeText}>New</Text>
-                </View>
-              ) : null}
-            </View>
-            {isEasenet ? (
-              <EasenetSubtitleRow
-                easetag={item.payee_easetag}
-                accountKind={item.payee_account_kind}
-                textStyle={styles.recipientBank}
+          {isEasenet ? (
+            <>
+              <EasenetRecipientHydratedPreview
+                recipient={item}
+                variant="row"
+                getInitials={getInitials}
+                titleEndAccessory={
+                  <>
+                    {showRecentBadge ? (
+                      <View style={[styles.recentBadge, styles.recipientMetaBadge]}>
+                        <Text style={styles.recentBadgeText}>Recent</Text>
+                      </View>
+                    ) : null}
+                    {isDraftEasenet ? (
+                      <View style={[styles.newRecipientBadge, styles.recipientMetaBadge]}>
+                        <Text style={styles.newRecipientBadgeText}>New</Text>
+                      </View>
+                    ) : null}
+                  </>
+                }
               />
-            ) : (
-              <Text style={styles.recipientBank} numberOfLines={1} ellipsizeMode="tail">
-                {item.bank_name}
-              </Text>
-            )}
-            {!isEasenet ? (
-              <>
-                <Text style={styles.recipientAccount} numberOfLines={1} ellipsizeMode="tail">
-                  {item.iban || item.account_number || ''}
-                </Text>
-                <Text style={styles.recipientCurrency}>{item.currency}</Text>
-              </>
-            ) : null}
-          </View>
-
-          <Ionicons name="chevron-forward" size={20} color={colors.text.secondary} />
+              <Ionicons name="chevron-forward" size={20} color={colors.text.secondary} />
+            </>
+          ) : (
+            <>
+              <RecipientPayoutPreview
+                recipient={item}
+                variant="row"
+                getInitials={getInitials}
+                titleEndAccessory={
+                  <>
+                    {showRecentBadge ? (
+                      <View style={[styles.recentBadge, styles.recipientMetaBadge]}>
+                        <Text style={styles.recentBadgeText}>Recent</Text>
+                      </View>
+                    ) : null}
+                    {isDraftEasenet ? (
+                      <View style={[styles.newRecipientBadge, styles.recipientMetaBadge]}>
+                        <Text style={styles.newRecipientBadgeText}>New</Text>
+                      </View>
+                    ) : null}
+                  </>
+                }
+              />
+              <Ionicons name="chevron-forward" size={20} color={colors.text.secondary} />
+            </>
+          )}
         </View>
       </TouchableOpacity>
     )

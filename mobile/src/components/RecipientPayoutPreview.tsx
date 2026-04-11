@@ -1,40 +1,40 @@
 import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import { View, Text, Image, StyleSheet } from 'react-native'
-import { EasenetSubtitleRow } from '../lib/easenetRecipientUi'
-import { EASNER_MARK_URL } from '../lib/easnerBrand'
+import type { Recipient } from '../types'
+import { getPayoutRecipientSubtitleParts } from '../lib/recipientPayoutPreview'
+import { getTokenIconUrl } from '../lib/cryptoIcons'
+import { PayoutSubtitleRow } from '../lib/easenetRecipientUi'
+import { CountryFlag } from './flags/CountryFlag'
+import { getCountryCodeForCurrency } from '@easner/shared'
 import { colors, spacing, borderRadius, textStyles } from '../theme'
 
-export type EasenetLookupProfile = {
-  fullName: string
-  easetag: string
-  /** From API when known; omit until hydrated so we don’t default to “Personal” incorrectly. */
-  accountKind?: 'business' | 'personal' | null
-  avatarUrl: string | null
-}
-
 type Props = {
-  profile: EasenetLookupProfile
+  recipient: Recipient
   getInitials: (name: string) => string
-  /** `card` = bordered block (forms). `row` = inline list row (recipients / send hub). */
   variant?: 'card' | 'row'
-  /** Shown after the display name on the same row (e.g. Recent / New badges). */
   titleEndAccessory?: ReactNode
 }
 
-/** Avatar + Easner mark + name + Business/Personal • @tag (matches easetag search preview). */
-export function EasenetLookupPreview({
-  profile,
-  getInitials,
-  variant = 'card',
-  titleEndAccessory,
-}: Props) {
+/**
+ * Same structure as Easenet preview: avatar + corner badge (flag / token) + name + `Label • detail`
+ * (mobile money, bank account, crypto wallet — not Easenet).
+ */
+export function RecipientPayoutPreview({ recipient, getInitials, variant = 'card', titleEndAccessory }: Props) {
   const row = variant === 'row'
-  const uri = String(profile.avatarUrl || '').trim()
+  const isWalletRecipient = String(recipient.bank_name || '').toLowerCase().includes('wallet')
+  const tokenIcon = getTokenIconUrl(recipient.currency)
+  const countryCode =
+    recipient.country_code ||
+    (recipient.currency === 'EUR' ? 'EU' : getCountryCodeForCurrency(recipient.currency) || 'US')
+
+  const uri = String(recipient.payee_avatar_url || '').trim()
   const [imageFailed, setImageFailed] = useState(false)
   useEffect(() => {
     setImageFailed(false)
   }, [uri])
+
+  const { left, right } = getPayoutRecipientSubtitleParts(recipient)
 
   return (
     <View style={[styles.wrap, row && styles.wrapRow]}>
@@ -48,30 +48,25 @@ export function EasenetLookupPreview({
           />
         ) : (
           <View style={styles.avatarFallback}>
-            <Text style={styles.avatarInitials}>{getInitials(profile.fullName)}</Text>
+            <Text style={styles.avatarInitials}>{getInitials(recipient.full_name)}</Text>
           </View>
         )}
-        <View style={styles.markBadge}>
-          <Image
-            source={{ uri: EASNER_MARK_URL }}
-            style={styles.markImg}
-            resizeMode="cover"
-          />
+        <View style={styles.cornerBadge}>
+          {isWalletRecipient && tokenIcon ? (
+            <Image source={{ uri: tokenIcon }} style={styles.badgeFill} resizeMode="cover" />
+          ) : (
+            <CountryFlag code={countryCode} size={20} />
+          )}
         </View>
       </View>
       <View style={styles.textCol}>
         <View style={styles.nameRow}>
           <Text style={[styles.name, row && styles.nameFlex]} numberOfLines={1} ellipsizeMode="tail">
-            {profile.fullName}
+            {recipient.full_name}
           </Text>
           {titleEndAccessory ? <View style={styles.titleEnd}>{titleEndAccessory}</View> : null}
         </View>
-        <EasenetSubtitleRow
-          easetag={profile.easetag}
-          accountKind={profile.accountKind}
-          textStyle={styles.tagLine}
-          gap={4}
-        />
+        <PayoutSubtitleRow left={left} right={right} textStyle={styles.tagLine} gap={4} />
       </View>
     </View>
   )
@@ -136,7 +131,7 @@ const styles = StyleSheet.create({
     color: colors.primary.main,
     fontFamily: 'Outfit-SemiBold',
   },
-  markBadge: {
+  cornerBadge: {
     position: 'absolute',
     bottom: -2,
     right: -2,
@@ -152,8 +147,9 @@ const styles = StyleSheet.create({
     borderColor: colors.background.primary,
     overflow: 'hidden',
   },
-  markImg: {
-    ...StyleSheet.absoluteFillObject,
+  badgeFill: {
+    width: 20,
+    height: 20,
     borderRadius: 10,
   },
   textCol: {

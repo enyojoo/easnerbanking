@@ -22,6 +22,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { clearEasenetPublicProfileCaches } from './easenetProfile'
 
 /** Canonical TTLs — single source of truth for SWR windows. */
 export const CacheTTL = {
@@ -158,10 +159,12 @@ export function allScopedUserCacheKeys(userId: string): string[] {
 
 export async function clearAllUserCachesForUserId(userId: string): Promise<void> {
   const keys = allScopedUserCacheKeys(userId)
-  if (keys.length === 0) return
   try {
-    await AsyncStorage.multiRemove(keys)
+    if (keys.length > 0) {
+      await AsyncStorage.multiRemove(keys)
+    }
   } catch {
     // ignore
   }
+  await clearEasenetPublicProfileCaches()
 }

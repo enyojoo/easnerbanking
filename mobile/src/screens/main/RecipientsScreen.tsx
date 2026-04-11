@@ -47,10 +47,11 @@ import {
 import { getAllowedCountriesCached } from '../../lib/jurisdictionCountryPolicy'
 import { getNetworkIconUrl, getTokenIconUrl } from '../../lib/cryptoIcons'
 import { Wallet, Building2, Smartphone, AtSign } from 'lucide-react-native'
-import { fetchEasenetPublicProfile } from '../../lib/easenetProfile'
+import { fetchEasenetPublicProfileCached } from '../../lib/easenetProfile'
 import { EasenetLookupPreview } from '../../components/EasenetLookupPreview'
-import { EasenetSubtitleRow } from '../../lib/easenetRecipientUi'
-import { EASNER_MARK_URL } from '../../lib/easnerBrand'
+import { EasenetRecipientHydratedPreview } from '../../components/EasenetRecipientHydratedPreview'
+import { RecipientPayoutPreview } from '../../components/RecipientPayoutPreview'
+import { isEasenetRecipientRecord } from '../../lib/easenetRecipientUi'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { CountryFlag } from '../../components/flags/CountryFlag'
 import { getCountryCodeForCurrency } from '@easner/shared'
@@ -192,7 +193,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
     setEasenetLookupError(null)
     const t = setTimeout(() => {
       void (async () => {
-        const res = await fetchEasenetPublicProfile(raw)
+        const res = await fetchEasenetPublicProfileCached(raw)
         if (cancelled) return
         setEasenetLookupLoading(false)
         if (res.found) {
@@ -798,102 +799,83 @@ function RecipientsContent({ navigation }: NavigationProps) {
   }
 
   const renderRecipient = ({ item }: { item: Recipient }) => {
-    const isWalletRecipient = String(item.bank_name || '').toLowerCase().includes('wallet')
-    const tokenIcon = getTokenIconUrl(item.currency)
-    const isEasenet = Boolean(item.payee_easetag?.trim())
+    const isEasenet = isEasenetRecipientRecord(item)
     return (
       <TouchableOpacity
         style={styles.recipientItem}
         activeOpacity={0.7}
+        onPress={async () => {
+          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+          handleEditRecipient(item)
+        }}
       >
         <View style={styles.recipientRow}>
-          <View style={styles.avatarContainer}>
-            <View style={styles.recipientAvatar}>
-              {item.payee_avatar_url ? (
-                <Image
-                  source={{ uri: item.payee_avatar_url }}
-                  style={styles.recipientAvatarPhoto}
-                  resizeMode="cover"
-                />
-              ) : (
-                <Text style={styles.recipientAvatarText}>
-                  {getInitials(item.full_name)}
-                </Text>
-              )}
-            </View>
-            <View style={styles.avatarFlagBadge}>
-              {isEasenet ? (
-                <Image source={{ uri: EASNER_MARK_URL }} style={styles.easnerMarkBadgeImage} resizeMode="cover" />
-              ) : (
-                <View style={styles.flagContainer}>
-                  {isWalletRecipient && tokenIcon ? (
-                    <Image source={{ uri: tokenIcon }} style={styles.flagImage} resizeMode="cover" />
+          {isEasenet ? (
+            <>
+              <EasenetRecipientHydratedPreview recipient={item} variant="row" getInitials={getInitials} />
+              <View style={styles.recipientActions}>
+                <TouchableOpacity
+                  style={styles.actionIcon}
+                  onPress={async () => {
+                    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                    handleEditRecipient(item)
+                  }}
+                  disabled={isSubmitting}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="pencil-outline" size={18} color={colors.text.primary} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionIcon, styles.actionIconDelete]}
+                  onPress={async () => {
+                    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+                    handleDeleteRecipient(item)
+                  }}
+                  disabled={deletingId === item.id}
+                  activeOpacity={0.7}
+                >
+                  {deletingId === item.id ? (
+                    <Ionicons name="hourglass-outline" size={18} color={colors.error.main} />
                   ) : (
-                    <CountryFlag
-                      code={item.country_code || (item.currency === 'EUR' ? 'EU' : getCountryCodeForCurrency(item.currency) || 'US')}
-                      size={20}
-                      style={styles.flagImage}
-                    />
+                    <Ionicons name="trash-outline" size={18} color={colors.error.main} />
                   )}
-                </View>
-              )}
-            </View>
-          </View>
-        
-          <View style={styles.recipientInfo}>
-            <Text style={styles.recipientName} numberOfLines={1} ellipsizeMode="tail">
-              {item.full_name}
-            </Text>
-            {isEasenet ? (
-              <EasenetSubtitleRow
-                easetag={item.payee_easetag}
-                accountKind={item.payee_account_kind}
-                textStyle={styles.recipientBank}
-                gap={4}
-              />
-            ) : (
-              <Text style={styles.recipientBank} numberOfLines={1} ellipsizeMode="tail">
-                {item.bank_name}
-              </Text>
-            )}
-            {!isEasenet ? (
-              <>
-                <Text style={styles.recipientAccount} numberOfLines={1} ellipsizeMode="tail">
-                  {item.iban || item.account_number || ''}
-                </Text>
-                <Text style={styles.recipientCurrency}>{item.currency}</Text>
-              </>
-            ) : null}
-          </View>
-        
-          <View style={styles.recipientActions}>
-            <TouchableOpacity
-              style={styles.actionIcon}
-              onPress={async () => {
-                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                handleEditRecipient(item)
-              }}
-              disabled={isSubmitting}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="pencil-outline" size={18} color={colors.text.primary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionIcon, styles.actionIconDelete]}
-              onPress={async () => {
-                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-                handleDeleteRecipient(item)
-              }}
-              disabled={deletingId === item.id}
-              activeOpacity={0.7}
-            >
-              {deletingId === item.id ? (
-                <Ionicons name="hourglass-outline" size={18} color={colors.error.main} />
-              ) : (
-                <Ionicons name="trash-outline" size={18} color={colors.error.main} />
-              )}
-            </TouchableOpacity>
-          </View>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : (
+            <>
+              <RecipientPayoutPreview recipient={item} variant="row" getInitials={getInitials} />
+
+              <View style={styles.recipientActions}>
+                <TouchableOpacity
+                  style={styles.actionIcon}
+                  onPress={async () => {
+                    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                    handleEditRecipient(item)
+                  }}
+                  disabled={isSubmitting}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="pencil-outline" size={18} color={colors.text.primary} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionIcon, styles.actionIconDelete]}
+                  onPress={async () => {
+                    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+                    handleDeleteRecipient(item)
+                  }}
+                  disabled={deletingId === item.id}
+                  activeOpacity={0.7}
+                >
+                  {deletingId === item.id ? (
+                    <Ionicons name="hourglass-outline" size={18} color={colors.error.main} />
+                  ) : (
+                    <Ionicons name="trash-outline" size={18} color={colors.error.main} />
+                  )}
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
         </View>
       </TouchableOpacity>
     )

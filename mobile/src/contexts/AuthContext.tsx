@@ -16,6 +16,7 @@ import {
 } from '../lib/auth-mfa'
 import { mapUsersRowToUser } from '../lib/userProfileHelpers'
 import { ensureConsumerMobileAccess } from '../lib/validateAppSurface'
+import { hydratePayoutCorridorsFromStorage, refreshPayoutCorridors } from '../lib/payoutCorridors'
 
 function mapNameFromMetadata(meta: Record<string, unknown> | undefined): {
   first_name: string
@@ -78,6 +79,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   /** Throttle automatic profile refetches (auth listener) for the same user; explicit `force` bypasses. */
   const lastAutoProfileFetchAtRef = useRef<Record<string, number>>({})
   const mfaGateSyncRef = useRef<Promise<'none' | 'pending' | 'missing_factor'> | null>(null)
+  /** Avoid repeated payout-corridor hydration (and dev Metro re-bundling) on every profile refetch. */
+  const payoutCorridorsBootstrappedForUserRef = useRef<string | null>(null)
 
   const syncMfaGateFromSession = useCallback(async (): Promise<'none' | 'pending' | 'missing_factor'> => {
     if (mfaGateSyncRef.current) {
@@ -104,6 +107,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         await supabase.auth.signOut()
         setUser(null)
         setUserProfile(null)
+        payoutCorridorsBootstrappedForUserRef.current = null
         setMfaPending(null)
         setLoading(false)
         return 'missing_factor'
@@ -210,11 +214,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       const surfaceGate = await ensureConsumerMobileAccess()
       if (surfaceGate.error) {
-        if (surfaceGate.error.message !== 'Unauthorized') {
-          console.warn('AuthContext: App surface denied:', surfaceGate.error.message)
+        /** Session not hydrated yet — never clear user; profile fetch will run again. */
+        if (surfaceGate.error.message === 'Unauthorized') {
+          return null
         }
+        console.warn('AuthContext: App surface denied:', surfaceGate.error.message)
         setUser(null)
         setUserProfile(null)
+        payoutCorridorsBootstrappedForUserRef.current = null
         setLoading(false)
         return null
       }
@@ -265,9 +272,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
           }
         }
         setUser(profile)
-        void import('../lib/payoutCorridors').then((m) => {
-          void m.hydratePayoutCorridorsFromStorage().then(() => m.refreshPayoutCorridors())
-        })
+        if (payoutCorridorsBootstrappedForUserRef.current !== userId) {
+          payoutCorridorsBootstrappedForUserRef.current = userId
+          void hydratePayoutCorridorsFromStorage().then(() => refreshPayoutCorridors())
+        }
 
         setUserProfile({
           id: regularUser.id,
@@ -296,6 +304,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // If user not found in either table, clear state
       setUser(null)
       setUserProfile(null)
+      payoutCorridorsBootstrappedForUserRef.current = null
       return null
     } catch (error) {
       console.error('Error fetching user profile:', error)
@@ -426,6 +435,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           lastAutoProfileFetchAtRef.current = {}
           setUser(null)
           setUserProfile(null)
+          payoutCorridorsBootstrappedForUserRef.current = null
           setMfaPending(null)
           setLoading(false) // Ensure loading is false so AppNavigator doesn't wait
         }
@@ -580,9 +590,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // This must happen FIRST before anything else to ensure AppNavigator responds immediately
       setUser(null)
       setUserProfile(null)
+      payoutCorridorsBootstrappedForUserRef.current = null
       setLoading(false) // Also set loading to false to ensure AppNavigator doesn't wait
 
-      clearJurisdictionCountryPolicyCache()
+      await clearJurisdictionCountryPolicyCache()
 
       // Sign out from Supabase (this will trigger onAuthStateChange which also sets user to null)
       // Do this AFTER setting user to null so navigation happens first
@@ -593,6 +604,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Still clear the state even if sign out fails
       setUser(null)
       setUserProfile(null)
+      payoutCorridorsBootstrappedForUserRef.current = null
     }
   }
 

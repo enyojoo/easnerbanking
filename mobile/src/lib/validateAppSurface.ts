@@ -1,13 +1,12 @@
 import { supabase } from './supabase'
+import { getSessionReliable } from './authSession'
 import { apiRequest } from './apiClient'
 
 /** Enforces mobile-only accounts (and blocks org / office-admin identities). */
 export async function ensureConsumerMobileAccess(): Promise<{ error: Error | null }> {
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-    /** `apiRequest` requires a token; without it we throw — avoid that and skip sign-out churn after SIGNED_OUT. */
+    const session = await getSessionReliable()
+    /** Transient while SecureStore/AsyncStorage hydrates — caller must not treat as "denied". */
     if (!session?.access_token) {
       return { error: new Error('Unauthorized') }
     }
@@ -36,7 +35,8 @@ export async function ensureConsumerMobileAccess(): Promise<{ error: Error | nul
     if (msg === 'No access token found' || msg === 'Authentication required') {
       return { error: new Error('Unauthorized') }
     }
-    await supabase.auth.signOut()
+    /** Do not sign out — transient / network; avoid kicking user back to login after successful sign-in. */
+    console.warn('ensureConsumerMobileAccess:', msg)
     return { error: e instanceof Error ? e : new Error('Sign-in validation failed') }
   }
 }

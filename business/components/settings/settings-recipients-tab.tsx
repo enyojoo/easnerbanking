@@ -221,7 +221,7 @@ export function SettingsRecipientsTab() {
                           <div className="relative mr-1 shrink-0">
                             {recipient.avatarUrl ? (
                               <Avatar className="h-10 w-10 border border-border">
-                                <AvatarImage src={recipient.avatarUrl} alt="" loading="eager" fetchPriority="high" />
+                                <AvatarImage src={recipient.avatarUrl} alt="" />
                                 <AvatarFallback>{recipientInitials(recipient)}</AvatarFallback>
                               </Avatar>
                             ) : (

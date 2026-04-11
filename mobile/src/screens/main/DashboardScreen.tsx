@@ -73,7 +73,7 @@ interface DashboardTransaction {
 }
 
 export default function DashboardScreen({ navigation }: NavigationProps) {
-  const { user, userProfile, refreshUserProfile } = useAuth()
+  const { user, userProfile, refreshUserProfile, loading: authLoading } = useAuth()
   const { refreshStaleData, refreshing: dataRefreshing, financialFeedsEpoch } = useUserData()
   const { balances, refreshBalances } = useBalance()
   const insets = useSafeAreaInsets()
@@ -389,6 +389,10 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
 
   const balance = parseFloat((balances as any)[selectedCurrency] || '0')
 
+  /** Only after `userProfile` is loaded: `isTier1Complete(undefined)` is false and would flash the banner. */
+  const showVerifyIdentityBanner =
+    !authLoading && userProfile != null && !isTier1Complete(userProfile)
+
   // Get user's first name for greeting - use only the first word if multiple names exist
   const dashboardAvatarFullName =
     userProfile?.profile?.full_name ||
@@ -666,7 +670,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
               </TouchableOpacity>
             </View>
 
-            {!isTier1Complete(userProfile) ? (
+            {showVerifyIdentityBanner ? (
               <View style={styles.verifyAccountBannerSlot}>
                 <TouchableOpacity
                   style={styles.verifyAccountBanner}

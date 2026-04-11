@@ -50,7 +50,13 @@ export function EasenetRecipientProfileRow({
       <div className="relative mr-1 shrink-0">
         {avatarUrl ? (
           <Avatar className="h-10 w-10 border border-border">
-            <AvatarImage src={avatarUrl} alt="" loading="eager" fetchPriority="high" />
+            <AvatarImage
+              src={avatarUrl}
+              alt=""
+              loading="eager"
+              decoding="async"
+              fetchPriority="high"
+            />
             <AvatarFallback>{easenetInitials(fullName)}</AvatarFallback>
           </Avatar>
         ) : (
@@ -63,10 +69,12 @@ export function EasenetRecipientProfileRow({
           <img
             src={EASNER_MARK_URL}
             alt=""
-            className="size-full object-cover"
+            width={20}
+            height={20}
             loading="eager"
             decoding="async"
             fetchPriority="high"
+            className="size-full object-cover"
           />
         </div>
       </div>
