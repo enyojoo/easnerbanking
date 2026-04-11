@@ -1,6 +1,5 @@
-/** Public Easner mark — badge for Easetag / in-network recipients */
-export const EASNER_MARK_URL =
-  "https://kixymrjsupzkxokujmwu.supabase.co/storage/v1/object/public/brand/Easner%20mark.png"
+/** Public Easner mark — badge for Easetag / in-network recipients (local asset for HTTP cache + instant repeat visits) */
+export const EASNER_MARK_URL = "/easner-mark.png"
 
 export type PayeeAccountKind = "business" | "personal"
 

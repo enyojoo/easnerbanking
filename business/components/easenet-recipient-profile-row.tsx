@@ -50,7 +50,7 @@ export function EasenetRecipientProfileRow({
       <div className="relative mr-1 shrink-0">
         {avatarUrl ? (
           <Avatar className="h-10 w-10 border border-border">
-            <AvatarImage src={avatarUrl} alt="" />
+            <AvatarImage src={avatarUrl} alt="" loading="eager" fetchPriority="high" />
             <AvatarFallback>{easenetInitials(fullName)}</AvatarFallback>
           </Avatar>
         ) : (
@@ -60,7 +60,14 @@ export function EasenetRecipientProfileRow({
         )}
         <div className="absolute -bottom-0.5 -right-0.5 h-5 w-5 overflow-hidden rounded-full border-2 border-background bg-background p-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={EASNER_MARK_URL} alt="" className="size-full object-cover" />
+          <img
+            src={EASNER_MARK_URL}
+            alt=""
+            className="size-full object-cover"
+            loading="eager"
+            decoding="async"
+            fetchPriority="high"
+          />
         </div>
       </div>
       <div className={cn("min-w-0 flex-1", textColClassName)}>

@@ -1,12 +1,9 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import { fetchEasenetProfileByTag } from "@/lib/easenet-profile"
-import {
-  readEasenetPublicProfileCache,
-  writeEasenetPublicProfileCache,
-  type CachedEasenetPublicProfile,
-} from "@/lib/easenet-public-profile-cache"
+import { writeEasenetPublicProfileCache } from "@/lib/easenet-public-profile-cache"
+import { useEasenetPublicProfileCacheSnapshot } from "@/hooks/use-easenet-public-profile-cache-snapshot"
 import type { PayeeAccountKind } from "@/lib/easner-brand"
 import { EasenetRecipientProfileRow } from "@/components/easenet-recipient-profile-row"
 
@@ -23,8 +20,8 @@ type Props = {
 }
 
 /**
- * Fills missing Easetag avatars from the public API. Uses an in-memory cache so reopening the
- * send recipient picker does not flash empty avatars before the network returns.
+ * Fills missing Easetag avatars from the public API. Uses memory + localStorage cache so repeat
+ * visits to Settings /send pickers show avatars immediately without waiting on the network.
  */
 export function EasenetRecipientProfileRowHydrated({
   fullName,
@@ -37,10 +34,7 @@ export function EasenetRecipientProfileRowHydrated({
   subtitleClassName,
   subtitleWrapperClassName,
 }: Props) {
-  const [remote, setRemote] = useState<CachedEasenetPublicProfile | null>(() => {
-    if (String(avatarUrl || "").trim()) return null
-    return readEasenetPublicProfileCache(easetag)
-  })
+  const cached = useEasenetPublicProfileCacheSnapshot(easetag)
 
   useEffect(() => {
     const propAvatar = String(avatarUrl || "").trim()
@@ -50,40 +44,31 @@ export function EasenetRecipientProfileRowHydrated({
         fullName,
         accountKind: accountKind === "business" ? "business" : "personal",
       })
-      setRemote(null)
       return
     }
 
-    const cached = readEasenetPublicProfileCache(easetag)
-    if (cached) {
-      setRemote(cached)
-      if (String(cached.avatarUrl || "").trim()) {
-        return
-      }
-    } else {
-      setRemote(null)
+    if (cached && String(cached.avatarUrl || "").trim()) {
+      return
     }
 
     let cancelled = false
     void (async () => {
       const res = await fetchEasenetProfileByTag(easetag)
       if (cancelled || !res.found) return
-      const next: CachedEasenetPublicProfile = {
+      writeEasenetPublicProfileCache(easetag, {
         avatarUrl: res.avatarUrl,
         fullName: res.fullName,
         accountKind: res.accountKind,
-      }
-      writeEasenetPublicProfileCache(easetag, next)
-      setRemote(next)
+      })
     })()
     return () => {
       cancelled = true
     }
-  }, [easetag, avatarUrl, fullName, accountKind])
+  }, [easetag, avatarUrl, fullName, accountKind, cached])
 
-  const mergedAvatar = String(avatarUrl || "").trim() ? avatarUrl : remote?.avatarUrl ?? null
+  const mergedAvatar = String(avatarUrl || "").trim() ? avatarUrl : cached?.avatarUrl ?? null
   const mergedName = fullName
-  const mergedKind = accountKind ?? remote?.accountKind
+  const mergedKind = accountKind ?? cached?.accountKind
 
   return (
     <EasenetRecipientProfileRow
