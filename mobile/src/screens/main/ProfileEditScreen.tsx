@@ -24,7 +24,13 @@ import KeyboardSafeContainer from '../../components/KeyboardSafeContainer'
 import { useAuth } from '../../contexts/AuthContext'
 import { useUserData } from '../../contexts/UserDataContext'
 import { NavigationProps } from '../../types'
-import { userService, personalFromUpdateProfileResult, UserProfileData, UserStats } from '../../lib/userService'
+import {
+  userService,
+  personalFromUpdateProfileResult,
+  fetchPersonalSettings,
+  UserProfileData,
+  UserStats,
+} from '../../lib/userService'
 import { colors, shadows, textStyles, borderRadius, spacing, userAvatarStyles, PROFILE_EDIT_AVATAR_SIZE, motion } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
@@ -35,7 +41,7 @@ import { uploadProfileAvatar, PROFILE_AVATAR_MAX_BYTES } from '../../lib/profile
 import { getApiBaseUrl } from '../../lib/apiClient'
 
 function ProfileEditContent({ navigation }: NavigationProps) {
-  const { user, userProfile, refreshUserProfile } = useAuth()
+  const { user, userProfile, refreshUserProfile, applyPersonalSettingsFromServer } = useAuth()
   const { transactions } = useUserData()
   const insets = useSafeAreaInsets()
   const [isEditing, setIsEditing] = useState(false)
@@ -151,11 +157,29 @@ function ProfileEditContent({ navigation }: NavigationProps) {
 
       const nextTag = editProfileData.easetag.replace(/^@/, '').trim().toLowerCase()
       const prevTag = (profileData.easetag || '').replace(/^@/, '').trim().toLowerCase()
+      let easetagSaved = false
       if (nextTag && nextTag !== prevTag) {
-        await userService.updateEasetag(nextTag)
+        try {
+          await userService.updateEasetag(nextTag)
+          easetagSaved = true
+        } catch (easetagErr) {
+          console.error('Easetag update failed after profile save:', easetagErr)
+          Alert.alert(
+            'Easetag not updated',
+            easetagErr instanceof Error
+              ? `${easetagErr.message}\n\nYour other profile changes were saved.`
+              : 'Your other profile changes were saved, but the Easetag could not be updated.',
+          )
+        }
       }
 
-      const fromServer = personalFromUpdateProfileResult(updateResult)
+      let fromServer = personalFromUpdateProfileResult(updateResult)
+      if (!fromServer) {
+        fromServer = await fetchPersonalSettings(user.id)
+      }
+      if (fromServer) {
+        applyPersonalSettingsFromServer(fromServer, easetagSaved ? { easetag: editProfileData.easetag } : undefined)
+      }
       const updatedProfileData = fromServer
         ? (() => {
             const parts = splitFullNameForForm(fromServer.fullName)

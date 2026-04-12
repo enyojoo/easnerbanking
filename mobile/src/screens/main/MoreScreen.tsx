@@ -92,6 +92,9 @@ function MoreContent({ navigation }: NavigationProps) {
   const [mfaStatusLine, setMfaStatusLine] = useState('')
   const [mfaStatusKnown, setMfaStatusKnown] = useState(false)
   const lastKycProfileRefreshRef = useRef(0)
+  /** Latest profile for focus handler — avoids putting `noah_kyc_status` in `useFocusEffect` deps (would re-run MFA listFactors on every profile poll while More stays focused). */
+  const userProfileRef = useRef(userProfile)
+  userProfileRef.current = userProfile
 
   const refreshMfaStatus = useCallback(async () => {
     const {
@@ -121,8 +124,9 @@ function MoreContent({ navigation }: NavigationProps) {
   useFocusEffect(
     useCallback(() => {
       if (!user?.id) return
+      const up = userProfileRef.current
       const noahKycStatus =
-        userProfile?.noah_kyc_status ?? (userProfile as { profile?: { noah_kyc_status?: string } })?.profile?.noah_kyc_status
+        up?.noah_kyc_status ?? (up as { profile?: { noah_kyc_status?: string } })?.profile?.noah_kyc_status
       if (noahKycStatus !== 'approved') {
         const now = Date.now()
         if (now - lastKycProfileRefreshRef.current > 60_000) {
@@ -131,7 +135,7 @@ function MoreContent({ navigation }: NavigationProps) {
         }
       }
       void refreshMfaStatus()
-    }, [user?.id, userProfile?.noah_kyc_status, refreshUserProfile, refreshMfaStatus]),
+    }, [user?.id, refreshUserProfile, refreshMfaStatus]),
   )
 
   // Refresh KYC submissions when screen comes into focus

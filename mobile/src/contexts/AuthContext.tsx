@@ -14,10 +14,46 @@ import {
   resolvePostSignInMfaRequirement,
   totpFactorsFromListResponse,
 } from '../lib/auth-mfa'
-import { mapUsersRowToUser } from '../lib/userProfileHelpers'
+import { mapUsersRowToUser, splitFullNameForForm } from '../lib/userProfileHelpers'
+import type { PersonalSettingsPayload } from '../lib/userService'
 import { ensureConsumerMobileAccess } from '../lib/validateAppSurface'
 import { hydratePayoutCorridorsFromStorage, refreshPayoutCorridors } from '../lib/payoutCorridors'
 import { readProfileSnapshot, writeProfileSnapshot } from '../lib/profileSnapshot'
+
+function patchAuthUserWithPersonal(
+  prev: AuthUser,
+  personal: PersonalSettingsPayload,
+  options?: { easetag?: string },
+): AuthUser {
+  const names = splitFullNameForForm(personal.fullName || null)
+  const easetagPart =
+    options && 'easetag' in options
+      ? {
+          easetag:
+            String(options.easetag ?? '')
+              .replace(/^@/, '')
+              .trim()
+              .toLowerCase() || undefined,
+        }
+      : {}
+  const profile: User = {
+    ...prev.profile,
+    full_name: personal.fullName?.trim() || null,
+    first_name: names.firstName,
+    middle_name: names.middleName || undefined,
+    last_name: names.lastName,
+    email: personal.email?.trim() || prev.profile.email,
+    phone: personal.phone ?? prev.profile.phone ?? null,
+    date_of_birth: personal.dateOfBirth || null,
+    avatar_url: personal.avatarUrl,
+    ...easetagPart,
+  }
+  return {
+    ...prev,
+    email: personal.email?.trim() || prev.email,
+    profile,
+  }
+}
 
 function mapNameFromMetadata(meta: Record<string, unknown> | undefined): {
   first_name: string
@@ -53,6 +89,11 @@ interface AuthContextType {
   ) => Promise<{ error: any; needsEmailConfirmation?: boolean }>
   signOut: () => Promise<void>
   refreshUserProfile: () => Promise<void>
+  /** Merge `PUT/GET /api/settings/personal` payload into session + snapshot (avoids stale Supabase read after save). */
+  applyPersonalSettingsFromServer: (
+    personal: PersonalSettingsPayload,
+    options?: { easetag?: string },
+  ) => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -75,6 +116,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true)
   const [mfaPending, setMfaPending] = useState<{ factorId: string } | null>(null)
   const profileFetchInFlightRef = useRef<Set<string>>(new Set())
+  const userProfileRef = useRef<AuthUser | null>(null)
   /** When `refreshUserProfile` runs while a fetch is in flight, run one more fetch after the current one finishes. */
   const profileFetchPendingRef = useRef(false)
   /** Throttle automatic profile refetches (auth listener) for the same user; explicit `force` bypasses. */
@@ -82,6 +124,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const mfaGateSyncRef = useRef<Promise<'none' | 'pending' | 'missing_factor'> | null>(null)
   /** Avoid repeated payout-corridor hydration (and dev Metro re-bundling) on every profile refetch. */
   const payoutCorridorsBootstrappedForUserRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    userProfileRef.current = userProfile
+  }, [userProfile])
 
   const syncMfaGateFromSession = useCallback(async (): Promise<'none' | 'pending' | 'missing_factor'> => {
     if (mfaGateSyncRef.current) {
@@ -330,6 +376,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
       await fetchUserProfile(user.id, undefined, { force: true })
     }
   }, [user?.id])
+
+  const applyPersonalSettingsFromServer = useCallback(
+    (personal: PersonalSettingsPayload, options?: { easetag?: string }) => {
+      const prev = userProfileRef.current
+      if (!prev?.id) return
+      const nextAuth = patchAuthUserWithPersonal(prev, personal, options)
+      setUser(nextAuth.profile)
+      setUserProfile(nextAuth)
+      userProfileRef.current = nextAuth
+      void writeProfileSnapshot(nextAuth)
+    },
+    [],
+  )
 
   useEffect(() => {
     let mounted = true
@@ -637,6 +696,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     signUp,
     signOut,
     refreshUserProfile,
+    applyPersonalSettingsFromServer,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

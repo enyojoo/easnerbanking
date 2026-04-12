@@ -68,6 +68,30 @@ export function personalFromUpdateProfileResult(result: unknown): PersonalSettin
   return null
 }
 
+/** GET `/api/settings/personal` — same `personal` shape as PUT response (for save fallback). */
+export async function fetchPersonalSettings(userId: string): Promise<PersonalSettingsPayload | null> {
+  const apiBase = getApiBaseUrl()
+  if (!apiBase) return null
+  await supabase.auth.refreshSession().catch(() => undefined)
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  if (!session?.access_token || session.user.id !== userId) return null
+  const res = await fetch(`${apiBase}/api/settings/personal`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  })
+  const text = await res.text()
+  let json: unknown = {}
+  try {
+    json = text ? JSON.parse(text) : {}
+  } catch {
+    return null
+  }
+  if (!res.ok) return null
+  return personalFromUpdateProfileResult(json)
+}
+
 export const userService = {
   /**
    * Persist profile fields. Prefer `PUT /api/settings/personal` (same as business web, service-role upsert)

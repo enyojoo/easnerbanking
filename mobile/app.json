@@ -81,23 +81,9 @@
           "backgroundColor": "#007ACC",
           "image": "./assets/splash-icon-light.png",
           "imageWidth": 200,
-          "ios": {
+          "dark": {
             "backgroundColor": "#007ACC",
-            "image": "./assets/splash-icon-light.png",
-            "imageWidth": 200,
-            "resizeMode": "contain"
-          },
-          "android": {
-            "backgroundColor": "#007ACC",
-            "image": "./assets/splash-icon-light.png",
-            "imageWidth": 264,
-            "resizeMode": "contain",
-            "dark": {
-              "backgroundColor": "#007ACC",
-              "image": "./assets/splash-icon-dark.png",
-              "imageWidth": 264,
-              "resizeMode": "contain"
-            }
+            "image": "./assets/splash-icon-dark.png"
           }
         }
       ]

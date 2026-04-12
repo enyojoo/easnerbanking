@@ -152,8 +152,8 @@ function AppContent() {
         }}
       >
         <StatusBar
-          style={Platform.OS === 'android' ? 'light' : 'dark'}
-          backgroundColor={Platform.OS === 'android' ? '#007ACC' : undefined}
+          style="dark"
+          backgroundColor={Platform.OS === 'android' ? palette.background.primary : undefined}
         />
         <AppNavigator />
       </NavigationContainer>

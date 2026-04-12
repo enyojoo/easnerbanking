@@ -97,8 +97,9 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
   const [disableOtpCode, setDisableOtpCode] = useState('')
   const [secretJustCopied, setSecretJustCopied] = useState(false)
 
-  const headerAnim = useRef(new Animated.Value(0)).current
-  const contentAnim = useRef(new Animated.Value(0)).current
+  /** Skip fade-in when jumping straight to QR — avoids hiding content for `motion.screenEnterMs` while enroll loads. */
+  const headerAnim = useRef(new Animated.Value(autoStartEnroll ? 1 : 0)).current
+  const contentAnim = useRef(new Animated.Value(autoStartEnroll ? 1 : 0)).current
 
   useCalmParallelEnterWhen(true, headerAnim, contentAnim)
 
@@ -163,8 +164,14 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
     setSecret(null)
     setVerifyCode('')
     setError(null)
-    void loadFactors()
+    // Do not call `loadFactors()` here: `beginTotpEnrollment` already lists factors via
+    // `unenrollUnverifiedTotpFactors`. Parallel `listFactorsForMfaStatus` (retries) was doubling
+    // latency before the QR/secret appeared.
     void startEnroll(generation)
+    const t = setTimeout(() => {
+      void loadFactors()
+    }, 0)
+    return () => clearTimeout(t)
   }, [autoStartEnroll, loadFactors, startEnroll])
 
   useFocusEffect(
