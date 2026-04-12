@@ -1,5 +1,4 @@
 import { supabase } from './supabase'
-import { joinFullName } from './userProfileHelpers'
 import { getApiBaseUrl } from './apiClient'
 
 /** Shape returned by `PUT /api/settings/personal` (and normalized Supabase fallback). */
@@ -11,10 +10,9 @@ export type PersonalSettingsPayload = {
   avatarUrl: string | null
 }
 
+/** Persists to `users.full_name` via `PUT /api/settings/personal` (`fullName` only — matches DB). */
 export interface UserProfileData {
-  firstName: string
-  middleName?: string
-  lastName: string
+  fullName: string
   phone: string
   dateOfBirth?: string
   /** Public HTTPS URL from `/api/upload/profile-avatar`; `null` clears `users.avatar_url` */
@@ -101,11 +99,7 @@ export const userService = {
     userId: string,
     updates: UserProfileData
   ): Promise<unknown> {
-    const fullName = joinFullName({
-      firstName: updates.firstName,
-      middleName: updates.middleName,
-      lastName: updates.lastName,
-    })
+    const nameTrim = String(updates.fullName ?? '').trim()
 
     const apiBase = getApiBaseUrl()
     if (apiBase) {
@@ -121,13 +115,8 @@ export const userService = {
       }
 
       const body: Record<string, unknown> = {
-        fullName: fullName.trim() || null,
-        firstName: updates.firstName.trim(),
-        lastName: updates.lastName.trim(),
+        fullName: nameTrim || null,
         phone: typeof updates.phone === 'string' ? updates.phone : '',
-      }
-      if (updates.middleName != null && String(updates.middleName).trim()) {
-        body.middleName = String(updates.middleName).trim()
       }
 
       if (updates.dateOfBirth !== undefined) {
@@ -167,7 +156,7 @@ export const userService = {
     }
 
     const updateData: Record<string, unknown> = {
-      full_name: fullName || null,
+      full_name: nameTrim || null,
       phone: updates.phone || null,
       updated_at: new Date().toISOString(),
     }

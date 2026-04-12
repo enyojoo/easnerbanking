@@ -35,7 +35,7 @@ import { colors, shadows, textStyles, borderRadius, spacing, userAvatarStyles, P
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { supabase } from '../../lib/supabase'
-import { splitFullNameForForm, initialsFromFullName, joinFullName } from '../../lib/userProfileHelpers'
+import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import * as ImagePicker from 'expo-image-picker'
 import { uploadProfileAvatar, PROFILE_AVATAR_MAX_BYTES } from '../../lib/profileAvatarUpload'
 import { getApiBaseUrl } from '../../lib/apiClient'
@@ -48,9 +48,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
   const [loading, setLoading] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [profileData, setProfileData] = useState({
-    firstName: '',
-    middleName: '',
-    lastName: '',
+    fullName: '',
     email: '',
     phone: '',
     easetag: '',
@@ -100,11 +98,8 @@ function ProfileEditContent({ navigation }: NavigationProps) {
     }
 
     const dob = userProfile.profile.date_of_birth || ''
-    const fromFull = splitFullNameForForm(userProfile.profile.full_name)
     const data = {
-      firstName: fromFull.firstName || userProfile.profile.first_name || '',
-      middleName: fromFull.middleName || userProfile.profile.middle_name || '',
-      lastName: fromFull.lastName || userProfile.profile.last_name || '',
+      fullName: (userProfile.profile.full_name || '').trim(),
       email: userProfile.profile.email || '',
       phone: userProfile.profile.phone || '',
       easetag: userProfile.profile.easetag || '',
@@ -138,8 +133,8 @@ function ProfileEditContent({ navigation }: NavigationProps) {
   const handleSaveProfile = async () => {
     if (!user) return
 
-    if (!editProfileData.firstName || !editProfileData.lastName) {
-      Alert.alert('Error', 'Please fill in all required fields')
+    if (!editProfileData.fullName?.trim()) {
+      Alert.alert('Error', 'Please enter your full name')
       return
     }
 
@@ -147,9 +142,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
       const updateResult = await userService.updateProfile(user.id, {
-        firstName: editProfileData.firstName,
-        middleName: editProfileData.middleName,
-        lastName: editProfileData.lastName,
+        fullName: editProfileData.fullName.trim(),
         phone: editProfileData.phone,
         dateOfBirth: editProfileData.dateOfBirth,
         avatarUrl: editProfileData.avatarUrl,
@@ -182,11 +175,8 @@ function ProfileEditContent({ navigation }: NavigationProps) {
       }
       const updatedProfileData = fromServer
         ? (() => {
-            const parts = splitFullNameForForm(fromServer.fullName)
             return {
-              firstName: parts.firstName,
-              middleName: parts.middleName,
-              lastName: parts.lastName,
+              fullName: (fromServer.fullName || '').trim(),
               email: fromServer.email || editProfileData.email,
               phone: fromServer.phone ?? '',
               easetag: editProfileData.easetag,
@@ -241,11 +231,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
   }
 
   const profilePhotoInitials = () => {
-    const full = joinFullName({
-      firstName: isEditing ? editProfileData.firstName : profileData.firstName,
-      middleName: isEditing ? editProfileData.middleName : profileData.middleName,
-      lastName: isEditing ? editProfileData.lastName : profileData.lastName,
-    })
+    const full = (isEditing ? editProfileData.fullName : profileData.fullName).trim()
     return initialsFromFullName(full || undefined)
   }
 
@@ -468,8 +454,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
 
   const renderProfileField = (label: string, value: string, onChangeText: (text: string) => void, disabled: boolean = false) => {
     const isEmailField = label.trim().toLowerCase() === 'email'
-    const isNameField =
-      label === 'First Name' || label === 'Middle Name' || label === 'Last Name'
+    const isNameField = label === 'Full Name'
     return (
       <View style={styles.fieldContainer}>
         <Text style={isEditing ? styles.fieldLabelEdit : styles.fieldLabel}>
@@ -782,19 +767,9 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                 {isEditing ? (
                   <>
                     {renderProfileField(
-                      'First Name',
-                      editProfileData.firstName,
-                      (text) => setEditProfileData(prev => ({ ...prev, firstName: text }))
-                    )}
-                    {renderProfileField(
-                      'Middle Name',
-                      editProfileData.middleName,
-                      (text) => setEditProfileData(prev => ({ ...prev, middleName: text }))
-                    )}
-                    {renderProfileField(
-                      'Last Name',
-                      editProfileData.lastName,
-                      (text) => setEditProfileData(prev => ({ ...prev, lastName: text }))
+                      'Full Name',
+                      editProfileData.fullName,
+                      (text) => setEditProfileData(prev => ({ ...prev, fullName: text }))
                     )}
                     {renderProfileField(
                       'Email',
@@ -813,18 +788,8 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                 ) : (
                   <>
                     <View style={styles.fieldContainer}>
-                      <Text style={styles.fieldLabel}>First Name</Text>
-                      <Text style={styles.fieldValue}>{profileData.firstName || 'Not set'}</Text>
-                    </View>
-                    {profileData.middleName && (
-                      <View style={styles.fieldContainer}>
-                        <Text style={styles.fieldLabel}>Middle Name</Text>
-                        <Text style={styles.fieldValue}>{profileData.middleName}</Text>
-                      </View>
-                    )}
-                    <View style={styles.fieldContainer}>
-                      <Text style={styles.fieldLabel}>Last Name</Text>
-                      <Text style={styles.fieldValue}>{profileData.lastName || 'Not set'}</Text>
+                      <Text style={styles.fieldLabel}>Full Name</Text>
+                      <Text style={styles.fieldValue}>{profileData.fullName?.trim() || 'Not set'}</Text>
                     </View>
                     <View style={styles.fieldContainer}>
                       <Text style={styles.fieldLabel}>Email Address</Text>

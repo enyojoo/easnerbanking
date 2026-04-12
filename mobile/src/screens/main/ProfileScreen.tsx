@@ -26,7 +26,6 @@ import { userService, UserProfileData, UserStats } from '../../lib/userService'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { analytics } from '../../lib/analytics'
 import { supabase } from '../../lib/supabase'
-import { splitFullNameForForm } from '../../lib/userProfileHelpers'
 
 function ProfileContent({ navigation }: NavigationProps) {
   const { user, userProfile, signOut, refreshUserProfile } = useAuth()
@@ -40,9 +39,7 @@ function ProfileContent({ navigation }: NavigationProps) {
     memberSince: '',
   })
   const [profileData, setProfileData] = useState({
-    firstName: '',
-    middleName: '',
-    lastName: '',
+    fullName: '',
     email: '',
     phone: '',
     baseCurrency: 'NGN',
@@ -64,11 +61,8 @@ function ProfileContent({ navigation }: NavigationProps) {
   // Load user profile data
   useEffect(() => {
     if (userProfile) {
-      const fromFull = splitFullNameForForm(userProfile.profile.full_name)
       const data = {
-        firstName: fromFull.firstName || userProfile.profile.first_name || '',
-        middleName: fromFull.middleName || userProfile.profile.middle_name || '',
-        lastName: fromFull.lastName || userProfile.profile.last_name || '',
+        fullName: (userProfile.profile.full_name || '').trim(),
         email: userProfile.profile.email || '',
         phone: userProfile.profile.phone || '',
         baseCurrency: userProfile.profile.base_currency || 'USD',
@@ -217,18 +211,16 @@ function ProfileContent({ navigation }: NavigationProps) {
   const handleSaveProfile = async () => {
     if (!user) return
 
-    if (!editProfileData.firstName || !editProfileData.lastName) {
-      Alert.alert('Error', 'Please fill in all required fields')
+    if (!editProfileData.fullName?.trim()) {
+      Alert.alert('Error', 'Please enter your full name')
       return
     }
 
     setLoading(true)
     try {
       // Update profile in database
-      const updatePayload = {
-        firstName: editProfileData.firstName,
-        middleName: editProfileData.middleName,
-        lastName: editProfileData.lastName,
+      const updatePayload: UserProfileData = {
+        fullName: editProfileData.fullName.trim(),
         phone: editProfileData.phone,
       }
       await userService.updateProfile(user.id, updatePayload)
@@ -559,19 +551,9 @@ function ProfileContent({ navigation }: NavigationProps) {
               {isEditing ? (
                 <>
         {renderProfileField(
-          'First Name',
-          editProfileData.firstName,
-          (text) => setEditProfileData(prev => ({ ...prev, firstName: text }))
-        )}
-        {renderProfileField(
-          'Middle Name',
-          editProfileData.middleName,
-          (text) => setEditProfileData(prev => ({ ...prev, middleName: text }))
-        )}
-        {renderProfileField(
-          'Last Name',
-          editProfileData.lastName,
-          (text) => setEditProfileData(prev => ({ ...prev, lastName: text }))
+          'Full Name',
+          editProfileData.fullName,
+          (text) => setEditProfileData(prev => ({ ...prev, fullName: text }))
         )}
         {renderProfileField(
           'Email',
@@ -590,18 +572,8 @@ function ProfileContent({ navigation }: NavigationProps) {
               ) : (
                 <>
                   <View style={styles.fieldContainer}>
-                    <Text style={styles.fieldLabel}>First Name</Text>
-                    <Text style={styles.fieldValue}>{profileData.firstName || 'Not set'}</Text>
-                  </View>
-                  {profileData.middleName && (
-                    <View style={styles.fieldContainer}>
-                      <Text style={styles.fieldLabel}>Middle Name</Text>
-                      <Text style={styles.fieldValue}>{profileData.middleName}</Text>
-                    </View>
-                  )}
-                  <View style={styles.fieldContainer}>
-                    <Text style={styles.fieldLabel}>Last Name</Text>
-                    <Text style={styles.fieldValue}>{profileData.lastName || 'Not set'}</Text>
+                    <Text style={styles.fieldLabel}>Full Name</Text>
+                    <Text style={styles.fieldValue}>{profileData.fullName?.trim() || 'Not set'}</Text>
                   </View>
                   <View style={styles.fieldContainer}>
                     <Text style={styles.fieldLabel}>Email Address</Text>
