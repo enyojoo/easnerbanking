@@ -17,7 +17,8 @@ import * as Haptics from 'expo-haptics'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { ShimmerLoader } from '../../components/premium'
 import { NavigationProps } from '../../types'
-import { colors, textStyles, borderRadius, spacing, shadows } from '../../theme'
+import { colors, textStyles, borderRadius, spacing, shadows, motion } from '../../theme'
+import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { apiGet, NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
 import { useUserData } from '../../contexts/UserDataContext'
@@ -74,20 +75,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
   const detailCacheKey = transactionDetailCacheKey(transactionId)
 
-  useEffect(() => {
-    Animated.stagger(100, [
-      Animated.timing(headerAnim, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-      Animated.timing(contentAnim, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-    ]).start()
-  }, [headerAnim, contentAnim])
+  useCalmParallelEnterWhen(true, headerAnim, contentAnim)
 
   useEffect(() => {
     if (!dataLoadedRef.current) {
@@ -155,8 +143,11 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   const onRefresh = async () => {
     setRefreshing(true)
     dataLoadedRef.current = false
-    await fetchTransactionDetails(true)
-    setRefreshing(false)
+    try {
+      await fetchTransactionDetails(true)
+    } finally {
+      setRefreshing(false)
+    }
   }
 
   const handleCopy = async (text: string, key: string) => {
@@ -391,7 +382,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
             transform: [{
               translateY: headerAnim.interpolate({
                 inputRange: [0, 1],
-                outputRange: [-20, 0],
+                outputRange: [-motion.screenEnterTranslateY, 0],
               })
             }]
           }
@@ -454,7 +445,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                 transform: [{
                   translateY: headerAnim.interpolate({
                     inputRange: [0, 1],
-                    outputRange: [-20, 0],
+                    outputRange: [-motion.screenEnterTranslateY, 0],
                   })
                 }]
               }
@@ -506,7 +497,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
               transform: [{
                 translateY: headerAnim.interpolate({
                   inputRange: [0, 1],
-                  outputRange: [-20, 0],
+                  outputRange: [-motion.screenEnterTranslateY, 0],
                 })
               }]
             }
@@ -543,7 +534,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                 transform: [{
                   translateY: headerAnim.interpolate({
                     inputRange: [0, 1],
-                    outputRange: [-20, 0],
+                    outputRange: [-motion.screenEnterTranslateY, 0],
                   })
                 }]
               }
@@ -573,7 +564,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
               transform: [{
                 translateY: contentAnim.interpolate({
                   inputRange: [0, 1],
-                  outputRange: [30, 0],
+                  outputRange: [motion.screenEnterTranslateY, 0],
                 })
               }]
             }}

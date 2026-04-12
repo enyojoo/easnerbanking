@@ -108,6 +108,8 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   // Ref to track if initial load is in progress (prevent multiple loads)
   const initialLoadInProgressRef = useRef(false)
   const prevKycStatusRef = useRef<string | null>(null)
+  /** Avoid treating first focus after mount as a KYC transition (null → status), which was clearing cache and replaying the notice. */
+  const isFirstFocusAfterMountRef = useRef(true)
   
   // Cache TTL (10 minutes - same as recipients)
   const CACHE_TTL = 10 * 60 * 1000
@@ -786,13 +788,21 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   useFocusEffect(
     React.useCallback(() => {
       void refreshUserProfile?.()
-      const kycChanged = prevKycStatusRef.current !== kycStatus
-      prevKycStatusRef.current = kycStatus
-      if (kycChanged) {
-        dataLoadedRef.current = false
-        void fetchAccountData(false)
-        return
+      const prev = prevKycStatusRef.current
+
+      if (isFirstFocusAfterMountRef.current) {
+        isFirstFocusAfterMountRef.current = false
+        prevKycStatusRef.current = kycStatus
+      } else {
+        const kycChanged = prev !== kycStatus
+        prevKycStatusRef.current = kycStatus
+        if (kycChanged) {
+          dataLoadedRef.current = false
+          void fetchAccountData(false)
+          return
+        }
       }
+
       if (!dataLoadedRef.current) {
         void fetchAccountData(false)
       }

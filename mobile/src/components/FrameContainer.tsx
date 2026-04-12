@@ -1,6 +1,6 @@
 import React from 'react'
 import { View, StyleSheet, ViewStyle } from 'react-native'
-import { colors, spacing, borderRadius } from '../theme'
+import { colors, spacing, borderRadius, shadows } from '../theme'
 
 interface FrameContainerProps {
   children: React.ReactNode
@@ -43,9 +43,10 @@ export default function FrameContainer({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: colors.frame.background,
-    borderRadius: 24,
-    borderWidth: 0.5,
+    borderRadius: borderRadius['3xl'],
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.frame.border,
+    ...shadows.xs,
   },
 })
 

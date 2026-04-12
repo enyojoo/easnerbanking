@@ -15,9 +15,11 @@ import { BlurView } from 'expo-blur'
 import * as Haptics from 'expo-haptics'
 import { Plus, Snowflake, Settings, Eye } from 'lucide-react-native'
 import Svg, { Circle, Defs, Path, Pattern, Rect } from 'react-native-svg'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
-import { colors, textStyles, borderRadius, spacing } from '../../theme'
+import { colors, textStyles, borderRadius, spacing, layout, motion } from '../../theme'
+import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { EASNER_CARD_ICON_URL } from '../../lib/easnerBrand'
 
@@ -70,11 +72,16 @@ function MastercardMark() {
 }
 
 export default function CardScreen({ navigation: _navigation }: NavigationProps) {
+  const insets = useSafeAreaInsets()
   const CARD_WIDTH = Math.min(SCREEN_WIDTH - spacing[5] * 2, 323)
   const CARD_HEIGHT = Math.round(CARD_WIDTH / 1.586)
   const cardStride = CARD_WIDTH + CARD_SPACING * 2
 
   const scrollX = useRef(new Animated.Value(0)).current
+  const headerAnim = useRef(new Animated.Value(0)).current
+  const contentAnim = useRef(new Animated.Value(0)).current
+
+  useCalmParallelEnterWhen(true, headerAnim, contentAnim)
 
   const actionsComingSoon = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -87,9 +94,26 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
   return (
     <ScreenWrapper>
       <View style={styles.container}>
-        <View style={styles.header}>
+        <Animated.View
+          style={[
+            styles.header,
+            {
+              opacity: headerAnim,
+              transform: [
+                {
+                  translateY: headerAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-motion.screenEnterTranslateY, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
           <View style={styles.headerContent}>
-            <Text style={styles.title}>My Cards</Text>
+            <View style={styles.headerTitleBlock}>
+              <Text style={styles.title}>My Cards</Text>
+            </View>
             <Pressable
              android_ripple={ripple.neutral}
               style={styles.iconBtn}
@@ -99,13 +123,32 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
               <Plus size={20} color={colors.text.primary} strokeWidth={2.5} />
             </Pressable>
           </View>
-        </View>
+        </Animated.View>
 
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: insets.bottom + layout.tabBarHeight + spacing[6] },
+          ]}
           showsVerticalScrollIndicator={false}
         >
+          <Animated.View
+            style={[
+              styles.scrollInner,
+              {
+                opacity: contentAnim,
+                transform: [
+                  {
+                    translateY: contentAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [motion.screenEnterTranslateY, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
           <View style={[styles.carouselContainer, { height: CARD_HEIGHT + spacing[8] }]}>
             <Animated.ScrollView
               horizontal
@@ -252,6 +295,7 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
               </Text>
             </View>
           </View>
+          </Animated.View>
         </ScrollView>
       </View>
     </ScreenWrapper>
@@ -267,7 +311,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: spacing[5],
+    flexGrow: 1,
+  },
+  scrollInner: {
+    flexGrow: 1,
   },
   header: {
     paddingHorizontal: spacing[5],
@@ -277,7 +324,14 @@ const styles = StyleSheet.create({
   headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+  },
+  headerTitleBlock: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
+    paddingRight: spacing[3],
   },
   title: {
     ...textStyles.headlineLarge,

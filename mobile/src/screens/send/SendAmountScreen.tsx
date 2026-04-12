@@ -23,7 +23,8 @@ import { MessageSquareText, ChevronDown, User, Coins, RotateCcw } from 'lucide-r
 import Svg, { Path } from 'react-native-svg'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
-import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
+import { colors, shadows, textStyles, borderRadius, spacing, motion } from '../../theme'
+import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { supabase } from '../../lib/supabase'
 import { Alert } from 'react-native'
@@ -259,20 +260,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   )
 
   // Run entrance animations
-  React.useEffect(() => {
-    Animated.stagger(100, [
-      Animated.timing(headerAnim, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-      Animated.timing(contentAnim, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-    ]).start()
-  }, [headerAnim, contentAnim])
+  useCalmParallelEnterWhen(true, headerAnim, contentAnim)
 
   const getInitials = (fullName: string) => {
     const parts = fullName.trim().split(' ').filter(Boolean)
@@ -606,7 +594,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   transform: [{
                     translateY: headerAnim.interpolate({
                       inputRange: [0, 1],
-                      outputRange: [-20, 0],
+                      outputRange: [-motion.screenEnterTranslateY, 0],
                     })
                   }]
                 }
@@ -615,10 +603,14 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               <Pressable
                android_ripple={ripple.neutral}
                 onPress={() => {
-                  // Always go back to SelectRecentRecipientScreen, never to SelectRecipientScreen
-                  navigation.navigate('SelectRecentRecipient' as never, {
-                    preferredBalanceCurrency: selectedBalanceCurrency,
-                  } as never)
+                  // Match iOS swipe-back: one pop to recipient hub when it is the previous route; otherwise leave send flow safely.
+                  if (navigation.canGoBack()) {
+                    navigation.goBack()
+                  } else {
+                    navigation.navigate('SelectRecentRecipient' as never, {
+                      preferredBalanceCurrency: selectedBalanceCurrency,
+                    } as never)
+                  }
                 }}
                 style={styles.backButton}
               >
@@ -637,7 +629,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   transform: [{
                     translateY: contentAnim.interpolate({
                       inputRange: [0, 1],
-                      outputRange: [30, 0],
+                      outputRange: [motion.screenEnterTranslateY, 0],
                     })
                   }]
                 }

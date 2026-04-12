@@ -194,8 +194,11 @@ export default function InAppNotificationsScreen({ navigation }: NavigationProps
 
   const onRefresh = async () => {
     setRefreshing(true)
-    await refreshNotifications()
-    setRefreshing(false)
+    try {
+      await refreshNotifications()
+    } finally {
+      setRefreshing(false)
+    }
   }
 
   const handleMarkAsRead = (id: string) => {

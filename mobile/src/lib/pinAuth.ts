@@ -30,8 +30,23 @@ const SESSION_LAST_ACTIVE_KEY = '@easner_session_last_active'
 const PIN_PROMPT_DISMISSED_KEY = '@easner_pin_prompt_dismissed'
 const FIRST_LOGIN_KEY = '@easner_first_login_after_verification'
 
-/** Align with business app idle timeout. */
-const SESSION_TIMEOUT_MS = 15 * 60 * 1000
+/** Same idle soft-lock window as business `APP_IDLE_TIMEOUT_MINUTES` in `business/lib/app-lock-config.ts`. */
+const SESSION_TIMEOUT_MS = 5 * 60 * 1000
+
+/** Per JS process: cold start should require PIN again for users who have a PIN (see `applyColdStartPinLockIfNeeded`). */
+let coldStartPinLockUserId: string | null = null
+
+function resetColdStartPinLockState() {
+  coldStartPinLockUserId = null
+}
+
+/** Once per user per process: lock app if PIN exists (survives persisted unlocked flag from previous run). */
+export async function applyColdStartPinLockIfNeeded(userId: string): Promise<void> {
+  if (coldStartPinLockUserId === userId) return
+  coldStartPinLockUserId = userId
+  if (!(await hasPin(userId))) return
+  await setAppLocked(userId, true)
+}
 
 export interface PinAuthResult {
   success: boolean
@@ -318,6 +333,7 @@ export async function removePin(userId: string): Promise<void> {
 
 export async function clearPinAuth(): Promise<void> {
   try {
+    resetColdStartPinLockState()
     const { supabase } = await import('./supabase')
     const { data } = await supabase.auth.getUser()
     const uid = data.user?.id

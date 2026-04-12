@@ -6,22 +6,31 @@
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icons/ios-light.png",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.easner.mobile",
       "icon": {
         "light": "./assets/icons/ios-light.png",
-        "dark": "./assets/icons/ios-dark.png",
         "tinted": "./assets/icons/ios-tinted.png"
       },
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": [
+          "processing"
+        ],
+        "BGTaskSchedulerPermittedIdentifiers": [
+          "com.expo.modules.backgroundtask.processing"
+        ]
       },
       "associatedDomains": [
         "applinks:easner.com"
       ]
+    },
+    "androidStatusBar": {
+      "backgroundColor": "#007ACC",
+      "barStyle": "light-content"
     },
     "android": {
       "softwareKeyboardLayoutMode": "resize",
@@ -31,7 +40,7 @@
         "backgroundColor": "#007ACC",
         "monochromeImage": "./assets/icons/adaptive-icon.png"
       },
-      "edgeToEdgeEnabled": false,
+      "edgeToEdgeEnabled": true,
       "package": "com.easner.mobile",
       "permissions": [
         "android.permission.RECORD_AUDIO"
@@ -62,16 +71,33 @@
       }
     },
     "plugins": [
+      "expo-system-ui",
       "expo-secure-store",
       "expo-image-picker",
       "expo-document-picker",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/onboarding/Splash.png",
-          "resizeMode": "cover",
-          "dark": {
-            "image": "./assets/onboarding/Splash.png"
+          "backgroundColor": "#007ACC",
+          "image": "./assets/splash-icon-light.png",
+          "imageWidth": 200,
+          "ios": {
+            "backgroundColor": "#007ACC",
+            "image": "./assets/splash-icon-light.png",
+            "imageWidth": 200,
+            "resizeMode": "contain"
+          },
+          "android": {
+            "backgroundColor": "#FFFFFF",
+            "image": "./assets/splash-icon-light.png",
+            "imageWidth": 264,
+            "resizeMode": "contain",
+            "dark": {
+              "backgroundColor": "#007ACC",
+              "image": "./assets/splash-icon-dark.png",
+              "imageWidth": 264,
+              "resizeMode": "contain"
+            }
           }
         }
       ]

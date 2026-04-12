@@ -1,12 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native'
 import { StatusBar } from 'expo-status-bar'
-import { View, Text, StyleSheet, AppState, AppStateStatus, Animated, useColorScheme } from 'react-native'
+import { View, Text, StyleSheet, Animated, Platform } from 'react-native'
+import * as BackgroundTask from 'expo-background-task'
+import * as TaskManager from 'expo-task-manager'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { useFonts } from 'expo-font'
 import * as SplashScreen from 'expo-splash-screen'
-import { updateSessionActivity, isSessionValid } from './src/lib/pinAuth'
+import * as SystemUI from 'expo-system-ui'
 import {
   Outfit_400Regular,
   Outfit_500Medium,
@@ -23,10 +25,13 @@ import { analytics } from './src/lib/analytics'
 import { deepLinkService } from './src/services/DeepLinkService'
 import { pushNotificationService } from './src/lib/pushNotificationService'
 import AppNavigator from './src/navigation/AppNavigator'
-import CustomSplashScreen from './src/components/SplashScreen'
 import { PushNotificationBootstrap } from './src/components/PushNotificationBootstrap'
-import { colors, resolveThemeColors } from './src/theme'
+import { resolveThemeColors } from './src/theme'
 import { ThemePaletteProvider } from './src/contexts/ThemePaletteContext'
+import {
+  BACKGROUND_TASK_IDENTIFIER,
+  registerBackgroundTaskAsync,
+} from './src/lib/backgroundTasks'
 
 // Keep the splash screen visible while we load fonts
 SplashScreen.preventAutoHideAsync()
@@ -36,8 +41,7 @@ function AppContent() {
   const navigationRef = useRef<NavigationContainerRef<any>>(null)
   const routeNameRef = useRef<string>('')
   const { loading: authLoading } = useAuth()
-  const colorScheme = useColorScheme()
-  const palette = resolveThemeColors(colorScheme)
+  const palette = resolveThemeColors('light')
   const getActiveRouteName = (route: any): string => {
     if (!route) return 'Unknown'
     if (route.state && route.state.index != null) {
@@ -48,6 +52,8 @@ function AppContent() {
 
   const [splashFinished, setSplashFinished] = useState(false)
   const appFadeAnim = useRef(new Animated.Value(0)).current
+  /** When `AppContent` first mounts (fonts already loaded), for minimum branded splash duration. */
+  const splashMountAt = useRef(Date.now())
 
   // Expose navigation ref globally for logout navigation
   useEffect(() => {
@@ -56,6 +62,30 @@ function AppContent() {
       delete (global as any).rootNavigationRef
     }
   }, [])
+
+  // Single native splash (`app.json` + `expo-splash-screen`): hide only after auth is ready and min display time.
+  // Avoids a second JS `Image` pass that looked like a different logo (native vs Metro scaling / stale prebuild assets).
+  useEffect(() => {
+    if (authLoading || splashFinished) return
+    const elapsed = Date.now() - splashMountAt.current
+    const remaining = Math.max(0, 3000 - elapsed)
+    let cancelled = false
+    const t = setTimeout(() => {
+      void (async () => {
+        if (cancelled) return
+        try {
+          await SplashScreen.hideAsync()
+        } catch (e) {
+          console.warn('SplashScreen.hideAsync', e)
+        }
+        if (!cancelled) setSplashFinished(true)
+      })()
+    }, remaining)
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [authLoading, splashFinished])
 
   // Fade in app content when splash finishes
   useEffect(() => {
@@ -68,13 +98,8 @@ function AppContent() {
     }
   }, [splashFinished, appFadeAnim])
 
-  // Determine if splash screen is ready to finish (wait for auth to load)
-  // AppNavigator will handle onboarding check internally
-  const isSplashReady = !authLoading
-
-  // Show splash screen until auth is ready (minimum 3 seconds)
   if (!splashFinished) {
-    return <CustomSplashScreen onFinish={() => setSplashFinished(true)} isReady={isSplashReady} />
+    return null
   }
 
   return (
@@ -97,7 +122,7 @@ function AppContent() {
           }
         }}
         theme={{
-          dark: colorScheme === 'dark',
+          dark: false,
           colors: {
             primary: palette.primary.main,
             background: palette.background.primary,
@@ -126,7 +151,7 @@ function AppContent() {
           },
         }}
       >
-        <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+        <StatusBar style="dark" />
         <AppNavigator />
       </NavigationContainer>
     </Animated.View>
@@ -146,6 +171,12 @@ export default function App() {
   // Initialize deep linking
   useEffect(() => {
     deepLinkService.initialize()
+  }, [])
+
+  // Edge-to-edge: match root window / nav bar scrim to app background; supports `userInterfaceStyle` with expo-system-ui.
+  useEffect(() => {
+    const bg = resolveThemeColors('light').background.primary
+    void SystemUI.setBackgroundColorAsync(bg)
   }, [])
 
   // Foreground/tap listeners only; token registration is gated on user prefs in PushNotificationBootstrap
@@ -184,20 +215,34 @@ export default function App() {
     }
   }, [])
 
-  // Track app state changes for session management
   useEffect(() => {
-    const handleAppStateChange = async (nextAppState: AppStateStatus) => {
-      if (nextAppState === 'active') {
-        // App came to foreground - update session activity
-        await updateSessionActivity()
-        // Check if session is still valid (AppNavigator will handle routing)
-      }
-    }
+    if (Platform.OS === 'web') return
 
-    const subscription = AppState.addEventListener('change', handleAppStateChange)
-    return () => subscription.remove()
+    let cancelled = false
+    void (async () => {
+      try {
+        const status = await BackgroundTask.getStatusAsync()
+        if (cancelled) return
+        if (status === BackgroundTask.BackgroundTaskStatus.Restricted) {
+          console.warn('Background tasks unavailable (Restricted)')
+          return
+        }
+        const alreadyRegistered = await TaskManager.isTaskRegisteredAsync(
+          BACKGROUND_TASK_IDENTIFIER
+        )
+        if (!alreadyRegistered) {
+          await registerBackgroundTaskAsync()
+        }
+      } catch (e) {
+        console.warn('Background task registration failed:', e)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
   }, [])
-  
+
   // Wait for fonts to load before showing anything
   if (!fontsLoaded) {
     return null

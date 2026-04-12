@@ -17,7 +17,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '../../contexts/AuthContext'
 import { NavigationProps } from '../../types'
 import { analytics } from '../../lib/analytics'
-import { useThemeColors, borderRadius, spacing } from '../../theme'
+import { useThemeColors, borderRadius, spacing, motion } from '../../theme'
+import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
 import { Button, TextField } from '../../components/ui'
@@ -36,20 +37,7 @@ export default function LoginScreen({ navigation }: NavigationProps) {
   const formAnim = useRef(new Animated.Value(0)).current
 
   // Run entrance animations
-  useEffect(() => {
-    Animated.stagger(100, [
-      Animated.timing(headerAnim, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-      Animated.timing(formAnim, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-    ]).start()
-  }, [headerAnim, formAnim])
+  useCalmParallelEnterWhen(true, headerAnim, formAnim)
 
   // Track screen view
   useEffect(() => {
@@ -97,7 +85,7 @@ export default function LoginScreen({ navigation }: NavigationProps) {
                 transform: [{
                   translateY: headerAnim.interpolate({
                     inputRange: [0, 1],
-                    outputRange: [-30, 0],
+                    outputRange: [-motion.screenEnterTranslateY, 0],
                   })
                 }]
               }
@@ -115,7 +103,7 @@ export default function LoginScreen({ navigation }: NavigationProps) {
                 transform: [{
                   translateY: formAnim.interpolate({
                     inputRange: [0, 1],
-                    outputRange: [30, 0],
+                    outputRange: [motion.screenEnterTranslateY, 0],
                   })
                 }]
               }

@@ -10,14 +10,14 @@
 import React, { useEffect, useRef } from 'react'
 import { StyleSheet, View, ViewStyle, Animated } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import { colors, borderRadius } from '../../theme'
+import { colors, borderRadius, motion } from '../../theme'
 
 interface ShimmerLoaderProps {
   width: number | string
   height: number
   borderRadius?: number
   style?: ViewStyle
-  /** Loop duration in ms (default 1500). */
+  /** Loop duration in ms (default `motion.skeletonPulseMs`). */
   durationMs?: number
 }
 
@@ -26,7 +26,7 @@ export default function ShimmerLoader({
   height,
   borderRadius: radius = borderRadius.md,
   style,
-  durationMs = 1500,
+  durationMs = motion.skeletonPulseMs,
 }: ShimmerLoaderProps) {
   const shimmerAnim = useRef(new Animated.Value(0)).current
 

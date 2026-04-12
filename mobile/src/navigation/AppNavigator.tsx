@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { View, Platform, Text, AppState, AppStateStatus, StyleSheet } from 'react-native'
-import { createStackNavigator, TransitionPresets } from '@react-navigation/stack'
+import { createStackNavigator } from '@react-navigation/stack'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { useNavigation } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
@@ -8,17 +8,24 @@ import { House, CreditCard, ChartSpline, Grip } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useAuth } from '../contexts/AuthContext'
-import { useThemeColors, shadows, textStyles, borderRadius, spacing, layout } from '../theme'
+import { useThemeColors, shadows, borderRadius, spacing, layout } from '../theme'
 import {
   isPinSetup,
   evaluateIdleLock,
   isAppLocked,
   updateSessionActivity,
   dismissPinPrompt,
+  applyColdStartPinLockIfNeeded,
 } from '../lib/pinAuth'
 import { emitAppLocked, registerAppLockListener } from '../lib/app-lock-bus'
 import { useBusinessNoahSync } from '../hooks/useBusinessNoahSync'
 import { useConsumerKycNoahSync } from '../hooks/useConsumerKycNoahSync'
+// Stack timing and Android vs iOS card transitions: see `transitionPresets.ts`.
+import {
+  mainStackPreset,
+  sendFlowStandardPreset,
+  sendFlowInstantTransitionSpec,
+} from './transitionPresets'
 
 // Onboarding Screen
 import OnboardingScreen from '../screens/onboarding/OnboardingScreen'
@@ -75,175 +82,6 @@ import AccountVerificationScreen from '../screens/verification/AccountVerificati
 const Stack = createStackNavigator()
 const Tab = createBottomTabNavigator()
 
-// Custom transition configurations for smooth, platform-appropriate animations
-const getTransitionConfig = () => {
-  if (Platform.OS === 'ios') {
-    return {
-      ...TransitionPresets.SlideFromRightIOS,
-      gestureEnabled: true,
-      gestureDirection: 'horizontal' as const,
-      gestureResponseDistance: 30, // More responsive
-      gestureVelocityImpact: 0.5, // More sensitive
-      transitionSpec: {
-        open: {
-          animation: 'timing' as const,
-          config: {
-            duration: 180, // Faster - was 250ms
-            useNativeDriver: true,
-          },
-        },
-        close: {
-          animation: 'timing' as const,
-          config: {
-            duration: 150, // Faster - was 250ms
-            useNativeDriver: true,
-          },
-        },
-      },
-    }
-  } else {
-    // Android - Modern slide up to open, slide out to close
-    return {
-      gestureEnabled: false, // Disable gestures on Android
-      transitionSpec: {
-        open: {
-          animation: 'timing' as const,
-          config: {
-            duration: 200, // Faster - was 300ms
-            useNativeDriver: true,
-          },
-        },
-        close: {
-          animation: 'timing' as const,
-          config: {
-            duration: 180, // Faster - was 300ms
-            useNativeDriver: true,
-          },
-        },
-      },
-      cardStyleInterpolator: ({ current, layouts }: any) => ({
-        cardStyle: {
-          transform: [
-            {
-              translateY: current.progress.interpolate({
-                inputRange: [0, 1],
-                outputRange: [layouts.screen.height, 0], // Slide up from bottom
-                extrapolate: 'clamp',
-              }),
-            },
-          ],
-          opacity: current.progress.interpolate({
-            inputRange: [0, 0.3, 1],
-            outputRange: [0, 0.8, 1], // Fade in as it slides up
-            extrapolate: 'clamp',
-          }),
-        },
-        overlayStyle: {
-          opacity: current.progress.interpolate({
-            inputRange: [0, 1],
-            outputRange: [0, 0.1], // Subtle overlay
-            extrapolate: 'clamp',
-          }),
-        },
-      }),
-    }
-  }
-}
-
-// Specialized transition configuration for send money flow
-const getSendFlowTransitionConfig = () => {
-  if (Platform.OS === 'ios') {
-    return {
-      gestureEnabled: true,
-      gestureDirection: 'horizontal' as const,
-      gestureResponseDistance: 60,
-      gestureVelocityImpact: 0.4,
-      transitionSpec: {
-        open: {
-          animation: 'timing' as const,
-          config: {
-            duration: 300,
-            useNativeDriver: true,
-          },
-        },
-        close: {
-          animation: 'timing' as const,
-          config: {
-            duration: 300,
-            useNativeDriver: true,
-          },
-        },
-      },
-      cardStyleInterpolator: ({ current, layouts }: any) => {
-        return {
-          cardStyle: {
-            transform: [
-              {
-                translateX: current.progress.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [layouts.screen.width, 0],
-                  extrapolate: 'clamp',
-                }),
-              },
-            ],
-            opacity: current.progress.interpolate({
-              inputRange: [0, 0.05, 1],
-              outputRange: [0, 1, 1],
-              extrapolate: 'clamp',
-            }),
-          },
-          overlayStyle: {
-            opacity: current.progress.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0, 0.2],
-              extrapolate: 'clamp',
-            }),
-          },
-        }
-      },
-    }
-  } else {
-    // Android - Simple slide in/out for send money flow
-    return {
-      gestureEnabled: false, // Disable gestures on Android
-      transitionSpec: {
-        open: {
-          animation: 'timing' as const,
-          config: {
-            duration: 300, // Faster - was 300ms
-            useNativeDriver: true,
-          },
-        },
-        close: {
-          animation: 'timing' as const,
-          config: {
-            duration: 300, // Faster - was 300ms
-            useNativeDriver: true,
-          },
-        },
-      },
-      cardStyleInterpolator: ({ current, layouts }: any) => ({
-        cardStyle: {
-          transform: [
-            {
-              translateX: current.progress.interpolate({
-                inputRange: [0, 1],
-                outputRange: [layouts.screen.width * 0.3, 0], // Simple slide in from right
-                extrapolate: 'clamp',
-              }),
-            },
-          ],
-          opacity: current.progress.interpolate({
-            inputRange: [0, 0.5, 1],
-            outputRange: [0, 0.9, 1], // Simple fade in
-            extrapolate: 'clamp',
-          }),
-        },
-      }),
-    }
-  }
-}
-
 function OnboardingStack() {
   return (
     <Stack.Navigator 
@@ -265,7 +103,7 @@ function MfaStack() {
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        ...getTransitionConfig(),
+        ...mainStackPreset(),
       }}
     >
       <Stack.Screen name="MfaVerify" component={MfaVerifyScreen} />
@@ -278,7 +116,7 @@ function AuthStack() {
     <Stack.Navigator 
       screenOptions={{ 
         headerShown: false,
-        ...getTransitionConfig()
+        ...mainStackPreset()
       }}
     >
       <Stack.Screen 
@@ -292,21 +130,21 @@ function AuthStack() {
         name="ForgotPassword" 
         component={ForgotPasswordScreen}
         options={{
-          ...getTransitionConfig(),
+          ...mainStackPreset(),
         }}
       />
       <Stack.Screen 
         name="ResetPassword" 
         component={ResetPasswordScreen}
         options={{
-          ...getTransitionConfig(),
+          ...mainStackPreset(),
         }}
       />
       <Stack.Screen 
         name="PinSetup" 
         component={PinSetupScreen}
         options={{
-          ...getTransitionConfig(),
+          ...mainStackPreset(),
         }}
         initialParams={{ mandatory: false }}
       />
@@ -314,7 +152,7 @@ function AuthStack() {
         name="PinEntry" 
         component={PinEntryScreen}
         options={{
-          ...getTransitionConfig(),
+          ...mainStackPreset(),
         }}
       />
     </Stack.Navigator>
@@ -363,16 +201,9 @@ function MainTabs() {
           bottom: 0,
           overflow: 'hidden',
         },
-        tabBarShowLabel: true,
+        tabBarShowLabel: false,
         tabBarActiveTintColor: palette.text.inverse,
         tabBarInactiveTintColor: 'rgba(255, 255, 255, 0.55)',
-        tabBarLabelPosition: 'below-icon',
-        tabBarLabelStyle: {
-          fontSize: textStyles.labelSmall.fontSize,
-          fontWeight: '500' as const,
-          marginTop: spacing[1],
-          letterSpacing: textStyles.labelSmall.letterSpacing,
-        },
         tabBarItemStyle: {
           flex: 1,
           alignItems: 'center',
@@ -388,7 +219,6 @@ function MainTabs() {
         name="Dashboard" 
         component={DashboardScreen}
         options={{
-          tabBarLabel: 'Home',
           tabBarIcon: ({ focused, color }) => (
             <View style={focused ? tabBarStyles.activeIconContainer : null}>
               <House 
@@ -404,7 +234,6 @@ function MainTabs() {
         name="Card" 
         component={CardScreen}
         options={{
-          tabBarLabel: 'Card',
           tabBarIcon: ({ focused, color }) => (
             <View style={focused ? tabBarStyles.activeIconContainer : null}>
               <CreditCard 
@@ -420,7 +249,6 @@ function MainTabs() {
         name="Transactions" 
         component={TransactionsScreen}
         options={{
-          tabBarLabel: 'Transactions',
           tabBarIcon: ({ focused, color }) => (
             <View style={focused ? tabBarStyles.activeIconContainer : null}>
               <ChartSpline 
@@ -436,7 +264,6 @@ function MainTabs() {
         name="More" 
         component={MoreScreen}
         options={{
-          tabBarLabel: 'More',
           tabBarIcon: ({ focused, color }) => (
             <View style={focused ? tabBarStyles.activeIconContainer : null}>
               <Grip 
@@ -497,7 +324,7 @@ function MainStack() {
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        ...getTransitionConfig()
+        ...mainStackPreset()
       }}
     >
       <Stack.Screen 
@@ -512,7 +339,7 @@ function MainStack() {
         name="PinSetup" 
         component={PinSetupScreen}
         options={{
-          ...getTransitionConfig(),
+          ...mainStackPreset(),
         }}
       />
       <Stack.Screen 
@@ -527,25 +354,9 @@ function MainStack() {
           
           return {
             headerShown: false,
+            ...(Platform.OS === 'ios' ? { fullScreenGestureEnabled: true as const } : {}),
             // No animation when going back from SendAmountScreen
-            ...(isFromSendAmount ? {
-              transitionSpec: {
-                open: {
-                  animation: 'timing' as const,
-                  config: {
-                    duration: 0, // Instant when opening (going back from SendAmountScreen)
-                    useNativeDriver: true,
-                  },
-                },
-                close: {
-                  animation: 'timing' as const,
-                  config: {
-                    duration: 0, // Instant when closing
-                    useNativeDriver: true,
-                  },
-                },
-              },
-            } : getSendFlowTransitionConfig()),
+            ...(isFromSendAmount ? sendFlowInstantTransitionSpec : sendFlowStandardPreset()),
           }
         }}
       />
@@ -568,25 +379,9 @@ function MainStack() {
           
           return {
             headerShown: false,
+            ...(Platform.OS === 'ios' ? { fullScreenGestureEnabled: true as const } : {}),
             // No animation when navigating from/to the send recipient hub (same header)
-            ...(isFromRecipientScreen ? {
-              transitionSpec: {
-                open: {
-                  animation: 'timing' as const,
-                  config: {
-                    duration: 0, // Instant when coming from recipient screen
-                    useNativeDriver: true,
-                  },
-                },
-                close: {
-                  animation: 'timing' as const,
-                  config: {
-                    duration: 0, // Instant when going back
-                    useNativeDriver: true,
-                  },
-                },
-              },
-            } : getSendFlowTransitionConfig()),
+            ...(isFromRecipientScreen ? sendFlowInstantTransitionSpec : sendFlowStandardPreset()),
           }
         }}
       />
@@ -605,24 +400,7 @@ function MainStack() {
           return {
             headerShown: false,
             // No animation when navigating to/from SendAmountScreen or SelectRecentRecipientScreen
-            ...(shouldHaveNoTransition ? {
-              transitionSpec: {
-                open: {
-                  animation: 'timing' as const,
-                  config: {
-                    duration: 0, // Instant when opening
-                    useNativeDriver: true,
-                  },
-                },
-                close: {
-                  animation: 'timing' as const,
-                  config: {
-                    duration: 0, // Instant when closing
-                    useNativeDriver: true,
-                  },
-                },
-              },
-            } : getSendFlowTransitionConfig()),
+            ...(shouldHaveNoTransition ? sendFlowInstantTransitionSpec : sendFlowStandardPreset()),
           }
         }}
       />
@@ -631,7 +409,7 @@ function MainStack() {
         component={PaymentMethodScreen}
         options={{ 
           headerShown: false,
-          ...getSendFlowTransitionConfig(),
+          ...sendFlowStandardPreset(),
         }}
       />
       <Stack.Screen 
@@ -639,7 +417,7 @@ function MainStack() {
         component={ConfirmationScreen}
         options={{ 
           headerShown: false,
-          ...getSendFlowTransitionConfig(),
+          ...sendFlowStandardPreset(),
         }}
       />
       <Stack.Screen 
@@ -647,7 +425,7 @@ function MainStack() {
         component={SendTransactionDetailsScreen}
         options={{ 
           headerShown: false,
-          ...getSendFlowTransitionConfig(),
+          ...sendFlowStandardPreset(),
           gestureEnabled: false, // Disable all gestures - only allow navigation via buttons
         }}
       />
@@ -656,7 +434,7 @@ function MainStack() {
         component={OpenBankingScreen}
         options={{ 
           headerShown: false,
-          ...getSendFlowTransitionConfig(),
+          ...sendFlowStandardPreset(),
         }}
       />
       <Stack.Screen 
@@ -664,7 +442,7 @@ function MainStack() {
         component={VirtualBankAccountScreen}
         options={{ 
           headerShown: false,
-          ...getSendFlowTransitionConfig(),
+          ...sendFlowStandardPreset(),
         }}
       />
       <Stack.Screen
@@ -672,7 +450,7 @@ function MainStack() {
         component={MobileMoneyScreen}
         options={{ 
           headerShown: false,
-          ...getSendFlowTransitionConfig(),
+          ...sendFlowStandardPreset(),
         }}
       />
       <Stack.Screen 
@@ -680,7 +458,7 @@ function MainStack() {
         component={ReceiveMoneyScreen}
         options={{ 
           headerShown: false,
-          ...getTransitionConfig(),
+          ...mainStackPreset(),
         }}
       />
       <Stack.Screen
@@ -688,7 +466,7 @@ function MainStack() {
         component={OpenCurrencyAccountScreen}
         options={{
           headerShown: false,
-          ...getTransitionConfig(),
+          ...mainStackPreset(),
         }}
       />
       <Stack.Screen 
@@ -696,7 +474,7 @@ function MainStack() {
         component={TransactionDetailsScreen}
         options={{ 
           headerShown: false,
-          ...getTransitionConfig(),
+          ...mainStackPreset(),
         }}
       />
       <Stack.Screen 
@@ -704,7 +482,7 @@ function MainStack() {
         component={LegacyTransactionDetailsScreen}
         options={{ 
           headerShown: false,
-          ...getTransitionConfig(),
+          ...mainStackPreset(),
         }}
       />
       <Stack.Screen 
@@ -712,7 +490,7 @@ function MainStack() {
         component={RecipientsScreen}
         options={{ 
           headerShown: false,
-          ...getTransitionConfig(),
+          ...mainStackPreset(),
         }}
       />
       <Stack.Screen 
@@ -720,7 +498,7 @@ function MainStack() {
         component={CardScreen}
         options={{ 
           headerShown: false,
-          ...getTransitionConfig(),
+          ...mainStackPreset(),
         }}
       />
       <Stack.Screen 
@@ -728,7 +506,7 @@ function MainStack() {
         component={TransactionCardScreen}
         options={{ 
           headerShown: false,
-          ...getTransitionConfig(),
+          ...mainStackPreset(),
         }}
       />
       <Stack.Screen 
@@ -736,7 +514,7 @@ function MainStack() {
         component={SupportScreen}
         options={{ 
           headerShown: false,
-          ...getTransitionConfig(),
+          ...mainStackPreset(),
         }}
       />
       <Stack.Screen 
@@ -744,7 +522,7 @@ function MainStack() {
         component={ReceiveTransactionDetailsScreen}
         options={{ 
           headerShown: false,
-          ...getTransitionConfig(),
+          ...mainStackPreset(),
         }}
       />
       <Stack.Screen 
@@ -752,7 +530,7 @@ function MainStack() {
         component={AccountVerificationScreen}
         options={{ 
           headerShown: false,
-          ...getTransitionConfig(),
+          ...mainStackPreset(),
         }}
       />
       <Stack.Screen 
@@ -760,7 +538,7 @@ function MainStack() {
         component={ProfileEditScreen}
         options={{ 
           headerShown: false,
-          ...getTransitionConfig(),
+          ...mainStackPreset(),
         }}
       />
       <Stack.Screen 
@@ -768,7 +546,7 @@ function MainStack() {
         component={ChangePasswordScreen}
         options={{ 
           headerShown: false,
-          ...getTransitionConfig(),
+          ...mainStackPreset(),
         }}
       />
       <Stack.Screen
@@ -776,7 +554,7 @@ function MainStack() {
         component={ChangePinScreen}
         options={{
           headerShown: false,
-          ...getTransitionConfig(),
+          ...mainStackPreset(),
         }}
       />
       <Stack.Screen
@@ -784,7 +562,7 @@ function MainStack() {
         component={MfaSetupScreen}
         options={{
           headerShown: false,
-          ...getTransitionConfig(),
+          ...mainStackPreset(),
         }}
       />
       <Stack.Screen 
@@ -792,7 +570,7 @@ function MainStack() {
         component={NotificationsScreen}
         options={{ 
           headerShown: false,
-          ...getTransitionConfig(),
+          ...mainStackPreset(),
         }}
       />
       <Stack.Screen 
@@ -800,7 +578,7 @@ function MainStack() {
         component={InAppNotificationsScreen}
         options={{ 
           headerShown: false,
-          ...getTransitionConfig(),
+          ...mainStackPreset(),
         }}
       />
     </Stack.Navigator>
@@ -920,6 +698,8 @@ export default function AppNavigator() {
         setPinGate('setup')
         return
       }
+      await applyColdStartPinLockIfNeeded(user.id)
+      if (cancelled) return
       const idle = await evaluateIdleLock(user.id)
       if (cancelled) return
       if (idle === 'signed_out') {
@@ -947,8 +727,23 @@ export default function AppNavigator() {
         return
       }
       if (r === 'locked') emitAppLocked('locked')
-    }, 60000)
+    }, 30000)
     return () => clearInterval(id)
+  }, [user?.id, pinGate, signOut])
+
+  useEffect(() => {
+    if (!user?.id || pinGate !== 'main') return
+    const handleAppStateChange = async (nextAppState: AppStateStatus) => {
+      if (nextAppState !== 'active') return
+      const r = await evaluateIdleLock(user.id)
+      if (r === 'signed_out') {
+        await signOut()
+        return
+      }
+      if (r === 'locked') emitAppLocked('locked')
+    }
+    const subscription = AppState.addEventListener('change', handleAppStateChange)
+    return () => subscription.remove()
   }, [user?.id, pinGate, signOut])
   
   // Re-check onboarding when app comes to foreground (in case it was changed)

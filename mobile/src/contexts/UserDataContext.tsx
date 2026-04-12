@@ -41,7 +41,8 @@ interface UserDataContextType {
   refreshCommunicationPreferences: (force?: boolean) => Promise<void>
   commitCommunicationPreferences: (prefs: CommunicationPreferences) => Promise<void>
   refreshAll: (force?: boolean, opts?: { suppressGlobalLoading?: boolean }) => Promise<void>
-  refreshStaleData: () => Promise<void> // Refresh only stale data
+  /** Pass `{ force: true }` on pull-to-refresh so all feeds refetch regardless of TTL. */
+  refreshStaleData: (options?: { force?: boolean }) => Promise<void>
   invalidateCurrencies: () => Promise<void>
   invalidateExchangeRates: () => Promise<void>
   invalidateRecipients: () => Promise<void>
@@ -446,15 +447,25 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
     ])
   }
 
-  // Refresh only stale data (for background refresh)
-  const refreshStaleData = async () => {
-    if (refreshing) return // Prevent multiple simultaneous refreshes
-    
+  // Refresh only stale data (for background refresh). `force` refetches everything (pull-to-refresh).
+  const refreshStaleData = async (options?: { force?: boolean }) => {
+    if (refreshing && !options?.force) return
+
     setRefreshing(true)
     try {
+      if (options?.force) {
+        await Promise.all([
+          fetchCurrencies(true, false),
+          fetchExchangeRates(true, false),
+          fetchRecipients(true, false),
+          fetchTransactions(true, false),
+          fetchPaymentMethods(true, false),
+        ])
+        return
+      }
+
       const refreshPromises: Promise<void>[] = []
-      
-      // Check each data type and refresh if stale
+
       if (isCacheStale(lastFetchTimes.current.currencies, CacheTTL.CURRENCIES)) {
         refreshPromises.push(fetchCurrencies(false, false))
       }
@@ -470,7 +481,7 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
       if (isCacheStale(lastFetchTimes.current.paymentMethods, CacheTTL.PAYMENT_METHODS)) {
         refreshPromises.push(fetchPaymentMethods(false, false))
       }
-      
+
       await Promise.all(refreshPromises)
     } catch (error) {
       console.error('UserDataContext: Error refreshing stale data:', error)

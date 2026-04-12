@@ -40,6 +40,7 @@ import {
   shadows,
   userAvatarStyles,
   motion,
+  layout,
 } from '../../theme'
 import type { Colors } from '../../theme/colors'
 import { scaledFontSize } from '../../theme/typography'
@@ -84,11 +85,12 @@ interface DashboardTransaction {
 
 export default function DashboardScreen({ navigation }: NavigationProps) {
   const palette = useThemeColors()
-  const styles = useMemo(() => createDashboardStyles(palette), [palette])
+  const insets = useSafeAreaInsets()
+  const tabBarScrollInset = insets.bottom + layout.tabBarHeight + spacing[6]
+  const styles = useMemo(() => createDashboardStyles(palette, tabBarScrollInset), [palette, tabBarScrollInset])
   const { user, userProfile, refreshUserProfile, loading: authLoading } = useAuth()
   const { refreshStaleData, refreshing: dataRefreshing, financialFeedsEpoch } = useUserData()
   const { balances, refreshBalances } = useBalance()
-  const insets = useSafeAreaInsets()
   const [selectedCurrency, setSelectedCurrency] = useState<'USD' | 'EUR' | 'GBP'>('USD')
   const [balanceVisible, setBalanceVisible] = useState(true)
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false)
@@ -677,7 +679,8 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                 {headerAvatarUrl ? (
                   <Image
                     source={{ uri: headerAvatarUrl }}
-                    style={userAvatarStyles.image}
+                    style={StyleSheet.absoluteFillObject}
+                    contentFit="cover"
                     cachePolicy="memory-disk"
                     recyclingKey={headerAvatarUrl}
                     transition={0}
@@ -737,27 +740,19 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
             onRefresh={async () => {
               setRefreshing(true)
               try {
-                // Trigger sync to update transaction table in Supabase
-                // This ensures any missing transactions are synced from Bridge API
-                const syncPromise = apiPost('/api/noah/sync-transactions').catch((error) => {
+                void apiPost('/api/noah/sync-transactions').catch((error) => {
                   console.warn('[DASHBOARD] Sync failed on pull-to-refresh:', error)
-                  // Don't block refresh if sync fails
                 })
-                
-                // Refresh all data (forced - user pulled to refresh)
-                // Use Promise.allSettled to ensure all promises complete even if some fail
-                await Promise.allSettled([
-                  syncPromise, // Sync transactions from Bridge API
-                  refreshStaleData(), // Refresh stale user data
-                  refreshBalances(true), // Force refresh balances (bypass cache)
-                  fetchRecentTransactions(true), // Force refresh transactions (bypass cache)
-                ])
+                // Keep spinner tied to balances + recent tx only — full `refreshStaleData({ force })` must not block RefreshControl.
+                await Promise.allSettled([refreshBalances(true), fetchRecentTransactions(true)])
               } catch (error) {
                 console.error('Error refreshing dashboard:', error)
               } finally {
-                // Always reset refreshing state, even if there's an error
                 setRefreshing(false)
               }
+              void refreshStaleData({ force: true }).catch((e) => {
+                console.warn('[DASHBOARD] Background user-data refresh after pull:', e)
+              })
             }}
             tintColor={palette.primary.main}
           />
@@ -959,7 +954,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   )
 }
 
-function createDashboardStyles(c: Colors) {
+function createDashboardStyles(c: Colors, tabBarScrollInset: number) {
   return StyleSheet.create({
   container: {
     flex: 1,
@@ -1039,7 +1034,8 @@ function createDashboardStyles(c: Colors) {
   },
   scrollContent: {
     paddingTop: 0,
-    paddingBottom: 100, // Space for bottom navigation bar
+    flexGrow: 1,
+    paddingBottom: tabBarScrollInset,
   },
   whiteCard: {
     backgroundColor: c.background.primary,

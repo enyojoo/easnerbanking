@@ -15,7 +15,8 @@ import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
-import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
+import { colors, shadows, textStyles, borderRadius, spacing, motion } from '../../theme'
+import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 
 export default function ChangePasswordScreen({ navigation }: NavigationProps) {
@@ -33,20 +34,7 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
   const contentAnim = useRef(new Animated.Value(0)).current
 
   // Run entrance animations
-  React.useEffect(() => {
-    Animated.stagger(100, [
-      Animated.timing(headerAnim, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-      Animated.timing(contentAnim, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-    ]).start()
-  }, [headerAnim, contentAnim])
+  useCalmParallelEnterWhen(true, headerAnim, contentAnim)
 
   const handleSubmit = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
@@ -98,7 +86,7 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
                 transform: [{
                   translateY: headerAnim.interpolate({
                     inputRange: [0, 1],
-                    outputRange: [-20, 0],
+                    outputRange: [-motion.screenEnterTranslateY, 0],
                   })
                 }]
               }
@@ -126,7 +114,7 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
                 transform: [{
                   translateY: contentAnim.interpolate({
                     inputRange: [0, 1],
-                    outputRange: [30, 0],
+                    outputRange: [motion.screenEnterTranslateY, 0],
                   })
                 }]
               }

@@ -1,6 +1,7 @@
-import React from 'react'
-import { View, StyleSheet } from 'react-native'
+import React, { useMemo } from 'react'
+import { View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useThemeColors } from '../theme'
 
 interface ScreenWrapperProps {
   children: React.ReactNode
@@ -9,17 +10,18 @@ interface ScreenWrapperProps {
 
 export default function ScreenWrapper({ children, style }: ScreenWrapperProps) {
   const insets = useSafeAreaInsets()
-  
+  const palette = useThemeColors()
+  const dynamic = useMemo(
+    () => ({
+      flex: 1,
+      backgroundColor: palette.background.primary,
+    }),
+    [palette.background.primary],
+  )
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top }, style]}>
+    <View style={[dynamic, { paddingTop: insets.top }, style]}>
       {children}
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-  },
-})

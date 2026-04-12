@@ -74,7 +74,11 @@ export default function TransactionCardScreen({ navigation }: NavigationProps) {
 
   const onRefresh = async () => {
     setRefreshing(true)
-    await load()
+    try {
+      await load()
+    } finally {
+      setRefreshing(false)
+    }
   }
 
   const formatAmount = (amount: number, currency: string) => {
@@ -110,7 +114,7 @@ export default function TransactionCardScreen({ navigation }: NavigationProps) {
         </View>
 
         <View style={styles.searchWrap}>
-          <Ionicons name="search" size={18} color={colors.text.secondary} />
+          <Ionicons name="search" size={18} color={colors.primary.main} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search"

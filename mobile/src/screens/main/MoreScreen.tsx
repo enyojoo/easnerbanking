@@ -9,7 +9,6 @@ import {
   Alert,
   Modal,
   ActivityIndicator,
-  Animated,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -22,7 +21,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { NavigationProps, KYCSubmission } from '../../types'
 import { kycService } from '../../lib/kycService'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
+import { colors, shadows, textStyles, borderRadius, spacing, layout } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { supabase } from '../../lib/supabase'
 import {
@@ -134,26 +133,6 @@ function MoreContent({ navigation }: NavigationProps) {
       void refreshMfaStatus()
     }, [user?.id, userProfile?.noah_kyc_status, refreshUserProfile, refreshMfaStatus]),
   )
-
-  // Animation refs
-  const headerAnim = useRef(new Animated.Value(0)).current
-  const contentAnim = useRef(new Animated.Value(0)).current
-
-  // Run entrance animations
-  useEffect(() => {
-    Animated.stagger(100, [
-      Animated.timing(headerAnim, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-      Animated.timing(contentAnim, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-    ]).start()
-  }, [headerAnim, contentAnim])
 
   // Refresh KYC submissions when screen comes into focus
   useEffect(() => {
@@ -304,42 +283,19 @@ function MoreContent({ navigation }: NavigationProps) {
     <ScreenWrapper>
       <View style={styles.container}>
         {/* Premium Header - Matching Card/Transaction */}
-        <Animated.View
-          style={[
-            styles.header,
-            {
-              opacity: headerAnim,
-              transform: [{
-                translateY: headerAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [-20, 0],
-                })
-              }]
-            }
-          ]}
-        >
+        <View style={styles.header}>
           <Text style={styles.title}>More</Text>
-        </Animated.View>
+        </View>
 
         <ScrollView
           style={styles.scrollContainer}
-          contentContainerStyle={{ paddingBottom: insets.bottom + spacing[5] }}
+          contentContainerStyle={{
+            flexGrow: 1,
+            paddingBottom: insets.bottom + layout.tabBarHeight + spacing[6],
+          }}
           showsVerticalScrollIndicator={false}
         >
-          <Animated.View
-            style={[
-              styles.content,
-              {
-                opacity: contentAnim,
-                transform: [{
-                  translateY: contentAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [30, 0],
-                  })
-                }]
-              }
-            ]}
-          >
+          <View style={styles.content}>
           {/* Account Section */}
           <View style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Account</Text>
@@ -476,7 +432,7 @@ function MoreContent({ navigation }: NavigationProps) {
           <View style={styles.versionContainer}>
             <Text style={styles.versionText}>Version 1.0.0</Text>
           </View>
-          </Animated.View>
+          </View>
         </ScrollView>
       </View>
 

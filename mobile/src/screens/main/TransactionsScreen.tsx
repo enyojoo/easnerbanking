@@ -15,6 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import { ArrowDownLeft, ArrowUpRight, Monitor } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { ShimmerLoader } from '../../components/premium'
 import FrameContainer from '../../components/FrameContainer'
@@ -33,7 +34,8 @@ import {
   isCacheStale,
   CacheTTL,
 } from '../../lib/userCache'
-import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
+import { colors, shadows, textStyles, borderRadius, spacing, layout, motion, shouldPlayDecorativeMotionEnter } from '../../theme'
+import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { getTransactionStatusDisplay } from '../../utils/formatters'
 
@@ -118,6 +120,7 @@ function TransactionItem({
   onPress,
   formatAmount,
   formatDate,
+  skipRowEntranceAnim,
 }: { 
   item: CombinedTransaction
   index: number
@@ -125,27 +128,31 @@ function TransactionItem({
   onPress: () => void
   formatAmount: (amount: number, currency: string, isReceived?: boolean) => string
   formatDate: (dateString: string) => string
+  skipRowEntranceAnim: boolean
 }) {
   const scaleAnim = useRef(new Animated.Value(1)).current
-  const slideAnim = useRef(new Animated.Value(30)).current
+  const slideAnim = useRef(new Animated.Value(motion.listRowTranslateY)).current
   const opacityAnim = useRef(new Animated.Value(0)).current
 
   useEffect(() => {
+    if (skipRowEntranceAnim) {
+      slideAnim.setValue(0)
+      opacityAnim.setValue(1)
+      return
+    }
     Animated.parallel([
       Animated.timing(slideAnim, {
         toValue: 0,
-        duration: 300,
-        delay: Math.min(index * 50, 300),
+        duration: motion.listRowEnterMs,
         useNativeDriver: true,
       }),
       Animated.timing(opacityAnim, {
         toValue: 1,
-        duration: 300,
-        delay: Math.min(index * 50, 300),
+        duration: motion.listRowEnterMs,
         useNativeDriver: true,
       }),
     ]).start()
-  }, [slideAnim, opacityAnim, index])
+  }, [slideAnim, opacityAnim, skipRowEntranceAnim])
 
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
@@ -275,6 +282,7 @@ function TransactionsSkeleton() {
 }
 
 function TransactionsContent({ navigation }: NavigationProps) {
+  const insets = useSafeAreaInsets()
   const { userProfile } = useAuth()
   const currencies = useCurrencies()
   const { transactions: userTransactions, refreshStaleData, financialFeedsEpoch } = useUserData()
@@ -285,17 +293,14 @@ function TransactionsContent({ navigation }: NavigationProps) {
   const [refreshing, setRefreshing] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   
-  // Animation refs
   const headerAnim = useRef(new Animated.Value(0)).current
+  const [skipRowEntranceAnim, setSkipRowEntranceAnim] = useState(false)
 
-  // Run entrance animations
+  useCalmParallelEnterWhen(true, headerAnim)
+
   useEffect(() => {
-    Animated.timing(headerAnim, {
-      toValue: 1,
-      duration: 400,
-      useNativeDriver: true,
-    }).start()
-  }, [headerAnim])
+    void shouldPlayDecorativeMotionEnter().then((play) => setSkipRowEntranceAnim(!play))
+  }, [])
 
   // Track screen view
   useEffect(() => {
@@ -399,21 +404,13 @@ function TransactionsContent({ navigation }: NavigationProps) {
 
   const onRefresh = async () => {
     setRefreshing(true)
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     try {
-      // Trigger sync to update transaction table in Supabase
-      // This ensures any missing transactions are synced from Bridge API
-      const syncPromise = apiPost('/api/noah/sync-transactions').catch((error) => {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+      void apiPost('/api/noah/sync-transactions').catch((error) => {
         console.warn('[TRANSACTIONS] Sync failed on pull-to-refresh:', error)
-        // Don't block refresh if sync fails
       })
-      
-      // Refresh stale data from UserDataContext (forced - user pulled to refresh)
-      await Promise.all([
-        syncPromise, // Sync transactions from Bridge API
-        refreshStaleData(), // Refresh stale user data
-        fetchTransactions(true), // Force refresh transactions (bypass cache)
-      ])
+      // Spinner follows this screen’s list fetch only — `refreshStaleData({ force })` can be slow and must not block RefreshControl.
+      await fetchTransactions(true)
     } catch (error: any) {
       if (error?.message?.includes('Network request failed') || error?.name === 'TypeError') {
         console.warn("Network error refreshing transactions:", error?.message || 'Network unavailable')
@@ -423,6 +420,9 @@ function TransactionsContent({ navigation }: NavigationProps) {
     } finally {
       setRefreshing(false)
     }
+    void refreshStaleData({ force: true }).catch((e) => {
+      console.warn('[TRANSACTIONS] Background user-data refresh after pull:', e)
+    })
   }
 
   const formatAmount = (amount: number, currency: string, isReceived: boolean = false) => {
@@ -487,7 +487,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
               transform: [{
                 translateY: headerAnim.interpolate({
                   inputRange: [0, 1],
-                  outputRange: [-20, 0],
+                  outputRange: [-motion.screenEnterTranslateY, 0],
                 })
               }]
             }
@@ -503,7 +503,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
       {/* Search Bar */}
       <View style={styles.searchContainer}>
           <View style={styles.searchInputWrapper}>
-            <Ionicons name="search" size={20} color={colors.neutral[400]} style={styles.searchIcon} />
+            <Ionicons name="search" size={20} color={colors.primary.main} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           value={searchTerm}
@@ -515,7 +515,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
         />
             {searchTerm.length > 0 && (
               <Pressable android_ripple={ripple.neutral} onPress={() => setSearchTerm('')}>
-                <Ionicons name="close-circle" size={20} color={colors.neutral[400]} />
+                <Ionicons name="close-circle" size={20} color={colors.primary.main} />
               </Pressable>
             )}
           </View>
@@ -524,7 +524,10 @@ function TransactionsContent({ navigation }: NavigationProps) {
       {/* Transactions List */}
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + layout.tabBarHeight + spacing[6] },
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl 
@@ -563,6 +566,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
                     item={item}
                     index={index}
                     isLast={isLast}
+                    skipRowEntranceAnim={skipRowEntranceAnim}
                     onPress={() => {
                       navigation.navigate(detailScreen as never, { 
                         transactionId: item.transaction_id,
@@ -592,7 +596,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: spacing[5],
+    flexGrow: 1,
   },
   header: {
     paddingHorizontal: spacing[5],
@@ -656,7 +660,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing[4],
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E2E2', // Match More screen divider color
+    borderBottomColor: colors.border.default,
   },
   transactionItemLast: {
     borderBottomWidth: 0,

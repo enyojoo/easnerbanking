@@ -18,7 +18,8 @@ import * as DocumentPicker from 'expo-document-picker'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
-import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
+import { colors, shadows, textStyles, borderRadius, spacing, motion } from '../../theme'
+import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 
 interface MockRecipient {
@@ -107,20 +108,7 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
   const headerAnim = useRef(new Animated.Value(0)).current
   const contentAnim = useRef(new Animated.Value(0)).current
 
-  React.useEffect(() => {
-    Animated.stagger(100, [
-      Animated.timing(headerAnim, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-      Animated.timing(contentAnim, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-    ]).start()
-  }, [headerAnim, contentAnim])
+  useCalmParallelEnterWhen(true, headerAnim, contentAnim)
 
   // Auto-confirm simulation (would be replaced with actual payment detection)
   useEffect(() => {
@@ -240,7 +228,7 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
               transform: [{
                 translateY: headerAnim.interpolate({
                   inputRange: [0, 1],
-                  outputRange: [-20, 0],
+                  outputRange: [-motion.screenEnterTranslateY, 0],
                 })
               }]
             }
@@ -272,7 +260,7 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
                 transform: [{
                   translateY: contentAnim.interpolate({
                     inputRange: [0, 1],
-                    outputRange: [30, 0],
+                    outputRange: [motion.screenEnterTranslateY, 0],
                   })
                 }]
               }

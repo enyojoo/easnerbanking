@@ -8,5 +8,5 @@ export const layout = {
   listRowMinHeight: 56,
   cardPadding: 20,
   primaryButtonMinHeight: 56,
-  tabBarHeight: 64,
+  tabBarHeight: 56,
 } as const

@@ -18,7 +18,8 @@ import { useUserData } from '../../contexts/UserDataContext'
 import { NavigationProps } from '../../types'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { analytics } from '../../lib/analytics'
-import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
+import { colors, shadows, textStyles, borderRadius, spacing, motion } from '../../theme'
+import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { generateTransactionId } from '../../lib/transactionId'
 import { hasPin } from '../../lib/pinAuth'
@@ -48,20 +49,7 @@ export default function ConfirmationScreen({ navigation, route }: NavigationProp
     paymentMethod 
   } = route.params || {}
 
-  useEffect(() => {
-    Animated.stagger(150, [
-      Animated.timing(headerAnim, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-      Animated.timing(cardsAnim, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-    ]).start()
-  }, [headerAnim, cardsAnim])
+  useCalmParallelEnterWhen(true, headerAnim, cardsAnim)
 
   useEffect(() => {
     analytics.trackScreenView('Confirmation')
@@ -165,7 +153,7 @@ export default function ConfirmationScreen({ navigation, route }: NavigationProp
             transform: [{
               translateY: headerAnim.interpolate({
                 inputRange: [0, 1],
-                outputRange: [-20, 0],
+                outputRange: [-motion.screenEnterTranslateY, 0],
               })
             }]
           }
@@ -195,7 +183,7 @@ export default function ConfirmationScreen({ navigation, route }: NavigationProp
             transform: [{
               translateY: cardsAnim.interpolate({
                 inputRange: [0, 1],
-                outputRange: [30, 0],
+                outputRange: [motion.screenEnterTranslateY, 0],
               })
             }]
           }}

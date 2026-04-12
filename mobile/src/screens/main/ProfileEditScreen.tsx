@@ -20,19 +20,13 @@ import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
+import KeyboardSafeContainer from '../../components/KeyboardSafeContainer'
 import { useAuth } from '../../contexts/AuthContext'
 import { useUserData } from '../../contexts/UserDataContext'
 import { NavigationProps } from '../../types'
 import { userService, personalFromUpdateProfileResult, UserProfileData, UserStats } from '../../lib/userService'
-import {
-  colors,
-  shadows,
-  textStyles,
-  borderRadius,
-  spacing,
-  userAvatarStyles,
-  PROFILE_EDIT_AVATAR_SIZE,
-} from '../../theme'
+import { colors, shadows, textStyles, borderRadius, spacing, userAvatarStyles, PROFILE_EDIT_AVATAR_SIZE, motion } from '../../theme'
+import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { supabase } from '../../lib/supabase'
 import { splitFullNameForForm, initialsFromFullName, joinFullName } from '../../lib/userProfileHelpers'
@@ -85,20 +79,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
   const contentAnim = useRef(new Animated.Value(0)).current
 
   // Run entrance animations
-  useEffect(() => {
-    Animated.stagger(100, [
-      Animated.timing(headerAnim, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-      Animated.timing(contentAnim, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-    ]).start()
-  }, [headerAnim, contentAnim])
+  useCalmParallelEnterWhen(true, headerAnim, contentAnim)
 
   useEffect(() => {
     if (!userProfile) return
@@ -620,10 +601,15 @@ function ProfileEditContent({ navigation }: NavigationProps) {
 
   return (
     <ScreenWrapper>
-      <View style={styles.container}>
+      <KeyboardSafeContainer style={styles.container} keyboardVerticalOffset={0}>
         <ScrollView
           style={styles.scrollContainer}
-          contentContainerStyle={{ paddingBottom: insets.bottom + spacing[5] }}
+          contentContainerStyle={{
+            flexGrow: 1,
+            paddingBottom: insets.bottom + spacing[10],
+          }}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
           showsVerticalScrollIndicator={false}
         >
           {/* Premium Header - Matching Send Flow */}
@@ -635,7 +621,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                 transform: [{
                   translateY: headerAnim.interpolate({
                     inputRange: [0, 1],
-                    outputRange: [-20, 0],
+                    outputRange: [-motion.screenEnterTranslateY, 0],
                   })
                 }]
               }
@@ -663,7 +649,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                 transform: [{
                   translateY: contentAnim.interpolate({
                     inputRange: [0, 1],
-                    outputRange: [30, 0],
+                    outputRange: [motion.screenEnterTranslateY, 0],
                   })
                 }]
               }
@@ -848,7 +834,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
             </View>
           </Animated.View>
         </ScrollView>
-      </View>
+      </KeyboardSafeContainer>
 
       {/* Delete Account Confirmation Modal */}
       <Modal

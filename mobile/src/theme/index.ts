@@ -10,6 +10,7 @@ export type { Colors } from './colors'
 export { resolveThemeColors } from './resolveThemeColors'
 export { layout } from './layout'
 export { motion } from './motion'
+export { shouldPlayDecorativeMotionEnter } from './reduceMotion'
 export { ThemePaletteProvider, useThemeColors } from '../contexts/ThemePaletteContext'
 
 export {

@@ -28,7 +28,16 @@ import { getApiBaseUrl } from '../../lib/apiClient'
 import { noahService } from '../../lib/noahService'
 import { supabase } from '../../lib/supabase'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { colors, textStyles, borderRadius, spacing, fontSize, lineHeight as lineHeightScale } from '../../theme'
+import {
+  colors,
+  textStyles,
+  borderRadius,
+  spacing,
+  fontSize,
+  lineHeight as lineHeightScale,
+  motion,
+} from '../../theme'
+import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { CONSUMER_TIER_LADDER } from '../../lib/compliance-tier-ladder-copy'
 import { isTier1Complete } from '../../lib/compliance'
 
@@ -93,23 +102,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
   const headerAnim = useRef(new Animated.Value(0)).current
   const contentAnim = useRef(new Animated.Value(0)).current
 
-  // Run entrance animations
-  useEffect(() => {
-    if (!loading) {
-      Animated.stagger(100, [
-        Animated.timing(headerAnim, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-        Animated.timing(contentAnim, {
-          toValue: 1,
-          duration: 500,
-          useNativeDriver: true,
-        }),
-      ]).start()
-    }
-  }, [loading, headerAnim, contentAnim])
+  useCalmParallelEnterWhen(!loading, headerAnim, contentAnim)
 
   // Sync Noah customer status — fetches from the verification API and updates the database
   const syncNoahStatus = useCallback(async (silent: boolean = false, force: boolean = false) => {
@@ -1120,7 +1113,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                 transform: [{
                   translateY: headerAnim.interpolate({
                     inputRange: [0, 1],
-                    outputRange: [-20, 0],
+                    outputRange: [-motion.screenEnterTranslateY, 0],
                   })
                 }]
               }
@@ -1152,7 +1145,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                 transform: [{
                   translateY: contentAnim.interpolate({
                     inputRange: [0, 1],
-                    outputRange: [30, 0],
+                    outputRange: [motion.screenEnterTranslateY, 0],
                   })
                 }]
               }

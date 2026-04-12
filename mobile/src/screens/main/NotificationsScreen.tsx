@@ -20,7 +20,8 @@ import ScreenWrapper from '../../components/ScreenWrapper'
 import { useAuth } from '../../contexts/AuthContext'
 import { useUserData } from '../../contexts/UserDataContext'
 import { NavigationProps } from '../../types'
-import { colors, textStyles, spacing } from '../../theme'
+import { colors, textStyles, spacing, motion } from '../../theme'
+import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { apiPatch, apiPost } from '../../lib/apiClient'
 import { pushNotificationService } from '../../lib/pushNotificationService'
@@ -52,20 +53,7 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
     }, [refreshCommunicationPreferences]),
   )
 
-  useEffect(() => {
-    Animated.stagger(100, [
-      Animated.timing(headerAnim, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-      Animated.timing(contentAnim, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-    ]).start()
-  }, [headerAnim, contentAnim])
+  useCalmParallelEnterWhen(true, headerAnim, contentAnim)
 
   const patchPrefs = async (next: CommunicationPreferences) => {
     const res = await apiPatch('/api/settings/communication', {
@@ -195,7 +183,7 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
                   {
                     translateY: headerAnim.interpolate({
                       inputRange: [0, 1],
-                      outputRange: [-20, 0],
+                      outputRange: [-motion.screenEnterTranslateY, 0],
                     }),
                   },
                 ],
@@ -225,7 +213,7 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
                   {
                     translateY: contentAnim.interpolate({
                       inputRange: [0, 1],
-                      outputRange: [30, 0],
+                      outputRange: [motion.screenEnterTranslateY, 0],
                     }),
                   },
                 ],

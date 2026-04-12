@@ -24,7 +24,8 @@ import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { analytics } from '../../lib/analytics'
 import { transactionService } from '../../lib/transactionService'
 import { getAccountTypeConfigFromCurrency, formatFieldValue } from '../../lib/currencyAccountTypes'
-import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
+import { colors, shadows, textStyles, borderRadius, spacing, motion } from '../../theme'
+import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 
 export default function PaymentMethodScreen({ navigation, route }: NavigationProps) {
@@ -52,20 +53,7 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
 
   const { sendAmount, sendCurrency, receiveAmount, receiveCurrency, exchangeRate, fee, feeType, recipient } = route.params || {}
 
-  useEffect(() => {
-    Animated.stagger(100, [
-      Animated.timing(headerAnim, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-      Animated.timing(contentAnim, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-    ]).start()
-  }, [headerAnim, contentAnim])
+  useCalmParallelEnterWhen(true, headerAnim, contentAnim)
 
   useEffect(() => {
     analytics.trackScreenView('PaymentMethod')
@@ -215,7 +203,7 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
             transform: [{
               translateY: headerAnim.interpolate({
                 inputRange: [0, 1],
-                outputRange: [-20, 0],
+                outputRange: [-motion.screenEnterTranslateY, 0],
               })
             }]
           }
@@ -245,7 +233,7 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
             transform: [{
               translateY: contentAnim.interpolate({
                 inputRange: [0, 1],
-                outputRange: [30, 0],
+                outputRange: [motion.screenEnterTranslateY, 0],
               })
             }]
           }}
