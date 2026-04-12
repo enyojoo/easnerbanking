@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
+  Pressable, Platform,
   TextInput,
   Animated,
 } from 'react-native'
@@ -16,6 +16,7 @@ import { Clipboard, Alert } from 'react-native'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 
 interface MockRecipient {
   id: string
@@ -154,12 +155,13 @@ export default function MobileMoneyScreen({ navigation, route }: NavigationProps
             }
           ]}
         >
-          <TouchableOpacity
+          <Pressable
+           android_ripple={ripple.neutral}
             onPress={() => navigation.goBack()}
             style={styles.backButton}
           >
             <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-          </TouchableOpacity>
+          </Pressable>
           <View style={styles.headerContent}>
             <Text style={styles.title}>Mobile Money Payment</Text>
           </View>
@@ -208,11 +210,10 @@ export default function MobileMoneyScreen({ navigation, route }: NavigationProps
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Transaction ID:</Text>
-                <TouchableOpacity
+                <Pressable
+                 android_ripple={ripple.neutral}
                   style={styles.summaryValueRow}
-                  onPress={() => handleCopy(transactionId || '', 'transactionId')}
-                  activeOpacity={0.7}
-                >
+                  onPress={() => handleCopy(transactionId || '', 'transactionId')} >
                   <Text style={styles.summaryValue}>{transactionId || 'N/A'}</Text>
                   <Ionicons 
                     name={copiedStates.transactionId ? "checkmark" : "copy-outline"} 
@@ -220,7 +221,7 @@ export default function MobileMoneyScreen({ navigation, route }: NavigationProps
                     color={copiedStates.transactionId ? colors.success.main : colors.text.secondary} 
                     style={{ marginLeft: 8 }}
                   />
-                </TouchableOpacity>
+                </Pressable>
               </View>
             </View>
 
@@ -270,14 +271,13 @@ export default function MobileMoneyScreen({ navigation, route }: NavigationProps
 
         {/* Action Button */}
         <View style={[styles.bottomContainer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-          <TouchableOpacity
+          <Pressable
+           android_ripple={ripple.neutral}
             style={[
               styles.payButton,
               (!phoneNumber || paymentConfirmed) && styles.payButtonDisabled
             ]}
-            onPress={handleConfirmPayment}
-            activeOpacity={0.8}
-            disabled={!phoneNumber || paymentConfirmed}
+            onPress={handleConfirmPayment} disabled={!phoneNumber || paymentConfirmed}
           >
             <LinearGradient
               colors={(!phoneNumber || paymentConfirmed)
@@ -293,7 +293,7 @@ export default function MobileMoneyScreen({ navigation, route }: NavigationProps
                   : `Pay ${formatCurrency(sendAmount || 0, sendCurrency || 'USD')}`}
               </Text>
             </LinearGradient>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </View>
     </ScreenWrapper>

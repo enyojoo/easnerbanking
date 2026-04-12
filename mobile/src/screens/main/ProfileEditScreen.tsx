@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   TextInput,
   Alert,
   Modal,
@@ -33,6 +33,7 @@ import {
   userAvatarStyles,
   PROFILE_EDIT_AVATAR_SIZE,
 } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 import { supabase } from '../../lib/supabase'
 import { splitFullNameForForm, initialsFromFullName, joinFullName } from '../../lib/userProfileHelpers'
 import * as ImagePicker from 'expo-image-picker'
@@ -497,7 +498,8 @@ function ProfileEditContent({ navigation }: NavigationProps) {
       <Text style={isEditing ? styles.fieldLabelEdit : styles.fieldLabel}>Date of Birth</Text>
       {isEditing ? (
         <>
-          <TouchableOpacity
+          <Pressable
+           android_ripple={ripple.neutral}
             style={[styles.fieldInput, styles.dateInputContainer]}
             onPress={() => {
               // Initialize selectedDate with current value when opening picker
@@ -505,9 +507,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                 setSelectedDate(new Date(editProfileData.dateOfBirth))
               }
               setShowDatePicker(true)
-            }}
-            activeOpacity={0.7}
-          >
+            }} >
             <Text style={[
               styles.dateInputText,
               !editProfileData.dateOfBirth && { color: colors.text.tertiary }
@@ -517,7 +517,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                 : 'Select date of birth'}
             </Text>
             <Ionicons name="calendar-outline" size={18} color={colors.text.secondary} />
-          </TouchableOpacity>
+          </Pressable>
           {Platform.OS === 'android' && showDatePicker ? (
             <DateTimePicker
               value={selectedDate}
@@ -641,16 +641,15 @@ function ProfileEditContent({ navigation }: NavigationProps) {
               }
             ]}
           >
-            <TouchableOpacity
+            <Pressable
+             android_ripple={ripple.neutral}
               onPress={async () => {
                 await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                 navigation.goBack()
               }}
-              style={styles.backButton}
-              activeOpacity={0.7}
-            >
+              style={styles.backButton} >
               <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-            </TouchableOpacity>
+            </Pressable>
             <View style={styles.headerContent}>
               <Text style={styles.title}>Your Profile</Text>
             </View>
@@ -674,15 +673,14 @@ function ProfileEditContent({ navigation }: NavigationProps) {
               <View style={styles.profileTopRow}>
                 <View style={styles.avatarColumn}>
                   {isEditing ? (
-                    <TouchableOpacity
+                    <Pressable
+                     android_ripple={ripple.neutral}
                       style={styles.avatarEditTouchable}
                       onPress={async () => {
                         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                         void handlePickProfilePhoto()
                       }}
-                      disabled={uploadingAvatar || loading}
-                      activeOpacity={0.9}
-                      accessibilityRole="button"
+                      disabled={uploadingAvatar || loading} accessibilityRole="button"
                       accessibilityLabel="Upload or change profile photo"
                     >
                       <View
@@ -714,7 +712,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                           </View>
                         ) : null}
                       </View>
-                    </TouchableOpacity>
+                    </Pressable>
                   ) : (
                     <View style={[userAvatarStyles.circle, styles.profileAvatarCircle]}>
                       {profileData.avatarUrl?.trim() ? (
@@ -728,46 +726,42 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                     </View>
                   )}
                   {isEditing && editProfileData.avatarUrl?.trim() ? (
-                    <TouchableOpacity
+                    <Pressable
+                     android_ripple={ripple.neutral}
                       onPress={() => setEditProfileData((p) => ({ ...p, avatarUrl: null }))}
-                      disabled={uploadingAvatar || loading}
-                      activeOpacity={0.7}
-                    >
+                      disabled={uploadingAvatar || loading} >
                       <Text style={styles.avatarRemoveText}>Remove</Text>
-                    </TouchableOpacity>
+                    </Pressable>
                   ) : null}
                 </View>
                 <View style={styles.buttonContainer}>
                   {!isEditing ? (
-                    <TouchableOpacity
+                    <Pressable
+                     android_ripple={ripple.neutral}
                       onPress={handleEditProfile}
-                      style={styles.actionButton}
-                      activeOpacity={0.7}
-                    >
+                      style={styles.actionButton} >
                       <Text style={styles.actionButtonText}>Edit</Text>
-                    </TouchableOpacity>
+                    </Pressable>
                   ) : (
                     <>
-                      <TouchableOpacity
+                      <Pressable
+                       android_ripple={ripple.neutral}
                         onPress={handleCancelEdit}
-                        disabled={loading}
-                        activeOpacity={0.7}
-                        style={styles.actionButtonSecondary}
+                        disabled={loading} style={styles.actionButtonSecondary}
                       >
                         <Text style={styles.actionButtonTextSecondary}>Discard</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
+                      </Pressable>
+                      <Pressable
+                       android_ripple={ripple.neutral}
                         onPress={handleSaveProfile}
-                        disabled={loading}
-                        activeOpacity={0.7}
-                        style={[styles.actionButton, loading && styles.actionButtonDisabled]}
+                        disabled={loading} style={[styles.actionButton, loading && styles.actionButtonDisabled]}
                       >
                         {loading ? (
                           <ActivityIndicator size={11} color={colors.text.inverse} />
                         ) : (
                           <Text style={styles.actionButtonText}>Save</Text>
                         )}
-                      </TouchableOpacity>
+                      </Pressable>
                     </>
                   )}
                 </View>
@@ -842,16 +836,15 @@ function ProfileEditContent({ navigation }: NavigationProps) {
 
             {/* Delete Account Section */}
             <View style={styles.deleteSection}>
-              <TouchableOpacity
+              <Pressable
+               android_ripple={ripple.neutral}
                 onPress={async () => {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                   setShowDeleteDialog(true)
                 }}
-                style={styles.deleteButton}
-                activeOpacity={0.7}
-              >
+                style={styles.deleteButton} >
                 <Text style={styles.deleteButtonText}>Delete Account</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </Animated.View>
         </ScrollView>
@@ -871,7 +864,8 @@ function ProfileEditContent({ navigation }: NavigationProps) {
               Are you sure you want to delete your account? This action cannot be undone and all your data will be permanently deleted.
             </Text>
             <View style={styles.modalButtons}>
-              <TouchableOpacity
+              <Pressable
+               android_ripple={ripple.neutral}
                 style={[styles.modalButton, styles.modalButtonCancel]}
                 onPress={async () => {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -879,13 +873,14 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                 }}
               >
                 <Text style={styles.modalButtonTextCancel}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
+              </Pressable>
+              <Pressable
+               android_ripple={ripple.neutral}
                 style={[styles.modalButton, styles.modalButtonConfirm]}
                 onPress={handleDeleteAccount}
               >
                 <Text style={styles.modalButtonTextConfirm}>Delete Account</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
         </View>
@@ -901,13 +896,13 @@ function ProfileEditContent({ navigation }: NavigationProps) {
           <View style={styles.dateModalOverlay}>
             <View style={[styles.dateModalContent, { paddingBottom: insets.bottom }]}>
               <View style={styles.dateModalHeader}>
-                <TouchableOpacity style={styles.dateCancelButton} onPress={handleDatePickerCancel}>
+                <Pressable android_ripple={ripple.neutral} style={styles.dateCancelButton} onPress={handleDatePickerCancel}>
                   <Text style={styles.dateCancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
+                </Pressable>
                 <Text style={styles.dateModalTitle}>Select Date of Birth</Text>
-                <TouchableOpacity style={styles.dateConfirmButtonHeader} onPress={handleDatePickerConfirm}>
+                <Pressable android_ripple={ripple.neutral} style={styles.dateConfirmButtonHeader} onPress={handleDatePickerConfirm}>
                   <Text style={styles.dateConfirmButtonTextHeader}>Done</Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
               <View style={styles.datePickerWrapper}>
                 <DateTimePicker

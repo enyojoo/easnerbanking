@@ -5,7 +5,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
+  Pressable, Platform,
   Alert,
   Modal,
   ActivityIndicator,
@@ -23,6 +23,7 @@ import { NavigationProps, KYCSubmission } from '../../types'
 import { kycService } from '../../lib/kycService'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 import { supabase } from '../../lib/supabase'
 import {
   getVerifiedTotpFactorId,
@@ -282,14 +283,13 @@ function MoreContent({ navigation }: NavigationProps) {
     isDestructive: boolean = false,
     isLast: boolean = false
   ) => (
-    <TouchableOpacity
+    <Pressable
+     android_ripple={ripple.neutral}
       style={[styles.menuItem, isLast && styles.menuItemLast]}
       onPress={async () => {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
         onPress()
-      }}
-      activeOpacity={0.7}
-    >
+      }} >
       <Text style={[styles.menuItemText, isDestructive && styles.destructiveText]}>
         {title}
       </Text>
@@ -297,7 +297,7 @@ function MoreContent({ navigation }: NavigationProps) {
         {rightComponent}
         <Ionicons name="chevron-forward" size={20} color={colors.neutral[400]} />
       </View>
-    </TouchableOpacity>
+    </Pressable>
   )
 
   return (
@@ -351,14 +351,13 @@ function MoreContent({ navigation }: NavigationProps) {
                 false,
                 false
               )}
-              <TouchableOpacity
+              <Pressable
+               android_ripple={ripple.neutral}
                 style={styles.menuItem}
                 onPress={async () => {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                   navigateFromMoreTab('AccountVerification')
-                }}
-                activeOpacity={0.7}
-              >
+                }} >
                 <Text style={styles.menuItemText}>Account verification</Text>
                 <View style={styles.menuItemRight}>
                   {tierBadge.tone === 'green' ? (
@@ -375,7 +374,7 @@ function MoreContent({ navigation }: NavigationProps) {
                   )}
                   <Ionicons name="chevron-forward" size={20} color={colors.neutral[400]} />
                 </View>
-              </TouchableOpacity>
+              </Pressable>
               {renderMenuItem(
                 'Notifications',
                 () => navigation.navigate('Notifications' as never),
@@ -461,17 +460,16 @@ function MoreContent({ navigation }: NavigationProps) {
 
           {/* Sign Out Button */}
           <View style={styles.signOutContainer}>
-            <TouchableOpacity
+            <Pressable
+             android_ripple={ripple.neutral}
               style={styles.signOutButton}
               onPress={async () => {
                 await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                 setShowLogoutDialog(true)
-              }}
-              activeOpacity={0.7}
-            >
+              }} >
               <Ionicons name="log-out-outline" size={20} color={colors.error.main} />
               <Text style={styles.signOutText}>Logout</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
 
           {/* App Version */}
@@ -496,14 +494,16 @@ function MoreContent({ navigation }: NavigationProps) {
               Are you sure you want to logout? You'll need to sign in again to access your account.
             </Text>
             <View style={styles.modalButtons}>
-              <TouchableOpacity
+              <Pressable
+               android_ripple={ripple.neutral}
                 style={[styles.modalButton, styles.modalButtonCancel]}
                 onPress={() => setShowLogoutDialog(false)}
                 disabled={isLoggingOut}
               >
                 <Text style={styles.modalButtonTextCancel}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
+              </Pressable>
+              <Pressable
+               android_ripple={ripple.neutral}
                 style={[styles.modalButton, styles.modalButtonConfirm]}
                 onPress={handleSignOut}
                 disabled={isLoggingOut}
@@ -513,7 +513,7 @@ function MoreContent({ navigation }: NavigationProps) {
                 ) : (
                   <Text style={styles.modalButtonTextConfirm}>Logout</Text>
                 )}
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
         </View>

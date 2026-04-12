@@ -1,17 +1,19 @@
 import React from 'react'
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import { View, Text, StyleSheet, Pressable, Platform } from 'react-native'
+import { ripple } from '../../lib/androidRipple'
 import { NavigationProps } from '../../types'
 
 export default function SendMoneyScreen({ navigation }: NavigationProps) {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Send Money</Text>
-      <TouchableOpacity
+      <Pressable
+       android_ripple={ripple.neutral}
         style={styles.button}
         onPress={() => navigation.navigate('Send')}
       >
         <Text style={styles.buttonText}>Start New Transfer</Text>
-      </TouchableOpacity>
+      </Pressable>
     </View>
   )
 }

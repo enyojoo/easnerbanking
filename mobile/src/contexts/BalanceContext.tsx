@@ -45,27 +45,23 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
   
   const BALANCE_CACHE_KEY = `easner_wallet_balances_${user?.id || 'anonymous'}`
 
-  // Load balances from cache
-  const loadCachedBalances = async (): Promise<{ USD: string; EUR: string } | null> => {
+  type BalanceCacheEnvelope = { data: { USD: string; EUR: string }; timestamp: number }
+
+  /** Stale-while-revalidate: never delete on read; caller decides when to refetch. */
+  const readBalanceCacheEnvelope = async (): Promise<BalanceCacheEnvelope | null> => {
     try {
       const cached = await AsyncStorage.getItem(BALANCE_CACHE_KEY)
       if (!cached) return null
-      
-      const { data, timestamp } = JSON.parse(cached)
-      const age = Date.now() - timestamp
-      
-      // Return cached data if still fresh
-      if (age < BALANCE_CACHE_TTL) {
-        return data
-      }
-      
-      // Cache expired, remove it
-      await AsyncStorage.removeItem(BALANCE_CACHE_KEY)
-      return null
+      return JSON.parse(cached) as BalanceCacheEnvelope
     } catch (error) {
-      console.warn('[BalanceContext] Error loading cached balances:', error)
+      console.warn('[BalanceContext] Error reading balance cache:', error)
       return null
     }
+  }
+
+  const loadCachedBalances = async (): Promise<{ USD: string; EUR: string } | null> => {
+    const env = await readBalanceCacheEnvelope()
+    return env?.data ?? null
   }
 
   // Save balances to cache
@@ -96,14 +92,12 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
       return
     }
     
-    // Also check cache before fetching
+    // Disk cache: skip network only when envelope is still within TTL
     if (!force) {
-      const cachedBalances = await loadCachedBalances()
-      if (cachedBalances) {
-        // Cache is fresh, use it and skip API call
-        setBalances(cachedBalances)
-        // Update lastFetchTime to prevent unnecessary fetches
-        lastFetchTimeRef.current = Date.now()
+      const env = await readBalanceCacheEnvelope()
+      if (env && Date.now() - env.timestamp < BALANCE_CACHE_TTL) {
+        setBalances(env.data)
+        lastFetchTimeRef.current = env.timestamp
         return
       }
     }
@@ -176,13 +170,11 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
     }
 
     const initializeBalances = async () => {
-      // Load from cache immediately for instant display
-      const cachedBalances = await loadCachedBalances()
-      if (cachedBalances) {
-        setBalances(cachedBalances)
+      const env = await readBalanceCacheEnvelope()
+      if (env?.data) {
+        setBalances(env.data)
+        lastFetchTimeRef.current = env.timestamp
       }
-      
-      // Fetch fresh data in background (stale-while-revalidate)
       await fetchBalances(false)
     }
 

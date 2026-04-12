@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
+  Pressable, Platform,
   ActivityIndicator,
   Animated,
 } from 'react-native'
@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 
 export default function OpenBankingScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
@@ -82,12 +83,13 @@ export default function OpenBankingScreen({ navigation, route }: NavigationProps
             }
           ]}
         >
-          <TouchableOpacity
+          <Pressable
+           android_ripple={ripple.neutral}
             onPress={() => navigation.goBack()}
             style={styles.backButton}
           >
             <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-          </TouchableOpacity>
+          </Pressable>
           <View style={styles.headerContent}>
             <Text style={styles.title}>
               {isSBP ? 'Connect via SBP' : 'Link Bank Account'}
@@ -132,11 +134,10 @@ export default function OpenBankingScreen({ navigation, route }: NavigationProps
               </Text>
             </View>
           ) : (
-            <TouchableOpacity
+            <Pressable
+             android_ripple={ripple.neutral}
               style={styles.connectButton}
-              onPress={handleConnect}
-              activeOpacity={0.8}
-            >
+              onPress={handleConnect} >
               <LinearGradient
                 colors={colors.primary.gradient}
                 start={{ x: 0, y: 0 }}
@@ -147,7 +148,7 @@ export default function OpenBankingScreen({ navigation, route }: NavigationProps
                   {isSBP ? 'Connect via SBP' : 'Connect Bank Account'}
                 </Text>
               </LinearGradient>
-            </TouchableOpacity>
+            </Pressable>
           )}
         </Animated.View>
       </View>

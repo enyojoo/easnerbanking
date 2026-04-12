@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -15,6 +15,7 @@ import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { NavigationProps } from '../../types'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 import { useAuth } from '../../contexts/AuthContext'
 import { hasPin, setupPin, verifyPin, getLockoutState } from '../../lib/pinAuth'
 import { appPinStrings } from '../../constants/app-pin-en'
@@ -282,26 +283,24 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
     <View style={[styles.container, { paddingTop: insets.top + spacing[4] }]}>
       <KeyboardAvoidingView style={styles.keyboardView} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.header}>
-          <TouchableOpacity
+          <Pressable
+           android_ripple={ripple.neutral}
             style={styles.headerButton}
-            onPress={handleHeaderBack}
-            activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            onPress={handleHeaderBack} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <View style={styles.headerButtonCircle}>
               <Ionicons name="arrow-back" size={20} color={colors.text.primary} />
             </View>
-          </TouchableOpacity>
+          </Pressable>
           <View style={styles.headerSpacer} />
-          <TouchableOpacity
+          <Pressable
+           android_ripple={ripple.neutral}
             style={styles.headerButton}
-            onPress={() => Alert.alert(helpTitle, helpBody)}
-            activeOpacity={0.7}
-          >
+            onPress={() => Alert.alert(helpTitle, helpBody)} >
             <View style={styles.headerButtonCircle}>
               <Ionicons name="help-circle-outline" size={20} color={colors.text.primary} />
             </View>
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
         <View style={styles.content}>
@@ -343,42 +342,39 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
           <View style={styles.keypadContainer}>
             <View style={styles.keypadGrid}>
               {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
-                <TouchableOpacity
+                <Pressable
+                 android_ripple={ripple.neutral}
                   key={num}
                   style={styles.keypadButton}
                   onPress={() => handleNumberPress(num.toString())}
-                  onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-                  activeOpacity={0.6}
-                  disabled={keypadDisabled}
+                  onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} disabled={keypadDisabled}
                 >
                   <Text style={styles.keypadButtonText}>{num}</Text>
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </View>
             <View style={styles.keypadBottomRow}>
               <View style={styles.keypadButtonSpacer} />
-              <TouchableOpacity
+              <Pressable
+               android_ripple={ripple.neutral}
                 style={styles.keypadButton}
                 onPress={() => handleNumberPress('0')}
-                onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-                activeOpacity={0.6}
-                disabled={keypadDisabled}
+                onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} disabled={keypadDisabled}
               >
                 <Text style={styles.keypadButtonText}>0</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
+              </Pressable>
+              <Pressable
+               android_ripple={ripple.neutral}
                 style={styles.keypadButton}
                 onPress={handleBackspace}
-                onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-                activeOpacity={0.6}
-                disabled={keypadDisabled || filledCount === 0}
+                onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} disabled={keypadDisabled || filledCount === 0}
               >
                 <Ionicons
                   name="backspace"
                   size={24}
                   color={filledCount === 0 ? colors.text.secondary : colors.error.main}
                 />
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
         </View>

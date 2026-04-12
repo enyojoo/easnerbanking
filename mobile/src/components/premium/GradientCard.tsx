@@ -11,13 +11,15 @@ import React, { useRef, useCallback } from 'react'
 import {
   StyleSheet,
   ViewStyle,
-  TouchableOpacity,
+  Pressable,
+  Platform,
   View,
   Animated,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
 import { colors, shadows, borderRadius } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 
 interface GradientCardProps {
   children: React.ReactNode
@@ -134,14 +136,18 @@ export default function GradientCard({
   if (onPress) {
     return (
       <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-        <TouchableOpacity
+        <Pressable
           onPress={handlePress}
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
-          activeOpacity={1}
+          android_ripple={ripple.primaryTint}
+          style={({ pressed }) => [
+            Platform.OS === 'android' && { borderRadius: cardRadius, overflow: 'hidden' as const },
+            pressed && Platform.OS === 'ios' && styles.cardPressedIOS,
+          ]}
         >
           {renderCard()}
-        </TouchableOpacity>
+        </Pressable>
       </Animated.View>
     )
   }
@@ -152,6 +158,9 @@ export default function GradientCard({
 const styles = StyleSheet.create({
   card: {
     overflow: 'hidden',
+  },
+  cardPressedIOS: {
+    opacity: 0.96,
   },
   content: {
     padding: 20,

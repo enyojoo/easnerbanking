@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable, Platform,
   StyleSheet,
   ScrollView,
   Alert,
@@ -19,6 +19,7 @@ import { NavigationProps } from '../../types'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { analytics } from '../../lib/analytics'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 import { generateTransactionId } from '../../lib/transactionId'
 import { hasPin } from '../../lib/pinAuth'
 import { PinChallengeModal } from '../../components/pin'
@@ -170,12 +171,13 @@ export default function ConfirmationScreen({ navigation, route }: NavigationProp
           }
         ]}
       >
-        <TouchableOpacity 
+        <Pressable 
+         android_ripple={ripple.neutral} 
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
           <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-        </TouchableOpacity>
+        </Pressable>
         <View style={styles.headerContent}>
           <Text style={styles.title}>Confirm Transfer</Text>
           <Text style={styles.subtitle}>Review your transaction</Text>
@@ -337,16 +339,18 @@ export default function ConfirmationScreen({ navigation, route }: NavigationProp
       
       {/* Bottom Buttons */}
       <View style={[styles.bottomContainer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-        <TouchableOpacity
+        <Pressable
+         android_ripple={ripple.neutral}
           style={styles.cancelButton}
           onPress={() => navigation.goBack()}
           disabled={isProcessing}
         >
           <Text style={styles.cancelButtonText}>Cancel</Text>
-        </TouchableOpacity>
+        </Pressable>
         
         <Animated.View style={[styles.confirmButtonWrapper, { transform: [{ scale: scaleAnim }] }]}>
-        <TouchableOpacity
+        <Pressable
+           android_ripple={ripple.neutral}
             style={[styles.confirmButton, isProcessing && styles.confirmButtonDisabled]}
           onPress={requestConfirmTransfer}
           disabled={isProcessing}
@@ -366,7 +370,7 @@ export default function ConfirmationScreen({ navigation, route }: NavigationProp
                 </>
           )}
             </LinearGradient>
-        </TouchableOpacity>
+        </Pressable>
         </Animated.View>
       </View>
 
@@ -458,9 +462,8 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   summaryAmount: {
-    ...textStyles.titleLarge,
+    ...textStyles.currencyLarge,
     color: colors.text.inverse,
-    fontWeight: '700',
   },
   arrowContainer: {
     paddingHorizontal: spacing[3],
@@ -569,8 +572,8 @@ const styles = StyleSheet.create({
     marginLeft: spacing[3],
   },
   totalValue: {
+    ...textStyles.currencyMedium,
     color: colors.primary.main,
-    fontWeight: '700',
   },
   deliveryBadge: {
     flexDirection: 'row',

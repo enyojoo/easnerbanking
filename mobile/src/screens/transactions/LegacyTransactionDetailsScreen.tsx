@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
+  Pressable, Platform,
   Alert,
   ActivityIndicator,
   RefreshControl,
@@ -23,6 +23,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { analytics } from '../../lib/analytics'
 import { TransactionTimeline } from '../../components/TransactionTimeline'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 
 export default function LegacyTransactionDetailsScreen({ navigation, route }: NavigationProps) {
   const { userProfile } = useAuth()
@@ -270,15 +271,16 @@ export default function LegacyTransactionDetailsScreen({ navigation, route }: Na
           </View>
           <Text style={styles.errorTitle}>Something went wrong</Text>
           <Text style={styles.errorText}>{error || 'Transaction not found'}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={fetchTransactionDetails}>
+          <Pressable android_ripple={ripple.neutral} style={styles.retryButton} onPress={fetchTransactionDetails}>
             <Text style={styles.retryButtonText}>Try Again</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
+          </Pressable>
+          <Pressable 
+           android_ripple={ripple.neutral} 
             style={styles.dashboardButton} 
             onPress={handleGoToDashboard}
           >
             <Text style={styles.dashboardButtonText}>Go to Dashboard</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </View>
     )
@@ -362,7 +364,8 @@ export default function LegacyTransactionDetailsScreen({ navigation, route }: Na
             <View style={styles.card}>
               <View style={styles.transactionIdRow}>
                 <Text style={styles.transactionIdLabel}>Transaction ID</Text>
-                <TouchableOpacity 
+                <Pressable 
+                 android_ripple={ripple.neutral} 
                   style={styles.transactionIdValueRow}
                   onPress={() => handleCopy(transaction.transaction_id, "transactionId")}
                 >
@@ -374,7 +377,7 @@ export default function LegacyTransactionDetailsScreen({ navigation, route }: Na
                       color={copiedStates.transactionId ? colors.success.main : colors.primary.main} 
                     />
                   </View>
-                </TouchableOpacity>
+                </Pressable>
               </View>
             </View>
           )}
@@ -425,10 +428,10 @@ export default function LegacyTransactionDetailsScreen({ navigation, route }: Na
                   <Text style={styles.receiptTitle}>Payment Receipt</Text>
                   <Text style={styles.receiptFilename}>{transaction.receipt_filename}</Text>
                 </View>
-                <TouchableOpacity style={styles.receiptButton} onPress={handleViewReceipt}>
+                <Pressable android_ripple={ripple.neutral} style={styles.receiptButton} onPress={handleViewReceipt}>
                   <Ionicons name="open-outline" size={16} color={colors.primary.main} />
                   <Text style={styles.receiptButtonText}>View</Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
             </View>
           )}
@@ -512,11 +515,11 @@ export default function LegacyTransactionDetailsScreen({ navigation, route }: Na
 
       {/* Bottom Actions */}
       <View style={[styles.bottomContainer, { paddingBottom: Math.max(insets.bottom + spacing[4], spacing[6]) }]}>
-        <TouchableOpacity style={styles.secondaryButton} onPress={handleGoToDashboard}>
+        <Pressable android_ripple={ripple.neutral} style={styles.secondaryButton} onPress={handleGoToDashboard}>
           <Text style={styles.secondaryButtonText}>Dashboard</Text>
-        </TouchableOpacity>
+        </Pressable>
         
-        <TouchableOpacity style={styles.primaryButton} onPress={handleSendAgain}>
+        <Pressable android_ripple={ripple.neutral} style={styles.primaryButton} onPress={handleSendAgain}>
           <LinearGradient
             colors={colors.primary.gradient}
             start={{ x: 0, y: 0 }}
@@ -525,7 +528,7 @@ export default function LegacyTransactionDetailsScreen({ navigation, route }: Na
           >
             <Text style={styles.primaryButtonText}>Send Again</Text>
           </LinearGradient>
-        </TouchableOpacity>
+        </Pressable>
       </View>
     </View>
   )

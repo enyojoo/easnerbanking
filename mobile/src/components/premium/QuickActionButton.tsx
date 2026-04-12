@@ -11,7 +11,8 @@
 import React, { useRef, useCallback } from 'react'
 import {
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
+  Platform,
   Text,
   View,
   ViewStyle,
@@ -21,6 +22,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
 import { Ionicons } from '@expo/vector-icons'
 import { colors, shadows, textStyles, borderRadius } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 
 interface QuickActionButtonProps {
   icon: keyof typeof Ionicons.glyphMap
@@ -66,12 +68,16 @@ export default function QuickActionButton({
 
   return (
     <Animated.View style={[styles.container, { transform: [{ scale: scaleAnim }] }, style]}>
-      <TouchableOpacity
+      <Pressable
         onPress={handlePress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
-        activeOpacity={1}
-        style={styles.touchable}
+        android_ripple={ripple.primaryTint}
+        style={({ pressed }) => [
+          styles.touchable,
+          Platform.OS === 'android' && styles.touchableClip,
+          pressed && Platform.OS === 'ios' && styles.touchablePressedIOS,
+        ]}
       >
         <LinearGradient
           colors={gradient}
@@ -82,7 +88,7 @@ export default function QuickActionButton({
           <Ionicons name={icon} size={26} color={iconColor} />
         </LinearGradient>
         <Text style={styles.label}>{label}</Text>
-      </TouchableOpacity>
+      </Pressable>
     </Animated.View>
   )
 }
@@ -93,6 +99,13 @@ const styles = StyleSheet.create({
   },
   touchable: {
     alignItems: 'center',
+  },
+  touchableClip: {
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+  },
+  touchablePressedIOS: {
+    opacity: 0.92,
   },
   iconContainer: {
     width: 56,

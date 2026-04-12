@@ -1,9 +1,10 @@
 import React, { useState } from 'react'
+import { useDeferredLoading } from '../../hooks/useDeferredLoading'
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -14,6 +15,7 @@ import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { NavigationProps } from '../../types'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 import {
   setupPin,
   markFirstLoginAfterVerification,
@@ -163,6 +165,7 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
 
   const currentPin = step === 'pin' ? pin : confirmPin
   const filledCount = currentPin.filter(d => d !== '').length
+  const showSaveSpinner = useDeferredLoading(loading)
 
   return (
     <View
@@ -178,20 +181,19 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
         {/* Header - Help Icon */}
         <View style={styles.header}>
           <View style={styles.headerSpacer} />
-          <TouchableOpacity
+          <Pressable
+           android_ripple={ripple.neutral}
             style={styles.headerButton}
             onPress={() => {
               Alert.alert(
                 step === 'pin' ? appPinStrings.setupTitle : appPinStrings.confirmTitle,
                 step === 'pin' ? appPinStrings.setupSubtitle : appPinStrings.confirmSubtitle,
               )
-            }}
-            activeOpacity={0.7}
-          >
+            }} >
             <View style={styles.headerButtonCircle}>
               <Ionicons name="help-circle-outline" size={20} color={colors.text.primary} />
             </View>
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
         {/* Content */}
@@ -207,7 +209,7 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
 
           {/* PIN dots, or centered spinner while saving */}
           <View style={styles.pinDotsWrapper}>
-            {loading ? (
+            {showSaveSpinner ? (
               <View style={styles.pinDotsLoadingOnly}>
                 <ActivityIndicator size="small" color={colors.primary.main} />
               </View>
@@ -231,50 +233,48 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
             {/* Numbers 1-9 in 3x3 grid */}
             <View style={styles.keypadGrid}>
               {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
-                <TouchableOpacity
+                <Pressable
+                 android_ripple={ripple.neutral}
                   key={num}
                   style={styles.keypadButton}
                   onPress={() => handleNumberPress(num.toString())}
-                  onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-                  activeOpacity={0.6}
-                  disabled={loading}
+                  onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} disabled={loading}
                 >
                   <Text style={styles.keypadButtonText}>{num}</Text>
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </View>
 
             {/* Bottom row: 0 in center, backspace on right */}
             <View style={styles.keypadBottomRow}>
               <View style={styles.keypadButtonSpacer} />
-              <TouchableOpacity
+              <Pressable
+               android_ripple={ripple.neutral}
                 style={styles.keypadButton}
                 onPress={() => handleNumberPress('0')}
-                onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-                activeOpacity={0.6}
-                disabled={loading}
+                onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} disabled={loading}
               >
                 <Text style={styles.keypadButtonText}>0</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
+              </Pressable>
+              <Pressable
+               android_ripple={ripple.neutral}
                 style={styles.keypadButton}
                 onPress={handleBackspace}
-                onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-                activeOpacity={0.6}
-                disabled={loading || filledCount === 0}
+                onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} disabled={loading || filledCount === 0}
               >
                 <Ionicons 
                   name="backspace" 
                   size={24} 
                   color={filledCount === 0 ? colors.text.secondary : colors.text.primary} 
                 />
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
 
           {/* Bottom Text */}
           {!isMandatory && (
-            <TouchableOpacity
+            <Pressable
+             android_ripple={ripple.neutral}
               style={[styles.logoutLink, { paddingBottom: spacing[4] }]}
               onPress={() => {
                 Alert.alert(
@@ -292,13 +292,11 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
                     },
                   ]
                 )
-              }}
-              activeOpacity={0.7}
-            >
+              }} >
               <Text style={styles.logoutText}>
                 Not your account? <Text style={styles.logoutLinkText}>Log out</Text>
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           )}
         </View>
       </KeyboardAvoidingView>

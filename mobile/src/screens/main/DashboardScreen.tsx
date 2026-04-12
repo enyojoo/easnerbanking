@@ -1,12 +1,11 @@
-import React, { useState, useRef, useCallback } from 'react'
+import React, { useState, useRef, useCallback, useMemo } from 'react'
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   Dimensions,
-  Image,
   Modal,
   Platform,
   FlatList,
@@ -33,13 +32,24 @@ import {
 } from 'lucide-react-native'
 import { useAuth } from '../../contexts/AuthContext'
 import { NavigationProps } from '../../types'
-import { colors, textStyles, borderRadius, spacing, shadows, userAvatarStyles } from '../../theme'
+import {
+  useThemeColors,
+  textStyles,
+  borderRadius,
+  spacing,
+  shadows,
+  userAvatarStyles,
+  motion,
+} from '../../theme'
+import type { Colors } from '../../theme/colors'
+import { scaledFontSize } from '../../theme/typography'
+import { ripple } from '../../lib/androidRipple'
 import { useEffect } from 'react'
-import { useFocusRefreshAll } from '../../hooks/useFocusRefresh'
 import { useUserData } from '../../contexts/UserDataContext'
 import { useFocusEffect } from '@react-navigation/native'
 import { useBalance } from '../../contexts/BalanceContext'
 import { apiGet, apiPost, NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
+import { Image } from 'expo-image'
 import { ShimmerLoader } from '../../components/premium'
 import { getTransactionStatusDisplay } from '../../utils/formatters'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
@@ -73,6 +83,8 @@ interface DashboardTransaction {
 }
 
 export default function DashboardScreen({ navigation }: NavigationProps) {
+  const palette = useThemeColors()
+  const styles = useMemo(() => createDashboardStyles(palette), [palette])
   const { user, userProfile, refreshUserProfile, loading: authLoading } = useAuth()
   const { refreshStaleData, refreshing: dataRefreshing, financialFeedsEpoch } = useUserData()
   const { balances, refreshBalances } = useBalance()
@@ -427,7 +439,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   }
 
   const getTransactionIcon = (iconType: string, isReceived: boolean) => {
-    const iconColor = colors.primary.main
+    const iconColor = palette.primary.main
     
     switch (iconType) {
       case 'inbox':
@@ -524,8 +536,9 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     return 'outbox'
   }
 
-  const formatBalanceDisplay = (amount: number, currency: 'USD' | 'EUR'): string => {
-    const currencySymbol = currency === 'USD' ? '$' : '€'
+  const formatBalanceDisplay = (amount: number, currency: 'USD' | 'EUR' | 'GBP'): string => {
+    const currencySymbol =
+      currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : currency
     
     // Format as "X Million" or "X Billion" if >= 100 million
     if (amount >= 100000000) {
@@ -559,10 +572,9 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
           setShowCurrencyDropdown(false)
       }}
     >
-      <TouchableOpacity 
-          style={styles.modalOverlay}
-        activeOpacity={1}
-          onPress={() => setShowCurrencyDropdown(false)}
+      <Pressable 
+         android_ripple={ripple.neutral} 
+          style={styles.modalOverlay} onPress={() => setShowCurrencyDropdown(false)}
         >
           <View style={[styles.modalContainer, { 
             maxHeight: estimatedHeight,
@@ -572,7 +584,8 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
               <Text style={styles.modalTitle}>Select Balance</Text>
               <View style={styles.modalHeaderActions}>
                 {canOpenMoreCurrencies ? (
-                  <TouchableOpacity
+                  <Pressable
+                   android_ripple={ripple.neutral}
                     style={styles.closeButton}
                     accessibilityRole="button"
                     accessibilityLabel="Open currency account"
@@ -581,17 +594,18 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                       navigation.navigate('OpenCurrencyAccount')
                     }}
                   >
-                    <Plus size={20} color={colors.text.secondary} strokeWidth={2.25} />
-                  </TouchableOpacity>
+                    <Plus size={20} color={palette.text.secondary} strokeWidth={2.25} />
+                  </Pressable>
                 ) : null}
-                <TouchableOpacity
+                <Pressable
+                 android_ripple={ripple.neutral}
                   onPress={() => {
                     setShowCurrencyDropdown(false)
                   }}
                   style={styles.closeButton}
                 >
-                  <Ionicons name="close" size={24} color={colors.text.secondary} />
-                </TouchableOpacity>
+                  <Ionicons name="close" size={24} color={palette.text.secondary} />
+                </Pressable>
               </View>
             </View>
 
@@ -604,7 +618,8 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                   : '••••••'
                 const isSelected = selectedCurrency === item.code
                 return (
-                  <TouchableOpacity
+                  <Pressable
+                   android_ripple={ripple.neutral}
                     key={item.code}
                     style={[
                       styles.currencyItem,
@@ -633,12 +648,12 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                         <View style={styles.checkboxInner} />
                       )}
             </View>
-                  </TouchableOpacity>
+                  </Pressable>
                 )
               })}
           </View>
         </View>
-      </TouchableOpacity>
+      </Pressable>
       </Modal>
     )
   }
@@ -652,34 +667,38 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
           <View style={styles.headerContent}>
             {/* User Greeting with Avatar */}
             <View style={styles.greetingContainer}>
-              <TouchableOpacity
+              <Pressable
+               android_ripple={ripple.neutral}
                 style={userAvatarStyles.circle}
                 onPress={async () => {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                   navigation.navigate('ProfileEdit' as any)
-                }}
-                activeOpacity={0.7}
-              >
+                }} >
                 {headerAvatarUrl ? (
-                  <Image source={{ uri: headerAvatarUrl }} style={userAvatarStyles.image} />
+                  <Image
+                    source={{ uri: headerAvatarUrl }}
+                    style={userAvatarStyles.image}
+                    cachePolicy="memory-disk"
+                    recyclingKey={headerAvatarUrl}
+                    transition={0}
+                  />
                 ) : (
                   <Text style={userAvatarStyles.initials}>
                     {initialsFromFullName(dashboardAvatarFullName)}
                   </Text>
                 )}
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             {showVerifyIdentityBanner ? (
               <View style={styles.verifyAccountBannerSlot}>
-                <TouchableOpacity
+                <Pressable
+                 android_ripple={ripple.neutral}
                   style={styles.verifyAccountBanner}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                     navigation.navigate('AccountVerification' as never)
-                  }}
-                  activeOpacity={0.88}
-                  accessibilityRole="button"
+                  }} accessibilityRole="button"
                   accessibilityLabel="Verify identity to unlock banking. Begin."
                 >
                   <View style={styles.verifyAccountBannerTextWrap}>
@@ -688,22 +707,21 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                     </Text>
                   </View>
                   <Text style={styles.verifyAccountBannerCta}>Begin</Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
             ) : null}
 
-            <TouchableOpacity
+            <Pressable
+             android_ripple={ripple.neutral}
               style={styles.supportHeaderButton}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                 navigation.navigate('Support' as never)
-              }}
-              activeOpacity={0.7}
-              accessibilityRole="button"
+              }} accessibilityRole="button"
               accessibilityLabel="Support"
             >
-              <MessageCircle size={22} color={colors.primary.main} strokeWidth={2} />
-            </TouchableOpacity>
+              <MessageCircle size={22} color={palette.primary.main} strokeWidth={2} />
+            </Pressable>
           </View>
         </View>
       </View>
@@ -741,14 +759,15 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                 setRefreshing(false)
               }
             }}
-            tintColor={colors.primary.main}
+            tintColor={palette.primary.main}
           />
         }
       >
         <View style={styles.whiteCard}>
           {/* Currency Selector with Plus Button */}
           <View style={styles.topActions}>
-            <TouchableOpacity
+            <Pressable
+             android_ripple={ripple.neutral}
               style={styles.currencySelector}
               onPress={() => {
                 // Open dropdown immediately
@@ -758,27 +777,24 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                 refreshBalances(false).catch(error => {
                   console.error('Error refreshing balances:', error)
                 })
-              }}
-              activeOpacity={0.7}
-            >
+              }} >
               <View style={styles.flagContainer}>
                 <CurrencyFlag currency={selectedCurrency} size={28} style={styles.flagImage} />
               </View>
               <Text style={styles.currencyText}>{selectedCurrency} Balance</Text>
-              <ChevronDown size={16} color={colors.text.primary} strokeWidth={2} />
-            </TouchableOpacity>
+              <ChevronDown size={16} color={palette.text.primary} strokeWidth={2} />
+            </Pressable>
           {/* Plus button hidden for now - will be used to add new balances when available */}
           {false && (
-            <TouchableOpacity
+            <Pressable
+             android_ripple={ripple.neutral}
               style={styles.addFundsButtonSmall}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                 // Navigate to add funds
-              }}
-              activeOpacity={0.7}
-            >
-              <Plus size={20} color={colors.primary.main} strokeWidth={2.5} />
-            </TouchableOpacity>
+              }} >
+              <Plus size={20} color={palette.primary.main} strokeWidth={2.5} />
+            </Pressable>
           )}
       </View>
 
@@ -787,41 +803,46 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
 
           {/* Balance Display */}
           <View style={styles.balanceContainer}>
-            <Text style={styles.balanceAmount}>
+            <Text
+              style={[
+                textStyles.balanceDisplay,
+                styles.balanceAmount,
+                { color: palette.text.primary, fontSize: scaledFontSize(56) },
+              ]}
+            >
               {balanceVisible 
                 ? formatBalanceDisplay(balance, selectedCurrency)
                 : '••••••'}
             </Text>
-            <TouchableOpacity 
+            <Pressable 
+             android_ripple={ripple.neutral} 
               style={styles.hideBalanceButton}
-              onPress={toggleBalanceVisibility}
-              activeOpacity={0.7}
-            >
+              onPress={toggleBalanceVisibility} >
               {balanceVisible ? (
-                <EyeOff size={22} color={colors.primary.main} strokeWidth={2} />
+                <EyeOff size={22} color={palette.primary.main} strokeWidth={2} />
               ) : (
-                <Eye size={22} color={colors.primary.main} strokeWidth={2} />
+                <Eye size={22} color={palette.primary.main} strokeWidth={2} />
               )}
-          </TouchableOpacity>
+          </Pressable>
               </View>
               
           {/* Receive and Send Buttons */}
           <View style={styles.actionButtons}>
-            <TouchableOpacity
+            <Pressable
+             android_ripple={ripple.neutral}
               style={styles.actionButton}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                 navigation.navigate('ReceiveMoney' as never, {
                   currency: selectedCurrency,
                 } as never)
-              }}
-              activeOpacity={0.7}
-            >
-              <ArrowDownLeft size={20} color={colors.primary.main} strokeWidth={2.5} />
+              }} >
+              <ArrowDownLeft size={20} color={palette.primary.main} strokeWidth={2.5} />
               <Text style={styles.actionButtonText}>Receive</Text>
-            </TouchableOpacity>
+            </Pressable>
 
-            <TouchableOpacity 
+            <Pressable 
+             android_ripple={ripple.neutral} 
               style={styles.actionButton}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -830,12 +851,10 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                     ? selectedCurrency
                     : undefined,
                 } as never)
-              }}
-              activeOpacity={0.7}
-            >
-              <ArrowUpRight size={20} color={colors.primary.main} strokeWidth={2.5} />
+              }} >
+              <ArrowUpRight size={20} color={palette.primary.main} strokeWidth={2.5} />
               <Text style={styles.actionButtonText}>Send</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
         </View>
         
@@ -844,17 +863,16 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
           {!loadingTransactions && recentTransactions.length > 0 && (
             <View style={styles.transactionsHeader}>
               <Text style={styles.transactionsTitle}>Transactions</Text>
-              <TouchableOpacity 
+              <Pressable 
+               android_ripple={ripple.neutral} 
                 style={styles.viewAllButton}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                   navigation.navigate('Transactions' as never)
-                }}
-                activeOpacity={0.7}
-              >
+                }} >
                 <Text style={styles.viewAllText}>All</Text>
-                <ArrowRight size={14} color={colors.primary.main} strokeWidth={2.5} />
-              </TouchableOpacity>
+                <ArrowRight size={14} color={palette.primary.main} strokeWidth={2.5} />
+              </Pressable>
             </View>
           )}
         
@@ -868,13 +886,14 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                   height={72} 
                   borderRadius={borderRadius.md}
                   style={{ marginBottom: spacing[2] }}
+                  durationMs={motion.skeletonPulseMs}
                 />
               ))}
             </View>
           ) : recentTransactions.length === 0 && hasAttemptedLoad ? (
             <View style={styles.emptyStateContainer}>
               <View style={styles.emptyIconContainer}>
-                <Ionicons name="receipt-outline" size={40} color={colors.neutral[400]} />
+                <Ionicons name="receipt-outline" size={40} color={palette.neutral[400]} />
               </View>
               <Text style={styles.emptyStateTitle}>No transactions yet</Text>
               <Text style={styles.emptyStateText}>
@@ -887,7 +906,8 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
               const iconType = getTransactionIconType(transaction)
               const isLast = index === recentTransactions.length - 1
               return (
-                <TouchableOpacity
+                <Pressable
+                 android_ripple={ripple.neutral}
                   key={transaction.id || transaction.transaction_id} 
                   style={[styles.transactionItem, isLast && styles.transactionItemLast]}
                   onPress={() => {
@@ -896,9 +916,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                       transactionId: transaction.transaction_id,
                       fromScreen: 'Dashboard'
                     } as never)
-                  }}
-                  activeOpacity={0.7}
-                >
+                  }} >
                   {getTransactionIcon(iconType, isReceived)}
                   <View style={styles.transactionDetails}>
                     <Text style={styles.transactionName}>
@@ -931,7 +949,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                       ) : null
                     })()}
                   </View>
-                </TouchableOpacity>
+                </Pressable>
               )
             })
           )}
@@ -941,13 +959,14 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   )
 }
 
-const styles = StyleSheet.create({
+function createDashboardStyles(c: Colors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background.primary, // White/light background for the page
+    backgroundColor: c.background.primary, // White/light background for the page
   },
   headerWrapper: {
-    backgroundColor: colors.background.primary,
+    backgroundColor: c.background.primary,
     paddingHorizontal: spacing[5],
     paddingBottom: spacing[1],
   },
@@ -979,10 +998,10 @@ const styles = StyleSheet.create({
     minWidth: 0,
     paddingVertical: spacing[2],
     paddingHorizontal: spacing[2],
-    backgroundColor: colors.frame.background,
+    backgroundColor: c.frame.background,
     borderRadius: borderRadius.lg,
     borderWidth: 0.5,
-    borderColor: colors.frame.border,
+    borderColor: c.frame.border,
     gap: spacing[2],
     ...shadows.xs,
   },
@@ -992,13 +1011,13 @@ const styles = StyleSheet.create({
   },
   verifyAccountBannerTitle: {
     ...textStyles.bodySmall,
-    color: colors.text.primary,
+    color: c.text.primary,
     fontWeight: '600',
     fontFamily: 'Outfit-SemiBold',
   },
   verifyAccountBannerCta: {
     ...textStyles.bodySmall,
-    color: colors.primary.main,
+    color: c.primary.main,
     fontFamily: 'Outfit-SemiBold',
     fontWeight: '600',
     textDecorationLine: 'underline',
@@ -1010,9 +1029,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.frame.background,
+    backgroundColor: c.frame.background,
     borderWidth: 0.5,
-    borderColor: colors.frame.border,
+    borderColor: c.frame.border,
     flexShrink: 0,
   },
   scrollView: {
@@ -1023,7 +1042,7 @@ const styles = StyleSheet.create({
     paddingBottom: 100, // Space for bottom navigation bar
   },
   whiteCard: {
-    backgroundColor: colors.background.primary,
+    backgroundColor: c.background.primary,
     paddingHorizontal: spacing[5],
     paddingTop: spacing[4],
     paddingBottom: spacing[5],
@@ -1040,10 +1059,10 @@ const styles = StyleSheet.create({
     gap: spacing[2],
     paddingHorizontal: spacing[3],
     paddingVertical: 0,
-    backgroundColor: colors.frame.background,
+    backgroundColor: c.frame.background,
     borderRadius: borderRadius.full,
     borderWidth: 0.5,
-    borderColor: colors.frame.border,
+    borderColor: c.frame.border,
     height: 40,
   },
   flagContainer: {
@@ -1051,11 +1070,11 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: colors.frame.background,
+    backgroundColor: c.frame.background,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 0.5,
-    borderColor: colors.frame.border,
+    borderColor: c.frame.border,
   },
   flagImage: {
     width: 24,
@@ -1063,14 +1082,14 @@ const styles = StyleSheet.create({
   },
   currencyText: {
     fontSize: 14,
-    color: colors.text.primary,
+    color: c.text.primary,
     fontFamily: 'Outfit-Medium',
   },
   addFundsButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.background.primary,
+    backgroundColor: c.background.primary,
     justifyContent: 'center',
     alignItems: 'center',
     ...shadows.sm,
@@ -1079,11 +1098,11 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.frame.background,
+    backgroundColor: c.frame.background,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 0.5,
-    borderColor: colors.frame.border,
+    borderColor: c.frame.border,
   },
   modalOverlay: {
     flex: 1,
@@ -1091,7 +1110,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContainer: {
-    backgroundColor: colors.background.primary,
+    backgroundColor: c.background.primary,
     borderTopLeftRadius: borderRadius['3xl'],
     borderTopRightRadius: borderRadius['3xl'],
     paddingTop: spacing[2],
@@ -1114,7 +1133,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[5],
     paddingVertical: spacing[4],
     borderBottomWidth: 1,
-    borderBottomColor: colors.border.light,
+    borderBottomColor: c.border.light,
   },
   modalHeaderActions: {
     flexDirection: 'row',
@@ -1124,14 +1143,14 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: colors.text.primary,
+    color: c.text.primary,
     fontFamily: 'Outfit-SemiBold',
   },
   closeButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.background.secondary,
+    backgroundColor: c.background.secondary,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1146,7 +1165,7 @@ const styles = StyleSheet.create({
     gap: spacing[3],
   },
   currencyItemActive: {
-    backgroundColor: colors.primary.main + '10',
+    backgroundColor: c.primary.main + '10',
   },
   currencyItemInfo: {
     flex: 1,
@@ -1154,14 +1173,14 @@ const styles = StyleSheet.create({
   currencyItemCode: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text.primary,
+    color: c.text.primary,
     fontFamily: 'Outfit-SemiBold',
     marginBottom: 2,
   },
   currencyItemBalance: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text.primary,
+    color: c.text.primary,
     fontFamily: 'Outfit-SemiBold',
     marginTop: 2,
   },
@@ -1170,26 +1189,26 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: colors.border.light,
+    borderColor: c.border.light,
     justifyContent: 'center',
     alignItems: 'center',
   },
   checkboxSelected: {
-    borderColor: colors.primary.main,
-    backgroundColor: colors.primary.main,
+    borderColor: c.primary.main,
+    backgroundColor: c.primary.main,
   },
   checkboxInner: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.background.primary,
+    backgroundColor: c.background.primary,
   },
   flagContainerSmall: {
     width: 24,
     height: 24,
     borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: colors.frame.background,
+    backgroundColor: c.frame.background,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1199,7 +1218,7 @@ const styles = StyleSheet.create({
   },
   currencyOptionText: {
     ...textStyles.bodyMedium,
-    color: colors.text.primary,
+    color: c.text.primary,
     fontFamily: 'Outfit-Medium',
   },
   balanceContainer: {
@@ -1209,11 +1228,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing[8],
   },
   balanceAmount: {
-    fontSize: 36,
-    fontWeight: '900',
-    color: colors.text.primary,
-    fontFamily: 'Outfit-Black',
-    letterSpacing: -0.5,
     flex: 1,
   },
   hideBalanceButton: {
@@ -1224,7 +1238,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginLeft: spacing[2],
     borderWidth: 0.5,
-    borderColor: colors.frame.border,
+    borderColor: c.frame.border,
   },
   actionButtons: {
     flexDirection: 'row',
@@ -1238,24 +1252,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing[2],
     height: 50,
-    backgroundColor: colors.frame.background,
+    backgroundColor: c.frame.background,
     borderRadius: borderRadius.xl,
     borderWidth: 0.5,
-    borderColor: colors.frame.border,
+    borderColor: c.frame.border,
   },
   actionButtonText: {
     ...textStyles.bodyLarge,
-    color: colors.text.primary,
+    color: c.text.primary,
     fontFamily: 'Outfit-SemiBold',
   },
   transactionsSection: {
     paddingHorizontal: spacing[5],
     paddingTop: spacing[5],
     paddingBottom: spacing[8],
-    backgroundColor: colors.frame.background,
+    backgroundColor: c.frame.background,
     borderRadius: 24,
     borderWidth: 0.5,
-    borderColor: colors.frame.border,
+    borderColor: c.frame.border,
     marginHorizontal: spacing[5],
     marginTop: spacing[3],
   },
@@ -1266,8 +1280,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing[4],
   },
   transactionsTitle: {
-    ...textStyles.headingSmall,
-    color: colors.text.primary,
+    ...textStyles.headlineSmall,
+    color: c.text.primary,
     fontFamily: 'Outfit-SemiBold',
   },
   viewAllButton: {
@@ -1281,7 +1295,7 @@ const styles = StyleSheet.create({
   },
   viewAllText: {
     ...textStyles.labelMedium,
-    color: colors.primary.main,
+    color: c.primary.main,
     fontFamily: 'Outfit-SemiBold',
   },
   transactionItem: {
@@ -1303,33 +1317,33 @@ const styles = StyleSheet.create({
     marginRight: spacing[3],
     backgroundColor: '#FFFFFF',
     borderWidth: 0.5,
-    borderColor: colors.frame.border,
+    borderColor: c.frame.border,
   },
   transactionDetails: {
     flex: 1,
   },
   transactionName: {
     ...textStyles.bodyMedium,
-    color: colors.text.primary,
+    color: c.text.primary,
     fontFamily: 'Outfit-Medium',
     marginBottom: spacing[1],
   },
   transactionDate: {
     ...textStyles.bodySmall,
-    color: colors.text.secondary,
+    color: c.text.secondary,
     fontFamily: 'Outfit-Regular',
   },
   transactionAmountContainer: {
     alignItems: 'flex-end',
-    gap: spacing[0.5],
+    gap: 2,
   },
   transactionAmount: {
     ...textStyles.bodyLarge,
-    color: colors.text.primary,
+    color: c.text.primary,
     fontFamily: 'Outfit-SemiBold',
   },
   transactionAmountReceived: {
-    color: colors.primary.main,
+    color: c.primary.main,
   },
   transactionStatus: {
     ...textStyles.bodySmall,
@@ -1346,24 +1360,26 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: colors.neutral[100],
+    backgroundColor: c.neutral[100],
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing[4],
   },
   emptyStateTitle: {
     ...textStyles.titleLarge,
-    color: colors.text.primary,
+    color: c.text.primary,
     fontFamily: 'Outfit-SemiBold',
     marginBottom: spacing[2],
   },
   emptyStateText: {
     ...textStyles.bodyMedium,
-    color: colors.text.secondary,
+    color: c.text.secondary,
     textAlign: 'center',
     fontFamily: 'Outfit-Regular',
   },
   skeletonContainer: {
     paddingHorizontal: spacing[5],
   },
-})
+  })
+}
+

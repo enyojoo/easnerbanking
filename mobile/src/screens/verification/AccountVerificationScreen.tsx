@@ -4,7 +4,9 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
+  KeyboardAvoidingView,
+  Platform,
   ActivityIndicator,
   Animated,
   Modal,
@@ -26,7 +28,7 @@ import { getApiBaseUrl } from '../../lib/apiClient'
 import { noahService } from '../../lib/noahService'
 import { supabase } from '../../lib/supabase'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
+import { colors, textStyles, borderRadius, spacing, fontSize, lineHeight as lineHeightScale } from '../../theme'
 import { CONSUMER_TIER_LADDER } from '../../lib/compliance-tier-ladder-copy'
 import { isTier1Complete } from '../../lib/compliance'
 
@@ -1094,12 +1096,19 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     )
   }
 
+  const scrollBottomPad = Math.max(insets.bottom, spacing[4]) + spacing[5]
+
   return (
     <ScreenWrapper>
-      <View style={styles.container}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
+      >
         <ScrollView
           style={styles.scrollContainer}
-          contentContainerStyle={{ paddingBottom: insets.bottom + spacing[5] }}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottomPad }]}
           showsVerticalScrollIndicator={false}
         >
           {/* Premium Header - Matching Send Flow */}
@@ -1117,16 +1126,19 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
               }
             ]}
           >
-            <TouchableOpacity
+            <Pressable
               onPress={async () => {
                 await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                 navigation.goBack()
               }}
-              style={styles.backButton}
-              activeOpacity={0.7}
+              style={({ pressed }) => [
+                styles.backButton,
+                pressed && Platform.OS === 'ios' && styles.backButtonPressed,
+              ]}
+              android_ripple={{ color: 'rgba(0, 0, 0, 0.12)', borderless: false }}
             >
               <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-            </TouchableOpacity>
+            </Pressable>
             <View style={styles.headerContent}>
               <Text style={styles.title}>Account verification</Text>
             </View>
@@ -1236,15 +1248,20 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                   </View>
                 </View>
               ) : (
-                <TouchableOpacity
+                <Pressable
                   onPress={async () => {
                     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                     await handleOpenKYC()
                   }}
-                  activeOpacity={0.7}
                   disabled={loadingKyc}
+                  style={({ pressed }) => [
+                    styles.card,
+                    styles.cardInteractive,
+                    pressed && Platform.OS === 'ios' && styles.cardPressed,
+                  ]}
+                  android_ripple={{ color: 'rgba(0, 122, 204, 0.12)', borderless: false }}
                 >
-                  <View style={styles.card}>
+                  <View style={styles.cardInner}>
                     <View style={styles.cardContent}>
                       <View style={styles.cardLeft}>
                         <View style={styles.iconContainer}>
@@ -1284,7 +1301,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                       </View>
                     ) : null}
                   </View>
-                </TouchableOpacity>
+                </Pressable>
               )}
 
               {CONSUMER_TIER_LADDER.tiers.slice(1).map((tier) => (
@@ -1714,7 +1731,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
             </Modal>
           </Animated.View>
         </ScrollView>
-      </View>
+      </KeyboardAvoidingView>
     </ScreenWrapper>
   )
 }
@@ -1726,6 +1743,9 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   loadingContainer: {
     flex: 1,
@@ -1750,6 +1770,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing[3],
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.06,
+        shadowRadius: 3,
+      },
+      android: { elevation: 2 },
+      default: {},
+    }),
+  },
+  backButtonPressed: {
+    opacity: 0.7,
   },
   headerContent: {
     flex: 1,
@@ -1758,6 +1791,13 @@ const styles = StyleSheet.create({
     ...textStyles.headlineMedium,
     color: colors.text.primary,
     marginBottom: 2,
+    ...Platform.select({
+      android: {
+        lineHeight: Math.round(fontSize.xl * lineHeightScale.snug) + 4,
+        includeFontPadding: false,
+      },
+      default: {},
+    }),
   },
   content: {
     padding: spacing[5],
@@ -1770,6 +1810,16 @@ const styles = StyleSheet.create({
     marginBottom: spacing[4],
     paddingHorizontal: spacing[5],
     paddingVertical: spacing[4],
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+      },
+      android: { elevation: 2 },
+      default: {},
+    }),
   },
   infoBox: {
     flexDirection: 'row',
@@ -1780,6 +1830,13 @@ const styles = StyleSheet.create({
     ...textStyles.bodySmall,
     color: colors.primary.main,
     flex: 1,
+    ...Platform.select({
+      android: {
+        lineHeight: Math.round(fontSize.xs * lineHeightScale.loose) + 4,
+        includeFontPadding: false,
+      },
+      default: {},
+    }),
   },
   cardsContainer: {
     gap: spacing[4],
@@ -1791,6 +1848,26 @@ const styles = StyleSheet.create({
     borderColor: '#E2E2E2',
     marginBottom: spacing[3],
     position: 'relative',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+      },
+      android: { elevation: 3 },
+      default: {},
+    }),
+  },
+  cardInteractive: Platform.select({
+    android: { overflow: 'hidden' },
+    default: {},
+  }),
+  cardPressed: {
+    opacity: 0.92,
+  },
+  cardInner: {
+    width: '100%',
   },
   cardContent: {
     padding: spacing[5],
@@ -1815,6 +1892,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'Outfit-Medium',
     color: colors.text.secondary,
+    ...Platform.select({
+      android: { lineHeight: 16, includeFontPadding: false },
+      default: {},
+    }),
   },
   iconContainer: {
     width: 48,
@@ -1830,6 +1911,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text.primary,
     marginBottom: spacing[1],
+    ...Platform.select({
+      android: {
+        lineHeight: Math.round(fontSize.sm * lineHeightScale.relaxed) + 4,
+        includeFontPadding: false,
+      },
+      default: {},
+    }),
   },
   comingLaterPill: {
     paddingHorizontal: spacing[2],
@@ -1841,11 +1929,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'Outfit-Medium',
     color: colors.text.secondary,
+    ...Platform.select({
+      android: { lineHeight: 16, includeFontPadding: false },
+      default: {},
+    }),
   },
   cardDescription: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
     lineHeight: 20,
+    ...Platform.select({
+      android: { lineHeight: 22, includeFontPadding: false },
+      default: {},
+    }),
   },
   cardRight: {
     flexDirection: 'row',
@@ -1871,6 +1967,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: '#FFFFFF',
+    ...Platform.select({
+      android: { lineHeight: 16, includeFontPadding: false },
+      default: {},
+    }),
   },
   badgeGreen: {
     backgroundColor: colors.success.background,
@@ -1885,6 +1985,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.success.dark,
     textTransform: 'none',
+    ...Platform.select({
+      android: { includeFontPadding: false, lineHeight: 16 },
+      default: {},
+    }),
   },
   badgeYellow: {
     backgroundColor: colors.warning.background,
@@ -1899,6 +2003,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.warning.dark,
     textTransform: 'none',
+    ...Platform.select({
+      android: { includeFontPadding: false, lineHeight: 16 },
+      default: {},
+    }),
   },
   badgeRed: {
     backgroundColor: colors.error.background,
@@ -1913,6 +2021,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.error.dark,
     textTransform: 'none',
+    ...Platform.select({
+      android: { includeFontPadding: false, lineHeight: 16 },
+      default: {},
+    }),
   },
   badgeGray: {
     backgroundColor: colors.neutral[100],
@@ -1927,6 +2039,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.neutral[600],
     textTransform: 'none',
+    ...Platform.select({
+      android: { includeFontPadding: false, lineHeight: 16 },
+      default: {},
+    }),
   },
   modalContainer: {
     flex: 1,

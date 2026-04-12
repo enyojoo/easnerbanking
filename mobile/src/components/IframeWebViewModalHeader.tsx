@@ -1,7 +1,8 @@
 import React from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, type TextStyle } from 'react-native'
+import { View, Text, Pressable, Platform, StyleSheet, type TextStyle } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { colors, textStyles, spacing } from '../theme'
+import { ripple } from '../lib/androidRipple'
 
 export type IframeWebViewModalHeaderProps = {
   onClose: () => void
@@ -27,16 +28,19 @@ export function IframeWebViewModalHeader({ onClose, title, children }: IframeWeb
   return (
     <View style={styles.header}>
       <View style={styles.titleBlock}>{left}</View>
-      <TouchableOpacity
+      <Pressable
         onPress={onClose}
-        activeOpacity={0.7}
-        style={styles.closeHit}
+        style={({ pressed }) => [
+          styles.closeHit,
+          pressed && Platform.OS === 'ios' && styles.closeHitPressedIOS,
+        ]}
+        android_ripple={ripple.neutral}
         accessibilityRole="button"
         accessibilityLabel="Close"
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
         <Ionicons name="close" size={22} color={colors.text.primary} />
-      </TouchableOpacity>
+      </Pressable>
     </View>
   )
 }
@@ -61,6 +65,9 @@ const styles = StyleSheet.create({
     padding: spacing[1],
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  closeHitPressedIOS: {
+    opacity: 0.7,
   },
   titleText: {
     ...textStyles.titleMedium,

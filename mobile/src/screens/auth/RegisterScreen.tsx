@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   Alert,
   KeyboardAvoidingView,
@@ -22,6 +22,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { NavigationProps } from '../../types'
 import { analytics } from '../../lib/analytics'
 import { colors, spacing } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
 import { TERMS_URL } from '../../constants/auth'
 import { Button, TextField } from '../../components/ui'
@@ -229,20 +230,19 @@ export default function RegisterScreen({ navigation }: NavigationProps) {
                 editable={!loading}
                 containerStyle={styles.fieldFlush}
                 rightAccessory={
-                  <TouchableOpacity
+                  <Pressable
+                   android_ripple={ripple.neutral}
                     style={styles.eyeButton}
                     onPress={async () => {
                       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                       setShowPassword(!showPassword)
-                    }}
-                    activeOpacity={0.7}
-                  >
+                    }} >
                     <Ionicons
                       name={showPassword ? 'eye-off' : 'eye'}
                       size={20}
                       color={colors.semantic.mutedForeground}
                     />
-                  </TouchableOpacity>
+                  </Pressable>
                 }
               />
 
@@ -260,18 +260,17 @@ export default function RegisterScreen({ navigation }: NavigationProps) {
 
           <View style={[styles.footer, { marginTop: spacing[3] }]}>
             <Text style={authScreenStyles.footerMuted}>Already have an account? </Text>
-            <TouchableOpacity
+            <Pressable
+             android_ripple={ripple.neutral}
               onPress={async () => {
                 await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                 navigation.reset({
                   index: 0,
                   routes: [{ name: 'Login' }],
                 })
-              }}
-              activeOpacity={0.7}
-            >
+              }} >
               <Text style={authScreenStyles.footerLink}>Sign in</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

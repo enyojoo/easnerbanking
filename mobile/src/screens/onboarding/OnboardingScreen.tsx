@@ -5,8 +5,8 @@ import {
   Image,
   StyleSheet,
   Dimensions,
-  TouchableOpacity,
   Pressable,
+  Platform,
   ScrollView,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { NavigationProps } from '../../types'
 import { colors, textStyles, borderRadius, spacing, fontSize, fontFamily, lineHeight } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 import { AUTH_INITIAL_MODE_KEY } from '../../constants/auth'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
@@ -111,15 +112,14 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
         {/* Progress Dots - Top */}
         <View style={[styles.pagination, { paddingTop: insets.top + spacing[4] }]}>
           {ONBOARDING_DATA.map((_, index) => (
-            <TouchableOpacity
+            <Pressable
+             android_ripple={ripple.neutral}
               key={index}
               style={[
                 styles.dot,
                 currentIndex === index && styles.dotActive,
               ]}
-              onPress={() => goToSlide(index)}
-              activeOpacity={0.7}
-            />
+              onPress={() => goToSlide(index)} />
           ))}
         </View>
 
@@ -163,6 +163,7 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
         {/* Action Buttons on Dark Fade Area */}
         <View style={[styles.bottomActions, { paddingBottom: Math.max(insets.bottom, spacing[6]) }]}>
           <Pressable
+           android_ripple={ripple.neutral}
             style={({ pressed }) => [styles.skipButtonBottom, pressed && styles.skipButtonPressed]}
             onPress={handleSkip}
             android_ripple={{ color: 'rgba(255,255,255,0.2)' }}
@@ -171,6 +172,7 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
           </Pressable>
 
           <Pressable
+           android_ripple={ripple.neutral}
             style={({ pressed }) => [styles.nextButton, pressed && styles.nextButtonPressed]}
             onPress={handleNext}
             android_ripple={{ color: 'rgba(255,255,255,0.25)' }}
@@ -184,7 +186,8 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
         </View>
 
         {/* Login Link - Bottom */}
-        <TouchableOpacity
+        <Pressable
+         android_ripple={ripple.neutral}
           style={[styles.loginLink, { paddingBottom: Math.max(insets.bottom, spacing[4]) }]}
           onPress={async () => {
             await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -200,13 +203,11 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
             } catch (error) {
               console.error('Error navigating to login:', error)
             }
-          }}
-          activeOpacity={0.7}
-        >
+          }} >
           <Text style={styles.loginText}>
             Already have an account? <Text style={styles.loginLinkText}>Log In</Text>
           </Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
     </View>
   )

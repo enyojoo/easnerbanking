@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   Dimensions,
   Platform,
   Animated,
@@ -18,6 +18,7 @@ import Svg, { Circle, Defs, Path, Pattern, Rect } from 'react-native-svg'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 import { EASNER_CARD_ICON_URL } from '../../lib/easnerBrand'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
@@ -89,15 +90,14 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
         <View style={styles.header}>
           <View style={styles.headerContent}>
             <Text style={styles.title}>My Cards</Text>
-            <TouchableOpacity
+            <Pressable
+             android_ripple={ripple.neutral}
               style={styles.iconBtn}
-              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-              activeOpacity={0.7}
-              accessibilityRole="button"
+              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} accessibilityRole="button"
               accessibilityLabel="Add card"
             >
               <Plus size={20} color={colors.text.primary} strokeWidth={2.5} />
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
 
@@ -222,26 +222,26 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
           </View>
 
           <View style={styles.actionButtons}>
-            <TouchableOpacity style={styles.actionButton} onPress={actionsComingSoon} activeOpacity={0.7}>
+            <Pressable android_ripple={ripple.neutral} style={styles.actionButton} onPress={actionsComingSoon} >
               <View style={[styles.actionIconContainer, styles.actionIconDisabled]}>
                 <Eye size={20} color={colors.text.tertiary} strokeWidth={2.5} />
               </View>
               <Text style={styles.actionButtonTextDisabled}>View</Text>
-            </TouchableOpacity>
+            </Pressable>
 
-            <TouchableOpacity style={styles.actionButton} onPress={actionsComingSoon} activeOpacity={0.7}>
+            <Pressable android_ripple={ripple.neutral} style={styles.actionButton} onPress={actionsComingSoon} >
               <View style={[styles.actionIconContainer, styles.actionIconDisabled]}>
                 <Snowflake size={20} color={colors.text.tertiary} strokeWidth={2.5} />
               </View>
               <Text style={styles.actionButtonTextDisabled}>Freeze</Text>
-            </TouchableOpacity>
+            </Pressable>
 
-            <TouchableOpacity style={styles.actionButton} onPress={actionsComingSoon} activeOpacity={0.7}>
+            <Pressable android_ripple={ripple.neutral} style={styles.actionButton} onPress={actionsComingSoon} >
               <View style={[styles.actionIconContainer, styles.actionIconDisabled]}>
                 <Settings size={20} color={colors.text.tertiary} strokeWidth={2.5} />
               </View>
               <Text style={styles.actionButtonTextDisabled}>Settings</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
 
           <View style={styles.section}>
@@ -469,7 +469,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[5],
   },
   sectionTitle: {
-    ...textStyles.headingSmall,
+    ...textStyles.headlineSmall,
     color: colors.text.primary,
     fontFamily: 'Outfit-SemiBold',
     marginBottom: spacing[3],

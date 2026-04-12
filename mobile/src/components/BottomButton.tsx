@@ -1,7 +1,8 @@
 import React from 'react'
-import { View, TouchableOpacity, Text, StyleSheet } from 'react-native'
+import { View, Pressable, Text, StyleSheet, Platform } from 'react-native'
+import { ripple } from '../lib/androidRipple'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { colors, borderRadius, spacing, textStyles, fontSize } from '../theme'
+import { colors, borderRadius, spacing, textStyles, fontSize, layout } from '../theme'
 
 interface BottomButtonProps {
   title: string
@@ -28,14 +29,17 @@ export default function BottomButton({
         },
       ]}
     >
-      <TouchableOpacity
-        style={[
+      <Pressable
+        style={({ pressed }) => [
           styles.button,
           variant === 'primary' ? styles.primaryButton : styles.secondaryButton,
           disabled && styles.disabledButton,
+          Platform.OS === 'android' && styles.buttonClip,
+          pressed && Platform.OS === 'ios' && !disabled && styles.buttonPressedIOS,
         ]}
         onPress={onPress}
         disabled={disabled}
+        android_ripple={ripple.primaryTint}
       >
         <Text
           style={[
@@ -46,7 +50,7 @@ export default function BottomButton({
         >
           {title}
         </Text>
-      </TouchableOpacity>
+      </Pressable>
     </View>
   )
 }
@@ -63,7 +67,13 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[4],
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 52,
+    minHeight: layout.primaryButtonMinHeight,
+  },
+  buttonClip: {
+    overflow: 'hidden',
+  },
+  buttonPressedIOS: {
+    opacity: 0.92,
   },
   primaryButton: {
     backgroundColor: colors.primary.main,

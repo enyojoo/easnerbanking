@@ -9,6 +9,7 @@
  * | Exchange rates | 5m | Volatile FX |
  * | Transaction detail | 10m | Rarely changes after settlement |
  * | Communication prefs | 5m | Settings; PATCH updates cache |
+ * | Profile row (`AuthUser`) | n/a TTL | [`profileSnapshot.ts`](./profileSnapshot.ts) — instant header; refreshed with profile fetch |
  * | Recipients | 60m | Low-volatility directory |
  * | Payment methods | 60m | Metadata |
  * | Currencies | 24h | Rarely changes |
@@ -23,6 +24,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { clearEasenetPublicProfileCaches } from './easenetProfile'
+import { clearProfileSnapshot } from './profileSnapshot'
 
 /** Canonical TTLs — single source of truth for SWR windows. */
 export const CacheTTL = {
@@ -166,5 +168,6 @@ export async function clearAllUserCachesForUserId(userId: string): Promise<void>
   } catch {
     // ignore
   }
+  await clearProfileSnapshot(userId)
   await clearEasenetPublicProfileCaches()
 }

@@ -7,6 +7,11 @@
 export { colors } from './colors'
 export type { Colors } from './colors'
 
+export { resolveThemeColors } from './resolveThemeColors'
+export { layout } from './layout'
+export { motion } from './motion'
+export { ThemePaletteProvider, useThemeColors } from '../contexts/ThemePaletteContext'
+
 export {
   USER_AVATAR_SIZE,
   PROFILE_EDIT_AVATAR_SIZE,
@@ -23,7 +28,9 @@ export {
   fontSize, 
   lineHeight, 
   letterSpacing,
-  textStyles 
+  textStyles,
+  scaledFontSize,
+  typographyScale,
 } from './typography'
 export type { Typography } from './typography'
 

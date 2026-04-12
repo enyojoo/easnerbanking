@@ -40,7 +40,7 @@ interface UserDataContextType {
   refreshPaymentMethods: (force?: boolean) => Promise<void>
   refreshCommunicationPreferences: (force?: boolean) => Promise<void>
   commitCommunicationPreferences: (prefs: CommunicationPreferences) => Promise<void>
-  refreshAll: (force?: boolean) => Promise<void>
+  refreshAll: (force?: boolean, opts?: { suppressGlobalLoading?: boolean }) => Promise<void>
   refreshStaleData: () => Promise<void> // Refresh only stale data
   invalidateCurrencies: () => Promise<void>
   invalidateExchangeRates: () => Promise<void>
@@ -480,9 +480,10 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
   }
 
   // Priority-based initial load: critical data first, then rest
-  const refreshAll = async (force: boolean = false) => {
-    setLoading(true)
-    
+  const refreshAll = async (force: boolean = false, opts?: { suppressGlobalLoading?: boolean }) => {
+    const showGlobal = !opts?.suppressGlobalLoading
+    if (showGlobal) setLoading(true)
+
     try {
       // Phase 1: Critical path for send flow + dashboard (recipients must not wait on slow tx fetch)
       await Promise.all([
@@ -500,7 +501,7 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
     } catch (error) {
       console.error('UserDataContext: Error in refreshAll:', error)
     } finally {
-      setLoading(false)
+      if (showGlobal) setLoading(false)
     }
   }
 
@@ -515,12 +516,9 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
       // Uses stale-while-revalidate: shows cached data immediately, then refreshes
       const initializeData = async () => {
         try {
-          setLoading(true)
-          await refreshAll(false) // Not forced - will use cache if available
+          await refreshAll(false, { suppressGlobalLoading: true })
         } catch (error) {
           console.error('UserDataContext: Error initializing data:', error)
-        } finally {
-          setLoading(false)
         }
       }
       

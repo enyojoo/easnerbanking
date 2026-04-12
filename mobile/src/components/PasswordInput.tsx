@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
-import { View, TextInput, TouchableOpacity, StyleSheet } from 'react-native'
+import { View, TextInput, Pressable, Platform, StyleSheet } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { colors } from '../theme'
+import { ripple } from '../lib/androidRipple'
 import { authScreenStyles } from '../theme/authScreen'
 
 interface PasswordInputProps {
@@ -39,17 +40,20 @@ export default function PasswordInput({
         placeholderTextColor={colors.text.secondary}
         returnKeyType="done"
       />
-      <TouchableOpacity
-        style={styles.eyeButton}
+      <Pressable
+        style={({ pressed }) => [
+          styles.eyeButton,
+          pressed && Platform.OS === 'ios' && styles.eyePressedIOS,
+        ]}
         onPress={() => setShowPassword(!showPassword)}
-        activeOpacity={0.7}
+        android_ripple={ripple.neutral}
       >
         <Ionicons
           name={showPassword ? 'eye-off' : 'eye'}
           size={20}
           color={colors.text.secondary}
         />
-      </TouchableOpacity>
+      </Pressable>
     </View>
   )
 }
@@ -59,5 +63,8 @@ const styles = StyleSheet.create({
     padding: 12,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  eyePressedIOS: {
+    opacity: 0.7,
   },
 })

@@ -1,9 +1,10 @@
 import React from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, ViewStyle } from 'react-native'
+import { View, Text, Pressable, Platform, StyleSheet, ViewStyle } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import * as Haptics from 'expo-haptics'
 import { colors, shadows, textStyles, spacing } from '../theme'
+import { ripple } from '../lib/androidRipple'
 
 interface InternalHeaderProps {
   title: string
@@ -37,15 +38,18 @@ export default function InternalHeader({
 
   return (
     <View style={[styles.header, style]}>
-      <TouchableOpacity
+      <Pressable
         onPress={handleBack}
-        style={styles.backButton}
-        activeOpacity={0.7}
+        style={({ pressed }) => [
+          styles.backButton,
+          pressed && Platform.OS === 'ios' && styles.hitPressedIOS,
+        ]}
+        android_ripple={ripple.neutral}
         accessibilityLabel="Go back"
         accessibilityRole="button"
       >
         <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-      </TouchableOpacity>
+      </Pressable>
       <View style={styles.headerContent}>
         <Text style={styles.title} accessibilityRole="header">
           {title}
@@ -57,17 +61,20 @@ export default function InternalHeader({
         )}
       </View>
       {rightAction && (
-        <TouchableOpacity
+        <Pressable
           onPress={rightAction.onPress}
-          style={styles.rightAction}
-          activeOpacity={0.7}
+          style={({ pressed }) => [
+            styles.rightAction,
+            pressed && Platform.OS === 'ios' && styles.hitPressedIOS,
+          ]}
+          android_ripple={ripple.neutral}
           accessibilityLabel={rightAction.label}
           accessibilityRole="button"
         >
           {rightAction.icon || (
             <Text style={styles.rightActionText}>{rightAction.label}</Text>
           )}
-        </TouchableOpacity>
+        </Pressable>
       )}
     </View>
   )
@@ -111,6 +118,9 @@ const styles = StyleSheet.create({
     ...textStyles.labelMedium,
     color: colors.primary.main,
     fontFamily: 'Outfit-SemiBold',
+  },
+  hitPressedIOS: {
+    opacity: 0.7,
   },
 })
 

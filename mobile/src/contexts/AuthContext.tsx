@@ -17,6 +17,7 @@ import {
 import { mapUsersRowToUser } from '../lib/userProfileHelpers'
 import { ensureConsumerMobileAccess } from '../lib/validateAppSurface'
 import { hydratePayoutCorridorsFromStorage, refreshPayoutCorridors } from '../lib/payoutCorridors'
+import { readProfileSnapshot, writeProfileSnapshot } from '../lib/profileSnapshot'
 
 function mapNameFromMetadata(meta: Record<string, unknown> | undefined): {
   first_name: string
@@ -277,7 +278,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           void hydratePayoutCorridorsFromStorage().then(() => refreshPayoutCorridors())
         }
 
-        setUserProfile({
+        const nextProfile: AuthUser = {
           id: regularUser.id,
           email: regularUser.email,
           isAdmin: false,
@@ -296,7 +297,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
           bridge_signed_agreement_id: row.bridge_signed_agreement_id as string | undefined,
           updated_at: profile.updated_at,
           profile,
-        })
+        }
+        setUserProfile(nextProfile)
+        void writeProfileSnapshot(nextProfile)
         return regularUser
       }
 
@@ -362,6 +365,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
             updated_at: afterGate.user.updated_at || afterGate.user.created_at,
           }
           setUser(mappedUser)
+          const snap = await readProfileSnapshot(afterGate.user.id)
+          if (snap?.id === afterGate.user.id) {
+            setUser(snap.profile)
+            setUserProfile(snap)
+          }
           fetchUserProfile(afterGate.user.id, mappedUser, { force: true }).catch(error => {
             console.error('Initial profile fetch error:', error)
           })
@@ -422,6 +430,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
             updated_at: afterGate.user.updated_at || afterGate.user.created_at,
           }
           setUser(mappedUser)
+          const snap = await readProfileSnapshot(afterGate.user.id)
+          if (snap?.id === afterGate.user.id) {
+            setUser(snap.profile)
+            setUserProfile(snap)
+          }
           const profileForce =
             event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'PASSWORD_RECOVERY'
           fetchUserProfile(afterGate.user.id, mappedUser, {

@@ -6,7 +6,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   Alert,
 } from 'react-native'
 import * as Haptics from 'expo-haptics'
@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Button, OtpCodeInput } from '../../components/ui'
 import { useAuth } from '../../contexts/AuthContext'
 import { colors, spacing } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
 
 export default function MfaVerifyScreen() {
@@ -97,14 +98,13 @@ export default function MfaVerifyScreen() {
             loading={submitting}
           />
 
-          <TouchableOpacity
+          <Pressable
+           android_ripple={ripple.neutral}
             style={styles.secondary}
-            onPress={handleBack}
-            activeOpacity={0.7}
-            disabled={submitting}
+            onPress={handleBack} disabled={submitting}
           >
             <Text style={styles.secondaryText}>Use a different account</Text>
-          </TouchableOpacity>
+          </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>

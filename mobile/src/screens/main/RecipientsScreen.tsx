@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react'
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   FlatList,
   Alert,
@@ -24,6 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { Plus, Search } from 'lucide-react-native'
 import ScreenWrapper from '../../components/ScreenWrapper'
+import KeyboardSafeContainer from '../../components/KeyboardSafeContainer'
 import ConfirmationDialog from '../../components/ConfirmationDialog'
 import { useToast } from '../../components/ToastProvider'
 import { useUserData } from '../../contexts/UserDataContext'
@@ -36,6 +37,7 @@ import { getAccountTypeConfigFromCurrency, formatFieldValue } from '../../lib/cu
 import { validateRequired, validateAccountNumber, validateIBAN } from '../../utils/validators'
 import { formatIBAN, formatSortCode, formatRoutingNumber, formatAccountNumber } from '../../utils/formatters'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 import { getAllCountryCurrencies, searchCountryCurrencies, CountryCurrency } from '../../lib/countryCurrencyMapping'
 import {
   getCatalogByRecipientTypeWithJurisdiction,
@@ -801,10 +803,9 @@ function RecipientsContent({ navigation }: NavigationProps) {
   const renderRecipient = ({ item }: { item: Recipient }) => {
     const isEasenet = isEasenetRecipientRecord(item)
     return (
-      <TouchableOpacity
-        style={styles.recipientItem}
-        activeOpacity={0.7}
-        onPress={async () => {
+      <Pressable
+       android_ripple={ripple.neutral}
+        style={styles.recipientItem} onPress={async () => {
           await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
           handleEditRecipient(item)
         }}
@@ -814,32 +815,30 @@ function RecipientsContent({ navigation }: NavigationProps) {
             <>
               <EasenetRecipientHydratedPreview recipient={item} variant="row" getInitials={getInitials} />
               <View style={styles.recipientActions}>
-                <TouchableOpacity
+                <Pressable
+                 android_ripple={ripple.neutral}
                   style={styles.actionIcon}
                   onPress={async () => {
                     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                     handleEditRecipient(item)
                   }}
-                  disabled={isSubmitting}
-                  activeOpacity={0.7}
-                >
+                  disabled={isSubmitting} >
                   <Ionicons name="pencil-outline" size={18} color={colors.text.primary} />
-                </TouchableOpacity>
-                <TouchableOpacity
+                </Pressable>
+                <Pressable
+                 android_ripple={ripple.neutral}
                   style={[styles.actionIcon, styles.actionIconDelete]}
                   onPress={async () => {
                     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
                     handleDeleteRecipient(item)
                   }}
-                  disabled={deletingId === item.id}
-                  activeOpacity={0.7}
-                >
+                  disabled={deletingId === item.id} >
                   {deletingId === item.id ? (
                     <Ionicons name="hourglass-outline" size={18} color={colors.error.main} />
                   ) : (
                     <Ionicons name="trash-outline" size={18} color={colors.error.main} />
                   )}
-                </TouchableOpacity>
+                </Pressable>
               </View>
             </>
           ) : (
@@ -847,42 +846,41 @@ function RecipientsContent({ navigation }: NavigationProps) {
               <RecipientPayoutPreview recipient={item} variant="row" getInitials={getInitials} />
 
               <View style={styles.recipientActions}>
-                <TouchableOpacity
+                <Pressable
+                 android_ripple={ripple.neutral}
                   style={styles.actionIcon}
                   onPress={async () => {
                     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                     handleEditRecipient(item)
                   }}
-                  disabled={isSubmitting}
-                  activeOpacity={0.7}
-                >
+                  disabled={isSubmitting} >
                   <Ionicons name="pencil-outline" size={18} color={colors.text.primary} />
-                </TouchableOpacity>
-                <TouchableOpacity
+                </Pressable>
+                <Pressable
+                 android_ripple={ripple.neutral}
                   style={[styles.actionIcon, styles.actionIconDelete]}
                   onPress={async () => {
                     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
                     handleDeleteRecipient(item)
                   }}
-                  disabled={deletingId === item.id}
-                  activeOpacity={0.7}
-                >
+                  disabled={deletingId === item.id} >
                   {deletingId === item.id ? (
                     <Ionicons name="hourglass-outline" size={18} color={colors.error.main} />
                   ) : (
                     <Ionicons name="trash-outline" size={18} color={colors.error.main} />
                   )}
-                </TouchableOpacity>
+                </Pressable>
               </View>
             </>
           )}
         </View>
-      </TouchableOpacity>
+      </Pressable>
     )
   }
 
   return (
     <ScreenWrapper>
+      <KeyboardSafeContainer>
       <View style={styles.container}>
         {/* Premium Header - Matching Send Flow */}
         <Animated.View
@@ -899,16 +897,15 @@ function RecipientsContent({ navigation }: NavigationProps) {
             }
           ]}
         >
-          <TouchableOpacity
+          <Pressable
+           android_ripple={ripple.neutral}
             onPress={async () => {
               await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
               navigation.goBack()
             }}
-            style={styles.backButton}
-            activeOpacity={0.7}
-          >
+            style={styles.backButton} >
             <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-          </TouchableOpacity>
+          </Pressable>
           <View style={styles.headerContent}>
         <Text style={styles.title}>Recipients</Text>
       </View>
@@ -916,8 +913,9 @@ function RecipientsContent({ navigation }: NavigationProps) {
 
         <ScrollView 
           style={styles.scrollView}
+          keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: insets.bottom + 100 }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
@@ -949,9 +947,9 @@ function RecipientsContent({ navigation }: NavigationProps) {
                 onSubmitEditing={() => Keyboard.dismiss()}
               />
               {searchTerm.length > 0 && (
-                <TouchableOpacity onPress={() => setSearchTerm('')}>
+                <Pressable android_ripple={ripple.neutral} onPress={() => setSearchTerm('')}>
                   <Ionicons name="close-circle" size={18} color={colors.text.secondary} />
-                </TouchableOpacity>
+                </Pressable>
               )}
             </View>
           </Animated.View>
@@ -977,6 +975,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                 data={filteredRecipients}
                 renderItem={renderRecipient}
                 keyExtractor={(item) => item.id}
+                keyboardShouldPersistTaps="handled"
                 scrollEnabled={false}
                 showsVerticalScrollIndicator={false}
                 removeClippedSubviews={true}
@@ -1004,17 +1003,16 @@ function RecipientsContent({ navigation }: NavigationProps) {
 
         {/* Add new recipient Button - Fixed at bottom */}
         <View style={[styles.bottomButtonContainer, { paddingBottom: insets.bottom + spacing[4] }]}>
-          <TouchableOpacity
+          <Pressable
+           android_ripple={ripple.neutral}
             style={styles.addRecipientButton}
             onPress={async () => {
               await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
               resetForm()
               setShowRecipientTypeModal(true)
-            }}
-            activeOpacity={0.7}
-          >
+            }} >
             <Text style={styles.addRecipientButtonText}>Add new recipient</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </View>
 
@@ -1033,10 +1031,9 @@ function RecipientsContent({ navigation }: NavigationProps) {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
-          <TouchableOpacity 
-            style={StyleSheet.absoluteFill}
-            activeOpacity={1}
-            onPress={() => {
+          <Pressable 
+           android_ripple={ripple.neutral} 
+            style={StyleSheet.absoluteFill} onPress={() => {
               setShowRecipientTypeModal(false)
               resetForm()
             }}
@@ -1049,7 +1046,8 @@ function RecipientsContent({ navigation }: NavigationProps) {
         >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add a new</Text>
-              <TouchableOpacity
+              <Pressable
+               android_ripple={ripple.neutral}
                 onPress={() => {
                   setShowRecipientTypeModal(false)
                   resetForm()
@@ -1057,12 +1055,13 @@ function RecipientsContent({ navigation }: NavigationProps) {
                 style={styles.closeButton}
               >
                 <Ionicons name="close" size={24} color={colors.text.secondary} />
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             <View style={styles.recipientTypeOptions}>
               {/* Wallet Address Option */}
-              <TouchableOpacity
+              <Pressable
+               android_ripple={ripple.neutral}
                 style={styles.recipientTypeOption}
                 onPress={async () => {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -1072,9 +1071,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                   setNewRecipient(prev => ({ ...prev, currency: firstAsset, network: firstNetwork }))
                   setShowRecipientTypeModal(false)
                   setShowBankAccountForm(true)
-                }}
-                activeOpacity={0.7}
-              >
+                }} >
                 <View style={styles.recipientTypeIcon}>
                   <Wallet size={24} color={colors.primary.main} strokeWidth={2} />
                 </View>
@@ -1082,10 +1079,11 @@ function RecipientsContent({ navigation }: NavigationProps) {
                   <Text style={styles.recipientTypeTitle}>Wallet Address</Text>
                   <Text style={styles.recipientTypeSubtitle}>Send stablecoins to an address</Text>
                 </View>
-              </TouchableOpacity>
+              </Pressable>
 
               {/* Bank Account Option */}
-              <TouchableOpacity
+              <Pressable
+               android_ripple={ripple.neutral}
                 style={styles.recipientTypeOption}
                 onPress={async () => {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -1100,9 +1098,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                   setNewRecipient(prev => ({ ...prev, currency: 'USD' }))
                   setShowRecipientTypeModal(false)
                   setShowBankAccountForm(true)
-                }}
-                activeOpacity={0.7}
-              >
+                }} >
                 <View style={styles.recipientTypeIcon}>
                   <Building2 size={24} color={colors.primary.main} strokeWidth={2} />
                 </View>
@@ -1110,10 +1106,11 @@ function RecipientsContent({ navigation }: NavigationProps) {
                   <Text style={styles.recipientTypeTitle}>Bank Account</Text>
                   <Text style={styles.recipientTypeSubtitle}>Send cash to a bank account</Text>
                 </View>
-              </TouchableOpacity>
+              </Pressable>
 
               {/* Mobile Wallet Option */}
-              <TouchableOpacity
+              <Pressable
+               android_ripple={ripple.neutral}
                 style={styles.recipientTypeOption}
                 onPress={async () => {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -1131,9 +1128,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                   setNewRecipient(prev => ({ ...prev, currency: firstCurrency, provider: firstProvider }))
                   setShowRecipientTypeModal(false)
                   setShowBankAccountForm(true) // Use same form for now
-                }}
-                activeOpacity={0.7}
-              >
+                }} >
                 <View style={styles.recipientTypeIcon}>
                   <Smartphone size={24} color={colors.primary.main} strokeWidth={2} />
                 </View>
@@ -1141,10 +1136,11 @@ function RecipientsContent({ navigation }: NavigationProps) {
                   <Text style={styles.recipientTypeTitle}>Mobile Money</Text>
                   <Text style={styles.recipientTypeSubtitle}>Send cash via mobile money</Text>
                 </View>
-              </TouchableOpacity>
+              </Pressable>
 
               {/* Easetag (P2P wallet) */}
-              <TouchableOpacity
+              <Pressable
+               android_ripple={ripple.neutral}
                 style={styles.recipientTypeOption}
                 onPress={async () => {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -1168,9 +1164,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                   }))
                   setShowRecipientTypeModal(false)
                   setShowBankAccountForm(true)
-                }}
-                activeOpacity={0.7}
-              >
+                }} >
                 <View style={styles.recipientTypeIcon}>
                   <AtSign size={24} color={colors.primary.main} strokeWidth={2} />
                 </View>
@@ -1178,7 +1172,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                   <Text style={styles.recipientTypeTitle}>Easetag</Text>
                   <Text style={styles.recipientTypeSubtitle}>Send cash via Easner handle</Text>
                 </View>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -1201,10 +1195,9 @@ function RecipientsContent({ navigation }: NavigationProps) {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
-          <TouchableOpacity 
-            style={StyleSheet.absoluteFill}
-            activeOpacity={1}
-            onPress={() => {
+          <Pressable 
+           android_ripple={ripple.neutral} 
+            style={StyleSheet.absoluteFill} onPress={() => {
               setShowBankAccountForm(false)
               setEditingRecipient(null)
               resetForm()
@@ -1226,7 +1219,8 @@ function RecipientsContent({ navigation }: NavigationProps) {
                       ? editingRecipient ? 'Edit Easetag recipient' : 'Add Easetag recipient'
                     : editingRecipient ? 'Edit Bank Account' : 'Add Bank Account'}
               </Text>
-              <TouchableOpacity
+              <Pressable
+               android_ripple={ripple.neutral}
                 onPress={() => {
                   setShowBankAccountForm(false)
                   setEditingRecipient(null)
@@ -1235,7 +1229,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                 style={styles.closeButton}
               >
                 <Ionicons name="close" size={24} color={colors.text.secondary} />
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             <ScrollView 
@@ -1246,7 +1240,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
               keyboardShouldPersistTaps="handled"
             >
               <View style={styles.modalContent}>
-              {isAnyDropdownOpen && <TouchableOpacity style={styles.dropdownBackdrop} activeOpacity={1} onPress={closeAllDropdowns} />}
+              {isAnyDropdownOpen && <Pressable android_ripple={ripple.neutral} style={styles.dropdownBackdrop} onPress={closeAllDropdowns} />}
               {error ? (
                 <View style={styles.errorContainer}>
                   <Text style={styles.errorText}>{error}</Text>
@@ -1255,14 +1249,13 @@ function RecipientsContent({ navigation }: NavigationProps) {
               
               {/* Country/Currency Selector - Matching SelectRecipientScreen exactly */}
               {selectedRecipientType !== 'wallet' && selectedRecipientType !== 'easenet' && <View style={[styles.currencySelectorWrapper, showCountryDropdown && styles.currencySelectorWrapperActive]}>
-                <TouchableOpacity
+                <Pressable
+                 android_ripple={ripple.neutral}
                   style={styles.currencySelector}
                   onPress={() => {
                     setShowCountryDropdown(!showCountryDropdown)
                     setCountrySearchTerm('')
-                  }}
-                  activeOpacity={0.7}
-                >
+                  }} >
                   <View style={styles.currencySelectorContent}>
                     {selectedCatalogEntry ? (
                       <CountryFlag code={selectedCatalogEntry.countryCode} size={22} style={styles.currencyFlag} />
@@ -1278,7 +1271,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                       color="#6b7280" 
                     />
                   </View>
-                </TouchableOpacity>
+                </Pressable>
                 
                 {showCountryDropdown && (
                   <View style={styles.currencyDropdown}>
@@ -1303,7 +1296,8 @@ function RecipientsContent({ navigation }: NavigationProps) {
                           selectedCountryCurrency?.countryCode === item.countryCode
                         
                         return (
-                          <TouchableOpacity
+                          <Pressable
+                           android_ripple={ripple.neutral}
                             key={`${item.countryCode}-${item.currencyCode}`}
                             style={[
                               styles.currencyDropdownItem,
@@ -1336,9 +1330,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                               
                               setShowCountryDropdown(false)
                               setCountrySearchTerm('')
-                            }}
-                            activeOpacity={0.7}
-                          >
+                            }} >
                             <CountryFlag code={item.countryCode} size={22} style={styles.currencyFlag} />
                             <View style={styles.currencyInfo}>
                               <Text style={styles.currencyCode}>{item.currencyCode}</Text>
@@ -1347,7 +1339,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                             {isSelected && (
                               <Ionicons name="checkmark" size={18} color={colors.primary.main} />
                             )}
-                          </TouchableOpacity>
+                          </Pressable>
                         )
                       })}
                     </ScrollView>
@@ -1402,16 +1394,15 @@ function RecipientsContent({ navigation }: NavigationProps) {
               {selectedRecipientType === 'mobile' && (
                 <>
                   <View style={[styles.currencySelectorWrapper, showProviderDropdown && styles.currencySelectorWrapperActive]}>
-                    <TouchableOpacity
+                    <Pressable
+                     android_ripple={ripple.neutral}
                       style={styles.currencySelector}
                       onPress={() => {
                         setShowProviderDropdown(!showProviderDropdown)
                         setShowCountryDropdown(false)
                         setShowWalletAssetDropdown(false)
                         setShowWalletNetworkDropdown(false)
-                      }}
-                      activeOpacity={0.7}
-                      disabled={isSubmitting}
+                      }} disabled={isSubmitting}
                     >
                       <View style={styles.currencySelectorContent}>
                         <Text style={styles.currencySelectorText}>
@@ -1419,7 +1410,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                         </Text>
                         <Ionicons name={showProviderDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6b7280" />
                       </View>
-                    </TouchableOpacity>
+                    </Pressable>
                     {showProviderDropdown && (
                       <View style={styles.currencyDropdown}>
                         <View style={styles.currencyDropdownSearch}>
@@ -1436,7 +1427,8 @@ function RecipientsContent({ navigation }: NavigationProps) {
                           {getRecipientProviders(newRecipient.currency, 'mobile_money', selectedCountryCurrency?.countryCode)
                             .filter((provider) => provider.toLowerCase().includes(providerSearchTerm.toLowerCase()))
                             .map((provider) => (
-                            <TouchableOpacity
+                            <Pressable
+                             android_ripple={ripple.neutral}
                               key={provider}
                               style={[styles.currencyDropdownItem, newRecipient.provider === provider && styles.currencyDropdownItemSelected]}
                               onPress={async () => {
@@ -1450,7 +1442,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                                 <Text style={styles.currencyCode}>{provider}</Text>
                               </View>
                               {newRecipient.provider === provider && <Ionicons name="checkmark" size={18} color={colors.primary.main} />}
-                            </TouchableOpacity>
+                            </Pressable>
                           ))}
                         </ScrollView>
                       </View>
@@ -1486,14 +1478,13 @@ function RecipientsContent({ navigation }: NavigationProps) {
                     editable={!isSubmitting}
                   />
                   <View style={[styles.currencySelectorWrapper, showWalletAssetDropdown && styles.currencySelectorWrapperActive]}>
-                    <TouchableOpacity
+                    <Pressable
+                     android_ripple={ripple.neutral}
                       style={styles.currencySelector}
                       onPress={() => {
                         setShowWalletAssetDropdown(!showWalletAssetDropdown)
                         setShowWalletNetworkDropdown(false)
-                      }}
-                      activeOpacity={0.7}
-                      disabled={isSubmitting}
+                      }} disabled={isSubmitting}
                     >
                       <View style={styles.currencySelectorContent}>
                         {getTokenIconUrl(newRecipient.currency) ? <Image source={{ uri: getTokenIconUrl(newRecipient.currency)! }} style={styles.cryptoIcon} /> : null}
@@ -1502,7 +1493,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                         </Text>
                         <Ionicons name={showWalletAssetDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6b7280" />
                       </View>
-                    </TouchableOpacity>
+                    </Pressable>
                     {showWalletAssetDropdown && (
                       <View style={styles.currencyDropdown}>
                         <View style={styles.currencyDropdownSearch}>
@@ -1519,7 +1510,8 @@ function RecipientsContent({ navigation }: NavigationProps) {
                           {getWalletAssets()
                             .filter((asset) => asset.toLowerCase().includes(walletAssetSearchTerm.toLowerCase()))
                             .map((asset) => (
-                            <TouchableOpacity
+                            <Pressable
+                             android_ripple={ripple.neutral}
                               key={asset}
                               style={[styles.currencyDropdownItem, newRecipient.currency === asset && styles.currencyDropdownItemSelected]}
                               onPress={async () => {
@@ -1539,23 +1531,22 @@ function RecipientsContent({ navigation }: NavigationProps) {
                                 <Text style={styles.currencyCode}>{asset}</Text>
                               </View>
                               {newRecipient.currency === asset && <Ionicons name="checkmark" size={18} color={colors.primary.main} />}
-                            </TouchableOpacity>
+                            </Pressable>
                           ))}
                         </ScrollView>
                       </View>
                     )}
                   </View>
                   <View style={[styles.currencySelectorWrapper, showWalletNetworkDropdown && styles.currencySelectorWrapperActive]}>
-                    <TouchableOpacity
+                    <Pressable
+                     android_ripple={ripple.neutral}
                       style={styles.currencySelector}
                       onPress={() => {
                         if (!isSubmitting) {
                           setShowWalletNetworkDropdown(!showWalletNetworkDropdown)
                           setShowWalletAssetDropdown(false)
                         }
-                      }}
-                      activeOpacity={0.7}
-                      disabled={isSubmitting}
+                      }} disabled={isSubmitting}
                     >
                       <View style={styles.currencySelectorContent}>
                         {getNetworkIconUrl(newRecipient.network) ? <Image source={{ uri: getNetworkIconUrl(newRecipient.network)! }} style={styles.cryptoIcon} /> : null}
@@ -1564,7 +1555,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                         </Text>
                         <Ionicons name={showWalletNetworkDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6b7280" />
                       </View>
-                    </TouchableOpacity>
+                    </Pressable>
                     {showWalletNetworkDropdown && (
                       <View style={styles.currencyDropdown}>
                         <View style={styles.currencyDropdownSearch}>
@@ -1581,7 +1572,8 @@ function RecipientsContent({ navigation }: NavigationProps) {
                           {getWalletNetworksForAsset(newRecipient.currency)
                             .filter((network) => network.toLowerCase().includes(walletNetworkSearchTerm.toLowerCase()))
                             .map((network) => (
-                            <TouchableOpacity
+                            <Pressable
+                             android_ripple={ripple.neutral}
                               key={network}
                               style={[styles.currencyDropdownItem, newRecipient.network === network && styles.currencyDropdownItemSelected]}
                               onPress={async () => {
@@ -1596,7 +1588,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                                 <Text style={styles.currencyCode}>{network}</Text>
                               </View>
                               {newRecipient.network === network && <Ionicons name="checkmark" size={18} color={colors.primary.main} />}
-                            </TouchableOpacity>
+                            </Pressable>
                           ))}
                         </ScrollView>
                       </View>
@@ -1611,9 +1603,9 @@ function RecipientsContent({ navigation }: NavigationProps) {
                       placeholderTextColor={colors.text.secondary}
                       editable={!isSubmitting}
                     />
-                    <TouchableOpacity style={styles.walletScanIconButton} onPress={handleScanPress} activeOpacity={0.7}>
+                    <Pressable android_ripple={ripple.neutral} style={styles.walletScanIconButton} onPress={handleScanPress} >
                       <Ionicons name="scan-outline" size={18} color={colors.primary.main} />
-                    </TouchableOpacity>
+                    </Pressable>
                   </View>
                   <TextInput
                     style={styles.modalInput}
@@ -1640,30 +1632,28 @@ function RecipientsContent({ navigation }: NavigationProps) {
                     {accountConfig.accountType === "us" && (
                       <View style={styles.transferTypeContainer}>
                         <View style={styles.transferTypeOptions}>
-                          <TouchableOpacity
+                          <Pressable
+                           android_ripple={ripple.neutral}
                             style={[styles.transferTypeOption, transferType === 'ACH' && styles.transferTypeOptionSelected]}
                             onPress={() => {
                               setTransferType('ACH')
                               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                            }}
-                            activeOpacity={0.7}
-                          >
+                            }} >
                             <Text style={[styles.transferTypeOptionText, transferType === 'ACH' && styles.transferTypeOptionTextSelected]}>
                               ACH
                             </Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
+                          </Pressable>
+                          <Pressable
+                           android_ripple={ripple.neutral}
                             style={[styles.transferTypeOption, transferType === 'Wire' && styles.transferTypeOptionSelected]}
                             onPress={() => {
                               setTransferType('Wire')
                               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                            }}
-                            activeOpacity={0.7}
-                          >
+                            }} >
                             <Text style={[styles.transferTypeOptionText, transferType === 'Wire' && styles.transferTypeOptionTextSelected]}>
                               Fedwire
                             </Text>
-                          </TouchableOpacity>
+                          </Pressable>
                         </View>
                       </View>
                     )}
@@ -1717,30 +1707,28 @@ function RecipientsContent({ navigation }: NavigationProps) {
                       <>
                         <View style={styles.transferTypeContainer}>
                           <View style={styles.transferTypeOptions}>
-                            <TouchableOpacity
+                            <Pressable
+                             android_ripple={ripple.neutral}
                               style={[styles.transferTypeOption, newRecipient.checkingOrSavings === 'checking' && styles.transferTypeOptionSelected]}
                               onPress={() => {
                                 setNewRecipient(prev => ({ ...prev, checkingOrSavings: 'checking' }))
                                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                              }}
-                              activeOpacity={0.7}
-                            >
+                              }} >
                               <Text style={[styles.transferTypeOptionText, newRecipient.checkingOrSavings === 'checking' && styles.transferTypeOptionTextSelected]}>
                                 Checking
                               </Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
+                            </Pressable>
+                            <Pressable
+                             android_ripple={ripple.neutral}
                               style={[styles.transferTypeOption, newRecipient.checkingOrSavings === 'savings' && styles.transferTypeOptionSelected]}
                               onPress={() => {
                                 setNewRecipient(prev => ({ ...prev, checkingOrSavings: 'savings' }))
                                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                              }}
-                              activeOpacity={0.7}
-                            >
+                              }} >
                               <Text style={[styles.transferTypeOptionText, newRecipient.checkingOrSavings === 'savings' && styles.transferTypeOptionTextSelected]}>
                                 Savings
                               </Text>
-                            </TouchableOpacity>
+                            </Pressable>
                           </View>
                         </View>
                         <View>
@@ -1991,7 +1979,8 @@ function RecipientsContent({ navigation }: NavigationProps) {
               )}
 
               <View style={styles.modalButtons}>
-                <TouchableOpacity
+                <Pressable
+                 android_ripple={ripple.neutral}
                   style={[styles.modalButton, styles.cancelButton]}
                   onPress={() => {
                     setShowBankAccountForm(false)
@@ -2002,8 +1991,9 @@ function RecipientsContent({ navigation }: NavigationProps) {
                   disabled={isSubmitting}
                 >
                   <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
+                </Pressable>
+                <Pressable
+                 android_ripple={ripple.neutral}
                   style={[styles.modalButton, styles.saveButton, (isSubmitting || !isFormValid()) && styles.disabledButton]}
                   onPress={editingRecipient ? handleUpdateRecipient : handleAddRecipient}
                   disabled={isSubmitting || !isFormValid()}
@@ -2011,7 +2001,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                   <Text style={styles.saveButtonText}>
                     {isSubmitting ? (editingRecipient ? 'Saving...' : 'Adding...') : (editingRecipient ? 'Save changes' : 'Add')}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
               </View>
             </ScrollView>
@@ -2031,9 +2021,9 @@ function RecipientsContent({ navigation }: NavigationProps) {
                 <View style={styles.scanUiLayer}>
                   <View style={styles.scanHeaderRow}>
                     <Text style={styles.scanTitle}>Scan wallet address</Text>
-                    <TouchableOpacity style={styles.scanCloseButton} onPress={() => setShowScanModal(false)}>
+                    <Pressable android_ripple={ripple.neutral} style={styles.scanCloseButton} onPress={() => setShowScanModal(false)}>
                       <Ionicons name="close" size={22} color={colors.text.inverse} />
-                    </TouchableOpacity>
+                    </Pressable>
                   </View>
                   <View style={styles.scanCenterGroup}>
                     <View style={styles.scanFrame} />
@@ -2057,6 +2047,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
         onConfirm={confirmDelete}
         onCancel={() => setDeleteConfirmation(null)}
       />
+      </KeyboardSafeContainer>
     </ScreenWrapper>
   )
 }

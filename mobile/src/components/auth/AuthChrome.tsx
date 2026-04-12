@@ -1,8 +1,9 @@
 import React from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native'
+import { View, Text, Pressable, StyleSheet, Platform } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 
 /** Matches business `login` / `signup` pages: horizontal rule + centered “Or”. Form/outline: 8px radius, semantic border. */
 export function OrDivider() {
@@ -24,18 +25,23 @@ type GoogleButtonProps = {
 /** Outline full-width button like shadcn `Button variant="outline"`. */
 export function GoogleOutlineButton({ label, onPress, disabled }: GoogleButtonProps) {
   return (
-    <TouchableOpacity
-      style={[styles.googleBtn, disabled && styles.googleBtnDisabled]}
+    <Pressable
+      style={({ pressed }) => [
+        styles.googleBtn,
+        disabled && styles.googleBtnDisabled,
+        Platform.OS === 'android' && styles.googleBtnClip,
+        pressed && Platform.OS === 'ios' && !disabled && styles.googleBtnPressedIOS,
+      ]}
       onPress={async () => {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
         onPress()
       }}
       disabled={disabled}
-      activeOpacity={0.7}
+      android_ripple={ripple.neutral}
     >
       <Ionicons name="logo-google" size={20} color={colors.text.primary} />
       <Text style={styles.googleBtnText}>{label}</Text>
-    </TouchableOpacity>
+    </Pressable>
   )
 }
 
@@ -74,6 +80,12 @@ const styles = StyleSheet.create({
         borderColor: colors.semantic.border,
       },
     }),
+  },
+  googleBtnClip: {
+    overflow: 'hidden',
+  },
+  googleBtnPressedIOS: {
+    opacity: 0.7,
   },
   googleBtnDisabled: {
     opacity: 0.5,

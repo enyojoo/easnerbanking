@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
+  Pressable, Platform,
   Clipboard,
   RefreshControl,
   Alert,
@@ -18,6 +18,7 @@ import ScreenWrapper from '../../components/ScreenWrapper'
 import { ShimmerLoader } from '../../components/premium'
 import { NavigationProps } from '../../types'
 import { colors, textStyles, borderRadius, spacing, shadows } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 import { apiGet, NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
 import { useUserData } from '../../contexts/UserDataContext'
 import {
@@ -354,11 +355,10 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
     return (
       <View style={styles.summaryRow}>
         <Text style={styles.summaryLabel}>{label}</Text>
-        <TouchableOpacity
+        <Pressable
+         android_ripple={ripple.neutral}
           style={styles.copyableValueRow}
-          onPress={() => handleCopy(value, fieldName)}
-          activeOpacity={0.7}
-        >
+          onPress={() => handleCopy(value, fieldName)} >
           <Text style={styles.summaryValue} numberOfLines={1}>
             {value}
           </Text>
@@ -369,7 +369,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
               color={isCopied ? colors.success.main : colors.primary.main} 
             />
           </View>
-        </TouchableOpacity>
+        </Pressable>
       </View>
     )
   }
@@ -397,16 +397,15 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
           }
         ]}
       >
-        <TouchableOpacity
+        <Pressable
+         android_ripple={ripple.neutral}
           onPress={async () => {
             await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
             navigation.goBack()
           }}
-          style={styles.backButton}
-          activeOpacity={0.7}
-        >
+          style={styles.backButton} >
           <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-        </TouchableOpacity>
+        </Pressable>
         <View style={styles.headerContent}>
         </View>
       </Animated.View>
@@ -461,16 +460,15 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
               }
             ]}
           >
-            <TouchableOpacity
+            <Pressable
+             android_ripple={ripple.neutral}
               onPress={async () => {
                 await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                 navigation.goBack()
               }}
-              style={styles.backButton}
-              activeOpacity={0.7}
-            >
+              style={styles.backButton} >
               <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-            </TouchableOpacity>
+            </Pressable>
         <View style={styles.headerContent}>
         </View>
           </Animated.View>
@@ -481,9 +479,9 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
             </View>
             <Text style={styles.errorTitle}>Something went wrong</Text>
             <Text style={styles.errorText}>{error || 'Transaction not found'}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={() => fetchTransactionDetails(true)}>
+            <Pressable android_ripple={ripple.neutral} style={styles.retryButton} onPress={() => fetchTransactionDetails(true)}>
               <Text style={styles.retryButtonText}>Try Again</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
       </ScreenWrapper>
@@ -514,16 +512,15 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
             }
           ]}
         >
-          <TouchableOpacity
+          <Pressable
+           android_ripple={ripple.neutral}
             onPress={async () => {
               await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
               navigation.goBack()
             }}
-            style={styles.backButton}
-            activeOpacity={0.7}
-          >
+            style={styles.backButton} >
             <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-          </TouchableOpacity>
+          </Pressable>
           <View style={styles.headerContent}>
             <Text style={styles.title}>Transaction Details</Text>
           </View>
@@ -628,7 +625,8 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                 {/* Transaction ID - always shown */}
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Transaction ID</Text>
-                  <TouchableOpacity 
+                  <Pressable 
+                   android_ripple={ripple.neutral} 
                     style={styles.copyableValueRow}
                     onPress={() => handleCopy(transaction.transaction_id, "transactionId")}
                   >
@@ -642,7 +640,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                         color={copiedStates.transactionId ? colors.success.main : colors.primary.main} 
                       />
                     </View>
-                  </TouchableOpacity>
+                  </Pressable>
                 </View>
 
                 {/* Type - always shown */}
@@ -761,7 +759,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
         {/* Bottom Actions */}
         {transaction.transaction_type === 'send' && (
           <View style={[styles.bottomContainer, { paddingBottom: Math.max(insets.bottom + spacing[4], spacing[6]) }]}>
-            <TouchableOpacity style={styles.primaryButton} onPress={handleSendAgain}>
+            <Pressable android_ripple={ripple.neutral} style={styles.primaryButton} onPress={handleSendAgain}>
               <LinearGradient
                 colors={colors.primary.gradient}
                 start={{ x: 0, y: 0 }}
@@ -770,7 +768,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
               >
                 <Text style={styles.primaryButtonText}>Send Again</Text>
               </LinearGradient>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         )}
       </View>

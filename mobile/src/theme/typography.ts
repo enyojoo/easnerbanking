@@ -4,7 +4,7 @@
  * Type scale and text styles for consistent hierarchy
  */
 
-import { TextStyle, Platform } from 'react-native'
+import { TextStyle, Platform, Dimensions, PixelRatio } from 'react-native'
 
 // Font families - Using Outfit from Google Fonts
 export const fontFamily = {
@@ -35,6 +35,21 @@ export const fontSize = {
   '3xl': 34,
   '4xl': 40,
   '5xl': 48,
+  /** Hero balance / send amount (Cash-like scale). */
+  '6xl': 56,
+}
+
+/** Clamp font scale for accessibility (v2 money + titles). */
+export function typographyScale(width?: number): number {
+  const w = width ?? Dimensions.get('window').width
+  const fs = PixelRatio.getFontScale()
+  const widthFactor = Math.min(Math.max(w / 375, 0.92), 1.08)
+  const fontFactor = Math.min(Math.max(fs, 1), 1.2)
+  return widthFactor * fontFactor
+}
+
+export function scaledFontSize(px: number, width?: number): number {
+  return Math.round(px * typographyScale(width))
 }
 
 // Line heights
@@ -93,6 +108,10 @@ export const textStyles: Record<string, TextStyle> = {
     fontSize: fontSize.xl,
     fontWeight: fontWeight.semibold,
     lineHeight: fontSize.xl * lineHeight.snug,
+    ...Platform.select({
+      android: { includeFontPadding: false, lineHeight: Math.round(fontSize.xl * lineHeight.snug) + 4 },
+      default: {},
+    }),
   },
   headlineSmall: {
     fontFamily: fontFamily.semibold,
@@ -133,12 +152,26 @@ export const textStyles: Record<string, TextStyle> = {
     fontSize: fontSize.sm,
     fontWeight: fontWeight.regular,
     lineHeight: fontSize.sm * lineHeight.relaxed,
+    ...Platform.select({
+      android: {
+        includeFontPadding: false,
+        lineHeight: Math.round(fontSize.sm * lineHeight.relaxed) + 4,
+      },
+      default: {},
+    }),
   },
   bodySmall: {
     fontFamily: fontFamily.regular,
     fontSize: fontSize.xs,
     fontWeight: fontWeight.regular,
     lineHeight: fontSize.xs * lineHeight.relaxed,
+    ...Platform.select({
+      android: {
+        includeFontPadding: false,
+        lineHeight: Math.round(fontSize.xs * lineHeight.relaxed) + 4,
+      },
+      default: {},
+    }),
   },
 
   /**
@@ -178,6 +211,10 @@ export const textStyles: Record<string, TextStyle> = {
     lineHeight: 10 * lineHeight.normal,
     letterSpacing: letterSpacing.wider,
     textTransform: 'uppercase',
+    ...Platform.select({
+      android: { includeFontPadding: false, lineHeight: 16 },
+      default: {},
+    }),
   },
 
   // Special - Numbers/Currency
@@ -203,6 +240,20 @@ export const textStyles: Record<string, TextStyle> = {
     fontWeight: fontWeight.semibold,
     lineHeight: fontSize.md * lineHeight.tight,
     fontVariant: ['tabular-nums'],
+  },
+
+  /** Primary balance line on Dashboard (tabular, large). */
+  balanceDisplay: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize['6xl'],
+    fontWeight: fontWeight.bold,
+    lineHeight: Math.round(fontSize['6xl'] * lineHeight.tight),
+    letterSpacing: letterSpacing.tight,
+    fontVariant: ['tabular-nums'],
+    ...Platform.select({
+      android: { includeFontPadding: false },
+      default: {},
+    }),
   },
 }
 

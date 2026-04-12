@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react'
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   FlatList,
   Animated,
@@ -34,7 +34,9 @@ import {
 import { buildDraftEasenetRecipient, isDraftEasenetRecipient } from '../../lib/draftEasenetRecipient'
 import { NavigationProps, Recipient } from '../../types'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 import ScreenWrapper from '../../components/ScreenWrapper'
+import KeyboardSafeContainer from '../../components/KeyboardSafeContainer'
 import { useUserData } from '../../contexts/UserDataContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { recipientService } from '../../lib/recipientService'
@@ -566,11 +568,10 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     const showRecentBadge = recentIds.has(item.id) && !isDraftEasenet
     const isEasenet = isEasenetRecipientRecord(item)
     return (
-      <TouchableOpacity
+      <Pressable
+       android_ripple={ripple.neutral}
         style={styles.recipientItem}
-        onPress={() => handleSelectRecipient(item)}
-        activeOpacity={0.7}
-      >
+        onPress={() => handleSelectRecipient(item)} >
         <View style={styles.recipientRow}>
           {isEasenet ? (
             <>
@@ -620,7 +621,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
             </>
           )}
         </View>
-      </TouchableOpacity>
+      </Pressable>
     )
   }
 
@@ -642,14 +643,15 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
           },
         ]}
       >
-        <TouchableOpacity
+        <Pressable
+         android_ripple={ripple.neutral}
           onPress={() => {
             navigation.navigate('MainTabs' as never)
           }}
           style={styles.backButton}
         >
           <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-        </TouchableOpacity>
+        </Pressable>
         <View style={styles.headerContent}>
           <Text style={styles.title}>Send Money</Text>
         </View>
@@ -688,9 +690,9 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
             <ActivityIndicator size="small" color={colors.primary.main} />
           ) : null}
           {searchTerm.length > 0 && !(searchTerm.trim().startsWith('@') && hubSearchLoading) ? (
-            <TouchableOpacity onPress={() => setSearchTerm('')}>
+            <Pressable android_ripple={ripple.neutral} onPress={() => setSearchTerm('')}>
               <Ionicons name="close-circle" size={18} color={colors.text.secondary} />
-            </TouchableOpacity>
+            </Pressable>
           ) : null}
         </View>
         {searchTerm.trim().startsWith('@') && hubSearchError && !hubSearchLoading && !hubVirtualRecipient ? (
@@ -729,6 +731,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
 
   return (
     <ScreenWrapper>
+      <KeyboardSafeContainer>
       <View style={styles.container}>
         {recipientsLoading && recipients.length === 0 ? (
           <View style={[styles.scrollContent, { paddingTop: spacing[4] }]}>
@@ -761,13 +764,12 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
 
         {/* Add a recipient Button - Fixed at bottom */}
         <View style={[styles.bottomButtonContainer, { paddingBottom: insets.bottom + spacing[4] }]}>
-          <TouchableOpacity
+          <Pressable
+           android_ripple={ripple.neutral}
             style={styles.addRecipientButton}
-            onPress={handleAddNewRecipient}
-            activeOpacity={0.7}
-          >
+            onPress={handleAddNewRecipient} >
             <Text style={styles.addRecipientButtonText}>Add a recipient</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </View>
 
@@ -786,10 +788,9 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
-          <TouchableOpacity 
-            style={StyleSheet.absoluteFill}
-            activeOpacity={1}
-            onPress={() => {
+          <Pressable 
+           android_ripple={ripple.neutral} 
+            style={StyleSheet.absoluteFill} onPress={() => {
               setShowRecipientTypeModal(false)
               resetForm()
             }}
@@ -802,7 +803,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
         >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add a new</Text>
-              <TouchableOpacity
+              <Pressable
+               android_ripple={ripple.neutral}
                 onPress={() => {
                   setShowRecipientTypeModal(false)
                   resetForm()
@@ -810,11 +812,12 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                 style={styles.closeButton}
               >
                 <Ionicons name="close" size={24} color={colors.text.secondary} />
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             <View style={styles.recipientTypeOptions}>
-              <TouchableOpacity
+              <Pressable
+               android_ripple={ripple.neutral}
                 style={styles.recipientTypeOption}
                 onPress={async () => {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -824,9 +827,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                   setNewRecipient(prev => ({ ...prev, currency: firstAsset, network: firstNetwork }))
                   setShowRecipientTypeModal(false)
                   setShowBankAccountForm(true)
-                }}
-                activeOpacity={0.7}
-              >
+                }} >
                 <View style={styles.recipientTypeIcon}>
                   <Wallet size={24} color={colors.primary.main} strokeWidth={2} />
                 </View>
@@ -834,9 +835,10 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                   <Text style={styles.recipientTypeTitle}>Wallet Address</Text>
                   <Text style={styles.recipientTypeSubtitle}>Send stablecoins to an address</Text>
                 </View>
-              </TouchableOpacity>
+              </Pressable>
 
-              <TouchableOpacity
+              <Pressable
+               android_ripple={ripple.neutral}
                 style={styles.recipientTypeOption}
                 onPress={async () => {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -851,9 +853,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                   setNewRecipient(prev => ({ ...prev, currency: 'USD' }))
                   setShowRecipientTypeModal(false)
                   setShowBankAccountForm(true)
-                }}
-                activeOpacity={0.7}
-              >
+                }} >
                 <View style={styles.recipientTypeIcon}>
                   <Building2 size={24} color={colors.primary.main} strokeWidth={2} />
                 </View>
@@ -861,9 +861,10 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                   <Text style={styles.recipientTypeTitle}>Bank Account</Text>
                   <Text style={styles.recipientTypeSubtitle}>Send cash to a bank account</Text>
                 </View>
-              </TouchableOpacity>
+              </Pressable>
 
-              <TouchableOpacity
+              <Pressable
+               android_ripple={ripple.neutral}
                 style={styles.recipientTypeOption}
                 onPress={async () => {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -881,9 +882,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                   setNewRecipient(prev => ({ ...prev, currency: firstCurrency, provider: firstProvider }))
                   setShowRecipientTypeModal(false)
                   setShowBankAccountForm(true)
-                }}
-                activeOpacity={0.7}
-              >
+                }} >
                 <View style={styles.recipientTypeIcon}>
                   <Smartphone size={24} color={colors.primary.main} strokeWidth={2} />
                 </View>
@@ -891,9 +890,10 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                   <Text style={styles.recipientTypeTitle}>Mobile Money</Text>
                   <Text style={styles.recipientTypeSubtitle}>Send cash via mobile money</Text>
                 </View>
-              </TouchableOpacity>
+              </Pressable>
 
-              <TouchableOpacity
+              <Pressable
+               android_ripple={ripple.neutral}
                 style={styles.recipientTypeOption}
                 onPress={async () => {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -917,9 +917,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                   }))
                   setShowRecipientTypeModal(false)
                   setShowBankAccountForm(true)
-                }}
-                activeOpacity={0.7}
-              >
+                }} >
                 <View style={styles.recipientTypeIcon}>
                   <AtSign size={24} color={colors.primary.main} strokeWidth={2} />
                 </View>
@@ -927,7 +925,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                   <Text style={styles.recipientTypeTitle}>Easetag</Text>
                   <Text style={styles.recipientTypeSubtitle}>Send cash via Easner handle</Text>
                 </View>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -948,10 +946,9 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
-          <TouchableOpacity 
-            style={StyleSheet.absoluteFill}
-            activeOpacity={1}
-            onPress={() => {
+          <Pressable 
+           android_ripple={ripple.neutral} 
+            style={StyleSheet.absoluteFill} onPress={() => {
               setShowBankAccountForm(false)
               resetForm()
             }}
@@ -974,7 +971,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                       ? 'Add Easetag recipient'
                       : 'Add Bank Account'}
               </Text>
-              <TouchableOpacity
+              <Pressable
+               android_ripple={ripple.neutral}
                 onPress={() => {
                   setShowBankAccountForm(false)
                   resetForm()
@@ -982,7 +980,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                 style={styles.closeButton}
               >
                 <Ionicons name="close" size={24} color={colors.text.secondary} />
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             <ScrollView 
@@ -993,7 +991,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
               keyboardShouldPersistTaps="handled"
             >
               <View style={styles.modalContent}>
-              {isAnyDropdownOpen && <TouchableOpacity style={styles.dropdownBackdrop} activeOpacity={1} onPress={closeAllDropdowns} />}
+              {isAnyDropdownOpen && <Pressable android_ripple={ripple.neutral} style={styles.dropdownBackdrop} onPress={closeAllDropdowns} />}
               
               {error ? (
                 <View style={styles.errorContainer}>
@@ -1044,14 +1042,13 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
             {/* Country/Currency Selector */}
             {selectedRecipientType !== 'wallet' && selectedRecipientType !== 'easenet' && (
             <View style={[styles.currencySelectorWrapper, showCurrencyDropdown && styles.currencySelectorWrapperActive]}>
-              <TouchableOpacity
+              <Pressable
+               android_ripple={ripple.neutral}
                 style={styles.currencySelector}
                 onPress={() => {
                   setShowCurrencyDropdown(!showCurrencyDropdown)
                   setCurrencySearchTerm('')
-                }}
-                activeOpacity={0.7}
-              >
+                }} >
                 <View style={styles.currencySelectorContent}>
                   {selectedCatalogEntry ? (
                     <CountryFlag code={selectedCatalogEntry.countryCode} size={22} style={styles.currencyFlag} />
@@ -1067,7 +1064,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                     color="#6b7280" 
                   />
                 </View>
-              </TouchableOpacity>
+              </Pressable>
               
               {showCurrencyDropdown && (
                 <View style={styles.currencyDropdown}>
@@ -1092,7 +1089,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                         selectedCountryCurrency?.countryCode === item.countryCode
 
                       return (
-                      <TouchableOpacity
+                      <Pressable
+                       android_ripple={ripple.neutral}
                         key={`${item.countryCode}-${item.currencyCode}`}
                         style={[
                           styles.currencyDropdownItem,
@@ -1126,7 +1124,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                         {isSelected && (
                           <Ionicons name="checkmark" size={18} color={colors.primary.main} />
                         )}
-                      </TouchableOpacity>
+                      </Pressable>
                     )})}
                   </ScrollView>
                 </View>
@@ -1137,16 +1135,15 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
               {selectedRecipientType === 'mobile' && (
                 <>
                   <View style={[styles.currencySelectorWrapper, showProviderDropdown && styles.currencySelectorWrapperActive]}>
-                    <TouchableOpacity
+                    <Pressable
+                     android_ripple={ripple.neutral}
                       style={styles.currencySelector}
                       onPress={() => {
                         setShowProviderDropdown(!showProviderDropdown)
                         setShowCurrencyDropdown(false)
                         setShowWalletAssetDropdown(false)
                         setShowWalletNetworkDropdown(false)
-                      }}
-                      activeOpacity={0.7}
-                      disabled={isSubmitting}
+                      }} disabled={isSubmitting}
                     >
                       <View style={styles.currencySelectorContent}>
                         <Text style={styles.currencySelectorText}>
@@ -1154,7 +1151,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                         </Text>
                         <Ionicons name={showProviderDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6b7280" />
                       </View>
-                    </TouchableOpacity>
+                    </Pressable>
                     {showProviderDropdown && (
                       <View style={styles.currencyDropdown}>
                         <View style={styles.currencyDropdownSearch}>
@@ -1171,7 +1168,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                           {getRecipientProviders(newRecipient.currency, 'mobile_money', selectedCountryCurrency?.countryCode)
                             .filter((provider) => provider.toLowerCase().includes(providerSearchTerm.toLowerCase()))
                             .map((provider) => (
-                            <TouchableOpacity
+                            <Pressable
+                             android_ripple={ripple.neutral}
                               key={provider}
                               style={[styles.currencyDropdownItem, newRecipient.provider === provider && styles.currencyDropdownItemSelected]}
                               onPress={async () => {
@@ -1185,7 +1183,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                                 <Text style={styles.currencyCode}>{provider}</Text>
                               </View>
                               {newRecipient.provider === provider && <Ionicons name="checkmark" size={18} color={colors.primary.main} />}
-                      </TouchableOpacity>
+                      </Pressable>
                     ))}
                   </ScrollView>
                 </View>
@@ -1222,14 +1220,13 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                     editable={!isSubmitting}
                   />
                   <View style={[styles.currencySelectorWrapper, showWalletAssetDropdown && styles.currencySelectorWrapperActive]}>
-                    <TouchableOpacity
+                    <Pressable
+                     android_ripple={ripple.neutral}
                       style={styles.currencySelector}
                       onPress={() => {
                         setShowWalletAssetDropdown(!showWalletAssetDropdown)
                         setShowWalletNetworkDropdown(false)
-                      }}
-                      activeOpacity={0.7}
-                      disabled={isSubmitting}
+                      }} disabled={isSubmitting}
                     >
                       <View style={styles.currencySelectorContent}>
                         {getTokenIconUrl(newRecipient.currency) ? <Image source={{ uri: getTokenIconUrl(newRecipient.currency)! }} style={styles.cryptoIcon} /> : null}
@@ -1238,7 +1235,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                         </Text>
                         <Ionicons name={showWalletAssetDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6b7280" />
                       </View>
-                    </TouchableOpacity>
+                    </Pressable>
                     {showWalletAssetDropdown && (
                       <View style={styles.currencyDropdown}>
                         <View style={styles.currencyDropdownSearch}>
@@ -1255,7 +1252,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                           {getWalletAssets()
                             .filter((asset) => asset.toLowerCase().includes(walletAssetSearchTerm.toLowerCase()))
                             .map((asset) => (
-                            <TouchableOpacity
+                            <Pressable
+                             android_ripple={ripple.neutral}
                               key={asset}
                               style={[styles.currencyDropdownItem, newRecipient.currency === asset && styles.currencyDropdownItemSelected]}
                               onPress={async () => {
@@ -1275,23 +1273,22 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                                 <Text style={styles.currencyCode}>{asset}</Text>
                               </View>
                               {newRecipient.currency === asset && <Ionicons name="checkmark" size={18} color={colors.primary.main} />}
-                            </TouchableOpacity>
+                            </Pressable>
                           ))}
                         </ScrollView>
                       </View>
                     )}
                   </View>
                   <View style={[styles.currencySelectorWrapper, showWalletNetworkDropdown && styles.currencySelectorWrapperActive]}>
-                    <TouchableOpacity
+                    <Pressable
+                     android_ripple={ripple.neutral}
                       style={styles.currencySelector}
                       onPress={() => {
                         if (!isSubmitting) {
                           setShowWalletNetworkDropdown(!showWalletNetworkDropdown)
                           setShowWalletAssetDropdown(false)
                         }
-                      }}
-                      activeOpacity={0.7}
-                      disabled={isSubmitting}
+                      }} disabled={isSubmitting}
                     >
                       <View style={styles.currencySelectorContent}>
                         {getNetworkIconUrl(newRecipient.network) ? <Image source={{ uri: getNetworkIconUrl(newRecipient.network)! }} style={styles.cryptoIcon} /> : null}
@@ -1300,7 +1297,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                         </Text>
                         <Ionicons name={showWalletNetworkDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6b7280" />
                       </View>
-                    </TouchableOpacity>
+                    </Pressable>
                     {showWalletNetworkDropdown && (
                       <View style={styles.currencyDropdown}>
                         <View style={styles.currencyDropdownSearch}>
@@ -1317,7 +1314,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                           {getWalletNetworksForAsset(newRecipient.currency)
                             .filter((network) => network.toLowerCase().includes(walletNetworkSearchTerm.toLowerCase()))
                             .map((network) => (
-                            <TouchableOpacity
+                            <Pressable
+                             android_ripple={ripple.neutral}
                               key={network}
                               style={[styles.currencyDropdownItem, newRecipient.network === network && styles.currencyDropdownItemSelected]}
                               onPress={async () => {
@@ -1332,7 +1330,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                                 <Text style={styles.currencyCode}>{network}</Text>
                               </View>
                               {newRecipient.network === network && <Ionicons name="checkmark" size={18} color={colors.primary.main} />}
-                            </TouchableOpacity>
+                            </Pressable>
                           ))}
                         </ScrollView>
                       </View>
@@ -1347,9 +1345,9 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                       placeholderTextColor={colors.text.secondary}
                       editable={!isSubmitting}
                     />
-                    <TouchableOpacity style={styles.walletScanIconButton} onPress={handleScanPress} activeOpacity={0.7}>
+                    <Pressable android_ripple={ripple.neutral} style={styles.walletScanIconButton} onPress={handleScanPress} >
                       <Ionicons name="scan-outline" size={18} color={colors.primary.main} />
-                    </TouchableOpacity>
+                    </Pressable>
                   </View>
                   <TextInput
                     style={styles.modalInput}
@@ -1381,30 +1379,28 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                     {accountConfig.accountType === "us" && (
                       <View style={styles.transferTypeContainer}>
                         <View style={styles.transferTypeOptions}>
-                          <TouchableOpacity
+                          <Pressable
+                           android_ripple={ripple.neutral}
                             style={[styles.transferTypeOption, transferType === 'ACH' && styles.transferTypeOptionSelected]}
                             onPress={() => {
                               setTransferType('ACH')
                               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                            }}
-                            activeOpacity={0.7}
-                          >
+                            }} >
                             <Text style={[styles.transferTypeOptionText, transferType === 'ACH' && styles.transferTypeOptionTextSelected]}>
                               ACH
                             </Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
+                          </Pressable>
+                          <Pressable
+                           android_ripple={ripple.neutral}
                             style={[styles.transferTypeOption, transferType === 'Wire' && styles.transferTypeOptionSelected]}
                             onPress={() => {
                               setTransferType('Wire')
                               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                            }}
-                            activeOpacity={0.7}
-                          >
+                            }} >
                             <Text style={[styles.transferTypeOptionText, transferType === 'Wire' && styles.transferTypeOptionTextSelected]}>
                               Fedwire
                             </Text>
-                          </TouchableOpacity>
+                          </Pressable>
                         </View>
                       </View>
                     )}
@@ -1444,30 +1440,28 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                       <>
                         <View style={styles.transferTypeContainer}>
                           <View style={styles.transferTypeOptions}>
-                            <TouchableOpacity
+                            <Pressable
+                             android_ripple={ripple.neutral}
                               style={[styles.transferTypeOption, newRecipient.checkingOrSavings === 'checking' && styles.transferTypeOptionSelected]}
                               onPress={() => {
                                 setNewRecipient(prev => ({ ...prev, checkingOrSavings: 'checking' }))
                                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                              }}
-                              activeOpacity={0.7}
-                            >
+                              }} >
                               <Text style={[styles.transferTypeOptionText, newRecipient.checkingOrSavings === 'checking' && styles.transferTypeOptionTextSelected]}>
                                 Checking
                               </Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
+                            </Pressable>
+                            <Pressable
+                             android_ripple={ripple.neutral}
                               style={[styles.transferTypeOption, newRecipient.checkingOrSavings === 'savings' && styles.transferTypeOptionSelected]}
                               onPress={() => {
                                 setNewRecipient(prev => ({ ...prev, checkingOrSavings: 'savings' }))
                                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                              }}
-                              activeOpacity={0.7}
-                            >
+                              }} >
                               <Text style={[styles.transferTypeOptionText, newRecipient.checkingOrSavings === 'savings' && styles.transferTypeOptionTextSelected]}>
                                 Savings
                               </Text>
-                            </TouchableOpacity>
+                            </Pressable>
                           </View>
                         </View>
                         <View>
@@ -1649,7 +1643,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
               })()}
 
               <View style={styles.modalButtons}>
-                <TouchableOpacity
+                <Pressable
+                 android_ripple={ripple.neutral}
                   style={[styles.modalButton, styles.cancelButton]}
                   onPress={() => {
                     setShowBankAccountForm(false)
@@ -1659,8 +1654,9 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                   disabled={isSubmitting}
                 >
                   <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
+                </Pressable>
+                <Pressable
+                 android_ripple={ripple.neutral}
                   style={[styles.modalButton, styles.saveButton, (isSubmitting || !isFormValid()) && styles.disabledButton]}
                   onPress={handleAddRecipient}
                   disabled={isSubmitting || !isFormValid()}
@@ -1668,7 +1664,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                   <Text style={styles.saveButtonText}>
                     {isSubmitting ? 'Adding...' : 'Add'}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
               </View>
             </ScrollView>
@@ -1688,9 +1684,9 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                 <View style={styles.scanUiLayer}>
                   <View style={styles.scanHeaderRow}>
                     <Text style={styles.scanTitle}>Scan wallet address</Text>
-                    <TouchableOpacity style={styles.scanCloseButton} onPress={() => setShowScanModal(false)}>
+                    <Pressable android_ripple={ripple.neutral} style={styles.scanCloseButton} onPress={() => setShowScanModal(false)}>
                       <Ionicons name="close" size={22} color={colors.text.inverse} />
-                    </TouchableOpacity>
+                    </Pressable>
                   </View>
                   <View style={styles.scanCenterGroup}>
                     <View style={styles.scanFrame} />
@@ -1702,6 +1698,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
           </View>
         </KeyboardAvoidingView>
       </Modal>
+      </KeyboardSafeContainer>
     </ScreenWrapper>
   )
 }

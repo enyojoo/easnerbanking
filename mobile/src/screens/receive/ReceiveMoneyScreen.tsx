@@ -5,7 +5,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
+  Pressable, Platform,
   Clipboard,
   Alert,
   Image,
@@ -19,6 +19,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { colors, shadows, textStyles, borderRadius, spacing, fontSize } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 import { getApiBaseUrl } from '../../lib/apiClient'
 import { noahService } from '../../lib/noahService'
 import { supabase } from '../../lib/supabase'
@@ -1111,11 +1112,10 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const renderCopyableField = (label: string, value: string, key: string) => (
     <View style={styles.fieldContainer}>
       <Text style={styles.fieldLabel}>{label}</Text>
-      <TouchableOpacity
+      <Pressable
+       android_ripple={ripple.neutral}
         style={styles.fieldValueContainer}
-        onPress={() => handleCopy(value, key)}
-        activeOpacity={0.7}
-      >
+        onPress={() => handleCopy(value, key)} >
         <Text style={styles.fieldValue}>{value}</Text>
         <View style={styles.copyButton}>
           {copiedStates[key] ? (
@@ -1124,7 +1124,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
             <Ionicons name="copy-outline" size={18} color={colors.text.secondary} />
           )}
         </View>
-      </TouchableOpacity>
+      </Pressable>
     </View>
   )
 
@@ -1134,12 +1134,13 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerTopRow}>
-            <TouchableOpacity
+            <Pressable
+             android_ripple={ripple.neutral}
               onPress={() => navigation.goBack()}
               style={styles.backButton}
             >
               <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-            </TouchableOpacity>
+            </Pressable>
             <View style={styles.headerContent}>
               <Text style={styles.title}>Receive Money</Text>
               <View style={styles.currencyDisplay}>
@@ -1153,30 +1154,28 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
         {/* Tabs - Only show if multiple options available */}
         {supportsStablecoins && (
           <View style={styles.tabsContainer}>
-            <TouchableOpacity
+            <Pressable
+             android_ripple={ripple.neutral}
               style={[styles.tab, activeTab === 'bank' && styles.tabActive]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                 setActiveTab('bank')
-              }}
-              activeOpacity={0.7}
-            >
+              }} >
               <Text style={[styles.tabText, activeTab === 'bank' && styles.tabTextActive]}>
                 {currency === 'USD' ? 'US Bank Account' : 'EU Bank Account'}
               </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
+            </Pressable>
+            <Pressable
+             android_ripple={ripple.neutral}
               style={[styles.tab, activeTab === 'stablecoin' && styles.tabActive]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                 setActiveTab('stablecoin')
-              }}
-              activeOpacity={0.7}
-            >
+              }} >
               <Text style={[styles.tabText, activeTab === 'stablecoin' && styles.tabTextActive]}>
                 Stablecoin
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         )}
 
@@ -1239,14 +1238,13 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                     </View>
 
                     {/* Share Button */}
-                    <TouchableOpacity
+                    <Pressable
+                     android_ripple={ripple.neutral}
                       style={styles.shareButton}
-                      onPress={handleShare}
-                      activeOpacity={0.7}
-                    >
+                      onPress={handleShare} >
                       <Ionicons name="share-outline" size={20} color={colors.primary.main} />
                       <Text style={styles.shareButtonText}>Share Account Details</Text>
-                    </TouchableOpacity>
+                    </Pressable>
 
                     {/* Payment Instructions */}
                     <View style={styles.instructionsContainer}>
@@ -1300,17 +1298,16 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                         : 'Please complete your identity verification to receive bank and stablecoin deposit information.'}
                     </Text>
                     {kycStatus !== 'approved' && kycStatus !== 'in_review' && (
-                    <TouchableOpacity
+                    <Pressable
+                     android_ripple={ripple.neutral}
                       style={styles.kycNoticeButton}
                       onPress={async () => {
                         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
                         navigation.navigate('AccountVerification' as any)
-                      }}
-                      activeOpacity={0.7}
-                    >
+                      }} >
                       <Text style={styles.kycNoticeButtonText}>Complete Verification</Text>
                       <Ionicons name="arrow-forward" size={18} color={colors.text.inverse} />
-                    </TouchableOpacity>
+                    </Pressable>
                     )}
                     {accountCreationError && (
                       <Text style={styles.errorText}>{accountCreationError}</Text>
@@ -1380,16 +1377,15 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                     </View>
 
                     {/* Share Button */}
-                    <TouchableOpacity
+                    <Pressable
+                     android_ripple={ripple.neutral}
                       style={styles.shareButton}
-                      onPress={handleShare}
-                      activeOpacity={0.7}
-                    >
+                      onPress={handleShare} >
                       <Ionicons name="share-outline" size={20} color={colors.primary.main} />
                       <Text style={styles.shareButtonText}>
                         Share {currency.toLowerCase() === 'usd' ? 'USDC' : 'EURC'} Details
                       </Text>
-                    </TouchableOpacity>
+                    </Pressable>
 
                     {/* Instructions */}
                     <View style={styles.instructionsContainer}>
@@ -1439,17 +1435,16 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                         : 'Please complete your identity verification to receive bank and stablecoin deposit information.'}
                     </Text>
                     {kycStatus !== 'approved' && kycStatus !== 'in_review' && (
-                    <TouchableOpacity
+                    <Pressable
+                     android_ripple={ripple.neutral}
                       style={styles.kycNoticeButton}
                       onPress={async () => {
                         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
                         navigation.navigate('AccountVerification' as any)
-                      }}
-                      activeOpacity={0.7}
-                    >
+                      }} >
                       <Text style={styles.kycNoticeButtonText}>Complete Verification</Text>
                       <Ionicons name="arrow-forward" size={18} color={colors.text.inverse} />
-                    </TouchableOpacity>
+                    </Pressable>
                     )}
                     {kycStatus === 'approved' && !hasStablecoinData && (
                       <Text style={styles.kycNoticeTextCompact}>

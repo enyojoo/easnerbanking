@@ -1,7 +1,8 @@
 import React from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, ViewStyle } from 'react-native'
+import { View, Text, Pressable, Platform, StyleSheet, ViewStyle } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { colors, textStyles, spacing, borderRadius } from '../theme'
+import { ripple } from '../lib/androidRipple'
 
 interface ErrorStateProps {
   title?: string
@@ -26,14 +27,18 @@ export default function ErrorState({
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.message}>{message}</Text>
       {onRetry && (
-        <TouchableOpacity
-          style={styles.retryButton}
+        <Pressable
+          style={({ pressed }) => [
+            styles.retryButton,
+            Platform.OS === 'android' && styles.retryButtonClip,
+            pressed && Platform.OS === 'ios' && styles.retryPressedIOS,
+          ]}
           onPress={onRetry}
-          activeOpacity={0.7}
+          android_ripple={ripple.primaryTint}
         >
           <Ionicons name="refresh" size={20} color={colors.primary.main} />
           <Text style={styles.retryText}>{retryLabel}</Text>
-        </TouchableOpacity>
+        </Pressable>
       )}
     </View>
   )
@@ -77,6 +82,12 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     backgroundColor: colors.primary.main + '10',
     marginTop: spacing[2],
+  },
+  retryButtonClip: {
+    overflow: 'hidden',
+  },
+  retryPressedIOS: {
+    opacity: 0.7,
   },
   retryText: {
     ...textStyles.labelMedium,

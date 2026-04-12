@@ -3,7 +3,9 @@ import {
   Modal,
   View,
   Text,
-  TouchableOpacity,
+  Pressable,
+  Platform,
+  KeyboardAvoidingView,
   StyleSheet,
   TextInput,
   ActivityIndicator,
@@ -13,6 +15,7 @@ import * as Sharing from 'expo-sharing'
 import { Ionicons } from '@expo/vector-icons'
 import { noahService } from '../lib/noahService'
 import { colors, spacing, borderRadius, textStyles } from '../theme'
+import { ripple } from '../lib/androidRipple'
 
 const ISO_RE = /^\d{4}-\d{2}-\d{2}$/
 
@@ -72,13 +75,22 @@ export function StatementPdfModal({ visible, onClose, accountCurrency }: Props) 
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.backdrop}>
+      <KeyboardAvoidingView
+        style={styles.backdrop}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
         <View style={styles.sheet}>
           <View style={styles.sheetHeader}>
             <Text style={styles.sheetTitle}>Download statement</Text>
-            <TouchableOpacity onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            <Pressable
+              onPress={onClose}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              android_ripple={ripple.neutral}
+              style={({ pressed }) => pressed && Platform.OS === 'ios' && styles.iconHitPressedIOS}
+            >
               <Ionicons name="close" size={22} color={colors.text.primary} />
-            </TouchableOpacity>
+            </Pressable>
           </View>
           <Text style={styles.hint}>Export a PDF of your account statement for the selected period.</Text>
           <Text style={styles.accountLine}>
@@ -105,19 +117,25 @@ export function StatementPdfModal({ visible, onClose, accountCurrency }: Props) 
             autoCorrect={false}
           />
 
-          <TouchableOpacity
-            style={[styles.primary, loading && styles.primaryDisabled]}
+          <Pressable
+            style={({ pressed }) => [
+              styles.primary,
+              loading && styles.primaryDisabled,
+              Platform.OS === 'android' && styles.primaryClip,
+              pressed && Platform.OS === 'ios' && !loading && styles.primaryPressedIOS,
+            ]}
             disabled={loading}
             onPress={() => void download()}
+            android_ripple={ripple.primaryTint}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.primaryText}>Download PDF</Text>
             )}
-          </TouchableOpacity>
+          </Pressable>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   )
 }
@@ -144,6 +162,9 @@ const styles = StyleSheet.create({
   sheetTitle: {
     ...textStyles.headlineSmall,
     color: colors.text.primary,
+  },
+  iconHitPressedIOS: {
+    opacity: 0.7,
   },
   hint: {
     ...textStyles.bodyMedium,
@@ -181,6 +202,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   primaryDisabled: { opacity: 0.6 },
+  primaryClip: {
+    overflow: 'hidden',
+  },
+  primaryPressedIOS: {
+    opacity: 0.92,
+  },
   primaryText: {
     color: '#fff',
     fontSize: 16,

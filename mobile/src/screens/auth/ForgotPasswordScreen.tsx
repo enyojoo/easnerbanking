@@ -3,7 +3,7 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   Alert,
   KeyboardAvoidingView,
@@ -18,6 +18,7 @@ import { supabase } from '../../lib/supabase'
 import { NavigationProps } from '../../types'
 import { analytics } from '../../lib/analytics'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
 import { Button, TextField } from '../../components/ui'
 
@@ -242,23 +243,21 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
         >
           {/* Header with back and help buttons */}
           <View style={styles.header}>
-            <TouchableOpacity
+            <Pressable
+             android_ripple={ripple.neutral}
               style={styles.backButton}
-              onPress={handleBack}
-              activeOpacity={0.7}
-            >
+              onPress={handleBack} >
               <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-            </TouchableOpacity>
+            </Pressable>
             <View style={styles.headerSpacer} />
-            <TouchableOpacity
+            <Pressable
+             android_ripple={ripple.neutral}
               style={styles.headerButton}
-              onPress={handleHelp}
-              activeOpacity={0.7}
-            >
+              onPress={handleHelp} >
               <View style={styles.headerButtonCircle}>
                 <Ionicons name="help-circle-outline" size={20} color={colors.text.primary} />
               </View>
-            </TouchableOpacity>
+            </Pressable>
           </View>
 
           <Text style={authScreenStyles.screenTitle}>
@@ -343,16 +342,15 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
                   style={styles.primaryCta}
                 />
 
-                <TouchableOpacity
+                <Pressable
+                 android_ripple={ripple.neutral}
                   onPress={handleResendOtp}
                   disabled={resendCooldown > 0 || loading}
-                  style={styles.resendButton}
-                  activeOpacity={0.7}
-                >
+                  style={styles.resendButton} >
                   <Text style={[styles.resendText, (resendCooldown > 0 || loading) && styles.resendTextDisabled]}>
                     {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : 'Resend code'}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               </>
             )}
           </View>

@@ -3,12 +3,14 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
+  Platform,
   Modal,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { colors, textStyles, borderRadius, spacing } from '../theme'
+import { ripple } from '../lib/androidRipple'
 
 interface PinSetupPromptProps {
   visible: boolean
@@ -49,21 +51,29 @@ export default function PinSetupPrompt({ visible, onSetup, onDismiss }: PinSetup
           </Text>
 
           <View style={styles.buttons}>
-            <TouchableOpacity
-              style={styles.dismissButton}
+            <Pressable
+              style={({ pressed }) => [
+                styles.dismissButton,
+                Platform.OS === 'android' && styles.btnClip,
+                pressed && Platform.OS === 'ios' && styles.dismissPressedIOS,
+              ]}
               onPress={handleDismiss}
-              activeOpacity={0.7}
+              android_ripple={ripple.neutral}
             >
               <Text style={styles.dismissButtonText}>Maybe Later</Text>
-            </TouchableOpacity>
+            </Pressable>
 
-            <TouchableOpacity
-              style={styles.setupButton}
+            <Pressable
+              style={({ pressed }) => [
+                styles.setupButton,
+                Platform.OS === 'android' && styles.btnClip,
+                pressed && Platform.OS === 'ios' && styles.setupPressedIOS,
+              ]}
               onPress={handleSetup}
-              activeOpacity={0.8}
+              android_ripple={ripple.primaryTint}
             >
               <Text style={styles.setupButtonText}>Set Up PIN</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
       </View>
@@ -91,7 +101,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: colors.primary.background || colors.background.secondary,
+    backgroundColor: colors.background.secondary,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing[4],
@@ -145,6 +155,15 @@ const styles = StyleSheet.create({
     color: colors.text.inverse,
     fontWeight: '600',
     fontFamily: 'Outfit-SemiBold',
+  },
+  btnClip: {
+    overflow: 'hidden',
+  },
+  dismissPressedIOS: {
+    opacity: 0.7,
+  },
+  setupPressedIOS: {
+    opacity: 0.92,
   },
 })
 

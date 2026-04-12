@@ -1,7 +1,8 @@
 import React from 'react'
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
+import { View, Text, Pressable, Platform, StyleSheet } from 'react-native'
 import { ArrowDownLeft, ArrowUpRight, Monitor, Apple } from 'lucide-react-native'
 import { colors, textStyles, spacing } from '../theme'
+import { ripple } from '../lib/androidRipple'
 
 interface TransactionCardProps {
   id: string
@@ -38,10 +39,14 @@ export default function TransactionCard({
   }
 
   return (
-    <TouchableOpacity
-      style={[styles.transactionItem, isLast && styles.transactionItemLast]}
+    <Pressable
+      style={({ pressed }) => [
+        styles.transactionItem,
+        isLast && styles.transactionItemLast,
+        pressed && Platform.OS === 'ios' && styles.rowPressedIOS,
+      ]}
       onPress={onPress}
-      activeOpacity={0.7}
+      android_ripple={ripple.neutral}
       accessibilityLabel={`Transaction: ${name}, ${amount}`}
       accessibilityRole="button"
     >
@@ -62,7 +67,7 @@ export default function TransactionCard({
       >
         {amount}
       </Text>
-    </TouchableOpacity>
+    </Pressable>
   )
 }
 
@@ -76,6 +81,9 @@ const styles = StyleSheet.create({
   },
   transactionItemLast: {
     borderBottomWidth: 0,
+  },
+  rowPressedIOS: {
+    opacity: 0.7,
   },
   transactionIconBox: {
     width: 40,

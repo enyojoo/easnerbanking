@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   FlatList,
   RefreshControl,
@@ -34,6 +34,7 @@ import {
   CacheTTL,
 } from '../../lib/userCache'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 import { getTransactionStatusDisplay } from '../../utils/formatters'
 
 // Get currencies from useUserData for formatAmount
@@ -209,16 +210,15 @@ function TransactionItem({
         opacity: opacityAnim,
       }}
     >
-      <TouchableOpacity
+      <Pressable
+       android_ripple={ripple.neutral}
         style={[styles.transactionItem, isLast && styles.transactionItemLast]}
         onPress={async () => {
           await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
           onPress()
         }}
         onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        activeOpacity={0.7}
-      >
+        onPressOut={handlePressOut} >
         {getTransactionIcon()}
         <View style={styles.transactionDetails}>
           <Text style={styles.transactionName}>
@@ -252,7 +252,7 @@ function TransactionItem({
             </Text>
           ) : null}
         </View>
-      </TouchableOpacity>
+      </Pressable>
     </Animated.View>
   )
 }
@@ -514,9 +514,9 @@ function TransactionsContent({ navigation }: NavigationProps) {
           onSubmitEditing={() => Keyboard.dismiss()}
         />
             {searchTerm.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchTerm('')}>
+              <Pressable android_ripple={ripple.neutral} onPress={() => setSearchTerm('')}>
                 <Ionicons name="close-circle" size={20} color={colors.neutral[400]} />
-              </TouchableOpacity>
+              </Pressable>
             )}
           </View>
       </View>

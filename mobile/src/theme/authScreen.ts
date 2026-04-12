@@ -11,10 +11,14 @@ export const AUTH_FIELD_MIN_HEIGHT = 44
 
 export const authScreenStyles = StyleSheet.create({
   screenTitle: {
-    ...textStyles.headlineLarge,
+    ...textStyles.displaySmall,
     color: colors.text.primary,
     textAlign: 'center',
     marginBottom: spacing[5],
+    ...Platform.select({
+      android: { includeFontPadding: false },
+      default: {},
+    }),
   },
   subtitle: {
     ...textStyles.bodyLarge,

@@ -6,7 +6,7 @@
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icons/ios-light.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
@@ -19,9 +19,12 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
-      "associatedDomains": ["applinks:easner.com"]
+      "associatedDomains": [
+        "applinks:easner.com"
+      ]
     },
     "android": {
+      "softwareKeyboardLayoutMode": "resize",
       "icon": "./assets/icons/adaptive-icon.png",
       "adaptiveIcon": {
         "foregroundImage": "./assets/icons/adaptive-icon.png",
@@ -43,7 +46,10 @@
               "host": "easner.com"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },

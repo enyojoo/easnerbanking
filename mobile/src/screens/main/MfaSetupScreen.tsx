@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
   ScrollView,
   Image,
   Alert,
@@ -30,6 +30,7 @@ import {
   type TotpFactorLike,
 } from '../../lib/auth-mfa'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 import { NavigationProps } from '../../types'
 
 function svgXmlFromQrDataUrl(qrDataUrl: string | null): string | null {
@@ -430,13 +431,12 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
               },
             ]}
           >
-            <TouchableOpacity
+            <Pressable
+             android_ripple={ripple.neutral}
               onPress={() => void handleHeaderBack()}
-              style={styles.backButton}
-              activeOpacity={0.7}
-            >
+              style={styles.backButton} >
               <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-            </TouchableOpacity>
+            </Pressable>
             <View style={styles.headerContent}>
               <Text style={styles.title}>{MFA_COPY.title}</Text>
             </View>
@@ -551,7 +551,8 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
                       >
                         {secret}
                       </Text>
-                      <TouchableOpacity
+                      <Pressable
+                       android_ripple={ripple.neutral}
                         style={styles.copySecretButton}
                         onPress={() => void copySecret()}
                         accessibilityRole="button"
@@ -563,7 +564,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
                           size={18}
                           color={secretJustCopied ? colors.success.main : colors.primary.main}
                         />
-                      </TouchableOpacity>
+                      </Pressable>
                     </View>
                   ) : (
                     <SkeletonLoader width="100%" height={16} borderRadius={4} />

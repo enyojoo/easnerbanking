@@ -2,13 +2,15 @@ import React from 'react'
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable,
+  Platform,
   StyleSheet,
   Modal,
   Animated,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { colors, textStyles, borderRadius, spacing, shadows } from '../theme'
+import { ripple } from '../lib/androidRipple'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 interface ConfirmationDialogProps {
@@ -132,24 +134,31 @@ export default function ConfirmationDialog({
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
           <View style={styles.buttons}>
-            <TouchableOpacity
-              style={[styles.button, styles.cancelButton]}
+            <Pressable
+              style={({ pressed }) => [
+                styles.button,
+                styles.cancelButton,
+                Platform.OS === 'android' && styles.buttonClip,
+                pressed && Platform.OS === 'ios' && styles.dialogBtnPressedIOS,
+              ]}
               onPress={onCancel}
-              activeOpacity={0.7}
+              android_ripple={ripple.neutral}
             >
               <Text style={styles.cancelText}>{cancelText}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
                 styles.button,
                 styles.confirmButton,
                 { backgroundColor: getConfirmButtonColor() },
+                Platform.OS === 'android' && styles.buttonClip,
+                pressed && Platform.OS === 'ios' && styles.dialogBtnPressedIOS,
               ]}
               onPress={onConfirm}
-              activeOpacity={0.7}
+              android_ripple={ripple.primaryTint}
             >
               <Text style={styles.confirmText}>{confirmText}</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </Animated.View>
       </View>
@@ -203,6 +212,12 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  buttonClip: {
+    overflow: 'hidden',
+  },
+  dialogBtnPressedIOS: {
+    opacity: 0.85,
   },
   cancelButton: {
     backgroundColor: colors.neutral[100],

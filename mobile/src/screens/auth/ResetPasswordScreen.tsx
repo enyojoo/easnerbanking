@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   Alert,
   KeyboardAvoidingView,
@@ -16,6 +16,7 @@ import { supabase } from '../../lib/supabase'
 import { NavigationProps } from '../../types'
 import { analytics } from '../../lib/analytics'
 import { colors, borderRadius, spacing } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
 import { Button, TextField } from '../../components/ui'
 
@@ -141,23 +142,21 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
           ]}
         >
           <View style={styles.header}>
-            <TouchableOpacity
+            <Pressable
+             android_ripple={ripple.neutral}
               style={styles.backButton}
-              onPress={handleBack}
-              activeOpacity={0.7}
-            >
+              onPress={handleBack} >
               <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-            </TouchableOpacity>
+            </Pressable>
             <View style={styles.headerSpacer} />
-            <TouchableOpacity
+            <Pressable
+             android_ripple={ripple.neutral}
               style={styles.headerButton}
-              onPress={handleHelp}
-              activeOpacity={0.7}
-          >
+              onPress={handleHelp} >
               <View style={styles.headerButtonCircle}>
                 <Ionicons name="help-circle-outline" size={20} color={colors.text.primary} />
               </View>
-            </TouchableOpacity>
+            </Pressable>
           </View>
             <Text style={authScreenStyles.screenTitle}>Validating reset link</Text>
             <Text style={authScreenStyles.subtitle}>
@@ -186,23 +185,21 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
         >
           {/* Header with back and help buttons */}
           <View style={styles.header}>
-            <TouchableOpacity
+            <Pressable
+             android_ripple={ripple.neutral}
               style={styles.backButton}
-              onPress={handleBack}
-              activeOpacity={0.7}
-            >
+              onPress={handleBack} >
               <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-            </TouchableOpacity>
+            </Pressable>
             <View style={styles.headerSpacer} />
-            <TouchableOpacity
+            <Pressable
+             android_ripple={ripple.neutral}
               style={styles.headerButton}
-              onPress={handleHelp}
-              activeOpacity={0.7}
-          >
+              onPress={handleHelp} >
               <View style={styles.headerButtonCircle}>
                 <Ionicons name="help-circle-outline" size={20} color={colors.text.primary} />
               </View>
-            </TouchableOpacity>
+            </Pressable>
           </View>
 
           <Text style={authScreenStyles.screenTitle}>Reset password</Text>
@@ -219,11 +216,10 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
               editable={!loading}
               containerStyle={styles.fieldFlush}
               rightAccessory={
-                <TouchableOpacity
+                <Pressable
+                 android_ripple={ripple.neutral}
                   style={styles.eyeButton}
-                  onPress={() => setPasswordVisible(!passwordVisible)}
-                  activeOpacity={0.7}
-                >
+                  onPress={() => setPasswordVisible(!passwordVisible)} >
                   <View style={styles.eyeButtonCircle}>
                     <Ionicons
                       name={passwordVisible ? 'eye-off' : 'eye'}
@@ -231,7 +227,7 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
                       color={colors.semantic.mutedForeground}
                     />
                   </View>
-                </TouchableOpacity>
+                </Pressable>
               }
             />
 
@@ -246,11 +242,10 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
               editable={!loading}
               containerStyle={styles.fieldFlush}
               rightAccessory={
-                <TouchableOpacity
+                <Pressable
+                 android_ripple={ripple.neutral}
                   style={styles.eyeButton}
-                  onPress={() => setConfirmPasswordVisible(!confirmPasswordVisible)}
-                  activeOpacity={0.7}
-                >
+                  onPress={() => setConfirmPasswordVisible(!confirmPasswordVisible)} >
                   <View style={styles.eyeButtonCircle}>
                     <Ionicons
                       name={confirmPasswordVisible ? 'eye-off' : 'eye'}
@@ -258,7 +253,7 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
                       color={colors.semantic.mutedForeground}
                     />
                   </View>
-                </TouchableOpacity>
+                </Pressable>
               }
             />
 

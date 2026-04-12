@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
+  Pressable, Platform,
   Switch,
   Animated,
   ActivityIndicator,
@@ -21,6 +21,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useUserData } from '../../contexts/UserDataContext'
 import { NavigationProps } from '../../types'
 import { colors, textStyles, spacing } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 import { apiPatch, apiPost } from '../../lib/apiClient'
 import { pushNotificationService } from '../../lib/pushNotificationService'
 
@@ -201,16 +202,15 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
               },
             ]}
           >
-            <TouchableOpacity
+            <Pressable
+             android_ripple={ripple.neutral}
               onPress={async () => {
                 await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                 navigation.goBack()
               }}
-              style={styles.backButton}
-              activeOpacity={0.7}
-            >
+              style={styles.backButton} >
               <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-            </TouchableOpacity>
+            </Pressable>
             <View style={styles.headerContent}>
               <Text style={styles.title}>Notifications</Text>
             </View>

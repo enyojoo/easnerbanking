@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, FlatList } from 'react-native'
+import { View, Text, StyleSheet, Pressable, Platform, ActivityIndicator, FlatList } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { apiGet, apiPost } from '../../lib/apiClient'
 import { colors, textStyles, spacing, borderRadius } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 
 type Offer = {
   code: string
@@ -66,9 +67,9 @@ export default function OpenCurrencyAccountScreen({ navigation }: NavigationProp
     <ScreenWrapper>
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Pressable android_ripple={ripple.neutral} onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
-          </TouchableOpacity>
+          </Pressable>
           <Text style={styles.title}>Open Currency Account</Text>
         </View>
 
@@ -93,7 +94,8 @@ export default function OpenCurrencyAccountScreen({ navigation }: NavigationProp
                       {item.disabledReason || (item.alreadyAdded ? 'Already added' : `Tier ${item.tierRequired}`)}
                     </Text>
                   </View>
-                  <TouchableOpacity
+                  <Pressable
+                   android_ripple={ripple.neutral}
                     disabled={disabled}
                     style={[styles.addBtn, disabled && styles.addBtnDisabled]}
                     onPress={() => openCurrency(item.code)}
@@ -103,7 +105,7 @@ export default function OpenCurrencyAccountScreen({ navigation }: NavigationProp
                     ) : (
                       <Text style={styles.addBtnText}>{item.alreadyAdded ? 'Added' : 'Add'}</Text>
                     )}
-                  </TouchableOpacity>
+                  </Pressable>
                 </View>
               )
             }}

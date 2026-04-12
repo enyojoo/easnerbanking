@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   TextInput,
   Alert,
   Animated,
@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 
 export default function ChangePasswordScreen({ navigation }: NavigationProps) {
   const insets = useSafeAreaInsets()
@@ -103,16 +104,15 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
               }
             ]}
           >
-            <TouchableOpacity
+            <Pressable
+             android_ripple={ripple.neutral}
               onPress={async () => {
                 await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                 navigation.goBack()
               }}
-              style={styles.backButton}
-              activeOpacity={0.7}
-            >
+              style={styles.backButton} >
               <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-            </TouchableOpacity>
+            </Pressable>
             <View style={styles.headerContent}>
               <Text style={styles.title}>Change Password</Text>
             </View>
@@ -146,7 +146,8 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
                   secureTextEntry={!showCurrentPassword}
                   editable={!loading}
                 />
-                <TouchableOpacity
+                <Pressable
+                 android_ripple={ripple.neutral}
                   style={styles.eyeButton}
                   onPress={() => setShowCurrentPassword(!showCurrentPassword)}
                 >
@@ -155,7 +156,7 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
                     size={20}
                     color="#6b7280"
                   />
-                </TouchableOpacity>
+                </Pressable>
               </View>
             </View>
 
@@ -171,7 +172,8 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
                   secureTextEntry={!showNewPassword}
                   editable={!loading}
                 />
-                <TouchableOpacity
+                <Pressable
+                 android_ripple={ripple.neutral}
                   style={styles.eyeButton}
                   onPress={() => setShowNewPassword(!showNewPassword)}
                 >
@@ -180,7 +182,7 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
                     size={20}
                     color="#6b7280"
                   />
-                </TouchableOpacity>
+                </Pressable>
               </View>
             </View>
 
@@ -196,7 +198,8 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
                   secureTextEntry={!showConfirmPassword}
                   editable={!loading}
                 />
-                <TouchableOpacity
+                <Pressable
+                 android_ripple={ripple.neutral}
                   style={styles.eyeButton}
                   onPress={() => setShowConfirmPassword(!showConfirmPassword)}
                 >
@@ -205,11 +208,12 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
                     size={20}
                     color="#6b7280"
                   />
-                </TouchableOpacity>
+                </Pressable>
               </View>
             </View>
 
-            <TouchableOpacity
+            <Pressable
+             android_ripple={ripple.neutral}
               style={[
                 styles.submitButton,
                 (!isFormValid || loading) && styles.submitButtonDisabled,
@@ -220,7 +224,7 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
               <Text style={styles.submitButtonText}>
                 {loading ? 'Updating...' : 'Update Password'}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
             </View>
           </Animated.View>
         </ScrollView>

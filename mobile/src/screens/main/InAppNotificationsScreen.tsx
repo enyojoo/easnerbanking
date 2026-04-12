@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable, Platform,
   StyleSheet,
   ScrollView,
   RefreshControl,
@@ -21,6 +21,7 @@ import * as Haptics from 'expo-haptics'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 import { useNotifications } from '../../contexts/NotificationsContext'
 
 // Mock notifications data
@@ -140,7 +141,8 @@ function NotificationItem({
   }
 
   return (
-    <TouchableOpacity
+    <Pressable
+     android_ripple={ripple.neutral}
       style={[styles.notificationItem, !item.read && styles.notificationItemUnread]}
       onPress={async () => {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -148,9 +150,7 @@ function NotificationItem({
           onMarkAsRead()
         }
         onPress()
-      }}
-      activeOpacity={0.7}
-    >
+      }} >
       <View style={styles.notificationIconBox}>
         {getIcon()}
       </View>
@@ -166,7 +166,7 @@ function NotificationItem({
         </Text>
         <Text style={styles.notificationTime}>{item.time}</Text>
       </View>
-    </TouchableOpacity>
+    </Pressable>
   )
 }
 
@@ -233,16 +233,15 @@ export default function InAppNotificationsScreen({ navigation }: NavigationProps
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity
+          <Pressable
+           android_ripple={ripple.neutral}
             onPress={async () => {
               await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
               navigation.goBack()
             }}
-            style={styles.backButton}
-            activeOpacity={0.7}
-          >
+            style={styles.backButton} >
             <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-          </TouchableOpacity>
+          </Pressable>
           <View style={styles.headerContent}>
             <Text style={styles.title}>Notifications</Text>
             <Text style={styles.subtitle}>
@@ -250,13 +249,12 @@ export default function InAppNotificationsScreen({ navigation }: NavigationProps
             </Text>
           </View>
           {unreadCount > 0 && (
-            <TouchableOpacity
+            <Pressable
+             android_ripple={ripple.neutral}
               onPress={handleMarkAllAsRead}
-              style={styles.markAllButton}
-              activeOpacity={0.7}
-            >
+              style={styles.markAllButton} >
               <Text style={styles.markAllText}>Mark all read</Text>
-            </TouchableOpacity>
+            </Pressable>
           )}
         </View>
 

@@ -17,6 +17,8 @@ interface ShimmerLoaderProps {
   height: number
   borderRadius?: number
   style?: ViewStyle
+  /** Loop duration in ms (default 1500). */
+  durationMs?: number
 }
 
 export default function ShimmerLoader({
@@ -24,6 +26,7 @@ export default function ShimmerLoader({
   height,
   borderRadius: radius = borderRadius.md,
   style,
+  durationMs = 1500,
 }: ShimmerLoaderProps) {
   const shimmerAnim = useRef(new Animated.Value(0)).current
 
@@ -31,13 +34,13 @@ export default function ShimmerLoader({
     const animation = Animated.loop(
       Animated.timing(shimmerAnim, {
         toValue: 1,
-        duration: 1500,
+        duration: durationMs,
         useNativeDriver: true,
       })
     )
     animation.start()
     return () => animation.stop()
-  }, [shimmerAnim])
+  }, [shimmerAnim, durationMs])
 
   const translateX = shimmerAnim.interpolate({
     inputRange: [0, 1],

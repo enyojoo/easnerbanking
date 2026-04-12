@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   Linking,
   Animated,
   Platform,
@@ -18,6 +18,7 @@ import { useExternalLink } from '../../hooks/useExternalLink'
 import { NavigationProps } from '../../types'
 import { analytics } from '../../lib/analytics'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 
 export default function SupportScreen({ navigation }: NavigationProps) {
   const insets = useSafeAreaInsets()
@@ -85,13 +86,14 @@ export default function SupportScreen({ navigation }: NavigationProps) {
     const isLast = index === faqItems.length - 1
     return (
       <View key={index} style={[styles.faqItem, isLast && styles.faqItemLast]}>
-        <TouchableOpacity 
+        <Pressable 
+         android_ripple={ripple.neutral} 
           style={styles.faqHeader}
           onPress={() => toggleFAQ(index)}
         >
         <Text style={styles.faqQuestion}>{item.question}</Text>
           <Text style={styles.faqToggle}>{expandedFAQ === index ? '−' : '+'}</Text>
-        </TouchableOpacity>
+        </Pressable>
         {expandedFAQ === index && (
         <Text style={styles.faqAnswer}>{item.answer}</Text>
         )}
@@ -100,20 +102,19 @@ export default function SupportScreen({ navigation }: NavigationProps) {
   }
 
   const renderContactButton = (title: string, onPress: () => void, icon: string, isLast: boolean = false) => (
-    <TouchableOpacity
+    <Pressable
+     android_ripple={ripple.neutral}
       style={[styles.contactButton, isLast && styles.contactButtonLast]}
       onPress={async () => {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
         onPress()
-      }}
-      activeOpacity={0.7}
-    >
+      }} >
       <Text style={styles.contactIcon}>{icon}</Text>
       <View style={styles.contactInfo}>
         <Text style={styles.contactTitle}>{title}</Text>
       </View>
       <Ionicons name="chevron-forward" size={20} color={colors.neutral[400]} />
-    </TouchableOpacity>
+    </Pressable>
   )
 
   return (
@@ -139,16 +140,15 @@ export default function SupportScreen({ navigation }: NavigationProps) {
               }
             ]}
           >
-            <TouchableOpacity
+            <Pressable
+             android_ripple={ripple.neutral}
               onPress={async () => {
                 await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                 navigation.goBack()
               }}
-              style={styles.backButton}
-              activeOpacity={0.7}
-        >
+              style={styles.backButton} >
               <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-        </TouchableOpacity>
+        </Pressable>
             <View style={styles.headerContent}>
               <Text style={styles.title}>Support</Text>
             </View>

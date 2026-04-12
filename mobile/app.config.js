@@ -67,15 +67,9 @@ module.exports = ({ config }) => {
     },
   }
 
-  // When `ios/` is checked in, Xcode `PRODUCT_BUNDLE_IDENTIFIER` is the source of truth.
-  // Omitting `ios.bundleIdentifier` here avoids EAS: "Specified value ... is ignored because
-  // an ios directory was detected". Keep app.json in sync for docs; run `npx expo prebuild -p ios`
-  // after changing the bundle ID so native matches.
-  const iosDir = path.join(__dirname, 'ios')
-  if (fs.existsSync(iosDir) && merged.ios?.bundleIdentifier) {
-    const { bundleIdentifier: _bundleIdIgnored, ...iosRest } = merged.ios
-    merged.ios = iosRest
-  }
+  // Keep `ios.bundleIdentifier` / `android.package` in the resolved config so `expo prebuild`
+  // and tooling can read them. Native projects under `ios/` / `android/` should stay aligned
+  // with app.json (re-run prebuild after changing IDs).
 
   return merged
 }

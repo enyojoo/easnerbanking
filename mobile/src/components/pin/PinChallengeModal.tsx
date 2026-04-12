@@ -4,7 +4,8 @@ import {
   Text,
   Modal,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
+  Platform,
   Animated,
   ActivityIndicator,
 } from 'react-native'
@@ -12,8 +13,10 @@ import * as Haptics from 'expo-haptics'
 import { getLockoutState, verifyPin } from '../../lib/pinAuth'
 import { appPinStrings } from '../../constants/app-pin-en'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 import { PinDotsRow } from './PinDotsRow'
 import { PinKeypad } from './PinKeypad'
+import { useDeferredLoading } from '../../hooks/useDeferredLoading'
 
 type Props = {
   visible: boolean
@@ -92,6 +95,7 @@ export function PinChallengeModal({ visible, userId, onClose, onVerified }: Prop
 
   const filled = pin.length
   const keypadDisabled = busy || lockedOut
+  const showBusySpinner = useDeferredLoading(busy && !error)
 
   const onDigit = (d: string) => {
     if (keypadDisabled || pin.length >= 4) return
@@ -129,7 +133,7 @@ export function PinChallengeModal({ visible, userId, onClose, onVerified }: Prop
             shakeStyle={{ transform: [{ translateX: shakeAnim }] }}
           />
 
-          {busy && !error ? (
+          {showBusySpinner ? (
             <View style={styles.busy}>
               <ActivityIndicator size="small" color={colors.primary.main} />
               <Text style={styles.busyText}>{appPinStrings.lockVerifying}</Text>
@@ -143,9 +147,17 @@ export function PinChallengeModal({ visible, userId, onClose, onVerified }: Prop
             />
           )}
 
-          <TouchableOpacity style={styles.cancelBtn} onPress={onClose} disabled={busy}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.cancelBtn,
+              pressed && Platform.OS === 'ios' && !busy && styles.cancelBtnPressedIOS,
+            ]}
+            onPress={onClose}
+            disabled={busy}
+            android_ripple={ripple.neutral}
+          >
             <Text style={styles.cancelText}>{appPinStrings.dialogCancel}</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </View>
     </Modal>
@@ -205,6 +217,9 @@ const styles = StyleSheet.create({
     marginTop: spacing[4],
     alignItems: 'center',
     paddingVertical: spacing[2],
+  },
+  cancelBtnPressedIOS: {
+    opacity: 0.7,
   },
   cancelText: {
     ...textStyles.bodyMedium,

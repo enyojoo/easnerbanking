@@ -1,8 +1,9 @@
 import React from 'react'
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
+import { View, Text, Pressable, Platform, StyleSheet } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { colors, borderRadius, spacing } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 
 type Props = {
   onDigit: (d: string) => void
@@ -17,44 +18,53 @@ export function PinKeypad({ onDigit, onBackspace, disabled, filledCount }: Props
     <View style={styles.keypadContainer}>
       <View style={styles.keypadGrid}>
         {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
-          <TouchableOpacity
+          <Pressable
             key={num}
-            style={styles.keypadButton}
+            style={({ pressed }) => [
+              styles.keypadButton,
+              pressed && Platform.OS === 'ios' && styles.keypadPressedIOS,
+            ]}
             onPress={() => {
               onDigit(String(num))
             }}
             onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-            activeOpacity={0.6}
             disabled={disabled}
+            android_ripple={ripple.neutral}
           >
             <Text style={styles.keypadButtonText}>{num}</Text>
-          </TouchableOpacity>
+          </Pressable>
         ))}
       </View>
       <View style={styles.keypadBottomRow}>
         <View style={styles.keypadButtonSpacer} />
-        <TouchableOpacity
-          style={styles.keypadButton}
+        <Pressable
+          style={({ pressed }) => [
+            styles.keypadButton,
+            pressed && Platform.OS === 'ios' && styles.keypadPressedIOS,
+          ]}
           onPress={() => onDigit('0')}
           onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-          activeOpacity={0.6}
           disabled={disabled}
+          android_ripple={ripple.neutral}
         >
           <Text style={styles.keypadButtonText}>0</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.keypadButton}
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [
+            styles.keypadButton,
+            pressed && Platform.OS === 'ios' && styles.keypadPressedIOS,
+          ]}
           onPress={onBackspace}
           onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-          activeOpacity={0.6}
           disabled={disabled || filledCount === 0}
+          android_ripple={ripple.neutral}
         >
           <Ionicons
             name="backspace"
             size={24}
             color={filledCount === 0 ? colors.text.secondary : colors.text.primary}
           />
-        </TouchableOpacity>
+        </Pressable>
       </View>
     </View>
   )
@@ -78,11 +88,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.secondary,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+      },
+      android: { elevation: 2 },
+      default: {},
+    }),
+  },
+  keypadPressedIOS: {
+    opacity: 0.6,
   },
   keypadButtonText: {
     fontSize: 26,

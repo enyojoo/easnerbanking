@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react'
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable, Platform,
   StyleSheet,
   ScrollView,
   ActivityIndicator,
   Alert,
 } from 'react-native'
 import ScreenWrapper from '../../components/ScreenWrapper'
+import { ripple } from '../../lib/androidRipple'
 import { NavigationProps } from '../../types'
 import { useAuth } from '../../contexts/AuthContext'
 import { Ionicons } from '@expo/vector-icons'
@@ -135,9 +136,9 @@ function ReceiveTransactionDetailsContent({ navigation, route }: NavigationProps
       <ScreenWrapper>
         <View style={styles.centerContainer}>
           <Text style={styles.errorText}>Transaction not found</Text>
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <Pressable android_ripple={ripple.neutral} style={styles.backButton} onPress={() => navigation.goBack()}>
             <Text style={styles.backButtonText}>Go Back</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </ScreenWrapper>
     )
@@ -256,18 +257,20 @@ function ReceiveTransactionDetailsContent({ navigation, route }: NavigationProps
 
         {/* Bottom Action Buttons */}
         <View style={styles.bottomActions}>
-          <TouchableOpacity 
+          <Pressable 
+           android_ripple={ripple.neutral} 
             style={[styles.bottomButton, styles.secondaryButton]} 
             onPress={() => navigation.navigate('MainTabs', { screen: 'Dashboard' })}
           >
             <Text style={styles.secondaryButtonText}>Dashboard</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
+          </Pressable>
+          <Pressable 
+           android_ripple={ripple.neutral} 
             style={[styles.bottomButton, styles.primaryButton]} 
             onPress={() => navigation.navigate('ReceiveMoney')}
           >
             <Text style={styles.primaryButtonText}>Receive More</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </ScrollView>
     </ScreenWrapper>

@@ -9,7 +9,8 @@
 
 import React, { useRef, useCallback } from 'react'
 import {
-  TouchableOpacity,
+  Pressable,
+  Platform,
   StyleSheet,
   StyleProp,
   ViewStyle,
@@ -19,6 +20,7 @@ import {
   ActivityIndicator,
   Animated,
 } from 'react-native'
+import { ripple } from '../../lib/androidRipple'
 import * as Haptics from 'expo-haptics'
 import { LinearGradient } from 'expo-linear-gradient'
 import { colors, shadows, textStyles, borderRadius } from '../../theme'
@@ -192,12 +194,20 @@ export default function HapticButton({
 
   return (
     <Animated.View style={[{ transform: [{ scale: scaleAnim }] }, fullWidth && styles.fullWidth]}>
-      <TouchableOpacity
+      <Pressable
         onPress={handlePress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         disabled={disabled || loading}
-        activeOpacity={1}
+        android_ripple={ripple.primaryTint}
+        style={({ pressed }) => [
+          Platform.OS === 'android' && {
+            borderRadius: borderRadius.lg,
+            overflow: 'hidden' as const,
+          },
+          fullWidth && { alignSelf: 'stretch' as const },
+          pressed && Platform.OS === 'ios' && !disabled && !loading && styles.pressedIOS,
+        ]}
       >
         {useGradient ? (
           <LinearGradient
@@ -211,7 +221,7 @@ export default function HapticButton({
         ) : (
           <View style={buttonStyle}>{content}</View>
         )}
-      </TouchableOpacity>
+      </Pressable>
     </Animated.View>
   )
 }
@@ -249,5 +259,8 @@ const styles = StyleSheet.create({
   },
   iconRight: {
     marginLeft: 8,
+  },
+  pressedIOS: {
+    opacity: 0.92,
   },
 })

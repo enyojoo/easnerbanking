@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
   ScrollView,
   TextInput,
   Alert,
@@ -15,6 +15,8 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import ScreenWrapper from '../../components/ScreenWrapper'
+import KeyboardSafeContainer from '../../components/KeyboardSafeContainer'
+import { ripple } from '../../lib/androidRipple'
 import ExternalLinkModal from '../../components/ExternalLinkModal'
 import { useExternalLink } from '../../hooks/useExternalLink'
 import { useAuth } from '../../contexts/AuthContext'
@@ -335,18 +337,20 @@ function ProfileContent({ navigation }: NavigationProps) {
         <View style={styles.currencyModalContent}>
           <View style={styles.currencyModalHeader}>
             <Text style={styles.currencyModalTitle}>Select Base Currency</Text>
-            <TouchableOpacity
+            <Pressable
+             android_ripple={ripple.neutral}
               style={styles.currencyCloseButton}
               onPress={() => setShowCurrencyPicker(false)}
             >
               <Ionicons name="close" size={24} color="#6b7280" />
-            </TouchableOpacity>
+            </Pressable>
           </View>
           <FlatList
             data={currencies}
             keyExtractor={(item) => item.code}
             renderItem={({ item }) => (
-              <TouchableOpacity
+              <Pressable
+               android_ripple={ripple.neutral}
                 style={styles.currencyItem}
                 onPress={() => {
                   setEditProfileData(prev => ({ ...prev, baseCurrency: item.code }))
@@ -361,7 +365,7 @@ function ProfileContent({ navigation }: NavigationProps) {
                   </View>
                   <Text style={styles.currencySymbol}>{item.symbol}</Text>
                 </View>
-              </TouchableOpacity>
+              </Pressable>
             )}
           />
         </View>
@@ -479,7 +483,8 @@ function ProfileContent({ navigation }: NavigationProps) {
     <View style={styles.fieldContainer}>
       <Text style={isEditing ? styles.fieldLabelEdit : styles.fieldLabel}>Base Currency</Text>
       {isEditing ? (
-        <TouchableOpacity
+        <Pressable
+         android_ripple={ripple.neutral}
           style={styles.currencySelector}
           onPress={() => setShowCurrencyPicker(true)}
         >
@@ -490,7 +495,7 @@ function ProfileContent({ navigation }: NavigationProps) {
             </Text>
             <Ionicons name="chevron-down" size={16} color="#6b7280" />
           </View>
-        </TouchableOpacity>
+        </Pressable>
       ) : (
         <View style={styles.currencyDisplay}>
           <CurrencyFlag currency={profileData.baseCurrency} size={20} style={styles.currencyFlag} />
@@ -504,17 +509,22 @@ function ProfileContent({ navigation }: NavigationProps) {
   )
 
   const renderMenuButton = (title: string, onPress: () => void, isDestructive: boolean = false) => (
-    <TouchableOpacity style={styles.menuButton} onPress={onPress}>
+    <Pressable android_ripple={ripple.neutral} style={styles.menuButton} onPress={onPress}>
       <Text style={[styles.menuButtonText, isDestructive && styles.destructiveText]}>
         {title}
       </Text>
       <Text style={styles.menuButtonArrow}>›</Text>
-    </TouchableOpacity>
+    </Pressable>
   )
 
   return (
     <ScreenWrapper>
-      <ScrollView style={styles.scrollContainer}>
+      <KeyboardSafeContainer>
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ flexGrow: 1 }}
+        style={styles.scrollContainer}
+      >
       {/* Profile Header */}
       <View style={styles.header}>
           <Text style={styles.pageTitle}>Settings</Text>
@@ -527,20 +537,20 @@ function ProfileContent({ navigation }: NavigationProps) {
         <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Profile</Text>
           {!isEditing ? (
-                <TouchableOpacity onPress={handleEditProfile} style={styles.editButtonContainer} activeOpacity={0.7}>
+                <Pressable android_ripple={ripple.neutral} onPress={handleEditProfile} style={styles.editButtonContainer} >
                   <Ionicons name="pencil-outline" size={18} color="#ffffff" />
               <Text style={styles.editButton}>Edit</Text>
-            </TouchableOpacity>
+            </Pressable>
           ) : (
             <View style={styles.editActions}>
-                  <TouchableOpacity onPress={handleCancelEdit} disabled={loading}>
+                  <Pressable android_ripple={ripple.neutral} onPress={handleCancelEdit} disabled={loading}>
                     <Text style={styles.cancelButton}>Discard</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={handleSaveProfile} disabled={loading}>
+              </Pressable>
+              <Pressable android_ripple={ripple.neutral} onPress={handleSaveProfile} disabled={loading}>
                 <Text style={[styles.saveButton, loading && styles.disabledButton]}>
                   {loading ? 'Saving...' : 'Save'}
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           )}
         </View>
@@ -693,6 +703,7 @@ function ProfileContent({ navigation }: NavigationProps) {
         title={termsLink.title}
         onClose={termsLink.closeLink}
       />
+      </KeyboardSafeContainer>
     </ScreenWrapper>
   )
 }

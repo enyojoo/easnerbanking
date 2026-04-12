@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native'
 import { StatusBar } from 'expo-status-bar'
-import { View, Text, StyleSheet, AppState, AppStateStatus, Animated } from 'react-native'
+import { View, Text, StyleSheet, AppState, AppStateStatus, Animated, useColorScheme } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { useFonts } from 'expo-font'
@@ -25,7 +25,8 @@ import { pushNotificationService } from './src/lib/pushNotificationService'
 import AppNavigator from './src/navigation/AppNavigator'
 import CustomSplashScreen from './src/components/SplashScreen'
 import { PushNotificationBootstrap } from './src/components/PushNotificationBootstrap'
-import { colors } from './src/theme'
+import { colors, resolveThemeColors } from './src/theme'
+import { ThemePaletteProvider } from './src/contexts/ThemePaletteContext'
 
 // Keep the splash screen visible while we load fonts
 SplashScreen.preventAutoHideAsync()
@@ -35,6 +36,8 @@ function AppContent() {
   const navigationRef = useRef<NavigationContainerRef<any>>(null)
   const routeNameRef = useRef<string>('')
   const { loading: authLoading } = useAuth()
+  const colorScheme = useColorScheme()
+  const palette = resolveThemeColors(colorScheme)
   const getActiveRouteName = (route: any): string => {
     if (!route) return 'Unknown'
     if (route.state && route.state.index != null) {
@@ -94,13 +97,14 @@ function AppContent() {
           }
         }}
         theme={{
+          dark: colorScheme === 'dark',
           colors: {
-            primary: colors.primary.main,
-            background: colors.background.primary,
-            card: colors.background.primary,
-            text: colors.text.primary,
-            border: colors.border.default,
-            notification: colors.error.main,
+            primary: palette.primary.main,
+            background: palette.background.primary,
+            card: palette.semantic.card,
+            text: palette.text.primary,
+            border: palette.semantic.border,
+            notification: palette.error.main,
           },
           fonts: {
             regular: {
@@ -122,7 +126,7 @@ function AppContent() {
           },
         }}
       >
-        <StatusBar style="dark" />
+        <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
         <AppNavigator />
       </NavigationContainer>
     </Animated.View>
@@ -202,21 +206,24 @@ export default function App() {
   try {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
+        {/* Global safe areas (react-native-safe-area-context). Expo Router not used — React Navigation + stack/tabs. */}
         <SafeAreaProvider>
-          <PostHogProvider>
-            <AuthProvider>
-              <PushNotificationBootstrap />
-              <BalanceProvider>
-              <UserDataProvider>
-                <NotificationsProvider>
-                  <ToastProvider>
-                    <AppContent />
-                  </ToastProvider>
-                </NotificationsProvider>
-              </UserDataProvider>
-              </BalanceProvider>
-            </AuthProvider>
-          </PostHogProvider>
+          <ThemePaletteProvider>
+            <PostHogProvider>
+              <AuthProvider>
+                <PushNotificationBootstrap />
+                <BalanceProvider>
+                  <UserDataProvider>
+                    <NotificationsProvider>
+                      <ToastProvider>
+                        <AppContent />
+                      </ToastProvider>
+                    </NotificationsProvider>
+                  </UserDataProvider>
+                </BalanceProvider>
+              </AuthProvider>
+            </PostHogProvider>
+          </ThemePaletteProvider>
         </SafeAreaProvider>
       </GestureHandlerRootView>
     )

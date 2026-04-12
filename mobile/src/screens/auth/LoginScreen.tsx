@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   Alert,
   KeyboardAvoidingView,
@@ -17,11 +17,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '../../contexts/AuthContext'
 import { NavigationProps } from '../../types'
 import { analytics } from '../../lib/analytics'
-import { colors, borderRadius, spacing } from '../../theme'
+import { useThemeColors, borderRadius, spacing } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
 import { Button, TextField } from '../../components/ui'
 
 export default function LoginScreen({ navigation }: NavigationProps) {
+  const themeColors = useThemeColors()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [rememberMe, setRememberMe] = useState(false)
@@ -78,7 +80,7 @@ export default function LoginScreen({ navigation }: NavigationProps) {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: themeColors.semantic.background }]}>
       <KeyboardAvoidingView
         style={styles.keyboardContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -148,21 +150,29 @@ export default function LoginScreen({ navigation }: NavigationProps) {
 
               {/* Remember Me Checkbox */}
               <View style={styles.rememberMeContainer}>
-                <TouchableOpacity
+                <Pressable
+                 android_ripple={ripple.neutral}
                   style={styles.checkboxContainer}
                   onPress={async () => {
                     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                     setRememberMe(!rememberMe)
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+                  }} >
+                  <View
+                    style={[
+                      styles.checkbox,
+                      {
+                        borderColor: themeColors.semantic.border,
+                        backgroundColor: rememberMe ? themeColors.primary.main : themeColors.semantic.background,
+                      },
+                      rememberMe && { borderColor: themeColors.primary.main },
+                    ]}
+                  >
                     {rememberMe && (
-                      <Ionicons name="checkmark" size={16} color={colors.text.inverse} />
+                      <Ionicons name="checkmark" size={16} color={themeColors.text.inverse} />
                     )}
                   </View>
                   <Text style={authScreenStyles.rememberMeText}>Remember me</Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
 
               <Button
@@ -175,30 +185,28 @@ export default function LoginScreen({ navigation }: NavigationProps) {
                 style={styles.primaryCta}
               />
 
-              <TouchableOpacity
+              <Pressable
+               android_ripple={ripple.neutral}
                 style={styles.linkButton}
                 onPress={async () => {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                   navigation.navigate('ForgotPassword')
-                }}
-                activeOpacity={0.7}
-              >
+                }} >
                 <Text style={authScreenStyles.linkText}>Forgot password?</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </Animated.View>
 
           <View style={styles.footer}>
             <Text style={authScreenStyles.footerMuted}>{"Don't have an account? "}</Text>
-            <TouchableOpacity 
+            <Pressable 
+             android_ripple={ripple.neutral} 
               onPress={async () => {
                 await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                 navigation.navigate('Register')
-              }}
-              activeOpacity={0.7}
-            >
+              }} >
               <Text style={authScreenStyles.footerLink}>Sign up</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -209,7 +217,6 @@ export default function LoginScreen({ navigation }: NavigationProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.semantic.background,
   },
   keyboardContainer: {
     flex: 1,
@@ -246,16 +253,10 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderWidth: 2,
-    borderColor: colors.semantic.border,
     borderRadius: borderRadius.sm,
-    backgroundColor: colors.semantic.background,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing[3],
-  },
-  checkboxChecked: {
-    backgroundColor: colors.primary.main,
-    borderColor: colors.primary.main,
   },
   linkButton: {
     alignItems: 'center',

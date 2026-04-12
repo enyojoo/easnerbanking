@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from 'react'
-import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native'
+import { View, Text, StyleSheet, Animated, Pressable, Platform } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { colors, textStyles, borderRadius, spacing, shadows } from '../theme'
+import { ripple } from '../lib/androidRipple'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning'
@@ -111,27 +112,33 @@ export default function Toast({
           {message}
         </Text>
         {action && (
-          <TouchableOpacity
+          <Pressable
             onPress={() => {
               action.onPress()
               dismiss()
             }}
-            style={styles.actionButton}
-            activeOpacity={0.7}
+            style={({ pressed }) => [
+              styles.actionButton,
+              pressed && Platform.OS === 'ios' && styles.toastHitPressedIOS,
+            ]}
+            android_ripple={ripple.primaryTint}
           >
             <Text style={[styles.actionText, { color: getColor() }]}>
               {action.label}
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         )}
-        <TouchableOpacity
+        <Pressable
           onPress={dismiss}
-          style={styles.closeButton}
-          activeOpacity={0.7}
+          style={({ pressed }) => [
+            styles.closeButton,
+            pressed && Platform.OS === 'ios' && styles.toastHitPressedIOS,
+          ]}
+          android_ripple={ripple.neutral}
           accessibilityLabel="Close"
         >
           <Ionicons name="close" size={18} color={colors.text.secondary} />
-        </TouchableOpacity>
+        </Pressable>
       </View>
     </Animated.View>
   )
@@ -169,6 +176,9 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     padding: spacing[1],
+  },
+  toastHitPressedIOS: {
+    opacity: 0.7,
   },
 })
 

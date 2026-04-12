@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   Alert,
   KeyboardAvoidingView,
@@ -22,6 +22,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { NavigationProps } from '../../types'
 import { analytics } from '../../lib/analytics'
 import { colors, borderRadius, spacing } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
 import { AUTH_INITIAL_MODE_KEY, TERMS_URL } from '../../constants/auth'
 
@@ -222,17 +223,17 @@ export default function AuthScreen({ navigation }: NavigationProps) {
         >
           <View style={styles.topBar}>
             {showBackButton ? (
-              <TouchableOpacity style={styles.backButton} onPress={handleBack} activeOpacity={0.7}>
+              <Pressable android_ripple={ripple.neutral} style={styles.backButton} onPress={handleBack} >
                 <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-              </TouchableOpacity>
+              </Pressable>
             ) : (
               <View style={styles.backPlaceholder} />
             )}
-            <TouchableOpacity style={styles.headerButton} onPress={handleHelp} activeOpacity={0.7}>
+            <Pressable android_ripple={ripple.neutral} style={styles.headerButton} onPress={handleHelp} >
               <View style={styles.headerButtonCircle}>
                 <Ionicons name="help-circle-outline" size={20} color={colors.text.primary} />
               </View>
-            </TouchableOpacity>
+            </Pressable>
           </View>
 
           <Text style={authScreenStyles.screenTitle}>
@@ -298,11 +299,10 @@ export default function AuthScreen({ navigation }: NavigationProps) {
               editable={!isLoading}
               containerStyle={styles.fieldFlush}
               rightAccessory={
-                <TouchableOpacity
+                <Pressable
+                 android_ripple={ripple.neutral}
                   style={styles.eyeButton}
-                  onPress={() => setPasswordVisible(!passwordVisible)}
-                  activeOpacity={0.7}
-                >
+                  onPress={() => setPasswordVisible(!passwordVisible)} >
                   <View style={styles.eyeButtonCircle}>
                     <Ionicons
                       name={passwordVisible ? 'eye-off' : 'eye'}
@@ -310,21 +310,20 @@ export default function AuthScreen({ navigation }: NavigationProps) {
                       color={colors.semantic.mutedForeground}
                     />
                   </View>
-                </TouchableOpacity>
+                </Pressable>
               }
             />
 
             {isLogin && (
-              <TouchableOpacity
+              <Pressable
+               android_ripple={ripple.neutral}
                 style={styles.forgotPasswordLink}
                 onPress={async () => {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                   navigation.navigate('ForgotPassword')
-                }}
-                activeOpacity={0.7}
-              >
+                }} >
                 <Text style={authScreenStyles.forgotPasswordText}>Forgot password?</Text>
-              </TouchableOpacity>
+              </Pressable>
             )}
 
             <Button
@@ -349,13 +348,12 @@ export default function AuthScreen({ navigation }: NavigationProps) {
               <Text style={authScreenStyles.footerMuted}>
                 {isLogin ? "Don't have an account? " : 'Already have an account? '}
               </Text>
-              <TouchableOpacity
-                onPress={() => switchMode(isLogin ? 'signup' : 'login')}
-                activeOpacity={0.7}
-                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+              <Pressable
+               android_ripple={ripple.neutral}
+                onPress={() => switchMode(isLogin ? 'signup' : 'login')} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
               >
                 <Text style={authScreenStyles.footerLink}>{isLogin ? 'Sign up' : 'Sign in'}</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
         </ScrollView>

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable, Platform,
   StyleSheet,
   ScrollView,
   Alert,
@@ -25,6 +25,7 @@ import { analytics } from '../../lib/analytics'
 import { transactionService } from '../../lib/transactionService'
 import { getAccountTypeConfigFromCurrency, formatFieldValue } from '../../lib/currencyAccountTypes'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 
 export default function PaymentMethodScreen({ navigation, route }: NavigationProps) {
   const { userProfile } = useAuth()
@@ -187,11 +188,10 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
   const renderCopyableField = (label: string, value: string, key: string) => (
     <View style={styles.fieldRow}>
       <Text style={styles.fieldLabel}>{label}</Text>
-      <TouchableOpacity 
+      <Pressable 
+       android_ripple={ripple.neutral} 
         style={styles.fieldValueContainer}
-        onPress={() => handleCopy(value, key)}
-        activeOpacity={0.7}
-      >
+        onPress={() => handleCopy(value, key)} >
         <Text style={styles.fieldValue}>{value}</Text>
         <View style={[styles.copyIcon, copiedStates[key] && styles.copyIconSuccess]}>
           <Ionicons 
@@ -200,7 +200,7 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
             color={copiedStates[key] ? colors.success.main : colors.primary.main} 
           />
         </View>
-      </TouchableOpacity>
+      </Pressable>
     </View>
   )
 
@@ -221,12 +221,13 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
           }
         ]}
       >
-        <TouchableOpacity 
+        <Pressable 
+         android_ripple={ripple.neutral} 
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
           <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-        </TouchableOpacity>
+        </Pressable>
         <View style={styles.headerContent}>
             <Text style={styles.title}>Make Payment</Text>
           <Text style={styles.subtitle}>Transfer funds to complete</Text>
@@ -286,11 +287,10 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
                 <View style={styles.summaryHeader}>
                   <View style={styles.summaryInfo}>
                     <Text style={styles.summaryLabel}>Transaction ID</Text>
-                    <TouchableOpacity
+                    <Pressable
+                     android_ripple={ripple.neutral}
                       style={styles.transactionIdRow}
-                      onPress={() => handleCopy(transactionId, "transactionIdSummary")}
-                      activeOpacity={0.7}
-                    >
+                      onPress={() => handleCopy(transactionId, "transactionIdSummary")} >
                       <Text style={styles.summaryAmount}>{transactionId}</Text>
                       <Ionicons 
                         name={copiedStates.transactionIdSummary ? "checkmark" : "copy-outline"} 
@@ -298,7 +298,7 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
                         color={copiedStates.transactionIdSummary ? colors.success.main : 'rgba(255,255,255,0.7)'} 
                         style={{ marginLeft: 8 }}
                       />
-                    </TouchableOpacity>
+                    </Pressable>
                   </View>
                 </View>
               </LinearGradient>
@@ -444,7 +444,8 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
                     <Text style={styles.instructionBullet}>•</Text>
                     <View style={styles.instructionRow}>
                       <Text style={styles.instructionText}>Note Transaction ID </Text>
-                      <TouchableOpacity
+                      <Pressable
+                       android_ripple={ripple.neutral}
                         style={styles.transactionIdBadge}
                         onPress={() => handleCopy(transactionId, "transactionId")}
                       >
@@ -454,7 +455,7 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
                           size={12} 
                           color={colors.primary.main} 
                         />
-                      </TouchableOpacity>
+                      </Pressable>
                     </View>
                   </View>
                   
@@ -488,18 +489,17 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
                   <View style={styles.uploadError}>
                     <Ionicons name="alert-circle" size={16} color={colors.error.main} />
                     <Text style={styles.uploadErrorText}>{uploadError}</Text>
-                    <TouchableOpacity onPress={() => setUploadError(null)}>
+                    <Pressable android_ripple={ripple.neutral} onPress={() => setUploadError(null)}>
                       <Ionicons name="close" size={16} color={colors.error.main} />
-              </TouchableOpacity>
+              </Pressable>
             </View>
           )}
 
-          <TouchableOpacity
+          <Pressable
+                 android_ripple={ripple.neutral}
                   style={[styles.uploadButton, uploadedFile && styles.uploadButtonSuccess]}
             onPress={handleUploadReceipt}
-            disabled={isUploading}
-                  activeOpacity={0.7}
-          >
+            disabled={isUploading} >
               <Ionicons 
                     name={uploadedFile ? "checkmark-circle" : "cloud-upload-outline"} 
                     size={28} 
@@ -511,7 +511,7 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
               {uploadedFile && (
                 <Text style={styles.uploadFileName}>{uploadedFile.name}</Text>
               )}
-          </TouchableOpacity>
+          </Pressable>
         </View>
             </>
           )}
@@ -520,7 +520,8 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
         
         {/* Bottom Button */}
       <View style={[styles.bottomContainer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-        <TouchableOpacity
+        <Pressable
+         android_ripple={ripple.neutral}
           style={[styles.confirmButton, isCreatingTransaction && styles.confirmButtonDisabled]}
           onPress={handleContinue}
           disabled={isCreatingTransaction}
@@ -540,7 +541,7 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
               </>
             )}
           </LinearGradient>
-        </TouchableOpacity>
+        </Pressable>
       </View>
     </View>
   )

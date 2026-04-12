@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
+  Pressable, Platform,
   Clipboard,
   Alert,
   Animated,
@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 
 interface MockRecipient {
   id: string
@@ -211,11 +212,10 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
   const renderCopyableField = (label: string, value: string, key: string) => (
     <View style={styles.fieldContainer}>
       <Text style={styles.fieldLabel}>{label}</Text>
-      <TouchableOpacity
+      <Pressable
+       android_ripple={ripple.neutral}
         style={styles.fieldValueContainer}
-        onPress={() => handleCopy(value, key)}
-        activeOpacity={0.7}
-      >
+        onPress={() => handleCopy(value, key)} >
         <Text style={styles.fieldValue}>{value}</Text>
         <View style={styles.copyButton}>
           {copiedStates[key] ? (
@@ -224,7 +224,7 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
             <Ionicons name="copy-outline" size={18} color={colors.text.secondary} />
           )}
         </View>
-      </TouchableOpacity>
+      </Pressable>
     </View>
   )
 
@@ -246,12 +246,13 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
             }
           ]}
         >
-          <TouchableOpacity
+          <Pressable
+           android_ripple={ripple.neutral}
             onPress={() => navigation.goBack()}
             style={styles.backButton}
           >
             <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-          </TouchableOpacity>
+          </Pressable>
           <View style={styles.headerContent}>
             <Text style={styles.title}>Bank Transfer</Text>
           </View>
@@ -306,11 +307,10 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Transaction ID:</Text>
-                <TouchableOpacity
+                <Pressable
+                 android_ripple={ripple.neutral}
                   style={styles.summaryValueRow}
-                  onPress={() => handleCopy(transactionId || '', 'transactionId')}
-                  activeOpacity={0.7}
-                >
+                  onPress={() => handleCopy(transactionId || '', 'transactionId')} >
                   <Text style={styles.summaryValue}>{transactionId || 'N/A'}</Text>
                   <Ionicons 
                     name={copiedStates.transactionId ? "checkmark" : "copy-outline"} 
@@ -318,7 +318,7 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
                     color={copiedStates.transactionId ? colors.success.main : colors.text.secondary} 
                     style={{ marginLeft: 8 }}
                   />
-                </TouchableOpacity>
+                </Pressable>
               </View>
             </View>
 
@@ -385,22 +385,20 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
                         </Text>
                       )}
                     </View>
-                    <TouchableOpacity
+                    <Pressable
+                     android_ripple={ripple.neutral}
                       style={styles.receiptRemoveButton}
-                      onPress={handleRemoveReceipt}
-                      activeOpacity={0.7}
-                    >
+                      onPress={handleRemoveReceipt} >
                       <Ionicons name="close-circle" size={24} color={colors.error.main} />
-                    </TouchableOpacity>
+                    </Pressable>
                   </View>
                 </View>
               ) : (
-                <TouchableOpacity
+                <Pressable
+                 android_ripple={ripple.neutral}
                   style={styles.receiptUploadButton}
                   onPress={handleUploadReceipt}
-                  disabled={isUploading}
-                  activeOpacity={0.7}
-                >
+                  disabled={isUploading} >
                   {isUploading ? (
                     <ActivityIndicator size="small" color={colors.primary.main} />
                   ) : (
@@ -409,7 +407,7 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
                       <Text style={styles.receiptUploadButtonText}>Upload Receipt</Text>
                     </>
                   )}
-                </TouchableOpacity>
+                </Pressable>
               )}
               
               {uploadError && (
@@ -421,11 +419,10 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
 
         {/* Action Button */}
         <View style={[styles.bottomContainer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-          <TouchableOpacity
+          <Pressable
+           android_ripple={ripple.neutral}
             style={styles.confirmButton}
-            onPress={handleConfirmPayment}
-            activeOpacity={0.8}
-            disabled={paymentConfirmed}
+            onPress={handleConfirmPayment} disabled={paymentConfirmed}
           >
             <LinearGradient
               colors={paymentConfirmed 
@@ -439,7 +436,7 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
                 {paymentConfirmed ? 'Processing...' : "I've paid"}
               </Text>
             </LinearGradient>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </View>
     </ScreenWrapper>

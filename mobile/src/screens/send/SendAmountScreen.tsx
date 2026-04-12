@@ -4,7 +4,7 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   ScrollView,
   KeyboardAvoidingView,
@@ -24,6 +24,7 @@ import Svg, { Path } from 'react-native-svg'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 import { supabase } from '../../lib/supabase'
 import { Alert } from 'react-native'
 import { useUserData } from '../../contexts/UserDataContext'
@@ -393,12 +394,20 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const currentBalance = parseFloat(balances[selectedBalanceCurrency as 'USD' | 'EUR'] || '0')
   const enteredAmount = sendAmount ? Number.parseFloat(sendAmount.replace(/,/g, '')) || 0 : 0
   const receiveCurrency = recipient?.currency || 'EUR'
+  const sendCurrency = selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency
+    ? selectedOtherCurrency === 'STABLE'
+      ? (selectedOtherPaymentMethod?.toUpperCase() || selectedBalanceCurrency)
+      : selectedOtherCurrency
+    : selectedBalanceCurrency
   const dynamicAmountFontSize = getDynamicFontSize(sendAmount)
   const dynamicAmountLineHeight = Math.round(dynamicAmountFontSize * 1.05)
-  const amountTextStyle =
-    Platform.OS === 'android'
-      ? { fontSize: dynamicAmountFontSize, lineHeight: dynamicAmountLineHeight }
-      : { fontSize: dynamicAmountFontSize }
+  const amountTextStyle = {
+    ...textStyles.balanceDisplay,
+    fontSize: dynamicAmountFontSize,
+    ...(Platform.OS === 'android'
+      ? { lineHeight: dynamicAmountLineHeight, includeFontPadding: false as const }
+      : { lineHeight: dynamicAmountLineHeight }),
+  }
   const amountDisplayCurrency = amountEntryMode === 'receive' ? receiveCurrency : sendCurrency
   const amountDisplaySymbolRaw = getCurrencySymbol(amountDisplayCurrency)
   const amountDisplaySymbol =
@@ -420,12 +429,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
           ? dynamicAmountLineHeight
           : undefined,
   }
-  // Determine sending currency based on payment method
-  const sendCurrency = selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency
-    ? selectedOtherCurrency === 'STABLE'
-      ? (selectedOtherPaymentMethod?.toUpperCase() || selectedBalanceCurrency)
-      : selectedOtherCurrency
-    : selectedBalanceCurrency
 
   const showCrossCurrencyExchangeUi =
     String(sendCurrency || '').toUpperCase() !== String(receiveCurrency || '').toUpperCase()
@@ -609,7 +612,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 }
               ]}
             >
-              <TouchableOpacity
+              <Pressable
+               android_ripple={ripple.neutral}
                 onPress={() => {
                   // Always go back to SelectRecentRecipientScreen, never to SelectRecipientScreen
                   navigation.navigate('SelectRecentRecipient' as never, {
@@ -619,7 +623,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 style={styles.backButton}
               >
                 <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-              </TouchableOpacity>
+              </Pressable>
               <View style={styles.headerContent}>
               <Text style={styles.title}>Send Money</Text>
             </View>
@@ -643,7 +647,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               {/* Recipient Section */}
               {recipient ? (
                 // Selected Recipient View
-                <TouchableOpacity
+                <Pressable
+                 android_ripple={ripple.neutral}
                   style={styles.recipientBar}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -653,9 +658,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       selectedOtherCurrency,
                       selectedOtherPaymentMethod,
                     } as never)
-                  }}
-                  activeOpacity={0.7}
-                >
+                  }} >
                   <Text style={styles.recipientLabel}>To:</Text>
                   <SendRecipientAvatar recipient={recipient} getInitials={getInitials} easenetPreview={easenetDisplay} />
                   <View style={styles.recipientInfo}>
@@ -684,24 +687,23 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                     style={styles.changeRecipientIcon}
                     accessibilityLabel="Change recipient"
                   />
-                </TouchableOpacity>
+                </Pressable>
               ) : (
                 // Select Recipient Box
-                <TouchableOpacity
+                <Pressable
+                 android_ripple={ripple.neutral}
                   style={styles.selectRecipientBox}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                     navigation.navigate('SelectRecentRecipient' as never, {
                       preferredBalanceCurrency: selectedBalanceCurrency,
                     } as never)
-                  }}
-                  activeOpacity={0.7}
-                >
+                  }} >
                   <View style={styles.selectRecipientIcon}>
                     <User size={20} color={colors.text.secondary} strokeWidth={2} />
                   </View>
                   <Text style={styles.selectRecipientText}>Select Recipient</Text>
-                </TouchableOpacity>
+                </Pressable>
               )}
 
               {recipient && !payoutCorridorActive ? (
@@ -780,10 +782,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   ) : showCrossCurrencyExchangeUi ? (
                     <View style={styles.exchangeInfoColumn}>
                       <View style={styles.exchangeInfoInline}>
-                        <TouchableOpacity
-                          onPress={toggleAmountDirection}
-                          activeOpacity={0.7}
-                          style={styles.exchangeToggleTouchArea}
+                        <Pressable
+                         android_ripple={ripple.neutral}
+                          onPress={toggleAmountDirection} style={styles.exchangeToggleTouchArea}
                         >
                           <Ionicons name="swap-vertical" size={13} color={colors.primary.main} />
                           <Text style={styles.exchangeInfoText}>
@@ -791,7 +792,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                               ? `Sending: ${formatCurrency(sendingAmount, sendCurrency)}`
                               : `Receiving: ${formatCurrency(receiveAmount, receiveCurrency)}`}
                           </Text>
-                        </TouchableOpacity>
+                        </Pressable>
                         <Text style={styles.exchangeInfoText}>
                           {' • '}
                           {amountEntryMode === 'receive'
@@ -823,14 +824,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               <View style={styles.sendMethodNoteKeypadGroup}>
               {/* Sending Method - Currency Balance Selector (Centered) */}
               <View style={styles.balanceSection}>
-                <TouchableOpacity
+                <Pressable
+                 android_ripple={ripple.neutral}
                   style={styles.balanceSelector}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                     setShowCurrencyPicker(true)
-                  }}
-                  activeOpacity={0.7}
-                >
+                  }} >
                   <View style={styles.flagContainer}>
                     {selectedPaymentMethod === 'balance' ? (
                       <CurrencyFlag currency={selectedBalanceCurrency} size={24} style={styles.flagImage} />
@@ -868,7 +868,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       : 'Select Method'}
               </Text>
                   <ChevronDown size={16} color={colors.text.primary} strokeWidth={2} />
-                </TouchableOpacity>
+                </Pressable>
 
           </View>
 
@@ -894,70 +894,64 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   <View style={styles.keypadGrid}>
                     {/* Row 1: 1, 2, 3 */}
                     {[1, 2, 3].map((num) => (
-                <TouchableOpacity
+                <Pressable
+                       android_ripple={ripple.neutral}
                         key={num}
                         style={styles.keypadButton}
                         onPress={() => handleKeypadPress(num.toString())}
-                        onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-                        activeOpacity={0.6}
-                      >
+                        onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} >
                         <Text style={styles.keypadButtonText}>{num}</Text>
-                      </TouchableOpacity>
+                      </Pressable>
                     ))}
                     {/* Row 2: 4, 5, 6 */}
                     {[4, 5, 6].map((num) => (
-                      <TouchableOpacity
+                      <Pressable
+                       android_ripple={ripple.neutral}
                         key={num}
                         style={styles.keypadButton}
                         onPress={() => handleKeypadPress(num.toString())}
-                        onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-                        activeOpacity={0.6}
-                      >
+                        onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} >
                         <Text style={styles.keypadButtonText}>{num}</Text>
-                      </TouchableOpacity>
+                      </Pressable>
                     ))}
                     {/* Row 3: 7, 8, 9 */}
                     {[7, 8, 9].map((num) => (
-                      <TouchableOpacity
+                      <Pressable
+                       android_ripple={ripple.neutral}
                         key={num}
                         style={styles.keypadButton}
                         onPress={() => handleKeypadPress(num.toString())}
-                        onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-                        activeOpacity={0.6}
-                      >
+                        onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} >
                         <Text style={styles.keypadButtonText}>{num}</Text>
-                      </TouchableOpacity>
+                      </Pressable>
                     ))}
                     {/* Row 4: ., 0, backspace */}
-                    <TouchableOpacity
+                    <Pressable
+                     android_ripple={ripple.neutral}
                       style={styles.keypadButton}
                       onPress={() => handleKeypadPress('.')}
-                      onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-                      activeOpacity={0.6}
-                    >
+                      onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} >
                       <Text style={styles.keypadButtonText}>.</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
+                    </Pressable>
+                    <Pressable
+                     android_ripple={ripple.neutral}
                       style={styles.keypadButton}
                       onPress={() => handleKeypadPress('0')}
-                      onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-                      activeOpacity={0.6}
-                    >
+                      onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} >
                       <Text style={styles.keypadButtonText}>0</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
+                    </Pressable>
+                    <Pressable
+                     android_ripple={ripple.neutral}
                       style={styles.keypadButton}
                       onPress={() => handleKeypadPress('backspace')}
-                      onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-                      activeOpacity={0.6}
-                      disabled={!sendAmount || sendAmount === '0'}
+                      onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} disabled={!sendAmount || sendAmount === '0'}
                     >
                       <Ionicons 
                         name="backspace" 
                         size={24} 
                         color={(!sendAmount || sendAmount === '0') ? colors.text.secondary : colors.text.primary} 
                       />
-                </TouchableOpacity>
+                </Pressable>
               </View>
               </View>
             </View>
@@ -974,21 +968,21 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
           ]}
         >
           {!tier1Ok ? (
-            <TouchableOpacity
+            <Pressable
+             android_ripple={ripple.neutral}
               style={styles.verifyInlineCta}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                 navigation.navigate('AccountVerification' as never)
-              }}
-              activeOpacity={0.8}
-              accessibilityRole="button"
+              }} accessibilityRole="button"
               accessibilityLabel="Verify identity to unlock banking. Begin."
             >
               <Text style={styles.verifyInlineText}>Verify identity to unlock banking</Text>
               <Text style={styles.verifyInlineLink}>Begin</Text>
-            </TouchableOpacity>
+            </Pressable>
           ) : null}
-          <TouchableOpacity
+          <Pressable
+           android_ripple={ripple.neutral}
             style={[styles.sendButton, sendButtonDisabled && styles.sendButtonDisabled]}
             onPress={async () => {
               const enteredAmountValue = Number.parseFloat(sendAmount.replace(/,/g, ''))
@@ -1428,7 +1422,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   : 'Select Method'}
               </Text>
             </LinearGradient>
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
         {/* Sending Method Modal */}
@@ -1441,10 +1435,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
           }}
         >
           <View style={styles.modalOverlay}>
-            <TouchableOpacity
-              style={StyleSheet.absoluteFill}
-              activeOpacity={1}
-              onPress={() => setShowCurrencyPicker(false)}
+            <Pressable
+             android_ripple={ripple.neutral}
+              style={StyleSheet.absoluteFill} onPress={() => setShowCurrencyPicker(false)}
             />
             <View style={[styles.modalContainer, { 
               height: Math.min(SCREEN_HEIGHT * 0.78, 680),
@@ -1453,14 +1446,15 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             }]} onStartShouldSetResponder={() => true} onResponderGrant={() => {}}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>How would you like to send?</Text>
-                <TouchableOpacity
+                <Pressable
+                 android_ripple={ripple.neutral}
                   onPress={() => {
                     setShowCurrencyPicker(false)
                   }}
                   style={styles.closeButton}
                 >
                   <Ionicons name="close" size={24} color={colors.text.secondary} />
-                </TouchableOpacity>
+                </Pressable>
       </View>
       
               <ScrollView 
@@ -1486,7 +1480,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                     })
                     const isSelected = selectedBalanceCurrency === item.code && selectedPaymentMethod === 'balance'
                     return (
-                      <TouchableOpacity
+                      <Pressable
+                       android_ripple={ripple.neutral}
                         key={item.code}
                         style={[
                           styles.currencyItem,
@@ -1521,7 +1516,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                             <View style={styles.checkboxInner} />
                           )}
                         </View>
-                      </TouchableOpacity>
+                      </Pressable>
                     )
                   })}
                 </View>
@@ -1533,7 +1528,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   {/* Currency Selector */}
                   {!selectedOtherCurrency ? (
                     otherCurrencies.map((currency) => (
-                      <TouchableOpacity
+                      <Pressable
+                       android_ripple={ripple.neutral}
                         key={currency.code}
                         style={styles.currencyItem}
                         onPress={async () => {
@@ -1554,12 +1550,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                           <Text style={styles.currencyItemCode}>{currency.name}</Text>
                         </View>
                         <Ionicons name="chevron-forward" size={20} color={colors.text.secondary} />
-                      </TouchableOpacity>
+                      </Pressable>
                     ))
                   ) : (
                     <>
                       {/* Back button to change currency */}
-                      <TouchableOpacity
+                      <Pressable
+                       android_ripple={ripple.neutral}
                         style={styles.currencyItem}
                         onPress={async () => {
                           await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -1573,13 +1570,14 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                             {otherCurrencies.find(c => c.code === selectedOtherCurrency)?.name}
                           </Text>
                         </View>
-                      </TouchableOpacity>
+                      </Pressable>
 
                       {/* Payment Methods for Selected Currency */}
                       {currencyPaymentMethods[selectedOtherCurrency]?.map((method) => {
                         const isSelected = selectedOtherPaymentMethod === method.code
                         return (
-                          <TouchableOpacity
+                          <Pressable
+                           android_ripple={ripple.neutral}
                             key={method.code}
                             style={[
                               styles.currencyItem,
@@ -1623,7 +1621,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                                 <View style={styles.checkboxInner} />
                               )}
                             </View>
-                          </TouchableOpacity>
+                          </Pressable>
                         )
                       })}
                     </>
@@ -2192,20 +2190,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border.light,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  paymentSection: {
-    marginBottom: spacing[4],
-  },
-  paymentSectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text.secondary,
-    fontFamily: 'Outfit-SemiBold',
-    marginBottom: spacing[2],
-    marginTop: spacing[2],
-    paddingHorizontal: spacing[5],
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   checkboxSelected: {
     width: 24,

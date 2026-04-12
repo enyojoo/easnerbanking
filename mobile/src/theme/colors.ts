@@ -14,6 +14,11 @@ export const colors = {
     gradientDark: ['#005A94', '#007ACC'] as const,
   },
 
+  /** Cash-style positive accent — success chips / confirmations only (not brand primary). */
+  accent: {
+    positive: '#00D632',
+  },
+
   // Success Colors
   success: {
     main: '#10B981',

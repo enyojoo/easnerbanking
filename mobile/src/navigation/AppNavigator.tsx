@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { View, Platform, TouchableOpacity, Text, AppState, AppStateStatus, StyleSheet } from 'react-native'
+import { View, Platform, Text, AppState, AppStateStatus, StyleSheet } from 'react-native'
 import { createStackNavigator, TransitionPresets } from '@react-navigation/stack'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { useNavigation } from '@react-navigation/native'
@@ -8,7 +8,7 @@ import { House, CreditCard, ChartSpline, Grip } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useAuth } from '../contexts/AuthContext'
-import { colors, shadows, textStyles, borderRadius, spacing } from '../theme'
+import { useThemeColors, shadows, textStyles, borderRadius, spacing, layout } from '../theme'
 import {
   isPinSetup,
   evaluateIdleLock,
@@ -335,6 +335,7 @@ const tabBarStyles = StyleSheet.create({
 
 function MainTabs() {
   const insets = useSafeAreaInsets()
+  const palette = useThemeColors()
   useBusinessNoahSync()
   useConsumerKycNoahSync()
 
@@ -343,34 +344,28 @@ function MainTabs() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: colors.primary.main, // Solid blue background for navigation bar
+          backgroundColor: palette.primary.main,
           borderTopWidth: 0,
-          borderBottomWidth: 0,
-          borderLeftWidth: 0,
-          borderRightWidth: 0,
-          elevation: 8,
+          elevation: 4,
           shadowColor: '#000',
-          shadowOffset: { width: 0, height: -4 },
-          shadowOpacity: 0.15,
-          shadowRadius: 12,
-          height: 60,
-          paddingBottom: Platform.OS === 'android' ? 10 : Math.max(insets.bottom, 8),
+          shadowOffset: { width: 0, height: -1 },
+          shadowOpacity: 0.12,
+          shadowRadius: 6,
+          height: layout.tabBarHeight + insets.bottom,
+          paddingBottom: insets.bottom,
           paddingTop: spacing[2],
-          paddingHorizontal: 20,
-          borderRadius: 100,
-          borderTopLeftRadius: 100,
-          borderTopRightRadius: 100,
-          borderBottomLeftRadius: 100,
-          borderBottomRightRadius: 100,
-          marginHorizontal: spacing[8],
-          marginBottom:
-            spacing[2] + (Platform.OS === 'ios' ? insets.bottom : Math.max(insets.bottom, 20)),
+          paddingHorizontal: spacing[2],
+          marginHorizontal: 0,
+          marginBottom: 0,
           position: 'absolute',
-          overflow: 'hidden', // Ensure rounded corners are clipped
+          left: 0,
+          right: 0,
+          bottom: 0,
+          overflow: 'hidden',
         },
-        tabBarShowLabel: false, // Hide labels to match design
-        tabBarActiveTintColor: colors.text.inverse, // Pure white for active
-        tabBarInactiveTintColor: 'rgba(255, 255, 255, 0.6)', // Lighter for inactive
+        tabBarShowLabel: true,
+        tabBarActiveTintColor: palette.text.inverse,
+        tabBarInactiveTintColor: 'rgba(255, 255, 255, 0.55)',
         tabBarLabelPosition: 'below-icon',
         tabBarLabelStyle: {
           fontSize: textStyles.labelSmall.fontSize,
@@ -397,8 +392,8 @@ function MainTabs() {
           tabBarIcon: ({ focused, color }) => (
             <View style={focused ? tabBarStyles.activeIconContainer : null}>
               <House 
-                size={24} 
-                color={focused ? colors.text.inverse : 'rgba(255, 255, 255, 0.6)'}
+                size={26} 
+                color={focused ? palette.text.inverse : 'rgba(255, 255, 255, 0.55)'}
                 strokeWidth={focused ? 2.5 : 2}
               />
             </View>
@@ -413,8 +408,8 @@ function MainTabs() {
           tabBarIcon: ({ focused, color }) => (
             <View style={focused ? tabBarStyles.activeIconContainer : null}>
               <CreditCard 
-                size={24} 
-                color={focused ? colors.text.inverse : 'rgba(255, 255, 255, 0.6)'}
+                size={26} 
+                color={focused ? palette.text.inverse : 'rgba(255, 255, 255, 0.55)'}
                 strokeWidth={focused ? 2.5 : 2}
               />
             </View>
@@ -429,8 +424,8 @@ function MainTabs() {
           tabBarIcon: ({ focused, color }) => (
             <View style={focused ? tabBarStyles.activeIconContainer : null}>
               <ChartSpline 
-                size={24} 
-                color={focused ? colors.text.inverse : 'rgba(255, 255, 255, 0.6)'}
+                size={26} 
+                color={focused ? palette.text.inverse : 'rgba(255, 255, 255, 0.55)'}
                 strokeWidth={focused ? 2.5 : 2}
               />
             </View>
@@ -445,8 +440,8 @@ function MainTabs() {
           tabBarIcon: ({ focused, color }) => (
             <View style={focused ? tabBarStyles.activeIconContainer : null}>
               <Grip 
-                size={24} 
-                color={focused ? colors.text.inverse : 'rgba(255, 255, 255, 0.6)'}
+                size={26} 
+                color={focused ? palette.text.inverse : 'rgba(255, 255, 255, 0.55)'}
                 strokeWidth={focused ? 2.5 : 2}
               />
             </View>
