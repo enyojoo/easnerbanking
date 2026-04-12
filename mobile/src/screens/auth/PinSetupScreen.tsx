@@ -21,6 +21,7 @@ import {
   markFirstLoginAfterVerification,
   updateSessionActivity,
   setAppLocked,
+  skipColdStartPinLockForUser,
 } from '../../lib/pinAuth'
 import { emitAppLocked } from '../../lib/app-lock-bus'
 import { useAuth } from '../../contexts/AuthContext'
@@ -115,6 +116,7 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
 
     if (result.success) {
       const uid = user?.id
+      if (uid) skipColdStartPinLockForUser(uid)
       // Fresh session + unlocked so idle re-check does not send user to PIN entry or sign-out
       await updateSessionActivity()
       if (uid) await setAppLocked(uid, false)

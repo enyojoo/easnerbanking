@@ -12,6 +12,8 @@ export const fontFamily = {
   medium: 'Outfit-Medium',
   semibold: 'Outfit-SemiBold',
   bold: 'Outfit-Bold',
+  /** Matches send-amount hero / keypad (Outfit-Black). */
+  black: 'Outfit-Black',
 }
 
 // Font weights
@@ -21,6 +23,7 @@ export const fontWeight = {
   semibold: '600' as const,
   bold: '700' as const,
   extrabold: '800' as const,
+  black: '900' as const,
 }
 
 // Font sizes following a harmonious scale
@@ -242,11 +245,11 @@ export const textStyles: Record<string, TextStyle> = {
     fontVariant: ['tabular-nums'],
   },
 
-  /** Primary balance line on Dashboard (tabular, large). */
+  /** Primary balance line on Dashboard — same face/weight as send amount (`SendAmountScreen`). */
   balanceDisplay: {
-    fontFamily: fontFamily.bold,
+    fontFamily: fontFamily.black,
     fontSize: fontSize['6xl'],
-    fontWeight: fontWeight.bold,
+    fontWeight: fontWeight.black,
     lineHeight: Math.round(fontSize['6xl'] * lineHeight.tight),
     letterSpacing: letterSpacing.tight,
     fontVariant: ['tabular-nums'],

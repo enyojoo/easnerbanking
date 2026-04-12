@@ -389,13 +389,14 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     : selectedBalanceCurrency
   const dynamicAmountFontSize = getDynamicFontSize(sendAmount)
   const dynamicAmountLineHeight = Math.round(dynamicAmountFontSize * 1.12)
-  const amountTextStyle = {
+  const amountTextBase = {
     ...textStyles.balanceDisplay,
     fontSize: dynamicAmountFontSize,
     lineHeight: dynamicAmountLineHeight,
     includeFontPadding: false as const,
     paddingVertical: 0,
     marginVertical: 0,
+    ...(Platform.OS === 'ios' ? { fontVariant: [] as const } : {}),
   }
   const amountDisplayCurrency = amountEntryMode === 'receive' ? receiveCurrency : sendCurrency
   const amountDisplaySymbolRaw = getCurrencySymbol(amountDisplayCurrency)
@@ -405,18 +406,36 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       : String(amountDisplayCurrency || '').trim()) || getCurrencySymbol(selectedBalanceCurrency)
   const amountAssetIconUrl = getTokenIconUrl(String(amountDisplayCurrency || '').toUpperCase()) || null
   const showAmountAssetIcon = Boolean(amountAssetIconUrl && amountDisplaySymbol.length > 2)
+  const prefixLineHeight =
+    amountDisplaySymbol.length > 2
+      ? Math.max(Math.round(dynamicAmountLineHeight * 0.55), 22)
+      : dynamicAmountLineHeight
+  /**
+   * iOS: Text vs TextInput lay out single-line text differently. Use one explicit line box height for
+   * $/€ + digits (short symbols only) so both sit on the same optical line.
+   */
+  const iosAmountLineBoxHeight =
+    Platform.OS === 'ios' && !showAmountAssetIcon && amountDisplaySymbol.length <= 2
+      ? Math.ceil(dynamicAmountFontSize * 1.12)
+      : null
+  const amountTextStyle = {
+    ...amountTextBase,
+    ...(iosAmountLineBoxHeight
+      ? { lineHeight: iosAmountLineBoxHeight, height: iosAmountLineBoxHeight }
+      : {}),
+  }
   const amountPrefixStyle = {
-    ...amountTextStyle,
+    ...amountTextBase,
     fontSize:
       amountDisplaySymbol.length > 2
         ? Math.max(Math.round(dynamicAmountFontSize * 0.52), 20)
         : dynamicAmountFontSize,
-    lineHeight:
-      amountDisplaySymbol.length > 2
-        ? Math.max(Math.round(dynamicAmountLineHeight * 0.55), 22)
-        : dynamicAmountLineHeight,
+    lineHeight: iosAmountLineBoxHeight ?? prefixLineHeight,
   }
-  const amountRowMinHeight = Math.max(96, dynamicAmountLineHeight + 32)
+  const amountRowMinHeight = Platform.select({
+    ios: Math.max(88, dynamicAmountLineHeight + 22),
+    default: Math.max(96, dynamicAmountLineHeight + 32),
+  })
 
   const showCrossCurrencyExchangeUi =
     String(sendCurrency || '').toUpperCase() !== String(receiveCurrency || '').toUpperCase()
@@ -728,14 +747,22 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                             resizeMode="cover"
                           />
                         </View>
-                      ) : (
-                        <Text
+                      ) : iosAmountLineBoxHeight ? (
+                        <View
                           style={[
-                            styles.currencyPrefix,
-                            amountPrefixStyle,
+                            styles.currencyPrefixIosBox,
+                            { height: iosAmountLineBoxHeight, marginRight: 2 },
                           ]}
-                          numberOfLines={1}
                         >
+                          <Text
+                            style={[styles.currencyPrefix, styles.currencyPrefixIosBoxText, amountPrefixStyle]}
+                            numberOfLines={1}
+                          >
+                            {amountDisplaySymbol}
+                          </Text>
+                        </View>
+                      ) : (
+                        <Text style={[styles.currencyPrefix, amountPrefixStyle]} numberOfLines={1}>
                           {amountDisplaySymbol}
                         </Text>
                       )
@@ -1836,6 +1863,15 @@ const styles = StyleSheet.create({
       android: { textAlignVertical: 'center' as const },
       default: {},
     }),
+  },
+  /** iOS short-symbol row: vertically center $/€ in the same line box height as the amount TextInput. */
+  currencyPrefixIosBox: {
+    justifyContent: 'center',
+    alignSelf: 'center',
+    overflow: 'hidden',
+  },
+  currencyPrefixIosBoxText: {
+    marginRight: 0,
   },
   amountAssetIconWrap: {
     width: 24,

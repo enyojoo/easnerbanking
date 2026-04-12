@@ -85,7 +85,6 @@ function RecipientsContent({ navigation }: NavigationProps) {
   const [transferType, setTransferType] = useState<'ACH' | 'Wire' | null>(null) // For USA
   // Shared form flow state (used by both add and edit)
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false)
-  const [currencySearchTerm, setCurrencySearchTerm] = useState('')
   const [editingRecipient, setEditingRecipient] = useState<Recipient | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -258,15 +257,36 @@ function RecipientsContent({ navigation }: NavigationProps) {
         ? 'bank'
         : (selectedRecipientType || 'bank')
   const filteredCurrencies = recipientCatalogFor(recipientTypeKey as RecipientType).filter((currency) => {
-    if (currencySearchTerm) {
+    if (countrySearchTerm) {
+      const t = countrySearchTerm.toLowerCase()
       return (
-        currency.currencyName.toLowerCase().includes(currencySearchTerm.toLowerCase()) ||
-        currency.currencyCode.toLowerCase().includes(currencySearchTerm.toLowerCase()) ||
-        currency.countryName.toLowerCase().includes(currencySearchTerm.toLowerCase())
+        currency.currencyName.toLowerCase().includes(t) ||
+        currency.currencyCode.toLowerCase().includes(t) ||
+        currency.countryName.toLowerCase().includes(t)
       )
     }
     return true
   })
+  const filteredProviderList = useMemo(
+    () =>
+      getRecipientProviders(
+        newRecipient.currency,
+        'mobile_money',
+        selectedCountryCurrency?.countryCode,
+      ).filter((provider) => provider.toLowerCase().includes(providerSearchTerm.toLowerCase())),
+    [newRecipient.currency, selectedCountryCurrency?.countryCode, providerSearchTerm],
+  )
+  const filteredWalletAssets = useMemo(
+    () => getWalletAssets().filter((asset) => asset.toLowerCase().includes(walletAssetSearchTerm.toLowerCase())),
+    [walletAssetSearchTerm],
+  )
+  const filteredWalletNetworks = useMemo(
+    () =>
+      getWalletNetworksForAsset(newRecipient.currency).filter((network) =>
+        network.toLowerCase().includes(walletNetworkSearchTerm.toLowerCase()),
+      ),
+    [newRecipient.currency, walletNetworkSearchTerm],
+  )
   const selectedCatalogEntry =
     recipientCatalogFor(recipientTypeKey as RecipientType).find(
       (item) => item.currencyCode === newRecipient.currency && item.countryCode === selectedCountryCurrency?.countryCode,
@@ -1278,23 +1298,20 @@ function RecipientsContent({ navigation }: NavigationProps) {
                         onChangeText={setCountrySearchTerm}
                       />
                     </View>
-                    <ScrollView
+                    <FlatList
+                      data={filteredCurrencies}
+                      keyExtractor={(item) => `${item.countryCode}-${item.currencyCode}`}
                       style={styles.currencyDropdownListScroll}
                       contentContainerStyle={styles.currencyDropdownListContent}
                       nestedScrollEnabled
                       keyboardShouldPersistTaps="handled"
-                      showsVerticalScrollIndicator
-                    >
-                      {(countrySearchTerm
-                        ? filteredCurrencies
-                        : recipientCatalogFor(recipientTypeKey as RecipientType)
-                      ).map((item) => {
+                      removeClippedSubviews={Platform.OS === 'android' ? false : undefined}
+                      renderItem={({ item }) => {
                         const isSelected =
                           newRecipient.currency === item.currencyCode &&
                           selectedCountryCurrency?.countryCode === item.countryCode
                         return (
                           <Pressable
-                            key={`${item.countryCode}-${item.currencyCode}`}
                             android_ripple={ripple.neutral}
                             style={[styles.currencyDropdownItem, isSelected && styles.currencyDropdownItemSelected]}
                             onPress={async () => {
@@ -1336,8 +1353,8 @@ function RecipientsContent({ navigation }: NavigationProps) {
                             ) : null}
                           </Pressable>
                         )
-                      })}
-                    </ScrollView>
+                      }}
+                    />
                   </View>
                 )}
               </View>}
@@ -1418,43 +1435,37 @@ function RecipientsContent({ navigation }: NavigationProps) {
                             onChangeText={setProviderSearchTerm}
                           />
                         </View>
-                        <ScrollView
+                        <FlatList
+                          data={filteredProviderList}
+                          keyExtractor={(provider) => provider}
                           style={styles.currencyDropdownListScroll}
                           contentContainerStyle={styles.currencyDropdownListContent}
                           nestedScrollEnabled
                           keyboardShouldPersistTaps="handled"
-                          showsVerticalScrollIndicator
-                        >
-                          {getRecipientProviders(
-                            newRecipient.currency,
-                            'mobile_money',
-                            selectedCountryCurrency?.countryCode,
-                          )
-                            .filter((provider) => provider.toLowerCase().includes(providerSearchTerm.toLowerCase()))
-                            .map((provider) => (
-                              <Pressable
-                                key={provider}
-                                android_ripple={ripple.neutral}
-                                style={[
-                                  styles.currencyDropdownItem,
-                                  newRecipient.provider === provider && styles.currencyDropdownItemSelected,
-                                ]}
-                                onPress={async () => {
-                                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                                  setNewRecipient((prev) => ({ ...prev, provider }))
-                                  setShowProviderDropdown(false)
-                                  setProviderSearchTerm('')
-                                }}
-                              >
-                                <View style={styles.currencyInfo}>
-                                  <Text style={styles.currencyCode}>{provider}</Text>
-                                </View>
-                                {newRecipient.provider === provider ? (
-                                  <Ionicons name="checkmark" size={18} color={colors.primary.main} />
-                                ) : null}
-                              </Pressable>
-                            ))}
-                        </ScrollView>
+                          removeClippedSubviews={Platform.OS === 'android' ? false : undefined}
+                          renderItem={({ item: provider }) => (
+                            <Pressable
+                              android_ripple={ripple.neutral}
+                              style={[
+                                styles.currencyDropdownItem,
+                                newRecipient.provider === provider && styles.currencyDropdownItemSelected,
+                              ]}
+                              onPress={async () => {
+                                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                                setNewRecipient((prev) => ({ ...prev, provider }))
+                                setShowProviderDropdown(false)
+                                setProviderSearchTerm('')
+                              }}
+                            >
+                              <View style={styles.currencyInfo}>
+                                <Text style={styles.currencyCode}>{provider}</Text>
+                              </View>
+                              {newRecipient.provider === provider ? (
+                                <Ionicons name="checkmark" size={18} color={colors.primary.main} />
+                              ) : null}
+                            </Pressable>
+                          )}
+                        />
                       </View>
                     )}
                   </View>
@@ -1516,47 +1527,45 @@ function RecipientsContent({ navigation }: NavigationProps) {
                             onChangeText={setWalletAssetSearchTerm}
                           />
                         </View>
-                        <ScrollView
+                        <FlatList
+                          data={filteredWalletAssets}
+                          keyExtractor={(asset) => asset}
                           style={styles.currencyDropdownListScroll}
                           contentContainerStyle={styles.currencyDropdownListContent}
                           nestedScrollEnabled
                           keyboardShouldPersistTaps="handled"
-                          showsVerticalScrollIndicator
-                        >
-                          {getWalletAssets()
-                            .filter((asset) => asset.toLowerCase().includes(walletAssetSearchTerm.toLowerCase()))
-                            .map((asset) => (
-                              <Pressable
-                                key={asset}
-                                android_ripple={ripple.neutral}
-                                style={[
-                                  styles.currencyDropdownItem,
-                                  newRecipient.currency === asset && styles.currencyDropdownItemSelected,
-                                ]}
-                                onPress={async () => {
-                                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                                  const networks = getWalletNetworksForAsset(asset)
-                                  setNewRecipient((prev) => ({
-                                    ...prev,
-                                    currency: asset,
-                                    network: networks[0] || '',
-                                  }))
-                                  setShowWalletAssetDropdown(false)
-                                  setWalletAssetSearchTerm('')
-                                }}
-                              >
-                                {getTokenIconUrl(asset) ? (
-                                  <Image source={{ uri: getTokenIconUrl(asset)! }} style={styles.cryptoIcon} />
-                                ) : null}
-                                <View style={styles.currencyInfo}>
-                                  <Text style={styles.currencyCode}>{asset}</Text>
-                                </View>
-                                {newRecipient.currency === asset ? (
-                                  <Ionicons name="checkmark" size={18} color={colors.primary.main} />
-                                ) : null}
-                              </Pressable>
-                            ))}
-                        </ScrollView>
+                          removeClippedSubviews={Platform.OS === 'android' ? false : undefined}
+                          renderItem={({ item: asset }) => (
+                            <Pressable
+                              android_ripple={ripple.neutral}
+                              style={[
+                                styles.currencyDropdownItem,
+                                newRecipient.currency === asset && styles.currencyDropdownItemSelected,
+                              ]}
+                              onPress={async () => {
+                                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                                const networks = getWalletNetworksForAsset(asset)
+                                setNewRecipient((prev) => ({
+                                  ...prev,
+                                  currency: asset,
+                                  network: networks[0] || '',
+                                }))
+                                setShowWalletAssetDropdown(false)
+                                setWalletAssetSearchTerm('')
+                              }}
+                            >
+                              {getTokenIconUrl(asset) ? (
+                                <Image source={{ uri: getTokenIconUrl(asset)! }} style={styles.cryptoIcon} />
+                              ) : null}
+                              <View style={styles.currencyInfo}>
+                                <Text style={styles.currencyCode}>{asset}</Text>
+                              </View>
+                              {newRecipient.currency === asset ? (
+                                <Ionicons name="checkmark" size={18} color={colors.primary.main} />
+                              ) : null}
+                            </Pressable>
+                          )}
+                        />
                       </View>
                     )}
                   </View>
@@ -1591,42 +1600,40 @@ function RecipientsContent({ navigation }: NavigationProps) {
                             onChangeText={setWalletNetworkSearchTerm}
                           />
                         </View>
-                        <ScrollView
+                        <FlatList
+                          data={filteredWalletNetworks}
+                          keyExtractor={(network) => network}
                           style={styles.currencyDropdownListScroll}
                           contentContainerStyle={styles.currencyDropdownListContent}
                           nestedScrollEnabled
                           keyboardShouldPersistTaps="handled"
-                          showsVerticalScrollIndicator
-                        >
-                          {getWalletNetworksForAsset(newRecipient.currency)
-                            .filter((network) => network.toLowerCase().includes(walletNetworkSearchTerm.toLowerCase()))
-                            .map((network) => (
-                              <Pressable
-                                key={network}
-                                android_ripple={ripple.neutral}
-                                style={[
-                                  styles.currencyDropdownItem,
-                                  newRecipient.network === network && styles.currencyDropdownItemSelected,
-                                ]}
-                                onPress={async () => {
-                                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                                  setNewRecipient((prev) => ({ ...prev, network }))
-                                  setShowWalletNetworkDropdown(false)
-                                  setWalletNetworkSearchTerm('')
-                                }}
-                              >
-                                {getNetworkIconUrl(network) ? (
-                                  <Image source={{ uri: getNetworkIconUrl(network)! }} style={styles.cryptoIcon} />
-                                ) : null}
-                                <View style={styles.currencyInfo}>
-                                  <Text style={styles.currencyCode}>{network}</Text>
-                                </View>
-                                {newRecipient.network === network ? (
-                                  <Ionicons name="checkmark" size={18} color={colors.primary.main} />
-                                ) : null}
-                              </Pressable>
-                            ))}
-                        </ScrollView>
+                          removeClippedSubviews={Platform.OS === 'android' ? false : undefined}
+                          renderItem={({ item: network }) => (
+                            <Pressable
+                              android_ripple={ripple.neutral}
+                              style={[
+                                styles.currencyDropdownItem,
+                                newRecipient.network === network && styles.currencyDropdownItemSelected,
+                              ]}
+                              onPress={async () => {
+                                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                                setNewRecipient((prev) => ({ ...prev, network }))
+                                setShowWalletNetworkDropdown(false)
+                                setWalletNetworkSearchTerm('')
+                              }}
+                            >
+                              {getNetworkIconUrl(network) ? (
+                                <Image source={{ uri: getNetworkIconUrl(network)! }} style={styles.cryptoIcon} />
+                              ) : null}
+                              <View style={styles.currencyInfo}>
+                                <Text style={styles.currencyCode}>{network}</Text>
+                              </View>
+                              {newRecipient.network === network ? (
+                                <Ionicons name="checkmark" size={18} color={colors.primary.main} />
+                              ) : null}
+                            </Pressable>
+                          )}
+                        />
                       </View>
                     )}
                   </View>
@@ -2554,7 +2561,7 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  /** ScrollView wrapper — nested FlatList does not scroll reliably inside parent ScrollView on Android */
+  /** Bounded list viewport for dropdown FlatLists inside the modal ScrollView */
   currencyDropdownListScroll: {
     maxHeight: 220,
     ...Platform.select({

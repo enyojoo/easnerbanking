@@ -61,6 +61,15 @@ function resetColdStartPinLockState() {
   coldStartPinLockUserId = null
 }
 
+/**
+ * After the user creates a PIN in this JS session, the PIN gate effect re-runs and would otherwise
+ * call `applyColdStartPinLockIfNeeded`, which locks whenever a PIN exists. Mark cold-start handled
+ * here so enrollment does not immediately send them to PIN entry.
+ */
+export function skipColdStartPinLockForUser(userId: string): void {
+  coldStartPinLockUserId = userId
+}
+
 /** Once per user per process: lock app if PIN exists (survives persisted unlocked flag from previous run). */
 export async function applyColdStartPinLockIfNeeded(userId: string): Promise<void> {
   if (coldStartPinLockUserId === userId) return
