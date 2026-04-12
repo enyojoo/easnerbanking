@@ -10,6 +10,7 @@ import {
   Platform,
   FlatList,
   RefreshControl,
+  Image,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -50,7 +51,6 @@ import { useUserData } from '../../contexts/UserDataContext'
 import { useFocusEffect } from '@react-navigation/native'
 import { useBalance } from '../../contexts/BalanceContext'
 import { apiGet, apiPost, NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
-import { Image } from 'expo-image'
 import { ShimmerLoader } from '../../components/premium'
 import { getTransactionStatusDisplay } from '../../utils/formatters'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
@@ -679,11 +679,8 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                 {headerAvatarUrl ? (
                   <Image
                     source={{ uri: headerAvatarUrl }}
-                    style={StyleSheet.absoluteFillObject}
-                    contentFit="cover"
-                    cachePolicy="memory-disk"
-                    recyclingKey={headerAvatarUrl}
-                    transition={0}
+                    style={userAvatarStyles.image}
+                    resizeMode="cover"
                   />
                 ) : (
                   <Text style={userAvatarStyles.initials}>

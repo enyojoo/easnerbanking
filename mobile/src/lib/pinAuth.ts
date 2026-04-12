@@ -33,6 +33,27 @@ const FIRST_LOGIN_KEY = '@easner_first_login_after_verification'
 /** Same idle soft-lock window as business `APP_IDLE_TIMEOUT_MINUTES` in `business/lib/app-lock-config.ts`. */
 const SESSION_TIMEOUT_MS = 5 * 60 * 1000
 
+/**
+ * In-process "last interaction" for idle evaluation. AsyncStorage is not updated on every touch
+ * (too slow); this lets `evaluateIdleLock` treat active use as non-idle until the real timeout.
+ */
+let lastInteractionMonotonicMs = 0
+
+/** Call on user touches / navigation while unlocked so idle lock does not fire mid-session. */
+export function markSessionInteraction(): void {
+  lastInteractionMonotonicMs = Date.now()
+}
+
+function resetSessionInteractionMemory(): void {
+  lastInteractionMonotonicMs = 0
+}
+
+function effectiveLastActiveMs(storedRaw: string | null): number {
+  const parsed = storedRaw ? parseInt(storedRaw, 10) : 0
+  const stored = Number.isFinite(parsed) ? parsed : 0
+  return Math.max(stored, lastInteractionMonotonicMs)
+}
+
 /** Per JS process: cold start should require PIN again for users who have a PIN (see `applyColdStartPinLockIfNeeded`). */
 let coldStartPinLockUserId: string | null = null
 
@@ -340,20 +361,24 @@ export async function clearPinAuth(): Promise<void> {
     if (uid) await removePin(uid)
     await AsyncStorage.removeItem(SESSION_LAST_ACTIVE_KEY)
     await AsyncStorage.removeItem(PIN_PROMPT_DISMISSED_KEY)
+    resetSessionInteractionMemory()
   } catch (e) {
     console.error('clearPinAuth', e)
   }
 }
 
 export async function updateSessionActivity(): Promise<void> {
+  const now = Date.now()
+  lastInteractionMonotonicMs = now
   try {
-    await AsyncStorage.setItem(SESSION_LAST_ACTIVE_KEY, Date.now().toString())
+    await AsyncStorage.setItem(SESSION_LAST_ACTIVE_KEY, now.toString())
   } catch {
     // ignore
   }
 }
 
 export async function clearSessionActivity(): Promise<void> {
+  resetSessionInteractionMemory()
   try {
     await AsyncStorage.removeItem(SESSION_LAST_ACTIVE_KEY)
   } catch {
@@ -364,9 +389,9 @@ export async function clearSessionActivity(): Promise<void> {
 export async function isSessionValid(): Promise<boolean> {
   try {
     const lastActive = await AsyncStorage.getItem(SESSION_LAST_ACTIVE_KEY)
-    if (!lastActive) return false
-    const lastActiveTime = parseInt(lastActive, 10)
-    return Date.now() - lastActiveTime < SESSION_TIMEOUT_MS
+    const effective = effectiveLastActiveMs(lastActive)
+    if (effective === 0) return false
+    return Date.now() - effective < SESSION_TIMEOUT_MS
   } catch {
     return false
   }
@@ -410,8 +435,9 @@ export async function getPinLockTimeRemaining(): Promise<number> {
 /** Idle exceeded: soft-lock if PIN exists, else caller should sign out. */
 export async function evaluateIdleLock(userId: string): Promise<'locked' | 'signed_out' | 'ok'> {
   const last = await AsyncStorage.getItem(SESSION_LAST_ACTIVE_KEY)
-  if (!last) return 'ok'
-  const idleMs = Date.now() - parseInt(last, 10)
+  const effectiveLast = effectiveLastActiveMs(last)
+  if (effectiveLast === 0) return 'ok'
+  const idleMs = Date.now() - effectiveLast
   if (idleMs <= SESSION_TIMEOUT_MS) return 'ok'
   if (await hasPin(userId)) {
     await setAppLocked(userId, true)

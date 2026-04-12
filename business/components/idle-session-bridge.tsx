@@ -42,6 +42,8 @@ export function IdleSessionBridge() {
     window.addEventListener("keydown", onAct, opts)
     window.addEventListener("scroll", onAct, opts)
     window.addEventListener("touchstart", onAct, opts)
+    window.addEventListener("pointerdown", onAct, opts)
+    window.addEventListener("focusin", onAct, opts)
 
     return () => {
       window.clearInterval(id)
@@ -49,6 +51,8 @@ export function IdleSessionBridge() {
       window.removeEventListener("keydown", onAct, opts)
       window.removeEventListener("scroll", onAct, opts)
       window.removeEventListener("touchstart", onAct, opts)
+      window.removeEventListener("pointerdown", onAct, opts)
+      window.removeEventListener("focusin", onAct, opts)
     }
   }, [user?.id, logout])
 

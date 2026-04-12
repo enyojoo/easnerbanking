@@ -13,9 +13,9 @@ import {
   isPinSetup,
   evaluateIdleLock,
   isAppLocked,
-  updateSessionActivity,
   dismissPinPrompt,
   applyColdStartPinLockIfNeeded,
+  markSessionInteraction,
 } from '../lib/pinAuth'
 import { emitAppLocked, registerAppLockListener } from '../lib/app-lock-bus'
 import { useBusinessNoahSync } from '../hooks/useBusinessNoahSync'
@@ -321,6 +321,14 @@ function MainStackWithPinPrompt({ showPinPrompt }: { showPinPrompt: boolean }) {
 
 function MainStack() {
   return (
+    <View
+      style={{ flex: 1 }}
+      collapsable={false}
+      onStartShouldSetResponderCapture={() => {
+        markSessionInteraction()
+        return false
+      }}
+    >
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
@@ -582,6 +590,7 @@ function MainStack() {
         }}
       />
     </Stack.Navigator>
+    </View>
   )
 }
 

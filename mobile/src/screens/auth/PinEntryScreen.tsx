@@ -205,6 +205,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
                 <Image
                   source={{ uri: headerAvatarUrl }}
                   style={userAvatarStyles.image}
+                  resizeMode="cover"
                   onError={() => setAvatarLoadFailed(true)}
                 />
               ) : (
