@@ -80,11 +80,7 @@
         {
           "backgroundColor": "#007ACC",
           "image": "./assets/splash-icon-light.png",
-          "imageWidth": 200,
-          "dark": {
-            "backgroundColor": "#007ACC",
-            "image": "./assets/splash-icon-dark.png"
-          }
+          "imageWidth": 200
         }
       ]
     ],
