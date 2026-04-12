@@ -411,17 +411,21 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       ? Math.max(Math.round(dynamicAmountLineHeight * 0.55), 22)
       : dynamicAmountLineHeight
   /**
-   * iOS: Text vs TextInput lay out single-line text differently. Use one explicit line box height for
-   * $/€ + digits (short symbols only) so both sit on the same optical line.
+   * Short currency symbols ($, €): shared line box for prefix Text + amount TextInput so both
+   * platforms align the glyph row (Text vs TextInput vertical metrics differ).
    */
-  const iosAmountLineBoxHeight =
-    Platform.OS === 'ios' && !showAmountAssetIcon && amountDisplaySymbol.length <= 2
+  const shortSymbolLineBoxHeight =
+    !showAmountAssetIcon && amountDisplaySymbol.length <= 2
       ? Math.ceil(dynamicAmountFontSize * 1.12)
       : null
+  /** Optical nudge: symbol often sits high relative to UITextField / Android EditText digits. */
+  const shortSymbolPrefixNudgeY = shortSymbolLineBoxHeight
+    ? Math.max(1, Math.round(dynamicAmountFontSize * (Platform.OS === 'ios' ? 0.04 : 0.03)))
+    : 0
   const amountTextStyle = {
     ...amountTextBase,
-    ...(iosAmountLineBoxHeight
-      ? { lineHeight: iosAmountLineBoxHeight, height: iosAmountLineBoxHeight }
+    ...(shortSymbolLineBoxHeight
+      ? { lineHeight: shortSymbolLineBoxHeight, height: shortSymbolLineBoxHeight }
       : {}),
   }
   const amountPrefixStyle = {
@@ -430,7 +434,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       amountDisplaySymbol.length > 2
         ? Math.max(Math.round(dynamicAmountFontSize * 0.52), 20)
         : dynamicAmountFontSize,
-    lineHeight: iosAmountLineBoxHeight ?? prefixLineHeight,
+    lineHeight: shortSymbolLineBoxHeight ?? prefixLineHeight,
   }
   const amountRowMinHeight = Platform.select({
     ios: Math.max(88, dynamicAmountLineHeight + 22),
@@ -747,15 +751,22 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                             resizeMode="cover"
                           />
                         </View>
-                      ) : iosAmountLineBoxHeight ? (
+                      ) : shortSymbolLineBoxHeight ? (
                         <View
                           style={[
-                            styles.currencyPrefixIosBox,
-                            { height: iosAmountLineBoxHeight, marginRight: 2 },
+                            styles.currencyPrefixLineBox,
+                            { height: shortSymbolLineBoxHeight, marginRight: 2 },
                           ]}
                         >
                           <Text
-                            style={[styles.currencyPrefix, styles.currencyPrefixIosBoxText, amountPrefixStyle]}
+                            style={[
+                              styles.currencyPrefix,
+                              styles.currencyPrefixLineBoxText,
+                              amountPrefixStyle,
+                              shortSymbolPrefixNudgeY > 0 && {
+                                transform: [{ translateY: shortSymbolPrefixNudgeY }],
+                              },
+                            ]}
                             numberOfLines={1}
                           >
                             {amountDisplaySymbol}
@@ -1864,13 +1875,13 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
-  /** iOS short-symbol row: vertically center $/€ in the same line box height as the amount TextInput. */
-  currencyPrefixIosBox: {
-    justifyContent: 'center',
+  /** Short-symbol row: same line box height as amount TextInput; flex-end biases glyph toward digit baseline. */
+  currencyPrefixLineBox: {
+    justifyContent: 'flex-end',
     alignSelf: 'center',
-    overflow: 'hidden',
+    paddingBottom: 1,
   },
-  currencyPrefixIosBoxText: {
+  currencyPrefixLineBoxText: {
     marginRight: 0,
   },
   amountAssetIconWrap: {
