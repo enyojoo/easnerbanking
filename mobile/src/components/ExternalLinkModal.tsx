@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
-import { View, StyleSheet, Modal, ActivityIndicator } from 'react-native'
+import { View, StyleSheet, Modal, ActivityIndicator, Platform, StatusBar } from 'react-native'
 import { WebView } from 'react-native-webview'
-import { colors, spacing } from '../theme'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { colors } from '../theme'
 import { IframeWebViewModalHeader } from './IframeWebViewModalHeader'
 
 interface ExternalLinkModalProps {
@@ -18,6 +19,12 @@ export default function ExternalLinkModal({
   onClose,
 }: ExternalLinkModalProps) {
   const [loading, setLoading] = useState(true)
+  const insets = useSafeAreaInsets()
+  /** Android full-screen modals often draw under the status bar; inset so header + WebView stay below it. */
+  const androidTopInset =
+    Platform.OS === 'android'
+      ? Math.max(insets.top, StatusBar.currentHeight != null ? StatusBar.currentHeight : 0)
+      : 0
 
   return (
     <Modal
@@ -26,7 +33,12 @@ export default function ExternalLinkModal({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <View style={styles.modalContainer}>
+      <View
+        style={[
+          styles.modalContainer,
+          androidTopInset > 0 ? { paddingTop: androidTopInset } : null,
+        ]}
+      >
         <IframeWebViewModalHeader onClose={onClose} title={title} />
         {loading && (
           <View style={styles.loadingContainer}>

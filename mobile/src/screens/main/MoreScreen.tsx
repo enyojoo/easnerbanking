@@ -31,6 +31,13 @@ import {
   unenrollUnverifiedTotpFactors,
 } from '../../lib/auth-mfa'
 import {
+  getMfaRefreshGeneration,
+  loadMfaVerifiedPersisted,
+  peekMfaVerified,
+  saveMfaVerified,
+  shouldListFactorsForMfaRow,
+} from '../../lib/mfaStatusCache'
+import {
   isTier1Complete,
   TIER2_COMPLETE_PLACEHOLDER,
   TIER3_COMPLETE_PLACEHOLDER,
@@ -90,26 +97,44 @@ function MoreContent({ navigation }: NavigationProps) {
   const privacyLink = useExternalLink()
   const termsLink = useExternalLink()
   const [mfaStatusLine, setMfaStatusLine] = useState('')
-  const [mfaStatusKnown, setMfaStatusKnown] = useState(false)
   const lastKycProfileRefreshRef = useRef(0)
   /** Latest profile for focus handler — avoids putting `noah_kyc_status` in `useFocusEffect` deps (would re-run MFA listFactors on every profile poll while More stays focused). */
   const userProfileRef = useRef(userProfile)
   userProfileRef.current = userProfile
 
   const refreshMfaStatus = useCallback(async () => {
+    const genAtStart = getMfaRefreshGeneration()
     const {
       data: { session },
     } = await supabase.auth.getSession()
+    if (getMfaRefreshGeneration() !== genAtStart) return
     if (!session?.user) {
       setMfaStatusLine('')
-      setMfaStatusKnown(false)
       return
     }
+    const uid = session.user.id
+
+    let cached: boolean | null = peekMfaVerified(uid)
+    if (cached === null) {
+      cached = await loadMfaVerifiedPersisted(uid)
+    }
+    if (getMfaRefreshGeneration() !== genAtStart) return
+
+    if (cached !== null) {
+      setMfaStatusLine(cached ? 'On' : 'Off')
+    } else {
+      setMfaStatusLine('Off')
+    }
+
+    if (cached !== null && !shouldListFactorsForMfaRow(uid)) {
+      return
+    }
+
     const { data, error } = await listFactorsForMfaStatus(supabase)
+    if (getMfaRefreshGeneration() !== genAtStart) return
+
     if (error) {
       console.warn('MoreScreen MFA status:', error.message)
-      setMfaStatusLine('Unable to load')
-      setMfaStatusKnown(true)
       return
     }
     const totp = totpFactorsFromListResponse(data)
@@ -117,13 +142,20 @@ function MoreContent({ navigation }: NavigationProps) {
     if (!id && totp.some((f) => f.status === 'unverified')) {
       await unenrollUnverifiedTotpFactors(supabase)
     }
-    setMfaStatusLine(id ? 'On' : 'Off')
-    setMfaStatusKnown(true)
+    if (getMfaRefreshGeneration() !== genAtStart) return
+
+    const on = Boolean(id)
+    setMfaStatusLine(on ? 'On' : 'Off')
+    await saveMfaVerified(uid, on)
   }, [])
 
   useFocusEffect(
     useCallback(() => {
       if (!user?.id) return
+      const mem = peekMfaVerified(user.id)
+      if (mem !== null) {
+        setMfaStatusLine(mem ? 'On' : 'Off')
+      }
       const up = userProfileRef.current
       const noahKycStatus =
         up?.noah_kyc_status ?? (up as { profile?: { noah_kyc_status?: string } })?.profile?.noah_kyc_status
@@ -252,9 +284,9 @@ function MoreContent({ navigation }: NavigationProps) {
   }
 
   const handleMfaRowPress = () => {
-    if (!mfaStatusKnown) return
+    if (!user?.id) return
     navigateFromMoreTab('MfaSetup', {
-      autoStartEnroll: mfaStatusLine === 'Off',
+      autoStartEnroll: mfaStatusLine !== 'On',
       mfaVerifiedOnCard: mfaStatusLine === 'On',
     })
   }
@@ -373,17 +405,13 @@ function MoreContent({ navigation }: NavigationProps) {
               {renderMenuItem(
                 'Two-Factor Authentication',
                 handleMfaRowPress,
-                !mfaStatusKnown ? (
-                  <ActivityIndicator size="small" color={colors.primary.main} />
-                ) : (
-                  <View style={mfaStatusLine === 'On' ? styles.badgeGreen : styles.badgeMuted}>
-                    <Text
-                      style={mfaStatusLine === 'On' ? styles.badgeTextGreen : styles.badgeTextMuted}
-                    >
-                      {mfaStatusLine}
-                    </Text>
-                  </View>
-                ),
+                <View style={mfaStatusLine === 'On' ? styles.badgeGreen : styles.badgeMuted}>
+                  <Text
+                    style={mfaStatusLine === 'On' ? styles.badgeTextGreen : styles.badgeTextMuted}
+                  >
+                    {mfaStatusLine === 'On' ? 'On' : 'Off'}
+                  </Text>
+                </View>,
                 false,
                 true
               )}

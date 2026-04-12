@@ -3,11 +3,38 @@ import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin
 
 type PersonalUpdateBody = {
   fullName?: string
+  /** Mobile sends split names; joined server-side if `fullName` is absent (avoids relying on a single string field). */
+  firstName?: string
+  middleName?: string
+  lastName?: string
   email?: string
   phone?: string
   dateOfBirth?: string
   /** Short HTTPS URL from Storage upload API; null clears. Stored on `users.avatar_url` only — never in JWT metadata. */
   avatarUrl?: string | null
+}
+
+function hasOwn(o: object, k: string): boolean {
+  return Object.prototype.hasOwnProperty.call(o, k)
+}
+
+/** `undefined` = do not change `full_name`; `null` = clear. Prefer split names when sent (mobile) so `full_name` still updates if a proxy strips `fullName`. */
+function resolveFullNameForUpdate(body: PersonalUpdateBody): string | null | undefined {
+  const hasParts =
+    hasOwn(body, "firstName") || hasOwn(body, "middleName") || hasOwn(body, "lastName")
+  if (hasParts) {
+    const parts = [body.firstName, body.middleName, body.lastName]
+      .map((s) => (typeof s === "string" ? s.trim() : ""))
+      .filter(Boolean)
+    return parts.length ? parts.join(" ") : null
+  }
+  if (hasOwn(body, "fullName")) {
+    const v = body.fullName
+    if (typeof v !== "string") return null
+    const t = v.trim()
+    return t.length ? t : null
+  }
+  return undefined
 }
 
 function fallbackNameFromMeta(user: { user_metadata?: Record<string, unknown> | null; email?: string | null }) {
@@ -105,8 +132,9 @@ export async function PUT(request: Request) {
     email: user.email ?? null,
   }
 
-  if ("fullName" in body) {
-    updatePayload.full_name = body.fullName?.trim() || null
+  const resolvedFullName = resolveFullNameForUpdate(body)
+  if (resolvedFullName !== undefined) {
+    updatePayload.full_name = resolvedFullName
   }
   if ("phone" in body) {
     updatePayload.phone = body.phone?.trim() || null

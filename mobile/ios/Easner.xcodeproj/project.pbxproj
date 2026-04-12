@@ -7,11 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		03E7D7D8D2C563B485CC5BC0 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C537AA292452356EECB77A8D /* PrivacyInfo.xcprivacy */; };
-		0C79A6776CBF73F768270C45 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B0F4E672F74A0D71BD128DE /* ExpoModulesProvider.swift */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		8481077E3B63BDB47B48AD85 /* libPods-Easner.a in Frameworks */ = {isa = PBXBuildFile; fileRef = EB3E52F01B74A22AA953EF33 /* libPods-Easner.a */; };
+		440F0AAFBA875E5806628E59 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = AB8B9394BA8E5F156D33309A /* PrivacyInfo.xcprivacy */; };
+		5E04DC00038A15680B5DBB29 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BA640A6EFD87C7A9D50CA40 /* ExpoModulesProvider.swift */; };
+		6E1AF2BB361CD257D7682D74 /* libPods-Easner.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFB7F1DEA3D537977E437B83 /* libPods-Easner.a */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
@@ -20,13 +20,13 @@
 		13B07F961A680F5B00A75B9A /* Easner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Easner.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = Easner/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Easner/Info.plist; sourceTree = "<group>"; };
-		893A00BEDFDE19D8D6DC708F /* Pods-Easner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Easner.debug.xcconfig"; path = "Target Support Files/Pods-Easner/Pods-Easner.debug.xcconfig"; sourceTree = "<group>"; };
-		8B0F4E672F74A0D71BD128DE /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Easner/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		226747A7ACB7071C0EF44771 /* Pods-Easner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Easner.release.xcconfig"; path = "Target Support Files/Pods-Easner/Pods-Easner.release.xcconfig"; sourceTree = "<group>"; };
+		7BA640A6EFD87C7A9D50CA40 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Easner/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = Easner/SplashScreen.storyboard; sourceTree = "<group>"; };
+		AB8B9394BA8E5F156D33309A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = Easner/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		C537AA292452356EECB77A8D /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = Easner/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		C7E0F5C48B67D7A08B0C27C3 /* Pods-Easner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Easner.release.xcconfig"; path = "Target Support Files/Pods-Easner/Pods-Easner.release.xcconfig"; sourceTree = "<group>"; };
-		EB3E52F01B74A22AA953EF33 /* libPods-Easner.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Easner.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		BFB7F1DEA3D537977E437B83 /* libPods-Easner.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Easner.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		C7B11DA897D650687FB7E2E6 /* Pods-Easner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Easner.debug.xcconfig"; path = "Target Support Files/Pods-Easner/Pods-Easner.debug.xcconfig"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Easner/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* Easner-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Easner-Bridging-Header.h"; path = "Easner/Easner-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -37,7 +37,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				8481077E3B63BDB47B48AD85 /* libPods-Easner.a in Frameworks */,
+				6E1AF2BB361CD257D7682D74 /* libPods-Easner.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -53,26 +53,36 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				C537AA292452356EECB77A8D /* PrivacyInfo.xcprivacy */,
+				AB8B9394BA8E5F156D33309A /* PrivacyInfo.xcprivacy */,
 			);
 			name = Easner;
 			sourceTree = "<group>";
 		};
-		24C03082275056C5719D9A70 /* ExpoModulesProviders */ = {
+		2583AF5185D9675F89F70D7E /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				F2CB0A8DEA0922302E7B4393 /* Easner */,
+				C7B11DA897D650687FB7E2E6 /* Pods-Easner.debug.xcconfig */,
+				226747A7ACB7071C0EF44771 /* Pods-Easner.release.xcconfig */,
 			);
-			name = ExpoModulesProviders;
+			name = Pods;
+			path = Pods;
 			sourceTree = "<group>";
 		};
 		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				EB3E52F01B74A22AA953EF33 /* libPods-Easner.a */,
+				BFB7F1DEA3D537977E437B83 /* libPods-Easner.a */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		6A02E033FEB3A229FA7C1E4B /* Easner */ = {
+			isa = PBXGroup;
+			children = (
+				7BA640A6EFD87C7A9D50CA40 /* ExpoModulesProvider.swift */,
+			);
+			name = Easner;
 			sourceTree = "<group>";
 		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
@@ -89,8 +99,8 @@
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				B033BABD80C81742CF6623E4 /* Pods */,
-				24C03082275056C5719D9A70 /* ExpoModulesProviders */,
+				2583AF5185D9675F89F70D7E /* Pods */,
+				AA1A94B24CF201B073ADC73E /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -105,14 +115,12 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		B033BABD80C81742CF6623E4 /* Pods */ = {
+		AA1A94B24CF201B073ADC73E /* ExpoModulesProviders */ = {
 			isa = PBXGroup;
 			children = (
-				893A00BEDFDE19D8D6DC708F /* Pods-Easner.debug.xcconfig */,
-				C7E0F5C48B67D7A08B0C27C3 /* Pods-Easner.release.xcconfig */,
+				6A02E033FEB3A229FA7C1E4B /* Easner */,
 			);
-			name = Pods;
-			path = Pods;
+			name = ExpoModulesProviders;
 			sourceTree = "<group>";
 		};
 		BB2F792B24A3F905000567C9 /* Supporting */ = {
@@ -124,14 +132,6 @@
 			path = Easner/Supporting;
 			sourceTree = "<group>";
 		};
-		F2CB0A8DEA0922302E7B4393 /* Easner */ = {
-			isa = PBXGroup;
-			children = (
-				8B0F4E672F74A0D71BD128DE /* ExpoModulesProvider.swift */,
-			);
-			name = Easner;
-			sourceTree = "<group>";
-		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -140,13 +140,13 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "Easner" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				407049B4F7624E4D326FCCC2 /* [Expo] Configure project */,
+				6316016B02D3EF5964AA019D /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				6087845733FE499C27077D3C /* [CP] Embed Pods Frameworks */,
+				65C00835FC6A945A56ADEEBF /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -196,7 +196,7 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				03E7D7D8D2C563B485CC5BC0 /* PrivacyInfo.xcprivacy in Resources */,
+				440F0AAFBA875E5806628E59 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -242,7 +242,7 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		407049B4F7624E4D326FCCC2 /* [Expo] Configure project */ = {
+		6316016B02D3EF5964AA019D /* [Expo] Configure project */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -266,7 +266,7 @@
 			shellPath = /bin/sh;
 			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-Easner/expo-configure-project.sh\"\n";
 		};
-		6087845733FE499C27077D3C /* [CP] Embed Pods Frameworks */ = {
+		65C00835FC6A945A56ADEEBF /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -344,7 +344,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				0C79A6776CBF73F768270C45 /* ExpoModulesProvider.swift in Sources */,
+				5E04DC00038A15680B5DBB29 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -353,7 +353,7 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 893A00BEDFDE19D8D6DC708F /* Pods-Easner.debug.xcconfig */;
+			baseConfigurationReference = C7B11DA897D650687FB7E2E6 /* Pods-Easner.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -389,7 +389,7 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = C7E0F5C48B67D7A08B0C27C3 /* Pods-Easner.release.xcconfig */;
+			baseConfigurationReference = 226747A7ACB7071C0EF44771 /* Pods-Easner.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;

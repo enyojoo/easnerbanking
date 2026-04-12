@@ -122,7 +122,12 @@ export const userService = {
 
       const body: Record<string, unknown> = {
         fullName: fullName.trim() || null,
+        firstName: updates.firstName.trim(),
+        lastName: updates.lastName.trim(),
         phone: typeof updates.phone === 'string' ? updates.phone : '',
+      }
+      if (updates.middleName != null && String(updates.middleName).trim()) {
+        body.middleName = String(updates.middleName).trim()
       }
 
       if (updates.dateOfBirth !== undefined) {

@@ -29,6 +29,7 @@ import {
   unenrollUnverifiedTotpFactors,
   type TotpFactorLike,
 } from '../../lib/auth-mfa'
+import { saveMfaVerified } from '../../lib/mfaStatusCache'
 import { colors, textStyles, borderRadius, spacing, motion } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
@@ -203,10 +204,23 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
     if (!autoStartEnroll) return
     if (!verifiedFactorId) return
     if (suppressVerifiedApiPopRef.current) return
-    enrollGenRef.current += 1
-    void unenrollUnverifiedTotpFactors(supabase)
-    allowRemoveRef.current = true
-    navigation.goBack()
+    let cancelled = false
+    void (async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (cancelled) return
+      if (session?.user?.id) await saveMfaVerified(session.user.id, true)
+      if (cancelled) return
+      enrollGenRef.current += 1
+      await unenrollUnverifiedTotpFactors(supabase)
+      if (cancelled) return
+      allowRemoveRef.current = true
+      navigation.goBack()
+    })()
+    return () => {
+      cancelled = true
+    }
   }, [autoStartEnroll, verifiedFactorId, navigation])
 
   const completeEnroll = async () => {
@@ -238,6 +252,10 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
       suppressVerifiedApiPopRef.current = true
       await loadFactors()
       resetLocal()
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (session?.user?.id) await saveMfaVerified(session.user.id, true)
       allowRemoveRef.current = true
       navigation.goBack()
     } finally {
@@ -329,6 +347,10 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
         setError(uErr.message || 'Could not disable two-factor authentication.')
         return
       }
+      const {
+        data: { session: s2 },
+      } = await supabase.auth.getSession()
+      if (s2?.user?.id) await saveMfaVerified(s2.user.id, false)
       await loadFactors()
     } finally {
       setTurnOffSubmitting(false)
@@ -376,6 +398,10 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
       }
       setShowDisableOtp(false)
       setDisableOtpCode('')
+      const {
+        data: { session: s2 },
+      } = await supabase.auth.getSession()
+      if (s2?.user?.id) await saveMfaVerified(s2.user.id, false)
       await loadFactors()
     } finally {
       setTurnOffSubmitting(false)

@@ -290,10 +290,9 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
 
   const handleSelectRecipient = async (recipient: Recipient) => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    // Navigate directly to SendAmountScreen with selected recipient
-    // Pass fromSelectRecentRecipient to enable instant transition
-    // Always push so stack stays MainTabs → hub → amount; swipe / back from amount pops hub before tabs.
-    navigation.push('SendAmount' as never, {
+    // Use navigate (not push) so re-entering amount after "Change recipient" does not stack duplicate
+    // SendAmount screens — back should be hub once, then dashboard.
+    navigation.navigate('SendAmount' as never, {
       recipient,
       fromSelectRecentRecipient: true,
       preferredBalanceCurrency: preferredBalanceCurrency === 'USD' || preferredBalanceCurrency === 'EUR'
@@ -450,7 +449,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
         resetForm()
         setShowBankAccountForm(false)
         setShowRecipientTypeModal(false)
-        navigation.push('SendAmount' as never, {
+        navigation.navigate('SendAmount' as never, {
           recipient: newRecipientData,
           fromSelectRecentRecipient: true,
           preferredBalanceCurrency: preferredBalanceCurrency === 'USD' || preferredBalanceCurrency === 'EUR'
@@ -505,7 +504,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       setShowRecipientTypeModal(false)
       
       // Navigate to SendAmountScreen with the newly added recipient
-      navigation.push('SendAmount' as never, {
+      navigation.navigate('SendAmount' as never, {
         recipient: newRecipientData,
         fromSelectRecentRecipient: true,
         preferredBalanceCurrency: preferredBalanceCurrency === 'USD' || preferredBalanceCurrency === 'EUR'
@@ -977,7 +976,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.modalScrollContent}
               nestedScrollEnabled={true}
-              scrollEnabled={!isAnyDropdownOpen}
+              // Android: disabling the parent ScrollView breaks nested dropdown lists (currency / provider / asset / network).
+              scrollEnabled={Platform.OS === 'android' ? true : !isAnyDropdownOpen}
               keyboardShouldPersistTaps="handled"
             >
               <View style={styles.modalContent}>
@@ -1767,31 +1767,32 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   searchContainer: {
-    marginBottom: spacing[3],
+    marginBottom: spacing[4],
   },
   searchWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.frame.background,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.xl,
+    paddingHorizontal: spacing[4],
+    ...Platform.select({
+      ios: { paddingVertical: spacing[3] },
+      android: { paddingVertical: spacing[2], minHeight: 44 },
+    }),
+    gap: spacing[2],
     borderWidth: 0.5,
     borderColor: colors.frame.border,
-    paddingHorizontal: spacing[3],
-    gap: spacing[2],
-    minHeight: 48,
   },
   searchInput: {
     flex: 1,
-    ...textStyles.textInputMedium,
+    ...textStyles.bodyMedium,
     color: colors.text.primary,
     fontFamily: 'Outfit-Regular',
-    paddingVertical: 0,
     ...Platform.select({
       android: {
-        textAlignVertical: 'center' as const,
+        paddingVertical: 0,
         includeFontPadding: false,
       },
-      default: {},
     }),
   },
   searchErrorText: {

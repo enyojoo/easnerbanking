@@ -19,6 +19,7 @@ import type { PersonalSettingsPayload } from '../lib/userService'
 import { ensureConsumerMobileAccess } from '../lib/validateAppSurface'
 import { hydratePayoutCorridorsFromStorage, refreshPayoutCorridors } from '../lib/payoutCorridors'
 import { readProfileSnapshot, writeProfileSnapshot } from '../lib/profileSnapshot'
+import { clearMfaVerified } from '../lib/mfaStatusCache'
 
 function patchAuthUserWithPersonal(
   prev: AuthUser,
@@ -641,6 +642,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }
 
   const signOut = async () => {
+    const mfaCacheUserId = user?.id
     try {
       console.log('AuthContext: Signing out user')
       setMfaPending(null)
@@ -678,6 +680,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setUser(null)
       setUserProfile(null)
       payoutCorridorsBootstrappedForUserRef.current = null
+    } finally {
+      await clearMfaVerified(mfaCacheUserId ?? null)
     }
   }
 

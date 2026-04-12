@@ -13,7 +13,7 @@ import {
   Platform,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { ArrowDownLeft, ArrowUpRight, Monitor } from 'lucide-react-native'
+import { ArrowDownLeft, ArrowUpRight, Monitor, Search } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -500,25 +500,25 @@ function TransactionsContent({ navigation }: NavigationProps) {
           </View>
         </Animated.View>
 
-      {/* Search Bar */}
+      {/* Search bar — match RecipientsScreen */}
       <View style={styles.searchContainer}>
-          <View style={styles.searchInputWrapper}>
-            <Ionicons name="search" size={20} color={colors.primary.main} style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          value={searchTerm}
-          onChangeText={setSearchTerm}
-          placeholder="Search by name or ID..."
-          placeholderTextColor={colors.neutral[400]}
-          returnKeyType="done"
-          onSubmitEditing={() => Keyboard.dismiss()}
-        />
-            {searchTerm.length > 0 && (
-              <Pressable android_ripple={ripple.neutral} onPress={() => setSearchTerm('')}>
-                <Ionicons name="close-circle" size={20} color={colors.primary.main} />
-              </Pressable>
-            )}
-          </View>
+        <View style={styles.searchWrapper}>
+          <Search size={18} color={colors.primary.main} strokeWidth={2} />
+          <TextInput
+            style={styles.searchInput}
+            value={searchTerm}
+            onChangeText={setSearchTerm}
+            placeholder="Search by name or ID..."
+            placeholderTextColor={colors.text.secondary}
+            returnKeyType="done"
+            onSubmitEditing={() => Keyboard.dismiss()}
+          />
+          {searchTerm.length > 0 ? (
+            <Pressable android_ripple={ripple.neutral} onPress={() => setSearchTerm('')}>
+              <Ionicons name="close-circle" size={18} color={colors.primary.main} />
+            </Pressable>
+          ) : null}
+        </View>
       </View>
 
       {/* Transactions List */}
@@ -610,33 +610,35 @@ const styles = StyleSheet.create({
     ...textStyles.headlineLarge,
     color: colors.text.primary,
   },
-  // Search
+  // Search — aligned with RecipientsScreen
   searchContainer: {
     paddingHorizontal: spacing[5],
-    paddingVertical: spacing[3],
+    marginBottom: spacing[4],
   },
-  searchInputWrapper: {
+  searchWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.frame.background,
     borderRadius: borderRadius.xl,
     paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
+    ...Platform.select({
+      ios: { paddingVertical: spacing[3] },
+      android: { paddingVertical: spacing[2], minHeight: 44 },
+    }),
+    gap: spacing[2],
     borderWidth: 0.5,
     borderColor: colors.frame.border,
   },
-  searchIcon: {
-    marginRight: spacing[2],
-  },
   searchInput: {
     flex: 1,
-    ...textStyles.textInputMedium,
+    ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontSize: 13,
-    textAlignVertical: 'center',
+    fontFamily: 'Outfit-Regular',
     ...Platform.select({
-      android: { includeFontPadding: false },
-      ios: { paddingVertical: 0 },
+      android: {
+        paddingVertical: 0,
+        includeFontPadding: false,
+      },
     }),
   },
   

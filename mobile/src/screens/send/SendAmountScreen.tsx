@@ -388,13 +388,14 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       : selectedOtherCurrency
     : selectedBalanceCurrency
   const dynamicAmountFontSize = getDynamicFontSize(sendAmount)
-  const dynamicAmountLineHeight = Math.round(dynamicAmountFontSize * 1.05)
+  const dynamicAmountLineHeight = Math.round(dynamicAmountFontSize * 1.12)
   const amountTextStyle = {
     ...textStyles.balanceDisplay,
     fontSize: dynamicAmountFontSize,
-    ...(Platform.OS === 'android'
-      ? { lineHeight: dynamicAmountLineHeight, includeFontPadding: false as const }
-      : { lineHeight: dynamicAmountLineHeight }),
+    lineHeight: dynamicAmountLineHeight,
+    includeFontPadding: false as const,
+    paddingVertical: 0,
+    marginVertical: 0,
   }
   const amountDisplayCurrency = amountEntryMode === 'receive' ? receiveCurrency : sendCurrency
   const amountDisplaySymbolRaw = getCurrencySymbol(amountDisplayCurrency)
@@ -409,14 +410,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     fontSize:
       amountDisplaySymbol.length > 2
         ? Math.max(Math.round(dynamicAmountFontSize * 0.52), 20)
-        : (amountTextStyle as { fontSize: number }).fontSize,
+        : dynamicAmountFontSize,
     lineHeight:
       amountDisplaySymbol.length > 2
         ? Math.max(Math.round(dynamicAmountLineHeight * 0.55), 22)
-        : Platform.OS === 'android'
-          ? dynamicAmountLineHeight
-          : undefined,
+        : dynamicAmountLineHeight,
   }
+  const amountRowMinHeight = Math.max(96, dynamicAmountLineHeight + 32)
 
   const showCrossCurrencyExchangeUi =
     String(sendCurrency || '').toUpperCase() !== String(receiveCurrency || '').toUpperCase()
@@ -717,7 +717,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
               {/* Amount Display - Wrapped with exchange info */}
               <View style={styles.amountSection}>
-                <View style={styles.amountInputWrapper}>
+                <View style={[styles.amountInputWrapper, { minHeight: amountRowMinHeight }]}>
                   <View style={styles.amountInputContainer}>
                     {recipient && (
                       showAmountAssetIcon ? (
@@ -763,6 +763,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       editable={!!recipient}
                       autoFocus={false}
                       showSoftInputOnFocus={false}
+                      underlineColorAndroid="transparent"
                     />
               </View>
           </View>
@@ -1814,28 +1815,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 0,
     width: '100%',
-    // Fixed height to accommodate largest font size (65px) + some padding
-    // This prevents layout shift when font size changes
-    height: 80,
-    minHeight: 80,
+    paddingVertical: spacing[1],
   },
   amountInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
-    // Ensure content is vertically centered within the fixed height
-    height: '100%',
+    maxWidth: '100%',
   },
   currencyPrefix: {
     fontSize: 50,
     fontWeight: '900',
     color: '#000000',
     fontFamily: 'Outfit-Black',
-    marginRight: 0,
+    marginRight: 2,
     includeFontPadding: false,
-    textAlignVertical: 'center',
-    // Dynamic font size will be applied inline
+    paddingVertical: 0,
+    ...Platform.select({
+      android: { textAlignVertical: 'center' as const },
+      default: {},
+    }),
   },
   amountAssetIconWrap: {
     width: 24,
@@ -1859,10 +1859,19 @@ const styles = StyleSheet.create({
     fontFamily: 'Outfit-Black',
     textAlign: 'left',
     paddingLeft: 0,
+    paddingRight: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    marginVertical: 0,
     flexShrink: 1,
-    // Allow text to scale down
+    flexGrow: 0,
+    minWidth: 48,
     includeFontPadding: false,
-    textAlignVertical: 'center',
+    ...Platform.select({
+      android: { textAlignVertical: 'center' as const },
+      ios: { paddingVertical: 0 },
+      default: {},
+    }),
   },
   amountInputDisabled: {
     color: colors.text.secondary,

@@ -1228,7 +1228,8 @@ function RecipientsContent({ navigation }: NavigationProps) {
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.modalScrollContent}
               nestedScrollEnabled={true}
-              scrollEnabled={!isAnyDropdownOpen}
+              // Android: disabling the parent ScrollView breaks nested dropdown lists (currency / provider / asset / network).
+              scrollEnabled={Platform.OS === 'android' ? true : !isAnyDropdownOpen}
               keyboardShouldPersistTaps="handled"
             >
               <View style={styles.modalContent}>
