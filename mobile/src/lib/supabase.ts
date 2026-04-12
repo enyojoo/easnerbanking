@@ -57,7 +57,8 @@ export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
     storage: ExpoSecureStoreAdapter,
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: true, // Better session detection for RLS
+    /** RN / dev client: avoid treating random deep links as auth redirects (web-only feature). */
+    detectSessionInUrl: false,
   },
   global: {
     headers: {
@@ -65,6 +66,19 @@ export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
     }
   }
 })
+
+/**
+ * Stale SecureStore/AsyncStorage after env switch, simulator reset, or revoked refresh token
+ * causes GoTrue to throw `Invalid Refresh Token`. Clear local session only (no server call).
+ */
+export async function clearInvalidPersistedAuthSession(): Promise<void> {
+  const { error } = await supabase.auth.getSession()
+  if (!error) return
+  const msg = `${error.message || ''} ${(error as { code?: string }).code || ''}`.toLowerCase()
+  if (msg.includes('refresh') || msg.includes('invalid jwt') || msg.includes('jwt expired')) {
+    await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
+  }
+}
 
 // Auth helper functions
 export const getCurrentUser = async () => {

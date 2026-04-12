@@ -57,7 +57,7 @@ module.exports = ({ config }) => {
       '')
       .replace(/\/$/, '') || ''
 
-  return {
+  const merged = {
     ...config,
     extra: {
       ...config.extra,
@@ -66,4 +66,16 @@ module.exports = ({ config }) => {
       apiUrl,
     },
   }
+
+  // When `ios/` is checked in, Xcode `PRODUCT_BUNDLE_IDENTIFIER` is the source of truth.
+  // Omitting `ios.bundleIdentifier` here avoids EAS: "Specified value ... is ignored because
+  // an ios directory was detected". Keep app.json in sync for docs; run `npx expo prebuild -p ios`
+  // after changing the bundle ID so native matches.
+  const iosDir = path.join(__dirname, 'ios')
+  if (fs.existsSync(iosDir) && merged.ios?.bundleIdentifier) {
+    const { bundleIdentifier: _bundleIdIgnored, ...iosRest } = merged.ios
+    merged.ios = iosRest
+  }
+
+  return merged
 }

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react'
 import * as Linking from 'expo-linking'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { supabase } from '../lib/supabase'
+import { supabase, clearInvalidPersistedAuthSession } from '../lib/supabase'
 import { User, AuthUser } from '../types'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 import { analytics } from '../lib/analytics'
@@ -334,6 +334,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Get initial session
     const getInitialSession = async () => {
       try {
+        await clearInvalidPersistedAuthSession()
         const {
           data: { session },
         } = await supabase.auth.getSession()

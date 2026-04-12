@@ -33,6 +33,16 @@ function linkDep(name) {
     }
   }
 
+  const destParent = path.dirname(dest)
+  try {
+    if (!fs.existsSync(destParent)) {
+      fs.mkdirSync(destParent, { recursive: true })
+    }
+  } catch (e) {
+    console.warn('[linkWorkspaceDeps] mkdir', destParent, e.message)
+    return
+  }
+
   try {
     fs.symlinkSync(src, dest)
   } catch (e) {
