@@ -1,5 +1,13 @@
+import { resolve, dirname } from "node:path"
+import { fileURLToPath } from "node:url"
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  turbopack: {
+    root: resolve(__dirname, ".."),
+  },
   transpilePackages: ["@easner/server", "@easner/shared"],
   async redirects() {
     return [
