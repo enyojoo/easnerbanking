@@ -1,4 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "cd .. && npm ci"
+  "installCommand": "cd .. && npm ci --workspace=easner-business --workspace=@easner/shared --workspace=@easner/server --include-workspace-root"
 }

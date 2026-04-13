@@ -33,7 +33,6 @@
     "test:login-pin-vectors": "node scripts/login-pin-test-vectors.mjs"
   },
   "devDependencies": {
-    "expo": "~54.0.29",
     "turbo": "^2.8.12"
   },
   "dependencies": {
