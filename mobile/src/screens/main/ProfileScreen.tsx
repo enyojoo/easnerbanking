@@ -22,13 +22,19 @@ import { useExternalLink } from '../../hooks/useExternalLink'
 import { useAuth } from '../../contexts/AuthContext'
 import { useUserData } from '../../contexts/UserDataContext'
 import { NavigationProps } from '../../types'
-import { userService, UserProfileData, UserStats } from '../../lib/userService'
+import {
+  userService,
+  UserProfileData,
+  UserStats,
+  personalFromUpdateProfileResult,
+  fetchPersonalSettings,
+} from '../../lib/userService'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { analytics } from '../../lib/analytics'
 import { supabase } from '../../lib/supabase'
 
 function ProfileContent({ navigation }: NavigationProps) {
-  const { user, userProfile, signOut, refreshUserProfile } = useAuth()
+  const { user, userProfile, signOut, refreshUserProfile, applyPersonalSettingsFromServer } = useAuth()
   const { transactions, currencies, exchangeRates } = useUserData()
   const [isEditing, setIsEditing] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -218,12 +224,11 @@ function ProfileContent({ navigation }: NavigationProps) {
 
     setLoading(true)
     try {
-      // Update profile in database
       const updatePayload: UserProfileData = {
         fullName: editProfileData.fullName.trim(),
         phone: editProfileData.phone,
       }
-      await userService.updateProfile(user.id, updatePayload)
+      const updateResult = await userService.updateProfile(user.id, updatePayload)
 
       const nextTag = (editProfileData.easetag || '').replace(/^@/, '').trim().toLowerCase()
       const prevTag = (profileData.easetag || '').replace(/^@/, '').trim().toLowerCase()
@@ -231,10 +236,25 @@ function ProfileContent({ navigation }: NavigationProps) {
         await userService.updateEasetag(nextTag)
       }
 
-      // Update local state
-      setProfileData(editProfileData)
+      let fromServer = personalFromUpdateProfileResult(updateResult)
+      if (!fromServer) {
+        fromServer = await fetchPersonalSettings(user.id)
+      }
+      if (fromServer) {
+        applyPersonalSettingsFromServer(fromServer, nextTag && nextTag !== prevTag ? { easetag: editProfileData.easetag } : undefined)
+      }
+      const updatedProfileData = fromServer
+        ? {
+            fullName: (fromServer.fullName || '').trim(),
+            email: fromServer.email || editProfileData.email,
+            phone: fromServer.phone ?? '',
+            baseCurrency: profileData.baseCurrency,
+            easetag: editProfileData.easetag,
+          }
+        : editProfileData
+      setProfileData(updatedProfileData)
+      setEditProfileData(updatedProfileData)
 
-      // Refresh user profile from auth context to get updated data
       if (refreshUserProfile) {
         await refreshUserProfile()
       }

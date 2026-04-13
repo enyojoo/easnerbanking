@@ -396,7 +396,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     includeFontPadding: false as const,
     paddingVertical: 0,
     marginVertical: 0,
-    ...(Platform.OS === 'ios' ? { fontVariant: [] as const } : {}),
   }
   const amountDisplayCurrency = amountEntryMode === 'receive' ? receiveCurrency : sendCurrency
   const amountDisplaySymbolRaw = getCurrencySymbol(amountDisplayCurrency)
@@ -410,23 +409,11 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     amountDisplaySymbol.length > 2
       ? Math.max(Math.round(dynamicAmountLineHeight * 0.55), 22)
       : dynamicAmountLineHeight
-  /**
-   * Short currency symbols ($, €): shared line box for prefix Text + amount TextInput so both
-   * platforms align the glyph row (Text vs TextInput vertical metrics differ).
-   */
-  const shortSymbolLineBoxHeight =
+  /** One Text line like Dashboard — avoids Text vs TextInput baseline mismatch for $ / € / £. */
+  const unifiedShortAmountText =
     !showAmountAssetIcon && amountDisplaySymbol.length <= 2
-      ? Math.ceil(dynamicAmountFontSize * 1.12)
-      : null
-  /** Optical nudge: symbol often sits high relative to UITextField / Android EditText digits. */
-  const shortSymbolPrefixNudgeY = shortSymbolLineBoxHeight
-    ? Math.max(1, Math.round(dynamicAmountFontSize * (Platform.OS === 'ios' ? 0.04 : 0.03)))
-    : 0
   const amountTextStyle = {
     ...amountTextBase,
-    ...(shortSymbolLineBoxHeight
-      ? { lineHeight: shortSymbolLineBoxHeight, height: shortSymbolLineBoxHeight }
-      : {}),
   }
   const amountPrefixStyle = {
     ...amountTextBase,
@@ -434,7 +421,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       amountDisplaySymbol.length > 2
         ? Math.max(Math.round(dynamicAmountFontSize * 0.52), 20)
         : dynamicAmountFontSize,
-    lineHeight: shortSymbolLineBoxHeight ?? prefixLineHeight,
+    lineHeight: prefixLineHeight,
   }
   const amountRowMinHeight = Platform.select({
     ios: Math.max(88, dynamicAmountLineHeight + 22),
@@ -742,68 +729,64 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               <View style={styles.amountSection}>
                 <View style={[styles.amountInputWrapper, { minHeight: amountRowMinHeight }]}>
                   <View style={styles.amountInputContainer}>
-                    {recipient && (
-                      showAmountAssetIcon ? (
-                        <View style={styles.amountAssetIconWrap}>
-                          <Image
-                            source={{ uri: amountAssetIconUrl! }}
-                            style={styles.amountAssetIcon}
-                            resizeMode="cover"
-                          />
-                        </View>
-                      ) : shortSymbolLineBoxHeight ? (
-                        <View
+                    {unifiedShortAmountText ? (
+                      <Text
+                        style={[
+                          styles.amountInput,
+                          amountTextStyle,
+                          styles.amountUnified,
+                          !recipient && styles.amountInputDisabled,
+                        ]}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.5}
+                        accessibilityRole="text"
+                        accessibilityLabel={`Amount ${amountDisplaySymbol}${recipient ? sendAmount : '0'}`}
+                      >
+                        {amountDisplaySymbol}
+                        {recipient ? sendAmount : '0'}
+                      </Text>
+                    ) : (
+                      <>
+                        {recipient &&
+                          (showAmountAssetIcon ? (
+                            <View style={styles.amountAssetIconWrap}>
+                              <Image
+                                source={{ uri: amountAssetIconUrl! }}
+                                style={styles.amountAssetIcon}
+                                resizeMode="cover"
+                              />
+                            </View>
+                          ) : (
+                            <Text style={[styles.currencyPrefix, amountPrefixStyle]} numberOfLines={1}>
+                              {amountDisplaySymbol}
+                            </Text>
+                          ))}
+                        <TextInput
                           style={[
-                            styles.currencyPrefixLineBox,
-                            { height: shortSymbolLineBoxHeight, marginRight: 2 },
+                            styles.amountInput,
+                            !recipient && styles.amountInputDisabled,
+                            amountTextStyle,
                           ]}
-                        >
-                          <Text
-                            style={[
-                              styles.currencyPrefix,
-                              styles.currencyPrefixLineBoxText,
-                              amountPrefixStyle,
-                              shortSymbolPrefixNudgeY > 0 && {
-                                transform: [{ translateY: shortSymbolPrefixNudgeY }],
-                              },
-                            ]}
-                            numberOfLines={1}
-                          >
-                            {amountDisplaySymbol}
-                          </Text>
-                        </View>
-                      ) : (
-                        <Text style={[styles.currencyPrefix, amountPrefixStyle]} numberOfLines={1}>
-                          {amountDisplaySymbol}
-                        </Text>
-                      )
+                          value={recipient ? sendAmount : '0'}
+                          onChangeText={(text) => {
+                            if (!recipient) return
+
+                            let cleaned = text.replace(/,/g, '').replace(/[^0-9.]/g, '')
+                            const formatted = formatAmount(cleaned)
+                            setSendAmount(formatted)
+                          }}
+                          placeholder="0"
+                          placeholderTextColor={colors.text.secondary}
+                          keyboardType="numeric"
+                          editable={!!recipient}
+                          autoFocus={false}
+                          showSoftInputOnFocus={false}
+                          underlineColorAndroid="transparent"
+                        />
+                      </>
                     )}
-              <TextInput
-                      style={[
-                        styles.amountInput, 
-                        !recipient && styles.amountInputDisabled,
-                        amountTextStyle,
-                      ]}
-                      value={recipient ? sendAmount : '0'}
-                onChangeText={(text) => {
-                        if (!recipient) return // Disabled until recipient is selected
-                        
-                        // Remove all commas and non-numeric except decimal
-                        let cleaned = text.replace(/,/g, '').replace(/[^0-9.]/g, '')
-                        
-                        // Format the cleaned value
-                        const formatted = formatAmount(cleaned)
-                        setSendAmount(formatted)
-                }}
-                placeholder="0"
-                      placeholderTextColor={colors.text.secondary}
-                keyboardType="numeric"
-                      editable={!!recipient}
-                      autoFocus={false}
-                      showSoftInputOnFocus={false}
-                      underlineColorAndroid="transparent"
-                    />
-              </View>
+                  </View>
           </View>
 
                 {/* Reserved height: keeps method + note positions stable (same-currency hides copy but not space). */}
@@ -1862,6 +1845,12 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     maxWidth: '100%',
   },
+  /** Single-line amount (short $ € £): same rendering path as dashboard balance Text. */
+  amountUnified: {
+    flexShrink: 1,
+    textAlign: 'center',
+    maxWidth: '100%',
+  },
   currencyPrefix: {
     fontSize: 50,
     fontWeight: '900',
@@ -1874,15 +1863,6 @@ const styles = StyleSheet.create({
       android: { textAlignVertical: 'center' as const },
       default: {},
     }),
-  },
-  /** Short-symbol row: same line box height as amount TextInput; flex-end biases glyph toward digit baseline. */
-  currencyPrefixLineBox: {
-    justifyContent: 'flex-end',
-    alignSelf: 'center',
-    paddingBottom: 1,
-  },
-  currencyPrefixLineBoxText: {
-    marginRight: 0,
   },
   amountAssetIconWrap: {
     width: 24,

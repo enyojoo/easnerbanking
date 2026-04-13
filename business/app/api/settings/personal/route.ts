@@ -18,18 +18,21 @@ function hasOwn(o: object, k: string): boolean {
   return Object.prototype.hasOwnProperty.call(o, k)
 }
 
-/** `undefined` = do not change `full_name`; `null` = clear. Prefer split names when sent (mobile) so `full_name` still updates if a proxy strips `fullName`. */
+/**
+ * `undefined` = do not change `full_name`; `null` = clear.
+ * Only use split first/middle/last when at least one part is a non-empty string — otherwise
+ * `{"firstName":null,"fullName":"Jane"}` would take the split branch, drop `fullName`, and clear the DB name.
+ */
 function resolveFullNameForUpdate(body: PersonalUpdateBody): string | null | undefined {
-  const hasParts =
-    hasOwn(body, "firstName") || hasOwn(body, "middleName") || hasOwn(body, "lastName")
-  if (hasParts) {
-    const parts = [body.firstName, body.middleName, body.lastName]
-      .map((s) => (typeof s === "string" ? s.trim() : ""))
-      .filter(Boolean)
-    return parts.length ? parts.join(" ") : null
+  const splitParts = [body.firstName, body.middleName, body.lastName]
+    .map((s) => (typeof s === "string" ? s.trim() : ""))
+    .filter(Boolean)
+  if (splitParts.length > 0) {
+    return splitParts.join(" ")
   }
   if (hasOwn(body, "fullName")) {
     const v = body.fullName
+    if (v === null || v === undefined) return null
     if (typeof v !== "string") return null
     const t = v.trim()
     return t.length ? t : null

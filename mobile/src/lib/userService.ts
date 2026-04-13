@@ -115,8 +115,11 @@ export const userService = {
       }
 
       const body: Record<string, unknown> = {
-        fullName: nameTrim || null,
         phone: typeof updates.phone === 'string' ? updates.phone : '',
+      }
+      /** Non-empty only: avoids `"fullName":null` JSON (server would clear `users.full_name`). Matches PUT partial semantics. */
+      if (nameTrim.length > 0) {
+        body.fullName = nameTrim
       }
 
       if (updates.dateOfBirth !== undefined) {
@@ -156,9 +159,11 @@ export const userService = {
     }
 
     const updateData: Record<string, unknown> = {
-      full_name: nameTrim || null,
       phone: updates.phone || null,
       updated_at: new Date().toISOString(),
+    }
+    if (nameTrim.length > 0) {
+      updateData.full_name = nameTrim
     }
 
     if (updates.dateOfBirth !== undefined) {
