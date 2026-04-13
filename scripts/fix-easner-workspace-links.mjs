@@ -1,3 +1,4 @@
+import { spawnSync } from "child_process"
 import fs from "fs"
 import path from "path"
 import { fileURLToPath } from "url"
@@ -49,12 +50,36 @@ for (const p of nestedTypes) {
   }
 }
 
-/** Fail fast on Vercel if hoisted deps are missing (avoids opaque Next “module not found”). */
+/**
+ * Vercel sometimes leaves root `dependencies` incomplete after `npm install` (e.g. `@supabase/ssr`
+ * missing while `@supabase/supabase-js` is present). Self-heal once so Next/webpack can resolve.
+ */
 if (process.env.VERCEL === "1") {
-  const supabaseJs = path.join(root, "node_modules", "@supabase", "supabase-js", "package.json")
-  if (!fs.existsSync(supabaseJs)) {
-    console.error("[easner] VERCEL postinstall: missing hoisted package:", supabaseJs)
-    console.error("[easner] Root package.json must list @supabase/supabase-js; run npm install at repo root.")
-    process.exit(1)
+  const rootPkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"))
+  const deps = { ...rootPkg.dependencies, ...rootPkg.devDependencies }
+  const supabasePkgs = [
+    { name: "@supabase/supabase-js", pkgJson: path.join(root, "node_modules", "@supabase", "supabase-js", "package.json") },
+    { name: "@supabase/ssr", pkgJson: path.join(root, "node_modules", "@supabase", "ssr", "package.json") },
+  ]
+  const missingSpecs = []
+  for (const { name, pkgJson } of supabasePkgs) {
+    if (!fs.existsSync(pkgJson)) {
+      const spec = deps[name]
+      if (spec) missingSpecs.push(`${name}@${spec}`)
+    }
+  }
+  if (missingSpecs.length > 0) {
+    console.warn("[easner] VERCEL postinstall: installing missing:", missingSpecs.join(" "))
+    const r = spawnSync("npm", ["install", ...missingSpecs, "--no-audit", "--no-fund"], {
+      cwd: root,
+      stdio: "inherit",
+    })
+    if (r.status !== 0) process.exit(r.status ?? 1)
+  }
+  for (const { name, pkgJson } of supabasePkgs) {
+    if (!fs.existsSync(pkgJson)) {
+      console.error("[easner] VERCEL postinstall: still missing after npm install:", name, pkgJson)
+      process.exit(1)
+    }
   }
 }

@@ -25,12 +25,31 @@ function resolveWorkspacePackageDir(packageName, workspaceDir) {
   ]
   for (const manifest of requireCandidates) {
     if (!fs.existsSync(manifest)) continue
+    const req = createRequire(manifest)
     try {
-      const req = createRequire(manifest)
       const resolved = req.resolve(`${packageName}/package.json`)
       return path.dirname(resolved)
     } catch {
-      /* try next */
+      try {
+        const entry = req.resolve(packageName)
+        let dir = path.dirname(entry)
+        for (let i = 0; i < 14; i++) {
+          const pj = path.join(dir, "package.json")
+          if (fs.existsSync(pj)) {
+            try {
+              const meta = JSON.parse(fs.readFileSync(pj, "utf8"))
+              if (meta.name === packageName) return dir
+            } catch {
+              /* invalid json */
+            }
+          }
+          const up = path.dirname(dir)
+          if (up === dir) break
+          dir = up
+        }
+      } catch {
+        /* try next manifest */
+      }
     }
   }
   throw new Error(
