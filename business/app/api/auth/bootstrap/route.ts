@@ -9,6 +9,10 @@ type BootstrapBody = {
   fullName?: string | null
 }
 
+function hasOwn(o: object, k: string): boolean {
+  return Object.prototype.hasOwnProperty.call(o, k)
+}
+
 function normalizeCountryCode(value: unknown): string | null {
   if (typeof value !== "string") return null
   const code = value.trim().toUpperCase()
@@ -88,7 +92,9 @@ export async function POST(request: Request) {
   const role: "business" | "individual" = body.role === "individual" ? "individual" : "business"
   const countryCode = normalizeCountryCode(body.countryCode)
   const country = countryNameFromCode(countryCode)
-  const name = parseName(body.fullName ?? (typeof user.user_metadata?.name === "string" ? user.user_metadata.name : null))
+  const metadataName = typeof user.user_metadata?.name === "string" ? user.user_metadata.name : null
+  const explicitFullNameProvided = hasOwn(body as object, "fullName")
+  const explicitName = parseName(explicitFullNameProvided ? body.fullName ?? null : null)
   const admin = createSupabaseAdmin()
 
   if (role === "business" && countryCode) {
@@ -103,14 +109,26 @@ export async function POST(request: Request) {
 
   const { data: userRow } = await admin
     .from("users")
-    .select("id,easner_business_id")
+    .select("id,easner_business_id,full_name")
     .eq("id", user.id)
     .maybeSingle()
+
+  /**
+   * Prevent silent name regression:
+   * - Existing user row: keep DB `full_name` unless client explicitly sent `fullName`.
+   * - Missing user row: allow explicit fullName, else seed once from auth metadata.
+   */
+  const resolvedBootstrapFullName =
+    explicitFullNameProvided
+      ? explicitName.fullName
+      : userRow?.id
+        ? (typeof userRow.full_name === "string" ? userRow.full_name : null)
+        : parseName(metadataName).fullName
 
   const baseUserPayload = {
     id: user.id,
     email: user.email ?? null,
-    full_name: name.fullName,
+    full_name: resolvedBootstrapFullName,
     updated_at: new Date().toISOString(),
   }
 
@@ -141,7 +159,7 @@ export async function POST(request: Request) {
   let businessId = userRow?.easner_business_id ?? null
 
   if (!businessId) {
-    const first = firstNameFromFullName(name.fullName)
+    const first = firstNameFromFullName(resolvedBootstrapFullName)
     const orgName = first ? possessiveBusinessName(first) : defaultOrgName(user.email, user.id)
     const orgPayloadWithCountry = {
       name: orgName,
@@ -178,7 +196,7 @@ export async function POST(request: Request) {
   const userLinkPayload = {
     id: user.id,
     email: user.email ?? null,
-    full_name: name.fullName,
+    full_name: resolvedBootstrapFullName,
     easner_business_id: businessId,
     updated_at: new Date().toISOString(),
   }
@@ -207,7 +225,7 @@ export async function POST(request: Request) {
     admin,
     businessId,
     userId: user.id,
-    fullName: name.fullName,
+    fullName: resolvedBootstrapFullName,
     email: user.email ?? null,
   })
 
