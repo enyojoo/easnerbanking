@@ -1,6 +1,16 @@
+import path from "path"
+import { fileURLToPath } from "url"
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+/** Monorepo root — workspace deps are hoisted here; Turbopack must resolve this tree on Vercel. */
+const monorepoRoot = path.join(__dirname, "..")
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: ["@easner/server"],
+  turbopack: {
+    root: monorepoRoot,
+  },
   async redirects() {
     return [
       {
