@@ -14,7 +14,10 @@
     "jsx": "react-jsx",
     "incremental": true,
     "plugins": [{ "name": "next" }],
-    "paths": { "@/*": ["./*"] }
+    "paths": {
+      "@/*": ["./*"],
+      "@supabase/supabase-js": ["../node_modules/@supabase/supabase-js"]
+    }
   },
   "include": [
     "next-env.d.ts",
