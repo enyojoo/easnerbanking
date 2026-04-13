@@ -1,5 +1,17 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": [
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "NOAH_API_BASE_URL",
+    "NOAH_API_KEY",
+    "NOAH_ONBOARDING_RETURN_URL",
+    "NOAH_BUSINESS_ONBOARDING_RETURN_URL",
+    "SENDGRID_API_KEY",
+    "SENDGRID_FROM_EMAIL",
+    "SENDGRID_FROM_NAME",
+    "EASNER_OFFICE_ORIGIN",
+    "NOAH_WEBHOOK_NOAH_ENV"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
