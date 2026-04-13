@@ -3,6 +3,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 
 let browserClient: SupabaseClient | null = null
+let serverRenderClient: SupabaseClient | null = null
 
 /**
  * Browser client with **localStorage** session (default `createClient`).
@@ -13,6 +14,23 @@ let browserClient: SupabaseClient | null = null
  * `fetchWithSession` (`Authorization: Bearer` + `credentials: "omit"`).
  */
 export function createSupabaseBrowser() {
+  // Client components are rendered once on the server during prerender.
+  // Returning a lazy server-side proxy keeps prerendering build-safe while
+  // still surfacing misuse if code tries to actually call Supabase on server.
+  if (typeof window === "undefined") {
+    if (!serverRenderClient) {
+      serverRenderClient = new Proxy(
+        {},
+        {
+          get() {
+            throw new Error("createSupabaseBrowser() cannot be used during server rendering")
+          },
+        },
+      ) as SupabaseClient
+    }
+    return serverRenderClient
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
   if (!url || !key) {
