@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -822,7 +823,14 @@ export function RecipientForm({
                   >
                     <span className="flex items-center gap-2">
                       {getTokenIconUrl(formData.walletAsset) && (
-                        <img src={getTokenIconUrl(formData.walletAsset)} alt={formData.walletAsset} className="h-[18px] w-[18px] rounded-full object-cover" />
+                        <Image
+                          src={getTokenIconUrl(formData.walletAsset)!}
+                          alt={formData.walletAsset}
+                          width={18}
+                          height={18}
+                          unoptimized
+                          className="h-[18px] w-[18px] rounded-full object-cover"
+                        />
                       )}
                       <span className={formData.walletAsset ? "" : "text-xs text-muted-foreground"}>
                         {formData.walletAsset || "Select asset"}
@@ -849,7 +857,16 @@ export function RecipientForm({
                             }}
                           >
                             <span className="flex items-center gap-2">
-                              {getTokenIconUrl(asset) && <img src={getTokenIconUrl(asset)} alt={asset} className="h-[18px] w-[18px] rounded-full object-cover" />}
+                              {getTokenIconUrl(asset) && (
+                                <Image
+                                  src={getTokenIconUrl(asset)!}
+                                  alt={asset}
+                                  width={18}
+                                  height={18}
+                                  unoptimized
+                                  className="h-[18px] w-[18px] rounded-full object-cover"
+                                />
+                              )}
                               {asset}
                             </span>
                           </CommandItem>
@@ -872,7 +889,14 @@ export function RecipientForm({
                   >
                     <span className="flex items-center gap-2">
                       {getNetworkIconUrl(formData.walletNetwork) && (
-                        <img src={getNetworkIconUrl(formData.walletNetwork)} alt={formData.walletNetwork} className="h-[18px] w-[18px] rounded-full object-cover" />
+                        <Image
+                          src={getNetworkIconUrl(formData.walletNetwork)!}
+                          alt={formData.walletNetwork}
+                          width={18}
+                          height={18}
+                          unoptimized
+                          className="h-[18px] w-[18px] rounded-full object-cover"
+                        />
                       )}
                       <span className={formData.walletNetwork ? "" : "text-xs text-muted-foreground"}>
                         {formData.walletNetwork || "Select network"}
@@ -897,7 +921,16 @@ export function RecipientForm({
                             }}
                           >
                             <span className="flex items-center gap-2">
-                              {getNetworkIconUrl(network) && <img src={getNetworkIconUrl(network)} alt={network} className="h-[18px] w-[18px] rounded-full object-cover" />}
+                              {getNetworkIconUrl(network) && (
+                                <Image
+                                  src={getNetworkIconUrl(network)!}
+                                  alt={network}
+                                  width={18}
+                                  height={18}
+                                  unoptimized
+                                  className="h-[18px] w-[18px] rounded-full object-cover"
+                                />
+                              )}
                               {network}
                             </span>
                           </CommandItem>

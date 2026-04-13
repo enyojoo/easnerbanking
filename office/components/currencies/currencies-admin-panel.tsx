@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -122,11 +123,13 @@ export function CurrenciesAdminPanel() {
                         const src = tokenIcons[code]
                         if (src) {
                           return (
-                            <img
+                            <Image
                               src={src}
                               alt=""
-                              className="h-[22px] w-[22px] rounded object-cover shrink-0"
-                              loading="lazy"
+                              width={22}
+                              height={22}
+                              unoptimized
+                              className="h-[22px] w-[22px] shrink-0 rounded object-cover"
                             />
                           )
                         }

@@ -1,3 +1,4 @@
+import Image from "next/image"
 import Link from "next/link"
 import { BRAND } from "./brand-constants"
 
@@ -17,10 +18,13 @@ const sizeClasses = {
 
 export function BusinessLogo({ size = "md", href = "/", className = "" }: BusinessLogoProps) {
   const img = (
-    <img
+    <Image
       src={BRAND.logoBusiness}
       alt="Easner Business"
-      className={`w-auto object-contain ${sizeClasses[size]} ${className}`}
+      width={200}
+      height={40}
+      unoptimized
+      className={`h-auto w-auto object-contain ${sizeClasses[size]} ${className}`}
     />
   )
 

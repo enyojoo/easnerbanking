@@ -21,7 +21,13 @@ const nextConfig = {
   compress: true,
   images: {
     unoptimized: true,
-    formats: ['image/webp', 'image/avif'],
+    formats: ["image/webp", "image/avif"],
+    remotePatterns: [
+      { protocol: "https", hostname: "seeqjiebmrnolcyydewj.supabase.co", pathname: "/**" },
+      { protocol: "https", hostname: "*.supabase.co", pathname: "/**" },
+      { protocol: "https", hostname: "raw.githubusercontent.com", pathname: "/**" },
+      { protocol: "https", hostname: "logo.svgcdn.com", pathname: "/**" },
+    ],
   },
   reactStrictMode: true,
   experimental: {

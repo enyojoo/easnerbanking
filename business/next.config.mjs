@@ -29,6 +29,13 @@ const nextConfig = {
   },
   images: {
     unoptimized: true,
+    remotePatterns: [
+      { protocol: "https", hostname: "seeqjiebmrnolcyydewj.supabase.co", pathname: "/**" },
+      { protocol: "https", hostname: "*.supabase.co", pathname: "/**" },
+      { protocol: "https", hostname: "raw.githubusercontent.com", pathname: "/**" },
+      { protocol: "https", hostname: "logo.svgcdn.com", pathname: "/**" },
+      { protocol: "https", hostname: "assets.coingecko.com", pathname: "/**" },
+    ],
   },
   serverExternalPackages: ["@react-pdf/renderer"],
 }

@@ -37,9 +37,12 @@ export function PinEntryBlock({
   const pinRef = useRef(pin)
   const disabledRef = useRef(!!disabled)
   const onChangePinRef = useRef(onChangePin)
-  pinRef.current = pin
-  disabledRef.current = !!disabled
-  onChangePinRef.current = onChangePin
+
+  useEffect(() => {
+    pinRef.current = pin
+    disabledRef.current = !!disabled
+    onChangePinRef.current = onChangePin
+  }, [pin, disabled, onChangePin])
 
   const onDigit = (d: string) => {
     if (disabled || pin.length >= 4) return

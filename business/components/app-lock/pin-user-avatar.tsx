@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 
@@ -30,10 +31,12 @@ export function PinUserAvatar({
       )}
     >
       {showImage ? (
-        <img
+        <Image
           src={trimmed}
           alt=""
-          className="h-full w-full object-cover"
+          fill
+          unoptimized
+          className="object-cover"
           onError={() => setImgFailed(true)}
         />
       ) : (

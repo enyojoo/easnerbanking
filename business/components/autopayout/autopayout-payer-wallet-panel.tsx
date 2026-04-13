@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -314,7 +315,14 @@ export function AutopayoutPayerWalletPanel({
                   <Button variant="outline" className="h-12 w-full justify-between" type="button">
                     <span className="flex items-center gap-2">
                       {tokenIcon ?
-                        <img src={tokenIcon} alt="" className="h-[18px] w-[18px] rounded-full object-cover" />
+                        <Image
+                          src={tokenIcon}
+                          alt=""
+                          width={18}
+                          height={18}
+                          unoptimized
+                          className="h-[18px] w-[18px] rounded-full object-cover"
+                        />
                       : null}
                       <span className={selectedAsset ? "" : "text-xs text-muted-foreground"}>
                         {selectedAsset || "Select asset"}
@@ -342,9 +350,12 @@ export function AutopayoutPayerWalletPanel({
                           >
                             <span className="flex items-center gap-2">
                               {getTokenIconUrl(tokenIconSymbol(asset)) ?
-                                <img
-                                  src={getTokenIconUrl(tokenIconSymbol(asset))}
+                                <Image
+                                  src={getTokenIconUrl(tokenIconSymbol(asset))!}
                                   alt=""
+                                  width={18}
+                                  height={18}
+                                  unoptimized
                                   className="h-[18px] w-[18px] rounded-full object-cover"
                                 />
                               : null}
@@ -367,9 +378,12 @@ export function AutopayoutPayerWalletPanel({
                       {selectedPair ?
                         <>
                           {getNetworkIconUrl(selectedPair.network) ?
-                            <img
+                            <Image
                               src={getNetworkIconUrl(selectedPair.network)!}
                               alt=""
+                              width={18}
+                              height={18}
+                              unoptimized
                               className="h-[18px] w-[18px] shrink-0 rounded-full object-cover"
                             />
                           : null}
@@ -399,9 +413,12 @@ export function AutopayoutPayerWalletPanel({
                             >
                               <span className="flex items-center gap-2">
                                 {getNetworkIconUrl(net) ?
-                                  <img
+                                  <Image
                                     src={getNetworkIconUrl(net)!}
                                     alt=""
+                                    width={18}
+                                    height={18}
+                                    unoptimized
                                     className="h-[18px] w-[18px] rounded-full object-cover"
                                   />
                                 : null}

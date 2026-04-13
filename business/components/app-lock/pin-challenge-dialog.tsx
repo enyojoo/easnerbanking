@@ -38,7 +38,10 @@ export function PinChallengeDialog({
   const [shake, setShake] = useState(false)
   /** Re-read lockout from storage while dialog is open (countdown). */
   const [lockTick, setLockTick] = useState(0)
-  const lock = useMemo(() => getLockoutState(userId), [userId, lockTick])
+  const lock = useMemo(() => {
+    void lockTick
+    return getLockoutState(userId)
+  }, [userId, lockTick])
   const lastTryRef = useRef<string>("")
 
   useEffect(() => {

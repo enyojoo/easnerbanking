@@ -1,6 +1,7 @@
 "use client"
 
 import { Suspense, useEffect, useMemo, useState, useCallback, type ReactNode } from "react"
+import Image from "next/image"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layout"
@@ -292,7 +293,14 @@ function BusinessesPageInner() {
                         </TableCell>
                         <TableCell>
                           {o.logo_url ? (
-                            <img src={o.logo_url} alt="" className="h-8 w-8 rounded object-cover border" />
+                            <Image
+                              src={o.logo_url}
+                              alt=""
+                              width={32}
+                              height={32}
+                              unoptimized
+                              className="h-8 w-8 rounded border object-cover"
+                            />
                           ) : (
                             "—"
                           )}
@@ -335,10 +343,13 @@ function BusinessesPageInner() {
                     <div className="space-y-2">
                       <div className="flex items-start gap-3 text-sm">
                         {selectedBusiness.logo_url ? (
-                          <img
+                          <Image
                             src={selectedBusiness.logo_url}
                             alt=""
-                            className="h-12 w-12 shrink-0 rounded object-cover border"
+                            width={48}
+                            height={48}
+                            unoptimized
+                            className="h-12 w-12 shrink-0 rounded border object-cover"
                           />
                         ) : (
                           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded border bg-muted text-xs text-muted-foreground">

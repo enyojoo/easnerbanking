@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import Image from "next/image"
 import Link from "next/link"
 import { AppLockProvider } from "@/components/app-lock/app-lock-provider"
 import { BRAND } from "@/components/brand/brand-constants"
@@ -47,9 +48,12 @@ export function PayShell({ children }: { children: React.ReactNode }) {
                   rel="noopener noreferrer"
                   className="inline-flex items-center"
                 >
-                  <img
+                  <Image
                     src={BRAND.logoBusiness}
                     alt="Easner Business"
+                    width={180}
+                    height={32}
+                    unoptimized
                     className="h-5 w-auto object-contain sm:h-6"
                   />
                 </a>

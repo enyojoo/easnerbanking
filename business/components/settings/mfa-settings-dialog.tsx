@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
 import { Check, Copy, Loader2, Smartphone } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -358,10 +359,7 @@ export function MfaSettingsDialog({
             <form onSubmit={(e) => void completeEnroll(e)} className="space-y-4 py-2">
               <div className="flex justify-center rounded-md border bg-white p-3">
                 {qrDataUrl ? (
-                  <>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={qrDataUrl} alt="" width={192} height={192} className="h-48 w-48" />
-                  </>
+                  <Image src={qrDataUrl} alt="" width={192} height={192} unoptimized className="h-48 w-48" />
                 ) : (
                   <Skeleton className="h-48 w-48 shrink-0" aria-hidden />
                 )}

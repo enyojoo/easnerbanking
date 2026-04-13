@@ -115,7 +115,7 @@ export default function InvoicesPage() {
     }
 
     return filtered
-  }, [invoices, activeTab, searchTerm, activeInvoices, archivedInvoices])
+  }, [activeTab, searchTerm, activeInvoices, archivedInvoices])
 
   const handleEdit = (invoice: Invoice, e: React.MouseEvent) => {
     e.stopPropagation()

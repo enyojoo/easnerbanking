@@ -1,3 +1,4 @@
+/* eslint-disable jsx-a11y/alt-text -- @react-pdf/renderer Image is not an HTML img */
 import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/renderer"
 import { PDF_LOGO_DATA_URL } from "@/lib/pdf-logo-base64"
 import { businessInfo } from "@/lib/business-info"
