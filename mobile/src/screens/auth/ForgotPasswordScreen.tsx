@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../../lib/supabase'
+import { getApiBaseUrl } from '../../lib/apiClient'
 import { NavigationProps } from '../../types'
 import { analytics } from '../../lib/analytics'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
@@ -147,7 +148,7 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
     setError('')
 
     try {
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'https://app.easner.com'
+      const apiUrl = getApiBaseUrl()
       const response = await fetch(`${apiUrl}/api/auth/verify-reset-otp`, {
         method: 'POST',
         headers: {

@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { getApiBaseUrl } from './apiClient'
 import { noahService } from './noahService'
 import { mapNoahDetailToTransactionData } from './noahUserDataHelpers'
 import type { TransactionData } from '../types'
@@ -67,7 +68,7 @@ export const transactionService = {
     // Send initial pending status email via API (non-blocking)
     try {
       console.log('Sending initial pending email for transaction:', data.transaction_id)
-      const baseUrl = process.env.EXPO_PUBLIC_API_URL || 'https://app.easner.com'
+      const baseUrl = getApiBaseUrl()
       const headers = await emailNotificationHeaders()
       // Use fetch to call the email API endpoint
       fetch(`${baseUrl}/api/send-email-notification`, {
@@ -95,7 +96,7 @@ export const transactionService = {
     // Send admin notification email via API (non-blocking)
     try {
       console.log('Sending admin notification for new transaction:', data.transaction_id)
-      const baseUrl = process.env.EXPO_PUBLIC_API_URL || 'https://app.easner.com'
+      const baseUrl = getApiBaseUrl()
       const headers = await emailNotificationHeaders()
       // Use fetch to call the admin notification API endpoint
       fetch(`${baseUrl}/api/send-email-notification`, {
@@ -203,7 +204,7 @@ export const transactionService = {
     // Send status update email via API (non-blocking)
     try {
       console.log('Sending status update email for transaction:', transactionId, 'status:', status)
-      const baseUrl = process.env.EXPO_PUBLIC_API_URL || 'https://app.easner.com'
+      const baseUrl = getApiBaseUrl()
       const headers = await emailNotificationHeaders()
       // Use fetch to call the email API endpoint
       fetch(`${baseUrl}/api/send-email-notification`, {

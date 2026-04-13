@@ -12,13 +12,9 @@ async function requireAuthSession(): Promise<Session> {
   return session
 }
 
-/** Next.js business app (`next dev` → :3000). Must match EXPO_PUBLIC_API_URL / app.config extra. */
+/** Next.js business app — same origin as {@link getApiBaseUrl}. */
 function apiUrl(): string {
-  return (
-    getApiBaseUrl() ||
-    process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, '') ||
-    (__DEV__ ? 'http://localhost:3000' : '')
-  )
+  return getApiBaseUrl()
 }
 
 /** One sync at a time (consumer hook + Account Verification + intervals share this client). */

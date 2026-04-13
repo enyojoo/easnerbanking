@@ -12,6 +12,7 @@ import ScreenWrapper from '../../components/ScreenWrapper'
 import { ripple } from '../../lib/androidRipple'
 import { NavigationProps } from '../../types'
 import { useAuth } from '../../contexts/AuthContext'
+import { apiGet } from '../../lib/apiClient'
 import { Ionicons } from '@expo/vector-icons'
 
 interface ReceiveTransaction {
@@ -54,8 +55,7 @@ function ReceiveTransactionDetailsContent({ navigation, route }: NavigationProps
   const loadTransaction = async () => {
     try {
       setLoading(true)
-      const apiBase = process.env.EXPO_PUBLIC_API_URL || ''
-      const response = await fetch(`${apiBase}/api/crypto/receive/${transactionId}`)
+      const response = await apiGet(`/api/crypto/receive/${transactionId}`)
       if (response.ok) {
         const data = await response.json()
         setTransaction(data.transaction)

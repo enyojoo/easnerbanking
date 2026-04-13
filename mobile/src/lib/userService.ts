@@ -69,7 +69,6 @@ export function personalFromUpdateProfileResult(result: unknown): PersonalSettin
 /** GET `/api/settings/personal` — same `personal` shape as PUT response (for save fallback). */
 export async function fetchPersonalSettings(userId: string): Promise<PersonalSettingsPayload | null> {
   const apiBase = getApiBaseUrl()
-  if (!apiBase) return null
   await supabase.auth.refreshSession().catch(() => undefined)
   const {
     data: { session },
@@ -92,8 +91,7 @@ export async function fetchPersonalSettings(userId: string): Promise<PersonalSet
 
 export const userService = {
   /**
-   * Persist profile fields. Prefer `PUT /api/settings/personal` (same as business web, service-role upsert)
-   * because direct `supabase.from('users').update()` often fails under RLS.
+   * Persist profile fields via `PUT /api/settings/personal` (same as business web, service-role upsert).
    */
   async updateProfile(
     userId: string,
@@ -102,89 +100,64 @@ export const userService = {
     const nameTrim = String(updates.fullName ?? '').trim()
 
     const apiBase = getApiBaseUrl()
-    if (apiBase) {
-      await supabase.auth.refreshSession().catch(() => undefined)
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      if (!session?.access_token) {
-        throw new Error('Not authenticated')
-      }
-      if (session.user.id !== userId) {
-        throw new Error('Session does not match user')
-      }
-
-      const body: Record<string, unknown> = {
-        phone: typeof updates.phone === 'string' ? updates.phone : '',
-      }
-      /** Non-empty only: avoids `"fullName":null` JSON (server would clear `users.full_name`). Matches PUT partial semantics. */
-      if (nameTrim.length > 0) {
-        body.fullName = nameTrim
-      }
-
-      if (updates.dateOfBirth !== undefined) {
-        body.dateOfBirth = updates.dateOfBirth || null
-      }
-
-      if (updates.avatarUrl !== undefined) {
-        const v = updates.avatarUrl
-        body.avatarUrl =
-          v === null || v === '' ? null : typeof v === 'string' ? v.trim() || null : null
-      }
-
-      const res = await fetch(`${apiBase}/api/settings/personal`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify(body),
-      })
-
-      const text = await res.text()
-      let json: { error?: string; personal?: unknown } = {}
-      try {
-        json = text ? (JSON.parse(text) as { error?: string; personal?: unknown }) : {}
-      } catch {
-        json = {}
-      }
-      if (!res.ok) {
-        const detail =
-          typeof json.error === 'string' && json.error.trim()
-            ? json.error
-            : text?.trim()?.slice(0, 200)
-        throw new Error(detail || `Failed to update profile (${res.status})`)
-      }
-      return json
+    await supabase.auth.refreshSession().catch(() => undefined)
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    if (!session?.access_token) {
+      throw new Error('Not authenticated')
+    }
+    if (session.user.id !== userId) {
+      throw new Error('Session does not match user')
     }
 
-    const updateData: Record<string, unknown> = {
-      phone: updates.phone || null,
-      updated_at: new Date().toISOString(),
+    const body: Record<string, unknown> = {
+      phone: typeof updates.phone === 'string' ? updates.phone : '',
     }
+    /** Non-empty only: avoids `"fullName":null` JSON (server would clear `users.full_name`). Matches PUT partial semantics. */
     if (nameTrim.length > 0) {
-      updateData.full_name = nameTrim
+      body.fullName = nameTrim
     }
 
     if (updates.dateOfBirth !== undefined) {
-      updateData.date_of_birth = updates.dateOfBirth || null
+      body.dateOfBirth = updates.dateOfBirth || null
     }
 
     if (updates.avatarUrl !== undefined) {
       const v = updates.avatarUrl
-      updateData.avatar_url =
+      body.avatarUrl =
         v === null || v === '' ? null : typeof v === 'string' ? v.trim() || null : null
     }
 
-    const { data, error } = await supabase
-      .from('users')
-      .update(updateData)
-      .eq('id', userId)
-      .select()
-      .single()
+    const res = await fetch(`${apiBase}/api/settings/personal`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify(body),
+    })
 
-    if (error) throw error
-    return data
+    const text = await res.text()
+    let json: { error?: string; personal?: unknown } = {}
+    try {
+      json = text ? (JSON.parse(text) as { error?: string; personal?: unknown }) : {}
+    } catch {
+      json = {}
+    }
+    if (!res.ok) {
+      const detail =
+        typeof json.error === 'string' && json.error.trim()
+          ? json.error
+          : text?.trim()?.slice(0, 200)
+      throw new Error(detail || `Failed to update profile (${res.status})`)
+    }
+    /**
+     * Server updates `user_metadata.name` via admin API; refresh JWT before any code runs
+     * `ensureBusinessAppUserBootstrap` (stale metadata would re-send the old name to `/api/auth/bootstrap`).
+     */
+    await supabase.auth.refreshSession().catch(() => undefined)
+    return json
   },
 
   /** Persist Easetag via business BFF (`PUT /api/username`) for validation + global uniqueness. */

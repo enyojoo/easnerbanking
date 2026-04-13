@@ -1,7 +1,7 @@
 // Email notification types and interfaces
 
 export interface EmailTemplate {
-  subject: string
+  subject: string | ((data: any) => string)
   html: (data: any) => string
   text: (data: any) => string
 }

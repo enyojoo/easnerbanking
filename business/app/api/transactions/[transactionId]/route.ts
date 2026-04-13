@@ -69,7 +69,8 @@ export async function GET(request: Request, routeCtx: Props) {
     return NextResponse.json({ error: "Missing transaction id" }, { status: 400 })
   }
 
-  const scopeRes = await resolveLedgerListScope(request, user.id)
+  const userId = user.id
+  const scopeRes = await resolveLedgerListScope(request, userId)
   if (!scopeRes.ok) return scopeRes.response
   const { scope, businessId } = scopeRes
 
@@ -84,7 +85,7 @@ export async function GET(request: Request, routeCtx: Props) {
     if (scope === "business") {
       q = q.eq("business_id", businessId as string)
     } else {
-      q = q.eq("user_id", user.id).is("business_id", null)
+      q = q.eq("user_id", userId).is("business_id", null)
     }
     return q.maybeSingle()
   }

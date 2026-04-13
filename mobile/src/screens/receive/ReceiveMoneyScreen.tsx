@@ -368,7 +368,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
             
             let walletsResponse: Response
             try {
-              walletsResponse = await fetch(`${getApiBaseUrl() || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/api/noah/wallets`, {
+              walletsResponse = await fetch(`${getApiBaseUrl()}/api/noah/wallets`, {
                 headers: {
                   'Authorization': `Bearer ${session?.access_token}`,
                 },
@@ -748,7 +748,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
             accountCreationTriggeredRef.current = true
             console.log('[RECEIVE-MONEY] KYC approved but accounts missing, triggering create-accounts provisioning...')
             try {
-              const syncResponse = await fetch(`${getApiBaseUrl() || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/api/noah/create-accounts`, {
+              const syncResponse = await fetch(`${getApiBaseUrl()}/api/noah/create-accounts`, {
                 method: 'POST',
                 headers: {
                   'Authorization': `Bearer ${session.access_token}`,
@@ -987,7 +987,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
       
       let response: Response
       try {
-        response = await fetch(`${getApiBaseUrl() || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/api/noah/create-accounts`, {
+        response = await fetch(`${getApiBaseUrl()}/api/noah/create-accounts`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${session.access_token}`,
@@ -1052,7 +1052,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
 
                   // Refresh wallet
                   try {
-                    const walletsResponse = await fetch(`${getApiBaseUrl() || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/api/noah/wallets`, {
+                    const walletsResponse = await fetch(`${getApiBaseUrl()}/api/noah/wallets`, {
                       headers: {
                         'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
                       },

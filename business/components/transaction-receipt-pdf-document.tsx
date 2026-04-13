@@ -7,6 +7,8 @@ import {
   View,
   Image,
   StyleSheet,
+  type TextProps,
+  type ViewProps,
 } from "@react-pdf/renderer"
 import type { Transaction } from "@/lib/finance-types"
 import { formatCurrency } from "@/lib/utils"
@@ -174,19 +176,21 @@ function TableRow({
 }: {
   label: string
   value: string
-  valueStyle?: object
+  valueStyle?: TextProps["style"]
   isFirst?: boolean
   isLast?: boolean
-  rowStyle?: object
+  rowStyle?: ViewProps["style"]
 }) {
   return (
     <View
-      style={[
-        isLast ? styles.tableRowLast : styles.tableRow,
-        isFirst && styles.tableRowFirst,
-        isLast && styles.tableRowLastRounded,
-        rowStyle,
-      ]}
+      style={
+        [
+          isLast ? styles.tableRowLast : styles.tableRow,
+          ...(isFirst ? [styles.tableRowFirst] : []),
+          ...(isLast ? [styles.tableRowLastRounded] : []),
+          ...(rowStyle ? [rowStyle] : []),
+        ] as ViewProps["style"]
+      }
     >
       <Text style={styles.tableCell}>{label}</Text>
       <Text style={valueStyle ?? styles.tableCellValue}>{value}</Text>
@@ -211,7 +215,7 @@ export function TransactionReceiptPDFDocument({
     (transaction.direction === "credit" ? "+" : "-") +
     formatCurrency(Math.abs(transaction.amount), "USD")
 
-  const rows: { label: string; value: string; valueStyle?: object }[] = [
+  const rows: { label: string; value: string; valueStyle?: TextProps["style"] }[] = [
     { label: "Merchant", value: transaction.description },
     { label: "Transaction ID", value: transaction.id },
     { label: "Type", value: transaction.type.toUpperCase() },

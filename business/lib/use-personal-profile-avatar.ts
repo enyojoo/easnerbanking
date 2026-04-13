@@ -26,7 +26,9 @@ export function usePersonalProfileAvatar() {
 
     void personalSettingsStore.initialize(user.id)
 
-    return unsub
+    return () => {
+      unsub()
+    }
   }, [user?.id])
 
   return { avatarUrl }

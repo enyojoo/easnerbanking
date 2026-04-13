@@ -1084,7 +1084,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 // Use Bridge transfer API to send from wallet to external bank account
                 try {
                   // Get user's Bridge wallet
-                  const walletsResponse = await fetch(`${getApiBaseUrl() || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/api/noah/wallets`, {
+                  const walletsResponse = await fetch(`${getApiBaseUrl()}/api/noah/wallets`, {
                     headers: {
                       'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
                     },

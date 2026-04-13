@@ -147,6 +147,8 @@ function ProfileEditContent({ navigation }: NavigationProps) {
         dateOfBirth: editProfileData.dateOfBirth,
         avatarUrl: editProfileData.avatarUrl,
       })
+      /** `updateProfile` refreshes JWT after API save; keep an extra refresh before hub refetch for older binaries. */
+      await supabase.auth.refreshSession().catch(() => undefined)
 
       const nextTag = editProfileData.easetag.replace(/^@/, '').trim().toLowerCase()
       const prevTag = (profileData.easetag || '').replace(/^@/, '').trim().toLowerCase()
@@ -199,8 +201,6 @@ function ProfileEditContent({ navigation }: NavigationProps) {
       if (refreshUserProfile) {
         await refreshUserProfile()
       }
-      /** JWT `user_metadata.name` is updated server-side; refresh so bootstrap / session consumers match `users.full_name`. */
-      await supabase.auth.refreshSession().catch(() => undefined)
 
       setIsEditing(false)
       setShowDatePicker(false)

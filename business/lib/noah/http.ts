@@ -70,7 +70,7 @@ export async function noahFetch<T>(opts: NoahFetchOptions): Promise<T> {
   const res = await fetch(fullUrl, {
     method: opts.method,
     headers,
-    body: bodyBuf,
+    body: bodyBuf !== undefined ? new Uint8Array(bodyBuf) : undefined,
   })
 
   const text = await res.text()

@@ -77,11 +77,6 @@ export async function getAllowedCountriesCached(surface: JurisdictionSurface): P
 
   const promise = (async (): Promise<AllowedCountriesPayload> => {
     const base = getApiBaseUrl()
-    if (!base) {
-      const fb = unrestrictedFallback(surface)
-      memory[surface] = fb
-      return fb
-    }
 
     try {
       const res = await fetch(`${base}/api/business/allowed-countries?surface=${encodeURIComponent(surface)}`)

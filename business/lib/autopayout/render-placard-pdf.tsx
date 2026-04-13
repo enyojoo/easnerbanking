@@ -176,7 +176,7 @@ function AutopayPlacardPdfDocument(props: PlacardPdfDocProps) {
           Scan the QR with your wallet on {props.networkDisplay}
         </Text>
         <View style={styles.qrWrap}>
-          <Image src={props.qrDataUrl} style={styles.qr} alt="" />
+          <Image src={props.qrDataUrl} style={styles.qr} />
         </View>
         <Text style={styles.addrLabel}>WALLET ADDRESS</Text>
         {lines.map((line, i) => (
@@ -193,7 +193,7 @@ function AutopayPlacardPdfDocument(props: PlacardPdfDocProps) {
         <View style={styles.footerRule}>
           <View>
             <Text style={styles.poweredLabel}>POWERED BY</Text>
-            <Image src={props.logoUrl} style={styles.logo} alt="" />
+            <Image src={props.logoUrl} style={styles.logo} />
           </View>
           <View style={styles.footerRight}>
             <Text style={styles.want}>Want one of these?</Text>

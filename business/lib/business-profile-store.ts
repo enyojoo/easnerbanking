@@ -112,6 +112,8 @@ class BusinessProfileStore {
           })
           .catch((err) => {
             console.error("Business profile background refresh failed:", err)
+            if (this.data) return this.data
+            throw err
           })
           .finally(() => {
             this.loadingPromise = null

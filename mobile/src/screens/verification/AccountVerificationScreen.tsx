@@ -981,7 +981,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     // Replace /verify with /widget and add iframe-origin parameter
     const widgetUrl = link.replace('/verify', '/widget')
     // Use the API base URL as the origin (for React Native, we use the API URL)
-    const origin = getApiBaseUrl() || process.env.EXPO_PUBLIC_API_URL || 'https://app.easner.com'
+    const origin = getApiBaseUrl()
     // Check if URL already has query parameters
     const separator = widgetUrl.includes('?') ? '&' : '?'
     return `${widgetUrl}${separator}iframe-origin=${encodeURIComponent(origin)}`

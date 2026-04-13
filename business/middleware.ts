@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
+import { maybeRedirectApiHostToBusiness } from "@/lib/api-subdomain-redirect"
 import { applyCorsHeaders, corsPreflightResponse, getCorsAllowedOrigins } from "@/lib/cors"
 
 function getClientIp(request: NextRequest): string {
@@ -12,6 +13,10 @@ function getClientIp(request: NextRequest): string {
 
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
+
+  /** `api.*` domain: only `/api/*` is meant for clients; send browsers to the business web origin. */
+  const apiHostRedirect = maybeRedirectApiHostToBusiness(request)
+  if (apiHostRedirect) return apiHostRedirect
 
   // Browser calls from Easner Office (different origin) need CORS on API responses.
   if (pathname.startsWith("/api/")) {
@@ -38,5 +43,8 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/invoices/:path*", "/settings", "/settings/:path*", "/api/:path*"],
+  matcher: [
+    "/",
+    "/((?!_next/static|_next/image|favicon.ico).*)",
+  ],
 }

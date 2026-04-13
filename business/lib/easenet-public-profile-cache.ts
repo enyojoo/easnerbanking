@@ -64,10 +64,13 @@ function removeFromSessionStorage(tag: string): void {
 export function readEasenetPublicProfileCache(rawTag: string): CachedEasenetPublicProfile | null {
   const tag = normalizeEasetag(String(rawTag || "").trim())
   if (!tag) return null
-  let e = store.get(tag)
+  let e: StoredEntry | undefined = store.get(tag)
   if (!e) {
-    e = readFromSessionStorage(tag)
-    if (e) store.set(tag, e)
+    const fromStorage = readFromSessionStorage(tag)
+    if (fromStorage) {
+      e = fromStorage
+      store.set(tag, e)
+    }
   }
   if (!e) return null
   if (Date.now() - e.storedAt > TTL_MS) {

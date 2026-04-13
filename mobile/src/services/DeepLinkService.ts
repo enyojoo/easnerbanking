@@ -1,5 +1,5 @@
 import * as Linking from 'expo-linking'
-import { Alert } from 'react-native'
+import { getApiBaseUrl } from '../lib/apiClient'
 
 export interface DeepLinkData {
   screen: string
@@ -130,7 +130,7 @@ export class DeepLinkService {
    */
   createDeepLink(screen: string, params: Record<string, string> = {}): string {
     try {
-      const baseUrl = process.env.EXPO_PUBLIC_API_URL || 'https://app.easner.com'
+      const baseUrl = getApiBaseUrl()
       
       const screenMap: Record<string, string> = {
         'Dashboard': '/user/dashboard',
@@ -152,7 +152,7 @@ export class DeepLinkService {
       return `${baseUrl}${path}`
     } catch (error) {
       console.error('DeepLinkService: Error creating deep link:', error)
-      return `${process.env.EXPO_PUBLIC_API_URL || 'https://app.easner.com'}/user/dashboard`
+      return `${getApiBaseUrl()}/user/dashboard`
     }
   }
 

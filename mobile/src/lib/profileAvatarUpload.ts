@@ -27,10 +27,6 @@ export async function uploadProfileAvatar(file: {
   }
 
   const apiBase = getApiBaseUrl()
-  if (!apiBase) {
-    return { error: 'App API URL is not configured.' }
-  }
-
   const mime = 'image/jpeg' as const
   const filename = 'avatar.jpg'
 

@@ -12,6 +12,7 @@
     "mobile"
   ],
   "scripts": {
+    "postinstall": "node scripts/fix-easner-workspace-links.mjs",
     "dev": "turbo run dev --filter=web",
     "dev:website": "turbo run dev --filter=website",
     "dev:web": "turbo run dev --filter=web",

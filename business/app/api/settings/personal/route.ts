@@ -63,7 +63,7 @@ export async function GET(request: Request) {
       .select("id,email,full_name,phone,date_of_birth")
       .eq("id", user.id)
       .maybeSingle()
-    data = r2.data
+    data = r2.data ? { ...r2.data, avatar_url: null } : null
     error = r2.error
   }
 

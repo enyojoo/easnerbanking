@@ -317,7 +317,7 @@ class OfficeDataStore {
         return this.data
       }
       // Try to load from cache as fallback
-      if (this.loadFromCache()) {
+      if (this.loadFromCache() && this.data) {
         this.notify()
         return this.data
       }
@@ -380,7 +380,7 @@ class OfficeDataStore {
         const totalVolume = 0
 
         // Find corresponding auth user to get email_confirmed_at
-        const authUser = authUsers?.users?.find(au => au.id === user.id)
+        const authUser = authUsers?.users?.find((au: { id: string; email_confirmed_at?: string | null }) => au.id === user.id)
         
         return {
           ...user,

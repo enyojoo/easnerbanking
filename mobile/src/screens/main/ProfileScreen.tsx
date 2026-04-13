@@ -31,6 +31,7 @@ import {
 } from '../../lib/userService'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { analytics } from '../../lib/analytics'
+import { getApiBaseUrl } from '../../lib/apiClient'
 import { supabase } from '../../lib/supabase'
 
 function ProfileContent({ navigation }: NavigationProps) {
@@ -129,7 +130,7 @@ function ProfileContent({ navigation }: NavigationProps) {
         return
       }
 
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'
+      const apiUrl = getApiBaseUrl()
       const response = await fetch(
         `${apiUrl}/api/username/check?easetag=${encodeURIComponent(cleanTag)}`,
         {
@@ -229,6 +230,7 @@ function ProfileContent({ navigation }: NavigationProps) {
         phone: editProfileData.phone,
       }
       const updateResult = await userService.updateProfile(user.id, updatePayload)
+      await supabase.auth.refreshSession().catch(() => undefined)
 
       const nextTag = (editProfileData.easetag || '').replace(/^@/, '').trim().toLowerCase()
       const prevTag = (profileData.easetag || '').replace(/^@/, '').trim().toLowerCase()
@@ -258,7 +260,6 @@ function ProfileContent({ navigation }: NavigationProps) {
       if (refreshUserProfile) {
         await refreshUserProfile()
       }
-      await supabase.auth.refreshSession().catch(() => undefined)
 
       setIsEditing(false)
       setEasetagAvailable(null)

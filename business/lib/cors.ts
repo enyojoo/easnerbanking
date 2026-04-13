@@ -9,11 +9,12 @@ function parseAllowedOrigins(): Set<string> {
       .filter(Boolean) ?? []
   const single = process.env.EASNER_OFFICE_ORIGIN?.trim()
   const fromEnv = single ? [...fromList, single] : fromList
-  /** Local Office dev + production Easner Office on Vercel (pair with easnerbank.vercel.app). */
+  /** Local Office dev + production Easner Office on Vercel + business web when API is on `api.*`. */
   const defaults = [
     "http://localhost:3002",
     "http://127.0.0.1:3002",
     "https://easnerbanking-office.vercel.app",
+    "https://business.easner.com",
   ]
   return new Set([...defaults, ...fromEnv])
 }

@@ -57,6 +57,12 @@ module.exports = ({ config }) => {
       '')
       .replace(/\/$/, '') || ''
 
+  if (process.env.EAS_BUILD && !apiUrl) {
+    console.warn(
+      '[easner-mobile] EAS build has no EXPO_PUBLIC_API_URL / NEXT_PUBLIC_API_URL — profile & Easetag saves require the business app URL. Set it in EAS Environment variables and rebuild.'
+    )
+  }
+
   const merged = {
     ...config,
     extra: {

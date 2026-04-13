@@ -346,6 +346,7 @@ export function SettingsCustomersTab() {
                 <CustomerDetailInSettings
                   customer={customer}
                   invoices={invoices}
+                  returnToPath={settingsHere}
                   onClose={closeDetailDialog}
                   updateCustomer={updateCustomer}
                   deleteCustomer={deleteCustomer}
@@ -364,12 +365,14 @@ export function SettingsCustomersTab() {
 function CustomerDetailInSettings({
   customer,
   invoices,
+  returnToPath,
   onClose,
   updateCustomer,
   deleteCustomer,
 }: {
   customer: Customer
   invoices: Invoice[]
+  returnToPath: string
   onClose: () => void
   updateCustomer: ReturnType<typeof useCustomers>["updateCustomer"]
   deleteCustomer: ReturnType<typeof useCustomers>["deleteCustomer"]
@@ -420,7 +423,7 @@ function CustomerDetailInSettings({
                     <Pencil className="h-4 w-4 mr-2" />
                     Edit
                   </Button>
-                  <Link href={withReturnTo(`/invoices/create?customer=${customer.id}`, settingsHere)}>
+                  <Link href={withReturnTo(`/invoices/create?customer=${customer.id}`, returnToPath)}>
                     <Button size="sm">
                       <Plus className="h-4 w-4 mr-2" />
                       Create Invoice
@@ -475,7 +478,7 @@ function CustomerDetailInSettings({
                   {customerInvoices.map((invoice) => (
                     <Link
                       key={invoice.id}
-                      href={withReturnTo(`/invoices/${invoice.id}`, settingsHere)}
+                      href={withReturnTo(`/invoices/${invoice.id}`, returnToPath)}
                       className="flex items-center justify-between py-4 hover:bg-muted/50 -mx-4 px-4 rounded-lg transition-colors"
                     >
                       <div>

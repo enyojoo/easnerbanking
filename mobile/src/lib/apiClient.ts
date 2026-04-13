@@ -2,8 +2,18 @@ import Constants from 'expo-constants'
 import { supabase } from './supabase'
 
 /**
- * Business Next.js API (bootstrap, Noah proxy). Set EXPO_PUBLIC_API_URL or NEXT_PUBLIC_API_URL
- * in mobile/.env or business/.env.local; app.config.js also exposes `extra.apiUrl`.
+ * Last-resort origin for release builds when `extra.apiUrl` / `EXPO_PUBLIC_API_URL` were not set at build time.
+ * Prefer setting `EXPO_PUBLIC_API_URL` on EAS (staging vs production).
+ */
+/** Default BFF origin when env is missing (should match `EASNER_API_HOST` / Vercel `api.*` domain). */
+export const EASNER_PUBLIC_APP_ORIGIN = 'https://api.easner.com'
+
+/**
+ * Business Next.js API (bootstrap, Noah proxy). Resolution order:
+ * 1. `expo.extra.apiUrl` from app.config.js (EAS env / local .env at prebuild)
+ * 2. `process.env.EXPO_PUBLIC_API_URL` (Metro inline)
+ * 3. Dev: `http://localhost:3000`
+ * 4. Release: {@link EASNER_PUBLIC_APP_ORIGIN} (warn once — same default as auth deep links elsewhere)
  */
 export const getApiBaseUrl = (): string => {
   const fromExtra = Constants.expoConfig?.extra?.apiUrl
@@ -21,9 +31,9 @@ export const getApiBaseUrl = (): string => {
   }
 
   console.warn(
-    'EXPO_PUBLIC_API_URL is not set. Set it for production builds (e.g. https://your-business-app.vercel.app).'
+    `[Easner] API base URL not in app config; using ${EASNER_PUBLIC_APP_ORIGIN}. Set EXPO_PUBLIC_API_URL on EAS for non-production backends.`
   )
-  return ''
+  return EASNER_PUBLIC_APP_ORIGIN
 }
 
 /**
@@ -32,13 +42,6 @@ export const getApiBaseUrl = (): string => {
  */
 export async function ensureBusinessAppUserBootstrap(): Promise<void> {
   const apiBase = getApiBaseUrl()
-  if (!apiBase) {
-    console.warn(
-      'EXPO_PUBLIC_API_URL is not set; skipping /api/auth/bootstrap. Set it to your business app URL (e.g. http://localhost:3000) so sign-up matches web.'
-    )
-    return
-  }
-
   try {
     const {
       data: { session },
@@ -95,21 +98,11 @@ export const apiRequest = async (
       throw new Error('No access token found')
     }
     
-    // Build full URL
+    // Build full URL (React Native has no document origin — never use host-relative URLs)
     const apiBase = getApiBaseUrl()
-    let url: string
-    
-    if (endpoint.startsWith('http')) {
-      // Already a full URL
-      url = endpoint
-    } else if (apiBase) {
-      // Use API base URL
-      url = `${apiBase}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`
-    } else {
-      // Use relative URL (assumes API is on same domain as web app)
-      // This works if you're using a proxy or the API is on the same domain
-      url = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
-    }
+    const url = endpoint.startsWith('http')
+      ? endpoint
+      : `${apiBase}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`
     
     // Prepare headers
     const headers: HeadersInit = {
