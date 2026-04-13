@@ -10,6 +10,11 @@ const nextConfig = {
   },
   transpilePackages: ["@easner/server", "@easner/shared"],
   webpack: (config) => {
+    config.resolve.alias = {
+      ...(config.resolve.alias || {}),
+      "@easner/shared": resolve(__dirname, "../packages/shared/src/index.ts"),
+      "@easner/server": resolve(__dirname, "../packages/server/lib/index.ts"),
+    }
     config.resolve.modules.unshift(resolve(__dirname, "../node_modules"))
     return config
   },
