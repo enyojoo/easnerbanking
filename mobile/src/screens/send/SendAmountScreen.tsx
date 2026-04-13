@@ -54,7 +54,6 @@ import {
 } from '../../lib/easenetRecipientUi'
 import { getPayoutRecipientSubtitleParts, isMobileMoneyRecipient } from '../../lib/recipientPayoutPreview'
 import { useEasenetRecipientHydration, type HydratedEasenetProfile } from '../../hooks/useEasenetRecipientHydration'
-import { EASNER_MARK_URL } from '../../lib/easnerBrand'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 const KEYPAD_BUTTON_WIDTH = 113
@@ -2266,22 +2265,17 @@ function EasenetSendRecipientAvatar({
     setImgFailed(false)
   }, [uri])
   return (
-    <View style={styles.recipientAvatarCircleWrap}>
-      <View style={styles.recipientAvatarCircle}>
-        {uri && !imgFailed ? (
-          <Image
-            source={{ uri }}
-            style={styles.recipientAvatarFill}
-            resizeMode="cover"
-            onError={() => setImgFailed(true)}
-          />
-        ) : (
-          <Text style={styles.recipientAvatarInitials}>{getInitials(displayName)}</Text>
-        )}
-      </View>
-      <View style={styles.easenetMarkBadgeSmall}>
-        <Image source={{ uri: EASNER_MARK_URL }} style={styles.easenetMarkImgSmall} resizeMode="cover" />
-      </View>
+    <View style={styles.recipientAvatarCircle}>
+      {uri && !imgFailed ? (
+        <Image
+          source={{ uri }}
+          style={styles.recipientAvatarFill}
+          resizeMode="cover"
+          onError={() => setImgFailed(true)}
+        />
+      ) : (
+        <Text style={styles.recipientAvatarInitials}>{getInitials(displayName)}</Text>
+      )}
     </View>
   )
 }

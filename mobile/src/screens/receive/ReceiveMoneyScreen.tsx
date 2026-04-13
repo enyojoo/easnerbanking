@@ -1428,7 +1428,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                     </View>
                     <Text style={styles.kycNoticeTitle}>
                       {kycStatus === 'approved' 
-                        ? `${currency.toUpperCase()} Address Setup in Progress` 
+                        ? `${currency.toLowerCase() === 'usd' ? 'USDC' : 'EURC'} Address Setup in Progress` 
                         : kycStatus === 'in_review'
                         ? 'Verification in Review'
                         : `Complete Verification for ${currency.toLowerCase() === 'usd' ? 'USDC' : 'EURC'} address`}
@@ -1441,7 +1441,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                         : kycStatus === 'rejected'
                         ? 'Your verification was not approved. Please complete identity verification again to receive your wallet address.'
                         : kycStatus === 'approved'
-                        ? 'Your wallet is being set up. This may take a few moments. Please check back shortly.'
+                        ? `Your ${currency.toLowerCase() === 'usd' ? 'USDC' : 'EURC'} address is being set up. This may take a few moments. Please check back shortly.`
                         : 'Please complete your identity verification to receive bank and stablecoin deposit information.'}
                     </Text>
                     {kycStatus !== 'approved' && kycStatus !== 'in_review' && (
@@ -1458,7 +1458,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                     )}
                     {kycStatus === 'approved' && !hasStablecoinData && (
                       <Text style={styles.kycNoticeTextCompact}>
-                        Your {currency.toLowerCase() === 'usd' ? 'USDC' : 'EURC'} address is being created automatically. Please wait a moment and refresh the screen.
+                        Your {currency.toLowerCase() === 'usd' ? 'USDC' : 'EURC'} address is being set up. This may take a few moments. Please check back shortly.
                       </Text>
                     )}
                     {accountCreationError && (
