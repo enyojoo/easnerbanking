@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ["@easner/server"],
+  transpilePackages: ["@easner/server", "@easner/shared"],
   async redirects() {
     return [
       { source: "/verification", destination: "/settings?tab=business", permanent: false },
