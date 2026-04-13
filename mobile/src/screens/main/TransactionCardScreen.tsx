@@ -7,6 +7,7 @@ import {
   RefreshControl,
   TextInput,
   Keyboard,
+  Platform,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
@@ -193,17 +194,29 @@ const styles = StyleSheet.create({
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: colors.frame.background,
+    borderRadius: borderRadius.xl,
+    paddingHorizontal: spacing[4],
+    ...Platform.select({
+      ios: { paddingVertical: spacing[3] },
+      android: { paddingVertical: spacing[2], minHeight: 44 },
+    }),
     gap: spacing[2],
-    backgroundColor: '#F3F4F6',
-    borderRadius: 14,
-    paddingHorizontal: spacing[3],
+    borderWidth: 0.5,
+    borderColor: colors.frame.border,
     marginBottom: spacing[4],
   },
   searchInput: {
     flex: 1,
-    paddingVertical: spacing[3],
-    ...textStyles.bodyMedium,
+    ...textStyles.textInputMedium,
     color: colors.text.primary,
+    ...Platform.select({
+      ios: { paddingVertical: 0 },
+      android: {
+        paddingVertical: 0,
+        includeFontPadding: false,
+      },
+    }),
   },
   scrollContent: {
     paddingBottom: spacing[10],

@@ -54,6 +54,7 @@ import {
 } from '../../lib/easenetRecipientUi'
 import { getPayoutRecipientSubtitleParts, isMobileMoneyRecipient } from '../../lib/recipientPayoutPreview'
 import { useEasenetRecipientHydration, type HydratedEasenetProfile } from '../../hooks/useEasenetRecipientHydration'
+import { navigateToSendRecipientHub } from '../../lib/sendFlowNavigation'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 const KEYPAD_BUTTON_WIDTH = 113
@@ -616,9 +617,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   if (navigation.canGoBack()) {
                     navigation.goBack()
                   } else {
-                    navigation.navigate('SelectRecentRecipient' as never, {
+                    navigateToSendRecipientHub(navigation, {
                       preferredBalanceCurrency: selectedBalanceCurrency,
-                    } as never)
+                    })
                   }
                 }}
                 style={styles.backButton}
@@ -653,12 +654,12 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   style={styles.recipientBar}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                    navigation.navigate('SelectRecentRecipient' as never, {
+                    navigateToSendRecipientHub(navigation, {
                       preferredBalanceCurrency: selectedBalanceCurrency,
                       selectedPaymentMethod,
                       selectedOtherCurrency,
                       selectedOtherPaymentMethod,
-                    } as never)
+                    })
                   }} >
                   <Text style={styles.recipientLabel}>To:</Text>
                   <SendRecipientAvatar recipient={recipient} getInitials={getInitials} easenetPreview={easenetDisplay} />
@@ -696,9 +697,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   style={styles.selectRecipientBox}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                    navigation.navigate('SelectRecentRecipient' as never, {
+                    navigateToSendRecipientHub(navigation, {
                       preferredBalanceCurrency: selectedBalanceCurrency,
-                    } as never)
+                    })
                   }} >
                   <View style={styles.selectRecipientIcon}>
                     <User size={20} color={colors.text.secondary} strokeWidth={2} />
@@ -977,7 +978,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         <View
           style={[
             styles.bottomContainer,
-            { paddingTop: spacing[2], paddingBottom: Math.max(insets.bottom, spacing[4]) },
+            { paddingTop: spacing[4], paddingBottom: insets.bottom + spacing[4] },
           ]}
         >
           {!tier1Ok ? (

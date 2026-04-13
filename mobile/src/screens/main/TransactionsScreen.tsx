@@ -631,10 +631,10 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    ...textStyles.bodyMedium,
+    ...textStyles.textInputMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Regular',
     ...Platform.select({
+      ios: { paddingVertical: 0 },
       android: {
         paddingVertical: 0,
         includeFontPadding: false,

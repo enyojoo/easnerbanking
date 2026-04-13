@@ -67,6 +67,24 @@ const getInitials = (name: string): string => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
+/**
+ * Dropdown panels live inside the add-recipient modal `ScrollView`. On Android, nested
+ * `FlatList` inside a parent `ScrollView` often steals gestures and does not scroll the list.
+ * Use a bounded `ScrollView` for options instead (with parent form scroll paused while open).
+ */
+function RecipientFormDropdownList({ children }: { children: React.ReactNode }) {
+  return (
+    <ScrollView
+      style={styles.currencyDropdownList}
+      nestedScrollEnabled
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator
+    >
+      {children}
+    </ScrollView>
+  )
+}
+
 export default function SelectRecentRecipientScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
   const { user, userProfile } = useAuth()
@@ -717,9 +735,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     </Animated.View>
   )
 
-  return (
-    <ScreenWrapper>
-      <KeyboardSafeContainer>
+  const screenBody = (
+    <>
       <View style={styles.container}>
         {recipientsLoading && recipients.length === 0 ? (
           <View style={[styles.scrollContent, { paddingTop: spacing[4] }]}>
@@ -976,8 +993,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.modalScrollContent}
               nestedScrollEnabled={true}
-              // Android: disabling the parent ScrollView breaks nested dropdown lists (currency / provider / asset / network).
-              scrollEnabled={Platform.OS === 'android' ? true : !isAnyDropdownOpen}
+              /** When a dropdown is open, pause the form scroll so the dropdown list receives vertical drags (Android + iOS). */
+              scrollEnabled={!isAnyDropdownOpen}
               keyboardShouldPersistTaps="handled"
             >
               <View style={styles.modalContent}>
@@ -991,10 +1008,10 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
               
             {selectedRecipientType === 'easenet' && (
               <>
-                <View style={styles.easenetInputShell}>
-                  <Text style={styles.easenetAtInside}>@</Text>
+                <View style={[styles.searchWrapper, styles.easenetHandleRowMargin]}>
+                  <Text style={styles.easenetAtPrefix}>@</Text>
                   <TextInput
-                    style={styles.easenetInputInner}
+                    style={styles.searchInput}
                     value={newRecipient.payeeEasetag}
                     onChangeText={(text) =>
                       setNewRecipient((prev) => ({ ...prev, payeeEasetag: text.replace(/^@+/, '') }))
@@ -1007,11 +1024,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                     underlineColorAndroid="transparent"
                   />
                   {easenetLookupLoading ? (
-                    <ActivityIndicator
-                      size="small"
-                      color={colors.primary.main}
-                      style={styles.easenetSpinnerInside}
-                    />
+                    <ActivityIndicator size="small" color={colors.primary.main} />
                   ) : null}
                 </View>
                 {easenetLookupError ? <Text style={styles.errorText}>{easenetLookupError}</Text> : null}
@@ -1068,20 +1081,14 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                       onChangeText={setCurrencySearchTerm}
                     />
                   </View>
-                  <FlatList
-                    data={filteredCurrencies}
-                    keyExtractor={(item) => `${item.countryCode}-${item.currencyCode}`}
-                    style={styles.currencyDropdownList}
-                    nestedScrollEnabled
-                    keyboardShouldPersistTaps="handled"
-                    removeClippedSubviews={Platform.OS === 'android' ? false : undefined}
-                    renderItem={({ item }) => {
+                  <RecipientFormDropdownList>
+                    {filteredCurrencies.map((item) => {
                       const isSelected =
                         newRecipient.currency === item.currencyCode &&
                         selectedCountryCurrency?.countryCode === item.countryCode
-
                       return (
                         <Pressable
+                          key={`${item.countryCode}-${item.currencyCode}`}
                           android_ripple={ripple.neutral}
                           style={[styles.currencyDropdownItem, isSelected && styles.currencyDropdownItemSelected]}
                           onPress={async () => {
@@ -1115,8 +1122,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                           ) : null}
                         </Pressable>
                       )
-                    }}
-                  />
+                    })}
+                  </RecipientFormDropdownList>
                 </View>
               )}
             </View>
@@ -1154,40 +1161,39 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                             onChangeText={setProviderSearchTerm}
                           />
                         </View>
-                        <FlatList
-                          data={getRecipientProviders(
+                        <RecipientFormDropdownList>
+                          {getRecipientProviders(
                             newRecipient.currency,
                             'mobile_money',
                             selectedCountryCurrency?.countryCode,
-                          ).filter((provider) => provider.toLowerCase().includes(providerSearchTerm.toLowerCase()))}
-                          keyExtractor={(provider) => provider}
-                          style={styles.currencyDropdownList}
-                          nestedScrollEnabled
-                          keyboardShouldPersistTaps="handled"
-                          removeClippedSubviews={Platform.OS === 'android' ? false : undefined}
-                          renderItem={({ item: provider }) => (
-                            <Pressable
-                              android_ripple={ripple.neutral}
-                              style={[
-                                styles.currencyDropdownItem,
-                                newRecipient.provider === provider && styles.currencyDropdownItemSelected,
-                              ]}
-                              onPress={async () => {
-                                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                                setNewRecipient((prev) => ({ ...prev, provider }))
-                                setShowProviderDropdown(false)
-                                setProviderSearchTerm('')
-                              }}
-                            >
-                              <View style={styles.currencyInfo}>
-                                <Text style={styles.currencyCode}>{provider}</Text>
-                              </View>
-                              {newRecipient.provider === provider ? (
-                                <Ionicons name="checkmark" size={18} color={colors.primary.main} />
-                              ) : null}
-                            </Pressable>
-                          )}
-                        />
+                          )
+                            .filter((provider) =>
+                              provider.toLowerCase().includes(providerSearchTerm.toLowerCase()),
+                            )
+                            .map((provider) => (
+                              <Pressable
+                                key={provider}
+                                android_ripple={ripple.neutral}
+                                style={[
+                                  styles.currencyDropdownItem,
+                                  newRecipient.provider === provider && styles.currencyDropdownItemSelected,
+                                ]}
+                                onPress={async () => {
+                                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                                  setNewRecipient((prev) => ({ ...prev, provider }))
+                                  setShowProviderDropdown(false)
+                                  setProviderSearchTerm('')
+                                }}
+                              >
+                                <View style={styles.currencyInfo}>
+                                  <Text style={styles.currencyCode}>{provider}</Text>
+                                </View>
+                                {newRecipient.provider === provider ? (
+                                  <Ionicons name="checkmark" size={18} color={colors.primary.main} />
+                                ) : null}
+                              </Pressable>
+                            ))}
+                        </RecipientFormDropdownList>
                 </View>
               )}
             </View>
@@ -1250,46 +1256,43 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                             onChangeText={setWalletAssetSearchTerm}
                           />
                         </View>
-                        <FlatList
-                          data={getWalletAssets().filter((asset) =>
-                            asset.toLowerCase().includes(walletAssetSearchTerm.toLowerCase()),
-                          )}
-                          keyExtractor={(asset) => asset}
-                          style={styles.currencyDropdownList}
-                          nestedScrollEnabled
-                          keyboardShouldPersistTaps="handled"
-                          removeClippedSubviews={Platform.OS === 'android' ? false : undefined}
-                          renderItem={({ item: asset }) => (
-                            <Pressable
-                              android_ripple={ripple.neutral}
-                              style={[
-                                styles.currencyDropdownItem,
-                                newRecipient.currency === asset && styles.currencyDropdownItemSelected,
-                              ]}
-                              onPress={async () => {
-                                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                                const networks = getWalletNetworksForAsset(asset)
-                                setNewRecipient((prev) => ({
-                                  ...prev,
-                                  currency: asset,
-                                  network: networks[0] || '',
-                                }))
-                                setShowWalletAssetDropdown(false)
-                                setWalletAssetSearchTerm('')
-                              }}
-                            >
-                              {getTokenIconUrl(asset) ? (
-                                <Image source={{ uri: getTokenIconUrl(asset)! }} style={styles.cryptoIcon} />
-                              ) : null}
-                              <View style={styles.currencyInfo}>
-                                <Text style={styles.currencyCode}>{asset}</Text>
-                              </View>
-                              {newRecipient.currency === asset ? (
-                                <Ionicons name="checkmark" size={18} color={colors.primary.main} />
-                              ) : null}
-                            </Pressable>
-                          )}
-                        />
+                        <RecipientFormDropdownList>
+                          {getWalletAssets()
+                            .filter((asset) =>
+                              asset.toLowerCase().includes(walletAssetSearchTerm.toLowerCase()),
+                            )
+                            .map((asset) => (
+                              <Pressable
+                                key={asset}
+                                android_ripple={ripple.neutral}
+                                style={[
+                                  styles.currencyDropdownItem,
+                                  newRecipient.currency === asset && styles.currencyDropdownItemSelected,
+                                ]}
+                                onPress={async () => {
+                                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                                  const networks = getWalletNetworksForAsset(asset)
+                                  setNewRecipient((prev) => ({
+                                    ...prev,
+                                    currency: asset,
+                                    network: networks[0] || '',
+                                  }))
+                                  setShowWalletAssetDropdown(false)
+                                  setWalletAssetSearchTerm('')
+                                }}
+                              >
+                                {getTokenIconUrl(asset) ? (
+                                  <Image source={{ uri: getTokenIconUrl(asset)! }} style={styles.cryptoIcon} />
+                                ) : null}
+                                <View style={styles.currencyInfo}>
+                                  <Text style={styles.currencyCode}>{asset}</Text>
+                                </View>
+                                {newRecipient.currency === asset ? (
+                                  <Ionicons name="checkmark" size={18} color={colors.primary.main} />
+                                ) : null}
+                              </Pressable>
+                            ))}
+                        </RecipientFormDropdownList>
                       </View>
                     )}
                   </View>
@@ -1324,41 +1327,38 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                             onChangeText={setWalletNetworkSearchTerm}
                           />
                         </View>
-                        <FlatList
-                          data={getWalletNetworksForAsset(newRecipient.currency).filter((network) =>
-                            network.toLowerCase().includes(walletNetworkSearchTerm.toLowerCase()),
-                          )}
-                          keyExtractor={(network) => network}
-                          style={styles.currencyDropdownList}
-                          nestedScrollEnabled
-                          keyboardShouldPersistTaps="handled"
-                          removeClippedSubviews={Platform.OS === 'android' ? false : undefined}
-                          renderItem={({ item: network }) => (
-                            <Pressable
-                              android_ripple={ripple.neutral}
-                              style={[
-                                styles.currencyDropdownItem,
-                                newRecipient.network === network && styles.currencyDropdownItemSelected,
-                              ]}
-                              onPress={async () => {
-                                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                                setNewRecipient((prev) => ({ ...prev, network }))
-                                setShowWalletNetworkDropdown(false)
-                                setWalletNetworkSearchTerm('')
-                              }}
-                            >
-                              {getNetworkIconUrl(network) ? (
-                                <Image source={{ uri: getNetworkIconUrl(network)! }} style={styles.cryptoIcon} />
-                              ) : null}
-                              <View style={styles.currencyInfo}>
-                                <Text style={styles.currencyCode}>{network}</Text>
-                              </View>
-                              {newRecipient.network === network ? (
-                                <Ionicons name="checkmark" size={18} color={colors.primary.main} />
-                              ) : null}
-                            </Pressable>
-                          )}
-                        />
+                        <RecipientFormDropdownList>
+                          {getWalletNetworksForAsset(newRecipient.currency)
+                            .filter((network) =>
+                              network.toLowerCase().includes(walletNetworkSearchTerm.toLowerCase()),
+                            )
+                            .map((network) => (
+                              <Pressable
+                                key={network}
+                                android_ripple={ripple.neutral}
+                                style={[
+                                  styles.currencyDropdownItem,
+                                  newRecipient.network === network && styles.currencyDropdownItemSelected,
+                                ]}
+                                onPress={async () => {
+                                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                                  setNewRecipient((prev) => ({ ...prev, network }))
+                                  setShowWalletNetworkDropdown(false)
+                                  setWalletNetworkSearchTerm('')
+                                }}
+                              >
+                                {getNetworkIconUrl(network) ? (
+                                  <Image source={{ uri: getNetworkIconUrl(network)! }} style={styles.cryptoIcon} />
+                                ) : null}
+                                <View style={styles.currencyInfo}>
+                                  <Text style={styles.currencyCode}>{network}</Text>
+                                </View>
+                                {newRecipient.network === network ? (
+                                  <Ionicons name="checkmark" size={18} color={colors.primary.main} />
+                                ) : null}
+                              </Pressable>
+                            ))}
+                        </RecipientFormDropdownList>
                       </View>
                     )}
                   </View>
@@ -1724,7 +1724,16 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
           </View>
         </KeyboardAvoidingView>
       </Modal>
-      </KeyboardSafeContainer>
+    </>
+  )
+
+  return (
+    <ScreenWrapper>
+      {Platform.OS === 'android' ? (
+        screenBody
+      ) : (
+        <KeyboardSafeContainer>{screenBody}</KeyboardSafeContainer>
+      )}
     </ScreenWrapper>
   )
 }
@@ -1785,15 +1794,22 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    ...textStyles.bodyMedium,
+    ...textStyles.textInputMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Regular',
     ...Platform.select({
+      ios: { paddingVertical: 0 },
       android: {
         paddingVertical: 0,
         includeFontPadding: false,
       },
     }),
+  },
+  easenetHandleRowMargin: {
+    marginBottom: spacing[2],
+  },
+  easenetAtPrefix: {
+    ...textStyles.textInputMedium,
+    color: colors.primary.main,
   },
   searchErrorText: {
     ...textStyles.bodySmall,
@@ -2019,7 +2035,16 @@ const styles = StyleSheet.create({
     paddingTop: spacing[4],
     borderTopWidth: 0.5,
     borderTopColor: colors.frame.border,
-    ...shadows.md,
+    ...Platform.select({
+      ios: shadows.md,
+      android: {
+        elevation: 0,
+        shadowColor: 'transparent',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0,
+        shadowRadius: 0,
+      },
+    }),
   },
   addRecipientButton: {
     backgroundColor: colors.primary.main,
@@ -2118,46 +2143,6 @@ const styles = StyleSheet.create({
         includeFontPadding: false,
       },
     }),
-  },
-  easenetInputShell: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E2E2',
-    borderRadius: borderRadius.lg,
-    backgroundColor: '#F9F9F9',
-    minHeight: 48,
-    marginBottom: spacing[2],
-  },
-  easenetAtInside: {
-    ...textStyles.bodyMedium,
-    color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
-    paddingLeft: spacing[4],
-    paddingRight: spacing[1],
-  },
-  easenetInputInner: {
-    flex: 1,
-    borderWidth: 0,
-    backgroundColor: 'transparent',
-    paddingVertical: spacing[3],
-    paddingRight: spacing[2],
-    marginBottom: 0,
-    ...textStyles.bodyMedium,
-    color: colors.text.primary,
-    fontFamily: 'Outfit-Regular',
-    fontSize: 13,
-    minHeight: 48,
-    lineHeight: 18,
-    textAlignVertical: 'center',
-    ...Platform.select({
-      android: {
-        includeFontPadding: false,
-      },
-    }),
-  },
-  easenetSpinnerInside: {
-    marginRight: spacing[3],
   },
   modalButtons: {
     flexDirection: 'row',
@@ -2326,15 +2311,13 @@ const styles = StyleSheet.create({
   },
   currencyDropdownSearchInput: {
     flex: 1,
-    ...textStyles.bodyMedium,
+    ...textStyles.textInputMedium,
     color: colors.text.primary,
-    paddingVertical: spacing[1],
-    fontSize: 13,
-    lineHeight: 18,
-    textAlignVertical: 'center',
+    paddingVertical: 0,
     ...Platform.select({
       android: {
         includeFontPadding: false,
+        textAlignVertical: 'center',
       },
     }),
   },
