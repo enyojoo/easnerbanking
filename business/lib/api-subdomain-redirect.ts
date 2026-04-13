@@ -26,7 +26,7 @@ export function getRequestHostname(request: NextRequest): string {
  * Hostnames dedicated to `/api/*` only (browser hits should go to the business origin).
  * - `EASNER_API_HOSTS` — comma-separated (e.g. `api.easner.com,www.api.easner.com`)
  * - `EASNER_API_HOST` — single host
- * - `NEXT_PUBLIC_EASNER_API_HOST` — inlined on Edge (use if middleware doesn’t see server-only env)
+ * - `NEXT_PUBLIC_EASNER_API_HOST` — inlined on Edge (use if proxy doesn’t see server-only env)
  */
 export function getApiOnlyHostnames(): string[] {
   const list = process.env.EASNER_API_HOSTS?.split(",").map((s) => s.trim()).filter(Boolean) ?? []

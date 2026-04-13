@@ -11,7 +11,7 @@ function getClientIp(request: NextRequest): string {
   return request.headers.get("x-real-ip") ?? "unknown"
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
   /** `api.*` domain: only `/api/*` is meant for clients; send browsers to the business web origin. */
