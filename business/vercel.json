@@ -1,5 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "cd .. && npm ci",
-  "buildCommand": "npm run build"
+  "buildCommand": "cd .. && npx turbo run build --filter=easner-business"
 }

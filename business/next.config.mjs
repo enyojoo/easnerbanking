@@ -8,9 +8,6 @@ const nextConfig = {
       { source: "/autopayout/:path*", destination: "/qr-pay/:path*", permanent: true },
     ]
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   typescript: {
     ignoreBuildErrors: true,
   },
