@@ -1,6 +1,5 @@
 "use client"
 
-import Image from "next/image"
 import { useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { X, Building2 } from "lucide-react"
@@ -64,7 +63,7 @@ export function BusinessLogoField({
           )}
         >
           {hasLogo ? (
-            <Image src={value!} alt="" fill unoptimized className="object-cover" />
+            <img src={value!} alt="" className="h-full w-full object-cover" />
           ) : (
             <Building2 className="h-4 w-4 text-muted-foreground" />
           )}

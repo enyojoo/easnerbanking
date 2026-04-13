@@ -121,8 +121,7 @@ class TeamMembersStore {
           })
           .catch((err) => {
             console.error("Team members background refresh failed:", err)
-            if (this.data) return this.data
-            throw err
+            return this.data!
           })
           .finally(() => {
             this.loadingPromise = null

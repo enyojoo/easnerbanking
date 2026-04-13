@@ -1,61 +1,3 @@
-import fs from "fs"
-import path from "path"
-import { createRequire } from "module"
-import { fileURLToPath } from "url"
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-/** Monorepo root — npm hoists workspace deps here; Turbopack must resolve from this tree (e.g. Vercel). */
-const monorepoRoot = path.join(__dirname, "..")
-const officeRoot = __dirname
-
-/**
- * Resolve a package directory for webpack. Try workspace-local node_modules first (npm
- * install-strategy=nested), then repo root, then Node resolution from manifests.
- */
-function resolveHoistedPackageDir(packageName, workspaceDir) {
-  const segments = packageName.split("/")
-  const dirsToTry = [
-    path.join(workspaceDir, "node_modules", ...segments),
-    path.join(monorepoRoot, "node_modules", ...segments),
-  ]
-  for (const dir of dirsToTry) {
-    if (fs.existsSync(path.join(dir, "package.json"))) {
-      return dir
-    }
-  }
-  const requireCandidates = [
-    path.join(workspaceDir, "package.json"),
-    path.join(monorepoRoot, "package.json"),
-  ]
-  for (const manifest of requireCandidates) {
-    if (!fs.existsSync(manifest)) continue
-    try {
-      const req = createRequire(manifest)
-      const resolved = req.resolve(`${packageName}/package.json`)
-      return path.dirname(resolved)
-    } catch {
-      /* try next */
-    }
-  }
-  throw new Error(
-    `[office/next.config] Cannot resolve "${packageName}". Tried: ${dirsToTry.join(", ")}`,
-  )
-}
-
-/** Webpack may use alias as object or array depending on Next version. */
-function ensureAlias(config, name, aliasPath) {
-  config.resolve = config.resolve ?? {}
-  const existing = config.resolve.alias
-  if (Array.isArray(existing)) {
-    existing.push({ name, alias: aliasPath })
-    return
-  }
-  config.resolve.alias = {
-    ...(existing && typeof existing === "object" ? existing : {}),
-    [name]: aliasPath,
-  }
-}
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   async redirects() {
@@ -72,24 +14,17 @@ const nextConfig = {
   compress: true,
   images: {
     unoptimized: true,
-    formats: ["image/webp", "image/avif"],
-    remotePatterns: [
-      { protocol: "https", hostname: "seeqjiebmrnolcyydewj.supabase.co", pathname: "/**" },
-      { protocol: "https", hostname: "*.supabase.co", pathname: "/**" },
-      { protocol: "https", hostname: "raw.githubusercontent.com", pathname: "/**" },
-      { protocol: "https", hostname: "logo.svgcdn.com", pathname: "/**" },
-    ],
+    formats: ['image/webp', 'image/avif'],
   },
   reactStrictMode: true,
   experimental: {
-    optimizePackageImports: ["lucide-react"],
+    optimizePackageImports: ['lucide-react'],
   },
   turbopack: {
-    root: monorepoRoot,
     rules: {
-      "*.svg": {
-        loaders: ["@svgr/webpack"],
-        as: "*.js",
+      '*.svg': {
+        loaders: ['@svgr/webpack'],
+        as: '*.js',
       },
     },
   },
@@ -97,17 +32,6 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   webpack: (config, { isServer }) => {
-    config.resolve = config.resolve ?? {}
-    config.resolve.symlinks = true
-    config.resolve.modules = [
-      path.join(monorepoRoot, "node_modules"),
-      path.join(officeRoot, "node_modules"),
-      ...(Array.isArray(config.resolve.modules) ? config.resolve.modules : ["node_modules"]),
-    ]
-
-    const supabaseJsDir = resolveHoistedPackageDir("@supabase/supabase-js", officeRoot)
-    ensureAlias(config, "@supabase/supabase-js", supabaseJsDir)
-
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,

@@ -68,8 +68,6 @@ const DEFAULT_PROFILE: BusinessProfile = {
   canManageBusinessVerification: true,
 }
 
-const PROFILE_CACHE_TTL_MS = 60 * 60 * 1000
-
 function countryCodeFromName(name: string | null | undefined): string | null {
   if (!name) return null
   const found = countries.find((c) => c.name.toLowerCase() === name.toLowerCase())
@@ -120,6 +118,7 @@ export async function updateBusinessProfile(payload: {
 
 export function useBusinessProfile() {
   const { user } = useAuth()
+  const PROFILE_CACHE_TTL_MS = 60 * 60 * 1000
   const cacheKey = user?.id ? CACHE_KEYS.BUSINESS_PROFILE(user.id) : null
   const { data: profileData, setData, loading: isLoading } = useCachedData<BusinessProfile>({
     enabled: Boolean(user?.id),

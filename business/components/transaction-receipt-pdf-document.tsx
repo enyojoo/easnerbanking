@@ -1,6 +1,5 @@
 "use client"
 
-/* eslint-disable jsx-a11y/alt-text -- @react-pdf/renderer Image is not an HTML img */
 import {
   Document,
   Page,
@@ -8,9 +7,8 @@ import {
   View,
   Image,
   StyleSheet,
-  type TextProps,
-  type ViewProps,
 } from "@react-pdf/renderer"
+import type { Style } from "@react-pdf/types"
 import type { Transaction } from "@/lib/finance-types"
 import { formatCurrency } from "@/lib/utils"
 
@@ -177,21 +175,19 @@ function TableRow({
 }: {
   label: string
   value: string
-  valueStyle?: TextProps["style"]
+  valueStyle?: Style
   isFirst?: boolean
   isLast?: boolean
-  rowStyle?: ViewProps["style"]
+  rowStyle?: Style
 }) {
   return (
     <View
-      style={
-        [
-          isLast ? styles.tableRowLast : styles.tableRow,
-          ...(isFirst ? [styles.tableRowFirst] : []),
-          ...(isLast ? [styles.tableRowLastRounded] : []),
-          ...(rowStyle ? [rowStyle] : []),
-        ] as ViewProps["style"]
-      }
+      style={[
+        isLast ? styles.tableRowLast : styles.tableRow,
+        ...(isFirst ? [styles.tableRowFirst] : []),
+        ...(isLast ? [styles.tableRowLastRounded] : []),
+        ...(rowStyle ? [rowStyle] : []),
+      ]}
     >
       <Text style={styles.tableCell}>{label}</Text>
       <Text style={valueStyle ?? styles.tableCellValue}>{value}</Text>
@@ -216,7 +212,7 @@ export function TransactionReceiptPDFDocument({
     (transaction.direction === "credit" ? "+" : "-") +
     formatCurrency(Math.abs(transaction.amount), "USD")
 
-  const rows: { label: string; value: string; valueStyle?: TextProps["style"] }[] = [
+  const rows: { label: string; value: string; valueStyle?: Style }[] = [
     { label: "Merchant", value: transaction.description },
     { label: "Transaction ID", value: transaction.id },
     { label: "Type", value: transaction.type.toUpperCase() },

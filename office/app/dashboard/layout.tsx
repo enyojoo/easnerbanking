@@ -5,7 +5,9 @@ export const metadata: Metadata = {
   description: "Admin dashboard for managing Easner platform operations, users, and transactions.",
   robots: {
     index: false,
+    noindex: true,
     follow: false,
+    nofollow: true,
   },
 }
 

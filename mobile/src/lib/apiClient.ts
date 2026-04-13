@@ -5,8 +5,7 @@ import { supabase } from './supabase'
  * Last-resort origin for release builds when `extra.apiUrl` / `EXPO_PUBLIC_API_URL` were not set at build time.
  * Prefer setting `EXPO_PUBLIC_API_URL` on EAS (staging vs production).
  */
-/** Default BFF origin when env is missing (should match `EASNER_API_HOST` / Vercel `api.*` domain). */
-export const EASNER_PUBLIC_APP_ORIGIN = 'https://api.easner.com'
+export const EASNER_PUBLIC_APP_ORIGIN = 'https://app.easner.com'
 
 /**
  * Business Next.js API (bootstrap, Noah proxy). Resolution order:

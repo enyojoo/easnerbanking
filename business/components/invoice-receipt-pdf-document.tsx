@@ -1,6 +1,5 @@
 "use client"
 
-/* eslint-disable jsx-a11y/alt-text -- @react-pdf/renderer Image is not an HTML img */
 import {
   Document,
   Page,

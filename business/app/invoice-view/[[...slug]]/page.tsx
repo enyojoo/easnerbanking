@@ -1,6 +1,5 @@
 "use client"
 
-import Image from "next/image"
 import { useState, useEffect, useMemo } from "react"
 import { useParams } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
@@ -503,13 +502,10 @@ export default function InvoiceViewPage() {
               rel="noopener noreferrer"
               className="inline-flex items-center"
             >
-              <Image
+              <img
                 src={BRAND.logoBusiness}
                 alt="Easner Business"
-                width={180}
-                height={32}
-                unoptimized
-                className="h-5 w-auto object-contain sm:h-6"
+                className="h-5 sm:h-6 w-auto object-contain"
               />
             </a>
           </div>

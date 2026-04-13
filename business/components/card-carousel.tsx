@@ -1,6 +1,5 @@
 "use client"
 
-import Image from "next/image"
 import { useState } from "react"
 import { ChevronLeft, ChevronRight, Snowflake } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -71,12 +70,9 @@ function CardFace({
       <div className="flex h-full flex-col justify-between p-6 sm:p-7 relative z-[2]">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-2">
-            <Image
+            <img
               src={BRAND.icon}
               alt="Easner"
-              width={120}
-              height={40}
-              unoptimized
               className="h-10 w-auto object-contain brightness-0 invert opacity-90"
             />
             <span className="text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/20 text-white/90">

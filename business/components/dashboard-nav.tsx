@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
   CreditCard,
@@ -16,7 +16,6 @@ import {
   QrCode,
   SmartphoneNfc,
 } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -36,7 +35,7 @@ export function DashboardNav() {
 
   const hasBusinessLogo = Boolean(businessLogoUrl?.trim())
 
-  const getInitialOpenGroups = useCallback(() => {
+  const getInitialOpenGroups = () => {
     const openGroups = new Set<string>()
     if (
       pathname.startsWith("/invoices") ||
@@ -46,13 +45,13 @@ export function DashboardNav() {
       openGroups.add("collections")
     }
     return openGroups
-  }, [pathname])
+  }
 
-  const [openGroups, setOpenGroups] = useState<Set<string>>(getInitialOpenGroups)
+  const [openGroups, setOpenGroups] = useState<Set<string>>(getInitialOpenGroups())
 
   useEffect(() => {
     setOpenGroups(getInitialOpenGroups())
-  }, [getInitialOpenGroups])
+  }, [pathname])
 
   const toggleGroup = (groupKey: string) => {
     setOpenGroups((prev) => {
@@ -93,14 +92,7 @@ export function DashboardNav() {
           className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-primary/10"
         >
           {hasBusinessLogo ? (
-            <Image
-              src={businessLogoUrl!}
-              alt=""
-              fill
-              unoptimized
-              className="object-cover"
-              sizes="40px"
-            />
+            <img src={businessLogoUrl!} alt="" className="h-full w-full object-cover" />
           ) : (
             <Building2 className="h-6 w-6 text-primary" />
           )}

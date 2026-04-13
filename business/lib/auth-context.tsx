@@ -93,13 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     void bootstrap()
-   }, [
-    supabase,
-    user?.id,
-    user?.user_metadata?.name,
-    user?.user_metadata?.first_name,
-    user?.user_metadata?.last_name,
-  ])
+  }, [supabase, user?.id])
 
   useEffect(() => {
     if (!user?.id) return

@@ -66,10 +66,10 @@ export function readEasenetPublicProfileCache(rawTag: string): CachedEasenetPubl
   if (!tag) return null
   let e: StoredEntry | undefined = store.get(tag)
   if (!e) {
-    const fromStorage = readFromSessionStorage(tag)
-    if (fromStorage) {
-      e = fromStorage
-      store.set(tag, e)
+    const fromSession = readFromSessionStorage(tag)
+    if (fromSession) {
+      store.set(tag, fromSession)
+      e = fromSession
     }
   }
   if (!e) return null

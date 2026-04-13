@@ -176,8 +176,6 @@ export function SettingsAdminPanel() {
 
   useEffect(() => {
     loadAllData()
-    // Intentional mount-only load; loadAllData closes over latest loaders for first paint.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const loadAllData = async () => {

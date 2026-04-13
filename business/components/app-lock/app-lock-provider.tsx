@@ -30,7 +30,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
     setAppLocked(user.id, false)
     resetSessionActivity()
     setBump((n) => n + 1)
-  }, [user])
+  }, [user?.id])
 
   const onSetupComplete = useCallback(() => {
     resetSessionActivity()

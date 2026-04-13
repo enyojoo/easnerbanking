@@ -134,8 +134,7 @@ class PersonalSettingsStore {
           })
           .catch((err) => {
             console.error("Personal settings background refresh failed:", err)
-            if (this.data) return this.data
-            throw err
+            return this.data!
           })
           .finally(() => {
             this.loadingPromise = null

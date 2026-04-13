@@ -30,7 +30,6 @@ export interface CreateIdentitySubmission {
   country_code: string
   id_type: string
   id_document_file: File
-  metadata?: Record<string, unknown> | null
 }
 
 export interface CreateAddressSubmission {

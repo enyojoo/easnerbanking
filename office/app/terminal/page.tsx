@@ -23,9 +23,8 @@ type Row = {
 }
 
 function fmtFiat(amount: number | string | null, currency: string | null) {
-  if (amount == null) return "—"
   const n = typeof amount === "string" ? Number.parseFloat(amount) : amount
-  if (!Number.isFinite(n)) return "—"
+  if (amount == null || !Number.isFinite(n)) return "—"
   const c = (currency || "USD").toUpperCase()
   return `${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${c}`
 }

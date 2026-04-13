@@ -127,10 +127,7 @@ export function SettingsBusinessTab() {
     if (profile.isLoading) return
     // Avoid overwriting Easetag (and racing the availability check) while editing business details.
     if (editingSection === "business") return
-    const code = countryCodeFromProfile({
-      countryCode: profile.countryCode,
-      country: profile.country,
-    })
+    const code = countryCodeFromProfile(profile)
     setCountryCode(code)
     const c = getCountryFromCode(code)
     const countryLabel = profile.country?.trim() || c?.name || ""

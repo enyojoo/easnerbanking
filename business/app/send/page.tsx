@@ -2,7 +2,6 @@
 
 import { useState, useMemo, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import Image from "next/image"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -591,16 +590,13 @@ export default function SendPage() {
                             isSelected ? "bg-muted" : ""
                           }`}
                         >
-                          <Image
+                          <img
                             src={
                               opt.code === "usdc"
                                 ? "https://assets.coingecko.com/coins/images/6319/small/USD_Coin_icon.png"
                                 : "https://assets.coingecko.com/coins/images/325/small/Tether.png"
                             }
                             alt={opt.name}
-                            width={32}
-                            height={32}
-                            unoptimized
                             className="h-8 w-8 rounded-full shrink-0"
                           />
                           <p className="font-medium">{opt.name}</p>

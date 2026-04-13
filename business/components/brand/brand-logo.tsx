@@ -1,4 +1,3 @@
-import Image from "next/image"
 import { BRAND } from "./brand-constants"
 
 interface BrandLogoProps {
@@ -15,13 +14,10 @@ export function BrandLogo({ href, className = "", size = "md" }: BrandLogoProps)
   }
 
   const img = (
-    <Image
+    <img
       src={BRAND.logo}
       alt={`${BRAND.name} Logo`}
-      width={160}
-      height={40}
-      unoptimized
-      className={`h-auto w-auto object-contain ${sizeClasses[size]} ${className}`}
+      className={`w-auto object-contain ${sizeClasses[size]} ${className}`}
     />
   )
 

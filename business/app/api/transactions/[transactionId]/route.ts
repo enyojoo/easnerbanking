@@ -62,6 +62,7 @@ type Props = { params: Promise<{ transactionId: string }> }
 export async function GET(request: Request, routeCtx: Props) {
   const user = await getUserFromApiRequest(request)
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const userId = user.id
 
   const { transactionId: rawId } = await routeCtx.params
   const transactionId = rawId?.trim()
@@ -69,7 +70,6 @@ export async function GET(request: Request, routeCtx: Props) {
     return NextResponse.json({ error: "Missing transaction id" }, { status: 400 })
   }
 
-  const userId = user.id
   const scopeRes = await resolveLedgerListScope(request, userId)
   if (!scopeRes.ok) return scopeRes.response
   const { scope, businessId } = scopeRes

@@ -1,6 +1,5 @@
 "use client"
 
-import Image from "next/image"
 import { useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { X, User } from "lucide-react"
@@ -58,7 +57,7 @@ export function ProfilePhotoField({
           className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border bg-muted/30"
         >
           {hasImage ? (
-            <Image src={value!} alt="" fill unoptimized className="object-cover" />
+            <img src={value!} alt="" className="h-full w-full object-cover" />
           ) : (
             <User className="h-6 w-6 text-muted-foreground" />
           )}

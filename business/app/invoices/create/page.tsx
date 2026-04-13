@@ -330,7 +330,7 @@ export default function CreateInvoicePage() {
         dueDate: futureDate.toISOString().split('T')[0]
       }))
     }
-  }, [isEditMode])
+  }, [])
 
   // Default invoice currency to business base currency when no customer (same as Add Customer dialog).
   // Only on initial profile load — not on every baseCurrency change — so manual picks are preserved.
