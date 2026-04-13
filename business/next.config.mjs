@@ -9,6 +9,10 @@ const nextConfig = {
     root: resolve(__dirname, ".."),
   },
   transpilePackages: ["@easner/server", "@easner/shared"],
+  webpack: (config) => {
+    config.resolve.modules.unshift(resolve(__dirname, "../node_modules"))
+    return config
+  },
   async redirects() {
     return [
       { source: "/verification", destination: "/settings?tab=business", permanent: false },
