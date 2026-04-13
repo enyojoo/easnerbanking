@@ -1,6 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useLayoutEffect, useMemo, useState } from 'react'
 import type { Recipient } from '../types'
-import { fetchEasenetPublicProfileCached, type EasenetPublicProfile } from '../lib/easenetProfile'
+import {
+  fetchEasenetPublicProfileCached,
+  peekEasenetPublicProfileMemory,
+  type EasenetPublicProfile,
+} from '../lib/easenetProfile'
 import {
   isEasenetRecipientRecord,
   resolveRecipientEasetagForUi,
@@ -14,6 +18,13 @@ export type HydratedEasenetProfile = {
   avatarUrl: string | null
 }
 
+function normEasetag(s: string | undefined): string {
+  return String(s || '')
+    .trim()
+    .replace(/^@+/, '')
+    .toLowerCase()
+}
+
 /**
  * Merges saved recipient snapshot with live `/api/users/public-by-easetag` (same source as search preview):
  * business logo vs personal avatar, correct Business/Personal, display name.
@@ -21,15 +32,28 @@ export type HydratedEasenetProfile = {
 export function useEasenetRecipientHydration(recipient: Recipient | null | undefined): HydratedEasenetProfile {
   const tag = recipient ? resolveRecipientEasetagForUi(recipient) : ''
   const isEasenet = Boolean(recipient && isEasenetRecipientRecord(recipient))
-  const [remote, setRemote] = useState<EasenetPublicProfile | null>(null)
+  const shouldSkip = Boolean(recipient && shouldSkipEasenetPublicFetch(recipient))
+  const recipientId = recipient?.id
 
-  useEffect(() => {
+  const [remote, setRemote] = useState<EasenetPublicProfile | null>(() => {
+    if (!recipient || !isEasenetRecipientRecord(recipient)) return null
+    const t = resolveRecipientEasetagForUi(recipient)
+    if (!t || shouldSkipEasenetPublicFetch(recipient)) return null
+    return peekEasenetPublicProfileMemory(t)
+  })
+
+  useLayoutEffect(() => {
     if (!isEasenet || !tag) {
       setRemote(null)
       return
     }
-    if (recipient && shouldSkipEasenetPublicFetch(recipient)) {
+    if (shouldSkip) {
       setRemote(null)
+      return
+    }
+    const mem = peekEasenetPublicProfileMemory(tag)
+    if (mem) {
+      setRemote(mem)
       return
     }
     let cancelled = false
@@ -39,7 +63,7 @@ export function useEasenetRecipientHydration(recipient: Recipient | null | undef
     return () => {
       cancelled = true
     }
-  }, [isEasenet, tag, recipient])
+  }, [isEasenet, tag, shouldSkip, recipientId])
 
   return useMemo(() => {
     if (!recipient || !isEasenet || !tag) {
@@ -54,7 +78,9 @@ export function useEasenetRecipientHydration(recipient: Recipient | null | undef
     const localAvatar = recipient.payee_avatar_url?.trim() || null
     const storedKind = recipient.payee_account_kind
 
-    if (remote?.found) {
+    const remoteOk = remote?.found && normEasetag(remote.easetag) === tag
+
+    if (remoteOk) {
       const remoteAvatar = remote.avatarUrl?.trim() || null
       return {
         fullName: remote.fullName.trim() || recipient.full_name,

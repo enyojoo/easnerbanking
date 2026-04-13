@@ -70,6 +70,17 @@ function cacheKeyForEasetag(rawTag: string): string {
     .toLowerCase()
 }
 
+/** Synchronous read of the in-memory Easenet profile cache (same TTL as {@link fetchEasenetPublicProfileCached}). */
+export function peekEasenetPublicProfileMemory(rawTag: string): EasenetPublicProfile | null {
+  const key = cacheKeyForEasetag(rawTag)
+  if (key.length < 4) return null
+  const mem = cachedProfiles.get(key)
+  if (mem && Date.now() - mem.at < MEMORY_TTL_MS) {
+    return mem.value
+  }
+  return null
+}
+
 function persistStorageKey(normalizedTag: string): string {
   return `${PERSIST_KEY_PREFIX}${normalizedTag}`
 }

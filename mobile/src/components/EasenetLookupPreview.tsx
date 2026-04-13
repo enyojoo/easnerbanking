@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
-import { View, Text, Image, StyleSheet } from 'react-native'
+import { View, Text, StyleSheet } from 'react-native'
+import { Image } from 'expo-image'
 import { EasenetSubtitleRow } from '../lib/easenetRecipientUi'
 import { EASNER_MARK_URL } from '../lib/easnerBrand'
 import { colors, spacing, borderRadius, textStyles } from '../theme'
@@ -43,7 +44,10 @@ export function EasenetLookupPreview({
           <Image
             source={{ uri }}
             style={styles.avatarImg}
-            resizeMode="cover"
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            recyclingKey={uri}
+            transition={0}
             onError={() => setImageFailed(true)}
           />
         ) : (
@@ -55,7 +59,9 @@ export function EasenetLookupPreview({
           <Image
             source={{ uri: EASNER_MARK_URL }}
             style={styles.markImg}
-            resizeMode="cover"
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            transition={0}
           />
         </View>
       </View>
