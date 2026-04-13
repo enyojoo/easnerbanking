@@ -9,16 +9,22 @@ const monorepoRoot = path.join(__dirname, "..")
 const officeRoot = __dirname
 
 /**
- * Resolve a package directory for webpack. Prefer the workspace that declares the dependency (office);
- * fall back to repo root (root now also lists @supabase/supabase-js so createRequire(root) works on CI).
+ * Resolve a package directory for webpack. Try workspace-local node_modules first (npm
+ * install-strategy=nested), then repo root, then Node resolution from manifests.
  */
-function resolveHoistedPackageDir(packageName) {
-  const hoisted = path.join(monorepoRoot, "node_modules", ...packageName.split("/"))
-  if (fs.existsSync(path.join(hoisted, "package.json"))) {
-    return hoisted
+function resolveHoistedPackageDir(packageName, workspaceDir) {
+  const segments = packageName.split("/")
+  const dirsToTry = [
+    path.join(workspaceDir, "node_modules", ...segments),
+    path.join(monorepoRoot, "node_modules", ...segments),
+  ]
+  for (const dir of dirsToTry) {
+    if (fs.existsSync(path.join(dir, "package.json"))) {
+      return dir
+    }
   }
   const requireCandidates = [
-    path.join(officeRoot, "package.json"),
+    path.join(workspaceDir, "package.json"),
     path.join(monorepoRoot, "package.json"),
   ]
   for (const manifest of requireCandidates) {
@@ -32,7 +38,7 @@ function resolveHoistedPackageDir(packageName) {
     }
   }
   throw new Error(
-    `[office/next.config] Cannot resolve "${packageName}". Expected at ${hoisted} or via npm workspaces.`,
+    `[office/next.config] Cannot resolve "${packageName}". Tried: ${dirsToTry.join(", ")}`,
   )
 }
 
@@ -95,10 +101,11 @@ const nextConfig = {
     config.resolve.symlinks = true
     config.resolve.modules = [
       path.join(monorepoRoot, "node_modules"),
+      path.join(officeRoot, "node_modules"),
       ...(Array.isArray(config.resolve.modules) ? config.resolve.modules : ["node_modules"]),
     ]
 
-    const supabaseJsDir = resolveHoistedPackageDir("@supabase/supabase-js")
+    const supabaseJsDir = resolveHoistedPackageDir("@supabase/supabase-js", officeRoot)
     ensureAlias(config, "@supabase/supabase-js", supabaseJsDir)
 
     if (!isServer) {

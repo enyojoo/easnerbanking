@@ -1,3 +1,4 @@
+import fs from "fs"
 import path from "path"
 import { createRequire } from "module"
 import { fileURLToPath } from "url"
@@ -5,18 +6,37 @@ import { fileURLToPath } from "url"
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 /** Monorepo root — workspace deps are hoisted here; Turbopack must resolve this tree on Vercel. */
 const monorepoRoot = path.join(__dirname, "..")
+const businessRoot = __dirname
 
-/** Hoisted deps under repo root; webpack must resolve them on Vercel (sparse business/node_modules). */
-const rootRequire = createRequire(path.join(monorepoRoot, "package.json"))
-function resolvePkgDir(specifier, fallbackSegments) {
-  try {
-    return path.dirname(rootRequire.resolve(`${specifier}/package.json`))
-  } catch {
-    return path.join(monorepoRoot, "node_modules", ...fallbackSegments)
+function resolveWorkspacePackageDir(packageName, workspaceDir) {
+  const segments = packageName.split("/")
+  const dirsToTry = [
+    path.join(workspaceDir, "node_modules", ...segments),
+    path.join(monorepoRoot, "node_modules", ...segments),
+  ]
+  for (const dir of dirsToTry) {
+    if (fs.existsSync(path.join(dir, "package.json"))) {
+      return dir
+    }
   }
+  const requireCandidates = [
+    path.join(workspaceDir, "package.json"),
+    path.join(monorepoRoot, "package.json"),
+  ]
+  for (const manifest of requireCandidates) {
+    if (!fs.existsSync(manifest)) continue
+    try {
+      const req = createRequire(manifest)
+      const resolved = req.resolve(`${packageName}/package.json`)
+      return path.dirname(resolved)
+    } catch {
+      /* try next */
+    }
+  }
+  throw new Error(
+    `[business/next.config] Cannot resolve "${packageName}". Tried: ${dirsToTry.join(", ")}`,
+  )
 }
-const supabaseJsDir = resolvePkgDir("@supabase/supabase-js", ["@supabase", "supabase-js"])
-const supabaseSsrDir = resolvePkgDir("@supabase/ssr", ["@supabase", "ssr"])
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -55,8 +75,11 @@ const nextConfig = {
     config.resolve = config.resolve ?? {}
     config.resolve.modules = [
       path.join(monorepoRoot, "node_modules"),
+      path.join(businessRoot, "node_modules"),
       ...(Array.isArray(config.resolve.modules) ? config.resolve.modules : ["node_modules"]),
     ]
+    const supabaseJsDir = resolveWorkspacePackageDir("@supabase/supabase-js", businessRoot)
+    const supabaseSsrDir = resolveWorkspacePackageDir("@supabase/ssr", businessRoot)
     config.resolve.alias = {
       ...config.resolve.alias,
       "@supabase/supabase-js": supabaseJsDir,
