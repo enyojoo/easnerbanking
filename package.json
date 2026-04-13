@@ -38,6 +38,7 @@
     "turbo": "^2.8.12"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.57.2",
     "next": "^16.1.6",
     "react": "19.1.0",
     "react-dom": "19.1.0"
