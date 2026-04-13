@@ -120,7 +120,7 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
               onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} accessibilityRole="button"
               accessibilityLabel="Add card"
             >
-              <Plus size={20} color={colors.text.primary} strokeWidth={2.5} />
+              <Plus size={22} color={colors.primary.main} strokeWidth={2} />
             </Pressable>
           </View>
         </Animated.View>
@@ -338,14 +338,15 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   iconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: colors.frame.background,
     borderWidth: 0.5,
     borderColor: colors.frame.border,
+    flexShrink: 0,
   },
   carouselContainer: {
     marginTop: spacing[3],

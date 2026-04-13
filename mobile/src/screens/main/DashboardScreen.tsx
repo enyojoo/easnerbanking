@@ -671,7 +671,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
             <View style={styles.greetingContainer}>
               <Pressable
                android_ripple={ripple.neutral}
-                style={userAvatarStyles.circle}
+                style={styles.headerAvatarButton}
                 onPress={async () => {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                   navigation.navigate('ProfileEdit' as any)
@@ -1013,6 +1013,18 @@ function createDashboardStyles(c: Colors, tabBarScrollInset: number) {
     fontFamily: 'Outfit-SemiBold',
     fontWeight: '600',
     textDecorationLine: 'underline',
+    flexShrink: 0,
+  },
+  headerAvatarButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: c.frame.background,
+    borderWidth: 0.5,
+    borderColor: c.frame.border,
+    overflow: 'hidden',
     flexShrink: 0,
   },
   supportHeaderButton: {
