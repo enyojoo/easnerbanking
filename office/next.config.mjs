@@ -1,3 +1,10 @@
+import path from "path"
+import { fileURLToPath } from "url"
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+/** Monorepo root — npm hoists workspace deps here; Turbopack must resolve from this tree (e.g. Vercel). */
+const monorepoRoot = path.join(__dirname, "..")
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   async redirects() {
@@ -21,6 +28,7 @@ const nextConfig = {
     optimizePackageImports: ['lucide-react'],
   },
   turbopack: {
+    root: monorepoRoot,
     rules: {
       '*.svg': {
         loaders: ['@svgr/webpack'],
