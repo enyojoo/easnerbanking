@@ -49,31 +49,6 @@ for (const p of nestedTypes) {
   }
 }
 
-// #region agent log
-if (process.env.EASNER_DEBUG_DEP_RESOLUTION === "1") {
-  const logPath = path.join(root, ".cursor", "debug-f22196.log")
-  const supabasePkg = path.join("@supabase", "supabase-js", "package.json")
-  const data = {}
-  for (const label of ["root", "office", "business"]) {
-    const base = label === "root" ? root : path.join(root, label)
-    const p = path.join(base, "node_modules", supabasePkg)
-    data[label] = { exists: fs.existsSync(p), path: p }
-  }
-  fs.mkdirSync(path.dirname(logPath), { recursive: true })
-  fs.appendFileSync(
-    logPath,
-    `${JSON.stringify({
-      sessionId: "f22196",
-      hypothesisId: "H1",
-      location: "fix-easner-workspace-links.mjs",
-      message: "supabase_js_after_install",
-      data,
-      timestamp: Date.now(),
-    })}\n`,
-  )
-}
-// #endregion
-
 /** Fail fast on Vercel if hoisted deps are missing (avoids opaque Next “module not found”). */
 if (process.env.VERCEL === "1") {
   const supabaseJs = path.join(root, "node_modules", "@supabase", "supabase-js", "package.json")
