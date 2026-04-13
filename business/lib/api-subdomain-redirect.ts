@@ -2,13 +2,47 @@ import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
 import { getBusinessAppPublicOrigin } from "@/lib/business-app-public-url"
 
+const DEFAULT_API_HOST = "api.easner.com"
+const DEFAULT_BUSINESS_HOST = "business.easner.com"
+
+function normalizeHostname(value: string | undefined): string | null {
+  if (!value) return null
+  const h = value.trim().toLowerCase().replace(/^https?:\/\//, "").split("/")[0]?.split(":")[0]
+  return h || null
+}
+
+/** Vercel / proxies often set this; `Host` alone can be wrong in some setups. */
+export function getRequestHostname(request: NextRequest): string {
+  const forwarded = request.headers.get("x-forwarded-host")
+  if (forwarded) {
+    const first = forwarded.split(",")[0]?.trim()
+    const h = normalizeHostname(first)
+    if (h) return h
+  }
+  return normalizeHostname(request.headers.get("host") ?? undefined) ?? ""
+}
+
 /**
- * Hostname dedicated to `/api/*` (e.g. Expo `EXPO_PUBLIC_API_URL`).
- * Override per environment with `EASNER_API_HOST` (no scheme, no path).
+ * Hostnames dedicated to `/api/*` only (browser hits should go to the business origin).
+ * - `EASNER_API_HOSTS` — comma-separated (e.g. `api.easner.com,www.api.easner.com`)
+ * - `EASNER_API_HOST` — single host
+ * - `NEXT_PUBLIC_EASNER_API_HOST` — inlined on Edge (use if middleware doesn’t see server-only env)
  */
-export function getApiOnlyCanonicalHost(): string {
-  const raw = process.env.EASNER_API_HOST?.trim().toLowerCase().replace(/^https?:\/\//, "").split("/")[0]
-  return raw || "api.easner.com"
+export function getApiOnlyHostnames(): string[] {
+  const list = process.env.EASNER_API_HOSTS?.split(",").map((s) => s.trim()).filter(Boolean) ?? []
+  const single = process.env.EASNER_API_HOST?.trim()
+  const pub = process.env.NEXT_PUBLIC_EASNER_API_HOST?.trim()
+  const merged = [...list, single || "", pub || ""]
+    .map((s) => normalizeHostname(s))
+    .filter((h): h is string => Boolean(h))
+  const unique = [...new Set(merged)]
+  if (unique.length > 0) return unique
+  return [DEFAULT_API_HOST]
+}
+
+export function isApiOnlyHostname(hostname: string): boolean {
+  if (!hostname) return false
+  return getApiOnlyHostnames().includes(hostname.toLowerCase())
 }
 
 /** Where browser users land when they open a non-API path on the API host. */
@@ -23,7 +57,7 @@ export function getBusinessWebOriginForApiHostRedirect(): string {
       return fallback.replace(/\/$/, "")
     }
   }
-  return "https://business.easner.com"
+  return `https://${DEFAULT_BUSINESS_HOST}`
 }
 
 /**
@@ -35,11 +69,19 @@ export function maybeRedirectApiHostToBusiness(request: NextRequest): NextRespon
   if (pathname.startsWith("/api/")) return null
   if (pathname.startsWith("/_next/")) return null
 
-  const host = request.headers.get("host")?.split(":")[0]?.toLowerCase() ?? ""
-  const apiHost = getApiOnlyCanonicalHost()
-  if (!host || host !== apiHost) return null
+  const host = getRequestHostname(request)
+  if (!host || !isApiOnlyHostname(host)) return null
 
-  const origin = getBusinessWebOriginForApiHostRedirect()
+  let origin = getBusinessWebOriginForApiHostRedirect().replace(/\/$/, "")
+  try {
+    const businessHost = new URL(origin).hostname.toLowerCase()
+    if (businessHost === host) {
+      origin = `https://${DEFAULT_BUSINESS_HOST}`
+    }
+  } catch {
+    origin = `https://${DEFAULT_BUSINESS_HOST}`
+  }
+
   const target = `${origin}${pathname}${request.nextUrl.search}`
   return NextResponse.redirect(target, 307)
 }
