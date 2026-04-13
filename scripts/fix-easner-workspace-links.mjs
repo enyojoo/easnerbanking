@@ -31,9 +31,13 @@ function ensureSymlink(linkName, absoluteTarget) {
   fs.symlinkSync(relTarget, linkPath)
 }
 
-for (const { name, target } of links) {
-  ensureSymlink(name, target)
+function linkEasnerWorkspacePackages() {
+  for (const { name, target } of links) {
+    ensureSymlink(name, target)
+  }
 }
+
+linkEasnerWorkspacePackages()
 
 /** Dedupe React type packages so Radix / Next see one @types/react (avoids Slot + layout TS errors). */
 const nestedTypes = [
@@ -83,3 +87,6 @@ if (process.env.VERCEL === "1") {
     }
   }
 }
+
+/** Nested `npm install` (Supabase self-heal) can prune `node_modules/@easner`; re-link workspace packages. */
+linkEasnerWorkspacePackages()
