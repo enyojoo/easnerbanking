@@ -199,6 +199,8 @@ function ProfileEditContent({ navigation }: NavigationProps) {
       if (refreshUserProfile) {
         await refreshUserProfile()
       }
+      /** JWT `user_metadata.name` is updated server-side; refresh so bootstrap / session consumers match `users.full_name`. */
+      await supabase.auth.refreshSession().catch(() => undefined)
 
       setIsEditing(false)
       setShowDatePicker(false)

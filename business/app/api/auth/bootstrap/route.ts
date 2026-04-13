@@ -110,17 +110,24 @@ export async function POST(request: Request) {
     .eq("id", user.id)
     .maybeSingle()
 
+  const dbFullNameTrim =
+    typeof userRow?.full_name === "string" ? userRow.full_name.trim() : ""
+
   /**
-   * Prevent silent name regression:
-   * - Existing user row: keep DB `full_name` unless client sent a string `fullName` (omit key or null → preserve/seed).
-   * - Missing user row: use string `fullName` if sent, else seed from auth metadata.
+   * `public.users.full_name` is the profile source of truth once set.
+   * Mobile bootstrap always sends `body.fullName` from JWT `user_metadata.name`, which often matches
+   * Noah/KYC and lags behind SQL or `PUT /api/settings/personal` — never overwrite a non-empty DB name from bootstrap.
    */
   const resolvedBootstrapFullName =
-    explicitFullNameProvided
-      ? explicitName.fullName
-      : userRow?.id
-        ? (typeof userRow.full_name === "string" ? userRow.full_name : null)
-        : parseName(metadataName).fullName
+    userRow?.id && dbFullNameTrim.length > 0
+      ? dbFullNameTrim
+      : explicitFullNameProvided
+        ? explicitName.fullName
+        : userRow?.id
+          ? typeof userRow.full_name === "string"
+            ? userRow.full_name
+            : null
+          : parseName(metadataName).fullName
 
   const baseUserPayload = {
     id: user.id,
@@ -146,6 +153,26 @@ export async function POST(request: Request) {
           },
           { onConflict: "id" },
         )
+    }
+  }
+
+  /**
+   * When DB `full_name` differs from JWT (e.g. edited in Supabase or profile API), align auth metadata
+   * so the mobile session can refresh to match without another profile save.
+   */
+  if (role === "individual" && dbFullNameTrim.length > 0) {
+    const jwtName = typeof user.user_metadata?.name === "string" ? user.user_metadata.name.trim() : ""
+    if (jwtName !== dbFullNameTrim) {
+      try {
+        const { data: cur, error: gErr } = await admin.auth.admin.getUserById(user.id)
+        if (!gErr && cur?.user) {
+          const meta = { ...(cur.user.user_metadata ?? {}) } as Record<string, unknown>
+          meta.name = dbFullNameTrim
+          await admin.auth.admin.updateUserById(user.id, { user_metadata: meta })
+        }
+      } catch {
+        /* non-fatal */
+      }
     }
   }
 

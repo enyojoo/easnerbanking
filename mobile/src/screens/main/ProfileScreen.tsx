@@ -258,6 +258,7 @@ function ProfileContent({ navigation }: NavigationProps) {
       if (refreshUserProfile) {
         await refreshUserProfile()
       }
+      await supabase.auth.refreshSession().catch(() => undefined)
 
       setIsEditing(false)
       setEasetagAvailable(null)

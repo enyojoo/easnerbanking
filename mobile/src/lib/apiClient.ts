@@ -65,7 +65,10 @@ export async function ensureBusinessAppUserBootstrap(): Promise<void> {
     if (!res.ok) {
       const text = await res.text().catch(() => '')
       console.warn('auth bootstrap failed:', res.status, text)
+      return
     }
+    /** Bootstrap may align `user_metadata.name` with `users.full_name` server-side — refresh JWT. */
+    await supabase.auth.refreshSession().catch(() => undefined)
   } catch (e) {
     console.warn('auth bootstrap error:', e)
   }

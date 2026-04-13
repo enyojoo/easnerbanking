@@ -61,7 +61,7 @@ export default function CardsPage() {
     <div className="flex flex-col h-[calc(100vh-9rem)] min-h-[500px] overflow-hidden">
       <div className="flex items-center justify-between mb-6 flex-shrink-0">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">My Cards</h1>
+          <h1 className="text-2xl font-semibold text-foreground">Cards</h1>
         </div>
         <Button className="gap-2" disabled={!hasCards}>
           <Plus className="h-4 w-4" />

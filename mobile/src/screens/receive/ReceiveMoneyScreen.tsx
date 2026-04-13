@@ -1456,11 +1456,6 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                       <Ionicons name="arrow-forward" size={18} color={colors.text.inverse} />
                     </Pressable>
                     )}
-                    {kycStatus === 'approved' && !hasStablecoinData && (
-                      <Text style={styles.kycNoticeTextCompact}>
-                        Your {currency.toLowerCase() === 'usd' ? 'USDC' : 'EURC'} address is being set up. This may take a few moments. Please check back shortly.
-                      </Text>
-                    )}
                     {accountCreationError && (
                       <Text style={styles.errorText}>{accountCreationError}</Text>
                     )}
@@ -1773,16 +1768,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Outfit-Regular',
     textAlign: 'center',
     lineHeight: 22,
-    marginBottom: spacing[4],
-  },
-  kycNoticeTextCompact: {
-    ...textStyles.bodyMedium,
-    fontSize: fontSize.sm,
-    color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
-    textAlign: 'center',
-    lineHeight: 18,
-    marginTop: spacing[2],
     marginBottom: spacing[4],
   },
   kycNoticeButton: {

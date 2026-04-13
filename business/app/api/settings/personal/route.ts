@@ -162,11 +162,26 @@ export async function PUT(request: Request) {
   const { error } = await admin.from("users").upsert(updatePayload, { onConflict: "id" })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  if ("avatarUrl" in body) {
+  /**
+   * Keep Supabase Auth `user_metadata` aligned with `public.users` so:
+   * - Mobile `POST /api/auth/bootstrap` (which reads `session.user.user_metadata.name`) does not fight the DB.
+   * - Noah KYC sync and other flows never need to touch `full_name`; profile remains source of truth on the row.
+   */
+  const shouldSyncAuthMetadata = "avatarUrl" in body || resolvedFullName !== undefined
+  if (shouldSyncAuthMetadata) {
     const { data: cur, error: getErr } = await admin.auth.admin.getUserById(user.id)
     if (getErr) return NextResponse.json({ error: getErr.message }, { status: 500 })
     const meta = { ...(cur.user?.user_metadata ?? {}) } as Record<string, unknown>
-    delete meta.avatar_url
+    if ("avatarUrl" in body) {
+      delete meta.avatar_url
+    }
+    if (resolvedFullName !== undefined) {
+      if (typeof resolvedFullName === "string" && resolvedFullName.trim().length > 0) {
+        meta.name = resolvedFullName.trim()
+      } else {
+        delete meta.name
+      }
+    }
     const { error: authErr } = await admin.auth.admin.updateUserById(user.id, { user_metadata: meta })
     if (authErr) return NextResponse.json({ error: authErr.message }, { status: 500 })
   }

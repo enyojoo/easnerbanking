@@ -1,6 +1,10 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { mapNoahVerificationToKycStatus } from "./map-kyc"
 
+/**
+ * Persist Noah customer id + mapped KYC status only.
+ * Do not set `users.full_name` (or any profile PII) from Noah — that stays on `public.users` via profile / bootstrap.
+ */
 export async function syncNoahCustomerToSupabase(
   target: { kind: "individual"; userId: string } | { kind: "business"; businessId: string },
   customer: Record<string, unknown>,

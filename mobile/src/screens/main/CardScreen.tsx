@@ -112,7 +112,7 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
         >
           <View style={styles.headerContent}>
             <View style={styles.headerTitleBlock}>
-              <Text style={styles.title}>My Cards</Text>
+              <Text style={styles.title}>Cards</Text>
             </View>
             <Pressable
              android_ripple={ripple.neutral}
