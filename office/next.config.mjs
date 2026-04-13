@@ -1,3 +1,8 @@
+import { resolve, dirname } from "node:path"
+import { fileURLToPath } from "node:url"
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   async redirects() {
@@ -21,6 +26,7 @@ const nextConfig = {
     optimizePackageImports: ['lucide-react'],
   },
   turbopack: {
+    root: resolve(__dirname, ".."),
     rules: {
       '*.svg': {
         loaders: ['@svgr/webpack'],
@@ -32,6 +38,11 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   webpack: (config, { isServer }) => {
+    config.resolve.alias = {
+      ...(config.resolve.alias || {}),
+      "@easner/shared": resolve(__dirname, "../packages/shared/src/index.ts"),
+    }
+    config.resolve.modules.unshift(resolve(__dirname, "../node_modules"))
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
