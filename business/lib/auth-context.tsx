@@ -75,6 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         typeof user.user_metadata?.name === "string"
           ? user.user_metadata.name
           : [user.user_metadata?.first_name, user.user_metadata?.last_name].filter(Boolean).join(" ")
+      const trimmedBootstrapName = String(fullNameFromMeta ?? "").trim()
 
       try {
         await fetchWithSession("/api/auth/bootstrap", {
@@ -83,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           body: JSON.stringify({
             ...(countryCode ? { countryCode } : {}),
             role,
-            fullName: fullNameFromMeta || null,
+            ...(trimmedBootstrapName ? { fullName: trimmedBootstrapName } : {}),
           }),
         })
       } catch (error) {

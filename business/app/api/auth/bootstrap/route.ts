@@ -9,10 +9,6 @@ type BootstrapBody = {
   fullName?: string | null
 }
 
-function hasOwn(o: object, k: string): boolean {
-  return Object.prototype.hasOwnProperty.call(o, k)
-}
-
 function normalizeCountryCode(value: unknown): string | null {
   if (typeof value !== "string") return null
   const code = value.trim().toUpperCase()
@@ -93,8 +89,9 @@ export async function POST(request: Request) {
   const countryCode = normalizeCountryCode(body.countryCode)
   const country = countryNameFromCode(countryCode)
   const metadataName = typeof user.user_metadata?.name === "string" ? user.user_metadata.name : null
-  const explicitFullNameProvided = hasOwn(body as object, "fullName")
-  const explicitName = parseName(explicitFullNameProvided ? body.fullName ?? null : null)
+  /** Only JSON string counts as explicit — `fullName: null` must not wipe DB (treat as omit; preserve/seed). */
+  const explicitFullNameProvided = typeof body.fullName === "string"
+  const explicitName = parseName(explicitFullNameProvided ? body.fullName : null)
   const admin = createSupabaseAdmin()
 
   if (role === "business" && countryCode) {
@@ -115,8 +112,8 @@ export async function POST(request: Request) {
 
   /**
    * Prevent silent name regression:
-   * - Existing user row: keep DB `full_name` unless client explicitly sent `fullName`.
-   * - Missing user row: allow explicit fullName, else seed once from auth metadata.
+   * - Existing user row: keep DB `full_name` unless client sent a string `fullName` (omit key or null → preserve/seed).
+   * - Missing user row: use string `fullName` if sent, else seed from auth metadata.
    */
   const resolvedBootstrapFullName =
     explicitFullNameProvided
