@@ -1,9 +1,19 @@
 import path from "path"
+import { createRequire } from "module"
 import { fileURLToPath } from "url"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 /** Monorepo root — npm hoists workspace deps here; Turbopack must resolve from this tree (e.g. Vercel). */
 const monorepoRoot = path.join(__dirname, "..")
+
+/** Hoisted deps live under the repo root; webpack must resolve them on Vercel (office/ has almost no node_modules). */
+const rootRequire = createRequire(path.join(monorepoRoot, "package.json"))
+let supabaseJsDir
+try {
+  supabaseJsDir = path.dirname(rootRequire.resolve("@supabase/supabase-js/package.json"))
+} catch {
+  supabaseJsDir = path.join(monorepoRoot, "node_modules", "@supabase", "supabase-js")
+}
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -46,6 +56,15 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   webpack: (config, { isServer }) => {
+    config.resolve = config.resolve ?? {}
+    config.resolve.modules = [
+      path.join(monorepoRoot, "node_modules"),
+      ...(Array.isArray(config.resolve.modules) ? config.resolve.modules : ["node_modules"]),
+    ]
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "@supabase/supabase-js": supabaseJsDir,
+    }
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
