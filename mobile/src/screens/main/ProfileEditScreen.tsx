@@ -369,7 +369,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
   }
 
   // Debounce easetag check
-  const easetagCheckTimeout = useRef<NodeJS.Timeout | null>(null)
+  const easetagCheckTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const handleEasetagChange = (text: string) => {
     // Remove @ if user types it, we'll add it in display
     const cleanText = text.replace(/^@/, "")

@@ -81,7 +81,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
   // Ref to track the last noah_signed_agreement_id we processed
   const lastProcessedTosAgreementIdRef = useRef<string | null>(null)
   // Ref to track periodic sync interval
-  const syncIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const syncIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Ref to prevent multiple simultaneous syncs
   const syncingRef = useRef(false)
 

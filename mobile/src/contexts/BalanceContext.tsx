@@ -35,7 +35,7 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
   const [balances, setBalances] = useState<{ USD: string; EUR: string }>({ USD: '0', EUR: '0' })
   
   const lastFetchTimeRef = useRef<number>(0)
-  const backgroundRefreshIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const backgroundRefreshIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isRefreshingRef = useRef<boolean>(false)
   const fetchBalancesRef = useRef<((force: boolean) => Promise<void>) | null>(null)
   const processedTransactionIdsRef = useRef<Set<string>>(new Set())
