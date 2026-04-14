@@ -23,7 +23,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ScrollView as GestureHandlerScrollView } from 'react-native-gesture-handler'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { Wallet, Building2, Smartphone, AtSign, Search } from 'lucide-react-native'
-import { fetchEasenetPublicProfileCached } from '../../lib/easenetProfile'
+import {
+  fetchEasenetPublicProfileCached,
+  primeEasenetPublicProfileCache,
+  warmEasenetPublicProfiles,
+} from '../../lib/easenetProfile'
 import { EasenetLookupPreview } from '../../components/EasenetLookupPreview'
 import { EasenetRecipientHydratedPreview } from '../../components/EasenetRecipientHydratedPreview'
 import { RecipientPayoutPreview } from '../../components/RecipientPayoutPreview'
@@ -206,6 +210,21 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     () => filterRecipientsBySearch(hubSorted, searchTerm),
     [hubSorted, searchTerm],
   )
+
+  useEffect(() => {
+    const easenetRows = recipients.filter((r) => isEasenetRecipientRecord(r))
+    if (easenetRows.length === 0) return
+    void Promise.allSettled(
+      easenetRows.map((row) =>
+        primeEasenetPublicProfileCache(resolveRecipientEasetagForUi(row), {
+          fullName: row.full_name,
+          avatarUrl: row.payee_avatar_url,
+          accountKind: row.payee_account_kind,
+        }),
+      ),
+    )
+    void warmEasenetPublicProfiles(easenetRows.map((row) => resolveRecipientEasetagForUi(row)))
+  }, [recipients])
 
   useEffect(() => {
     const t = searchTerm.trim()

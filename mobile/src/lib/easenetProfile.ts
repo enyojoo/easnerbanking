@@ -56,7 +56,7 @@ export async function fetchEasenetPublicProfile(rawTag: string): Promise<Easenet
 /** In-memory: avoid re-reading disk on every navigation in the same session. */
 const MEMORY_TTL_MS = 24 * 60 * 60 * 1000
 /** AsyncStorage: survive app restarts; refreshed when stale. */
-const DISK_TTL_MS = 7 * 24 * 60 * 60 * 1000
+const DISK_TTL_MS = 30 * 24 * 60 * 60 * 1000
 
 const PERSIST_KEY_PREFIX = 'easner_easenet_public_profile_v1_'
 
@@ -115,6 +115,44 @@ async function writePersistedEasenetProfile(normalizedTag: string, value: Extrac
   } catch {
     // ignore
   }
+}
+
+/**
+ * Prime cache from an already-saved recipient snapshot so avatar/kind can render instantly
+ * while network refresh happens in the background.
+ */
+export async function primeEasenetPublicProfileCache(
+  rawTag: string,
+  snapshot: { fullName?: string | null; avatarUrl?: string | null; accountKind?: PayeeAccountKind | null },
+): Promise<void> {
+  const key = cacheKeyForEasetag(rawTag)
+  if (key.length < 4) return
+  if (snapshot.accountKind !== 'business' && snapshot.accountKind !== 'personal') return
+  const fullName = String(snapshot.fullName || '').trim()
+  if (!fullName) return
+  const value: Extract<EasenetPublicProfile, { found: true }> = {
+    found: true,
+    easetag: key,
+    fullName,
+    avatarUrl: snapshot.avatarUrl?.trim() || null,
+    accountKind: snapshot.accountKind,
+  }
+  cachedProfiles.set(key, { at: Date.now(), value })
+  await writePersistedEasenetProfile(key, value)
+}
+
+/**
+ * Non-blocking warmup for Easetag public profiles; deduped by in-flight + cache checks.
+ */
+export async function warmEasenetPublicProfiles(rawTags: string[]): Promise<void> {
+  const unique = Array.from(
+    new Set(
+      (rawTags || [])
+        .map((tag) => cacheKeyForEasetag(tag))
+        .filter((tag) => tag.length >= 4),
+    ),
+  )
+  await Promise.allSettled(unique.map((tag) => fetchEasenetPublicProfileCached(tag)))
 }
 
 /** Clears persisted Easenet public lookups (e.g. on logout). */

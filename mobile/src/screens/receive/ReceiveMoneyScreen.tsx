@@ -30,7 +30,7 @@ type TabType = 'bank' | 'stablecoin'
 
 export default function ReceiveMoneyScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
-  const { userProfile, refreshUserProfile } = useAuth()
+  const { user, userProfile, refreshUserProfile } = useAuth()
   const [activeTab, setActiveTab] = useState<TabType>('bank')
   const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>({})
   const [virtualAccount, setVirtualAccount] = useState<any>(null)
@@ -78,7 +78,16 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     }
   }
   
-  const kycStatus = getKycStatus()
+  const [cachedKycStatus, setCachedKycStatus] = useState<string | null>(null)
+  const profileRefreshAtRef = useRef(0)
+  const PROFILE_REFRESH_TTL_MS = 5 * 60 * 1000
+  const kycStatusStorageKey = useMemo(
+    () => (user?.id ? `easner_receive_kyc_status_${user.id}` : null),
+    [user?.id],
+  )
+
+  const liveKycStatus = getKycStatus()
+  const kycStatus = liveKycStatus ?? cachedKycStatus
   
   // Check if account data exists (from DB or API)
   const hasAccountData = virtualAccount?.hasAccount || hasAccountInDb || (virtualAccount && virtualAccount.accountNumber)
@@ -111,8 +120,36 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   /** Avoid treating first focus after mount as a KYC transition (null → status), which was clearing cache and replaying the notice. */
   const isFirstFocusAfterMountRef = useRef(true)
   
-  // Cache TTL (10 minutes - same as recipients)
-  const CACHE_TTL = 10 * 60 * 1000
+  // Keep receive account/wallet cache warm much longer; still refreshed explicitly on mutations.
+  const CACHE_TTL = 24 * 60 * 60 * 1000
+
+  useEffect(() => {
+    if (!kycStatusStorageKey) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(kycStatusStorageKey)
+        if (cancelled) return
+        if (!raw) return
+        const env = JSON.parse(raw) as { status?: string }
+        if (env?.status === 'approved' || env?.status === 'in_review' || env?.status === 'rejected') {
+          setCachedKycStatus(env.status)
+        }
+      } catch {
+        // ignore
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [kycStatusStorageKey])
+
+  useEffect(() => {
+    if (!kycStatusStorageKey) return
+    if (liveKycStatus !== 'approved' && liveKycStatus !== 'in_review' && liveKycStatus !== 'rejected') return
+    setCachedKycStatus(liveKycStatus)
+    void AsyncStorage.setItem(kycStatusStorageKey, JSON.stringify({ status: liveKycStatus })).catch(() => {})
+  }, [kycStatusStorageKey, liveKycStatus])
   
   // Helper to get cached data (use useCallback to ensure stable reference)
   const getCachedData = React.useCallback(async <T,>(key: string): Promise<{ data: T; timestamp: number } | null> => {
@@ -787,7 +824,11 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   // Refresh on focus and re-evaluate account state when verification status changes.
   useFocusEffect(
     React.useCallback(() => {
-      void refreshUserProfile?.()
+      const now = Date.now()
+      if (now - profileRefreshAtRef.current > PROFILE_REFRESH_TTL_MS) {
+        profileRefreshAtRef.current = now
+        void refreshUserProfile?.()
+      }
       const prev = prevKycStatusRef.current
 
       if (isFirstFocusAfterMountRef.current) {

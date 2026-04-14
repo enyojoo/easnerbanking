@@ -23,7 +23,6 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { clearEasenetPublicProfileCaches } from './easenetProfile'
 import { clearProfileSnapshot } from './profileSnapshot'
 
 /** Canonical TTLs — single source of truth for SWR windows. */
@@ -169,5 +168,4 @@ export async function clearAllUserCachesForUserId(userId: string): Promise<void>
     // ignore
   }
   await clearProfileSnapshot(userId)
-  await clearEasenetPublicProfileCaches()
 }

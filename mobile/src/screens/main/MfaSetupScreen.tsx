@@ -62,6 +62,9 @@ const MFA_COPY = {
   enabling: 'Enabling…',
 } as const
 
+const MFA_QR_SIZE = 192
+const MFA_SECRET_BOX_HEIGHT = 56
+
 type MfaRouteParams = { autoStartEnroll?: boolean; mfaVerifiedOnCard?: boolean }
 
 /** Single snapshot so `loaded` is never true while `factors` still reflect a stale empty list (fixes Set up → Disable flash). */
@@ -559,11 +562,11 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
                 <Text style={styles.enrollIntro}>{MFA_COPY.enrollDescription}</Text>
                 <View style={styles.qrWrap}>
                   {enrollQrSvg ? (
-                    <SvgXml xml={enrollQrSvg} width={192} height={192} />
+                    <SvgXml xml={enrollQrSvg} width={MFA_QR_SIZE} height={MFA_QR_SIZE} />
                   ) : qrDataUrl ? (
                     <Image source={{ uri: qrDataUrl }} style={styles.qr} resizeMode="contain" />
                   ) : (
-                    <SkeletonLoader width={192} height={192} borderRadius={8} />
+                    <SkeletonLoader width={MFA_QR_SIZE} height={MFA_QR_SIZE} borderRadius={8} />
                   )}
                 </View>
                 <Text style={styles.label}>{MFA_COPY.secretLabel}</Text>
@@ -573,7 +576,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
                       <Text
                         style={styles.secretText}
                         selectable
-                        numberOfLines={3}
+                        numberOfLines={2}
                         {...Platform.select({
                           android: { includeFontPadding: false },
                         })}
@@ -596,7 +599,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
                       </Pressable>
                     </View>
                   ) : (
-                    <SkeletonLoader width="100%" height={16} borderRadius={4} />
+                    <SkeletonLoader width="100%" height={20} borderRadius={4} />
                   )}
                 </View>
                 <View
@@ -713,16 +716,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginVertical: spacing[4],
-    padding: spacing[3],
     borderWidth: 1,
     borderColor: colors.semantic.border,
     borderRadius: borderRadius.md,
     backgroundColor: colors.semantic.card,
-    minHeight: 200,
+    width: MFA_QR_SIZE,
+    height: MFA_QR_SIZE,
+    alignSelf: 'center',
   },
   qr: {
-    width: 192,
-    height: 192,
+    width: MFA_QR_SIZE,
+    height: MFA_QR_SIZE,
   },
   label: {
     ...textStyles.labelLarge,
@@ -738,7 +742,7 @@ const styles = StyleSheet.create({
     paddingRight: spacing[1],
     paddingVertical: spacing[2],
     marginBottom: spacing[4],
-    minHeight: 38,
+    height: MFA_SECRET_BOX_HEIGHT,
     justifyContent: 'center',
   },
   secretRowInner: {

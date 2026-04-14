@@ -52,11 +52,15 @@ import {
 import { getAllowedCountriesCached } from '../../lib/jurisdictionCountryPolicy'
 import { getNetworkIconUrl, getTokenIconUrl } from '../../lib/cryptoIcons'
 import { Wallet, Building2, Smartphone, AtSign } from 'lucide-react-native'
-import { fetchEasenetPublicProfileCached } from '../../lib/easenetProfile'
+import {
+  fetchEasenetPublicProfileCached,
+  primeEasenetPublicProfileCache,
+  warmEasenetPublicProfiles,
+} from '../../lib/easenetProfile'
 import { EasenetLookupPreview } from '../../components/EasenetLookupPreview'
 import { EasenetRecipientHydratedPreview } from '../../components/EasenetRecipientHydratedPreview'
 import { RecipientPayoutPreview } from '../../components/RecipientPayoutPreview'
-import { isEasenetRecipientRecord } from '../../lib/easenetRecipientUi'
+import { isEasenetRecipientRecord, resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { CountryFlag } from '../../components/flags/CountryFlag'
 import { getCountryCodeForCurrency } from '@easner/shared'
@@ -185,6 +189,21 @@ function RecipientsContent({ navigation }: NavigationProps) {
   // Keep local list in sync with context while allowing instant local updates.
   useEffect(() => {
     setUiRecipients(recipients)
+  }, [recipients])
+
+  useEffect(() => {
+    const easenetRows = recipients.filter((r) => isEasenetRecipientRecord(r))
+    if (easenetRows.length === 0) return
+    void Promise.allSettled(
+      easenetRows.map((row) =>
+        primeEasenetPublicProfileCache(resolveRecipientEasetagForUi(row), {
+          fullName: row.full_name,
+          avatarUrl: row.payee_avatar_url,
+          accountKind: row.payee_account_kind,
+        }),
+      ),
+    )
+    void warmEasenetPublicProfiles(easenetRows.map((row) => resolveRecipientEasetagForUi(row)))
   }, [recipients])
 
   useEffect(() => {
