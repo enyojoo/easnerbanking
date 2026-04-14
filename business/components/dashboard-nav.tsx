@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils"
 import { BusinessLogo } from "@/components/brand/business-logo"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { Tier1VerificationBadge } from "@/components/compliance/tier1-verification-badge"
+import { BusinessOnboardingChecklist } from "@/components/business-onboarding-checklist"
 
 export function DashboardNav() {
   const pathname = usePathname()
@@ -192,6 +193,8 @@ export function DashboardNav() {
           }
         })}
       </nav>
+
+      <BusinessOnboardingChecklist />
 
       <div className="px-4 py-4 border-t border-sidebar-border flex items-center justify-center">
         <BusinessLogo size="md" href="/" />
