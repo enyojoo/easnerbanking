@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   ScrollView,
   Platform,
+  Dimensions,
   KeyboardAvoidingView,
   Keyboard,
   InteractionManager,
@@ -21,6 +22,7 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { ScrollView as GestureHandlerScrollView } from 'react-native-gesture-handler'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { Plus, Search } from 'lucide-react-native'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -66,14 +68,14 @@ import { getCountryCodeForCurrency } from '@easner/shared'
  */
 function RecipientFormDropdownList({ children }: { children: React.ReactNode }) {
   return (
-    <ScrollView
+    <GestureHandlerScrollView
       style={styles.currencyDropdownList}
       nestedScrollEnabled
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator
     >
       {children}
-    </ScrollView>
+    </GestureHandlerScrollView>
   )
 }
 
@@ -116,6 +118,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
   } | null>(null)
   const [easenetLookupLoading, setEasenetLookupLoading] = useState(false)
   const [easenetLookupError, setEasenetLookupError] = useState<string | null>(null)
+  const [androidDropdownKeyboardHeight, setAndroidDropdownKeyboardHeight] = useState(0)
   const [jurisdictionUnrestricted, setJurisdictionUnrestricted] = useState(true)
   const [jurisdictionCodes, setJurisdictionCodes] = useState<string[] | null>(null)
 
@@ -224,6 +227,20 @@ function RecipientsContent({ navigation }: NavigationProps) {
       clearTimeout(t)
     }
   }, [newRecipient.payeeEasetag, selectedRecipientType, showBankAccountForm])
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return
+    const onShow = Keyboard.addListener('keyboardDidShow', (event) => {
+      setAndroidDropdownKeyboardHeight(event.endCoordinates?.height || 0)
+    })
+    const onHide = Keyboard.addListener('keyboardDidHide', () => {
+      setAndroidDropdownKeyboardHeight(0)
+    })
+    return () => {
+      onShow.remove()
+      onHide.remove()
+    }
+  }, [])
   
   // Reset form after create/edit form modal closes (for smooth animation)
   useEffect(() => {
@@ -315,6 +332,28 @@ function RecipientsContent({ navigation }: NavigationProps) {
     setShowProviderDropdown(false)
     setShowWalletAssetDropdown(false)
     setShowWalletNetworkDropdown(false)
+  }
+  const renderDropdownContainer = (onClose: () => void, content: React.ReactNode) => {
+    if (Platform.OS === 'android') {
+      const screenHeight = Dimensions.get('screen').height
+      const keyboardOpen = androidDropdownKeyboardHeight > 0
+      const maxHeight = Math.max(260, Math.floor(screenHeight * (keyboardOpen ? 0.5 : 0.62)))
+      return (
+        <Modal
+          visible
+          transparent
+          animationType="fade"
+          onRequestClose={onClose}
+          statusBarTranslucent
+        >
+          <Pressable style={styles.androidDropdownOverlay} onPress={onClose} />
+          <View style={styles.androidDropdownContainer} pointerEvents="box-none">
+            <View style={[styles.androidDropdownCard, { maxHeight }]}>{content}</View>
+          </View>
+        </Modal>
+      )
+    }
+    return <View style={styles.currencyDropdown}>{content}</View>
   }
 
   const handleAddRecipient = async () => {
@@ -1069,10 +1108,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
           />
           <View style={[styles.modalContainer, styles.recipientTypeModal, { 
             paddingBottom: Math.max(insets.bottom, 20),
-          }]} 
-          onStartShouldSetResponder={() => true}
-          onResponderGrant={() => {}}
-        >
+          }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add a new</Text>
               <Pressable
@@ -1271,7 +1307,9 @@ function RecipientsContent({ navigation }: NavigationProps) {
               keyboardShouldPersistTaps="handled"
             >
               <View style={styles.modalContent}>
-              {isAnyDropdownOpen && <Pressable android_ripple={ripple.neutral} style={styles.dropdownBackdrop} onPress={closeAllDropdowns} />}
+              {isAnyDropdownOpen && Platform.OS !== 'android' && (
+                <Pressable android_ripple={ripple.neutral} style={styles.dropdownBackdrop} onPress={closeAllDropdowns} />
+              )}
               {error ? (
                 <View style={styles.errorContainer}>
                   <Text style={styles.errorText}>{error}</Text>
@@ -1304,8 +1342,13 @@ function RecipientsContent({ navigation }: NavigationProps) {
                   </View>
                 </Pressable>
                 
-                {showCountryDropdown && (
-                  <View style={styles.currencyDropdown}>
+                {showCountryDropdown &&
+                  renderDropdownContainer(
+                    () => {
+                      setShowCountryDropdown(false)
+                      setCountrySearchTerm('')
+                    },
+                    <>
                     <View style={styles.currencyDropdownSearch}>
                       <Ionicons name="search" size={18} color={colors.neutral[400]} />
                       <TextInput
@@ -1367,8 +1410,8 @@ function RecipientsContent({ navigation }: NavigationProps) {
                         )
                       })}
                     </RecipientFormDropdownList>
-                  </View>
-                )}
+                    </>,
+                  )}
               </View>}
 
               {/* Show form fields */}
@@ -1429,8 +1472,13 @@ function RecipientsContent({ navigation }: NavigationProps) {
                         <Ionicons name={showProviderDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6b7280" />
                       </View>
                     </Pressable>
-                    {showProviderDropdown && (
-                      <View style={styles.currencyDropdown}>
+                    {showProviderDropdown &&
+                      renderDropdownContainer(
+                        () => {
+                          setShowProviderDropdown(false)
+                          setProviderSearchTerm('')
+                        },
+                        <>
                         <View style={styles.currencyDropdownSearch}>
                           <Ionicons name="search" size={18} color={colors.neutral[400]} />
                           <TextInput
@@ -1466,8 +1514,8 @@ function RecipientsContent({ navigation }: NavigationProps) {
                             </Pressable>
                           ))}
                         </RecipientFormDropdownList>
-                      </View>
-                    )}
+                        </>,
+                      )}
                   </View>
                   <TextInput
                     style={styles.modalInput}
@@ -1515,8 +1563,13 @@ function RecipientsContent({ navigation }: NavigationProps) {
                         <Ionicons name={showWalletAssetDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6b7280" />
                       </View>
                     </Pressable>
-                    {showWalletAssetDropdown && (
-                      <View style={styles.currencyDropdown}>
+                    {showWalletAssetDropdown &&
+                      renderDropdownContainer(
+                        () => {
+                          setShowWalletAssetDropdown(false)
+                          setWalletAssetSearchTerm('')
+                        },
+                        <>
                         <View style={styles.currencyDropdownSearch}>
                           <Ionicons name="search" size={18} color={colors.neutral[400]} />
                           <TextInput
@@ -1560,8 +1613,8 @@ function RecipientsContent({ navigation }: NavigationProps) {
                             </Pressable>
                           ))}
                         </RecipientFormDropdownList>
-                      </View>
-                    )}
+                        </>,
+                      )}
                   </View>
                   <View style={[styles.currencySelectorWrapper, showWalletNetworkDropdown && styles.currencySelectorWrapperActive]}>
                     <Pressable
@@ -1582,8 +1635,13 @@ function RecipientsContent({ navigation }: NavigationProps) {
                         <Ionicons name={showWalletNetworkDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6b7280" />
                       </View>
                     </Pressable>
-                    {showWalletNetworkDropdown && (
-                      <View style={styles.currencyDropdown}>
+                    {showWalletNetworkDropdown &&
+                      renderDropdownContainer(
+                        () => {
+                          setShowWalletNetworkDropdown(false)
+                          setWalletNetworkSearchTerm('')
+                        },
+                        <>
                         <View style={styles.currencyDropdownSearch}>
                           <Ionicons name="search" size={18} color={colors.neutral[400]} />
                           <TextInput
@@ -1622,8 +1680,8 @@ function RecipientsContent({ navigation }: NavigationProps) {
                             </Pressable>
                           ))}
                         </RecipientFormDropdownList>
-                      </View>
-                    )}
+                        </>,
+                      )}
                   </View>
                   <View style={styles.walletAddressInputWrap}>
                     <TextInput
@@ -2499,6 +2557,23 @@ const styles = StyleSheet.create({
         elevation: 20,
       },
     }),
+  },
+  androidDropdownOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.28)',
+  },
+  androidDropdownContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: spacing[5],
+  },
+  androidDropdownCard: {
+    borderWidth: 1,
+    borderColor: colors.frame.border,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.background.primary,
+    overflow: 'hidden',
+    elevation: 20,
   },
   currencyDropdownSearch: {
     flexDirection: 'row',

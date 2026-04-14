@@ -11,6 +11,7 @@ import {
   TextInput,
   Modal,
   Platform,
+  Dimensions,
   KeyboardAvoidingView,
   Keyboard,
   Alert,
@@ -19,6 +20,7 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { ScrollView as GestureHandlerScrollView } from 'react-native-gesture-handler'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { Wallet, Building2, Smartphone, AtSign, Search } from 'lucide-react-native'
 import { fetchEasenetPublicProfileCached } from '../../lib/easenetProfile'
@@ -74,14 +76,14 @@ const getInitials = (name: string): string => {
  */
 function RecipientFormDropdownList({ children }: { children: React.ReactNode }) {
   return (
-    <ScrollView
+    <GestureHandlerScrollView
       style={styles.currencyDropdownList}
       nestedScrollEnabled
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator
     >
       {children}
-    </ScrollView>
+    </GestureHandlerScrollView>
   )
 }
 
@@ -127,6 +129,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   } | null>(null)
   const [easenetLookupLoading, setEasenetLookupLoading] = useState(false)
   const [easenetLookupError, setEasenetLookupError] = useState<string | null>(null)
+  const [androidDropdownKeyboardHeight, setAndroidDropdownKeyboardHeight] = useState(0)
 
   /** Hub search (@mode) live lookup — separate from add-recipient modal. */
   const [hubSearchEasenet, setHubSearchEasenet] = useState<{
@@ -305,6 +308,20 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       clearTimeout(t)
     }
   }, [newRecipient.payeeEasetag, selectedRecipientType, showBankAccountForm])
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return
+    const onShow = Keyboard.addListener('keyboardDidShow', (event) => {
+      setAndroidDropdownKeyboardHeight(event.endCoordinates?.height || 0)
+    })
+    const onHide = Keyboard.addListener('keyboardDidHide', () => {
+      setAndroidDropdownKeyboardHeight(0)
+    })
+    return () => {
+      onShow.remove()
+      onHide.remove()
+    }
+  }, [])
 
   const handleSelectRecipient = async (recipient: Recipient) => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -568,6 +585,28 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     setShowWalletAssetDropdown(false)
     setShowWalletNetworkDropdown(false)
   }
+  const renderDropdownContainer = (onClose: () => void, content: React.ReactNode) => {
+    if (Platform.OS === 'android') {
+      const screenHeight = Dimensions.get('screen').height
+      const keyboardOpen = androidDropdownKeyboardHeight > 0
+      const maxHeight = Math.max(260, Math.floor(screenHeight * (keyboardOpen ? 0.5 : 0.62)))
+      return (
+        <Modal
+          visible
+          transparent
+          animationType="fade"
+          onRequestClose={onClose}
+          statusBarTranslucent
+        >
+          <Pressable style={styles.androidDropdownOverlay} onPress={onClose} />
+          <View style={styles.androidDropdownContainer} pointerEvents="box-none">
+            <View style={[styles.androidDropdownCard, { maxHeight }]}>{content}</View>
+          </View>
+        </Modal>
+      )
+    }
+    return <View style={styles.currencyDropdown}>{content}</View>
+  }
 
   const renderRecipient = ({ item }: { item: Recipient }) => {
     const isDraftEasenet = isDraftEasenetRecipient(item.id)
@@ -802,10 +841,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
           />
           <View style={[styles.modalContainer, styles.recipientTypeModal, { 
             paddingBottom: Math.max(insets.bottom, 20),
-          }]} 
-          onStartShouldSetResponder={() => true}
-          onResponderGrant={() => {}}
-        >
+          }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add a new</Text>
               <Pressable
@@ -962,10 +998,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
             style={[styles.modalContainer, { 
               height: '92%',
               paddingBottom: Math.max(insets.bottom, 20),
-            }]} 
-            onStartShouldSetResponder={() => true}
-            onResponderGrant={() => {}}
-          >
+            }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 {selectedRecipientType === 'wallet'
@@ -998,7 +1031,9 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
               keyboardShouldPersistTaps="handled"
             >
               <View style={styles.modalContent}>
-              {isAnyDropdownOpen && <Pressable android_ripple={ripple.neutral} style={styles.dropdownBackdrop} onPress={closeAllDropdowns} />}
+              {isAnyDropdownOpen && Platform.OS !== 'android' && (
+                <Pressable android_ripple={ripple.neutral} style={styles.dropdownBackdrop} onPress={closeAllDropdowns} />
+              )}
               
               {error ? (
                 <View style={styles.errorContainer}>
@@ -1069,8 +1104,13 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                 </View>
               </Pressable>
               
-              {showCurrencyDropdown && (
-                <View style={styles.currencyDropdown}>
+              {showCurrencyDropdown &&
+                renderDropdownContainer(
+                  () => {
+                    setShowCurrencyDropdown(false)
+                    setCurrencySearchTerm('')
+                  },
+                  <>
                   <View style={styles.currencyDropdownSearch}>
                     <Ionicons name="search" size={18} color={colors.neutral[400]} />
                     <TextInput
@@ -1124,8 +1164,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                       )
                     })}
                   </RecipientFormDropdownList>
-                </View>
-              )}
+                  </>,
+                )}
             </View>
             )}
 
@@ -1149,8 +1189,13 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                         <Ionicons name={showProviderDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6b7280" />
                       </View>
                     </Pressable>
-                    {showProviderDropdown && (
-                      <View style={styles.currencyDropdown}>
+                    {showProviderDropdown &&
+                      renderDropdownContainer(
+                        () => {
+                          setShowProviderDropdown(false)
+                          setProviderSearchTerm('')
+                        },
+                        <>
                         <View style={styles.currencyDropdownSearch}>
                           <Ionicons name="search" size={18} color={colors.neutral[400]} />
                           <TextInput
@@ -1194,8 +1239,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                               </Pressable>
                             ))}
                         </RecipientFormDropdownList>
-                </View>
-              )}
+                        </>,
+                      )}
             </View>
                   <TextInput
                     style={styles.modalInput}
@@ -1244,8 +1289,13 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                         <Ionicons name={showWalletAssetDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6b7280" />
                       </View>
                     </Pressable>
-                    {showWalletAssetDropdown && (
-                      <View style={styles.currencyDropdown}>
+                    {showWalletAssetDropdown &&
+                      renderDropdownContainer(
+                        () => {
+                          setShowWalletAssetDropdown(false)
+                          setWalletAssetSearchTerm('')
+                        },
+                        <>
                         <View style={styles.currencyDropdownSearch}>
                           <Ionicons name="search" size={18} color={colors.neutral[400]} />
                           <TextInput
@@ -1293,8 +1343,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                               </Pressable>
                             ))}
                         </RecipientFormDropdownList>
-                      </View>
-                    )}
+                        </>,
+                      )}
                   </View>
                   <View style={[styles.currencySelectorWrapper, showWalletNetworkDropdown && styles.currencySelectorWrapperActive]}>
                     <Pressable
@@ -1315,8 +1365,13 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                         <Ionicons name={showWalletNetworkDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6b7280" />
                       </View>
                     </Pressable>
-                    {showWalletNetworkDropdown && (
-                      <View style={styles.currencyDropdown}>
+                    {showWalletNetworkDropdown &&
+                      renderDropdownContainer(
+                        () => {
+                          setShowWalletNetworkDropdown(false)
+                          setWalletNetworkSearchTerm('')
+                        },
+                        <>
                         <View style={styles.currencyDropdownSearch}>
                           <Ionicons name="search" size={18} color={colors.neutral[400]} />
                           <TextInput
@@ -1359,8 +1414,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                               </Pressable>
                             ))}
                         </RecipientFormDropdownList>
-                      </View>
-                    )}
+                        </>,
+                      )}
                   </View>
                   <View style={styles.walletAddressInputWrap}>
                     <TextInput
@@ -2299,6 +2354,23 @@ const styles = StyleSheet.create({
         elevation: 20,
       },
     }),
+  },
+  androidDropdownOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.28)',
+  },
+  androidDropdownContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: spacing[5],
+  },
+  androidDropdownCard: {
+    borderWidth: 1,
+    borderColor: '#E2E2E2',
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.background.primary,
+    overflow: 'hidden',
+    elevation: 20,
   },
   currencyDropdownSearch: {
     flexDirection: 'row',
