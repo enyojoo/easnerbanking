@@ -5,6 +5,11 @@ import { getBusinessAppPublicOrigin } from "@/lib/business-app-public-url"
 const DEFAULT_API_HOST = "api.easner.com"
 const DEFAULT_BUSINESS_HOST = "business.easner.com"
 
+/** True for Next.js Route Handlers under `/api` (including `/api` with no trailing slash). */
+export function isBusinessAppApiPath(pathname: string): boolean {
+  return pathname === "/api" || pathname.startsWith("/api/")
+}
+
 function normalizeHostname(value: string | undefined): string | null {
   if (!value) return null
   const h = value.trim().toLowerCase().replace(/^https?:\/\//, "").split("/")[0]?.split(":")[0]
@@ -66,8 +71,8 @@ export function getBusinessWebOriginForApiHostRedirect(): string {
  */
 export function maybeRedirectApiHostToBusiness(request: NextRequest): NextResponse | null {
   const pathname = request.nextUrl.pathname
-  if (pathname.startsWith("/api/")) return null
-  if (pathname.startsWith("/_next/")) return null
+  if (isBusinessAppApiPath(pathname)) return null
+  if (pathname.startsWith("/_next")) return null
 
   const host = getRequestHostname(request)
   if (!host || !isApiOnlyHostname(host)) return null
