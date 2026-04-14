@@ -20,24 +20,14 @@ export async function ensureConsumerMobileAccess(): Promise<{ error: Error | nul
     if ((res as { isNetworkError?: boolean }).isNetworkError) {
       return { error: null }
     }
-    const data = (await res.json().catch(() => ({}))) as { error?: string; code?: string }
+    const data = (await res.json().catch(() => ({}))) as { error?: string }
     if (!res.ok) {
-      const code = typeof data.code === 'string' ? data.code : ''
-      const isPermanentSurfaceDenial =
-        code === 'WRONG_ROLE_FOR_MOBILE' ||
-        code === 'OFFICE_ADMIN_WRONG_APP' ||
-        code === 'ROLE_CONFLICT'
-      if (isPermanentSurfaceDenial) {
-        await supabase.auth.signOut()
-        return {
-          error: new Error(
-            typeof data.error === 'string' ? data.error : 'This account cannot use the Easner mobile app.',
-          ),
-        }
+      await supabase.auth.signOut()
+      return {
+        error: new Error(
+          typeof data.error === 'string' ? data.error : 'This account cannot use the Easner mobile app.',
+        ),
       }
-      // Do not sign out on transient/unknown denials to avoid login bounce loops.
-      console.warn('ensureConsumerMobileAccess: non-permanent validation failure', res.status, code)
-      return { error: null }
     }
     return { error: null }
   } catch (e) {

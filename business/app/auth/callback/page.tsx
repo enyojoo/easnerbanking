@@ -48,7 +48,7 @@ function AuthCallbackContent() {
             router.replace(
               "/auth/login?message=" +
                 encodeURIComponent(
-                  "This account cannot access the Business dashboard. Use the Easner mobile app for personal accounts.",
+                  "You're an Easner Mobile user, please sign in through the Easner mobile app.",
                 ),
             )
           }

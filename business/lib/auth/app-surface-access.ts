@@ -56,7 +56,7 @@ export async function validateAppSurfaceAccess(
         code: "WRONG_ROLE_FOR_BUSINESS_WEB",
         message:
           role === "individual"
-            ? "Personal Easner accounts use the mobile app. Use Easner Business with an organization account, or create one after signing up on the web."
+            ? "You're an Easner Mobile user, please sign in through the Easner mobile app."
             : "This account is not enabled for the Business dashboard.",
       }
     }
@@ -70,7 +70,7 @@ export async function validateAppSurfaceAccess(
       code: "WRONG_ROLE_FOR_MOBILE",
       message:
         role === "business"
-          ? "Organization accounts use the Easner Business web dashboard."
+          ? "You're an Easner Business user, please sign in at business.easner.com."
           : "This account is not enabled for the mobile app.",
     }
   }

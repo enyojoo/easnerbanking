@@ -67,6 +67,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const bootstrap = async () => {
       const { data } = await supabase.auth.getSession()
       if (!data.session) return
+      try {
+        await ensureBusinessWebSurface(supabase)
+      } catch (error) {
+        console.error("business surface validation failed", error)
+        return
+      }
 
       const onboarding = getOnboarding()
       const countryCode = onboarding?.countryCode?.trim() || undefined

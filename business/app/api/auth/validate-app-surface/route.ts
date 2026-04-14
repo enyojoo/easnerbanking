@@ -35,22 +35,14 @@ export async function POST(request: NextRequest) {
     body = {}
   }
 
-  /**
-   * Prefer explicit bearer from body when present.
-   * In local/dev, ambient browser cookies can point to a different signed-in account
-   * than the mobile app request and cause intermittent 403s.
-   */
-  const rawBodyToken = typeof body.accessToken === "string" ? body.accessToken.trim() : ""
-  let user = null as Awaited<ReturnType<typeof getUserFromApiRequest>>
-  if (rawBodyToken) {
-    const admin = createSupabaseAdmin()
-    const { data, error } = await admin.auth.getUser(rawBodyToken)
-    if (!error && data.user) {
-      user = data.user
-    }
-  }
+  let user = await getUserFromApiRequest(request)
   if (!user) {
-    user = await getUserFromApiRequest(request)
+    const raw = typeof body.accessToken === "string" ? body.accessToken.trim() : ""
+    if (raw) {
+      const admin = createSupabaseAdmin()
+      const { data, error } = await admin.auth.getUser(raw)
+      if (!error && data.user) user = data.user
+    }
   }
   if (!user) {
     const res = NextResponse.json({ ok: false, error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
@@ -69,14 +61,6 @@ export async function POST(request: NextRequest) {
 
   const access = await validateAppSurfaceAccess(user.id, surface)
   if (!access.ok) {
-    if (process.env.NODE_ENV !== "production") {
-      console.warn("[validate-app-surface] denied", {
-        userId: user.id,
-        surface,
-        code: access.code,
-        status: access.status,
-      })
-    }
     const res = NextResponse.json(
       { ok: false, error: access.message, code: access.code },
       { status: access.status },
@@ -85,8 +69,5 @@ export async function POST(request: NextRequest) {
   }
 
   const res = NextResponse.json({ ok: true })
-  if (process.env.NODE_ENV !== "production") {
-    console.log("[validate-app-surface] ok", { userId: user.id, surface })
-  }
   return applyCorsHeaders(res, request, allowed)
 }

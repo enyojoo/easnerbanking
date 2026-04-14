@@ -3,19 +3,16 @@ import { supabase } from './supabase'
 
 /**
  * Last-resort API origin for release builds when `extra.apiUrl` / `EXPO_PUBLIC_API_URL`
- * were not set at build time. Prefer setting `EXPO_PUBLIC_API_URL` on EAS.
+ * were not set at build time. Prefer setting `EXPO_PUBLIC_API_URL` on EAS explicitly.
  */
-export const EASNER_PUBLIC_API_ORIGIN = 'https://api.easner.com'
-const BOOTSTRAP_MIN_INTERVAL_MS = 10 * 60 * 1000
-const bootstrapLastRunAtByUser: Record<string, number> = {}
-const bootstrapInFlightByUser: Record<string, Promise<void> | null> = {}
+export const EASNER_PUBLIC_APP_ORIGIN = 'https://api.easner.com'
 
 /**
  * Business Next.js API (bootstrap, Noah proxy). Resolution order:
  * 1. `expo.extra.apiUrl` from app.config.js (EAS env / local .env at prebuild)
  * 2. `process.env.EXPO_PUBLIC_API_URL` (Metro inline)
  * 3. Dev: `http://localhost:3000`
- * 4. Release: {@link EASNER_PUBLIC_API_ORIGIN}
+ * 4. Release: {@link EASNER_PUBLIC_APP_ORIGIN} (warn once — same default as auth deep links elsewhere)
  */
 export const getApiBaseUrl = (): string => {
   const fromExtra = Constants.expoConfig?.extra?.apiUrl
@@ -33,9 +30,9 @@ export const getApiBaseUrl = (): string => {
   }
 
   console.warn(
-    `[Easner] API base URL not in app config; using ${EASNER_PUBLIC_API_ORIGIN}. Set EXPO_PUBLIC_API_URL on EAS for non-production backends.`
+    `[Easner] API base URL not in app config; using ${EASNER_PUBLIC_APP_ORIGIN}. Set EXPO_PUBLIC_API_URL on EAS for non-production backends.`
   )
-  return EASNER_PUBLIC_API_ORIGIN
+  return EASNER_PUBLIC_APP_ORIGIN
 }
 
 /**
@@ -50,51 +47,30 @@ export async function ensureBusinessAppUserBootstrap(): Promise<void> {
     } = await supabase.auth.getSession()
     if (!session?.access_token) return
 
-    const userId = session.user.id
-    const now = Date.now()
-    const lastRun = bootstrapLastRunAtByUser[userId] ?? 0
-    if (now - lastRun < BOOTSTRAP_MIN_INTERVAL_MS) {
-      return
-    }
-    if (bootstrapInFlightByUser[userId]) {
-      await bootstrapInFlightByUser[userId]
-      return
-    }
-
     const fullName =
       typeof session.user.user_metadata?.name === 'string'
         ? session.user.user_metadata.name.trim()
         : null
 
-    const run = (async () => {
-      const res = await fetch(`${apiBase}/api/auth/bootstrap`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          role: 'individual',
-          fullName: fullName || undefined,
-        }),
-      })
+    const res = await fetch(`${apiBase}/api/auth/bootstrap`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        role: 'individual',
+        fullName: fullName || undefined,
+      }),
+    })
 
-      if (!res.ok) {
-        const text = await res.text().catch(() => '')
-        console.warn('auth bootstrap failed:', res.status, text)
-        return
-      }
-      bootstrapLastRunAtByUser[userId] = Date.now()
-      /** Bootstrap may align `user_metadata.name` with `users.full_name` server-side — refresh JWT. */
-      await supabase.auth.refreshSession().catch(() => undefined)
-    })()
-
-    bootstrapInFlightByUser[userId] = run
-    try {
-      await run
-    } finally {
-      bootstrapInFlightByUser[userId] = null
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      console.warn('auth bootstrap failed:', res.status, text)
+      return
     }
+    /** Bootstrap may align `user_metadata.name` with `users.full_name` server-side — refresh JWT. */
+    await supabase.auth.refreshSession().catch(() => undefined)
   } catch (e) {
     console.warn('auth bootstrap error:', e)
   }

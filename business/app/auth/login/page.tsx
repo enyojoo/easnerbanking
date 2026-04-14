@@ -78,6 +78,7 @@ export default function LoginPage() {
       } else if (
         message.includes("Easner") ||
         message.includes("mobile app") ||
+        message.includes("business.easner.com") ||
         message.includes("Office") ||
         message.includes("Business web") ||
         message.includes("Organization accounts")

@@ -85,6 +85,7 @@ export async function POST(request: Request) {
     body = {}
   }
 
+  const role: "business" | "individual" = body.role === "individual" ? "individual" : "business"
   const countryCode = normalizeCountryCode(body.countryCode)
   const country = countryNameFromCode(countryCode)
   const metadataName = typeof user.user_metadata?.name === "string" ? user.user_metadata.name : null
@@ -92,44 +93,6 @@ export async function POST(request: Request) {
   const explicitFullNameProvided = typeof body.fullName === "string"
   const explicitName = parseName(explicitFullNameProvided ? body.fullName : null)
   const admin = createSupabaseAdmin()
-
-  const { data: userRow } = await admin
-    .from("users")
-    .select("id,easner_business_id,full_name,role")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  const existingRole =
-    userRow?.role === "business" || userRow?.role === "individual" ? userRow.role : null
-  const requestedRole = body.role === "business" || body.role === "individual" ? body.role : null
-  if (existingRole && requestedRole && existingRole !== requestedRole) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error:
-          existingRole === "individual"
-            ? "This account is personal-only and cannot be converted by bootstrap."
-            : "This account is business-only and cannot be converted by bootstrap.",
-        code: "ROLE_CONFLICT",
-      },
-      { status: 409 },
-    )
-  }
-  /**
-   * Never default to business on missing role (can accidentally flip mobile users).
-   * Resolution order:
-   * 1) explicit valid role from body
-   * 2) existing DB role (if present)
-   * 3) business only when signup payload includes country (business onboarding)
-   * 4) otherwise individual (mobile-safe default)
-   */
-  const role: "business" | "individual" = requestedRole
-    ? requestedRole
-    : existingRole
-      ? existingRole
-      : countryCode
-        ? "business"
-        : "individual"
 
   if (role === "business" && countryCode) {
     const ok = await isCountryAllowedForSurface(admin, countryCode, "signup")
@@ -139,6 +102,45 @@ export async function POST(request: Request) {
         { status: 400 },
       )
     }
+  }
+
+  const { data: userRow } = await admin
+    .from("users")
+    .select("id,easner_business_id,full_name,role")
+    .eq("id", user.id)
+    .maybeSingle()
+
+  const existingRole =
+    userRow?.role === "business" || userRow?.role === "individual" ? userRow.role : null
+  const hasBusinessLink = typeof userRow?.easner_business_id === "string" && userRow.easner_business_id.length > 0
+
+  /**
+   * Never allow bootstrap to flip an existing account between consumer/business roles.
+   * - Existing individual cannot be upgraded to business via bootstrap.
+   * - Existing business (or linked org user) cannot be downgraded to individual via bootstrap.
+   */
+  if (existingRole && existingRole !== role) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          existingRole === "individual"
+            ? "You're an Easner Mobile user, please sign in through the Easner mobile app."
+            : "You're an Easner Business user, please sign in at business.easner.com.",
+        code: "ROLE_TRANSITION_DENIED",
+      },
+      { status: 403 },
+    )
+  }
+  if (role === "individual" && hasBusinessLink) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "You're an Easner Business user, please sign in at business.easner.com.",
+        code: "BUSINESS_LINKED_ACCOUNT",
+      },
+      { status: 403 },
+    )
   }
 
   const dbFullNameTrim =
@@ -170,7 +172,7 @@ export async function POST(request: Request) {
   // Support both migrated and pre-migration schemas.
   const { error: upsertErrWithRole } = await admin
     .from("users")
-    .upsert({ ...baseUserPayload, role }, { onConflict: "id" })
+    .upsert({ ...baseUserPayload, role: existingRole ?? role }, { onConflict: "id" })
   if (upsertErrWithRole) {
     const { error: upsertErrNoRole } = await admin.from("users").upsert(baseUserPayload, { onConflict: "id" })
     if (upsertErrNoRole) {
