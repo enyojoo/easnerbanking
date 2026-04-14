@@ -22,7 +22,7 @@ import { CurrencyFlag } from "@/components/flags"
 import { RecipientForm } from "@/components/recipient-form"
 import type { Beneficiary } from "@/lib/recipient-types"
 import { fetchWithSession } from "@/lib/fetch-with-session"
-import { dataCache, CACHE_KEYS } from "@/lib/cache"
+import { dataCache, CACHE_KEYS, notifyTerminalPayoutSetupUpdated } from "@/lib/cache"
 import { useAuth } from "@/lib/auth-context"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -103,6 +103,7 @@ export function TerminalPayoutSetupPanel({
       dataCache.invalidate(CACHE_KEYS.TERMINAL_SESSIONS(user.id))
     }
     await refetch()
+    notifyTerminalPayoutSetupUpdated()
   }, [refetch, user?.id])
 
   const linkRecipientToTerminal = useCallback(
@@ -182,6 +183,7 @@ export function TerminalPayoutSetupPanel({
           dataCache.invalidate(CACHE_KEYS.TERMINAL_SESSIONS(user.id))
         }
         await refetch()
+        notifyTerminalPayoutSetupUpdated()
       } catch (e) {
         rollback()
         toast.error(e instanceof Error ? e.message : "Could not update settings.")
@@ -247,6 +249,7 @@ export function TerminalPayoutSetupPanel({
           dataCache.invalidate(CACHE_KEYS.TERMINAL_SESSIONS(user.id))
         }
         await refetch()
+        notifyTerminalPayoutSetupUpdated()
       } catch (e) {
         setSetupData((prev) => ({ ...prev, defaultTerminalPayoutId: rollback }))
         toast.error(e instanceof Error ? e.message : "Could not set default.")
@@ -278,6 +281,7 @@ export function TerminalPayoutSetupPanel({
           dataCache.invalidate(CACHE_KEYS.TERMINAL_SESSIONS(user.id))
         }
         await refetch()
+        notifyTerminalPayoutSetupUpdated()
       } catch (e) {
         setSetupData((prev) => ({ ...prev, defaultTerminalPayoutId: rollback }))
         toast.error(e instanceof Error ? e.message : "Could not clear default.")

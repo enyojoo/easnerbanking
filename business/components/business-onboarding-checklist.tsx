@@ -9,7 +9,16 @@ import { fetchWithSession } from "@/lib/fetch-with-session"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { isBusinessInfoStepComplete } from "@/lib/business-tab-completion"
 import { parseBalanceString } from "@/hooks/use-business-account-rows"
-import { businessNoahAccountsPersistKey, CACHE_KEYS, dataCache } from "@/lib/cache"
+import {
+  businessNoahAccountsPersistKey,
+  CACHE_KEYS,
+  dataCache,
+  EASNER_TERMINAL_PAYOUT_SETUP_UPDATED_EVENT,
+} from "@/lib/cache"
+import {
+  fetchTerminalPayoutSetup,
+  type TerminalPayoutSetupData,
+} from "@/hooks/use-terminal-payout-setup-cached"
 
 const NOAH_BUSINESS_HEADERS = { "X-Easner-Noah-Scope": "business" } as const
 
@@ -122,27 +131,35 @@ export function BusinessOnboardingChecklist() {
     }
   }, [profile.tier1Complete, userId])
 
+  const applyTerminalFromCache = useCallback(() => {
+    if (!userId) return
+    const d = dataCache.get<TerminalPayoutSetupData>(CACHE_KEYS.TERMINAL_PAYOUT_SETUP(userId))
+    if (d != null) {
+      setTerminalPayoutId(d.defaultTerminalPayoutId)
+    }
+  }, [userId])
+
   const refreshTerminal = useCallback(async () => {
     if (!userId) {
       setTerminalPayoutId(undefined)
       return
     }
     try {
-      const res = await fetchWithSession("/api/terminal/settings")
-      if (!res.ok) {
-        setTerminalPayoutId(null)
-        return
-      }
-      const j = (await res.json()) as { default_terminal_payout_id?: string | null }
-      setTerminalPayoutId(j.default_terminal_payout_id ?? null)
+      const data = await fetchTerminalPayoutSetup()
+      setTerminalPayoutId(data.defaultTerminalPayoutId)
     } catch {
       setTerminalPayoutId(null)
     }
   }, [userId])
 
   useEffect(() => {
+    if (!userId) {
+      setTerminalPayoutId(undefined)
+      return
+    }
+    applyTerminalFromCache()
     void refreshTerminal()
-  }, [refreshTerminal])
+  }, [applyTerminalFromCache, refreshTerminal, userId])
 
   useEffect(() => {
     if (!userId) return
@@ -170,11 +187,21 @@ export function BusinessOnboardingChecklist() {
 
   useEffect(() => {
     const onProfile = () => {
+      applyTerminalFromCache()
       void refreshTerminal()
     }
     window.addEventListener("business-profile-updated", onProfile)
     return () => window.removeEventListener("business-profile-updated", onProfile)
-  }, [refreshTerminal])
+  }, [applyTerminalFromCache, refreshTerminal])
+
+  useEffect(() => {
+    const onTerminalUpdated = () => {
+      applyTerminalFromCache()
+      void refreshTerminal()
+    }
+    window.addEventListener(EASNER_TERMINAL_PAYOUT_SETUP_UPDATED_EVENT, onTerminalUpdated)
+    return () => window.removeEventListener(EASNER_TERMINAL_PAYOUT_SETUP_UPDATED_EVENT, onTerminalUpdated)
+  }, [applyTerminalFromCache, refreshTerminal])
 
   useEffect(() => {
     if (expanded) {

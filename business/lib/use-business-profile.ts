@@ -180,7 +180,13 @@ export function useBusinessProfile() {
   )
   const hasCachedProfile = Boolean(cacheKey && dataCache.get(cacheKey) != null)
   const isFresh = Boolean(cacheKey && hasCachedProfile && !dataCache.isStale(cacheKey))
-  const hasData = hasCachedProfile
+  /** True when memory cache has profile OR we already finished a load (survives `dataCache.invalidate` during `business-profile-updated` without detail). */
+  const hasLoadedProfile = Boolean(
+    user?.id &&
+      !isLoading &&
+      (profileData.businessId != null || profileData.name.trim().length > 0),
+  )
+  const hasData = hasCachedProfile || hasLoadedProfile
 
   return {
     ...profile,

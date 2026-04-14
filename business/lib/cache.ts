@@ -125,6 +125,14 @@ export function requestBusinessAccountsRefresh(): void {
   window.dispatchEvent(new CustomEvent("easner-business-accounts-refresh"))
 }
 
+/** Fired after terminal payout / settings mutations so sidebar onboarding can sync without waiting for navigation. */
+export const EASNER_TERMINAL_PAYOUT_SETUP_UPDATED_EVENT = "easner-terminal-payout-setup-updated" as const
+
+export function notifyTerminalPayoutSetupUpdated(): void {
+  if (typeof window === "undefined") return
+  window.dispatchEvent(new CustomEvent(EASNER_TERMINAL_PAYOUT_SETUP_UPDATED_EVENT))
+}
+
 /** Drop cached snapshot and ask hooks to refetch (e.g. after switching org — rare for same user). */
 export function invalidateBusinessNoahAccountsCache(userId: string): void {
   dataCache.invalidate(CACHE_KEYS.BUSINESS_NOAH_ACCOUNT_SNAPSHOT(userId))
