@@ -491,6 +491,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
   const tier1Ok = isTier1Complete(userProfile)
   const tier2Ok = TIER2_COMPLETE_PLACEHOLDER
+  const showVerificationNotice = !tier1Ok
+  const keypadToCtaGap = showVerificationNotice ? spacing[5] : spacing[1]
+  const ctaTopPadding = showVerificationNotice ? spacing[4] : spacing[2]
   const verificationBlocksSend =
     receiveAmount > 0 &&
     (selectedPaymentMethod === 'balance' ||
@@ -835,7 +838,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               </View>
 
               {/* Method + note + keypad: stacked under exchange row (tight gap); space below group stays inside KAV above bottomContainer. */}
-              <View style={styles.sendMethodNoteKeypadGroup}>
+              <View style={[styles.sendMethodNoteKeypadGroup, { marginBottom: keypadToCtaGap }]}>
               {/* Sending Method - Currency Balance Selector (Centered) */}
               <View style={styles.balanceSection}>
                 <Pressable
@@ -978,7 +981,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         <View
           style={[
             styles.bottomContainer,
-            { paddingTop: spacing[4], paddingBottom: insets.bottom + spacing[4] },
+            { paddingTop: ctaTopPadding, paddingBottom: insets.bottom + spacing[4] },
           ]}
         >
           {!tier1Ok ? (
