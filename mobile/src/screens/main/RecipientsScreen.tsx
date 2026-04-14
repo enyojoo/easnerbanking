@@ -59,6 +59,24 @@ import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { CountryFlag } from '../../components/flags/CountryFlag'
 import { getCountryCodeForCurrency } from '@easner/shared'
 
+/**
+ * Dropdown panels live inside the add/edit recipient modal `ScrollView`. On Android, nested
+ * `FlatList` inside a parent `ScrollView` often steals gestures and does not scroll the list.
+ * Use a bounded `ScrollView` for options instead.
+ */
+function RecipientFormDropdownList({ children }: { children: React.ReactNode }) {
+  return (
+    <ScrollView
+      style={styles.currencyDropdownList}
+      nestedScrollEnabled
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator
+    >
+      {children}
+    </ScrollView>
+  )
+}
+
 function RecipientsContent({ navigation }: NavigationProps) {
   const { user, userProfile } = useAuth()
   const { recipients, loading, refreshRecipients, invalidateRecipients, currencies } = useUserData()
@@ -1248,8 +1266,8 @@ function RecipientsContent({ navigation }: NavigationProps) {
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.modalScrollContent}
               nestedScrollEnabled={true}
-              // Android: disabling the parent ScrollView breaks nested dropdown lists (currency / provider / asset / network).
-              scrollEnabled={Platform.OS === 'android' ? true : !isAnyDropdownOpen}
+              // Pause parent form scroll while a dropdown is open so list drags stay inside the dropdown.
+              scrollEnabled={!isAnyDropdownOpen}
               keyboardShouldPersistTaps="handled"
             >
               <View style={styles.modalContent}>
@@ -1298,20 +1316,14 @@ function RecipientsContent({ navigation }: NavigationProps) {
                         onChangeText={setCountrySearchTerm}
                       />
                     </View>
-                    <FlatList
-                      data={filteredCurrencies}
-                      keyExtractor={(item) => `${item.countryCode}-${item.currencyCode}`}
-                      style={styles.currencyDropdownListScroll}
-                      contentContainerStyle={styles.currencyDropdownListContent}
-                      nestedScrollEnabled
-                      keyboardShouldPersistTaps="handled"
-                      removeClippedSubviews={Platform.OS === 'android' ? false : undefined}
-                      renderItem={({ item }) => {
+                    <RecipientFormDropdownList>
+                      {filteredCurrencies.map((item) => {
                         const isSelected =
                           newRecipient.currency === item.currencyCode &&
                           selectedCountryCurrency?.countryCode === item.countryCode
                         return (
                           <Pressable
+                            key={`${item.countryCode}-${item.currencyCode}`}
                             android_ripple={ripple.neutral}
                             style={[styles.currencyDropdownItem, isSelected && styles.currencyDropdownItemSelected]}
                             onPress={async () => {
@@ -1353,8 +1365,8 @@ function RecipientsContent({ navigation }: NavigationProps) {
                             ) : null}
                           </Pressable>
                         )
-                      }}
-                    />
+                      })}
+                    </RecipientFormDropdownList>
                   </View>
                 )}
               </View>}
@@ -1364,10 +1376,10 @@ function RecipientsContent({ navigation }: NavigationProps) {
                 <>
               {selectedRecipientType === 'easenet' && (
                 <>
-                  <View style={styles.easenetInputShell}>
-                    <Text style={styles.easenetAtInside}>@</Text>
+                  <View style={[styles.searchWrapper, styles.easenetHandleRowMargin]}>
+                    <Text style={styles.easenetAtPrefix}>@</Text>
                     <TextInput
-                      style={styles.easenetInputInner}
+                      style={styles.searchInput}
                       value={newRecipient.payeeEasetag}
                       onChangeText={(text) =>
                         setNewRecipient((prev) => ({ ...prev, payeeEasetag: text.replace(/^@+/, '') }))
@@ -1379,13 +1391,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                       editable={!isSubmitting}
                       underlineColorAndroid="transparent"
                     />
-                    {easenetLookupLoading ? (
-                      <ActivityIndicator
-                        size="small"
-                        color={colors.primary.main}
-                        style={styles.easenetSpinnerInside}
-                      />
-                    ) : null}
+                    {easenetLookupLoading ? <ActivityIndicator size="small" color={colors.primary.main} /> : null}
                   </View>
                   {easenetLookupError ? (
                     <Text style={styles.errorText}>{easenetLookupError}</Text>
@@ -1435,16 +1441,10 @@ function RecipientsContent({ navigation }: NavigationProps) {
                             onChangeText={setProviderSearchTerm}
                           />
                         </View>
-                        <FlatList
-                          data={filteredProviderList}
-                          keyExtractor={(provider) => provider}
-                          style={styles.currencyDropdownListScroll}
-                          contentContainerStyle={styles.currencyDropdownListContent}
-                          nestedScrollEnabled
-                          keyboardShouldPersistTaps="handled"
-                          removeClippedSubviews={Platform.OS === 'android' ? false : undefined}
-                          renderItem={({ item: provider }) => (
+                        <RecipientFormDropdownList>
+                          {filteredProviderList.map((provider) => (
                             <Pressable
+                              key={provider}
                               android_ripple={ripple.neutral}
                               style={[
                                 styles.currencyDropdownItem,
@@ -1464,8 +1464,8 @@ function RecipientsContent({ navigation }: NavigationProps) {
                                 <Ionicons name="checkmark" size={18} color={colors.primary.main} />
                               ) : null}
                             </Pressable>
-                          )}
-                        />
+                          ))}
+                        </RecipientFormDropdownList>
                       </View>
                     )}
                   </View>
@@ -1527,16 +1527,10 @@ function RecipientsContent({ navigation }: NavigationProps) {
                             onChangeText={setWalletAssetSearchTerm}
                           />
                         </View>
-                        <FlatList
-                          data={filteredWalletAssets}
-                          keyExtractor={(asset) => asset}
-                          style={styles.currencyDropdownListScroll}
-                          contentContainerStyle={styles.currencyDropdownListContent}
-                          nestedScrollEnabled
-                          keyboardShouldPersistTaps="handled"
-                          removeClippedSubviews={Platform.OS === 'android' ? false : undefined}
-                          renderItem={({ item: asset }) => (
+                        <RecipientFormDropdownList>
+                          {filteredWalletAssets.map((asset) => (
                             <Pressable
+                              key={asset}
                               android_ripple={ripple.neutral}
                               style={[
                                 styles.currencyDropdownItem,
@@ -1564,8 +1558,8 @@ function RecipientsContent({ navigation }: NavigationProps) {
                                 <Ionicons name="checkmark" size={18} color={colors.primary.main} />
                               ) : null}
                             </Pressable>
-                          )}
-                        />
+                          ))}
+                        </RecipientFormDropdownList>
                       </View>
                     )}
                   </View>
@@ -1600,16 +1594,10 @@ function RecipientsContent({ navigation }: NavigationProps) {
                             onChangeText={setWalletNetworkSearchTerm}
                           />
                         </View>
-                        <FlatList
-                          data={filteredWalletNetworks}
-                          keyExtractor={(network) => network}
-                          style={styles.currencyDropdownListScroll}
-                          contentContainerStyle={styles.currencyDropdownListContent}
-                          nestedScrollEnabled
-                          keyboardShouldPersistTaps="handled"
-                          removeClippedSubviews={Platform.OS === 'android' ? false : undefined}
-                          renderItem={({ item: network }) => (
+                        <RecipientFormDropdownList>
+                          {filteredWalletNetworks.map((network) => (
                             <Pressable
+                              key={network}
                               android_ripple={ripple.neutral}
                               style={[
                                 styles.currencyDropdownItem,
@@ -1632,8 +1620,8 @@ function RecipientsContent({ navigation }: NavigationProps) {
                                 <Ionicons name="checkmark" size={18} color={colors.primary.main} />
                               ) : null}
                             </Pressable>
-                          )}
-                        />
+                          ))}
+                        </RecipientFormDropdownList>
                       </View>
                     )}
                   </View>
@@ -2322,19 +2310,18 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.15)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
   modalContainer: {
     backgroundColor: colors.background.primary,
     borderTopLeftRadius: borderRadius['3xl'],
     borderTopRightRadius: borderRadius['3xl'],
-    paddingTop: spacing[2],
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.25,
+        shadowOpacity: 0.15,
         shadowRadius: 12,
       },
       android: {
@@ -2410,45 +2397,20 @@ const styles = StyleSheet.create({
     borderColor: colors.error.main,
     borderWidth: 1.5,
   },
-  easenetInputShell: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: colors.frame.border,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.frame.background,
-    minHeight: 48,
+  easenetHandleRowMargin: {
     marginBottom: spacing[2],
   },
-  easenetAtInside: {
-    ...textStyles.bodyMedium,
-    color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
-    paddingLeft: spacing[4],
-    paddingRight: spacing[1],
+  easenetAtPrefix: {
+    ...textStyles.textInputMedium,
+    color: colors.primary.main,
   },
-  easenetInputInner: {
-    flex: 1,
-    borderWidth: 0,
-    backgroundColor: 'transparent',
-    paddingVertical: spacing[3],
-    paddingRight: spacing[2],
-    marginBottom: 0,
-    ...textStyles.bodyMedium,
-    color: colors.text.primary,
-    fontFamily: 'Outfit-Regular',
-    fontSize: 13,
-    minHeight: 48,
-    lineHeight: 18,
-    textAlignVertical: 'center',
-    ...Platform.select({
-      android: {
-        includeFontPadding: false,
-      },
-    }),
-  },
-  easenetSpinnerInside: {
-    marginRight: spacing[3],
+  errorContainer: {
+    backgroundColor: colors.error.background,
+    borderColor: colors.error.light,
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    padding: spacing[3],
+    marginBottom: spacing[4],
   },
   errorText: {
     ...textStyles.bodySmall,
@@ -2559,15 +2521,11 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  /** Bounded list viewport for dropdown FlatLists inside the modal ScrollView */
-  currencyDropdownListScroll: {
+  currencyDropdownList: {
     maxHeight: 220,
     ...Platform.select({
       android: { flexGrow: 0 },
     }),
-  },
-  currencyDropdownListContent: {
-    paddingBottom: spacing[2],
   },
   currencyDropdownItem: {
     flexDirection: 'row',
@@ -2638,19 +2596,6 @@ const styles = StyleSheet.create({
   currencySymbol: {
     ...textStyles.bodyMedium,
     color: colors.text.secondary,
-  },
-  errorContainer: {
-    backgroundColor: colors.error.background,
-    borderColor: colors.error.light,
-    borderWidth: 1,
-    borderRadius: borderRadius.md,
-    padding: spacing[3],
-    marginBottom: spacing[4],
-  },
-  errorText: {
-    ...textStyles.bodySmall,
-    color: colors.error.main,
-    textAlign: 'center',
   },
   disabledButton: {
     opacity: 0.6,
