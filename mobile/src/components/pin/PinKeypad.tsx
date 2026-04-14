@@ -62,7 +62,7 @@ export function PinKeypad({
           </Pressable>
         ))}
       </View>
-      <View style={styles.keypadBottomRow}>
+      <View style={[styles.keypadBottomRow, { width: keypadSizing.rowWidth }]}>
         <View style={[styles.keypadButtonSpacer, { width: keypadSizing.buttonWidth }]} />
         <Pressable
           style={({ pressed }) => [
@@ -110,6 +110,7 @@ export function PinKeypad({
 const styles = StyleSheet.create({
   keypadContainer: {
     width: '100%',
+    alignItems: 'center',
   },
   keypadGrid: {
     flexDirection: 'row',
@@ -149,10 +150,9 @@ const styles = StyleSheet.create({
   },
   keypadBottomRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: spacing[4],
-    paddingHorizontal: spacing[5],
+    width: '100%',
   },
   keypadButtonSpacer: {
     width: 72,

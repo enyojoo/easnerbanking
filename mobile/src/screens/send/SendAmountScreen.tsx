@@ -433,9 +433,11 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         : dynamicAmountFontSize,
     lineHeight: prefixLineHeight,
   }
-  const amountRowMinHeight = Platform.select({
-    ios: Math.max(88, dynamicAmountLineHeight + 22),
-    default: Math.max(96, dynamicAmountLineHeight + 32),
+  // Keep the amount band fixed so dynamic number-size changes never push/pull the
+  // balance/note/keypad/KYC/CTA group vertically.
+  const amountRowHeight = Platform.select({
+    ios: 108,
+    default: 116,
   })
 
   const showCrossCurrencyExchangeUi =
@@ -740,7 +742,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
               {/* Amount Display - Wrapped with exchange info */}
               <View style={styles.amountSection}>
-                <View style={[styles.amountInputWrapper, { minHeight: amountRowMinHeight }]}>
+                <View style={[styles.amountInputWrapper, { height: amountRowHeight }]}>
                   <View style={styles.amountInputContainer}>
                     {unifiedShortAmountText ? (
                       <Text
