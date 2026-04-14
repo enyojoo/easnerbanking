@@ -62,7 +62,11 @@ const MFA_COPY = {
   enabling: 'Enabling…',
 } as const
 
-const MFA_QR_SIZE = 192
+/** Outer square (border included in layout). */
+const MFA_QR_FRAME = 192
+/** Padding so the QR module grid clears the border and rounded corners (avoids “cut” edges). */
+const MFA_QR_INSET = spacing[2]
+const MFA_QR_DRAW_SIZE = MFA_QR_FRAME - MFA_QR_INSET * 2
 const MFA_SECRET_BOX_HEIGHT = 56
 
 type MfaRouteParams = { autoStartEnroll?: boolean; mfaVerifiedOnCard?: boolean }
@@ -562,11 +566,11 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
                 <Text style={styles.enrollIntro}>{MFA_COPY.enrollDescription}</Text>
                 <View style={styles.qrWrap}>
                   {enrollQrSvg ? (
-                    <SvgXml xml={enrollQrSvg} width={MFA_QR_SIZE} height={MFA_QR_SIZE} />
+                    <SvgXml xml={enrollQrSvg} width={MFA_QR_DRAW_SIZE} height={MFA_QR_DRAW_SIZE} />
                   ) : qrDataUrl ? (
                     <Image source={{ uri: qrDataUrl }} style={styles.qr} resizeMode="contain" />
                   ) : (
-                    <SkeletonLoader width={MFA_QR_SIZE} height={MFA_QR_SIZE} borderRadius={8} />
+                    <SkeletonLoader width={MFA_QR_DRAW_SIZE} height={MFA_QR_DRAW_SIZE} borderRadius={8} />
                   )}
                 </View>
                 <Text style={styles.label}>{MFA_COPY.secretLabel}</Text>
@@ -720,13 +724,15 @@ const styles = StyleSheet.create({
     borderColor: colors.semantic.border,
     borderRadius: borderRadius.md,
     backgroundColor: colors.semantic.card,
-    width: MFA_QR_SIZE,
-    height: MFA_QR_SIZE,
+    width: MFA_QR_FRAME,
+    height: MFA_QR_FRAME,
+    padding: MFA_QR_INSET,
+    overflow: 'hidden',
     alignSelf: 'center',
   },
   qr: {
-    width: MFA_QR_SIZE,
-    height: MFA_QR_SIZE,
+    width: MFA_QR_DRAW_SIZE,
+    height: MFA_QR_DRAW_SIZE,
   },
   label: {
     ...textStyles.labelLarge,
