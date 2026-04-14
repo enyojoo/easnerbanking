@@ -1,9 +1,7 @@
 import React, { useEffect, useRef } from 'react'
-import { View, Image, StyleSheet, Dimensions, Animated } from 'react-native'
+import { View, Image, StyleSheet, Animated, useWindowDimensions } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import * as SplashScreen from 'expo-splash-screen'
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 
 interface SplashScreenProps {
   onFinish: () => void
@@ -13,6 +11,7 @@ interface SplashScreenProps {
 export default function CustomSplashScreen({ onFinish, isReady = false }: SplashScreenProps) {
   const fadeAnim = useRef(new Animated.Value(1)).current
   const minDisplayTime = useRef(Date.now())
+  const { width, height } = useWindowDimensions()
 
   useEffect(() => {
     // Hide the native splash screen
@@ -45,7 +44,7 @@ export default function CustomSplashScreen({ onFinish, isReady = false }: Splash
       <StatusBar style="light" />
       <Image
         source={require('../../assets/onboarding/Splash.png')}
-        style={styles.image}
+        style={[styles.image, { width, height }]}
         resizeMode="cover"
       />
     </Animated.View>
@@ -59,8 +58,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   image: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
+    width: '100%',
+    height: '100%',
   },
 })
 

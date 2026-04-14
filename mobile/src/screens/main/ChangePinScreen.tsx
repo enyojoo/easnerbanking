@@ -19,6 +19,7 @@ import { ripple } from '../../lib/androidRipple'
 import { useAuth } from '../../contexts/AuthContext'
 import { hasPin, setupPin, verifyPin, getLockoutState } from '../../lib/pinAuth'
 import { appPinStrings } from '../../constants/app-pin-en'
+import { PinKeypad } from '../../components/pin'
 
 type Step = 'verify' | 'pin' | 'confirm'
 
@@ -340,42 +341,13 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
           ) : null}
 
           <View style={styles.keypadContainer}>
-            <View style={styles.keypadGrid}>
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
-                <Pressable
-                 android_ripple={ripple.neutral}
-                  key={num}
-                  style={styles.keypadButton}
-                  onPress={() => handleNumberPress(num.toString())}
-                  onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} disabled={keypadDisabled}
-                >
-                  <Text style={styles.keypadButtonText}>{num}</Text>
-                </Pressable>
-              ))}
-            </View>
-            <View style={styles.keypadBottomRow}>
-              <View style={styles.keypadButtonSpacer} />
-              <Pressable
-               android_ripple={ripple.neutral}
-                style={styles.keypadButton}
-                onPress={() => handleNumberPress('0')}
-                onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} disabled={keypadDisabled}
-              >
-                <Text style={styles.keypadButtonText}>0</Text>
-              </Pressable>
-              <Pressable
-               android_ripple={ripple.neutral}
-                style={styles.keypadButton}
-                onPress={handleBackspace}
-                onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} disabled={keypadDisabled || filledCount === 0}
-              >
-                <Ionicons
-                  name="backspace"
-                  size={24}
-                  color={filledCount === 0 ? colors.text.secondary : colors.error.main}
-                />
-              </Pressable>
-            </View>
+            <PinKeypad
+              onDigit={handleNumberPress}
+              onBackspace={handleBackspace}
+              disabled={keypadDisabled}
+              filledCount={filledCount}
+              backspaceActiveColor={colors.error.main}
+            />
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -508,43 +480,6 @@ const styles = StyleSheet.create({
   keypadContainer: {
     width: '100%',
     marginBottom: spacing[8],
-  },
-  keypadGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: spacing[5],
-    marginBottom: spacing[4],
-  },
-  keypadButton: {
-    width: 80,
-    height: 80,
-    borderRadius: borderRadius['2xl'],
-    backgroundColor: colors.background.secondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  keypadButtonText: {
-    fontSize: 28,
-    lineHeight: 34,
-    color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
-    fontWeight: '600',
-  },
-  keypadBottomRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: spacing[5],
-    paddingHorizontal: spacing[5],
-  },
-  keypadButtonSpacer: {
-    width: 80,
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,

@@ -1,8 +1,8 @@
 import React from 'react'
-import { View, Text, Pressable, Platform, StyleSheet } from 'react-native'
+import { View, Text, Pressable, Platform, StyleSheet, useWindowDimensions } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
-import { colors, borderRadius, spacing } from '../../theme'
+import { colors, borderRadius, spacing, computeKeypadCellSize, layout, getContentWidth } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 
 type Props = {
@@ -10,18 +10,45 @@ type Props = {
   onBackspace: () => void
   disabled?: boolean
   filledCount: number
+  backspaceActiveColor?: string
+  maxButtonSize?: number
 }
 
 /** 3×4 numeric keypad + backspace (matches unlock / app-lock spec). */
-export function PinKeypad({ onDigit, onBackspace, disabled, filledCount }: Props) {
+export function PinKeypad({
+  onDigit,
+  onBackspace,
+  disabled,
+  filledCount,
+  backspaceActiveColor,
+  maxButtonSize = 92,
+}: Props) {
+  const { width } = useWindowDimensions()
+  const contentWidth = getContentWidth(width, layout.screenHorizontal)
+  const keypadSizing = computeKeypadCellSize(contentWidth, {
+    gap: spacing[4],
+    minSize: 68,
+    maxSize: maxButtonSize,
+  })
+
   return (
     <View style={styles.keypadContainer}>
-      <View style={styles.keypadGrid}>
+      <View
+        style={[
+          styles.keypadGrid,
+          { width: keypadSizing.rowWidth, gap: keypadSizing.gap, rowGap: keypadSizing.gap },
+        ]}
+      >
         {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
           <Pressable
             key={num}
             style={({ pressed }) => [
               styles.keypadButton,
+              {
+                width: keypadSizing.buttonWidth,
+                height: keypadSizing.buttonWidth,
+                borderRadius: Math.max(borderRadius.xl, Math.floor(keypadSizing.buttonWidth * 0.28)),
+              },
               pressed && Platform.OS === 'ios' && styles.keypadPressedIOS,
             ]}
             onPress={() => {
@@ -36,10 +63,15 @@ export function PinKeypad({ onDigit, onBackspace, disabled, filledCount }: Props
         ))}
       </View>
       <View style={styles.keypadBottomRow}>
-        <View style={styles.keypadButtonSpacer} />
+        <View style={[styles.keypadButtonSpacer, { width: keypadSizing.buttonWidth }]} />
         <Pressable
           style={({ pressed }) => [
             styles.keypadButton,
+            {
+              width: keypadSizing.buttonWidth,
+              height: keypadSizing.buttonWidth,
+              borderRadius: Math.max(borderRadius.xl, Math.floor(keypadSizing.buttonWidth * 0.28)),
+            },
             pressed && Platform.OS === 'ios' && styles.keypadPressedIOS,
           ]}
           onPress={() => onDigit('0')}
@@ -52,6 +84,11 @@ export function PinKeypad({ onDigit, onBackspace, disabled, filledCount }: Props
         <Pressable
           style={({ pressed }) => [
             styles.keypadButton,
+            {
+              width: keypadSizing.buttonWidth,
+              height: keypadSizing.buttonWidth,
+              borderRadius: Math.max(borderRadius.xl, Math.floor(keypadSizing.buttonWidth * 0.28)),
+            },
             pressed && Platform.OS === 'ios' && styles.keypadPressedIOS,
           ]}
           onPress={onBackspace}
@@ -62,7 +99,7 @@ export function PinKeypad({ onDigit, onBackspace, disabled, filledCount }: Props
           <Ionicons
             name="backspace"
             size={24}
-            color={filledCount === 0 ? colors.text.secondary : colors.text.primary}
+            color={filledCount === 0 ? colors.text.secondary : backspaceActiveColor || colors.text.primary}
           />
         </Pressable>
       </View>
@@ -78,7 +115,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: spacing[5],
+    gap: spacing[4],
     marginBottom: spacing[4],
   },
   keypadButton: {
@@ -114,7 +151,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: spacing[5],
+    gap: spacing[4],
     paddingHorizontal: spacing[5],
   },
   keypadButtonSpacer: {

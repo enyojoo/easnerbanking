@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  Dimensions,
   Modal,
   Platform,
   FlatList,
@@ -64,7 +63,6 @@ import {
   CacheTTL,
 } from '../../lib/userCache'
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window')
 const DASHBOARD_SELECTED_CURRENCY_KEY_PREFIX = 'easner_dashboard_selected_currency_'
 
 // Transaction interface for dashboard

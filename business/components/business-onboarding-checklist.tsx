@@ -277,7 +277,7 @@ export function BusinessOnboardingChecklist() {
         aria-expanded={expanded}
         className={cn(
           "flex w-full min-w-0 items-center justify-between gap-1.5 rounded-full border border-primary/35 bg-sidebar px-2 py-1.5 text-left font-medium leading-snug text-foreground shadow-sm transition-colors",
-          "hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar",
+          "hover:bg-accent/50 focus-visible:outline-none",
         )}
       >
         <span className="min-w-0 flex-1 truncate pr-0.5 text-[13px]">Complete onboarding</span>
@@ -306,7 +306,7 @@ export function BusinessOnboardingChecklist() {
                 <Link
                   href={step.href}
                   className={cn(
-                    "flex gap-2.5 rounded-md p-1 -m-1 transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "flex gap-2.5 rounded-md p-1 -m-1 transition-colors hover:bg-accent/60 focus-visible:outline-none",
                   )}
                 >
                   <span className="mt-0.5 shrink-0">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   ScrollView,
   Keyboard,
   Platform,
+  useWindowDimensions,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { ArrowDownLeft, ArrowUpRight, Monitor, Search } from 'lucide-react-native'
@@ -34,7 +35,19 @@ import {
   isCacheStale,
   CacheTTL,
 } from '../../lib/userCache'
-import { colors, shadows, textStyles, borderRadius, spacing, layout, motion, shouldPlayDecorativeMotionEnter } from '../../theme'
+import {
+  colors,
+  shadows,
+  textStyles,
+  borderRadius,
+  spacing,
+  layout,
+  motion,
+  shouldPlayDecorativeMotionEnter,
+  isRegularWidth,
+  getContentWidth,
+  scaledFontSize,
+} from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { getTransactionStatusDisplay } from '../../utils/formatters'
@@ -282,6 +295,48 @@ function TransactionsSkeleton() {
 }
 
 function TransactionsContent({ navigation }: NavigationProps) {
+  const { width: windowWidth } = useWindowDimensions()
+  const regularWidth = isRegularWidth(windowWidth)
+  const contentWidth = getContentWidth(windowWidth, spacing[5])
+  const splitConfig = useMemo(() => {
+    if (windowWidth >= 1024) {
+      return {
+        maxWidth: Math.min(windowWidth - spacing[10], 980),
+        listFlex: 1.1,
+        detailFlex: 0.9,
+        gap: spacing[4],
+        detailPadding: spacing[5],
+        titleSize: scaledFontSize(12, windowWidth),
+        nameSize: scaledFontSize(22, windowWidth),
+        metaSize: scaledFontSize(13, windowWidth),
+        amountSize: scaledFontSize(28, windowWidth),
+      }
+    }
+    if (windowWidth >= 768) {
+      return {
+        maxWidth: Math.min(windowWidth - spacing[8], 920),
+        listFlex: 1.16,
+        detailFlex: 0.84,
+        gap: spacing[4],
+        detailPadding: spacing[5],
+        titleSize: scaledFontSize(12, windowWidth),
+        nameSize: scaledFontSize(20, windowWidth),
+        metaSize: scaledFontSize(12, windowWidth),
+        amountSize: scaledFontSize(26, windowWidth),
+      }
+    }
+    return {
+      maxWidth: Math.min(windowWidth - spacing[6], 860),
+      listFlex: 1.28,
+      detailFlex: 0.72,
+      gap: spacing[3],
+      detailPadding: spacing[4],
+      titleSize: scaledFontSize(11, windowWidth),
+      nameSize: scaledFontSize(18, windowWidth),
+      metaSize: scaledFontSize(12, windowWidth),
+      amountSize: scaledFontSize(24, windowWidth),
+    }
+  }, [windowWidth])
   const insets = useSafeAreaInsets()
   const { userProfile } = useAuth()
   const currencies = useCurrencies()
@@ -292,6 +347,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null)
   
   const headerAnim = useRef(new Animated.Value(0)).current
   const [skipRowEntranceAnim, setSkipRowEntranceAnim] = useState(false)
@@ -474,6 +530,22 @@ function TransactionsContent({ navigation }: NavigationProps) {
     return matchesSearch
   })
 
+  useEffect(() => {
+    if (!regularWidth) return
+    if (filteredTransactions.length === 0) {
+      setSelectedTransactionId(null)
+      return
+    }
+    if (!selectedTransactionId || !filteredTransactions.some((tx) => tx.transaction_id === selectedTransactionId)) {
+      setSelectedTransactionId(filteredTransactions[0]?.transaction_id || null)
+    }
+  }, [filteredTransactions, regularWidth, selectedTransactionId])
+
+  const selectedTransaction =
+    regularWidth && selectedTransactionId
+      ? filteredTransactions.find((tx) => tx.transaction_id === selectedTransactionId) || null
+      : null
+
 
   return (
     <ScreenWrapper>
@@ -537,7 +609,13 @@ function TransactionsContent({ navigation }: NavigationProps) {
           />
         }
       >
-        <View style={styles.transactionsContainer}>
+        <View
+          style={
+            regularWidth
+              ? [styles.transactionsSplitContainer, { maxWidth: splitConfig.maxWidth }]
+              : [styles.transactionsContainer, { maxWidth: contentWidth, alignSelf: 'center', width: '100%' }]
+          }
+        >
           {loading ? (
             <TransactionsSkeleton />
           ) : filteredTransactions.length === 0 ? (
@@ -555,30 +633,108 @@ function TransactionsContent({ navigation }: NavigationProps) {
               </Text>
             </View>
           ) : (
-            <>
-              {filteredTransactions.map((item, index) => {
-                const isLast = index === filteredTransactions.length - 1
-                const detailScreen = 'TransactionDetails'
-                
-                return (
-                  <TransactionItem
-                    key={item.id || item.transaction_id || `tx-${item.created_at}`}
-                    item={item}
-                    index={index}
-                    isLast={isLast}
-                    skipRowEntranceAnim={skipRowEntranceAnim}
-                    onPress={() => {
-                      navigation.navigate(detailScreen as never, { 
-                        transactionId: item.transaction_id,
-                        fromScreen: 'Transactions'
-                      } as never)
-                    }}
-                    formatAmount={formatAmount}
-                    formatDate={formatDate}
-                  />
-                )
-              })}
-            </>
+            <View style={regularWidth ? [styles.regularWidthRow, { gap: splitConfig.gap }] : undefined}>
+              <View
+                style={
+                  regularWidth ? [styles.regularWidthListPane, { flex: splitConfig.listFlex }] : undefined
+                }
+              >
+                {filteredTransactions.map((item, index) => {
+                  const isLast = index === filteredTransactions.length - 1
+                  const detailScreen = 'TransactionDetails'
+
+                  return (
+                    <TransactionItem
+                      key={item.id || item.transaction_id || `tx-${item.created_at}`}
+                      item={item}
+                      index={index}
+                      isLast={isLast}
+                      skipRowEntranceAnim={skipRowEntranceAnim}
+                      onPress={() => {
+                        if (regularWidth) {
+                          setSelectedTransactionId(item.transaction_id)
+                          return
+                        }
+                        navigation.navigate(detailScreen as never, {
+                          transactionId: item.transaction_id,
+                          fromScreen: 'Transactions',
+                        } as never)
+                      }}
+                      formatAmount={formatAmount}
+                      formatDate={formatDate}
+                    />
+                  )
+                })}
+              </View>
+              {regularWidth ? (
+                <View
+                  style={[
+                    styles.regularWidthDetailPane,
+                    { flex: splitConfig.detailFlex, padding: splitConfig.detailPadding },
+                  ]}
+                >
+                  {selectedTransaction ? (
+                    <>
+                      <Text style={[styles.regularWidthDetailTitle, { fontSize: splitConfig.titleSize }]}>
+                        Transaction Preview
+                      </Text>
+                      <Text
+                        style={[
+                          styles.regularWidthDetailName,
+                          {
+                            fontSize: splitConfig.nameSize,
+                            lineHeight: Math.round(splitConfig.nameSize * 1.25),
+                          },
+                        ]}
+                      >
+                        {getTransactionName(
+                          selectedTransaction,
+                          selectedTransaction.transaction_type || selectedTransaction.type || 'send',
+                        )}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.regularWidthDetailMeta,
+                          {
+                            fontSize: splitConfig.metaSize,
+                            lineHeight: Math.round(splitConfig.metaSize * 1.4),
+                          },
+                        ]}
+                      >
+                        {formatDate(selectedTransaction.created_at)}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.regularWidthDetailAmount,
+                          {
+                            fontSize: splitConfig.amountSize,
+                            lineHeight: Math.round(splitConfig.amountSize * 1.2),
+                          },
+                        ]}
+                      >
+                        {formatAmount(
+                          selectedTransaction.send_amount || selectedTransaction.amount || 0,
+                          selectedTransaction.send_currency || selectedTransaction.currency || 'USD',
+                          (selectedTransaction.transaction_type || selectedTransaction.type) === 'receive',
+                        )}
+                      </Text>
+                      <Pressable
+                        android_ripple={ripple.neutral}
+                        style={styles.regularWidthDetailButton}
+                        onPress={() =>
+                          navigation.navigate('TransactionDetails' as never, {
+                            transactionId: selectedTransaction.transaction_id,
+                            fromScreen: 'Transactions',
+                          } as never)
+                        }
+                      >
+                        <Text style={styles.regularWidthDetailButtonText}>Open details</Text>
+                      </Pressable>
+                    </>
+                  ) : null}
+                </View>
+              ) : null}
+            </View>
           )}
         </View>
       </ScrollView>
@@ -653,6 +809,68 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[5],
     paddingTop: spacing[5],
     paddingBottom: spacing[8],
+  },
+  transactionsSplitContainer: {
+    marginHorizontal: spacing[5],
+    marginTop: spacing[3],
+    alignSelf: 'center',
+    width: '100%',
+  },
+  regularWidthRow: {
+    flexDirection: 'row',
+    gap: spacing[4],
+  },
+  regularWidthListPane: {
+    flex: 1.2,
+    backgroundColor: colors.frame.background,
+    borderRadius: borderRadius['3xl'],
+    borderWidth: 0.5,
+    borderColor: colors.frame.border,
+    paddingHorizontal: spacing[5],
+    paddingTop: spacing[5],
+    paddingBottom: spacing[8],
+  },
+  regularWidthDetailPane: {
+    flex: 0.8,
+    backgroundColor: colors.frame.background,
+    borderRadius: borderRadius['3xl'],
+    borderWidth: 0.5,
+    borderColor: colors.frame.border,
+    padding: spacing[5],
+    alignSelf: 'flex-start',
+  },
+  regularWidthDetailTitle: {
+    ...textStyles.labelLarge,
+    color: colors.text.secondary,
+    marginBottom: spacing[2],
+  },
+  regularWidthDetailName: {
+    ...textStyles.titleLarge,
+    color: colors.text.primary,
+    marginBottom: spacing[2],
+  },
+  regularWidthDetailMeta: {
+    ...textStyles.bodySmall,
+    color: colors.text.secondary,
+    marginBottom: spacing[3],
+  },
+  regularWidthDetailAmount: {
+    ...textStyles.headlineSmall,
+    color: colors.text.primary,
+    marginBottom: spacing[4],
+  },
+  regularWidthDetailButton: {
+    minHeight: 44,
+    borderRadius: borderRadius.xl,
+    backgroundColor: colors.primary.main,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing[4],
+  },
+  regularWidthDetailButtonText: {
+    ...textStyles.labelLarge,
+    color: colors.text.inverse,
+    fontFamily: 'Outfit-SemiBold',
   },
   skeletonContainer: {
     paddingHorizontal: 0,

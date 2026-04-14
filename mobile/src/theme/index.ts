@@ -9,6 +9,13 @@ export type { Colors } from './colors'
 
 export { resolveThemeColors } from './resolveThemeColors'
 export { layout } from './layout'
+export {
+  CONTENT_MAX_WIDTH,
+  REGULAR_WIDTH_BREAKPOINT,
+  getContentWidth,
+  isRegularWidth,
+  computeKeypadCellSize,
+} from './layoutMetrics'
 export { motion } from './motion'
 export { shouldPlayDecorativeMotionEnter } from './reduceMotion'
 export { ThemePaletteProvider, useThemeColors } from '../contexts/ThemePaletteContext'

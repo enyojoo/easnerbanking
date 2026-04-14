@@ -5,10 +5,10 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  Dimensions,
   Platform,
   Animated,
   Image,
+  useWindowDimensions,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { BlurView } from 'expo-blur'
@@ -23,7 +23,6 @@ import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { EASNER_CARD_ICON_URL } from '../../lib/easnerBrand'
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window')
 const CARD_SPACING = spacing[1]
 
 const COMING_SOON_COPY = 'Easner Card is coming soon'
@@ -72,8 +71,9 @@ function MastercardMark() {
 }
 
 export default function CardScreen({ navigation: _navigation }: NavigationProps) {
+  const { width: windowWidth } = useWindowDimensions()
   const insets = useSafeAreaInsets()
-  const CARD_WIDTH = Math.min(SCREEN_WIDTH - spacing[5] * 2, 323)
+  const CARD_WIDTH = Math.min(windowWidth - spacing[5] * 2, 323)
   const CARD_HEIGHT = Math.round(CARD_WIDTH / 1.586)
   const cardStride = CARD_WIDTH + CARD_SPACING * 2
 
@@ -160,7 +160,7 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
               decelerationRate="fast"
               contentContainerStyle={[
                 styles.carouselContent,
-                { paddingHorizontal: (SCREEN_WIDTH - CARD_WIDTH) / 2, gap: CARD_SPACING * 2 },
+                { paddingHorizontal: (windowWidth - CARD_WIDTH) / 2, gap: CARD_SPACING * 2 },
               ]}
               contentInsetAdjustmentBehavior="never"
             >

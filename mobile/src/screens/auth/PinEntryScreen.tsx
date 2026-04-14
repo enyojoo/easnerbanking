@@ -23,6 +23,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { appPinStrings } from '../../constants/app-pin-en'
 import { displayFirstNameFromFullName, initialsFromFullName } from '../../lib/userProfileHelpers'
 import { useDeferredLoading } from '../../hooks/useDeferredLoading'
+import { PinKeypad } from '../../components/pin'
 
 export default function PinEntryScreen({ navigation: navigationProp }: NavigationProps) {
   const { user, userProfile, signOut } = useAuth()
@@ -257,47 +258,13 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
             </View>
           </View>
 
-          {/* Numeric Keypad - 3x3 grid + 0 and backspace */}
           <View style={styles.keypadContainer}>
-            {/* Numbers 1-9 in 3x3 grid */}
-            <View style={styles.keypadGrid}>
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
-                <Pressable
-                 android_ripple={ripple.neutral}
-                  key={num}
-                  style={styles.keypadButton}
-                  onPress={() => handleNumberPress(num.toString())}
-                  onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} disabled={loading || locked}
-                >
-                  <Text style={styles.keypadButtonText}>{num}</Text>
-                </Pressable>
-              ))}
-            </View>
-
-            {/* Bottom row: 0 in center, backspace on right */}
-            <View style={styles.keypadBottomRow}>
-              <View style={styles.keypadButtonSpacer} />
-              <Pressable
-               android_ripple={ripple.neutral}
-                style={styles.keypadButton}
-                onPress={() => handleNumberPress('0')}
-                onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} disabled={loading || locked}
-              >
-                <Text style={styles.keypadButtonText}>0</Text>
-              </Pressable>
-              <Pressable
-               android_ripple={ripple.neutral}
-                style={styles.keypadButton}
-                onPress={handleBackspace}
-                onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} disabled={loading || locked || filledCount === 0}
-              >
-                <Ionicons 
-                  name="backspace" 
-                  size={24} 
-                  color={filledCount === 0 ? colors.text.secondary : colors.text.primary} 
-                />
-              </Pressable>
-            </View>
+            <PinKeypad
+              onDigit={handleNumberPress}
+              onBackspace={handleBackspace}
+              disabled={loading || locked}
+              filledCount={filledCount}
+            />
           </View>
 
           {/* Bottom Text */}
@@ -441,43 +408,6 @@ const styles = StyleSheet.create({
     width: '100%',
     marginTop: 'auto',
     marginBottom: spacing[4],
-  },
-  keypadGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: spacing[5],
-    marginBottom: spacing[4],
-  },
-  keypadButton: {
-    width: 80,
-    height: 80,
-    borderRadius: borderRadius['2xl'],
-    backgroundColor: colors.background.secondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  keypadButtonText: {
-    fontSize: 28,
-    lineHeight: 34,
-    color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
-    fontWeight: '600',
-  },
-  keypadBottomRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: spacing[5],
-    paddingHorizontal: spacing[5],
-  },
-  keypadButtonSpacer: {
-    width: 80,
   },
   logoutLink: {
     alignItems: 'center',

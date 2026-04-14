@@ -28,8 +28,8 @@ export const fontWeight = {
 
 // Font sizes following a harmonious scale
 export const fontSize = {
-  xs: 11,
-  sm: 13,
+  xs: 12,
+  sm: 14,
   base: 15,
   md: 17,
   lg: 20,
@@ -46,7 +46,7 @@ export const fontSize = {
 export function typographyScale(width?: number): number {
   const w = width ?? Dimensions.get('window').width
   const fs = PixelRatio.getFontScale()
-  const widthFactor = Math.min(Math.max(w / 375, 0.92), 1.08)
+  const widthFactor = Math.min(Math.max(w / 375, 0.92), 1.14)
   const fontFactor = Math.min(Math.max(fs, 1), 1.2)
   return widthFactor * fontFactor
 }
@@ -209,9 +209,9 @@ export const textStyles: Record<string, TextStyle> = {
   },
   labelSmall: {
     fontFamily: fontFamily.medium,
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: fontWeight.medium,
-    lineHeight: 10 * lineHeight.normal,
+    lineHeight: 11 * lineHeight.normal,
     letterSpacing: letterSpacing.wider,
     textTransform: 'uppercase',
     ...Platform.select({

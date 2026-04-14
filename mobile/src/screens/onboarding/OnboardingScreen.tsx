@@ -4,12 +4,12 @@ import {
   Text,
   Image,
   StyleSheet,
-  Dimensions,
   Pressable,
   Platform,
   ScrollView,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  useWindowDimensions,
 } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -20,8 +20,6 @@ import { NavigationProps } from '../../types'
 import { colors, textStyles, borderRadius, spacing, fontSize, fontFamily, lineHeight } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { AUTH_INITIAL_MODE_KEY } from '../../constants/auth'
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 
 // Onboarding images
 const ONBOARDING_DATA = [
@@ -45,6 +43,7 @@ const ONBOARDING_DATA = [
 const ONBOARDING_COMPLETED_KEY = '@easner_onboarding_completed'
 
 export default function OnboardingScreen({ navigation }: NavigationProps) {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions()
   const [currentIndex, setCurrentIndex] = useState(0)
   const scrollViewRef = useRef<ScrollView>(null)
   const insets = useSafeAreaInsets()
@@ -52,7 +51,7 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
   /** Only sync index when paging settles — `onScroll` + Math.round caused label/dot flicker mid-animation. */
   const handleMomentumScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const scrollPosition = event.nativeEvent.contentOffset.x
-    const index = Math.round(scrollPosition / SCREEN_WIDTH)
+    const index = Math.round(scrollPosition / screenWidth)
     const clamped = Math.max(0, Math.min(ONBOARDING_DATA.length - 1, index))
     setCurrentIndex((prev) => {
       if (clamped !== prev) {
@@ -66,7 +65,7 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
     if (currentIndex < ONBOARDING_DATA.length - 1) {
       const nextIndex = currentIndex + 1
       scrollViewRef.current?.scrollTo({
-        x: nextIndex * SCREEN_WIDTH,
+        x: nextIndex * screenWidth,
         animated: true,
       })
       setCurrentIndex(nextIndex)
@@ -98,7 +97,7 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
 
   const goToSlide = (index: number) => {
     scrollViewRef.current?.scrollTo({
-      x: index * SCREEN_WIDTH,
+      x: index * screenWidth,
       animated: true,
     })
     setCurrentIndex(index)
@@ -134,7 +133,7 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
           contentContainerStyle={styles.scrollContent}
         >
           {ONBOARDING_DATA.map((item) => (
-            <View key={item.id} style={styles.slide}>
+            <View key={item.id} style={[styles.slide, { width: screenWidth }]}>
               {/* Title */}
               <View style={styles.titleContainer}>
                 <Text style={styles.title}>{item.title}</Text>
@@ -144,7 +143,7 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
               <View style={styles.imageWrapper}>
                 <Image
                   source={item.image}
-                  style={styles.image}
+                  style={[styles.image, { maxWidth: screenWidth }]}
                   resizeMode="contain"
                 />
               </View>
@@ -156,14 +155,13 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
         <LinearGradient
           colors={['transparent', 'rgba(0, 0, 0, 0.1)', 'rgba(0, 0, 0, 0.4)', 'rgba(0, 0, 0, 0.75)', 'rgba(0, 0, 0, 0.95)', '#000000', '#000000']}
           locations={[0, 0.2, 0.4, 0.6, 0.8, 0.9, 1]}
-          style={styles.fadeOverlay}
+          style={[styles.fadeOverlay, { height: screenHeight * 0.7 }]}
           pointerEvents="none"
         />
 
         {/* Action Buttons on Dark Fade Area */}
         <View style={[styles.bottomActions, { paddingBottom: Math.max(insets.bottom, spacing[6]) }]}>
           <Pressable
-           android_ripple={ripple.neutral}
             style={({ pressed }) => [styles.skipButtonBottom, pressed && styles.skipButtonPressed]}
             onPress={handleSkip}
             android_ripple={{ color: 'rgba(255,255,255,0.2)' }}
@@ -172,7 +170,6 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
           </Pressable>
 
           <Pressable
-           android_ripple={ripple.neutral}
             style={({ pressed }) => [styles.nextButton, pressed && styles.nextButtonPressed]}
             onPress={handleNext}
             android_ripple={{ color: 'rgba(255,255,255,0.25)' }}
@@ -248,7 +245,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   slide: {
-    width: SCREEN_WIDTH,
+    width: '100%',
     flex: 1,
     alignItems: 'center',
     justifyContent: 'flex-start',
@@ -280,14 +277,14 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
-    maxWidth: SCREEN_WIDTH,
+    maxWidth: '100%',
   },
   fadeOverlay: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: SCREEN_HEIGHT * 0.7,
+    height: '70%',
     zIndex: 1,
   },
   bottomActions: {

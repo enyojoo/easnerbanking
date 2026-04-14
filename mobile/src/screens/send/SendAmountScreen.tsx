@@ -10,10 +10,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   Animated,
-  Dimensions,
   Modal,
   Image,
   Keyboard,
+  useWindowDimensions,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -23,7 +23,16 @@ import { MessageSquareText, ChevronDown, User, Coins, RotateCcw } from 'lucide-r
 import Svg, { Path } from 'react-native-svg'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
-import { colors, shadows, textStyles, borderRadius, spacing, motion } from '../../theme'
+import {
+  colors,
+  shadows,
+  textStyles,
+  borderRadius,
+  spacing,
+  motion,
+  computeKeypadCellSize,
+  getContentWidth,
+} from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { supabase } from '../../lib/supabase'
@@ -55,11 +64,6 @@ import {
 import { getPayoutRecipientSubtitleParts, isMobileMoneyRecipient } from '../../lib/recipientPayoutPreview'
 import { useEasenetRecipientHydration, type HydratedEasenetProfile } from '../../hooks/useEasenetRecipientHydration'
 import { navigateToSendRecipientHub } from '../../lib/sendFlowNavigation'
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
-const KEYPAD_BUTTON_WIDTH = 113
-const KEYPAD_GAP = 8 // spacing[2]
-const KEYPAD_ROW_WIDTH = (KEYPAD_BUTTON_WIDTH * 3) + (KEYPAD_GAP * 2) // 113 * 3 + 8 * 2 = 355
 
 function inferCountryFromRecipientCurrency(currency: string): string | undefined {
   const m: Record<string, string> = {
@@ -115,6 +119,12 @@ function repricingReasonLabel(reasonCode: string): string {
 }
 
 export default function SendAmountScreen({ navigation, route }: NavigationProps) {
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions()
+  const keypadSizing = computeKeypadCellSize(getContentWidth(windowWidth, spacing[5]), {
+    gap: spacing[2],
+    minSize: 90,
+    maxSize: 114,
+  })
   const insets = useSafeAreaInsets()
   const { user, userProfile, refreshUserProfile } = useAuth()
   const noahKycStatus =
@@ -908,13 +918,18 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 
                 {/* Numeric Keypad - 3x4 grid */}
                 <View style={styles.keypadContainer}>
-                  <View style={styles.keypadGrid}>
+                  <View
+                    style={[
+                      styles.keypadGrid,
+                      { width: keypadSizing.rowWidth, gap: keypadSizing.gap, rowGap: keypadSizing.gap },
+                    ]}
+                  >
                     {/* Row 1: 1, 2, 3 */}
                     {[1, 2, 3].map((num) => (
                 <Pressable
                        android_ripple={ripple.neutral}
                         key={num}
-                        style={styles.keypadButton}
+                        style={[styles.keypadButton, { width: keypadSizing.buttonWidth }]}
                         onPress={() => handleKeypadPress(num.toString())}
                         onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} >
                         <Text style={styles.keypadButtonText}>{num}</Text>
@@ -925,7 +940,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       <Pressable
                        android_ripple={ripple.neutral}
                         key={num}
-                        style={styles.keypadButton}
+                        style={[styles.keypadButton, { width: keypadSizing.buttonWidth }]}
                         onPress={() => handleKeypadPress(num.toString())}
                         onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} >
                         <Text style={styles.keypadButtonText}>{num}</Text>
@@ -936,7 +951,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       <Pressable
                        android_ripple={ripple.neutral}
                         key={num}
-                        style={styles.keypadButton}
+                        style={[styles.keypadButton, { width: keypadSizing.buttonWidth }]}
                         onPress={() => handleKeypadPress(num.toString())}
                         onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} >
                         <Text style={styles.keypadButtonText}>{num}</Text>
@@ -945,21 +960,21 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                     {/* Row 4: ., 0, backspace */}
                     <Pressable
                      android_ripple={ripple.neutral}
-                      style={styles.keypadButton}
+                      style={[styles.keypadButton, { width: keypadSizing.buttonWidth }]}
                       onPress={() => handleKeypadPress('.')}
                       onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} >
                       <Text style={styles.keypadButtonText}>.</Text>
                     </Pressable>
                     <Pressable
                      android_ripple={ripple.neutral}
-                      style={styles.keypadButton}
+                      style={[styles.keypadButton, { width: keypadSizing.buttonWidth }]}
                       onPress={() => handleKeypadPress('0')}
                       onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} >
                       <Text style={styles.keypadButtonText}>0</Text>
                     </Pressable>
                     <Pressable
                      android_ripple={ripple.neutral}
-                      style={styles.keypadButton}
+                      style={[styles.keypadButton, { width: keypadSizing.buttonWidth }]}
                       onPress={() => handleKeypadPress('backspace')}
                       onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} disabled={!sendAmount || sendAmount === '0'}
                     >
@@ -1457,8 +1472,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               style={StyleSheet.absoluteFill} onPress={() => setShowCurrencyPicker(false)}
             />
             <View style={[styles.modalContainer, { 
-              height: Math.min(SCREEN_HEIGHT * 0.78, 680),
-              minHeight: Math.min(SCREEN_HEIGHT * 0.58, 520),
+              height: Math.min(windowHeight * 0.78, 680),
+              minHeight: Math.min(windowHeight * 0.58, 520),
               paddingBottom: Math.max(insets.bottom, 20),
             }]} onStartShouldSetResponder={() => true} onResponderGrant={() => {}}>
               <View style={styles.modalHeader}>
@@ -2049,12 +2064,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'flex-start',
-    width: KEYPAD_ROW_WIDTH,
-    gap: KEYPAD_GAP,
-    rowGap: KEYPAD_GAP,
+    width: '100%',
+    gap: spacing[2],
+    rowGap: spacing[2],
   },
   keypadButton: {
-    width: KEYPAD_BUTTON_WIDTH,
+    width: 113,
     height: 50,
     borderRadius: 20,
     backgroundColor: '#F9F9F9',
