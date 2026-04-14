@@ -16,15 +16,38 @@ function normalizeHostname(value: string | undefined): string | null {
   return h || null
 }
 
-/** Vercel / proxies often set this; `Host` alone can be wrong in some setups. */
-export function getRequestHostname(request: NextRequest): string {
+/** Hostnames seen on this request (deduped). `Host` first — it matches the URL the client used on Vercel. */
+function collectHostnameCandidates(request: NextRequest): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  const push = (raw: string | undefined | null) => {
+    const h = normalizeHostname(raw ?? undefined)
+    if (h && !seen.has(h)) {
+      seen.add(h)
+      out.push(h)
+    }
+  }
+  push(request.headers.get("host"))
   const forwarded = request.headers.get("x-forwarded-host")
   if (forwarded) {
-    const first = forwarded.split(",")[0]?.trim()
-    const h = normalizeHostname(first)
-    if (h) return h
+    for (const part of forwarded.split(",")) {
+      push(part.trim())
+    }
   }
-  return normalizeHostname(request.headers.get("host") ?? undefined) ?? ""
+  push(request.nextUrl.hostname)
+  return out
+}
+
+/**
+ * Best hostname for host-based routing. If `x-forwarded-host` lists several hosts (common behind proxies),
+ * prefer the one that matches an API-only hostname so `api.easner.com` is not mistaken for another entry.
+ */
+export function getRequestHostname(request: NextRequest): string {
+  const candidates = collectHostnameCandidates(request)
+  const apiSet = new Set(getApiOnlyHostnames().map((h) => h.toLowerCase()))
+  const apiMatch = candidates.find((h) => apiSet.has(h.toLowerCase()))
+  if (apiMatch) return apiMatch
+  return candidates[0] ?? ""
 }
 
 /**
@@ -41,8 +64,8 @@ export function getApiOnlyHostnames(): string[] {
     .map((s) => normalizeHostname(s))
     .filter((h): h is string => Boolean(h))
   const unique = [...new Set(merged)]
-  if (unique.length > 0) return unique
-  return [DEFAULT_API_HOST]
+  /** Always include the production API host so redirects still run when env lists only alternates (e.g. staging-only). */
+  return [...new Set([...unique, DEFAULT_API_HOST])]
 }
 
 export function isApiOnlyHostname(hostname: string): boolean {
@@ -88,5 +111,7 @@ export function maybeRedirectApiHostToBusiness(request: NextRequest): NextRespon
   }
 
   const target = `${origin}${pathname}${request.nextUrl.search}`
-  return NextResponse.redirect(target, 307)
+  const res = NextResponse.redirect(target, 307)
+  res.headers.set("Cache-Control", "private, no-store")
+  return res
 }
