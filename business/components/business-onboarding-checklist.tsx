@@ -115,15 +115,15 @@ export function BusinessOnboardingChecklist() {
       return
     }
     try {
-      const res = await fetchWithSession("/api/noah/wallets/balances", { headers: NOAH_BUSINESS_HEADERS })
-      if (!res.ok) {
+      const tkRes = await fetchWithSession("/api/wallets/on-chain-balances", { headers: NOAH_BUSINESS_HEADERS })
+      if (!tkRes.ok) {
         setFunded(hasPositiveFiat(cached))
         return
       }
-      const b = (await res.json()) as { USD?: string; EUR?: string }
+      const t = (await tkRes.json()) as { USD?: string; EUR?: string }
       const next: SnapshotBalances = {
-        USD: typeof b.USD === "string" ? b.USD : "0",
-        EUR: typeof b.EUR === "string" ? b.EUR : "0",
+        USD: typeof t.USD === "string" ? t.USD : "0",
+        EUR: typeof t.EUR === "string" ? t.EUR : "0",
       }
       setFunded(hasPositiveFiat(next))
     } catch {

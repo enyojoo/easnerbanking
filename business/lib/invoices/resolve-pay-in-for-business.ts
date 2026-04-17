@@ -17,6 +17,7 @@ import {
   buildPayInAccountsFromSources,
   type VirtualAccountJson,
 } from "@/lib/invoices/map-pay-in-accounts"
+import { getTurnkeyDepositAddressesForBusiness } from "@/lib/wallet/turnkey-deposit-addresses"
 
 export type InvoicePayInPayload = {
   bankAccount?: Account
@@ -38,7 +39,7 @@ export async function resolvePayInForBusiness(
 
   const { data: biz } = await admin
     .from("businesses")
-    .select("name, noah_kyb_status, noah_wallet_id")
+    .select("name, noah_kyb_status")
     .eq("id", businessId)
     .maybeSingle()
 
@@ -104,24 +105,17 @@ export async function resolvePayInForBusiness(
     }
   }
 
-  let walletAddress = ""
-  let walletMemo = ""
-  const wid = biz?.noah_wallet_id as string | undefined
-  if (wid) {
-    const { data: w } = await admin
-      .from("wallets")
-      .select("address, blockchain_memo")
-      .eq("noah_wallet_id", wid)
-      .maybeSingle()
-    if (w?.address) walletAddress = String(w.address)
-    if (w?.blockchain_memo != null) walletMemo = String(w.blockchain_memo)
-  }
+  const turnkey = await getTurnkeyDepositAddressesForBusiness(admin, businessId)
+  const walletForInvoice =
+    code === "EUR" ? turnkey.EUR : code === "USD" || code === "GBP" ? turnkey.USD : turnkey.USD
+  const walletAddress = walletForInvoice.address
+  const walletMemo = walletForInvoice.memo
 
   return buildPayInAccountsFromSources({
     invoiceCurrency: code,
     displayName,
     va,
-    walletAddress: walletAddress || undefined,
+    walletAddress: walletAddress.trim() || undefined,
     walletMemo,
     balance: 0,
     canProvision: true,

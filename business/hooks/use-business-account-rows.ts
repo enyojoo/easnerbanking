@@ -27,7 +27,8 @@ type VaJson = {
 type AccountSnapshot = {
   balances: { USD: string; EUR: string }
   enabledExtras: string[]
-  walletAddress: string
+  /** Turnkey Solana receive addresses (USDC → USD bucket, EURC → EUR bucket). */
+  stablecoinDeposit: { USD: string; EUR: string }
   vaByCurrency: Record<string, VaJson | null>
 }
 
@@ -52,7 +53,15 @@ function isAccountSnapshot(v: unknown): v is AccountSnapshot {
   const b = o.balances
   if (!b || typeof b !== "object") return false
   const bb = b as Record<string, unknown>
-  return typeof bb.USD === "string" && typeof bb.EUR === "string"
+  const sd = o.stablecoinDeposit
+  if (!sd || typeof sd !== "object") return false
+  const sdd = sd as Record<string, unknown>
+  return (
+    typeof bb.USD === "string" &&
+    typeof bb.EUR === "string" &&
+    typeof sdd.USD === "string" &&
+    typeof sdd.EUR === "string"
+  )
 }
 
 function readSnapshotFromLocalStorage(userId: string): AccountSnapshot | null {
@@ -83,12 +92,12 @@ function applySnapshotToSetter(
   snapshot: AccountSnapshot,
   setBalances: (b: { USD: string; EUR: string }) => void,
   setEnabledExtras: (e: string[]) => void,
-  setWalletAddress: (w: string) => void,
+  setStablecoinDeposit: (s: { USD: string; EUR: string }) => void,
   setVaByCurrency: (v: Record<string, VaJson | null>) => void,
 ) {
   setBalances(snapshot.balances)
   setEnabledExtras(snapshot.enabledExtras)
-  setWalletAddress(snapshot.walletAddress)
+  setStablecoinDeposit(snapshot.stablecoinDeposit)
   setVaByCurrency(snapshot.vaByCurrency)
 }
 
@@ -98,7 +107,10 @@ export function useBusinessAccountRows() {
   const { tier1Complete, isLoading: profileLoading, name, baseCurrency } = useBusinessProfile()
   const [balances, setBalances] = useState<{ USD: string; EUR: string }>({ USD: "0", EUR: "0" })
   const [enabledExtras, setEnabledExtras] = useState<string[]>([])
-  const [walletAddress, setWalletAddress] = useState<string>("")
+  const [stablecoinDeposit, setStablecoinDeposit] = useState<{ USD: string; EUR: string }>({
+    USD: "",
+    EUR: "",
+  })
   const [vaByCurrency, setVaByCurrency] = useState<Record<string, VaJson | null>>({})
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -109,11 +121,11 @@ export function useBusinessAccountRows() {
   const diskHydrateDoneForTierRef = useRef(false)
   const balancesRef = useRef(balances)
   const enabledExtrasRef = useRef(enabledExtras)
-  const walletAddressRef = useRef(walletAddress)
+  const stablecoinDepositRef = useRef(stablecoinDeposit)
   const vaByCurrencyRef = useRef(vaByCurrency)
   balancesRef.current = balances
   enabledExtrasRef.current = enabledExtras
-  walletAddressRef.current = walletAddress
+  stablecoinDepositRef.current = stablecoinDeposit
   vaByCurrencyRef.current = vaByCurrency
 
   const noahHeaders = useMemo(
@@ -132,7 +144,7 @@ export function useBusinessAccountRows() {
       mem && isAccountSnapshot(mem) ? mem : readSnapshotFromLocalStorage(userId)
     diskHydrateDoneForTierRef.current = true
     if (!snap) return
-    applySnapshotToSetter(snap, setBalances, setEnabledExtras, setWalletAddress, setVaByCurrency)
+    applySnapshotToSetter(snap, setBalances, setEnabledExtras, setStablecoinDeposit, setVaByCurrency)
     dataCache.set(key, snap, SNAPSHOT_TTL_MS)
     restoredFromCacheRef.current = true
     hasFetchedOnceRef.current = true
@@ -157,7 +169,7 @@ export function useBusinessAccountRows() {
     if (!tier1Complete) {
       setBalances({ USD: "0", EUR: "0" })
       setEnabledExtras([])
-      setWalletAddress("")
+      setStablecoinDeposit({ USD: "", EUR: "" })
       setVaByCurrency({})
       hasFetchedOnceRef.current = false
       restoredFromCacheRef.current = false
@@ -173,10 +185,10 @@ export function useBusinessAccountRows() {
     restoredFromCacheRef.current = false
 
     try {
-      const [availRes, balRes, walletRes] = await Promise.all([
+      const [availRes, tkBalRes, depositRes] = await Promise.all([
         fetchWithSession("/api/accounts/available-currencies", { headers: noahHeaders }),
-        fetchWithSession("/api/noah/wallets/balances", { headers: noahHeaders }),
-        fetchWithSession("/api/noah/wallets", { headers: noahHeaders }),
+        fetchWithSession("/api/wallets/on-chain-balances", { headers: noahHeaders }),
+        fetchWithSession("/api/wallets/deposit-addresses", { headers: noahHeaders }),
       ])
 
       const avail = (await availRes.json().catch(() => ({}))) as {
@@ -189,21 +201,32 @@ export function useBusinessAccountRows() {
         setEnabledExtras(nextExtras)
       }
 
-      let nextBalances = balancesRef.current
-      if (balRes.ok) {
-        const b = (await balRes.json()) as { USD?: string; EUR?: string }
-        nextBalances = {
-          USD: b.USD ?? "0",
-          EUR: b.EUR ?? "0",
+      let nextBalances: { USD: string; EUR: string }
+      if (tkBalRes.ok) {
+        const t = (await tkBalRes.json().catch(() => ({}))) as {
+          USD?: string
+          EUR?: string
         }
-        setBalances(nextBalances)
+        nextBalances = {
+          USD: typeof t.USD === "string" ? t.USD : "0",
+          EUR: typeof t.EUR === "string" ? t.EUR : "0",
+        }
+      } else {
+        nextBalances = { USD: "0", EUR: "0" }
       }
+      setBalances(nextBalances)
 
-      let nextWallet = walletAddressRef.current
-      if (walletRes.ok) {
-        const w = (await walletRes.json()) as { wallets?: Array<{ address?: string }> }
-        nextWallet = w.wallets?.[0]?.address ?? ""
-        setWalletAddress(nextWallet)
+      let nextDeposit = stablecoinDepositRef.current
+      if (depositRes.ok) {
+        const d = (await depositRes.json()) as {
+          USD?: { address?: string }
+          EUR?: { address?: string }
+        }
+        nextDeposit = {
+          USD: typeof d.USD?.address === "string" ? d.USD.address : "",
+          EUR: typeof d.EUR?.address === "string" ? d.EUR.address : "",
+        }
+        setStablecoinDeposit(nextDeposit)
       }
 
       const extras = nextExtras
@@ -233,7 +256,7 @@ export function useBusinessAccountRows() {
       persistSnapshot(userId, {
         balances: nextBalances,
         enabledExtras: nextExtras,
-        walletAddress: nextWallet,
+        stablecoinDeposit: nextDeposit,
         vaByCurrency: vaEntries,
       })
     } catch (e: unknown) {
@@ -292,6 +315,10 @@ export function useBusinessAccountRows() {
       const hasVa = Boolean(va?.hasAccount)
       const usdc = currency === "USD" || currency === "GBP"
       const eurc = currency === "EUR"
+      const stablecoinAddress =
+        currency === "EUR"
+          ? stablecoinDeposit.EUR || undefined
+          : stablecoinDeposit.USD || undefined
 
       return {
         id: `acc_${currency.toLowerCase()}`,
@@ -308,12 +335,12 @@ export function useBusinessAccountRows() {
         balance: bal,
         availableBalance: bal,
         status: tier1Complete ? "active" : "pending",
-        stablecoinAddress: walletAddress || undefined,
+        stablecoinAddress,
         stablecoinChain: "Solana",
         stablecoinToken: usdc ? "USDC" : eurc ? "EURC" : "USDC",
       }
     })
-  }, [balances, displayName, enabledExtras, tier1Complete, vaByCurrency, walletAddress])
+  }, [balances, displayName, enabledExtras, stablecoinDeposit, tier1Complete, vaByCurrency])
 
   return {
     accountRows,

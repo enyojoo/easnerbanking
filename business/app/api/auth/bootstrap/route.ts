@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { countries } from "@/lib/countries"
 import { isCountryAllowedForSurface } from "@/lib/jurisdiction-country-policy"
+import { noahCustomerIdFromBusinessId, noahCustomerIdFromUserId } from "@/lib/noah/customer-id"
+import { ensureTurnkeySubOrgForEasnerOwner } from "@/lib/wallet/ensure-turnkey-sub-org"
 
 type BootstrapBody = {
   countryCode?: string
@@ -210,6 +212,22 @@ export async function POST(request: Request) {
   }
 
   if (role === "individual") {
+    try {
+      const tk = await ensureTurnkeySubOrgForEasnerOwner({
+        admin,
+        scope: "individual",
+        subjectUserId: user.id,
+        subjectBusinessId: null,
+        noahCustomerId: noahCustomerIdFromUserId(user.id),
+        userEmail: user.email,
+        displayName: resolvedBootstrapFullName,
+      })
+      if (!tk.ok && tk.reason !== "email_required" && tk.reason !== "turnkey_disabled") {
+        console.warn("[bootstrap] Turnkey sub-org (individual):", tk.reason)
+      }
+    } catch (e) {
+      console.warn("[bootstrap] Turnkey sub-org (individual) error:", e)
+    }
     return NextResponse.json({ ok: true, role, userId: user.id, businessId: userRow?.easner_business_id ?? null })
   }
 
@@ -285,6 +303,23 @@ export async function POST(request: Request) {
     fullName: resolvedBootstrapFullName,
     email: user.email ?? null,
   })
+
+  try {
+    const tk = await ensureTurnkeySubOrgForEasnerOwner({
+      admin,
+      scope: "business",
+      subjectUserId: user.id,
+      subjectBusinessId: businessId,
+      noahCustomerId: noahCustomerIdFromBusinessId(businessId),
+      userEmail: user.email,
+      displayName: resolvedBootstrapFullName,
+    })
+    if (!tk.ok && tk.reason !== "email_required" && tk.reason !== "turnkey_disabled") {
+      console.warn("[bootstrap] Turnkey sub-org (business):", tk.reason)
+    }
+  } catch (e) {
+    console.warn("[bootstrap] Turnkey sub-org (business) error:", e)
+  }
 
   return NextResponse.json({
     ok: true,

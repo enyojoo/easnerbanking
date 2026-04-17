@@ -1,7 +1,7 @@
 /**
  * Noah provider fee decomposition: ramp, funding rail, local payout.
- * Fee amounts are normalized to reporting_currency (default USD) when fee_currency matches;
- * cross-currency normalization is intentionally minimal until a dedicated FX feed exists.
+ * Fee amounts are normalized to reporting_currency (default USD). Cross-currency uses
+ * `PRICING_FEE_CROSS_RATES_JSON` (see `normalizeFeeToReporting`).
  */
 
 export type ProviderFeeComponentDb =
@@ -82,10 +82,41 @@ export function isProviderDecompositionEnabled(): boolean {
   return process.env.PRICING_PROVIDER_DECOMPOSED === "true"
 }
 
+/**
+ * Convert a fee line amount into `reporting` currency.
+ * Same-currency is exact. Cross-currency uses `PRICING_FEE_CROSS_RATES_JSON`:
+ * `{ "EUR_USD": 1.08 }` means multiply EUR amount by 1.08 to get USD; `{ "USD_EUR": 0.93 }` is also supported.
+ * In production, missing rates throw so margin math cannot silently ignore FX.
+ */
 function normalizeFeeToReporting(amount: number, feeCurrency: string, reporting: string): number {
   const fc = feeCurrency.toUpperCase()
   const rc = reporting.toUpperCase()
   if (fc === rc) return amount
+
+  const raw = process.env.PRICING_FEE_CROSS_RATES_JSON?.trim()
+  if (raw) {
+    try {
+      const map = JSON.parse(raw) as Record<string, number>
+      const direct = map[`${fc}_${rc}`]
+      if (typeof direct === "number" && Number.isFinite(direct) && direct > 0) {
+        return amount * direct
+      }
+      const inverse = map[`${rc}_${fc}`]
+      if (typeof inverse === "number" && Number.isFinite(inverse) && inverse > 0) {
+        return amount / inverse
+      }
+    } catch {
+      // fall through
+    }
+  }
+
+  const strict =
+    process.env.NODE_ENV === "production" || process.env.PRICING_STRICT_FEE_FX === "true"
+  if (strict) {
+    throw new Error(
+      `normalizeFeeToReporting: set PRICING_FEE_CROSS_RATES_JSON for ${fc}→${rc} (e.g. {"${fc}_${rc}": <rate>})`,
+    )
+  }
   return amount
 }
 

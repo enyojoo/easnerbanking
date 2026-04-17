@@ -1,4 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "cd .. && npm ci --workspace=easner-business --workspace=@easner/shared --workspace=@easner/server --include-workspace-root"
+  "installCommand": "cd .. && npm ci --workspace=easner-business --workspace=@easner/shared --workspace=@easner/server --include-workspace-root",
+  "crons": [
+    {
+      "path": "/api/internal/wallet-provisioning/process",
+      "schedule": "* * * * *"
+    }
+  ]
 }

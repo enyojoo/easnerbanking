@@ -18,6 +18,7 @@ import {
   pickTriggerCryptoAmount,
   startOnchainDepositToPaymentWorkflow,
 } from "@/lib/terminal/automated-payout-workflow"
+import { resolveTurnkeyAddressForNoahPair } from "@/lib/wallet/resolve-wallet-owner"
 
 export async function GET(request: Request) {
   const user = await getUserFromApiRequest(request)
@@ -178,15 +179,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Recipient not found." }, { status: 400 })
   }
 
-  const sourceAddress =
-    String(body?.source_address || "").trim() ||
-    (process.env.NOAH_TERMINAL_SOURCE_ADDRESS || "").trim()
+  let sourceAddress = String(body?.source_address || "").trim()
+  if (!sourceAddress) {
+    sourceAddress = (process.env.NOAH_TERMINAL_SOURCE_ADDRESS || "").trim()
+  }
+  if (!sourceAddress) {
+    const resolved = await resolveTurnkeyAddressForNoahPair(admin, acc.ctx, cryptoCurrency, network)
+    if (resolved?.trim()) sourceAddress = resolved.trim()
+  }
 
   if (!sourceAddress) {
     return NextResponse.json(
       {
         error:
-          "source_address is required for automated payout (payer wallet), or set NOAH_TERMINAL_SOURCE_ADDRESS for sandbox.",
+          "source_address is required for automated payout (payer wallet), or set NOAH_TERMINAL_SOURCE_ADDRESS, or provision a Turnkey Solana wallet for this asset.",
       },
       { status: 400 },
     )

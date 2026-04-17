@@ -34,11 +34,9 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const [activeTab, setActiveTab] = useState<TabType>('bank')
   const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>({})
   const [virtualAccount, setVirtualAccount] = useState<any>(null)
-  const [liquidationAddress, setLiquidationAddress] = useState<string | null>(null)
-  const [liquidationMemo, setLiquidationMemo] = useState<string | null>(null)
-  // Keep walletAddress for backward compatibility during migration
-  const [walletAddress, setWalletAddress] = useState<string | null>(null)
-  const [walletMemo, setWalletMemo] = useState<string | null>(null)
+  /** Turnkey Solana USDC / EURC receive address for the selected currency. */
+  const [turnkeyDepositAddress, setTurnkeyDepositAddress] = useState<string | null>(null)
+  const [turnkeyDepositMemo, setTurnkeyDepositMemo] = useState<string | null>(null)
   const [loading, setLoading] = useState(false) // Start as false, will be set to true only if we need to fetch
   const [creatingAccounts, setCreatingAccounts] = useState(false)
   const [accountCreationError, setAccountCreationError] = useState<string | null>(null)
@@ -50,7 +48,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const supportsStablecoins = currency === 'USD' || currency === 'EUR'
   
   // State to track if accounts exist in database (fallback when API times out)
-  const [hasWalletInDb, setHasWalletInDb] = useState(false)
+  const [hasTurnkeyDepositCached, setHasTurnkeyDepositCached] = useState(false)
   const [hasAccountInDb, setHasAccountInDb] = useState(false)
   // Start as false - only set to true after we've checked for data
   const [initialCheckComplete, setInitialCheckComplete] = useState(false)
@@ -96,16 +94,14 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   // If account data exists, always show it (don't show "in progress")
   const accountReady = hasAccountData && kycStatus === 'approved'
   
-  // Check if liquidation address data exists (preferred) or wallet data (fallback)
-  const hasLiquidationData = liquidationAddress && liquidationAddress !== 'Loading...' && liquidationAddress !== 'Liquidation address not available'
-  const hasWalletData = (walletAddress && 
-    walletAddress !== 'Loading...' && 
-    walletAddress !== 'Wallet address not available') || hasWalletInDb
-  // Use liquidation address if available, otherwise fall back to wallet address
-  const hasStablecoinData = hasLiquidationData || hasWalletData
-  
-  // Check if stablecoin address is ready (has liquidation address or wallet address and KYC approved)
-  // If address data exists, always show it (don't show "in progress")
+  const hasTurnkeyDepositData =
+    Boolean(
+      turnkeyDepositAddress &&
+        turnkeyDepositAddress !== 'Loading...' &&
+        turnkeyDepositAddress !== 'Wallet address not available',
+    ) || hasTurnkeyDepositCached
+  const hasStablecoinData = hasTurnkeyDepositData
+
   const walletReady = hasStablecoinData && kycStatus === 'approved'
   
   // Ref to track if we've already triggered account creation
@@ -188,10 +184,29 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
         return
       }
       
-      // Also check if we have account data in state
+      // VA already in state (e.g. from navigation) — still load Turnkey deposit address once.
       if (hasAccountData || virtualAccount?.hasAccount) {
-        console.log('[ReceiveMoney] 🛑 BLOCKED fetchAccountData - account data exists in state')
-        dataLoadedRef.current = true // Set ref to prevent future calls
+        dataLoadedRef.current = true
+        try {
+          const { data: { session: s } } = await supabase.auth.getSession()
+          const uid = s?.user?.id
+          if (uid) {
+            const dep = await noahService.getTurnkeyDepositAddresses()
+            const row = currency === 'USD' ? dep.USD : dep.EUR
+            if (row?.address) {
+              setTurnkeyDepositAddress(row.address)
+              setTurnkeyDepositMemo(row.memo ? row.memo : null)
+              setHasTurnkeyDepositCached(true)
+              const cl = currency.toLowerCase() as 'usd' | 'eur'
+              await setCachedData(`easner_wallet_${uid}_${cl}`, {
+                turnkeyAddress: row.address,
+                turnkeyMemo: row.memo || '',
+              })
+            }
+          }
+        } catch (e) {
+          console.error('[ReceiveMoney] Turnkey deposit (short path):', e)
+        }
         return
       }
       
@@ -228,21 +243,6 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
               .single()
             
             if (userProfileData) {
-            
-            // Check if wallet exists in database
-            if (userProfileData.noah_wallet_id) {
-              setHasWalletInDb(true)
-              // Try to get wallet address from database
-              const { data: wallet } = await supabase
-                .from('wallets')
-                .select('address')
-                .eq('noah_wallet_id', userProfileData.noah_wallet_id)
-                .single()
-              if (wallet?.address) {
-                setWalletAddress(wallet.address)
-              }
-            }
-            
             // Check if virtual account exists in database
             const accountId = currencyLower === 'usd' 
               ? userProfileData.noah_usd_virtual_account_id 
@@ -356,90 +356,26 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
           // Using cached data from database, skipping API call
         }
 
-        // Fetch liquidation address (preferred) or wallet address (fallback) from API
-        // BUT skip if we already have wallet/liquidation data loaded
-        if (hasStablecoinData || liquidationAddress || (walletAddress && hasWalletInDb)) {
-          // Wallet/liquidation address data already loaded, skip
-        } else {
-          const currencyLower = currency.toLowerCase() as 'usd' | 'eur'
-          const stablecoinCurrency = currencyLower === 'usd' ? 'usdc' : 'eurc'
-          
-          // Try to fetch liquidation address first
-          if (!liquidationAddress) {
-            try {
-              const liquidationAddr = await noahService.getLiquidationAddress(stablecoinCurrency, 'solana')
-              if (liquidationAddr.hasAddress && liquidationAddr.address) {
-                setLiquidationAddress(liquidationAddr.address)
-                if (liquidationAddr.memo) {
-                  setLiquidationMemo(liquidationAddr.memo)
-                }
-                dataLoadedRef.current = true
-              } else {
-                // Liquidation address doesn't exist, try to create it
-                console.log('[ReceiveMoney] Liquidation address not found, attempting to create...')
-                try {
-                  const created = await noahService.createLiquidationAddress(stablecoinCurrency, 'solana')
-                  if (created.hasAddress && created.address) {
-                    setLiquidationAddress(created.address)
-                    if (created.memo) {
-                      setLiquidationMemo(created.memo)
-                    }
-                    dataLoadedRef.current = true
-                  }
-                } catch (createError) {
-                  console.error('Error creating liquidation address:', createError)
-                  // Fall back to wallet address if liquidation address creation fails
-                }
-              }
-            } catch (liquidationError) {
-              console.error('Error fetching liquidation address:', liquidationError)
-              // Fall back to wallet address
-            }
-          }
-          
-          // Fallback: Fetch wallet address from API only if liquidation address is not available
-          if (!liquidationAddress && !walletAddress && !hasWalletInDb) {
+        if (!hasStablecoinData && !turnkeyDepositAddress) {
           try {
-            const controller = new AbortController()
-            const timeoutId = setTimeout(() => controller.abort(), 8000)
-            
-            let walletsResponse: Response
-            try {
-              walletsResponse = await fetch(`${getApiBaseUrl()}/api/noah/wallets`, {
-                headers: {
-                  'Authorization': `Bearer ${session?.access_token}`,
-                },
-                signal: controller.signal,
+            const dep = await noahService.getTurnkeyDepositAddresses()
+            const row = currency === 'USD' ? dep.USD : dep.EUR
+            if (row?.address) {
+              setTurnkeyDepositAddress(row.address)
+              setTurnkeyDepositMemo(row.memo ? row.memo : null)
+              setHasTurnkeyDepositCached(true)
+              const currencyLower = currency.toLowerCase() as 'usd' | 'eur'
+              const CACHE_KEY_WALLET = `easner_wallet_${userId}_${currencyLower}`
+              await setCachedData(CACHE_KEY_WALLET, {
+                turnkeyAddress: row.address,
+                turnkeyMemo: row.memo || '',
               })
-              clearTimeout(timeoutId)
-            } catch (fetchError: any) {
-              clearTimeout(timeoutId)
-              if (fetchError.name === 'AbortError') {
-                throw new Error('Timeout')
-              }
-              throw fetchError
+              dataLoadedRef.current = true
             }
-            
-            if (walletsResponse.ok) {
-              const walletsData = await walletsResponse.json()
-              const solanaWallet = walletsData.wallets?.find((w: any) => w.chain === 'solana')
-              if (solanaWallet?.address) {
-                setWalletAddress(solanaWallet.address)
-                setHasWalletInDb(true)
-                dataLoadedRef.current = true
-                if (solanaWallet.blockchain_memo) {
-                  setWalletMemo(solanaWallet.blockchain_memo)
-                } else {
-                  setWalletMemo(null)
-                }
-              }
-            }
-          } catch (walletError) {
-            console.error('Error fetching wallet address:', walletError)
-            // Silently fail - we already have database state
+          } catch (e) {
+            console.error('[ReceiveMoney] Turnkey deposit addresses:', e)
           }
         }
-        } // Close the else block for wallet/liquidation fetching
       } catch (error) {
         console.error('Error fetching account data:', error)
       } finally {
@@ -558,23 +494,17 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
           
           const cachedWallet = await getCachedDataLocal<any>(CACHE_KEY_WALLET)
           if (cachedWallet && !isStaleLocal(cachedWallet.timestamp, CACHE_TTL)) {
-            // Cache is fresh - use it immediately
-            if (cachedWallet.data.liquidationAddress) {
-              setLiquidationAddress(cachedWallet.data.liquidationAddress)
-              setLiquidationMemo(cachedWallet.data.liquidationMemo)
-            } else if (cachedWallet.data.walletAddress) {
-              setWalletAddress(cachedWallet.data.walletAddress)
-              setHasWalletInDb(true)
+            if (cachedWallet.data.turnkeyAddress) {
+              setTurnkeyDepositAddress(cachedWallet.data.turnkeyAddress)
+              setTurnkeyDepositMemo(cachedWallet.data.turnkeyMemo || null)
+              setHasTurnkeyDepositCached(true)
             }
             dataLoadedRef.current = true
           } else if (cachedWallet) {
-            // Cache is stale - show it immediately, then refresh in background
-            if (cachedWallet.data.liquidationAddress) {
-              setLiquidationAddress(cachedWallet.data.liquidationAddress)
-              setLiquidationMemo(cachedWallet.data.liquidationMemo)
-            } else if (cachedWallet.data.walletAddress) {
-              setWalletAddress(cachedWallet.data.walletAddress)
-              setHasWalletInDb(true)
+            if (cachedWallet.data.turnkeyAddress) {
+              setTurnkeyDepositAddress(cachedWallet.data.turnkeyAddress)
+              setTurnkeyDepositMemo(cachedWallet.data.turnkeyMemo || null)
+              setHasTurnkeyDepositCached(true)
             }
           }
           
@@ -649,45 +579,21 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
             setInitialCheckComplete(true)
           }
 
-          // Load liquidation address from database (preferred) or wallet address (fallback)
-          if (userProfileData.noah_wallet_id) {
-            const stablecoinCurrency = currencyLower === 'usd' ? 'usdc' : 'eurc'
-            
-            // Load wallet with liquidation address fields
-            const { data: wallet } = await supabase
-              .from('wallets')
-              .select('address, usdc_liquidation_address, usdc_liquidation_memo, eurc_liquidation_address, eurc_liquidation_memo')
-              .eq('noah_wallet_id', userProfileData.noah_wallet_id)
-              .single()
-            
-            if (wallet) {
-              // Try liquidation address first (preferred)
-              const liquidationAddr = stablecoinCurrency === 'usdc' 
-                ? wallet.usdc_liquidation_address 
-                : wallet.eurc_liquidation_address
-              const liquidationMemo = stablecoinCurrency === 'usdc'
-                ? wallet.usdc_liquidation_memo
-                : wallet.eurc_liquidation_memo
-              
-              if (liquidationAddr) {
-                setLiquidationAddress(liquidationAddr)
-                setLiquidationMemo(liquidationMemo)
-                dataLoadedRef.current = true
-                // Cache the wallet data
-                await setCachedDataLocal(CACHE_KEY_WALLET, {
-                  liquidationAddress: liquidationAddr,
-                  liquidationMemo: liquidationMemo,
-                })
-              } else if (wallet.address) {
-                // Fallback to wallet address if liquidation address not found
-                setWalletAddress(wallet.address)
-                setHasWalletInDb(true)
-                // Cache the wallet data
-                await setCachedDataLocal(CACHE_KEY_WALLET, {
-                  walletAddress: wallet.address,
-                })
-              }
+          try {
+            const dep = await noahService.getTurnkeyDepositAddresses()
+            const row = currency === 'USD' ? dep.USD : dep.EUR
+            if (row?.address) {
+              setTurnkeyDepositAddress(row.address)
+              setTurnkeyDepositMemo(row.memo ? row.memo : null)
+              setHasTurnkeyDepositCached(true)
+              dataLoadedRef.current = true
+              await setCachedDataLocal(CACHE_KEY_WALLET, {
+                turnkeyAddress: row.address,
+                turnkeyMemo: row.memo || '',
+              })
             }
+          } catch {
+            /* defer to Receive tab refetch */
           }
         } else {
           // No user profile data
@@ -718,6 +624,9 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
       if (wasCurrencyChange) {
         setVirtualAccount(null)
         setHasAccountInDb(false)
+        setTurnkeyDepositAddress(null)
+        setTurnkeyDepositMemo(null)
+        setHasTurnkeyDepositCached(false)
       }
       
       // Only load if we don't already have data loaded for this currency
@@ -991,20 +900,17 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     return null
   }, [virtualAccount, currency, hasAccountInDb, dataLoadedFromCache, initialCheckComplete])
 
-  // Get stablecoin address (prefer liquidation address, fallback to wallet address)
+  /** Turnkey Solana vault for this currency tab. */
   const getStablecoinAddress = () => {
-    // Use liquidation address if available, otherwise fall back to wallet address
-    const address = liquidationAddress || walletAddress || ''
-    const memo = liquidationMemo || walletMemo || undefined
-    
+    const address = turnkeyDepositAddress || ''
+    const memo = turnkeyDepositMemo || undefined
+
     return {
       address: walletReady ? address : '',
       network: 'Solana',
-      supportedStablecoins: currency === 'USD' 
-        ? ['USDC'] 
-        : ['EURC'],
+      supportedStablecoins: currency === 'USD' ? ['USDC'] : ['EURC'],
       memo,
-      isLiquidationAddress: !!liquidationAddress, // Track if this is a liquidation address
+      isLiquidationAddress: false,
     }
   }
 
@@ -1091,23 +997,16 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                     console.error('Error refreshing virtual account:', error)
                   }
 
-                  // Refresh wallet
                   try {
-                    const walletsResponse = await fetch(`${getApiBaseUrl()}/api/noah/wallets`, {
-                      headers: {
-                        'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-                      },
-                    })
-                    if (walletsResponse.ok) {
-                      const walletsData = await walletsResponse.json()
-                      const solanaWallet = walletsData.wallets?.find((w: any) => w.chain === 'solana')
-                      if (solanaWallet?.address) {
-                        setWalletAddress(solanaWallet.address)
-                        setHasWalletInDb(true)
-                      }
+                    const dep = await noahService.getTurnkeyDepositAddresses()
+                    const row = currency === 'USD' ? dep.USD : dep.EUR
+                    if (row?.address) {
+                      setTurnkeyDepositAddress(row.address)
+                      setTurnkeyDepositMemo(row.memo ? row.memo : null)
+                      setHasTurnkeyDepositCached(true)
                     }
                   } catch (error) {
-                    console.error('Error refreshing wallet:', error)
+                    console.error('Error refreshing Turnkey deposit address:', error)
                   }
                 } finally {
                   setLoading(false)
@@ -1405,11 +1304,9 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                       {/* Address */}
                       {stablecoinData.address && (
                         renderCopyableField(
-                          stablecoinData.isLiquidationAddress 
-                            ? (currency.toLowerCase() === 'usd' ? 'USDC Address' : 'EURC Address')
-                            : 'Wallet Address',
+                          currency.toLowerCase() === 'usd' ? 'USDC Address' : 'EURC Address',
                           stablecoinData.address,
-                          'liquidationAddress'
+                          'stablecoinAddress',
                         )
                       )}
                       

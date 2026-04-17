@@ -284,6 +284,8 @@ function selectBestRoute(params: {
   reportingCurrency: string
   sourceCurrency: string
   providerRate: number
+  /** When set and matches a candidate id, that route wins (pricing_rules.route_preference). */
+  routePreference?: string | null
 }): { selectedRoute: string; routeSelectionReason: string } {
   const candidates = params.candidates ?? []
   if (!candidates.length) {
@@ -323,6 +325,18 @@ function selectBestRoute(params: {
   })
 
   weighted.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id))
+
+  const pref = params.routePreference?.trim()
+  if (pref) {
+    const preferred = weighted.find((w) => w.id === pref)
+    if (preferred) {
+      return {
+        selectedRoute: preferred.id,
+        routeSelectionReason: `route_preference_${pref}`,
+      }
+    }
+  }
+
   const selected = weighted[0]!
   return {
     selectedRoute: selected.id,
@@ -539,9 +553,10 @@ export async function createQuote(input: QuoteInput): Promise<QuoteResult> {
   const marginBps = sourceAmount > 0 ? round8((netRevenueAmount / sourceAmount) * 10000) : 0
   const marginPercent = sourceAmount > 0 ? round8((netRevenueAmount / sourceAmount) * 100) : 0
 
-  // margin protection
+  // margin protection — enforce whenever not legacy (not only canary cohort)
   const allowLossLeader = Boolean(guardrailRule?.allow_loss_leader ?? false)
-  if (!allowLossLeader && !runtime.legacyMode && canaryActive) {
+  const enforceMarginGuardrails = !runtime.legacyMode && process.env.PRICING_MARGIN_GUARDRAILS_DISABLED !== "true"
+  if (!allowLossLeader && enforceMarginGuardrails) {
     if (
       guardrailRule?.minimum_net_revenue != null &&
       netRevenueAmount < Number(guardrailRule.minimum_net_revenue)
@@ -581,6 +596,7 @@ export async function createQuote(input: QuoteInput): Promise<QuoteResult> {
           reportingCurrency: reporting,
           sourceCurrency,
           providerRate,
+          routePreference: guardrailRule?.route_preference ?? null,
         })
 
   const pricingTotals: PricingTotals | null =
@@ -738,7 +754,9 @@ export async function createQuote(input: QuoteInput): Promise<QuoteResult> {
 }
 
 async function providerScheduleVersionsMatchQuote(admin: ReturnType<typeof createSupabaseAdmin>, quoteRow: Record<string, unknown>): Promise<boolean> {
-  if (process.env.PRICING_VALIDATE_PROVIDER_VERSIONS !== "true") return true
+  const enforce =
+    process.env.NODE_ENV === "production" || process.env.PRICING_VALIDATE_PROVIDER_VERSIONS === "true"
+  if (!enforce) return true
   const costs = quoteRow.provider_costs as ProviderCostsBreakdown | null | undefined
   if (!costs) return true
   const lines = [costs.ramp_fee, costs.funding_fee, costs.funding_fee_outbound, costs.local_payout_fee].filter(
@@ -796,6 +814,15 @@ export async function validateQuote(userId: string, quoteId: string) {
 export async function applyQuote(params: { userId: string; quoteId: string; transactionId?: string | null }) {
   const admin = createSupabaseAdmin()
   const quote = await validateQuote(params.userId, params.quoteId)
+
+  const { data: existingApply } = await admin
+    .from("applied_fees")
+    .select("id")
+    .eq("quote_id", quote.id)
+    .maybeSingle()
+  if (existingApply?.id) {
+    return { appliedFeeId: existingApply.id as string, quoteId: quote.id as string }
+  }
 
   const { data: applied, error: appliedErr } = await admin
     .from("applied_fees")

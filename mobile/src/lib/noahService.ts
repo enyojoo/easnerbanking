@@ -661,28 +661,28 @@ export const noahService = {
   },
 
   /**
-   * Get wallet balances (USD/EUR)
+   * Wallet balances as USD/EUR from Turnkey on-chain USDC/EURC at mapped Solana addresses only.
    */
   async getWalletBalances(): Promise<NoahWalletBalances> {
     const session = await requireAuthSession()
 
-    // Add timeout to fetch
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 8000)
+    const authHeaders = {
+      'Authorization': `Bearer ${session.access_token}`,
+    } as const
 
     try {
-      console.log('[NoahService] Fetching wallet balances from API...')
-      const response = await fetch(`${apiUrl()}/api/noah/wallets/balances`, {
+      console.log('[NoahService] Fetching on-chain wallet balances (Turnkey)...')
+      const tkRes = await fetch(`${apiUrl()}/api/wallets/on-chain-balances`, {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-        },
+        headers: { ...authHeaders },
         signal: controller.signal,
       })
       clearTimeout(timeoutId)
 
-      if (!response.ok) {
-        const errorText = await response.text()
+      if (!tkRes.ok) {
+        const errorText = await tkRes.text()
         let code: string | undefined
         let msg: string | undefined
         try {
@@ -693,24 +693,114 @@ export const noahService = {
           /* plain text */
         }
         const verificationGate =
-          response.status === 403 &&
+          tkRes.status === 403 &&
           (code === 'NOAH_KYC_REQUIRED' ||
             code === 'NOAH_KYB_REQUIRED' ||
             (msg?.includes('verification must be approved') ?? false))
         if (!verificationGate) {
-          console.error(`[NoahService] API error ${response.status}:`, errorText)
+          console.error(`[NoahService] on-chain balances error ${tkRes.status}:`, errorText)
         }
         return { USD: '0', EUR: '0' }
       }
 
-      const data = await response.json()
-      console.log('[NoahService] Received balances:', data)
-      return data
+      const tk = (await tkRes.json()) as { USD?: string; EUR?: string }
+      console.log('[NoahService] On-chain balances:', tk)
+      return {
+        USD: typeof tk.USD === 'string' ? tk.USD : '0',
+        EUR: typeof tk.EUR === 'string' ? tk.EUR : '0',
+      }
     } catch (error: any) {
       clearTimeout(timeoutId)
-      // Return zero balances on timeout or error
       console.error('[NoahService] Error fetching wallet balances:', error)
       return { USD: '0', EUR: '0' }
+    }
+  },
+
+  /**
+   * Solana USDC / EURC deposit addresses from Turnkey `wallet_accounts` (same as business /accounts).
+   */
+  /**
+   * Ensure Turnkey sub-org exists (server-side create) and is linked — idempotent.
+   * Requires `NOAH_API_KEY` on the business app (route uses requireNoahEnv).
+   */
+  async ensureTurnkeySubOrg(): Promise<{
+    ok: boolean
+    created?: boolean
+    subOrganizationId?: string
+    error?: string
+  }> {
+    const session = await requireAuthSession()
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 15000)
+    try {
+      const res = await fetch(`${apiUrl()}/api/wallets/ensure-sub-org`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+      })
+      clearTimeout(timeoutId)
+      const json = (await res.json().catch(() => ({}))) as {
+        ok?: boolean
+        created?: boolean
+        subOrganizationId?: string
+        error?: string
+      }
+      if (!res.ok) {
+        return { ok: false, error: json.error || `HTTP ${res.status}` }
+      }
+      return {
+        ok: true,
+        created: json.created === true,
+        subOrganizationId: typeof json.subOrganizationId === 'string' ? json.subOrganizationId : undefined,
+      }
+    } catch (e: any) {
+      clearTimeout(timeoutId)
+      return { ok: false, error: e?.message || 'ensure-sub-org failed' }
+    }
+  },
+
+  async getTurnkeyDepositAddresses(): Promise<{
+    USD: { address: string; stablecoin: string; chain: string; memo: string }
+    EUR: { address: string; stablecoin: string; chain: string; memo: string }
+  }> {
+    const session = await requireAuthSession()
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 8000)
+    const empty = (stablecoin: string) => ({
+      address: '',
+      stablecoin,
+      chain: 'Solana',
+      memo: '',
+    })
+    try {
+      const res = await fetch(`${apiUrl()}/api/wallets/deposit-addresses`, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        signal: controller.signal,
+      })
+      clearTimeout(timeoutId)
+      if (!res.ok) {
+        return { USD: empty('USDC'), EUR: empty('EURC') }
+      }
+      const j = (await res.json()) as Record<string, unknown>
+      const pick = (k: 'USD' | 'EUR', stablecoin: string) => {
+        const row = j[k]
+        if (!row || typeof row !== 'object') return empty(stablecoin)
+        const o = row as Record<string, unknown>
+        return {
+          address: typeof o.address === 'string' ? o.address : '',
+          stablecoin: typeof o.stablecoin === 'string' ? o.stablecoin : stablecoin,
+          chain: typeof o.chain === 'string' ? o.chain : 'Solana',
+          memo: typeof o.memo === 'string' ? o.memo : '',
+        }
+      }
+      return { USD: pick('USD', 'USDC'), EUR: pick('EUR', 'EURC') }
+    } catch {
+      clearTimeout(timeoutId)
+      return { USD: empty('USDC'), EUR: empty('EURC') }
     }
   },
 
