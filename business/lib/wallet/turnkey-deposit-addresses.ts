@@ -1,7 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
+import { noahCustomerIdFromBusinessId } from "@/lib/noah/customer-id"
 import { getActiveWalletAddress } from "@/lib/wallet/turnkey-wallet-db"
-import { getWalletOwnerId } from "@/lib/wallet/resolve-wallet-owner"
+import { resolveWalletOwnerIdForEasnerContext } from "@/lib/wallet/resolve-wallet-owner"
 import { DEFAULT_INDIVIDUAL_VAULTS } from "@/lib/wallet/vault-spec"
 
 export type TurnkeyDepositLine = {
@@ -23,16 +24,6 @@ const emptyLine = (stablecoin: string): TurnkeyDepositLine => ({
   memo: "",
 })
 
-function ownerRefFromContext(ctx: NoahAccountContext): {
-  ownerType: "individual" | "business"
-  ownerRef: string
-} {
-  const ownerType: "individual" | "business" = ctx.scope === "business" ? "business" : "individual"
-  const ownerRef =
-    ctx.scope === "business" && ctx.subjectBusinessId ? ctx.subjectBusinessId : ctx.subjectUserId
-  return { ownerType, ownerRef }
-}
-
 /**
  * Active Solana USDC / EURC receive addresses from `wallet_accounts` (Turnkey vaults).
  */
@@ -40,8 +31,7 @@ export async function getTurnkeyDepositAddressesForContext(
   admin: SupabaseClient,
   ctx: NoahAccountContext,
 ): Promise<TurnkeyDepositAddressesResponse> {
-  const { ownerType, ownerRef } = ownerRefFromContext(ctx)
-  const ownerId = await getWalletOwnerId(admin, ownerType, ownerRef)
+  const ownerId = await resolveWalletOwnerIdForEasnerContext(admin, ctx)
   if (!ownerId) {
     return { USD: emptyLine("USDC"), EUR: emptyLine("EURC") }
   }
@@ -78,7 +68,21 @@ export async function getTurnkeyDepositAddressesForBusiness(
   admin: SupabaseClient,
   businessId: string,
 ): Promise<TurnkeyDepositAddressesResponse> {
-  const ownerId = await getWalletOwnerId(admin, "business", businessId)
+  const { data: biz } = await admin
+    .from("businesses")
+    .select("noah_customer_id")
+    .eq("id", businessId)
+    .maybeSingle()
+  const noahId =
+    String(biz?.noah_customer_id ?? "").trim() || noahCustomerIdFromBusinessId(businessId)
+
+  const ownerId = await resolveWalletOwnerIdForEasnerContext(admin, {
+    scope: "business",
+    customerType: "Business",
+    noahCustomerId: noahId,
+    subjectBusinessId: businessId,
+    subjectUserId: businessId,
+  })
   if (!ownerId) {
     return { USD: emptyLine("USDC"), EUR: emptyLine("EURC") }
   }

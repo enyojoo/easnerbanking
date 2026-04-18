@@ -6,7 +6,7 @@ import {
   isTurnkeyConfigured,
   isTurnkeyOnChainBalanceQueryEnabled,
 } from "@/lib/turnkey/config"
-import { getWalletOwnerId } from "@/lib/wallet/resolve-wallet-owner"
+import { resolveWalletOwnerIdForEasnerContext } from "@/lib/wallet/resolve-wallet-owner"
 
 /** @see https://docs.turnkey.com/api-reference/queries/get-balances */
 export const TURNKEY_SOLANA_MAINNET_CAIP2 =
@@ -85,11 +85,7 @@ export async function getTurnkeyDisplayBalancesUsdEur(
     return { USD: "0", EUR: "0", source: "none", detail: "turnkey_not_configured" }
   }
 
-  const ownerType: "individual" | "business" = ctx.scope === "business" ? "business" : "individual"
-  const ownerRef =
-    ctx.scope === "business" && ctx.subjectBusinessId ? ctx.subjectBusinessId : ctx.subjectUserId
-
-  const ownerId = await getWalletOwnerId(admin, ownerType, ownerRef)
+  const ownerId = await resolveWalletOwnerIdForEasnerContext(admin, ctx)
   if (!ownerId) {
     return { USD: "0", EUR: "0", source: "none", detail: "no_wallet_owner" }
   }

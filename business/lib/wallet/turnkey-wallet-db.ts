@@ -86,7 +86,8 @@ export async function getActiveWalletAddress(
     .eq("ledger_currency", ledgerCurrency)
     .eq("status", "active")
     .maybeSingle()
-  return data?.address ? String(data.address) : null
+  const raw = data?.address != null ? String(data.address).trim() : ""
+  return raw.length > 0 ? raw : null
 }
 
 /**

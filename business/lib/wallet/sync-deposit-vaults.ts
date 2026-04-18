@@ -4,7 +4,7 @@ import {
   isTurnkeyConfigured,
   isTurnkeyWalletAutoprovisionEnabled,
 } from "@/lib/turnkey/config"
-import { getWalletOwnerId } from "@/lib/wallet/resolve-wallet-owner"
+import { resolveWalletOwnerIdForEasnerContext } from "@/lib/wallet/resolve-wallet-owner"
 import { enqueueVaultProvisioningJobs } from "@/lib/wallet/turnkey-wallet-db"
 import { getTurnkeyDepositAddressesForContext } from "@/lib/wallet/turnkey-deposit-addresses"
 import { processNextWalletProvisioningJob } from "@/lib/wallet/turnkey-provisioning"
@@ -32,11 +32,7 @@ export async function trySyncTurnkeyDepositVaultsIfNeeded(
   let body = await getTurnkeyDepositAddressesForContext(admin, ctx)
   if (depositAddressesComplete(body)) return
 
-  const ownerType: "individual" | "business" = ctx.scope === "business" ? "business" : "individual"
-  const ownerRef =
-    ctx.scope === "business" && ctx.subjectBusinessId ? ctx.subjectBusinessId : ctx.subjectUserId
-
-  const ownerId = await getWalletOwnerId(admin, ownerType, ownerRef)
+  const ownerId = await resolveWalletOwnerIdForEasnerContext(admin, ctx)
   if (!ownerId) return
 
   const { data: wo } = await admin
@@ -51,9 +47,15 @@ export async function trySyncTurnkeyDepositVaultsIfNeeded(
   const now = new Date().toISOString()
   await admin
     .from("wallet_provisioning_jobs")
-    .update({ state: "pending", error: null, updated_at: now })
+    .update({
+      state: "pending",
+      error: null,
+      attempt_count: 0,
+      next_retry_at: null,
+      updated_at: now,
+    })
     .eq("wallet_owner_id", ownerId)
-    .eq("state", "awaiting_sub_org")
+    .in("state", ["awaiting_sub_org", "dead_letter"])
 
   await enqueueVaultProvisioningJobs(admin, ownerId, DEFAULT_INDIVIDUAL_VAULTS)
 

@@ -5,7 +5,10 @@ import {
   pickNoahWorkflowIdFromResponse,
   startBankDepositToOnchainAddress,
 } from "@/lib/noah/bank-onramp-workflow"
-import { resolveTurnkeyAddressForNoahPair, getWalletOwnerId } from "@/lib/wallet/resolve-wallet-owner"
+import {
+  resolveTurnkeyAddressForNoahPair,
+  resolveWalletOwnerIdForEasnerContext,
+} from "@/lib/wallet/resolve-wallet-owner"
 import { prepareSellFromRecipientRow, type RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
 import {
   pickDestinationAddress,
@@ -67,12 +70,7 @@ export async function createOnRampPaymentIntent(input: {
   })
 
   const workflowId = pickNoahWorkflowIdFromResponse(noahRaw)
-  const ownerType: "individual" | "business" = input.ctx.scope === "business" ? "business" : "individual"
-  const ownerRef =
-    input.ctx.scope === "business" && input.ctx.subjectBusinessId
-      ? input.ctx.subjectBusinessId
-      : input.ctx.subjectUserId
-  const walletOwnerId = await getWalletOwnerId(input.admin, ownerType, ownerRef)
+  const walletOwnerId = await resolveWalletOwnerIdForEasnerContext(input.admin, input.ctx)
 
   const { data: row, error } = await input.admin
     .from("payment_intents")
@@ -198,12 +196,7 @@ export async function createOffRampPaymentIntent(input: {
   })
 
   const destination = pickDestinationAddress(workflowRaw)
-  const ownerType: "individual" | "business" = input.ctx.scope === "business" ? "business" : "individual"
-  const ownerRef =
-    input.ctx.scope === "business" && input.ctx.subjectBusinessId
-      ? input.ctx.subjectBusinessId
-      : input.ctx.subjectUserId
-  const walletOwnerId = await getWalletOwnerId(input.admin, ownerType, ownerRef)
+  const walletOwnerId = await resolveWalletOwnerIdForEasnerContext(input.admin, input.ctx)
 
   const { data: row, error } = await input.admin
     .from("payment_intents")
