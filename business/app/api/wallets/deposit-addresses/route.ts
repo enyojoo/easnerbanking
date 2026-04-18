@@ -4,6 +4,7 @@ import { requireAuth, requireNoahEnv } from "@/app/api/noah/_helpers"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
 import { getTurnkeyDepositAddressesForContext } from "@/lib/wallet/turnkey-deposit-addresses"
+import { trySyncTurnkeyDepositVaultsIfNeeded } from "@/lib/wallet/sync-deposit-vaults"
 
 export const runtime = "nodejs"
 
@@ -28,6 +29,7 @@ export async function GET(request: Request) {
   if (guard) return guard
 
   const admin = createSupabaseAdmin()
+  await trySyncTurnkeyDepositVaultsIfNeeded(admin, acc.ctx)
   const body = await getTurnkeyDepositAddressesForContext(admin, acc.ctx)
 
   return NextResponse.json(body)

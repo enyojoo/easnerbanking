@@ -42,8 +42,11 @@ export async function scheduleTurnkeyWalletsAfterKycApproved(params: {
 
 /**
  * Process a single pending provisioning job (Turnkey createWallet in user sub-org).
+ * When `walletOwnerId` is set, only jobs for that `wallet_owners` row are considered.
  */
-export async function processNextWalletProvisioningJob(): Promise<{
+export async function processNextWalletProvisioningJob(opts?: {
+  walletOwnerId?: string
+}): Promise<{
   processed: boolean
   jobId?: string
   detail?: string
@@ -57,14 +60,15 @@ export async function processNextWalletProvisioningJob(): Promise<{
 
   const admin = createSupabaseAdmin()
   const now = new Date().toISOString()
-  const { data: job } = await admin
+  let jobQuery = admin
     .from("wallet_provisioning_jobs")
     .select("*, wallet_owners(*)")
     .in("state", ["pending", "retry"])
     .or(`next_retry_at.is.null,next_retry_at.lte.${now}`)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle()
+  if (opts?.walletOwnerId) {
+    jobQuery = jobQuery.eq("wallet_owner_id", opts.walletOwnerId)
+  }
+  const { data: job } = await jobQuery.order("created_at", { ascending: true }).limit(1).maybeSingle()
 
   if (!job?.id) return { processed: false, detail: "no_jobs" }
 
