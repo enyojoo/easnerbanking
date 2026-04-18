@@ -9,7 +9,8 @@ export const runtime = "nodejs"
 
 /**
  * GET — Solana USDC/EURC balances at Turnkey-mapped `wallet_accounts` (chain truth for BYOW).
- * Response: `{ USD, EUR }` strings — same shape legacy clients expected for dashboard cards.
+ * Response: `{ USD, EUR, source, balanceCaip2, detail? }` — `balanceCaip2` is the CAIP-2 network
+ * used for Turnkey (verify against deposit network if balances look wrong).
  *
  * @see https://docs.turnkey.com/api-reference/queries/get-balances
  */
@@ -37,6 +38,7 @@ export async function GET(request: Request) {
     USD: result.USD,
     EUR: result.EUR,
     source: result.source,
+    balanceCaip2: result.balanceCaip2,
     ...(result.detail ? { detail: result.detail } : {}),
   })
 }

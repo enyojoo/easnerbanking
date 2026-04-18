@@ -58,6 +58,16 @@ export function isTurnkeyOnChainBalanceQueryEnabled(): boolean {
   return process.env.TURNKEY_ONCHAIN_BALANCE_QUERY !== "false"
 }
 
+/**
+ * CAIP-2 chain id passed to Turnkey `getWalletAddressBalances` for Solana deposit addresses.
+ * Must match the network where USDC/EURC were sent (mainnet vs devnet). Turnkey accepts
+ * aliases like `solana:mainnet` and normalizes them.
+ * @see https://docs.turnkey.com/api-reference/queries/get-balances
+ */
+export function getTurnkeyBalanceCaip2(): string {
+  return (process.env.TURNKEY_BALANCE_CAIP2?.trim() || "solana:mainnet").trim()
+}
+
 /** When `false`, skip server-side `createSubOrganization` (e.g. bootstrap auto-provision). */
 export function isTurnkeyServerSubOrgCreationEnabled(): boolean {
   return process.env.TURNKEY_SERVER_SUB_ORG_CREATION_ENABLED !== "false"

@@ -59,9 +59,15 @@ interface NoahVirtualAccount {
   status?: string
 }
 
-interface NoahWalletBalances {
+export interface NoahWalletBalances {
   USD: string
   EUR: string
+  /** Present when business `GET /api/wallets/on-chain-balances` includes Turnkey metadata */
+  source?: "turnkey" | "none"
+  /** Server diagnostic, e.g. `turnkey_balance_query_failed:...` */
+  detail?: string
+  /** CAIP-2 value the server used for Turnkey — must match the network where USDC/EURC were sent */
+  balanceCaip2?: string
 }
 
 interface NoahTransfer {
@@ -703,12 +709,37 @@ export const noahService = {
         return { USD: '0', EUR: '0' }
       }
 
-      const tk = (await tkRes.json()) as { USD?: string; EUR?: string }
-      console.log('[NoahService] On-chain balances:', tk)
-      return {
-        USD: typeof tk.USD === 'string' ? tk.USD : '0',
-        EUR: typeof tk.EUR === 'string' ? tk.EUR : '0',
+      const tk = (await tkRes.json()) as {
+        USD?: string
+        EUR?: string
+        source?: string
+        detail?: string
+        balanceCaip2?: string
       }
+      const source: NoahWalletBalances["source"] =
+        tk.source === "turnkey" || tk.source === "none" ? tk.source : undefined
+      const out: NoahWalletBalances = {
+        USD: typeof tk.USD === "string" ? tk.USD : "0",
+        EUR: typeof tk.EUR === "string" ? tk.EUR : "0",
+        ...(source ? { source } : {}),
+        ...(typeof tk.detail === "string" ? { detail: tk.detail } : {}),
+        ...(typeof tk.balanceCaip2 === "string" ? { balanceCaip2: tk.balanceCaip2 } : {}),
+      }
+      if (out.source === "none") {
+        console.warn(
+          "[NoahService] On-chain balances: source=none (cards may show 0).",
+          { detail: out.detail, balanceCaip2: out.balanceCaip2 },
+          "If USDC/EURC are on-chain, verify the API host has TURNKEY_BALANCE_CAIP2 matching that network (e.g. solana:mainnet vs solana:devnet).",
+        )
+      } else {
+        console.log("[NoahService] On-chain balances:", {
+          USD: out.USD,
+          EUR: out.EUR,
+          source: out.source,
+          balanceCaip2: out.balanceCaip2,
+        })
+      }
+      return out
     } catch (error: any) {
       clearTimeout(timeoutId)
       console.error('[NoahService] Error fetching wallet balances:', error)
