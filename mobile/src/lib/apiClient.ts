@@ -71,6 +71,23 @@ export async function ensureBusinessAppUserBootstrap(): Promise<void> {
     }
     /** Bootstrap may align `user_metadata.name` with `users.full_name` server-side — refresh JWT. */
     await supabase.auth.refreshSession().catch(() => undefined)
+
+    /** Idempotent Turnkey sub-org + wallet queue — retries if bootstrap Turnkey step failed earlier. */
+    try {
+      const ensureRes = await fetch(`${apiBase}/api/wallets/ensure-sub-org`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      })
+      if (!ensureRes.ok) {
+        const text = await ensureRes.text().catch(() => '')
+        console.warn('ensure-sub-org after bootstrap:', ensureRes.status, text)
+      }
+    } catch (e) {
+      console.warn('ensure-sub-org after bootstrap error:', e)
+    }
   } catch (e) {
     console.warn('auth bootstrap error:', e)
   }

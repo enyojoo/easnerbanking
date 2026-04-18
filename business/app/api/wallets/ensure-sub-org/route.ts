@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { requireAuth, requireNoahEnv } from "@/app/api/noah/_helpers"
+import { requireAuth } from "@/app/api/noah/_helpers"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { ensureTurnkeySubOrgForEasnerOwner } from "@/lib/wallet/ensure-turnkey-sub-org"
 
@@ -11,8 +11,6 @@ export const runtime = "nodejs"
  * Idempotent. Use when bootstrap was skipped or Turnkey creation failed earlier.
  */
 export async function POST(request: Request) {
-  const mis = requireNoahEnv()
-  if (mis) return mis
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
   const { user } = auth

@@ -84,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const trimmedBootstrapName = String(fullNameFromMeta ?? "").trim()
 
       try {
-        await fetchWithSession("/api/auth/bootstrap", {
+        const bootRes = await fetchWithSession("/api/auth/bootstrap", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -93,6 +93,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             ...(trimmedBootstrapName ? { fullName: trimmedBootstrapName } : {}),
           }),
         })
+        if (bootRes.ok) {
+          try {
+            const er = await fetchWithSession("/api/wallets/ensure-sub-org", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-Easner-Noah-Scope": "business",
+              },
+            })
+            if (!er.ok) {
+              const text = await er.text().catch(() => "")
+              console.warn("ensure-sub-org after bootstrap:", er.status, text)
+            }
+          } catch (e) {
+            console.warn("ensure-sub-org error:", e)
+          }
+        }
       } catch (error) {
         console.error("auth bootstrap failed", error)
       }

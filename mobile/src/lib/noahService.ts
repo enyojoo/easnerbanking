@@ -721,7 +721,7 @@ export const noahService = {
    */
   /**
    * Ensure Turnkey sub-org exists (server-side create) and is linked — idempotent.
-   * Requires `NOAH_API_KEY` on the business app (route uses requireNoahEnv).
+   * (Consumer mobile: default Noah scope is individual.)
    */
   async ensureTurnkeySubOrg(): Promise<{
     ok: boolean
