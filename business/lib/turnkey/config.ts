@@ -15,6 +15,11 @@ export function getTurnkeyApiPrivateKey(): string {
   return (process.env.TURNKEY_API_PRIVATE_KEY || "").trim()
 }
 
+/** Must match the curve used when the parent org API key was created (P256 vs SECP256K1). */
+export function getTurnkeyApiKeyCurveType(): string {
+  return (process.env.TURNKEY_API_KEY_CURVE || "API_KEY_CURVE_P256").trim()
+}
+
 export function getTurnkeyApiBaseUrl(): string {
   const raw = (process.env.TURNKEY_API_BASE_URL || "https://api.turnkey.com").replace(/\/$/, "")
   return raw

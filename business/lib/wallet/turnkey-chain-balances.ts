@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
-import { getTurnkeyApiClient } from "@/lib/turnkey/client"
+import { getTurnkeyApiClientForSubOrganization } from "@/lib/turnkey/client"
 import {
   getTurnkeyFallbackSubOrganizationId,
   isTurnkeyConfigured,
@@ -115,7 +115,7 @@ export async function getTurnkeyDisplayBalancesUsdEur(
     return { USD: "0", EUR: "0", source: "none", detail: "no_active_solana_accounts" }
   }
 
-  const client = getTurnkeyApiClient()
+  const client = getTurnkeyApiClientForSubOrganization(subOrg)
   if (!client) {
     return { USD: "0", EUR: "0", source: "none", detail: "no_turnkey_client" }
   }

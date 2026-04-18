@@ -1,6 +1,6 @@
 import { defaultSolanaAccountAtIndex } from "@turnkey/sdk-server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { getTurnkeyApiClient } from "@/lib/turnkey/client"
+import { getTurnkeyApiClientForSubOrganization } from "@/lib/turnkey/client"
 import {
   getTurnkeyFallbackSubOrganizationId,
   isTurnkeyConfigured,
@@ -55,9 +55,6 @@ export async function processNextWalletProvisioningJob(opts?: {
     return { processed: false, detail: "turnkey_not_configured_or_disabled" }
   }
 
-  const client = getTurnkeyApiClient()
-  if (!client) return { processed: false, detail: "no_client" }
-
   const admin = createSupabaseAdmin()
   const now = new Date().toISOString()
   let jobQuery = admin
@@ -99,6 +96,9 @@ export async function processNextWalletProvisioningJob(opts?: {
       .eq("id", job.id)
     return { processed: true, jobId: job.id, detail: "awaiting_sub_org" }
   }
+
+  const client = getTurnkeyApiClientForSubOrganization(subOrgId)
+  if (!client) return { processed: false, detail: "no_client" }
 
   const walletName = `easner-${job.ledger_currency}-${job.chain}-${job.asset}`.toLowerCase()
   const spec = DEFAULT_INDIVIDUAL_VAULTS.find(
