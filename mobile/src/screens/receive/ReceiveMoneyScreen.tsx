@@ -902,14 +902,17 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
 
   /** Turnkey Solana vault for this currency tab. */
   const getStablecoinAddress = () => {
-    const address = turnkeyDepositAddress || ''
+    const raw = turnkeyDepositAddress || ''
     const memo = turnkeyDepositMemo || undefined
+    const kycOk = kycStatus === 'approved'
+    const addrValid =
+      Boolean(raw) && raw !== 'Loading...' && raw !== 'Wallet address not available'
 
     return {
-      address: walletReady ? address : '',
+      address: kycOk && addrValid ? raw : '',
       network: 'Solana',
       supportedStablecoins: currency === 'USD' ? ['USDC'] : ['EURC'],
-      memo,
+      memo: kycOk && addrValid ? memo : undefined,
       isLiquidationAddress: false,
     }
   }

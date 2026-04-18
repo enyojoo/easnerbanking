@@ -3,7 +3,7 @@
 
 import * as FileSystem from 'expo-file-system/legacy'
 import type { Session } from '@supabase/supabase-js'
-import { getApiBaseUrl } from './apiClient'
+import { getApiBaseUrl, NOAH_SCOPE_INDIVIDUAL_HEADERS } from './apiClient'
 import { getSessionReliable } from './authSession'
 
 async function requireAuthSession(): Promise<Session> {
@@ -676,7 +676,7 @@ export const noahService = {
       console.log('[NoahService] Fetching on-chain wallet balances (Turnkey)...')
       const tkRes = await fetch(`${apiUrl()}/api/wallets/on-chain-balances`, {
         method: 'GET',
-        headers: { ...authHeaders },
+        headers: { ...authHeaders, ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
         signal: controller.signal,
       })
       clearTimeout(timeoutId)
@@ -738,6 +738,7 @@ export const noahService = {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
+          ...NOAH_SCOPE_INDIVIDUAL_HEADERS,
         },
         signal: controller.signal,
       })
@@ -767,6 +768,8 @@ export const noahService = {
     EUR: { address: string; stablecoin: string; chain: string; memo: string }
   }> {
     const session = await requireAuthSession()
+    await this.ensureTurnkeySubOrg().catch(() => undefined)
+
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 8000)
     const empty = (stablecoin: string) => ({
@@ -778,7 +781,10 @@ export const noahService = {
     try {
       const res = await fetch(`${apiUrl()}/api/wallets/deposit-addresses`, {
         method: 'GET',
-        headers: { Authorization: `Bearer ${session.access_token}` },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          ...NOAH_SCOPE_INDIVIDUAL_HEADERS,
+        },
         signal: controller.signal,
       })
       clearTimeout(timeoutId)
