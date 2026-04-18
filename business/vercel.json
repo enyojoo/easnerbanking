@@ -4,7 +4,7 @@
   "crons": [
     {
       "path": "/api/internal/wallet-provisioning/process",
-      "schedule": "* * * * *"
+      "schedule": "0 0 * * *"
     }
   ]
 }

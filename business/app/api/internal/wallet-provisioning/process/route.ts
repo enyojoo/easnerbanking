@@ -8,7 +8,7 @@ async function drainWalletProvisioningBatch(): Promise<
   NextResponse<{ ok: true; results: Awaited<ReturnType<typeof processNextWalletProvisioningJob>>[] }>
 > {
   const results: Awaited<ReturnType<typeof processNextWalletProvisioningJob>>[] = []
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 100; i++) {
     const r = await processNextWalletProvisioningJob()
     results.push(r)
     if (!r.processed || r.detail === "no_jobs" || r.detail === "turnkey_not_configured_or_disabled") {
