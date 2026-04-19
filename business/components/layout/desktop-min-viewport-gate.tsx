@@ -6,13 +6,10 @@ type Product = "business" | "office"
 
 const COPY: Record<
   Product,
-  { title: string; lede: string; detail: string }
+  { title: string; lede?: string; detail?: string }
 > = {
   business: {
     title: "Easner Business works best on a wide screen",
-    lede: "Invoices, ledgers, cards, and compliance views are laid out for desktop and large tablets so you can scan tables, compare numbers, and finish tasks without crowding the UI.",
-    detail:
-      "This web app is not supported on phones or small tablets. Switch to a laptop, desktop, or a large tablet in landscape, then come back here.",
   },
   office: {
     title: "Easner Office works best on a wide screen",
@@ -54,8 +51,12 @@ export function DesktopMinViewportGate({ product, children }: DesktopMinViewport
             >
               {copy.title}
             </h1>
-            <p className="text-pretty text-base leading-relaxed text-muted-foreground">{copy.lede}</p>
-            <p className="text-pretty text-sm leading-relaxed text-muted-foreground">{copy.detail}</p>
+            {copy.lede ? (
+              <p className="text-pretty text-base leading-relaxed text-muted-foreground">{copy.lede}</p>
+            ) : null}
+            {copy.detail ? (
+              <p className="text-pretty text-sm leading-relaxed text-muted-foreground">{copy.detail}</p>
+            ) : null}
           </div>
 
           <ul className="flex flex-col gap-4 border-y border-border py-6 text-left text-sm text-muted-foreground">
@@ -70,8 +71,8 @@ export function DesktopMinViewportGate({ product, children }: DesktopMinViewport
             <li className="flex gap-3">
               <Smartphone className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden />
               <span>
-                <span className="font-medium text-foreground">Banking on your phone</span> — use the
-                Easner mobile app for balances, transfers, and notifications.{" "}
+                <span className="font-medium text-foreground">Banking on your phone</span> — for
+                individual banking, use Easner mobile app for balances, transfers, and cards.{" "}
                 <a
                   href={APP_URLS.website}
                   className="text-primary underline-offset-4 hover:underline"
