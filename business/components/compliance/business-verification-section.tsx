@@ -197,7 +197,9 @@ export function BusinessVerificationSection() {
                     Tier {t.tier}
                   </Badge>
                   {isT1 && tier1Complete ? (
-                    <Badge className="bg-green-600 hover:bg-green-600">Approved</Badge>
+                    <Badge className="border-transparent bg-success text-success-foreground hover:bg-success">
+                      Approved
+                    </Badge>
                   ) : isT1 ? (
                     <Badge variant="secondary">{formatTier1Status(tier1VerificationStatus)}</Badge>
                   ) : (

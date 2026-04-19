@@ -4,7 +4,7 @@
  * Stored per user on device only. Used for idle soft-lock, unlock, and action confirmations.
  * NOT server MFA / not Supabase 2FA.
  *
- * iOS/Android: `react-native-quick-crypto` (OpenSSL via JSI) — same KDF as web, not pure-JS @noble/hashes
+ * iOS/Android: `react-native-quick-crypto` 0.x (OpenSSL via native JSI, no Nitro) — same KDF as web; falls back to @noble/hashes if unavailable
  * (100k iterations in JS was multi-second; business feels instant due to Web Crypto).
  * Expo web: `crypto.subtle` when available.
  */
@@ -156,17 +156,22 @@ async function derivePinHash(pin: string, salt: Uint8Array): Promise<Uint8Array>
   // Native: OpenSSL-backed PBKDF2 (avoid multi-second pure-JS 100k iterations on Hermes)
   if (Platform.OS !== 'web') {
     try {
-      const { pbkdf2Sync } = require('react-native-quick-crypto') as {
-        pbkdf2Sync: (
-          password: string | Uint8Array,
-          salt: Uint8Array,
-          iterations: number,
-          keylen: number,
-          digest: string,
-        ) => Uint8Array
+      type Pbkdf2SyncFn = (
+        password: string | Uint8Array,
+        salt: Uint8Array,
+        iterations: number,
+        keylen: number,
+        digest: string,
+      ) => Uint8Array
+      const qc = require('react-native-quick-crypto') as {
+        pbkdf2Sync?: Pbkdf2SyncFn
+        default?: { pbkdf2Sync?: Pbkdf2SyncFn }
       }
-      const derived = pbkdf2Sync(pin, salt, LOGIN_PIN_PBKDF2_ITERATIONS, dkLen, 'sha256')
-      return new Uint8Array(derived)
+      const pbkdf2Sync = qc?.pbkdf2Sync ?? qc?.default?.pbkdf2Sync
+      if (typeof pbkdf2Sync === 'function') {
+        const derived = pbkdf2Sync(pin, salt, LOGIN_PIN_PBKDF2_ITERATIONS, dkLen, 'sha256')
+        return new Uint8Array(derived)
+      }
     } catch (e) {
       console.warn('derivePinHash: react-native-quick-crypto failed, using @noble/hashes', e)
     }

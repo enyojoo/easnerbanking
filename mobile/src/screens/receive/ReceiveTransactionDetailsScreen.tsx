@@ -75,18 +75,18 @@ function ReceiveTransactionDetailsContent({ navigation, route }: NavigationProps
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'deposited':
-        return '#10b981'
+        return '#0F8A5F'
       case 'converted':
       case 'converting':
-        return '#f59e0b'
+        return '#A8792A'
       case 'confirmed':
-        return '#007ACC'
+        return '#0F8A5F'
       case 'pending':
-        return '#6b7280'
+        return '#6F756F'
       case 'failed':
-        return '#ef4444'
+        return '#7A2E2E'
       default:
-        return '#6b7280'
+        return '#6F756F'
     }
   }
 
@@ -206,7 +206,7 @@ function ReceiveTransactionDetailsContent({ navigation, route }: NavigationProps
             <View key={stage.id} style={styles.timelineItem}>
               <View style={styles.timelineIcon}>
                 {stage.completed ? (
-                  <Ionicons name="checkmark-circle" size={24} color="#10b981" />
+                  <Ionicons name="checkmark-circle" size={24} color="#0F8A5F" />
                 ) : (
                   <Ionicons name="time-outline" size={24} color="#d1d5db" />
                 )}
@@ -328,7 +328,7 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 12,
-    color: '#6b7280',
+    color: '#6F756F',
     textTransform: 'uppercase',
     marginBottom: 4,
   },
@@ -339,7 +339,7 @@ const styles = StyleSheet.create({
   },
   infoSubtext: {
     fontSize: 12,
-    color: '#6b7280',
+    color: '#6F756F',
     marginTop: 2,
   },
   amountCard: {
@@ -353,7 +353,7 @@ const styles = StyleSheet.create({
   },
   amountLabel: {
     fontSize: 12,
-    color: '#6b7280',
+    color: '#6F756F',
     textTransform: 'uppercase',
     marginBottom: 8,
   },
@@ -365,7 +365,7 @@ const styles = StyleSheet.create({
   fiatAmount: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#10b981',
+    color: '#0F8A5F',
   },
   timelineItem: {
     flexDirection: 'row',
@@ -389,7 +389,7 @@ const styles = StyleSheet.create({
   },
   timelineTime: {
     fontSize: 12,
-    color: '#6b7280',
+    color: '#6F756F',
   },
   timelineLine: {
     position: 'absolute',
@@ -400,11 +400,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#e5e7eb',
   },
   timelineLineActive: {
-    backgroundColor: '#10b981',
+    backgroundColor: '#0F8A5F',
   },
   errorText: {
     fontSize: 16,
-    color: '#ef4444',
+    color: '#7A2E2E',
     marginBottom: 16,
   },
   backButton: {

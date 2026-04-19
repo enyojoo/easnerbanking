@@ -27,7 +27,7 @@ export async function renderAutopayPlacardHdPng(input: RenderPlacardHdPngInput):
     margin: 2,
     errorCorrectionLevel: "H",
     type: "png",
-    color: { dark: "#0a0a0a", light: "#ffffff" },
+    color: { dark: "#0F1110", light: "#F6F3EB" },
   })
   const qrB64 = qrBuf.toString("base64")
 
@@ -61,9 +61,9 @@ export async function renderAutopayPlacardHdPng(input: RenderPlacardHdPngInput):
 <svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#5b21b6"/>
-      <stop offset="55%" style="stop-color:#312e81"/>
-      <stop offset="100%" style="stop-color:#0f172a"/>
+      <stop offset="0%" style="stop-color:#1C201E"/>
+      <stop offset="55%" style="stop-color:#151817"/>
+      <stop offset="100%" style="stop-color:#0F1110"/>
     </linearGradient>
     <filter id="soft" x="-5%" y="-5%" width="110%" height="110%">
       <feGaussianBlur stdDeviation="2" result="b"/>
@@ -80,7 +80,7 @@ export async function renderAutopayPlacardHdPng(input: RenderPlacardHdPngInput):
   <text x="400" y="192" text-anchor="middle" fill="#ffffff" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="28" font-weight="600">${escSvg(chip)}</text>
   <text x="${W / 2}" y="330" text-anchor="middle" fill="#ffffff" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="64" font-weight="800">Pay with Stablecoin</text>
   <text x="${W / 2}" y="420" text-anchor="middle" fill="rgba(255,255,255,0.75)" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="30">Scan the QR with your wallet on ${escSvg(input.networkDisplay)}</text>
-  <rect x="${(W - 960) / 2}" y="500" width="960" height="960" rx="28" fill="#ffffff" filter="url(#soft)"/>
+  <rect x="${(W - 960) / 2}" y="500" width="960" height="960" rx="40" fill="#F6F3EB" filter="url(#soft)"/>
   <image href="data:image/png;base64,${qrB64}" x="${(W - 920) / 2}" y="520" width="920" height="920" preserveAspectRatio="xMidYMid meet"/>
   <text x="${W / 2}" y="1540" text-anchor="middle" fill="rgba(255,255,255,0.65)" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="24" font-weight="600" letter-spacing="1">WALLET ADDRESS</text>
   <text text-anchor="middle" fill="rgba(255,255,255,0.9)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="26" font-weight="500">${addrTspans}</text>

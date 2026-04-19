@@ -160,8 +160,8 @@ export default function LoginPage() {
       <CardContent>
         <div className="space-y-4">
           {successMessage && step === "password" && (
-            <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-md">
-              <p className="text-sm text-green-700 dark:text-green-400">{successMessage}</p>
+            <div className="p-3 bg-primary/10 border border-primary/20 rounded-xl">
+              <p className="text-sm text-primary">{successMessage}</p>
             </div>
           )}
           {error && (

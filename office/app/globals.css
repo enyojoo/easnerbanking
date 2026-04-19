@@ -1,122 +1,222 @@
-/* Easner Brand Standards
- * Primary Color: #007ACC
- * Logo: https://seeqjiebmrnolcyydewj.supabase.co/storage/v1/object/public/brand/Easner%20Logo.svg
+/* Easner Design System — Office admin
+ * Mirrors business/app/globals.css. Single source of truth:
+ * packages/shared/src/design/tokens.ts
  */
+
 @import "tailwindcss";
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(0.99 0 0);
-  --foreground: oklch(0.15 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.15 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.15 0 0);
-  --primary: #007acc;
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.96 0 0);
-  --secondary-foreground: oklch(0.15 0 0);
-  --muted: oklch(0.96 0 0);
-  --muted-foreground: oklch(0.5 0 0);
-  --accent: oklch(0.96 0 0);
-  --accent-foreground: oklch(0.15 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(1 0 0);
-  --border: oklch(0.93 0 0);
-  --input: oklch(0.93 0 0);
-  --ring: #007acc;
-  --chart-1: #007acc;
-  --chart-2: oklch(0.6 0.15 180);
-  --chart-3: oklch(0.65 0.2 140);
-  --chart-4: oklch(0.7 0.15 80);
-  --chart-5: oklch(0.55 0.18 300);
-  --radius: 0.5rem;
-  --sidebar: oklch(0.98 0 0);
-  --sidebar-foreground: oklch(0.15 0 0);
-  --sidebar-primary: #007acc;
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.96 0 0);
-  --sidebar-accent-foreground: oklch(0.15 0 0);
-  --sidebar-border: oklch(0.93 0 0);
-  --sidebar-ring: #007acc;
+  --background: 42 33% 95%;
+  --foreground: 210 12% 8%;
+
+  --card: 40 27% 97%;
+  --card-foreground: 210 12% 8%;
+
+  --popover: 40 27% 97%;
+  --popover-foreground: 210 12% 8%;
+
+  --primary: 204 100% 40%;
+  --primary-foreground: 40 30% 96%;
+  --primary-hover: 204 100% 32%;
+  --surface-tint: 205 83% 96%;
+  --brand-navy: 210 73% 15%;
+
+  --secondary: 42 18% 88%;
+  --secondary-foreground: 210 12% 8%;
+
+  --muted: 42 20% 90%;
+  --muted-foreground: 210 7% 42%;
+
+  /* Subtle neutral hover/focus highlight — used by shadcn DropdownMenu,
+     Select, Command, etc. and by custom hover:bg-accent/* call sites.
+     Must be a quiet surface so text-foreground stays readable on hover.
+     Primary blue is separate; success uses --success. */
+  --accent: 42 20% 90%;
+  --accent-foreground: 210 12% 8%;
+
+  --destructive: 0 45% 33%;
+  --destructive-foreground: 40 30% 96%;
+
+  --warning: 37 61% 41%;
+  --warning-foreground: 40 30% 96%;
+
+  --success: 156 80% 30%;
+  --success-foreground: 40 30% 96%;
+
+  --border: 40 18% 82%;
+  --input: 40 18% 82%;
+  --ring: 204 100% 40%;
+
+  --chart-1: 204 100% 40%;
+  --chart-2: 210 12% 8%;
+  --chart-3: 40 27% 82%;
+  --chart-4: 37 61% 41%;
+  --chart-5: 210 5% 45%;
+
+  --sidebar: 40 27% 97%;
+  --sidebar-foreground: 210 12% 8%;
+  --sidebar-primary: 204 100% 40%;
+  --sidebar-primary-foreground: 40 30% 96%;
+  --sidebar-accent: 42 20% 90%;
+  --sidebar-accent-foreground: 210 12% 8%;
+  --sidebar-border: 40 18% 82%;
+  --sidebar-ring: 204 100% 40%;
+
+  --brand-graphite: 210 11% 8%;
+  --brand-carbon: 210 10% 10%;
+  --brand-ink: 210 12% 12%;
+  --brand-ivory: 42 33% 95%;
+  --brand-cloud: 42 38% 97%;
+  --brand-mist: 42 33% 88%;
+  --brand-stone: 40 27% 82%;
+  --brand-slate: 210 5% 45%;
+  --brand-emerald: 156 80% 30%;
+  --brand-emerald-deep: 156 83% 24%;
+  --brand-amber: 37 61% 41%;
+  --brand-oxblood: 0 45% 33%;
+  --brand-primary-hover: 204 100% 32%;
+  --brand-navy-hsl: 210 73% 15%;
+  --brand-tint-blue: 205 83% 96%;
+
+  --radius: 1rem;
+
+  --shadow-soft: 0 8px 30px rgba(15, 17, 16, 0.06);
+  --shadow-card: 0 10px 30px rgba(15, 17, 16, 0.08);
+  --shadow-lift: 0 16px 40px rgba(15, 17, 16, 0.12);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.145 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.145 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: #007acc;
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.637 0.237 25.331);
-  --border: oklch(0.269 0 0);
-  --input: oklch(0.269 0 0);
-  --ring: oklch(0.439 0 0);
-  --chart-1: #007acc;
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: #007acc;
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.269 0 0);
-  --sidebar-ring: oklch(0.439 0 0);
+  --background: 210 10% 8%;
+  --foreground: 40 24% 93%;
+
+  --card: 210 10% 11%;
+  --card-foreground: 40 24% 93%;
+
+  --popover: 210 10% 11%;
+  --popover-foreground: 40 24% 93%;
+
+  --primary: 206 93% 60%;
+  --primary-foreground: 40 30% 96%;
+  --primary-hover: 206 93% 52%;
+  --surface-tint: 206 40% 18%;
+
+  --secondary: 210 8% 15%;
+  --secondary-foreground: 40 24% 93%;
+
+  --muted: 210 7% 16%;
+  --muted-foreground: 40 10% 70%;
+
+  /* Quiet neutral hover surface in dark mode (see light-mode note). */
+  --accent: 210 7% 16%;
+  --accent-foreground: 40 24% 93%;
+
+  --destructive: 0 40% 35%;
+  --destructive-foreground: 40 30% 96%;
+
+  --warning: 37 55% 48%;
+  --warning-foreground: 40 30% 96%;
+
+  --success: 156 80% 34%;
+  --success-foreground: 40 30% 96%;
+
+  --border: 210 7% 18%;
+  --input: 210 7% 18%;
+  --ring: 206 93% 60%;
+
+  --chart-1: 206 93% 60%;
+  --chart-2: 40 24% 93%;
+  --chart-3: 210 10% 28%;
+  --chart-4: 37 55% 48%;
+  --chart-5: 210 5% 55%;
+
+  --sidebar: 210 10% 10%;
+  --sidebar-foreground: 40 24% 93%;
+  --sidebar-primary: 206 93% 60%;
+  --sidebar-primary-foreground: 40 30% 96%;
+  --sidebar-accent: 210 7% 16%;
+  --sidebar-accent-foreground: 40 24% 93%;
+  --sidebar-border: 210 7% 18%;
+  --sidebar-ring: 206 93% 60%;
+
+  --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.35);
+  --shadow-card: 0 14px 36px rgba(0, 0, 0, 0.45);
+  --shadow-lift: 0 20px 48px rgba(0, 0, 0, 0.55);
 }
 
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --font-serif: var(--font-playfair), "Cormorant Garamond", ui-serif, serif;
+
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-primary-hover: hsl(var(--primary-hover));
+  --color-surface-tint: hsl(var(--surface-tint));
+  --color-brand-navy: hsl(var(--brand-navy));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --color-chart-1: hsl(var(--chart-1));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-5: hsl(var(--chart-5));
+
+  --color-sidebar: hsl(var(--sidebar));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+
+  --color-graphite: hsl(var(--brand-graphite));
+  --color-carbon: hsl(var(--brand-carbon));
+  --color-ink: hsl(var(--brand-ink));
+  --color-ivory: hsl(var(--brand-ivory));
+  --color-cloud: hsl(var(--brand-cloud));
+  --color-mist: hsl(var(--brand-mist));
+  --color-stone: hsl(var(--brand-stone));
+  --color-slate-quiet: hsl(var(--brand-slate));
+  --color-emerald-brand: hsl(var(--brand-emerald));
+  --color-emerald-deep: hsl(var(--brand-emerald-deep));
+  --color-amber-quiet: hsl(var(--brand-amber));
+  --color-oxblood: hsl(var(--brand-oxblood));
+  --color-brand-primary-hover: hsl(var(--brand-primary-hover));
+  --color-brand-navy-hsl: hsl(var(--brand-navy-hsl));
+  --color-brand-tint-blue: hsl(var(--brand-tint-blue));
+
+  --radius-sm: calc(var(--radius) - 0.375rem);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 0.375rem);
+  --radius-xl: calc(var(--radius) + 0.75rem);
+
+  --shadow-soft: var(--shadow-soft);
+  --shadow-card: var(--shadow-card);
+  --shadow-lift: var(--shadow-lift);
 }
 
 @layer base {
@@ -130,7 +230,20 @@
 
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "cv11", "ss01", "ss03";
     transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  .tabular,
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .font-serif,
+  .font-display {
+    font-family: var(--font-serif);
+    font-feature-settings: "liga", "dlig";
+    letter-spacing: -0.01em;
   }
 
   input[type="text"],
@@ -140,7 +253,7 @@
   input[type="password"],
   input[type="search"],
   textarea {
-    caret-color: var(--foreground);
+    caret-color: var(--color-foreground);
   }
 
   input[type="text"]:focus,
@@ -150,15 +263,28 @@
   input[type="password"]:focus,
   input[type="search"]:focus,
   textarea:focus {
-    caret-color: var(--primary);
+    caret-color: var(--color-primary);
   }
 
-  /* Remove persistent focus outline; show ring only for keyboard (focus-visible) */
-  button:focus, a:focus, [role="button"]:focus, [role="menuitem"]:focus, [role="option"]:focus, select:focus, [data-state]:focus, [tabindex]:not([tabindex="-1"]):focus {
+  button:focus,
+  a:focus,
+  [role="button"]:focus,
+  [role="menuitem"]:focus,
+  [role="option"]:focus,
+  select:focus,
+  [data-state]:focus,
+  [tabindex]:not([tabindex="-1"]):focus {
     outline: none;
   }
-  button:focus-visible, a:focus-visible, [role="button"]:focus-visible, [role="menuitem"]:focus-visible, [role="option"]:focus-visible, select:focus-visible, [data-state]:focus-visible, [tabindex]:not([tabindex="-1"]):focus-visible {
-    outline: 2px solid var(--ring);
+  button:focus-visible,
+  a:focus-visible,
+  [role="button"]:focus-visible,
+  [role="menuitem"]:focus-visible,
+  [role="option"]:focus-visible,
+  select:focus-visible,
+  [data-state]:focus-visible,
+  [tabindex]:not([tabindex="-1"]):focus-visible {
+    outline: 2px solid hsl(var(--ring));
     outline-offset: 2px;
   }
 }

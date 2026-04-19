@@ -85,27 +85,36 @@ export function DashboardNav() {
     { href: "/accounts", label: "Accounts", icon: Wallet, type: "single" as const },
   ]
 
+  const navItemBase =
+    "w-full justify-start gap-3 px-3 py-2.5 min-h-11 h-auto text-sm font-medium rounded-xl transition-[background-color,color,box-shadow,border-color] duration-200 stroke-[1.5]"
+  const navItemInactive =
+    "text-muted-foreground hover:bg-muted/70 hover:text-foreground border border-transparent"
+  /** Elevated card tile — shadow + border; primary on icons only */
+  const navItemActive =
+    "bg-card text-foreground font-semibold shadow-card border border-border/70 [&_svg]:text-primary"
+  const iconBase = "h-[18px] w-[18px] flex-shrink-0 stroke-[1.5]"
+
   return (
-    <div className="fixed left-0 top-0 h-screen w-64 border-r bg-sidebar flex flex-col">
-      <div className="flex items-center gap-3 border-b border-sidebar-border px-4 py-3">
+    <div className="fixed left-0 top-0 h-screen w-64 border-r border-sidebar-border bg-sidebar text-sidebar-foreground flex flex-col">
+      <div className="flex h-16 min-h-16 items-center gap-3 border-b border-sidebar-border px-5">
         <div
           key={hasBusinessLogo ? "nav-logo" : "nav-placeholder"}
-          className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-primary/10"
+          className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-card shadow-soft border border-border/60"
         >
           {hasBusinessLogo ? (
             <img src={businessLogoUrl!} alt="" className="h-full w-full object-cover" />
           ) : (
-            <Building2 className="h-6 w-6 text-primary" />
+            <Building2 className="h-[18px] w-[18px] text-primary stroke-[1.5]" />
           )}
         </div>
         {businessProfileLoading ? (
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-            <div className="h-4 w-28 animate-pulse rounded bg-muted" />
-            <div className="h-3.5 w-14 animate-pulse rounded bg-muted" />
+            <div className="h-3.5 w-28 animate-pulse rounded bg-muted" />
+            <div className="h-3 w-14 animate-pulse rounded bg-muted" />
           </div>
         ) : (
-          <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
-            <span className="w-full truncate text-sm font-semibold leading-tight">{businessName}</span>
+          <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
+            <span className="w-full truncate text-sm font-semibold leading-tight tracking-tight">{businessName}</span>
             <Tier1VerificationBadge
               tier1Complete={tier1Complete}
               tier1VerificationStatus={tier1VerificationStatus}
@@ -115,26 +124,28 @@ export function DashboardNav() {
         )}
       </div>
 
-      <nav className="flex flex-1 flex-col gap-2.5 px-3 py-6 overflow-y-auto">
+      <nav className="flex flex-1 flex-col gap-1 px-3 py-5 overflow-y-auto">
         {menuItems.map((item) => {
           if (item.type === "single") {
             const Icon = item.icon
             const isActive =
               item.href === "/send" ? pathname === "/send" || pathname.startsWith("/send/") : pathname === item.href
             return (
-              <Link key={item.href} href={item.href || "#"}>
-                <Button
-                  variant="ghost"
+              <Link
+                key={item.href}
+                href={item.href || "#"}
+                aria-current={isActive ? "page" : undefined}
+              >
+                <div
                   className={cn(
-                    "w-full justify-start gap-3 px-3 py-3 min-h-11 h-auto text-sm font-medium rounded-md transition-all duration-200",
-                    isActive
-                      ? "bg-accent text-accent-foreground"
-                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                    "flex items-center",
+                    navItemBase,
+                    isActive ? navItemActive : navItemInactive,
                   )}
                 >
-                  <Icon className="h-5 w-5 flex-shrink-0" />
+                  <Icon className={iconBase} />
                   <span className="truncate">{item.label}</span>
-                </Button>
+                </div>
               </Link>
             )
           } else {
@@ -142,47 +153,47 @@ export function DashboardNav() {
             const hasActiveChild = item.items?.some((child) => pathname === child.href) || false
 
             return (
-              <div key={item.key} className="flex flex-col gap-2.5">
+              <div key={item.key} className="flex flex-col gap-1">
                 <Button
                   variant="ghost"
                   onClick={() => toggleGroup(item.key || "")}
                   className={cn(
-                    "w-full justify-between gap-3 px-3 py-3 min-h-11 h-auto text-sm font-medium rounded-md transition-all duration-200",
-                    hasActiveChild
-                      ? "bg-accent text-accent-foreground"
-                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                    "w-full justify-between gap-3 px-3 py-2.5 min-h-11 h-auto text-sm font-medium rounded-xl transition-all duration-200",
+                    hasActiveChild ? navItemActive : navItemInactive,
                   )}
                 >
                   <div className="flex items-center gap-3">
-                    <item.icon className="h-5 w-5 flex-shrink-0" />
+                    <item.icon className={iconBase} />
                     <span className="truncate">{item.label}</span>
                   </div>
                   {isOpen ? (
-                    <ChevronDown className="h-4 w-4 flex-shrink-0" />
+                    <ChevronDown className="h-4 w-4 flex-shrink-0 stroke-[1.5]" />
                   ) : (
-                    <ChevronRight className="h-4 w-4 flex-shrink-0" />
+                    <ChevronRight className="h-4 w-4 flex-shrink-0 stroke-[1.5]" />
                   )}
                 </Button>
 
                 {isOpen && (
-                  <div className="ml-4 flex flex-col gap-2.5 border-l border-sidebar-border pl-2">
+                  <div className="ml-5 flex flex-col gap-0.5 border-l border-sidebar-border pl-2">
                     {item.items?.map((child) => {
                       const ChildIcon = child.icon
                       const isActive = pathname === child.href
                       return (
-                        <Link key={child.href} href={child.href}>
-                          <Button
-                            variant="ghost"
+                        <Link
+                          key={child.href}
+                          href={child.href}
+                          aria-current={isActive ? "page" : undefined}
+                        >
+                          <div
                             className={cn(
-                              "w-full justify-start gap-3 px-3 py-3 min-h-11 h-auto text-sm font-medium rounded-md transition-all duration-200",
-                              isActive
-                                ? "bg-accent text-accent-foreground"
-                                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                              navItemBase,
+                              "flex items-center",
+                              isActive ? navItemActive : navItemInactive,
                             )}
                           >
-                            <ChildIcon className="h-5 w-5 flex-shrink-0" />
+                            <ChildIcon className={iconBase} />
                             <span className="truncate">{child.label}</span>
-                          </Button>
+                          </div>
                         </Link>
                       )
                     })}
@@ -196,7 +207,7 @@ export function DashboardNav() {
 
       <BusinessOnboardingChecklist />
 
-      <div className="px-4 py-4 border-t border-sidebar-border flex items-center justify-center">
+      <div className="px-5 py-4 border-t border-sidebar-border flex items-center justify-center">
         <BusinessLogo size="md" href="/" />
       </div>
     </div>

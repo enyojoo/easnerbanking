@@ -177,7 +177,7 @@ export function BusinessOnboardingDialog() {
                   ) : easetagAvail.easetagValidationError ? (
                     <span className="line-clamp-2 text-destructive">{easetagAvail.easetagValidationError}</span>
                   ) : easetagAvail.easetagAvailable === true ? (
-                    <span className="inline-flex items-center justify-end gap-1 text-green-600">
+                    <span className="inline-flex items-center justify-end gap-1 text-primary">
                       <Check className="h-3.5 w-3.5 shrink-0" aria-hidden />
                       Available
                     </span>

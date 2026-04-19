@@ -62,35 +62,35 @@ export default function AdminDashboardPage() {
   const getActivityIcon = (type: string) => {
     if (type.includes("card_funding")) {
       if (type.includes("completed")) {
-        return <CheckCircle className="h-4 w-4 text-green-600" />
+        return <CheckCircle className="h-4 w-4 text-primary" />
       }
       if (type.includes("failed")) {
-        return <XCircle className="h-4 w-4 text-red-600" />
+        return <XCircle className="h-4 w-4 text-destructive" />
       }
       if (type.includes("cancelled")) {
-        return <XCircle className="h-4 w-4 text-gray-600" />
+        return <XCircle className="h-4 w-4 text-muted-foreground" />
       }
       if (type.includes("processing")) {
-        return <AlertCircle className="h-4 w-4 text-blue-600" />
+        return <AlertCircle className="h-4 w-4 text-foreground" />
       }
-      return <Clock className="h-4 w-4 text-yellow-600" />
+      return <Clock className="h-4 w-4 text-[hsl(var(--warning))]" />
     }
 
     switch (type) {
       case "transaction_completed":
-        return <CheckCircle className="h-4 w-4 text-green-600" />
+        return <CheckCircle className="h-4 w-4 text-primary" />
       case "transaction_failed":
-        return <XCircle className="h-4 w-4 text-red-600" />
+        return <XCircle className="h-4 w-4 text-destructive" />
       case "transaction_cancelled":
-        return <XCircle className="h-4 w-4 text-gray-600" />
+        return <XCircle className="h-4 w-4 text-muted-foreground" />
       case "transaction_processing":
-        return <AlertCircle className="h-4 w-4 text-blue-600" />
+        return <AlertCircle className="h-4 w-4 text-foreground" />
       case "transaction_pending":
-        return <Clock className="h-4 w-4 text-yellow-600" />
+        return <Clock className="h-4 w-4 text-[hsl(var(--warning))]" />
       case "user_registered":
-        return <Users className="h-4 w-4 text-blue-600" />
+        return <Users className="h-4 w-4 text-foreground" />
       default:
-        return <Activity className="h-4 w-4 text-gray-600" />
+        return <Activity className="h-4 w-4 text-muted-foreground" />
     }
   }
 
@@ -104,7 +104,7 @@ export default function AdminDashboardPage() {
       <div className="p-6 space-y-6">
         <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
 
-        {loadError && <p className="text-sm text-red-600">{loadError}</p>}
+        {loadError && <p className="text-sm text-destructive">{loadError}</p>}
 
         {/* KPI strip */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

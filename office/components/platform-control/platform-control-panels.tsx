@@ -47,7 +47,7 @@ export function IntegrationsHealthPanel() {
           <CardDescription>GET /api/health on the business deployment</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
-          {err && <p className="text-sm text-red-600">{err}</p>}
+          {err && <p className="text-sm text-destructive">{err}</p>}
           {health != null && (
             <pre className="text-xs bg-muted p-3 rounded-md overflow-auto">{JSON.stringify(health, null, 2)}</pre>
           )}
@@ -195,8 +195,8 @@ export function NoahOperationsPanel() {
           <Button onClick={runSync} disabled={loading || !userId.trim()}>
             {loading ? "Syncing…" : "Sync from Noah"}
           </Button>
-          {message && <p className="text-sm text-green-700">{message}</p>}
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {message && <p className="text-sm text-primary">{message}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
         </CardContent>
       </Card>
     </div>

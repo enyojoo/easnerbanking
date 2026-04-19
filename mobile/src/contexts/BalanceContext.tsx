@@ -1,339 +1,111 @@
-import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react'
-import { AppState, AppStateStatus } from 'react-native'
-import AsyncStorage from '@react-native-async-storage/async-storage'
-import { noahService } from '../lib/noahService'
-import { useAuth } from './AuthContext'
-import { supabase } from '../lib/supabase'
+import React, { createContext, useContext, useCallback, useMemo, ReactNode } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { qk } from '@easner/shared'
+import { useWalletBalances } from '../hooks/queries/use-wallets'
+import { useMaybeScope } from '../query/scope'
+
+/**
+ * Compatibility shim over the TanStack Query `useWalletBalances` hook.
+ *
+ * The BalanceContext surface is kept intact — existing screens still call
+ * `useBalance()` and receive `{ balances, refreshBalances, updateBalanceOptimistically }`
+ * — but the data now lives in the shared Query cache. Realtime balance events
+ * flow through `useSupabaseRealtimeScope` (mounted once in `QueryProvider`)
+ * and surgically update `qk.wallets.list(scope)`, so this context no longer
+ * owns a Supabase channel, AsyncStorage envelope, or polling loop.
+ *
+ * Balances are sensitive → NEVER persisted to disk (see `useWalletBalances`
+ * `meta.safePersist: false`).
+ *
+ * Optimistic updates remain available for the send flow so the UI stays
+ * instant, but they write to the in-memory Query cache (via
+ * `setQueryData`) rather than parallel state. The next realtime event or
+ * refetch overwrites the optimistic value with server truth.
+ */
+
+interface Balances {
+  USD: string
+  EUR: string
+}
 
 interface BalanceContextType {
-  balances: { USD: string; EUR: string }
+  balances: Balances
   refreshBalances: (force?: boolean) => Promise<void>
-  updateBalanceOptimistically: (currency: 'USD' | 'EUR', amount: number, operation?: 'subtract' | 'add', transactionId?: string) => void
+  updateBalanceOptimistically: (
+    currency: 'USD' | 'EUR',
+    amount: number,
+    operation?: 'subtract' | 'add',
+    transactionId?: string,
+  ) => void
 }
 
 const BalanceContext = createContext<BalanceContextType | undefined>(undefined)
 
+const EMPTY_BALANCES: Balances = { USD: '0', EUR: '0' }
+
 export function useBalance() {
-  const context = useContext(BalanceContext)
-  if (context === undefined) {
-    throw new Error('useBalance must be used within a BalanceProvider')
-  }
-  return context
+  const ctx = useContext(BalanceContext)
+  if (!ctx) throw new Error('useBalance must be used within a BalanceProvider')
+  return ctx
 }
 
 interface BalanceProviderProps {
   children: ReactNode
 }
 
-// Balance data is financially sensitive: keep freshness windows short.
-const BALANCE_CACHE_TTL = 60 * 1000
-// Fallback polling cadence (used only when realtime is not healthy).
-const BACKGROUND_REFRESH_INTERVAL = 60 * 1000
-
 export function BalanceProvider({ children }: BalanceProviderProps) {
-  const { user } = useAuth()
-  const [balances, setBalances] = useState<{ USD: string; EUR: string }>({ USD: '0', EUR: '0' })
-  
-  const lastFetchTimeRef = useRef<number>(0)
-  const backgroundRefreshIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const isRefreshingRef = useRef<boolean>(false)
-  const fetchBalancesRef = useRef<((force: boolean) => Promise<void>) | null>(null)
-  const processedTransactionIdsRef = useRef<Set<string>>(new Set())
-  const lastBalanceRefreshRef = useRef<number>(0)
-  const realtimeHealthyRef = useRef<boolean>(false)
-  const DEBOUNCE_MS = 1000 // Debounce balance refreshes to prevent rapid API calls
-  
-  const BALANCE_CACHE_KEY = `easner_wallet_balances_${user?.id || 'anonymous'}`
+  const qc = useQueryClient()
+  const scope = useMaybeScope()
+  const query = useWalletBalances()
 
-  type BalanceCacheEnvelope = { data: { USD: string; EUR: string }; timestamp: number }
-
-  /** Stale-while-revalidate: never delete on read; caller decides when to refetch. */
-  const readBalanceCacheEnvelope = async (): Promise<BalanceCacheEnvelope | null> => {
-    try {
-      const cached = await AsyncStorage.getItem(BALANCE_CACHE_KEY)
-      if (!cached) return null
-      return JSON.parse(cached) as BalanceCacheEnvelope
-    } catch (error) {
-      console.warn('[BalanceContext] Error reading balance cache:', error)
-      return null
+  const balances: Balances = useMemo(() => {
+    if (!query.data) return EMPTY_BALANCES
+    return {
+      USD: String(query.data.USD ?? '0'),
+      EUR: String(query.data.EUR ?? '0'),
     }
-  }
+  }, [query.data])
 
-  const loadCachedBalances = async (): Promise<{ USD: string; EUR: string } | null> => {
-    const env = await readBalanceCacheEnvelope()
-    return env?.data ?? null
-  }
-
-  // Save balances to cache
-  const saveBalancesToCache = async (walletBalances: { USD: string; EUR: string }) => {
-    try {
-      await AsyncStorage.setItem(BALANCE_CACHE_KEY, JSON.stringify({
-        data: walletBalances,
-        timestamp: Date.now(),
-      }))
-    } catch (error) {
-      console.warn('[BalanceContext] Error saving balances to cache:', error)
-    }
-  }
-
-  // Fetch balances from API (silent - no loading states)
-  const fetchBalances = async (force: boolean = false): Promise<void> => {
-    // Prevent concurrent fetches
-    if (isRefreshingRef.current && !force) {
-      return
-    }
-
-    // Check if we need to fetch (force or stale)
-    const timeSinceLastFetch = Date.now() - lastFetchTimeRef.current
-    const isStale = timeSinceLastFetch > BALANCE_CACHE_TTL
-    
-    // If not forcing and data is fresh, skip fetch
-    if (!force && !isStale && lastFetchTimeRef.current > 0) {
-      return
-    }
-    
-    // Disk cache: skip network only when envelope is still within TTL
-    if (!force) {
-      const env = await readBalanceCacheEnvelope()
-      if (env && Date.now() - env.timestamp < BALANCE_CACHE_TTL) {
-        setBalances(env.data)
-        lastFetchTimeRef.current = env.timestamp
-        return
+  const refreshBalances = useCallback(
+    async (force: boolean = false) => {
+      if (!scope) return
+      if (force) {
+        await qc.invalidateQueries({ queryKey: qk.wallets.list(scope) })
       }
-    }
+      await query.refetch()
+    },
+    [qc, scope, query],
+  )
 
-    isRefreshingRef.current = true
-
-    try {
-      const walletBalances = await Promise.race([
-        noahService.getWalletBalances(),
-        new Promise<{ USD: string; EUR: string }>((resolve) => 
-          setTimeout(() => resolve({ USD: '0', EUR: '0' }), 10000)
-        )
-      ])
-      
-      setBalances(walletBalances)
-      lastFetchTimeRef.current = Date.now()
-      
-      // Save to cache
-      await saveBalancesToCache(walletBalances)
-    } catch (error) {
-      console.error('[BalanceContext] Error fetching balances:', error)
-      // Don't update balances on error - keep existing values
-    } finally {
-      isRefreshingRef.current = false
-    }
-  }
-
-  // Optimistic balance update (for immediate UI feedback after transactions)
-  // Like CashApp/Revolut - update UI instantly, then sync in background
-  const updateBalanceOptimistically = (currency: 'USD' | 'EUR', amount: number, operation: 'subtract' | 'add' = 'subtract', transactionId?: string) => {
-    // Mark transaction as processed to prevent double update in real-time handler
-    if (transactionId) {
-      processedTransactionIdsRef.current.add(transactionId)
-    }
-    
-    setBalances((prev) => {
-      const current = parseFloat(prev[currency] || '0')
-      const updated = operation === 'subtract' 
-        ? Math.max(0, current - amount) // Don't go below 0 for sends
-        : current + amount // Add for receives
-      return {
-        ...prev,
-        [currency]: updated.toFixed(2),
-      }
-    })
-    
-    // Refresh in background IMMEDIATELY to get actual balance (stale-while-revalidate pattern)
-    // This ensures balance is accurate within seconds, not minutes
-    fetchBalances(true).catch(() => {
-      // Silently fail - optimistic update already shown
-    })
-  }
-
-  // Public refresh function (can be called from components)
-  const refreshBalances = async (force: boolean = false) => {
-    await fetchBalances(force)
-  }
-
-  // Store latest fetchBalances in ref for real-time subscription
-  // Update ref whenever fetchBalances changes (which happens when user?.id changes)
-  useEffect(() => {
-    fetchBalancesRef.current = fetchBalances
-  })
-
-  // Initialize: Load from cache immediately, then fetch fresh data
-  useEffect(() => {
-    if (!user?.id) {
-      setBalances({ USD: '0', EUR: '0' })
-      return
-    }
-
-    const initializeBalances = async () => {
-      const env = await readBalanceCacheEnvelope()
-      if (env?.data) {
-        setBalances(env.data)
-        lastFetchTimeRef.current = env.timestamp
-      }
-      await fetchBalances(false)
-    }
-
-    initializeBalances()
-
-    // Set up background refresh interval (like Revolut/CashApp)
-    backgroundRefreshIntervalRef.current = setInterval(() => {
-      if (realtimeHealthyRef.current) return
-      fetchBalances(false).catch(() => {
-        // Silently fail
+  const updateBalanceOptimistically = useCallback<BalanceContextType['updateBalanceOptimistically']>(
+    (currency, amount, operation = 'subtract') => {
+      if (!scope) return
+      const key = qk.wallets.list(scope)
+      qc.setQueryData(key, (prev: unknown) => {
+        const base =
+          prev && typeof prev === 'object'
+            ? (prev as Record<string, unknown>)
+            : {}
+        const currentRaw = (base as Record<string, unknown>)[currency]
+        const current = Number.parseFloat(String(currentRaw ?? '0')) || 0
+        const updated =
+          operation === 'subtract'
+            ? Math.max(0, current - amount)
+            : current + amount
+        return { ...base, [currency]: updated.toFixed(2) }
       })
-    }, BACKGROUND_REFRESH_INTERVAL)
+      // Kick off a background refetch so the optimistic value is replaced
+      // with authoritative server state within a few seconds. The realtime
+      // bridge will also poke us independently if the channel is healthy.
+      qc.invalidateQueries({ queryKey: qk.wallets.list(scope) })
+    },
+    [qc, scope],
+  )
 
-    return () => {
-      if (backgroundRefreshIntervalRef.current) {
-        clearInterval(backgroundRefreshIntervalRef.current)
-      }
-    }
-  }, [user?.id])
-
-  // Refresh when app comes to foreground
-  useEffect(() => {
-    if (!user?.id) return
-
-    const handleAppStateChange = (nextAppState: AppStateStatus) => {
-      if (nextAppState === 'active') {
-        // App came to foreground - refresh if stale
-        const timeSinceLastFetch = Date.now() - lastFetchTimeRef.current
-        const isStale = timeSinceLastFetch > BALANCE_CACHE_TTL
-        
-        if (isStale) {
-          // Load from cache first for immediate display
-          loadCachedBalances().then((cached) => {
-            if (cached) {
-              setBalances(cached)
-            }
-          })
-          
-          // Then fetch fresh data
-          fetchBalances(false).catch(() => {
-            // Silently fail
-          })
-        }
-      }
-    }
-
-    const subscription = AppState.addEventListener('change', handleAppStateChange)
-    return () => subscription.remove()
-  }, [user?.id])
-
-  // Real-time subscription for transaction updates - simplified
-  useEffect(() => {
-    if (!user?.id) return
-
-    let channel: ReturnType<typeof supabase.channel> | null = null
-
-    const setupRealtime = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        console.warn('[BalanceContext] No active session, skipping real-time subscription')
-        return
-      }
-
-      try {
-        channel = supabase
-          .channel(`balance-updates-${user.id}`)
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table: 'transactions',
-              filter: `user_id=eq.${user.id}`,
-            },
-            async (payload: any) => {
-              try {
-                console.log('[BalanceContext] Real-time transaction update detected, refreshing balances:', payload.eventType)
-                
-                const txId = payload.new?.transaction_id || payload.new?.id || payload.old?.transaction_id || payload.old?.id
-                
-                // Skip if we've already processed this transaction (prevents double updates)
-                if (txId && processedTransactionIdsRef.current.has(txId)) {
-                  console.log('[BalanceContext] ⏭️ Skipping already processed transaction:', txId)
-                  return
-                }
-                
-                // For INSERT events (new transactions), we can do optimistic update based on transaction type
-                if (payload.eventType === 'INSERT' && payload.new && !processedTransactionIdsRef.current.has(txId)) {
-                  const tx = payload.new
-                  const currencyLower = (tx.currency || '').toLowerCase()
-                  const currency = currencyLower === 'usd' ? 'USD' : currencyLower === 'eur' ? 'EUR' : null
-                  const amount = parseFloat(tx.amount || '0')
-                  
-                  if (currency && amount > 0) {
-                    if (tx.transaction_type === 'receive' && tx.direction === 'credit') {
-                      // Receive transaction - add to balance
-                      setBalances((prev) => {
-                        const current = parseFloat(prev[currency] || '0')
-                        return {
-                          ...prev,
-                          [currency]: (current + amount).toFixed(2),
-                        }
-                      })
-                      if (txId) processedTransactionIdsRef.current.add(txId)
-                    } else if (tx.transaction_type === 'send' && tx.direction === 'debit') {
-                      // Send transaction - already handled optimistically in SendAmountScreen
-                      if (txId) processedTransactionIdsRef.current.add(txId)
-                    }
-                  }
-                } else if (txId) {
-                  processedTransactionIdsRef.current.add(txId)
-                }
-                
-                // Debounce balance refresh
-                const now = Date.now()
-                if (now - lastBalanceRefreshRef.current < DEBOUNCE_MS) {
-                  return
-                }
-                lastBalanceRefreshRef.current = now
-                
-                // Force refresh balances
-                if (fetchBalancesRef.current) {
-                  await fetchBalancesRef.current(true)
-                }
-              } catch (error: any) {
-                console.error('[BalanceContext] Error processing real-time update:', error)
-              }
-            }
-          )
-          .subscribe((status) => {
-            if (status === 'SUBSCRIBED') {
-              realtimeHealthyRef.current = true
-              console.log('[BalanceContext] ✅ Real-time subscription active')
-            } else {
-              realtimeHealthyRef.current = false
-              console.log(`[BalanceContext] Real-time ${status}`)
-            }
-          })
-      } catch (error) {
-        console.warn('[BalanceContext] Real-time setup failed:', error)
-      }
-    }
-
-    setupRealtime()
-
-    return () => {
-      realtimeHealthyRef.current = false
-      if (channel) {
-        supabase.removeChannel(channel)
-      }
-    }
-  }, [user?.id])
-
-  const value: BalanceContextType = {
-    balances,
-    refreshBalances,
-    updateBalanceOptimistically,
-  }
+  const value = useMemo<BalanceContextType>(
+    () => ({ balances, refreshBalances, updateBalanceOptimistically }),
+    [balances, refreshBalances, updateBalanceOptimistically],
+  )
 
   return <BalanceContext.Provider value={value}>{children}</BalanceContext.Provider>
 }
-

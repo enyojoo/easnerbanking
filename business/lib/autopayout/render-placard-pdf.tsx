@@ -15,9 +15,9 @@ const styles = StyleSheet.create({
   page: {
     width: PLACARD_PDF_W_PT,
     height: PLACARD_PDF_H_PT,
-    backgroundColor: "#312e81",
+    backgroundColor: "#0F1110",
     fontFamily: "Helvetica",
-    color: "#ffffff",
+    color: "#F6F3EB",
     paddingTop: 18,
     paddingHorizontal: 22,
     paddingBottom: 20,
@@ -77,8 +77,8 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     marginBottom: 14,
     padding: 8,
-    backgroundColor: "#ffffff",
-    borderRadius: 8,
+    backgroundColor: "#F6F3EB",
+    borderRadius: 12,
   },
   qr: {
     width: 188,
@@ -213,7 +213,7 @@ export async function renderAutopayPlacardPdfBuffer(input: RenderPlacardHdPngInp
     margin: 2,
     errorCorrectionLevel: "H",
     type: "png",
-    color: { dark: "#0a0a0a", light: "#ffffff" },
+    color: { dark: "#0F1110", light: "#F6F3EB" },
   })
   const qrDataUrl = `data:image/png;base64,${qrBuf.toString("base64")}`
   const logoUrl = input.logoImageHref?.trim() || PDF_LOGO_DATA_URL

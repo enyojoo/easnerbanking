@@ -1,152 +1,387 @@
 /**
- * Easner Premium Design System - Colors
- * 
- * A sophisticated color palette for a premium banking experience
+ * Easner Design System — Mobile colors
+ *
+ * Graphite + Ivory + Easner blue primary; emerald for success. No neon greens,
+ * no purple gradients, no glassmorphism. Paired with dark mode support.
+ *
+ * Structural shape is preserved for backwards-compat with existing
+ * screens (`colors.primary.main`, `colors.semantic.background`, ...),
+ * but every raw hex value has been re-authored.
+ *
+ * Tokens are mirrored from `@easner/shared` design-system tokens where
+ * possible and converted to flat hex for React Native StyleSheet.
  */
 
-export const colors = {
-  // Primary — matches business `app/globals.css` (--primary: #007acc)
+/** Core neutrals: blue-gray (~210°) so dark surfaces don’t read green vs emerald success. */
+const brand = {
+  graphite: '#121416',
+  carbon: '#171a1c',
+  ink: '#1b1f22',
+  ivory: '#F6F3EB',
+  cloud: '#F8F6F0',
+  mist: '#E9E4D8',
+  stone: '#D9D4C7',
+  slate: '#6F7580',
+  primary: '#007ACC',
+  /** Hover / mid ramp — pairs with primary */
+  primaryHover: '#0062A3',
+  /** Pressed / deep end of ramp */
+  primaryDeep: '#005A9E',
+  /** Executive / institutional emphasis */
+  navy: '#0A2540',
+  /** Sparse selection / info surfaces */
+  tintBlue: '#EAF5FD',
+  /** Dark canvas primary accent */
+  darkAccent: '#3AA6F8',
+  /** Darker than darkAccent for pressed / gradients on dark */
+  darkPrimaryHover: '#2B8FDC',
+  emerald: '#0F8A5F',
+  emeraldDeep: '#0A6E4C',
+  amber: '#A8792A',
+  oxblood: '#7A2E2E',
+} as const
+
+type ColorPalette = {
   primary: {
-    main: '#007ACC',
-    light: '#3399D6',
-    dark: '#005A94',
-    gradient: ['#007ACC', '#3399D6'] as const,
-    gradientDark: ['#005A94', '#007ACC'] as const,
-  },
-
-  /** Cash-style positive accent — success chips / confirmations only (not brand primary). */
-  accent: {
-    positive: '#00D632',
-  },
-
-  // Success Colors
+    main: string
+    light: string
+    dark: string
+    gradient: readonly [string, string]
+    gradientDark: readonly [string, string]
+  }
+  accent: { positive: string }
   success: {
-    main: '#10B981',
-    light: '#34D399',
-    dark: '#059669',
-    gradient: ['#10B981', '#34D399'] as const,
-    background: '#ECFDF5',
-  },
-
-  // Warning Colors  
+    main: string
+    light: string
+    dark: string
+    gradient: readonly [string, string]
+    background: string
+  }
   warning: {
-    main: '#F59E0B',
-    light: '#FBBF24',
-    dark: '#D97706',
-    gradient: ['#F59E0B', '#FBBF24'] as const,
-    background: '#FFFBEB',
-  },
-
-  // Error Colors
+    main: string
+    light: string
+    dark: string
+    gradient: readonly [string, string]
+    background: string
+  }
   error: {
-    main: '#EF4444',
-    light: '#F87171',
-    dark: '#DC2626',
-    gradient: ['#EF4444', '#F87171'] as const,
-    background: '#FEF2F2',
+    main: string
+    light: string
+    dark: string
+    gradient: readonly [string, string]
+    background: string
+  }
+  neutral: {
+    white: string
+    50: string
+    100: string
+    200: string
+    300: string
+    400: string
+    500: string
+    600: string
+    700: string
+    800: string
+    900: string
+    black: string
+  }
+  background: {
+    primary: string
+    secondary: string
+    tertiary: string
+    dark: string
+  }
+  text: {
+    primary: string
+    secondary: string
+    tertiary: string
+    inverse: string
+    link: string
+  }
+  cardGradients: {
+    premium: readonly [string, string]
+    blue: readonly [string, string]
+    purple: readonly [string, string]
+    green: readonly [string, string]
+    gold: readonly [string, string]
+  }
+  glass: {
+    background: string
+    border: string
+    backgroundDark: string
+  }
+  status: {
+    pending: string
+    processing: string
+    completed: string
+    failed: string
+    cancelled: string
+  }
+  border: {
+    light: string
+    default: string
+    dark: string
+  }
+  frame: {
+    background: string
+    border: string
+  }
+  semantic: {
+    background: string
+    foreground: string
+    card: string
+    cardForeground: string
+    muted: string
+    mutedForeground: string
+    border: string
+    input: string
+    destructive: string
+    destructiveForeground: string
+    ring: string
+  }
+  brand: typeof brand
+}
+
+export const lightColors: ColorPalette = {
+  primary: {
+    main: brand.primary,
+    light: '#3399D6',
+    dark: brand.primaryHover,
+    gradient: [brand.primaryDeep, brand.primary] as const,
+    gradientDark: [brand.primaryHover, '#3399D6'] as const,
   },
 
-  // Neutral Colors
+  accent: {
+    positive: brand.emerald,
+  },
+
+  success: {
+    main: brand.emerald,
+    light: '#1FA877',
+    dark: brand.emeraldDeep,
+    gradient: [brand.emerald, '#1FA877'] as const,
+    background: 'rgba(15, 138, 95, 0.08)',
+  },
+
+  warning: {
+    main: brand.amber,
+    light: '#C49542',
+    dark: '#8A6221',
+    gradient: [brand.amber, '#C49542'] as const,
+    background: 'rgba(168, 121, 42, 0.10)',
+  },
+
+  error: {
+    main: brand.oxblood,
+    light: '#9C4747',
+    dark: '#5F2424',
+    gradient: [brand.oxblood, '#9C4747'] as const,
+    background: 'rgba(122, 46, 46, 0.08)',
+  },
+
   neutral: {
     white: '#FFFFFF',
-    50: '#F8FAFC',
-    100: '#F1F5F9',
-    200: '#E2E8F0',
-    300: '#CBD5E1',
-    400: '#94A3B8',
-    500: '#64748B',
-    600: '#475569',
-    700: '#334155',
-    800: '#1E293B',
-    900: '#0F172A',
+    50: brand.cloud,
+    100: brand.ivory,
+    200: brand.mist,
+    300: brand.stone,
+    400: '#B5B1A4',
+    500: brand.slate,
+    600: '#4C514C',
+    700: '#363A37',
+    800: brand.ink,
+    900: brand.graphite,
     black: '#000000',
   },
 
-  // Background Colors
   background: {
-    primary: '#FFFFFF',
-    secondary: '#F8FAFC',
-    tertiary: '#F1F5F9',
-    dark: '#0F172A',
+    primary: brand.ivory,
+    secondary: brand.cloud,
+    tertiary: brand.mist,
+    dark: brand.graphite,
   },
 
-  // Text Colors
   text: {
-    primary: '#111827',
-    secondary: '#6B7280',
-    tertiary: '#9CA3AF',
-    inverse: '#FFFFFF',
-    link: '#007ACC',
+    primary: brand.graphite,
+    secondary: brand.slate,
+    tertiary: '#8a919d',
+    inverse: brand.ivory,
+    link: brand.primary,
   },
 
-  // Card Gradients
   cardGradients: {
-    premium: ['#1E293B', '#334155'] as const,
-    blue: ['#007ACC', '#3399D6'] as const,
-    purple: ['#7C3AED', '#A78BFA'] as const,
-    green: ['#059669', '#10B981'] as const,
-    gold: ['#D97706', '#F59E0B'] as const,
+    premium: [brand.graphite, brand.carbon] as const,
+    blue: [brand.graphite, brand.ink] as const,
+    purple: [brand.carbon, brand.ink] as const,
+    green: [brand.emeraldDeep, brand.emerald] as const,
+    gold: [brand.ink, brand.graphite] as const,
   },
 
-  // Glassmorphism
   glass: {
-    background: 'rgba(255, 255, 255, 0.7)',
-    border: 'rgba(255, 255, 255, 0.2)',
-    backgroundDark: 'rgba(15, 23, 42, 0.8)',
+    background: 'rgba(246, 243, 235, 0.85)',
+    border: 'rgba(18, 20, 22, 0.08)',
+    backgroundDark: 'rgba(18, 20, 22, 0.75)',
   },
 
-  // Status Colors (for transactions)
   status: {
-    pending: '#F59E0B',
-    processing: '#007ACC',
-    completed: '#10B981',
-    failed: '#EF4444',
-    cancelled: '#6B7280',
+    pending: brand.amber,
+    processing: brand.slate,
+    completed: brand.emerald,
+    failed: brand.oxblood,
+    cancelled: brand.slate,
   },
 
-  // Border Colors
   border: {
-    light: '#F1F5F9',
-    default: '#E2E8F0',
-    dark: '#CBD5E1',
+    light: brand.mist,
+    default: brand.stone,
+    dark: '#C1BDB1',
   },
 
-  // Frame Colors (for containers like transaction sections)
   frame: {
-    background: '#F9F9F9',
-    border: '#E2E2E2',
+    background: brand.cloud,
+    border: brand.mist,
   },
 
-  /**
-   * Semantic roles aligned with business `app/globals.css` CSS variables (light mode).
-   * Use these for new UI instead of ad-hoc grays; enables a future dark theme swap.
-   * | Token | Business variable |
-   * |-------|-------------------|
-   * | background | --background |
-   * | foreground | --foreground |
-   * | muted | --muted / secondary surfaces |
-   * | mutedForeground | --muted-foreground |
-   * | border | --border |
-   * | input | --input |
-   * | card | --card |
-   * | cardForeground | --card-foreground |
-   * | destructive | --destructive |
-   * | ring | --ring |
-   */
   semantic: {
-    background: '#FFFFFF',
-    foreground: '#111827',
-    muted: '#F1F5F9',
-    mutedForeground: '#64748B',
-    border: '#E2E8F0',
-    input: '#E2E8F0',
-    card: '#FFFFFF',
-    cardForeground: '#111827',
-    destructive: '#EF4444',
-    destructiveForeground: '#FFFFFF',
-    ring: '#007ACC',
+    background: brand.ivory,
+    foreground: brand.graphite,
+    card: brand.cloud,
+    cardForeground: brand.graphite,
+    muted: brand.mist,
+    mutedForeground: brand.slate,
+    border: brand.stone,
+    input: brand.stone,
+    destructive: brand.oxblood,
+    destructiveForeground: brand.ivory,
+    ring: brand.primary,
   },
+
+  brand,
 }
 
-export type Colors = typeof colors
+export const darkColors: ColorPalette = {
+  primary: {
+    main: brand.darkAccent,
+    light: '#6BB8F0',
+    dark: brand.darkPrimaryHover,
+    gradient: [brand.darkPrimaryHover, brand.darkAccent] as const,
+    gradientDark: [brand.darkPrimaryHover, '#6BB8F0'] as const,
+  },
 
+  accent: {
+    positive: brand.emerald,
+  },
+
+  success: {
+    main: brand.emerald,
+    light: '#22B382',
+    dark: brand.emeraldDeep,
+    gradient: [brand.emerald, '#22B382'] as const,
+    background: 'rgba(15, 138, 95, 0.14)',
+  },
+
+  warning: {
+    main: '#C18A32',
+    light: '#D9A353',
+    dark: brand.amber,
+    gradient: ['#C18A32', '#D9A353'] as const,
+    background: 'rgba(193, 138, 50, 0.14)',
+  },
+
+  error: {
+    main: '#9C4747',
+    light: '#B56464',
+    dark: brand.oxblood,
+    gradient: ['#9C4747', '#B56464'] as const,
+    background: 'rgba(156, 71, 71, 0.14)',
+  },
+
+  neutral: {
+    white: brand.ivory,
+    50: '#1e2124',
+    100: brand.ink,
+    200: '#2b2e31',
+    300: '#383c42',
+    400: '#5a5e66',
+    500: brand.slate,
+    600: '#8c94a0',
+    700: '#a8b0bd',
+    800: '#c8ced8',
+    900: brand.ivory,
+    black: '#000000',
+  },
+
+  background: {
+    primary: brand.graphite,
+    secondary: brand.carbon,
+    tertiary: brand.ink,
+    dark: '#0a0b0d',
+  },
+
+  text: {
+    primary: brand.ivory,
+    secondary: '#a8b0bd',
+    tertiary: '#6f7580',
+    inverse: brand.graphite,
+    link: brand.darkAccent,
+  },
+
+  cardGradients: {
+    premium: [brand.graphite, brand.carbon] as const,
+    blue: [brand.graphite, brand.ink] as const,
+    purple: [brand.carbon, brand.ink] as const,
+    green: [brand.emeraldDeep, brand.emerald] as const,
+    gold: [brand.ink, brand.graphite] as const,
+  },
+
+  glass: {
+    background: 'rgba(23, 26, 28, 0.85)',
+    border: 'rgba(246, 243, 235, 0.06)',
+    backgroundDark: 'rgba(18, 20, 23, 0.9)',
+  },
+
+  status: {
+    pending: '#C18A32',
+    processing: '#a8b0bd',
+    completed: brand.emerald,
+    failed: '#9C4747',
+    cancelled: brand.slate,
+  },
+
+  border: {
+    light: '#2b2e31',
+    default: '#383c42',
+    dark: '#5a5e66',
+  },
+
+  frame: {
+    background: brand.carbon,
+    border: '#2b2e31',
+  },
+
+  semantic: {
+    background: brand.graphite,
+    foreground: brand.ivory,
+    card: brand.carbon,
+    cardForeground: brand.ivory,
+    muted: '#26292c',
+    mutedForeground: '#a8b0bd',
+    border: '#2b2e31',
+    input: '#2b2e31',
+    destructive: '#9C4747',
+    destructiveForeground: brand.ivory,
+    ring: brand.darkAccent,
+  },
+
+  brand,
+}
+
+/**
+ * Default export — preserves backwards-compat for call sites that
+ * `import { colors }`. Defaults to the light palette; screens that
+ * need dynamic theming should use `useThemeColors()` from
+ * `ThemePaletteContext` instead.
+ */
+export const colors: ColorPalette = lightColors
+
+export type Colors = ColorPalette

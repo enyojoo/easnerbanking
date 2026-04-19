@@ -92,21 +92,23 @@ export function generateInvoiceEmailHtml(data: InvoiceEmailData): string {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Invoice ${invoice.invoiceNumber} - ${businessName}</title>
   <style>
+    /* Easner email palette — graphite + ivory + primary blue. Email-safe hex only. */
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; background: #fff; }
-    .container { max-width: 600px; margin: 0 auto; padding: 40px 30px; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #1C201E; background: #F6F3EB; }
+    .container { max-width: 600px; margin: 0 auto; padding: 40px 30px; background: #F8F6F0; border-radius: 22px; }
     .logo { max-width: 140px; height: auto; margin-bottom: 24px; display: block; }
-    .business-info { font-size: 14px; color: #4a5568; margin-bottom: 32px; }
+    .business-info { font-size: 14px; color: #6F756F; margin-bottom: 32px; }
     .business-info p { margin-bottom: 4px; }
-    .greeting { font-size: 18px; font-weight: 500; color: #1a202c; margin-bottom: 20px; }
-    .body-text { font-size: 16px; color: #4a5568; margin-bottom: 24px; line-height: 1.7; }
-    .invoice-details { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin: 24px 0; }
-    .invoice-details h3 { font-size: 14px; color: #2d3748; margin-bottom: 12px; font-weight: 600; }
-    .invoice-details p { font-size: 16px; margin-bottom: 8px; }
-    .cta { display: inline-block; background: linear-gradient(135deg, #007ACC 0%, #0056b3 100%); color: #fff !important; text-decoration: none; padding: 16px 32px; border-radius: 8px; font-weight: 600; font-size: 16px; margin: 24px 0; }
-    .footer { margin-top: 40px; padding-top: 24px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #718096; }
+    .greeting { font-size: 18px; font-weight: 600; color: #0F1110; margin-bottom: 20px; letter-spacing: -0.01em; }
+    .body-text { font-size: 16px; color: #1C201E; margin-bottom: 24px; line-height: 1.7; }
+    .invoice-details { background: #F6F3EB; border: 1px solid #D9D4C7; border-radius: 16px; padding: 20px; margin: 24px 0; }
+    .invoice-details h3 { font-size: 12px; color: #6F756F; margin-bottom: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
+    .invoice-details p { font-size: 16px; margin-bottom: 8px; color: #0F1110; }
+    .cta { display: inline-block; background: #007ACC; color: #F6F3EB !important; text-decoration: none; padding: 14px 28px; border-radius: 16px; font-weight: 600; font-size: 15px; margin: 24px 0; letter-spacing: -0.005em; }
+    .cta:hover { background: #0062A3; }
+    .footer { margin-top: 40px; padding-top: 24px; border-top: 1px solid #D9D4C7; font-size: 14px; color: #6F756F; }
     .footer p { margin-bottom: 12px; }
-    .copyright { font-size: 12px; color: #a0aec0; margin-top: 20px; }
+    .copyright { font-size: 12px; color: #6F756F; margin-top: 20px; }
   </style>
 </head>
 <body>

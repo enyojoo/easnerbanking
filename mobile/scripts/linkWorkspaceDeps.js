@@ -20,10 +20,23 @@ function linkDep(name) {
   const dest = path.join(mobileNm, name)
   if (!fs.existsSync(src)) return
 
+  // If the parent of `dest` already resolves to the parent of `src` (because a
+  // scoped parent like mobile/node_modules/@easner is itself a symlink to
+  // root/node_modules/@easner), unlink+symlink would destroy the root entry
+  // and recreate it as a self-referencing loop. Skip in that case.
+  try {
+    const srcParent = fs.realpathSync(path.dirname(src))
+    const destParentReal = fs.realpathSync(path.dirname(dest))
+    if (srcParent === destParentReal) return
+  } catch {}
+
   if (fs.existsSync(dest)) {
     try {
       const st = fs.lstatSync(dest)
       if (st.isSymbolicLink()) {
+        try {
+          if (fs.realpathSync(dest) === fs.realpathSync(src)) return
+        } catch {}
         fs.unlinkSync(dest)
       } else {
         return

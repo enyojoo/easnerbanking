@@ -34,7 +34,7 @@ export default function InvoicesPage() {
     <OfficeDashboardLayout>
       <div className="p-6 space-y-4">
         <h1 className="text-2xl font-bold">Invoices</h1>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
         <Card>
           <CardHeader>
             <CardTitle>All invoices</CardTitle>

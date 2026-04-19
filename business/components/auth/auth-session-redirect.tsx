@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState, type ReactNode } from "react"
-import { Loader2 } from "lucide-react"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { resolvePostSignInMfaRequirement } from "@/lib/auth-mfa"
@@ -75,16 +74,11 @@ export function AuthSessionRedirect({ children }: { children: ReactNode }) {
     (!isLogin || !loginSessionChecked)
 
   if (showRedirecting) {
-    return (
-      <div
-        className="fixed inset-0 z-[200] flex items-center justify-center bg-background"
-        role="status"
-        aria-busy="true"
-        aria-label="Loading"
-      >
-        <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" aria-hidden />
-      </div>
-    )
+    // Intentionally render nothing during the short auth → dashboard redirect
+    // instead of an intermediary spinner. The destination route has its own
+    // loading UI (the app-wide LoadingSpinner) so a second spinner here would
+    // feel like a double loading state.
+    return null
   }
 
   return <>{children}</>

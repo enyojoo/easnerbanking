@@ -1,9 +1,18 @@
 import type { Metadata } from "next"
 import { GeistSans } from "geist/font/sans"
 import { GeistMono } from "geist/font/mono"
+import { Playfair_Display } from "next/font/google"
 import { AuthProvider } from "@/lib/auth-context"
 import { ProtectedRouteWrapper } from "@/components/auth/protected-route-wrapper"
+import { ThemeProvider } from "@/components/theme-provider"
 import "./globals.css"
+
+const playfair = Playfair_Display({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-playfair",
+  weight: ["400", "500", "600", "700"],
+})
 
 export const metadata: Metadata = {
   title: "Easner Office",
@@ -25,10 +34,18 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
+      <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable} ${playfair.variable}`} suppressHydrationWarning>
         <AuthProvider>
-        <ProtectedRouteWrapper>{children}</ProtectedRouteWrapper>
-      </AuthProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="light"
+            enableSystem
+            disableTransitionOnChange
+            storageKey="easner-office-theme"
+          >
+            <ProtectedRouteWrapper>{children}</ProtectedRouteWrapper>
+          </ThemeProvider>
+        </AuthProvider>
       </body>
     </html>
   )

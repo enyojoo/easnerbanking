@@ -6,7 +6,7 @@ interface BrandLogoProps {
   style?: ImageStyle
 }
 
-// Easner primary color
+// Easner primary color (matches theme `brand.primary`)
 const PRIMARY_COLOR = '#007ACC'
 
 export default function BrandLogo({ size = 'md', style }: BrandLogoProps) {

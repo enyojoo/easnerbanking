@@ -21,7 +21,9 @@ import { useAuth } from '../../contexts/AuthContext'
 import { NavigationProps, KYCSubmission } from '../../types'
 import { kycService } from '../../lib/kycService'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Sun, Moon } from 'lucide-react-native'
 import { colors, shadows, textStyles, borderRadius, spacing, layout } from '../../theme'
+import { useThemeColors, useThemeMode, useThemeScheme } from '../../contexts/ThemePaletteContext'
 import { ripple } from '../../lib/androidRipple'
 import { supabase } from '../../lib/supabase'
 import {
@@ -70,6 +72,9 @@ function tierBadgeForProfile(
 function MoreContent({ navigation }: NavigationProps) {
   const { user, userProfile, refreshUserProfile, signOut } = useAuth()
   const insets = useSafeAreaInsets()
+  const palette = useThemeColors()
+  const { setMode: setThemeMode } = useThemeMode()
+  const scheme = useThemeScheme()
 
   /** Main stack screens (ProfileEdit, Notifications, …) are siblings of `MainTabs`. Prefer parent `navigate` so taps work from the More tab. */
   const navigateFromMoreTab = useCallback(
@@ -422,6 +427,62 @@ function MoreContent({ navigation }: NavigationProps) {
           <View style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>App</Text>
             <View style={styles.sectionContent}>
+              <View
+                style={[
+                  styles.appearanceBlock,
+                  { borderBottomColor: palette.semantic.border },
+                ]}
+                accessibilityLabel="Theme"
+              >
+                <View style={styles.appearanceChips}>
+                  <Pressable
+                    android_ripple={ripple.neutral}
+                    style={[
+                      styles.appearanceChip,
+                      {
+                        backgroundColor:
+                          scheme === 'light' ? palette.primary.main : palette.semantic.muted,
+                        borderColor: palette.semantic.border,
+                      },
+                    ]}
+                    onPress={async () => {
+                      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                      void setThemeMode('light')
+                    }}
+                    accessibilityLabel="Light mode"
+                    accessibilityState={{ selected: scheme === 'light' }}
+                  >
+                    <Sun
+                      size={20}
+                      color={scheme === 'light' ? palette.text.inverse : palette.text.primary}
+                      strokeWidth={2}
+                    />
+                  </Pressable>
+                  <Pressable
+                    android_ripple={ripple.neutral}
+                    style={[
+                      styles.appearanceChip,
+                      {
+                        backgroundColor:
+                          scheme === 'dark' ? palette.primary.main : palette.semantic.muted,
+                        borderColor: palette.semantic.border,
+                      },
+                    ]}
+                    onPress={async () => {
+                      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                      void setThemeMode('dark')
+                    }}
+                    accessibilityLabel="Dark mode"
+                    accessibilityState={{ selected: scheme === 'dark' }}
+                  >
+                    <Moon
+                      size={20}
+                      color={scheme === 'dark' ? palette.text.inverse : palette.text.primary}
+                      strokeWidth={2}
+                    />
+                  </Pressable>
+                </View>
+              </View>
               {renderMenuItem(
                 'Support',
                 () => navigateFromMoreTab('Support'),
@@ -564,6 +625,27 @@ const styles = StyleSheet.create({
   sectionContent: {
     paddingHorizontal: spacing[5],
     paddingBottom: spacing[2],
+  },
+  appearanceBlock: {
+    marginHorizontal: -spacing[5],
+    paddingHorizontal: spacing[5],
+    paddingBottom: spacing[3],
+    marginBottom: spacing[1],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  appearanceChips: {
+    flexDirection: 'row',
+    gap: spacing[2],
+  },
+  appearanceChip: {
+    flex: 1,
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[2],
+    borderRadius: borderRadius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
   },
   menuItem: {
     flexDirection: 'row',

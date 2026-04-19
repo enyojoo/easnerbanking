@@ -99,8 +99,8 @@ export function CommercialRulesPanel() {
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">Pricing rules</h2>
-      {notice ? <p className="text-sm text-blue-700">{notice}</p> : null}
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {notice ? <p className="text-sm text-muted-foreground">{notice}</p> : null}
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       <Card>
         <CardHeader>
@@ -448,7 +448,7 @@ export function CommercialProviderFeesPanel() {
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">Provider fee baselines</h2>
-      {notice ? <p className="text-sm text-blue-700">{notice}</p> : null}
+      {notice ? <p className="text-sm text-muted-foreground">{notice}</p> : null}
 
       <Card>
         <CardHeader>
@@ -752,7 +752,7 @@ export function CommercialRolloutPanel() {
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">Rollout controls</h2>
-      {notice ? <p className="text-sm text-blue-700">{notice}</p> : null}
+      {notice ? <p className="text-sm text-muted-foreground">{notice}</p> : null}
 
       <Card>
         <CardHeader>
@@ -844,7 +844,7 @@ export function CommercialPricingEngineHealthPanel() {
           Refresh
         </Button>
       </div>
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading pricing health...</p>
       ) : health ? (
@@ -895,7 +895,7 @@ export function CommercialMetricsPanel() {
           Refresh
         </Button>
       </div>
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading metrics...</p>
@@ -1171,7 +1171,7 @@ export function CommercialWebhookOpsPanel() {
           <Button onClick={onReplay} disabled={loading}>
             {loading ? "Replaying..." : "Replay Failed Webhooks"}
           </Button>
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          {error ? <p className="text-sm text-destructive">{error}</p> : null}
           {result ? (
             <div className="text-sm space-y-1">
               <p>ok: {String(result.ok)}</p>

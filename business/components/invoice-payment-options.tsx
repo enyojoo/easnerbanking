@@ -43,7 +43,7 @@ function CopyableField({
           className="text-muted-foreground hover:text-foreground flex-shrink-0 transition-colors"
         >
           {copiedField === fieldId ? (
-            <Check className="h-4 w-4 text-green-600" />
+            <Check className="h-4 w-4 text-primary" />
           ) : (
             <Copy className="h-4 w-4" />
           )}
@@ -350,7 +350,7 @@ export function InvoicePaymentOptions({
               onClick={() => handleShare("bank")}
             >
               {copiedField === "share-bank" ? (
-                <Check className="h-4 w-4 text-green-600" />
+                <Check className="h-4 w-4 text-primary" />
               ) : (
                 <Share2 className="h-4 w-4" />
               )}
@@ -408,7 +408,7 @@ export function InvoicePaymentOptions({
                   onClick={() => handleShare("stablecoin")}
                 >
                   {copiedField === "share-stablecoin" ? (
-                    <Check className="h-4 w-4 text-green-600" />
+                    <Check className="h-4 w-4 text-primary" />
                   ) : (
                     <Share2 className="h-4 w-4" />
                   )}

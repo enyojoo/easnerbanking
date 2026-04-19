@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native'
 import { StatusBar } from 'expo-status-bar'
-import { View, Text, StyleSheet, Animated, Platform } from 'react-native'
+import { View, Text, StyleSheet, Animated, Platform, Appearance } from 'react-native'
 import * as BackgroundTask from 'expo-background-task'
 import * as TaskManager from 'expo-task-manager'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
@@ -10,15 +10,23 @@ import { useFonts } from 'expo-font'
 import * as SplashScreen from 'expo-splash-screen'
 import * as SystemUI from 'expo-system-ui'
 import {
-  Outfit_400Regular,
-  Outfit_500Medium,
-  Outfit_600SemiBold,
-  Outfit_700Bold,
-} from '@expo-google-fonts/outfit'
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+  Inter_800ExtraBold,
+} from '@expo-google-fonts/inter'
+import {
+  PlayfairDisplay_400Regular,
+  PlayfairDisplay_500Medium,
+  PlayfairDisplay_600SemiBold,
+  PlayfairDisplay_700Bold,
+} from '@expo-google-fonts/playfair-display'
 import { AuthProvider, useAuth } from './src/contexts/AuthContext'
 import { UserDataProvider } from './src/contexts/UserDataContext'
 import { NotificationsProvider } from './src/contexts/NotificationsContext'
 import { BalanceProvider } from './src/contexts/BalanceContext'
+import { QueryProvider } from './src/query'
 import { ToastProvider } from './src/components/ToastProvider'
 import { PostHogProvider } from './src/components/PostHogProvider'
 import { analytics } from './src/lib/analytics'
@@ -27,7 +35,11 @@ import { pushNotificationService } from './src/lib/pushNotificationService'
 import AppNavigator from './src/navigation/AppNavigator'
 import { PushNotificationBootstrap } from './src/components/PushNotificationBootstrap'
 import { resolveThemeColors } from './src/theme'
-import { ThemePaletteProvider } from './src/contexts/ThemePaletteContext'
+import {
+  ThemePaletteProvider,
+  useThemeColors,
+  useThemeScheme,
+} from './src/contexts/ThemePaletteContext'
 import {
   BACKGROUND_TASK_IDENTIFIER,
   registerBackgroundTaskAsync,
@@ -41,7 +53,8 @@ function AppContent() {
   const navigationRef = useRef<NavigationContainerRef<any>>(null)
   const routeNameRef = useRef<string>('')
   const { loading: authLoading } = useAuth()
-  const palette = resolveThemeColors('light')
+  const palette = useThemeColors()
+  const scheme = useThemeScheme()
   const getActiveRouteName = (route: any): string => {
     if (!route) return 'Unknown'
     if (route.state && route.state.index != null) {
@@ -122,7 +135,7 @@ function AppContent() {
           }
         }}
         theme={{
-          dark: false,
+          dark: scheme === 'dark',
           colors: {
             primary: palette.primary.main,
             background: palette.background.primary,
@@ -133,26 +146,26 @@ function AppContent() {
           },
           fonts: {
             regular: {
-              fontFamily: 'Outfit-Regular',
+              fontFamily: 'Inter_400Regular',
               fontWeight: '400' as const,
             },
             medium: {
-              fontFamily: 'Outfit-Medium',
+              fontFamily: 'Inter_500Medium',
               fontWeight: '500' as const,
             },
             bold: {
-              fontFamily: 'Outfit-Bold',
+              fontFamily: 'Inter_700Bold',
               fontWeight: '700' as const,
             },
             heavy: {
-              fontFamily: 'Outfit-Bold',
+              fontFamily: 'Inter_800ExtraBold',
               fontWeight: '800' as const,
             },
           },
         }}
       >
         <StatusBar
-          style="dark"
+          style={scheme === 'dark' ? 'light' : 'dark'}
           backgroundColor={Platform.OS === 'android' ? palette.background.primary : undefined}
         />
         <AppNavigator />
@@ -165,10 +178,15 @@ export default function App() {
   console.log('App.tsx: App component rendering')
   
   const [fontsLoaded] = useFonts({
-    'Outfit-Regular': Outfit_400Regular,
-    'Outfit-Medium': Outfit_500Medium,
-    'Outfit-SemiBold': Outfit_600SemiBold,
-    'Outfit-Bold': Outfit_700Bold,
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+    Inter_800ExtraBold,
+    PlayfairDisplay_400Regular,
+    PlayfairDisplay_500Medium,
+    PlayfairDisplay_600SemiBold,
+    PlayfairDisplay_700Bold,
   })
   
   // Initialize deep linking
@@ -178,8 +196,13 @@ export default function App() {
 
   // Edge-to-edge: match root window / nav bar scrim to app background; supports `userInterfaceStyle` with expo-system-ui.
   useEffect(() => {
-    const bg = resolveThemeColors('light').background.primary
-    void SystemUI.setBackgroundColorAsync(bg)
+    const applyBackground = () => {
+      const bg = resolveThemeColors(Appearance.getColorScheme()).background.primary
+      void SystemUI.setBackgroundColorAsync(bg)
+    }
+    applyBackground()
+    const sub = Appearance.addChangeListener(() => applyBackground())
+    return () => sub.remove()
   }, [])
 
   // Foreground/tap listeners only; token registration is gated on user prefs in PushNotificationBootstrap
@@ -259,16 +282,18 @@ export default function App() {
           <ThemePaletteProvider>
             <PostHogProvider>
               <AuthProvider>
-                <PushNotificationBootstrap />
-                <BalanceProvider>
-                  <UserDataProvider>
-                    <NotificationsProvider>
-                      <ToastProvider>
-                        <AppContent />
-                      </ToastProvider>
-                    </NotificationsProvider>
-                  </UserDataProvider>
-                </BalanceProvider>
+                <QueryProvider>
+                  <PushNotificationBootstrap />
+                  <BalanceProvider>
+                    <UserDataProvider>
+                      <NotificationsProvider>
+                        <ToastProvider>
+                          <AppContent />
+                        </ToastProvider>
+                      </NotificationsProvider>
+                    </UserDataProvider>
+                  </BalanceProvider>
+                </QueryProvider>
               </AuthProvider>
             </PostHogProvider>
           </ThemePaletteProvider>

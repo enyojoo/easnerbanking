@@ -2056,16 +2056,12 @@ export function SettingsAdminPanel() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <Badge
-                            className={
-                              method.status === "active" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
-                            }
-                          >
+                          <Badge variant={method.status === "active" ? "emerald" : "slate"}>
                             {method.status}
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          {method.is_default && <Badge className="bg-blue-100 text-blue-800">Default</Badge>}
+                          {method.is_default && <Badge variant="outline">Default</Badge>}
                         </TableCell>
                         <TableCell>
                           <DropdownMenu>
@@ -2089,7 +2085,7 @@ export function SettingsAdminPanel() {
                               )}
                               <DropdownMenuItem
                                 onClick={() => handleDeletePaymentMethod(method.id)}
-                                className="text-red-600"
+                                className="text-destructive focus:text-destructive"
                               >
                                 <Trash2 className="h-4 w-4 mr-2" />
                                 Delete

@@ -142,7 +142,7 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
                   <Ionicons
                     name={showCurrentPassword ? 'eye-off-outline' : 'eye-outline'}
                     size={20}
-                    color="#6b7280"
+                    color="#6F756F"
                   />
                 </Pressable>
               </View>
@@ -168,7 +168,7 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
                   <Ionicons
                     name={showNewPassword ? 'eye-off-outline' : 'eye-outline'}
                     size={20}
-                    color="#6b7280"
+                    color="#6F756F"
                   />
                 </Pressable>
               </View>
@@ -194,7 +194,7 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
                   <Ionicons
                     name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
                     size={20}
-                    color="#6b7280"
+                    color="#6F756F"
                   />
                 </Pressable>
               </View>

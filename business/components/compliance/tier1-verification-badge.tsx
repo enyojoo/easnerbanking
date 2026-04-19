@@ -41,7 +41,7 @@ export function Tier1VerificationBadge({
     return (
       <Badge
         className={cn(
-          "shrink-0 border-transparent bg-green-600 font-medium text-white hover:bg-green-600",
+          "shrink-0 border-transparent bg-success font-medium text-success-foreground hover:bg-success",
           sizeClass,
           className,
         )}

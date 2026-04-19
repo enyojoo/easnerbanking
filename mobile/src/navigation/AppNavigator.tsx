@@ -159,36 +159,41 @@ function AuthStack() {
   )
 }
 
-// Styles for active icon container (circular background highlight)
-const tabBarStyles = StyleSheet.create({
-  activeIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-})
-
 function MainTabs() {
   const insets = useSafeAreaInsets()
   const palette = useThemeColors()
   useBusinessNoahSync()
   useConsumerKycNoahSync()
 
+  const activeColor = palette.primary.main
+  const inactiveColor = palette.text.secondary
+  const tabBarStyles = React.useMemo(
+    () =>
+      StyleSheet.create({
+        activeIconContainer: {
+          width: 44,
+          height: 44,
+          borderRadius: 22,
+          backgroundColor: `${palette.primary.main}1A`,
+          justifyContent: 'center',
+          alignItems: 'center',
+        },
+      }),
+    [palette.primary.main],
+  )
+
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: palette.primary.main,
-          borderTopWidth: 0,
-          elevation: 4,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -1 },
-          shadowOpacity: 0.12,
-          shadowRadius: 6,
+          backgroundColor: palette.semantic.background,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: palette.semantic.border,
+          elevation: 0,
+          shadowColor: 'transparent',
+          shadowOpacity: 0,
+          shadowRadius: 0,
           height: layout.tabBarHeight + insets.bottom,
           paddingBottom: insets.bottom,
           paddingTop: spacing[2],
@@ -202,8 +207,8 @@ function MainTabs() {
           overflow: 'hidden',
         },
         tabBarShowLabel: false,
-        tabBarActiveTintColor: palette.text.inverse,
-        tabBarInactiveTintColor: 'rgba(255, 255, 255, 0.55)',
+        tabBarActiveTintColor: activeColor,
+        tabBarInactiveTintColor: inactiveColor,
         tabBarItemStyle: {
           flex: 1,
           alignItems: 'center',
@@ -215,61 +220,61 @@ function MainTabs() {
         },
       }}
     >
-      <Tab.Screen 
-        name="Dashboard" 
+      <Tab.Screen
+        name="Dashboard"
         component={DashboardScreen}
         options={{
-          tabBarIcon: ({ focused, color }) => (
+          tabBarIcon: ({ focused }) => (
             <View style={focused ? tabBarStyles.activeIconContainer : null}>
-              <House 
-                size={26} 
-                color={focused ? palette.text.inverse : 'rgba(255, 255, 255, 0.55)'}
-                strokeWidth={focused ? 2.5 : 2}
+              <House
+                size={24}
+                color={focused ? activeColor : inactiveColor}
+                strokeWidth={focused ? 2.25 : 1.75}
               />
             </View>
           ),
         }}
       />
-      <Tab.Screen 
-        name="Card" 
+      <Tab.Screen
+        name="Card"
         component={CardScreen}
         options={{
-          tabBarIcon: ({ focused, color }) => (
+          tabBarIcon: ({ focused }) => (
             <View style={focused ? tabBarStyles.activeIconContainer : null}>
-              <CreditCard 
-                size={26} 
-                color={focused ? palette.text.inverse : 'rgba(255, 255, 255, 0.55)'}
-                strokeWidth={focused ? 2.5 : 2}
+              <CreditCard
+                size={24}
+                color={focused ? activeColor : inactiveColor}
+                strokeWidth={focused ? 2.25 : 1.75}
               />
             </View>
           ),
         }}
       />
-      <Tab.Screen 
-        name="Transactions" 
+      <Tab.Screen
+        name="Transactions"
         component={TransactionsScreen}
         options={{
-          tabBarIcon: ({ focused, color }) => (
+          tabBarIcon: ({ focused }) => (
             <View style={focused ? tabBarStyles.activeIconContainer : null}>
-              <ChartSpline 
-                size={26} 
-                color={focused ? palette.text.inverse : 'rgba(255, 255, 255, 0.55)'}
-                strokeWidth={focused ? 2.5 : 2}
+              <ChartSpline
+                size={24}
+                color={focused ? activeColor : inactiveColor}
+                strokeWidth={focused ? 2.25 : 1.75}
               />
             </View>
           ),
         }}
       />
-      <Tab.Screen 
-        name="More" 
+      <Tab.Screen
+        name="More"
         component={MoreScreen}
         options={{
-          tabBarIcon: ({ focused, color }) => (
+          tabBarIcon: ({ focused }) => (
             <View style={focused ? tabBarStyles.activeIconContainer : null}>
-              <Grip 
-                size={26} 
-                color={focused ? palette.text.inverse : 'rgba(255, 255, 255, 0.55)'}
-                strokeWidth={focused ? 2.5 : 2}
+              <Grip
+                size={24}
+                color={focused ? activeColor : inactiveColor}
+                strokeWidth={focused ? 2.25 : 1.75}
               />
             </View>
           ),

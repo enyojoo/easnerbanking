@@ -1,27 +1,28 @@
 "use client"
 
-import {
-  createContext,
-  useContext,
-  useState,
-  useCallback,
-  useEffect,
-  useRef,
-  type ReactNode,
-} from "react"
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
+import { useQueryClient } from "@tanstack/react-query"
+import { qk } from "@easner/shared"
 import type { Invoice } from "@/lib/b2b/types"
-import { CACHE_KEYS, dataCache } from "@/lib/cache"
-import { useAuth } from "@/lib/auth-context"
-import { fetchWithSession } from "@/lib/fetch-with-session"
-import { useCachedData } from "@/lib/use-cached-data"
+import { useInvoicesList } from "@/hooks/queries/use-invoices"
 import {
-  addInvoiceToStore,
-  updateInvoiceInStore,
-  removeInvoiceFromStore,
-  replaceInvoiceStore,
-} from "@/lib/invoice-store"
+  useAddInvoice,
+  useUpdateInvoice,
+  useDeleteInvoice,
+} from "@/hooks/mutations/use-invoices"
+import { replaceInvoiceStore } from "@/lib/invoice-store"
+import { useScope } from "@/lib/query/scope"
 
-const B2B_INVOICES_CACHE_TTL_MS = 60 * 60 * 1000
+/**
+ * Thin compat shim over the TanStack Query hooks.
+ *
+ * Public API (`useInvoices()` returning `{ invoices, loading, error,
+ * refreshInvoices, addInvoice, updateInvoice, deleteInvoice }`) is
+ * preserved so existing screens compile unchanged. Internally this
+ * routes through `useInvoicesList` + optimistic mutation hooks, so
+ * nothing touches `localStorage` or `dataCache` anymore for B2B
+ * invoices — a concrete win on the "no sensitive data on disk" rule.
+ */
 
 interface InvoicesContextValue {
   invoices: Invoice[]
@@ -36,144 +37,92 @@ interface InvoicesContextValue {
 const InvoicesContext = createContext<InvoicesContextValue | null>(null)
 
 export function InvoicesProvider({ children }: { children: ReactNode }) {
-  const { user, isLoading: authLoading } = useAuth()
+  const qc = useQueryClient()
+  const { scope } = useScope()
   const [error, setError] = useState<string | null>(null)
-  const invoicesRef = useRef<Invoice[]>([])
 
-  const fetchInvoices = useCallback(async () => {
-    const res = await fetchWithSession("/api/business/b2b/invoices")
-    const data = (await res.json().catch(() => ({}))) as {
-      invoices?: Invoice[]
-      error?: string
-    }
-    if (!res.ok) {
-      throw new Error(data.error || "Failed to load invoices")
-    }
-    return data.invoices ?? []
-  }, [])
-
-  const onLoadError = useCallback((e: unknown) => {
-    setError(e instanceof Error ? e.message : "Failed to load invoices")
-    replaceInvoiceStore([])
-  }, [])
-
-  const {
-    data: invoices,
-    setData: setInvoices,
-    loading,
-    refetch,
-  } = useCachedData<Invoice[]>({
-    enabled: !authLoading && Boolean(user?.id),
-    cacheKey: user?.id ? CACHE_KEYS.B2B_INVOICES(user.id) : null,
-    persistKey: user?.id ? `easner_b2b_invoices_${user.id}` : undefined,
-    initialData: [],
-    ttlMs: B2B_INVOICES_CACHE_TTL_MS,
-    fetcher: fetchInvoices,
-    onError: onLoadError,
-  })
+  const query = useInvoicesList()
+  const invoices = query.data ?? []
+  const loading = query.isPending
 
   useEffect(() => {
-    invoicesRef.current = invoices
     replaceInvoiceStore(invoices)
   }, [invoices])
 
   const refreshInvoices = useCallback(async () => {
     setError(null)
-    await refetch()
-  }, [refetch])
+    if (!scope) return
+    await qc.invalidateQueries({ queryKey: qk.invoices.list(scope, {}) })
+  }, [qc, scope])
+
+  const addMutation = useAddInvoice()
+  const updateMutation = useUpdateInvoice()
+  const deleteMutation = useDeleteInvoice()
 
   const addInvoice = useCallback(
     async (invoice: Invoice) => {
       setError(null)
-      const res = await fetchWithSession("/api/business/b2b/invoices", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(invoice),
-      })
-      const data = (await res.json().catch(() => ({}))) as {
-        invoice?: Invoice
-        error?: string
-      }
-      if (!res.ok) {
-        setError(data.error || "Failed to create invoice")
+      try {
+        const res = await addMutation.mutateAsync(invoice)
+        return res.invoice ?? null
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to create invoice")
         return null
       }
-      const created = data.invoice
-      if (created) {
-        addInvoiceToStore(created)
-        setInvoices((prev) => [created, ...prev.filter((i) => i.id !== created.id)])
-      }
-      return created ?? null
     },
-    [setInvoices],
+    [addMutation],
   )
 
   const updateInvoice = useCallback(
     async (id: string, updates: Partial<Invoice>) => {
       setError(null)
-      const prev = invoicesRef.current.find((i) => i.id === id)
-      const merged = prev ? { ...prev, ...updates, id } : ({ ...updates, id } as Invoice)
-      const res = await fetchWithSession(`/api/business/b2b/invoices/${encodeURIComponent(id)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(merged),
-      })
-      const data = (await res.json().catch(() => ({}))) as {
-        invoice?: Invoice
-        error?: string
-      }
-      if (!res.ok) {
-        setError(data.error || "Failed to update invoice")
+      try {
+        const res = await updateMutation.mutateAsync({ id, updates })
+        return res.invoice ?? null
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to update invoice")
         return null
       }
-      const updated = data.invoice
-      if (updated) {
-        updateInvoiceInStore(id, updated)
-        setInvoices((prev) => prev.map((i) => (i.id === id ? updated : i)))
-      }
-      return updated ?? null
     },
-    [setInvoices],
+    [updateMutation],
   )
 
   const deleteInvoice = useCallback(
     async (id: string) => {
       setError(null)
-      const res = await fetchWithSession(
-        `/api/business/b2b/invoices/${encodeURIComponent(id)}`,
-        { method: "DELETE" },
-      )
-      const data = (await res.json().catch(() => ({}))) as { error?: string }
-      if (!res.ok) {
-        setError(data.error || "Failed to delete invoice")
+      try {
+        await deleteMutation.mutateAsync(id)
+        return true
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to delete invoice")
         return false
       }
-      removeInvoiceFromStore(id)
-      setInvoices((prev) => prev.filter((i) => i.id !== id))
-      return true
     },
-    [setInvoices],
+    [deleteMutation],
   )
 
-  return (
-    <InvoicesContext.Provider
-      value={{
-        invoices,
-        loading,
-        error,
-        refreshInvoices,
-        addInvoice,
-        updateInvoice,
-        deleteInvoice,
-      }}
-    >
-      {children}
-    </InvoicesContext.Provider>
+  const value = useMemo<InvoicesContextValue>(
+    () => ({
+      invoices,
+      loading,
+      error: error ?? (query.error instanceof Error ? query.error.message : null),
+      refreshInvoices,
+      addInvoice,
+      updateInvoice,
+      deleteInvoice,
+    }),
+    [invoices, loading, error, query.error, refreshInvoices, addInvoice, updateInvoice, deleteInvoice],
   )
+
+  return <InvoicesContext.Provider value={value}>{children}</InvoicesContext.Provider>
 }
 
-export function invalidateB2bInvoicesCache(userId: string) {
-  dataCache.invalidate(CACHE_KEYS.B2B_INVOICES(userId))
+/**
+ * @deprecated No longer needed: TanStack Query owns invalidation.
+ * Retained as a no-op so legacy call sites compile.
+ */
+export function invalidateB2bInvoicesCache(_userId: string) {
+  // no-op
 }
 
 export function useInvoices() {

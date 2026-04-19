@@ -101,16 +101,16 @@ function NoahVerificationBadge({ rawStatus }: { rawStatus: string }) {
           ? "in_review"
           : "pending"
 
-  const statusConfig = {
-    verified: { color: "bg-green-100 text-green-700", text: "Verified" },
-    pending: { color: "bg-amber-100 text-amber-700", text: "Pending" },
-    rejected: { color: "bg-red-100 text-red-700", text: "Rejected" },
-    in_review: { color: "bg-yellow-100 text-yellow-700", text: "In Review" },
+  const statusConfig: Record<string, { variant: "emerald" | "amber" | "oxblood" | "slate"; text: string }> = {
+    verified: { variant: "emerald", text: "Verified" },
+    pending: { variant: "amber", text: "Pending" },
+    rejected: { variant: "oxblood", text: "Rejected" },
+    in_review: { variant: "slate", text: "In Review" },
   }
 
-  const config = statusConfig[key as keyof typeof statusConfig] || statusConfig.pending
+  const config = statusConfig[key] || statusConfig.pending
 
-  return <Badge className={`${config.color} hover:${config.color}`}>{config.text}</Badge>
+  return <Badge variant={config.variant}>{config.text}</Badge>
 }
 
 interface TransactionData {
@@ -373,20 +373,16 @@ export default function AdminUsersPage() {
   const getAccountTypeBadge = (user: UserData) => {
     const label = accountTypeLabel(user)
     if (!label) return <span className="text-xs text-muted-foreground">—</span>
-    const cls =
-      label === "Both"
-        ? "bg-violet-100 text-violet-800 hover:bg-violet-100"
-        : label === "Business"
-          ? "bg-blue-100 text-blue-800 hover:bg-blue-100"
-          : "bg-slate-100 text-slate-800 hover:bg-slate-100"
-    return <Badge className={cls}>{label}</Badge>
+    const variant: "emerald" | "slate" | "outline" =
+      label === "Both" ? "outline" : label === "Business" ? "emerald" : "slate"
+    return <Badge variant={variant}>{label}</Badge>
   }
 
   const getEasnerRoleBadge = (role: string | null | undefined) => {
     const r = String(role || "individual").toLowerCase()
     const isBiz = r === "business"
     return (
-      <Badge className={isBiz ? "bg-indigo-100 text-indigo-800 hover:bg-indigo-100" : "bg-slate-100 text-slate-800 hover:bg-slate-100"}>
+      <Badge variant={isBiz ? "emerald" : "slate"}>
         {isBiz ? "Business" : "Individual"}
       </Badge>
     )
@@ -508,7 +504,9 @@ export default function AdminUsersPage() {
         </div>
 
         {dirError ? (
-          <p className="text-sm text-red-600 rounded-md border border-red-200 bg-red-50 px-4 py-3">{dirError}</p>
+          <p className="text-sm text-destructive rounded-xl border border-[hsl(var(--destructive)/0.25)] bg-[hsl(var(--destructive)/0.08)] px-4 py-3">
+            {dirError}
+          </p>
         ) : null}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -526,7 +524,7 @@ export default function AdminUsersPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-gray-600">Verified</CardTitle>
-              <UserCheck className="h-4 w-4 text-blue-600" />
+              <UserCheck className="h-4 w-4 text-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-gray-900">{registrationStats.verifiedUsers}</div>
@@ -690,10 +688,10 @@ export default function AdminUsersPage() {
                                         <div className="mt-2 flex flex-1 flex-col justify-start space-y-2">
                                           {mfaResetFeedback ? (
                                             <p
-                                              className={`text-sm rounded-md border px-3 py-2 ${
+                                              className={`text-sm rounded-xl border px-3 py-2 ${
                                                 mfaResetFeedback.ok
-                                                  ? "border-green-200 bg-green-50 text-green-800"
-                                                  : "border-red-200 bg-red-50 text-red-800"
+                                                  ? "border-primary/20 bg-primary/10 text-primary"
+                                                  : "border-[hsl(var(--destructive)/0.25)] bg-[hsl(var(--destructive)/0.08)] text-destructive"
                                               }`}
                                             >
                                               {mfaResetFeedback.message}
@@ -829,12 +827,12 @@ export default function AdminUsersPage() {
                                                 </TableCell>
                                                 <TableCell>
                                                   <Badge
-                                                    className={
+                                                    variant={
                                                       transaction.status === "completed"
-                                                        ? "bg-green-100 text-green-800"
+                                                        ? "emerald"
                                                         : transaction.status === "processing"
-                                                          ? "bg-yellow-100 text-yellow-800"
-                                                          : "bg-gray-100 text-gray-800"
+                                                          ? "amber"
+                                                          : "slate"
                                                     }
                                                   >
                                                     {transaction.status}

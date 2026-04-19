@@ -150,12 +150,12 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between pt-4 border-t border-border">
             <div className="flex gap-12">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-full bg-green-50 dark:bg-green-900/20">
-                  <TrendingUp className="h-4 w-4 text-green-600" />
+                <div className="p-2 rounded-full bg-primary/10">
+                  <TrendingUp className="h-4 w-4 text-primary" />
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Money in</p>
-                  <p className="text-lg font-bold text-green-600">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-[0.08em]">Money in</p>
+                  <p className="text-lg font-semibold text-primary">
                     <span
                       className={cn(
                         "inline-flex min-w-[9.5rem] items-center justify-start tabular-nums leading-none self-center",
@@ -175,12 +175,12 @@ export default function DashboardPage() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-full bg-red-50 dark:bg-red-900/20">
-                  <TrendingDown className="h-4 w-4 text-red-600" />
+                <div className="p-2 rounded-full bg-muted">
+                  <TrendingDown className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Money out</p>
-                  <p className="text-lg font-bold text-red-600">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-[0.08em]">Money out</p>
+                  <p className="text-lg font-semibold text-foreground">
                     <span
                       className={cn(
                         "inline-flex min-w-[9.5rem] items-center justify-start tabular-nums leading-none",
@@ -239,7 +239,7 @@ export default function DashboardPage() {
                       >
                         <div className="flex items-center gap-3 min-w-0">
                           <div
-                            className={`shrink-0 rounded-full p-2 ${txn.direction === "credit" ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"}`}
+                            className={`shrink-0 rounded-full p-2 ${txn.direction === "credit" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}
                           >
                             {txn.direction === "credit" ?
                               <ArrowDownLeft className="h-4 w-4" />
@@ -254,7 +254,7 @@ export default function DashboardPage() {
                           </div>
                         </div>
                         <p
-                          className={`shrink-0 text-sm font-semibold tabular-nums ${txn.direction === "credit" ? "text-green-600" : "text-foreground"}`}
+                          className={`shrink-0 text-sm font-semibold tabular-nums ${txn.direction === "credit" ? "text-primary" : "text-foreground"}`}
                         >
                           {txn.direction === "credit" ? "+" : "-"}
                           {formatCurrency(Math.abs(txn.amount), cur)}

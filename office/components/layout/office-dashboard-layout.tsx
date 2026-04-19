@@ -4,7 +4,8 @@ import type React from "react"
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { ChevronDown, ChevronRight, LogOut, Menu, X } from "lucide-react"
+import { ChevronDown, ChevronRight, LogOut, Menu, Moon, Sun, X } from "lucide-react"
+import { useTheme } from "next-themes"
 import { BrandLogo } from "@easner/shared"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/lib/auth-context"
@@ -24,14 +25,18 @@ interface OfficeDashboardLayoutProps {
 
 const singleButtonClass = (active: boolean) =>
   cn(
-    "w-full justify-start gap-3 px-3 py-3 h-auto text-sm font-medium rounded-md transition-all duration-200",
-    active ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+    "w-full justify-start gap-3 px-3 py-2.5 h-auto text-[13px] rounded-xl transition-[background-color,color,box-shadow,border-color] duration-200",
+    active
+      ? "bg-card text-foreground font-semibold shadow-card border border-border/70 [&_svg]:text-primary"
+      : "font-medium text-muted-foreground hover:bg-muted hover:text-foreground border border-transparent",
   )
 
 const groupHeaderButtonClass = (hasActiveChild: boolean) =>
   cn(
-    "w-full justify-between gap-3 px-3 py-3 h-auto text-sm font-medium rounded-md transition-all duration-200",
-    hasActiveChild ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+    "w-full justify-between gap-3 px-3 py-2.5 h-auto text-[13px] rounded-xl transition-[background-color,color,box-shadow,border-color] duration-200",
+    hasActiveChild
+      ? "bg-card text-foreground font-semibold shadow-card border border-border/70 [&_svg]:text-primary"
+      : "font-medium text-muted-foreground hover:bg-muted hover:text-foreground border border-transparent",
   )
 
 function getInitialOpenGroups(pathname: string | null): Set<string> {
@@ -47,6 +52,45 @@ function getInitialOpenGroups(pathname: string | null): Set<string> {
   }
   if (pathname.startsWith("/monetization") || pathname.startsWith("/pricing-fx")) next.add("revenue")
   return next
+}
+
+function OfficeAppearanceSwitcher() {
+  const { resolvedTheme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+
+  if (!mounted) {
+    return <div className="h-9 w-full rounded-lg bg-muted/50" aria-hidden />
+  }
+
+  const isDark = resolvedTheme === "dark"
+
+  return (
+    <div className="flex gap-1" role="group" aria-label="Theme">
+      <Button
+        type="button"
+        variant={!isDark ? "secondary" : "ghost"}
+        size="sm"
+        className="h-9 flex-1 rounded-lg px-0"
+        onClick={() => setTheme("light")}
+        aria-label="Light mode"
+        aria-pressed={!isDark}
+      >
+        <Sun className="h-4 w-4 shrink-0 stroke-[1.5]" />
+      </Button>
+      <Button
+        type="button"
+        variant={isDark ? "secondary" : "ghost"}
+        size="sm"
+        className="h-9 flex-1 rounded-lg px-0"
+        onClick={() => setTheme("dark")}
+        aria-label="Dark mode"
+        aria-pressed={isDark}
+      >
+        <Moon className="h-4 w-4 shrink-0 stroke-[1.5]" />
+      </Button>
+    </div>
+  )
 }
 
 export function OfficeDashboardLayout({ children }: OfficeDashboardLayoutProps) {
@@ -88,23 +132,32 @@ export function OfficeDashboardLayout({ children }: OfficeDashboardLayoutProps) 
     <div className="flex h-screen bg-background">
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
-          <div className="fixed inset-0 bg-gray-600 bg-opacity-75" onClick={() => setSidebarOpen(false)} />
+          <div
+            className="fixed inset-0 bg-[hsl(var(--brand-graphite)/0.6)] backdrop-blur-sm"
+            onClick={() => setSidebarOpen(false)}
+          />
         </div>
       )}
 
       <div
         className={cn(
-          "fixed left-0 top-0 z-50 h-screen w-64 border-r bg-sidebar flex flex-col transform transition-transform duration-300 ease-in-out lg:translate-x-0",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          "fixed left-0 top-0 z-50 h-screen w-64 border-r border-sidebar-border bg-sidebar flex flex-col transform transition-transform duration-300 ease-in-out lg:translate-x-0",
+          sidebarOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
         <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-6">
-          <div className="flex min-w-0 items-center gap-2">
-            <BrandLogo size="sm" href="/dashboard" className="shrink-0" />
-            <span className="truncate text-sm font-medium text-primary">Office</span>
+          <div className="flex min-w-0 items-center gap-2.5">
+            <BrandLogo size="sm" href="/dashboard" className="shrink-0 rounded-xl ring-1 ring-inset ring-primary/15" />
+            <span className="truncate font-serif text-sm font-medium tracking-tight text-foreground">Office</span>
           </div>
-          <Button variant="ghost" size="icon" className="shrink-0 lg:hidden" onClick={() => setSidebarOpen(false)} aria-label="Close menu">
-            <X className="h-5 w-5" />
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="shrink-0 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Close menu"
+          >
+            <X className="h-4 w-4" />
           </Button>
         </div>
 
@@ -113,9 +166,14 @@ export function OfficeDashboardLayout({ children }: OfficeDashboardLayoutProps) 
             const Icon = item.icon
             const active = isNavItemActive(pathname, item.href)
             return (
-              <Link key={item.href} href={item.href} onClick={() => setSidebarOpen(false)}>
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setSidebarOpen(false)}
+                aria-current={active ? "page" : undefined}
+              >
                 <Button variant="ghost" className={singleButtonClass(active)}>
-                  <Icon className="h-5 w-5 shrink-0" />
+                  <Icon className="h-[18px] w-[18px] shrink-0 stroke-[1.5]" />
                   <span className="truncate">{item.name}</span>
                 </Button>
               </Link>
@@ -130,21 +188,30 @@ export function OfficeDashboardLayout({ children }: OfficeDashboardLayoutProps) 
               <div key={section.id} className="space-y-1">
                 <Button variant="ghost" onClick={() => toggleGroup(section.id)} className={groupHeaderButtonClass(hasActiveChild)}>
                   <div className="flex items-center gap-3">
-                    <Icon className="h-5 w-5 shrink-0" />
+                    <Icon className="h-[18px] w-[18px] shrink-0 stroke-[1.5]" />
                     <span className="truncate">{section.label}</span>
                   </div>
-                  {isOpen ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
+                  {isOpen ? (
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  )}
                 </Button>
 
                 {isOpen ? (
-                  <div className="ml-4 space-y-1">
+                  <div className="ml-4 space-y-1 border-l border-border/60 pl-2">
                     {section.items.map((child) => {
                       const ChildIcon = child.icon
                       const active = isNavItemActive(pathname, child.href)
                       return (
-                        <Link key={child.href} href={child.href} onClick={() => setSidebarOpen(false)}>
+                        <Link
+                          key={child.href}
+                          href={child.href}
+                          onClick={() => setSidebarOpen(false)}
+                          aria-current={active ? "page" : undefined}
+                        >
                           <Button variant="ghost" className={singleButtonClass(active)}>
-                            <ChildIcon className="h-5 w-5 shrink-0" />
+                            <ChildIcon className="h-[18px] w-[18px] shrink-0 stroke-[1.5]" />
                             <span className="truncate">{child.name}</span>
                           </Button>
                         </Link>
@@ -156,35 +223,52 @@ export function OfficeDashboardLayout({ children }: OfficeDashboardLayoutProps) 
             )
           })}
 
-          <Link href={officeNavPlatformLink.href} onClick={() => setSidebarOpen(false)}>
+          <Link
+            href={officeNavPlatformLink.href}
+            onClick={() => setSidebarOpen(false)}
+            aria-current={isNavItemActive(pathname, officeNavPlatformLink.href) ? "page" : undefined}
+          >
             <Button variant="ghost" className={singleButtonClass(isNavItemActive(pathname, officeNavPlatformLink.href))}>
-              <PlatformNavIcon className="h-5 w-5 shrink-0" />
+              <PlatformNavIcon className="h-[18px] w-[18px] shrink-0 stroke-[1.5]" />
               <span className="truncate">{officeNavPlatformLink.name}</span>
             </Button>
           </Link>
         </nav>
 
-        <div className="border-t border-sidebar-border px-4 py-4">
-          <Button
-            variant="ghost"
-            className="h-auto w-full justify-start gap-3 px-3 py-3 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-            onClick={handleLogout}
-          >
-            <LogOut className="h-5 w-5 shrink-0" />
-            <span className="truncate">Logout</span>
-          </Button>
+        <div className="mt-auto border-t border-sidebar-border">
+          <div className="px-3 py-3">
+            <OfficeAppearanceSwitcher />
+          </div>
+          <div className="border-t border-sidebar-border px-3 py-4">
+            <Button
+              variant="ghost"
+              className="h-auto w-full justify-start gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+              onClick={handleLogout}
+            >
+              <LogOut className="h-[18px] w-[18px] shrink-0 stroke-[1.5]" />
+              <span className="truncate">Logout</span>
+            </Button>
+          </div>
         </div>
       </div>
 
       <div className="flex flex-1 flex-col overflow-hidden lg:ml-64">
-        <div className="flex h-16 items-center border-b border-sidebar-border bg-background px-4 sm:px-6 lg:px-8">
-          <Button variant="ghost" size="sm" className="lg:hidden" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
-            <Menu className="h-5 w-5" />
+        <div className="flex h-16 items-center border-b border-border/60 bg-background/80 px-4 backdrop-blur sm:px-6 lg:px-8">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="lg:hidden"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Open menu"
+          >
+            <Menu className="h-4 w-4" />
           </Button>
           <div className="flex-1" />
         </div>
 
-        <main className="flex-1 overflow-y-auto">{children}</main>
+        <main className="flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8">{children}</div>
+        </main>
       </div>
     </div>
   )

@@ -36,18 +36,18 @@ const styles = StyleSheet.create({
   },
   muted: {
     fontSize: 8,
-    color: "#6b7280",
+    color: "#6F756F",
     marginBottom: 2,
   },
   table: {
     marginTop: 16,
     borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
+    borderTopColor: "#E9E4D8",
   },
   row: {
     flexDirection: "row",
     borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
+    borderBottomColor: "#EFECE2",
     paddingVertical: 6,
   },
   colDate: { width: "22%" },
@@ -58,7 +58,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     fontWeight: "bold",
     fontSize: 8,
-    color: "#374151",
+    color: "#3D403D",
   },
 })
 
@@ -104,7 +104,7 @@ export function StatementPDFDocument({ meta, rows, logoUrl = PDF_LOGO_DATA_URL }
         </View>
 
         {rows.length === 0 ? (
-          <Text style={{ marginTop: 12, color: "#6b7280" }}>No transactions in this period.</Text>
+          <Text style={{ marginTop: 12, color: "#6F756F" }}>No transactions in this period.</Text>
         ) : null}
       </Page>
     </Document>

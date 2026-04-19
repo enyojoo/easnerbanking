@@ -97,14 +97,14 @@ function KybBadge({ rawStatus }: { rawStatus: string }) {
         : raw === "under_review" || raw === "in_review"
           ? "in_review"
           : "pending"
-  const statusConfig = {
-    verified: { color: "bg-green-100 text-green-700", text: "Verified" },
-    pending: { color: "bg-amber-100 text-amber-700", text: "Pending" },
-    rejected: { color: "bg-red-100 text-red-700", text: "Rejected" },
-    in_review: { color: "bg-yellow-100 text-yellow-700", text: "In Review" },
+  const statusConfig: Record<string, { variant: "emerald" | "amber" | "oxblood" | "slate"; text: string }> = {
+    verified: { variant: "emerald", text: "Verified" },
+    pending: { variant: "amber", text: "Pending" },
+    rejected: { variant: "oxblood", text: "Rejected" },
+    in_review: { variant: "slate", text: "In Review" },
   }
-  const config = statusConfig[key as keyof typeof statusConfig] || statusConfig.pending
-  return <Badge className={config.color}>{config.text}</Badge>
+  const config = statusConfig[key] || statusConfig.pending
+  return <Badge variant={config.variant}>{config.text}</Badge>
 }
 
 function BusinessesPageInner() {
@@ -194,7 +194,11 @@ function BusinessesPageInner() {
           </div>
         </div>
 
-        {error ? <p className="text-sm text-red-600 rounded-md border border-red-200 bg-red-50 px-4 py-3">{error}</p> : null}
+        {error ? (
+          <p className="text-sm text-destructive rounded-xl border border-[hsl(var(--destructive)/0.25)] bg-[hsl(var(--destructive)/0.08)] px-4 py-3">
+            {error}
+          </p>
+        ) : null}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card>
@@ -210,7 +214,7 @@ function BusinessesPageInner() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-gray-600">With owner</CardTitle>
-              <Building2 className="h-4 w-4 text-blue-600" />
+              <Building2 className="h-4 w-4 text-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-gray-900">{loading ? "—" : stats.withOwner}</div>

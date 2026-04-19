@@ -134,22 +134,25 @@ export default function AdminTransactionsPage() {
   }
 
   const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      pending: { color: "bg-yellow-100 text-yellow-800", icon: <Clock className="h-3 w-3 mr-1" /> },
-      processing: { color: "bg-blue-100 text-blue-800", icon: <AlertCircle className="h-3 w-3 mr-1" /> },
-      completed: { color: "bg-green-100 text-green-800", icon: <CheckCircle className="h-3 w-3 mr-1" /> },
-      confirmed: { color: "bg-blue-100 text-blue-800", icon: <CheckCircle className="h-3 w-3 mr-1" /> },
-      converting: { color: "bg-yellow-100 text-yellow-800", icon: <Clock className="h-3 w-3 mr-1" /> },
-      converted: { color: "bg-blue-100 text-blue-800", icon: <AlertCircle className="h-3 w-3 mr-1" /> },
-      deposited: { color: "bg-green-100 text-green-800", icon: <CheckCircle className="h-3 w-3 mr-1" /> },
-      failed: { color: "bg-red-100 text-red-800", icon: <XCircle className="h-3 w-3 mr-1" /> },
-      cancelled: { color: "bg-gray-100 text-gray-800", icon: <XCircle className="h-3 w-3 mr-1" /> },
+    const statusConfig: Record<
+      string,
+      { variant: "emerald" | "amber" | "oxblood" | "slate" | "outline"; icon: React.ReactNode }
+    > = {
+      pending: { variant: "amber", icon: <Clock className="h-3 w-3 mr-1" /> },
+      processing: { variant: "outline", icon: <AlertCircle className="h-3 w-3 mr-1" /> },
+      completed: { variant: "emerald", icon: <CheckCircle className="h-3 w-3 mr-1" /> },
+      confirmed: { variant: "outline", icon: <CheckCircle className="h-3 w-3 mr-1" /> },
+      converting: { variant: "amber", icon: <Clock className="h-3 w-3 mr-1" /> },
+      converted: { variant: "outline", icon: <AlertCircle className="h-3 w-3 mr-1" /> },
+      deposited: { variant: "emerald", icon: <CheckCircle className="h-3 w-3 mr-1" /> },
+      failed: { variant: "oxblood", icon: <XCircle className="h-3 w-3 mr-1" /> },
+      cancelled: { variant: "slate", icon: <XCircle className="h-3 w-3 mr-1" /> },
     }
 
-    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pending
+    const config = statusConfig[status] || statusConfig.pending
 
     return (
-      <Badge className={`${config.color} hover:${config.color} flex items-center`}>
+      <Badge variant={config.variant} className="inline-flex items-center">
         {config.icon}
         {status.charAt(0).toUpperCase() + status.slice(1)}
       </Badge>
@@ -337,33 +340,33 @@ export default function AdminTransactionsPage() {
             <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-200">
               <span className="text-sm text-gray-500">Active filters:</span>
               {directionFilter !== "all" && (
-                <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-200">
+                <Badge variant="outline">
                   Direction: {directionFilter === "out" ? "Outgoing" : "Incoming"}
                   <button
                     onClick={() => setDirectionFilter("all")}
-                    className="ml-2 hover:bg-blue-100 rounded-full p-0.5"
+                    className="ml-2 rounded-full p-0.5 hover:bg-muted"
                   >
                     <X className="h-3 w-3" />
                   </button>
                 </Badge>
               )}
               {statusFilter !== "all" && (
-                <Badge variant="secondary" className="bg-purple-50 text-purple-700 border-purple-200">
+                <Badge variant="slate">
                   Status: {statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}
                   <button
                     onClick={() => setStatusFilter("all")}
-                    className="ml-2 hover:bg-purple-100 rounded-full p-0.5"
+                    className="ml-2 rounded-full p-0.5 hover:bg-muted"
                   >
                     <X className="h-3 w-3" />
                   </button>
                 </Badge>
               )}
               {currencyFilter !== "all" && (
-                <Badge variant="secondary" className="bg-green-50 text-green-700 border-green-200">
+                <Badge variant="emerald">
                   Currency: {currencyFilter}
                   <button
                     onClick={() => setCurrencyFilter("all")}
-                    className="ml-2 hover:bg-green-100 rounded-full p-0.5"
+                    className="ml-2 rounded-full p-0.5 hover:bg-primary/20"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -550,7 +553,7 @@ export default function AdminTransactionsPage() {
                                         handleStatusUpdate(selectedTransaction.id, "completed")
                                       }
                                       disabled={selectedTransaction.status === "completed"}
-                                      className="text-green-600 hover:text-green-700"
+                                      className="text-primary hover:text-primary"
                                     >
                                       Transfer Complete
                                     </Button>
@@ -559,7 +562,7 @@ export default function AdminTransactionsPage() {
                                       variant="outline"
                                       onClick={() => handleStatusUpdate(selectedTransaction.id, "failed")}
                                       disabled={selectedTransaction.status === "failed"}
-                                      className="text-red-600 hover:text-red-700"
+                                      className="text-destructive hover:text-destructive"
                                     >
                                       Mark Failed
                                     </Button>
@@ -598,7 +601,7 @@ export default function AdminTransactionsPage() {
                             </DropdownMenuItem>
                             <DropdownMenuItem
                             onClick={() => handleStatusUpdate(transaction.id, "failed")}
-                              className="text-red-600"
+                              className="text-destructive focus:text-destructive"
                             >
                               Mark as Failed
                             </DropdownMenuItem>

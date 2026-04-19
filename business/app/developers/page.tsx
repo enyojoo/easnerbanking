@@ -60,8 +60,8 @@ export default function DevelopersOverviewPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center">
-                <Key className="h-5 w-5 text-blue-600" />
+              <div className="w-10 h-10 bg-muted rounded-xl flex items-center justify-center ring-1 ring-inset ring-border/60">
+                <Key className="h-5 w-5 text-foreground" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Active API Keys</p>
@@ -74,8 +74,8 @@ export default function DevelopersOverviewPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 dark:bg-green-900/20 rounded-lg flex items-center justify-center">
-                <Code className="h-5 w-5 text-green-600" />
+              <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center ring-1 ring-inset ring-primary/15">
+                <Code className="h-5 w-5 text-primary" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Webhooks</p>

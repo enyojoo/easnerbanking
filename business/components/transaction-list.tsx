@@ -28,7 +28,7 @@ export function TransactionList({ transactions }: TransactionListProps) {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div
-                    className={`rounded-full p-2 ${txn.direction === "credit" ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600"}`}
+                    className={`rounded-full p-2 ${txn.direction === "credit" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}
                   >
                     {txn.direction === "credit" ? (
                       <ArrowDownLeft className="h-5 w-5" />
@@ -54,7 +54,7 @@ export function TransactionList({ transactions }: TransactionListProps) {
                 </div>
                 <div className="text-right">
                   <div
-                    className={`text-lg font-semibold ${txn.direction === "credit" ? "text-green-600" : "text-red-600"}`}
+                    className={`text-lg font-semibold tabular-nums ${txn.direction === "credit" ? "text-primary" : "text-foreground"}`}
                   >
                     {txn.direction === "credit" ? "+" : "-"}{formatCurrency(Math.abs(txn.amount), "USD")}
                   </div>

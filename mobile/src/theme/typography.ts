@@ -1,22 +1,34 @@
 /**
- * Easner Premium Design System - Typography
- * 
- * Type scale and text styles for consistent hierarchy
+ * Easner Design System — Mobile typography
+ *
+ * Two-layer type system, parity with web (`--font-serif` + `--font-sans`):
+ *   - Sans: Inter (UI, body, numerals)
+ *   - Serif: Playfair Display (display + hero balance + brand moments)
+ *
+ * Outfit has been fully removed. Legacy `balanceDisplay` now uses the
+ * serif face so the mobile hero balance visually matches the web
+ * `font-serif tabular-nums` balance treatment.
  */
 
 import { TextStyle, Platform, Dimensions, PixelRatio } from 'react-native'
 
-// Font families - Using Outfit from Google Fonts
+/**
+ * Font PostScript names — these must match the keys registered via
+ * `@expo-google-fonts/inter` + `@expo-google-fonts/playfair-display`
+ * in `mobile/App.tsx`.
+ */
 export const fontFamily = {
-  regular: 'Outfit-Regular',
-  medium: 'Outfit-Medium',
-  semibold: 'Outfit-SemiBold',
-  bold: 'Outfit-Bold',
-  /** Matches send-amount hero / keypad (Outfit-Black). */
-  black: 'Outfit-Black',
+  regular: 'Inter_400Regular',
+  medium: 'Inter_500Medium',
+  semibold: 'Inter_600SemiBold',
+  bold: 'Inter_700Bold',
+  black: 'Inter_800ExtraBold',
+  serifRegular: 'PlayfairDisplay_400Regular',
+  serifMedium: 'PlayfairDisplay_500Medium',
+  serifSemibold: 'PlayfairDisplay_600SemiBold',
+  serifBold: 'PlayfairDisplay_700Bold',
 }
 
-// Font weights
 export const fontWeight = {
   regular: '400' as const,
   medium: '500' as const,
@@ -26,7 +38,6 @@ export const fontWeight = {
   black: '900' as const,
 }
 
-// Font sizes following a harmonious scale
 export const fontSize = {
   xs: 12,
   sm: 14,
@@ -38,7 +49,7 @@ export const fontSize = {
   '3xl': 34,
   '4xl': 40,
   '5xl': 48,
-  /** Hero balance / send amount (Cash-like scale). */
+  /** Hero balance / send amount — matches web displayXl. */
   '6xl': 56,
 }
 
@@ -55,7 +66,6 @@ export function scaledFontSize(px: number, width?: number): number {
   return Math.round(px * typographyScale(width))
 }
 
-// Line heights
 export const lineHeight = {
   tight: 1.1,
   snug: 1.25,
@@ -64,7 +74,6 @@ export const lineHeight = {
   loose: 1.75,
 }
 
-// Letter spacing
 export const letterSpacing = {
   tighter: -0.5,
   tight: -0.25,
@@ -74,9 +83,38 @@ export const letterSpacing = {
   widest: 1,
 }
 
-// Pre-defined text styles
 export const textStyles: Record<string, TextStyle> = {
-  // Display - Large headlines
+  // ---------------------------------------------------------------
+  // Serif display — used for hero balances + brand moments
+  // ---------------------------------------------------------------
+  displaySerifXl: {
+    fontFamily: fontFamily.serifBold,
+    fontSize: fontSize['6xl'],
+    fontWeight: fontWeight.bold,
+    lineHeight: Math.round(fontSize['6xl'] * lineHeight.tight),
+    letterSpacing: letterSpacing.tighter,
+    fontVariant: ['tabular-nums'],
+    ...Platform.select({ android: { includeFontPadding: false }, default: {} }),
+  },
+  displaySerifLg: {
+    fontFamily: fontFamily.serifSemibold,
+    fontSize: fontSize['4xl'],
+    fontWeight: fontWeight.semibold,
+    lineHeight: Math.round(fontSize['4xl'] * lineHeight.tight),
+    letterSpacing: letterSpacing.tight,
+    fontVariant: ['tabular-nums'],
+  },
+  displaySerifMd: {
+    fontFamily: fontFamily.serifSemibold,
+    fontSize: fontSize['3xl'],
+    fontWeight: fontWeight.semibold,
+    lineHeight: Math.round(fontSize['3xl'] * lineHeight.tight),
+    letterSpacing: letterSpacing.tight,
+  },
+
+  // ---------------------------------------------------------------
+  // Display — sans headlines
+  // ---------------------------------------------------------------
   displayLarge: {
     fontFamily: fontFamily.bold,
     fontSize: fontSize['5xl'],
@@ -179,7 +217,6 @@ export const textStyles: Record<string, TextStyle> = {
 
   /**
    * Single-line TextInput — intentionally no `lineHeight`.
-   * Body styles’ relaxed lineHeight shifts caret/text vertically on iOS and Android.
    */
   textInputSingleLine: {
     fontFamily: fontFamily.regular,
@@ -220,7 +257,7 @@ export const textStyles: Record<string, TextStyle> = {
     }),
   },
 
-  // Special - Numbers/Currency
+  // Numbers / Currency — tabular sans
   currencyLarge: {
     fontFamily: fontFamily.bold,
     fontSize: fontSize['3xl'],
@@ -245,13 +282,16 @@ export const textStyles: Record<string, TextStyle> = {
     fontVariant: ['tabular-nums'],
   },
 
-  /** Primary balance line on Dashboard — same face/weight as send amount (`SendAmountScreen`). */
+  /**
+   * Primary balance line on Dashboard / SendAmount — mirrors the web
+   * `font-serif` hero balance. Playfair Display, tabular numerals.
+   */
   balanceDisplay: {
-    fontFamily: fontFamily.black,
+    fontFamily: fontFamily.serifBold,
     fontSize: fontSize['6xl'],
-    fontWeight: fontWeight.black,
+    fontWeight: fontWeight.bold,
     lineHeight: Math.round(fontSize['6xl'] * lineHeight.tight),
-    letterSpacing: letterSpacing.tight,
+    letterSpacing: letterSpacing.tighter,
     fontVariant: ['tabular-nums'],
     ...Platform.select({
       android: { includeFontPadding: false },
@@ -261,4 +301,3 @@ export const textStyles: Record<string, TextStyle> = {
 }
 
 export type Typography = typeof textStyles
-

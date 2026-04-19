@@ -22,19 +22,36 @@ function CardFace({
   comingSoonOverlay?: boolean
 }) {
   const isPhysical = card.form === "physical"
+  // Premium private-bank card faces: graphite-on-graphite, subtle emerald accent
+  // for physical cards. No bright fintech colors.
   const cardGradient = isPhysical
-    ? "linear-gradient(135deg, #005a99 0%, #007ACC 50%, #0099e6 100%)"
-    : "linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #334155 100%)"
+    ? "linear-gradient(140deg, #0F1110 0%, #151817 55%, #1C201E 100%)"
+    : "linear-gradient(140deg, #0A0B0B 0%, #0F1110 55%, #151817 100%)"
 
   return (
     <div
-      className="relative overflow-hidden rounded-2xl shadow-xl transition-all duration-300 w-full"
+      className="relative overflow-hidden rounded-3xl transition-all duration-300 w-full"
       style={{
         background: cardGradient,
-        border: "none",
+        border: "1px solid rgba(246, 243, 235, 0.06)",
         aspectRatio: "1.586",
+        // Tight, close-contact shadow. Previous value used a 48px blur at 35%
+        // opacity which radiated ~68px past the card and fogged the disabled
+        // action buttons below (they sit only 24px away via space-y-6).
+        boxShadow:
+          "0 8px 20px rgba(15, 17, 16, 0.16), 0 2px 6px rgba(15, 17, 16, 0.08), inset 0 1px 0 rgba(246, 243, 235, 0.06)",
       }}
     >
+      {isPhysical ? (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-[2px]"
+          style={{
+            background:
+              "linear-gradient(90deg, transparent 0%, rgba(15, 138, 95, 0.9) 50%, transparent 100%)",
+          }}
+        />
+      ) : null}
       <div className="absolute inset-0 z-[1] opacity-10">
         <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
           <defs>
@@ -51,7 +68,7 @@ function CardFace({
       </div>
 
       {comingSoonOverlay && (
-        <div className="absolute inset-0 z-[6] flex flex-col items-center justify-center bg-black/45 backdrop-blur-[2px] px-5 text-center">
+        <div className="absolute inset-0 z-[6] flex flex-col items-center justify-center rounded-3xl bg-black/45 backdrop-blur-[2px] px-5 text-center">
           <p className="max-w-[280px] text-sm font-medium leading-snug text-white sm:text-base">
             Corporate cards will be available soon on Easner.
           </p>
@@ -59,7 +76,7 @@ function CardFace({
       )}
 
       {frozen && !comingSoonOverlay && (
-        <div className="absolute inset-0 z-[5] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="absolute inset-0 z-[5] flex items-center justify-center rounded-3xl bg-black/50 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-3 text-white">
             <Snowflake className="h-16 w-16" />
             <p className="text-xl font-semibold">Card Frozen</p>

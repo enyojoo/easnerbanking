@@ -356,7 +356,7 @@ function ProfileContent({ navigation }: NavigationProps) {
               style={styles.currencyCloseButton}
               onPress={() => setShowCurrencyPicker(false)}
             >
-              <Ionicons name="close" size={24} color="#6b7280" />
+              <Ionicons name="close" size={24} color="#6F756F" />
             </Pressable>
           </View>
           <FlatList
@@ -428,23 +428,23 @@ function ProfileContent({ navigation }: NavigationProps) {
             {easetagTLen > 0 ? (
               <View style={styles.easetagStatusContainer}>
                 {easetagTLen < 4 ? (
-                  <Text style={[styles.easetagStatusTextInline, { color: '#6b7280' }]}>Min 4 characters</Text>
+                  <Text style={[styles.easetagStatusTextInline, { color: '#6F756F' }]}>Min 4 characters</Text>
                 ) : checkingEasetag ? (
-                  <Text style={[styles.easetagStatusTextInline, { color: '#6b7280' }]}>Checking…</Text>
+                  <Text style={[styles.easetagStatusTextInline, { color: '#6F756F' }]}>Checking…</Text>
                 ) : easetagValidationError ? (
                   <Text style={[styles.easetagStatusTextInline, styles.easetagUnavailableText]} numberOfLines={2}>
                     {easetagValidationError}
                   </Text>
                 ) : easetagAvailable === true ? (
                   <>
-                    <Ionicons name="checkmark-circle" size={16} color="#10b981" />
+                    <Ionicons name="checkmark-circle" size={16} color="#0F8A5F" />
                     <Text style={[styles.easetagStatusTextInline, styles.easetagAvailableText]}>
                       Available
                     </Text>
                   </>
                 ) : easetagAvailable === false ? (
                   <>
-                    <Ionicons name="close-circle" size={16} color="#ef4444" />
+                    <Ionicons name="close-circle" size={16} color="#7A2E2E" />
                     <Text style={[styles.easetagStatusTextInline, styles.easetagUnavailableText]}>
                       Taken
                     </Text>
@@ -472,7 +472,7 @@ function ProfileContent({ navigation }: NavigationProps) {
               maxLength={20}
             />
             <View style={styles.easetagSpinnerSlot}>
-              {checkingEasetag ? <ActivityIndicator size="small" color="#6b7280" /> : null}
+              {checkingEasetag ? <ActivityIndicator size="small" color="#6F756F" /> : null}
             </View>
           </View>
           <Text style={styles.fieldDescription}>
@@ -507,7 +507,7 @@ function ProfileContent({ navigation }: NavigationProps) {
             <Text style={styles.currencySelectorText}>
               {editProfileData.baseCurrency} - {currencies.find(c => c.code === editProfileData.baseCurrency)?.name || 'Select Currency'}
             </Text>
-            <Ionicons name="chevron-down" size={16} color="#6b7280" />
+            <Ionicons name="chevron-down" size={16} color="#6F756F" />
           </View>
         </Pressable>
       ) : (
@@ -635,7 +635,7 @@ function ProfileContent({ navigation }: NavigationProps) {
             <View style={styles.statusContent}>
               <View style={styles.statusItem}>
                 <View style={styles.statusLeft}>
-                  <Ionicons name="mail-outline" size={16} color="#10b981" />
+                  <Ionicons name="mail-outline" size={16} color="#007ACC" />
                   <Text style={styles.statusLabel}>Email</Text>
                 </View>
                 <View style={[styles.statusBadge, userProfile?.email_confirmed_at ? styles.verifiedBadge : styles.pendingBadge]}>
@@ -719,7 +719,7 @@ const styles = StyleSheet.create({
   },
   pageSubtitle: {
     fontSize: 16,
-    color: '#6b7280',
+    color: '#6F756F',
   },
   contentContainer: {
     padding: 24,
@@ -777,7 +777,7 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#6F756F',
     fontWeight: '500',
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -814,7 +814,7 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 12,
     fontWeight: '400',
-    color: '#6b7280',
+    color: '#6F756F',
     marginBottom: 0,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -822,7 +822,7 @@ const styles = StyleSheet.create({
   fieldLabelEdit: {
     fontSize: 12,
     fontWeight: '400',
-    color: '#6b7280',
+    color: '#6F756F',
     marginBottom: 4,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -880,7 +880,7 @@ const styles = StyleSheet.create({
   },
   currencyDescription: {
     fontSize: 12,
-    color: '#6b7280',
+    color: '#6F756F',
     marginTop: 2,
   },
   easetagLabelContainer: {
@@ -918,7 +918,7 @@ const styles = StyleSheet.create({
   },
   easetagPrefix: {
     fontSize: 16,
-    color: '#6b7280',
+    color: '#6F756F',
     paddingLeft: 12,
     paddingRight: 4,
     fontWeight: '500',
@@ -942,14 +942,14 @@ const styles = StyleSheet.create({
     paddingRight: 12,
   },
   easetagAvailableText: {
-    color: '#10b981',
+    color: '#0F8A5F',
   },
   easetagUnavailableText: {
-    color: '#ef4444',
+    color: '#7A2E2E',
   },
   fieldDescription: {
     fontSize: 12,
-    color: '#6b7280',
+    color: '#6F756F',
     marginTop: 2,
   },
   statusContent: {
@@ -1005,7 +1005,7 @@ const styles = StyleSheet.create({
   },
   statusStatLabel: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#6F756F',
   },
   statusStatValue: {
     fontSize: 14,
@@ -1025,7 +1025,7 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   destructiveText: {
-    color: '#ef4444',
+    color: '#7A2E2E',
   },
   menuButtonArrow: {
     fontSize: 20,
@@ -1087,16 +1087,16 @@ const styles = StyleSheet.create({
   },
   currencyName: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#6F756F',
     marginTop: 2,
   },
   currencySymbol: {
     fontSize: 16,
-    color: '#6b7280',
+    color: '#6F756F',
   },
   disabledHint: {
     fontSize: 12,
-    color: '#6b7280',
+    color: '#6F756F',
     fontStyle: 'italic',
   },
   fieldValueDisabled: {

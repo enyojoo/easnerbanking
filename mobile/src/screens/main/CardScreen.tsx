@@ -39,8 +39,8 @@ const MOCK_CARDS = [
 
 function gradientForForm(form: 'virtual' | 'physical'): [string, string, string] {
   return form === 'physical'
-    ? ['#005a99', '#007ACC', '#0099e6']
-    : ['#0F172A', '#1E293B', '#334155']
+    ? ['#0F1110', '#151817', '#1C201E']
+    : ['#050606', '#0F1110', '#1C201E']
 }
 
 function CardPattern({ cardId, width, height }: { cardId: string; width: number; height: number }) {

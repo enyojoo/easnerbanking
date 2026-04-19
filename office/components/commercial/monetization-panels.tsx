@@ -53,8 +53,8 @@ export function CommercialPlansPanel() {
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">Plans</h2>
-      {notice ? <p className="text-sm text-blue-700">{notice}</p> : null}
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {notice ? <p className="text-sm text-muted-foreground">{notice}</p> : null}
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       <Card>
         <CardHeader>
@@ -183,8 +183,8 @@ export function CommercialSubscriptionsPanel() {
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">Subscriptions</h2>
-      {notice ? <p className="text-sm text-blue-700">{notice}</p> : null}
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {notice ? <p className="text-sm text-muted-foreground">{notice}</p> : null}
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       <Card>
         <CardHeader>
@@ -359,7 +359,7 @@ export function CommercialPromoPanel() {
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">Promotions</h2>
-      {notice ? <p className="text-sm text-blue-700">{notice}</p> : null}
+      {notice ? <p className="text-sm text-muted-foreground">{notice}</p> : null}
 
       <Card>
         <CardHeader>
@@ -461,8 +461,8 @@ export function CommercialLimitsPanel() {
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">Limit policies</h2>
-      {notice ? <p className="text-sm text-blue-700">{notice}</p> : null}
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {notice ? <p className="text-sm text-muted-foreground">{notice}</p> : null}
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       <Card>
         <CardHeader>

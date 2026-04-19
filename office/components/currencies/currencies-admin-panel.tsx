@@ -137,11 +137,7 @@ export function CurrenciesAdminPanel() {
                   </TableCell>
                   <TableCell className="font-mono">{currency.code}</TableCell>
                   <TableCell>
-                    <Badge
-                      className={
-                        currency.active ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                      }
-                    >
+                    <Badge variant={currency.active ? "emerald" : "oxblood"}>
                       {currency.active ? "Active" : "Suspended"}
                     </Badge>
                   </TableCell>

@@ -147,7 +147,7 @@ export default function CardsPage() {
                       <div className="flex items-center gap-3">
                         <div
                           className={`rounded-full p-2 ${
-                            transaction.direction === "credit" ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"
+                            transaction.direction === "credit" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
                           }`}
                         >
                           {transaction.direction === "credit" ?
@@ -167,7 +167,7 @@ export default function CardsPage() {
                       </div>
                       <p
                         className={`text-sm font-semibold tabular-nums ${
-                          transaction.direction === "credit" ? "text-green-600" : "text-foreground"
+                          transaction.direction === "credit" ? "text-primary" : "text-foreground"
                         }`}
                       >
                         {transaction.direction === "credit" ? "+" : "-"}

@@ -56,11 +56,11 @@ export function DashboardShell({ children, mainClassName = "", constrained = fal
 
   return (
     <AppLockProvider>
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background text-foreground">
         <BusinessOnboardingDialog />
         <DashboardNav />
         <div className="ml-64 flex min-h-screen flex-col">
-          <header className="fixed top-0 left-64 right-0 z-30 flex h-16 min-h-16 items-center justify-end gap-4 border-b bg-background px-6">
+          <header className="fixed top-0 left-64 right-0 z-30 flex h-16 min-h-16 items-center justify-end gap-4 border-b border-border/60 bg-background/80 px-8 backdrop-blur-md supports-[backdrop-filter]:bg-background/70">
           {profileLoading ? (
             <div className="flex items-center gap-2">
               <div className="h-8 w-8 animate-pulse rounded-full bg-muted" />
@@ -79,22 +79,22 @@ export function DashboardShell({ children, mainClassName = "", constrained = fal
           </header>
           {showTier1Banner ? (
           <div
-            className="fixed top-16 left-64 right-0 z-20 flex flex-wrap items-center justify-between gap-2 border-b border-amber-200/80 bg-amber-50/90 px-6 py-2.5 text-sm text-amber-950 backdrop-blur-sm"
+            className="fixed top-16 left-64 right-0 z-20 flex flex-wrap items-center justify-between gap-2 border-b border-[hsl(var(--warning)/0.3)] bg-[hsl(var(--warning)/0.12)] px-8 py-2.5 text-sm text-[hsl(var(--warning))] backdrop-blur-sm"
             role="status"
           >
             <span>
               Complete business verification to unlock payments and bank accounts for your organization.
             </span>
-            <Link href="/settings?tab=business" className="font-semibold text-amber-950 underline underline-offset-2">
+            <Link href="/settings?tab=business" className="font-semibold text-[hsl(var(--warning))] underline underline-offset-2">
               Verify
             </Link>
           </div>
           ) : null}
           <main
             className={cn(
-              "flex-1 px-6 pb-8",
+              "flex-1 px-8 pb-10",
               showTier1Banner ? "pt-[6.5rem]" : "pt-20",
-              constrained ? "mx-auto w-full max-w-6xl" : "w-full",
+              constrained ? "mx-auto w-full max-w-6xl" : "mx-auto w-full max-w-[1440px]",
               mainClassName,
             )}
           >

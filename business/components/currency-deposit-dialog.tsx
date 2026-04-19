@@ -37,7 +37,7 @@ function CopyableField({ label, value, copiedField, fieldId, onCopy }: CopyableF
           className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
         >
           {copiedField === fieldId ? (
-            <Check className="h-4 w-4 text-green-600" />
+            <Check className="h-4 w-4 text-primary" />
           ) : (
             <Copy className="h-4 w-4" />
           )}

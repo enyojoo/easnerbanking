@@ -18,7 +18,13 @@ export {
 } from './layoutMetrics'
 export { motion } from './motion'
 export { shouldPlayDecorativeMotionEnter } from './reduceMotion'
-export { ThemePaletteProvider, useThemeColors } from '../contexts/ThemePaletteContext'
+export {
+  ThemePaletteProvider,
+  useThemeColors,
+  useThemeScheme,
+  useThemeMode,
+} from '../contexts/ThemePaletteContext'
+export type { ThemeMode } from '../contexts/ThemePaletteContext'
 
 export {
   USER_AVATAR_SIZE,

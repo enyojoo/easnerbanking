@@ -766,7 +766,7 @@ export default function InvoiceDetailPage() {
                                 onClick={() => copyToClipboard(paymentRecord.transactionId!, "payment-txn-id")}
                               >
                                 {copiedField === "payment-txn-id" ? (
-                                  <Check className="h-3 w-3 text-green-600" />
+                                  <Check className="h-3 w-3 text-primary" />
                                 ) : (
                                   <Copy className="h-3 w-3" />
                                 )}
@@ -835,7 +835,7 @@ export default function InvoiceDetailPage() {
                   <span className="text-sm text-muted-foreground">Invoice link</span>
                   <div className="flex items-center gap-1">
                     <Button variant="ghost" size="sm" onClick={() => copyToClipboard(customerViewUrl, "invoice-link")}>
-                      {copiedField === "invoice-link" ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3" />}
+                      {copiedField === "invoice-link" ? <Check className="h-3 w-3 text-primary" /> : <Copy className="h-3 w-3" />}
                     </Button>
                     <Link
                       href={

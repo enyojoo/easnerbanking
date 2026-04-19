@@ -205,10 +205,10 @@ export default function TransactionsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="text-center">
               <div className="flex items-center justify-center gap-2 mb-2">
-                <TrendingUp className="h-5 w-5 text-green-600" />
+                <TrendingUp className="h-5 w-5 text-primary" />
                 <p className="text-sm text-muted-foreground">Money in</p>
               </div>
-              <p className="text-3xl font-semibold tracking-tight text-green-600">
+              <p className="text-3xl font-semibold tracking-tight tabular-nums text-primary">
                 +{formatCurrency(totalCredit, summaryCurrency)}
               </p>
               {!totalsCurrency && filteredTransactions.length > 0 ?
@@ -219,10 +219,10 @@ export default function TransactionsPage() {
             </div>
             <div className="text-center">
               <div className="flex items-center justify-center gap-2 mb-2">
-                <TrendingDown className="h-5 w-5 text-red-600" />
+                <TrendingDown className="h-5 w-5 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">Money out</p>
               </div>
-              <p className="text-3xl font-semibold tracking-tight text-red-600">
+              <p className="text-3xl font-semibold tracking-tight tabular-nums text-foreground">
                 -{formatCurrency(totalDebit, summaryCurrency)}
               </p>
             </div>
@@ -259,7 +259,7 @@ export default function TransactionsPage() {
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div
-                          className={`shrink-0 rounded-full p-2 ${txn.direction === "credit" ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"}`}
+                          className={`shrink-0 rounded-full p-2 ${txn.direction === "credit" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}
                         >
                           {txn.direction === "credit" ?
                             <ArrowDownLeft className="h-4 w-4" />
@@ -275,7 +275,7 @@ export default function TransactionsPage() {
                         </div>
                       </div>
                       <p
-                        className={`shrink-0 text-sm font-semibold tabular-nums ${txn.direction === "credit" ? "text-green-600" : "text-foreground"}`}
+                        className={`shrink-0 text-sm font-semibold tabular-nums ${txn.direction === "credit" ? "text-primary" : "text-foreground"}`}
                       >
                         {txn.direction === "credit" ? "+" : "-"}
                         {formatCurrency(Math.abs(txn.amount), cur)}

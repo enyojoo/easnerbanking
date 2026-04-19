@@ -2,6 +2,10 @@ import * as React from 'react'
 
 import { cn } from '@/lib/utils'
 
+/**
+ * Easner input — calm, rounded, premium focus ring.
+ * Default height 48px, 16px radius, soft surface separation.
+ */
 const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<'input'>>(
   ({ className, type, ...props }, ref) => {
     return (
@@ -9,8 +13,15 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<'input'>>(
         type={type}
         data-slot="input"
         className={cn(
-          'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-ring disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm caret-foreground transition-[border-color]',
-          'aria-invalid:border-destructive',
+          'flex h-12 w-full rounded-2xl border border-border/70 bg-background px-4 text-[15px]',
+          'placeholder:text-muted-foreground',
+          'file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground',
+          'shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.02)]',
+          'transition-[border-color,box-shadow,background-color] duration-150',
+          'focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-0',
+          'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
+          'caret-foreground md:text-sm',
+          'aria-invalid:border-destructive aria-invalid:ring-destructive/30',
           className,
         )}
         ref={ref}

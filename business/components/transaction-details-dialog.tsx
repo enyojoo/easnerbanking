@@ -67,7 +67,7 @@ export function TransactionDetailsDialog({
             <div>
               <p className="text-sm text-muted-foreground">Amount</p>
               <p
-                className={`text-2xl font-semibold ${transaction.direction === "credit" ? "text-green-600" : "text-foreground"}`}
+                className={`text-2xl font-semibold tabular-nums ${transaction.direction === "credit" ? "text-primary" : "text-foreground"}`}
               >
                 {transaction.direction === "credit" ? "+" : "-"}
                 {formatCurrency(Math.abs(transaction.amount), transaction.displayCurrency || "USD")}

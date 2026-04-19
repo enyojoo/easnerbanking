@@ -22,7 +22,7 @@ export const emailTemplates: Record<string, EmailTemplate> = {
           With Easner, you can:
         </p>
         
-        <ul style="color: #4a5568; font-size: 16px; line-height: 1.7; margin: 20px 0; padding-left: 20px;">
+        <ul style="color: #3D403D; font-size: 16px; line-height: 1.7; margin: 20px 0; padding-left: 20px;">
           <li><strong>Send money globally in under 5 minutes</strong> - Lightning-fast cross-border transfers</li>
           <li>Track your transfers in real-time with live updates</li>
           <li>Save your favorite recipients for instant transfers</li>
@@ -339,22 +339,22 @@ Need help? Contact us at support@easner.com
           A new user has requested early access to Easner. Here are their details:
         </p>
         
-        <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; margin: 20px 0;">
-          <h3 style="color: #007ACC; margin: 0 0 15px 0; font-size: 18px;">Contact Information</h3>
+        <div style="background: #F8F6F0; border: 1px solid #E9E4D8; border-radius: 12px; padding: 20px; margin: 20px 0;">
+          <h3 style="color: #0F1110; margin: 0 0 14px 0; font-size: 15px; letter-spacing: 0.02em; text-transform: uppercase; font-weight: 600;">Contact Information</h3>
           <p style="margin: 5px 0; font-size: 16px;"><strong>Name:</strong> ${data.fullName}</p>
           <p style="margin: 5px 0; font-size: 16px;"><strong>Email:</strong> ${data.email}</p>
           <p style="margin: 5px 0; font-size: 16px;"><strong>WhatsApp/Telegram:</strong> ${data.whatsappTelegram}</p>
         </div>
         
-        <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; margin: 20px 0;">
-          <h3 style="color: #007ACC; margin: 0 0 15px 0; font-size: 18px;">Use Case & Transfer Preferences</h3>
+        <div style="background: #F8F6F0; border: 1px solid #E9E4D8; border-radius: 12px; padding: 20px; margin: 20px 0;">
+          <h3 style="color: #0F1110; margin: 0 0 14px 0; font-size: 15px; letter-spacing: 0.02em; text-transform: uppercase; font-weight: 600;">Use Case & Transfer Preferences</h3>
           <p style="margin: 5px 0; font-size: 16px;"><strong>Primary Use Case:</strong> ${data.primaryUseCase}</p>
           <p style="margin: 5px 0; font-size: 16px;"><strong>Located in:</strong> ${data.locatedIn}</p>
           <p style="margin: 5px 0; font-size: 16px;"><strong>Sending to:</strong> ${data.sendingTo}</p>
         </div>
         
-        <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; margin: 20px 0;">
-          <h3 style="color: #007ACC; margin: 0 0 15px 0; font-size: 18px;">Request Details</h3>
+        <div style="background: #F8F6F0; border: 1px solid #E9E4D8; border-radius: 12px; padding: 20px; margin: 20px 0;">
+          <h3 style="color: #0F1110; margin: 0 0 14px 0; font-size: 15px; letter-spacing: 0.02em; text-transform: uppercase; font-weight: 600;">Request Details</h3>
           <p style="margin: 5px 0; font-size: 16px;"><strong>Submitted at:</strong> ${new Date(data.submittedAt).toLocaleString()}</p>
           <p style="margin: 5px 0; font-size: 16px;"><strong>User Agent:</strong> ${data.userAgent}</p>
           <p style="margin: 5px 0; font-size: 16px;"><strong>IP Address:</strong> ${data.ipAddress}</p>
@@ -405,9 +405,9 @@ Request Details:
           Thank you for requesting early access to Easner! We're excited to have you join our community of users who will experience zero-fee international money transfers.
         </p>
 
-        <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; margin: 20px 0;">
-          <h3 style="color: #007ACC; margin: 0 0 15px 0; font-size: 18px;">What happens next?</h3>
-          <ul style="margin: 0; padding-left: 20px; color: #555; font-size: 16px;">
+        <div style="background: #F8F6F0; border: 1px solid #E9E4D8; border-radius: 12px; padding: 20px; margin: 20px 0;">
+          <h3 style="color: #0F1110; margin: 0 0 14px 0; font-size: 15px; letter-spacing: 0.02em; text-transform: uppercase; font-weight: 600;">What happens next?</h3>
+          <ul style="margin: 0; padding-left: 20px; color: #3D403D; font-size: 16px;">
             <li style="margin-bottom: 8px; font-size: 16px;">We'll review your application and use case</li>
             <li style="margin-bottom: 8px; font-size: 16px;">You'll receive an invitation email when approved</li>
             <li style="margin-bottom: 8px; font-size: 16px;">We'll follow up with you via the contact method you provided</li>
@@ -415,9 +415,9 @@ Request Details:
           </ul>
         </div>
 
-        <div style="background: #e8f4fd; border: 1px solid #b3d9ff; border-radius: 8px; padding: 20px; margin: 20px 0;">
-          <h3 style="color: #007ACC; margin: 0 0 10px 0; font-size: 18px;">Why Easner?</h3>
-          <p style="margin: 0; color: #555; font-size: 16px;">
+        <div style="background: #E6F4EC; border: 1px solid #C7E3D4; border-radius: 12px; padding: 20px; margin: 20px 0;">
+          <h3 style="color: #0F1110; margin: 0 0 10px 0; font-size: 15px; letter-spacing: 0.02em; text-transform: uppercase; font-weight: 600;">Why Easner?</h3>
+          <p style="margin: 0; color: #3D403D; font-size: 16px;">
             We're building the future of international money transfers with zero fees, real-time exchange rates, and instant transfers. Your early access will help us shape the perfect experience for users like you.
           </p>
         </div>

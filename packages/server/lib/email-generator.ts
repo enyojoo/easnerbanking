@@ -1,4 +1,10 @@
-// Email template generator using the provided design system
+// Email template generator — Easner design system
+//
+// Palette: Graphite (#0F1110) + Ivory (#F6F3EB) + Primary (#007ACC),
+// hover (#0062A3), dark-mode links/CTA (#3AA6F8).
+// Typography: system sans for body, Georgia serif fallback for the
+// display title so email clients render an editorial headline without
+// requiring a webfont.
 
 export function generateBaseEmailTemplate(
   title: string,
@@ -20,338 +26,371 @@ export function generateBaseEmailTemplate(
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             line-height: 1.6;
-            color: #333333;
-            background-color: #ffffff;
+            color: #1C201E;
+            background-color: #F8F6F0;
         }
-        
+
         .email-container {
             max-width: 600px;
             margin: 0 auto;
-            background-color: #ffffff;
-            border-radius: 8px;
+            background-color: #FFFFFF;
+            border-radius: 16px;
             overflow: hidden;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #E9E4D8;
         }
-        
+
         .email-header {
-            background: #ffffff;
-            padding: 40px 30px;
+            background: #FFFFFF;
+            padding: 48px 32px 32px 32px;
             text-align: center;
-            border-bottom: 1px solid #e2e8f0;
+            border-bottom: 1px solid #E9E4D8;
         }
-        
+
         .logo {
             max-width: 120px;
             height: auto;
-            margin: 0 auto 20px auto;
+            margin: 0 auto 24px auto;
             display: block;
         }
-        
+
         .email-title {
-            color: #007ACC;
+            color: #0F1110;
+            font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
             font-size: 28px;
-            font-weight: 700;
-            margin-bottom: 10px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            line-height: 1.2;
+            margin-bottom: 8px;
         }
-        
+
         .email-subtitle {
-            color: #4a5568;
-            font-size: 16px;
+            color: #6F756F;
+            font-size: 15px;
             font-weight: 400;
         }
-        
+
         .email-body {
-            padding: 40px 30px;
+            padding: 40px 32px;
         }
-        
+
         .welcome-text {
-            font-size: 18px;
-            color: #1a202c;
+            font-size: 17px;
+            color: #0F1110;
             margin-bottom: 20px;
-            font-weight: 500;
+            font-weight: 600;
         }
-        
+
         .confirmation-text {
-            font-size: 16px;
-            color: #4a5568;
-            margin-bottom: 30px;
+            font-size: 15px;
+            color: #3D403D;
+            margin-bottom: 24px;
             line-height: 1.7;
         }
-        
+
         .cta-button {
             display: inline-block;
-            background: linear-gradient(135deg, #007ACC 0%, #0056b3 100%);
-            color: #ffffff !important;
+            background: #007ACC;
+            color: #F6F3EB !important;
             text-decoration: none;
-            padding: 16px 32px;
-            border-radius: 8px;
+            padding: 14px 28px;
+            border-radius: 999px;
             font-weight: 600;
-            font-size: 16px;
+            font-size: 15px;
             text-align: center;
             margin: 20px 0;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 12px rgba(0, 122, 204, 0.3);
+            letter-spacing: 0.01em;
         }
-        
+
         .cta-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(0, 122, 204, 0.4);
+            background: #0062A3;
         }
-        
+
         .security-note {
-            background-color: #f7fafc;
-            border-left: 4px solid #007ACC;
-            padding: 20px;
-            margin: 30px 0;
-            border-radius: 0 8px 8px 0;
+            background-color: #F8F6F0;
+            border: 1px solid #E9E4D8;
+            border-left: 3px solid #007ACC;
+            padding: 20px 22px;
+            margin: 28px 0;
+            border-radius: 0 12px 12px 0;
         }
-        
+
         .security-note h3 {
-            color: #2d3748;
-            font-size: 18px;
-            margin-bottom: 10px;
+            color: #0F1110;
+            font-size: 15px;
+            margin-bottom: 6px;
             font-weight: 600;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
         }
-        
+
         .security-note p {
-            color: #4a5568;
-            font-size: 16px;
+            color: #3D403D;
+            font-size: 15px;
             margin: 0;
         }
-        
+
         .email-footer {
-            background-color: #ffffff;
-            padding: 30px;
+            background-color: #FFFFFF;
+            padding: 28px 32px 32px 32px;
             text-align: center;
-            border-top: 1px solid #e2e8f0;
+            border-top: 1px solid #E9E4D8;
         }
-        
+
         .footer-text {
-            color: #718096;
-            font-size: 14px;
-            margin-bottom: 15px;
+            color: #6F756F;
+            font-size: 13px;
+            margin-bottom: 14px;
         }
-        
+
         .footer-links {
-            margin: 20px 0;
+            margin: 14px 0;
         }
-        
+
         .footer-links a {
             color: #007ACC;
             text-decoration: none;
-            margin: 0 15px;
-            font-size: 14px;
+            margin: 0 12px;
+            font-size: 13px;
+            font-weight: 500;
         }
-        
+
         .footer-links a:hover {
             text-decoration: underline;
         }
-        
+
         .company-info {
-            color: #a0aec0;
-            font-size: 12px;
-            margin-top: 20px;
+            color: #8A8F8A;
+            font-size: 11px;
+            line-height: 1.6;
+            margin-top: 18px;
         }
-        
+
         .transaction-details {
-            background-color: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 20px;
-            margin: 20px 0;
+            background-color: #F8F6F0;
+            border: 1px solid #E9E4D8;
+            border-radius: 12px;
+            padding: 22px;
+            margin: 24px 0;
         }
-        
+
         .transaction-details h3 {
-            color: #2d3748;
-            font-size: 18px;
-            margin-bottom: 15px;
+            color: #0F1110;
+            font-size: 13px;
+            margin-bottom: 14px;
             font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
         }
-        
+
         .detail-row {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 8px;
-            padding: 4px 0;
-            font-size: 16px;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #EFECE2;
+            font-size: 14px;
         }
-        
+
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+
         .detail-label {
-            color: #4a5568;
+            color: #6F756F;
             font-weight: 500;
-            font-size: 16px;
+            font-size: 13px;
         }
-        
+
         .detail-value {
-            color: #1a202c;
+            color: #0F1110;
             font-weight: 600;
-            font-size: 16px;
+            font-size: 14px;
+            font-variant-numeric: tabular-nums;
         }
-        
+
         .status-badge {
             display: inline-block;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 14px;
+            padding: 3px 10px;
+            border-radius: 999px;
+            font-size: 11px;
             font-weight: 600;
+            letter-spacing: 0.08em;
             text-transform: uppercase;
         }
-        
+
         .status-pending {
-            background-color: #fef3c7;
-            color: #92400e;
+            background-color: #FAF1DB;
+            color: #8A6221;
         }
-        
+
         .status-processing {
-            background-color: #dbeafe;
-            color: #1e40af;
+            background-color: #EFECE2;
+            color: #3D403D;
         }
-        
+
         .status-completed {
-            background-color: #d1fae5;
-            color: #065f46;
+            background-color: #E6F4EC;
+            color: #0A6E4C;
         }
-        
+
         .status-failed {
-            background-color: #fee2e2;
-            color: #991b1b;
+            background-color: #F4E5E5;
+            color: #5F2424;
         }
-        
+
         .status-cancelled {
-            background-color: #f3f4f6;
-            color: #374151;
+            background-color: #EFECE2;
+            color: #6F756F;
         }
-        
+
         /* Dark mode support */
         @media (prefers-color-scheme: dark) {
             body {
-                background-color: #0a0a0a;
-                color: #e5e5e5;
+                background-color: #0A0B0A;
+                color: #E5E1D5;
             }
-            
+
             .email-container {
-                background-color: #1a1a1a;
-                border-color: #333333;
+                background-color: #151817;
+                border-color: #262926;
             }
-            
+
             .email-header {
-                background: #1a1a1a;
-                border-bottom-color: #333333;
+                background: #151817;
+                border-bottom-color: #262926;
             }
-            
+
             .email-title {
-                color: #007ACC;
+                color: #F6F3EB;
             }
-            
+
             .email-subtitle {
-                color: #999999;
+                color: #8A8F8A;
             }
-            
+
             .welcome-text {
-                color: #ffffff;
+                color: #F6F3EB;
             }
-            
+
             .confirmation-text {
-                color: #e5e5e5;
+                color: #D5D1C5;
             }
-            
+
             .security-note {
-                background-color: #2a2a2a;
-                border-left-color: #007ACC;
+                background-color: #1C201E;
+                border-color: #262926;
+                border-left-color: #3AA6F8;
             }
-            
+
             .security-note h3 {
-                color: #ffffff;
+                color: #F6F3EB;
             }
-            
+
             .security-note p {
-                color: #e5e5e5;
+                color: #D5D1C5;
             }
-            
+
             .email-footer {
-                background-color: #1a1a1a;
-                border-top-color: #333333;
+                background-color: #151817;
+                border-top-color: #262926;
             }
-            
+
             .footer-text {
-                color: #999999;
+                color: #8A8F8A;
             }
-            
+
             .footer-links a {
-                color: #007ACC;
+                color: #3AA6F8;
             }
-            
+
             .company-info {
-                color: #666666;
+                color: #6F756F;
             }
-            
+
             .transaction-details {
-                background-color: #2a2a2a;
-                border-color: #333333;
+                background-color: #1C201E;
+                border-color: #262926;
             }
-            
+
             .transaction-details h3 {
-                color: #ffffff;
+                color: #F6F3EB;
             }
-            
+
+            .detail-row {
+                border-bottom-color: #262926;
+            }
+
             .detail-label {
-                color: #999999;
+                color: #8A8F8A;
             }
-            
+
             .detail-value {
-                color: #ffffff;
+                color: #F6F3EB;
             }
-            
+
             .cta-button {
-                color: #ffffff !important;
+                background: #3AA6F8;
+                color: #F6F3EB !important;
+            }
+
+            .cta-button:hover {
+                background: #2B8FDC;
             }
         }
-        
+
         /* Mobile responsiveness */
         @media only screen and (max-width: 600px) {
             .email-container {
                 margin: 0;
                 border-radius: 0;
+                border-left: none;
+                border-right: none;
             }
-            
+
             .email-header {
-                padding: 30px 20px;
+                padding: 36px 24px 28px 24px;
             }
-            
+
             .email-title {
                 font-size: 24px;
             }
-            
+
             .email-body {
-                padding: 30px 20px;
+                padding: 32px 24px;
             }
-            
+
             .welcome-text {
                 font-size: 16px;
             }
-            
+
             .confirmation-text {
                 font-size: 15px;
             }
-            
+
             .cta-button {
                 display: block;
                 width: 100%;
-                padding: 18px 20px;
-                font-size: 16px;
+                padding: 16px 20px;
+                font-size: 15px;
             }
-            
+
             .email-footer {
-                padding: 25px 20px;
+                padding: 24px 20px;
             }
-            
+
             .footer-links a {
                 display: block;
                 margin: 10px 0;
+            }
+
+            .detail-row {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 2px;
             }
         }
     </style>
@@ -364,28 +403,28 @@ export function generateBaseEmailTemplate(
             <h1 class="email-title">${title}</h1>
             ${subtitle ? `<p class="email-subtitle">${subtitle}</p>` : ''}
         </div>
-        
+
         <!-- Body -->
         <div class="email-body">
             ${content}
-            
+
             ${ctaButton ? `
             <div style="text-align: center;">
                 <a href="${ctaButton.url}" class="cta-button">${ctaButton.text}</a>
             </div>
             ` : ''}
         </div>
-        
+
         <!-- Footer -->
         <div class="email-footer">
             <p class="footer-text">
-                Need help? We're here for you!
+                Need help? We're here for you.
             </p>
-            
+
             <div class="footer-links">
                 <a href="mailto:support@easner.com">Contact Support</a>
             </div>
-            
+
             <p class="company-info">
                 © 2025 Easner, Inc. All rights reserved.<br>
                 28 Geary St Ste 650, San Francisco, CA 94108<br>
@@ -403,37 +442,37 @@ export function generateTransactionDetails(data: any): string {
     <div class="transaction-details">
       <h3>Transaction Details</h3>
       <div class="detail-row">
-        <span class="detail-label">Transaction ID: </span>
+        <span class="detail-label">Transaction ID</span>
         <span class="detail-value">${data.transactionId}</span>
       </div>
       <div class="detail-row">
-        <span class="detail-label">Recipient: </span>
+        <span class="detail-label">Recipient</span>
         <span class="detail-value">${data.recipientName}</span>
       </div>
       <div class="detail-row">
-        <span class="detail-label">Amount: </span>
+        <span class="detail-label">Amount</span>
         <span class="detail-value">${data.sendAmount} ${data.sendCurrency}</span>
       </div>
       <div class="detail-row">
-        <span class="detail-label">Receiving: </span>
+        <span class="detail-label">Receiving</span>
         <span class="detail-value">${data.receiveAmount} ${data.receiveCurrency}</span>
       </div>
       <div class="detail-row">
-        <span class="detail-label">Rate Used: </span>
+        <span class="detail-label">Rate used</span>
         <span class="detail-value">1 ${data.sendCurrency} = ${data.exchangeRate} ${data.receiveCurrency}</span>
       </div>
       <div class="detail-row">
-        <span class="detail-label">Fee: </span>
+        <span class="detail-label">Fee</span>
         <span class="detail-value">${data.fee} ${data.sendCurrency}</span>
       </div>
       <div class="detail-row">
-        <span class="detail-label">Status: </span>
+        <span class="detail-label">Status</span>
         <span class="detail-value">
           <span class="status-badge status-${data.status}">${data.status}</span>
         </span>
       </div>
       <div class="detail-row">
-        <span class="detail-label">Date: </span>
+        <span class="detail-label">Date</span>
         <span class="detail-value">${new Date(data.createdAt).toLocaleDateString()}</span>
       </div>
     </div>
@@ -443,13 +482,13 @@ export function generateTransactionDetails(data: any): string {
 export function generateFooter(): string {
   return `
     <p class="footer-text">
-      Need help? We're here for you!
+      Need help? We're here for you.
     </p>
-    
+
     <div class="footer-links">
       <a href="mailto:support@easner.com">Contact Support</a>
     </div>
-    
+
     <p class="company-info">
       © 2025 Easner, Inc. All rights reserved.<br>
       28 Geary St Ste 650, San Francisco, CA 94108<br>

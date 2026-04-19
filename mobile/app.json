@@ -6,7 +6,7 @@
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icons/ios-light.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
@@ -29,15 +29,15 @@
       ]
     },
     "androidStatusBar": {
-      "backgroundColor": "#007ACC",
-      "barStyle": "light-content"
+      "backgroundColor": "#F6F3EB",
+      "barStyle": "dark-content"
     },
     "android": {
       "softwareKeyboardLayoutMode": "resize",
       "icon": "./assets/icons/adaptive-icon.png",
       "adaptiveIcon": {
         "foregroundImage": "./assets/icons/adaptive-icon.png",
-        "backgroundColor": "#007ACC",
+        "backgroundColor": "#0F1110",
         "monochromeImage": "./assets/icons/adaptive-icon.png"
       },
       "edgeToEdgeEnabled": true,
@@ -78,7 +78,12 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#007ACC",
+          "backgroundColor": "#F6F3EB",
+          "dark": {
+            "backgroundColor": "#0F1110",
+            "image": "./assets/splash-icon-light.png",
+            "imageWidth": 200
+          },
           "image": "./assets/splash-icon-light.png",
           "imageWidth": 200
         }

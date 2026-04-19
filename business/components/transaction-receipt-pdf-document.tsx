@@ -37,7 +37,7 @@ const styles = StyleSheet.create({
   receiptTitle: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#111827",
+    color: "#0F1110",
     marginBottom: 2,
   },
   headerLogo: {
@@ -67,26 +67,26 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   amountCredit: {
-    color: "#16a34a",
+    color: "#007ACC",
   },
   amountDebit: {
-    color: "#111827",
+    color: "#0F1110",
   },
   dateText: {
     fontSize: 10,
-    color: "#6b7280",
+    color: "#6F756F",
   },
   tableWrapper: {
     marginHorizontal: 40,
     borderWidth: 1,
-    borderColor: "#cbd5e1",
+    borderColor: "#D9D4C7",
     borderRadius: 8,
     overflow: "hidden",
   },
   tableRow: {
     flexDirection: "row",
     borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
+    borderBottomColor: "#E9E4D8",
   },
   tableRowLast: {
     flexDirection: "row",
@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 8,
   },
   tableRowEven: {
-    backgroundColor: "#f8fafc",
+    backgroundColor: "#F8F6F0",
   },
   tableRowOdd: {
     backgroundColor: "#ffffff",
@@ -109,20 +109,20 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 12,
     fontSize: 10,
-    color: "#475569",
+    color: "#3D403D",
   },
   tableCellValue: {
     flex: 1.5,
     padding: 12,
     fontSize: 10,
-    color: "#0f172a",
+    color: "#0F1110",
     textAlign: "right",
   },
   amountCellCredit: {
     flex: 1.5,
     padding: 12,
     fontSize: 10,
-    color: "#16a34a",
+    color: "#007ACC",
     fontWeight: "bold",
     textAlign: "right",
   },
@@ -130,7 +130,7 @@ const styles = StyleSheet.create({
     flex: 1.5,
     padding: 12,
     fontSize: 10,
-    color: "#0f172a",
+    color: "#0F1110",
     fontWeight: "bold",
     textAlign: "right",
   },
@@ -143,13 +143,13 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 9,
-    color: "#64748b",
+    color: "#6F756F",
     textAlign: "center",
     marginBottom: 2,
   },
   footerTextLink: {
     fontSize: 9,
-    color: "#64748b",
+    color: "#6F756F",
     textAlign: "center",
   },
   footerEmail: {

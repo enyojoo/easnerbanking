@@ -21,7 +21,11 @@
     "tailwind-merge": "^2.5.5"
   },
   "peerDependencies": {
-    "react": "^18 || ^19"
+    "react": "^18 || ^19",
+    "@tanstack/react-query": "^5"
+  },
+  "peerDependenciesMeta": {
+    "@tanstack/react-query": { "optional": false }
   },
   "devDependencies": {
     "@types/react": "^18",

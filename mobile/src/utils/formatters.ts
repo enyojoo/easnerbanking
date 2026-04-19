@@ -101,24 +101,24 @@ export function getTransactionStatusDisplay(status: string): { label: string; co
   if (!status) return null
   const statusLower = status.toLowerCase()
   if (statusLower.includes('processed') || statusLower.includes('completed')) {
-    return { label: 'Completed', color: '#10B981' }
+    return { label: 'Completed', color: '#0F8A5F' }
   }
   if (statusLower.includes('pending') || statusLower.includes('awaiting') || statusLower.includes('scheduled') || statusLower.includes('received') || statusLower.includes('submitted')) {
-    return { label: 'Processing', color: '#007ACC' }
+    return { label: 'Processing', color: '#6F756F' }
   }
   if (statusLower.includes('failed') || statusLower.includes('returned')) {
-    return { label: 'Failed', color: '#EF4444' }
+    return { label: 'Failed', color: '#7A2E2E' }
   }
   if (statusLower.includes('refunded')) {
-    return { label: 'Refunded', color: '#EF4444' }
+    return { label: 'Refunded', color: '#7A2E2E' }
   }
   if (statusLower.includes('review')) {
-    return { label: 'In Review', color: '#F59E0B' }
+    return { label: 'In Review', color: '#A8792A' }
   }
   if (statusLower.includes('cancelled')) {
-    return { label: 'Cancelled', color: '#6B7280' }
+    return { label: 'Cancelled', color: '#6F756F' }
   }
-  return { label: status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), color: '#6B7280' }
+  return { label: status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), color: '#6F756F' }
 }
 
 /**

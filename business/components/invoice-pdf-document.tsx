@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
   },
   businessText: {
     fontSize: 9,
-    color: "#6b7280",
+    color: "#6F756F",
     marginBottom: 2,
   },
   invoiceHeader: {
@@ -65,12 +65,12 @@ const styles = StyleSheet.create({
   },
   invoiceNumber: {
     fontSize: 9,
-    color: "#6b7280",
+    color: "#6F756F",
     marginBottom: 4,
     textAlign: "right",
   },
   statusBadge: {
-    backgroundColor: "#e5e7eb",
+    backgroundColor: "#E9E4D8",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 8,
     fontWeight: "bold",
-    color: "#6b7280",
+    color: "#6F756F",
     textTransform: "uppercase",
     letterSpacing: 1,
     marginBottom: 8,
@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
   sectionTitleRight: {
     fontSize: 8,
     fontWeight: "bold",
-    color: "#6b7280",
+    color: "#6F756F",
     textTransform: "uppercase",
     letterSpacing: 1,
     marginBottom: 8,
@@ -123,26 +123,26 @@ const styles = StyleSheet.create({
   },
   sectionTextMuted: {
     fontSize: 9,
-    color: "#6b7280",
+    color: "#6F756F",
     marginBottom: 2,
   },
   table: {
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#E9E4D8",
     borderRadius: 4,
   },
   tableHeader: {
     flexDirection: "row",
-    backgroundColor: "#f3f4f6",
+    backgroundColor: "#EFECE2",
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
+    borderBottomColor: "#E9E4D8",
   },
   tableHeaderCell: {
     fontSize: 8,
     fontWeight: "bold",
-    color: "#6b7280",
+    color: "#6F756F",
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     padding: 12,
     borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
+    borderTopColor: "#E9E4D8",
   },
   tableCell: {
     fontSize: 10,
@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
   },
   totalSubLabel: {
     fontSize: 9,
-    color: "#6b7280",
+    color: "#6F756F",
   },
   totalSubAmount: {
     fontSize: 10,
@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
   },
   totalLabel: {
     fontSize: 9,
-    color: "#6b7280",
+    color: "#6F756F",
     marginBottom: 4,
   },
   totalAmount: {
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
+    borderTopColor: "#E9E4D8",
   },
   paymentSectionTitle: {
     fontSize: 12,
@@ -210,9 +210,9 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "column",
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#E9E4D8",
     borderRadius: 6,
-    backgroundColor: "#fafafa",
+    backgroundColor: "#F8F6F0",
     padding: 14,
     minHeight: 220,
   },
@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
   },
   paymentFieldLabel: {
     fontSize: 8,
-    color: "#6b7280",
+    color: "#6F756F",
     marginBottom: 4,
   },
   paymentFieldValue: {
@@ -240,17 +240,17 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
+    borderTopColor: "#E9E4D8",
   },
   paymentInstructionsTitle: {
     fontSize: 8,
     fontWeight: "bold",
-    color: "#6b7280",
+    color: "#6F756F",
     marginBottom: 6,
   },
   paymentInstructionItem: {
     fontSize: 8,
-    color: "#6b7280",
+    color: "#6F756F",
     marginBottom: 4,
   },
   stablecoinRow: {
@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 9,
-    color: "#6b7280",
+    color: "#6F756F",
   },
   footerLogo: {
     width: 90,

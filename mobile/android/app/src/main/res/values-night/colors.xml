@@ -1,1 +1,7 @@
-<resources/>
+<resources>
+  <color name="splashscreen_background">#0F1110</color>
+  <color name="iconBackground">#0F1110</color>
+  <!-- Dark canvas accent — matches tokens darkAccent -->
+  <color name="colorPrimary">#3AA6F8</color>
+  <color name="colorPrimaryDark">#2B8FDC</color>
+</resources>

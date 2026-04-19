@@ -202,7 +202,7 @@ export default function InvoiceViewPage() {
               className="text-xs sm:text-sm h-8 sm:h-9 px-2.5 sm:px-3"
             >
               {copiedLink ? (
-                <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2 text-green-600" />
+                <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2 text-primary" />
               ) : (
                 <Copy className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
               )}
@@ -448,7 +448,7 @@ export default function InvoiceViewPage() {
                                   onClick={() => copyToClipboard(paymentRecord.transactionId!, "payment-txn-id")}
                                 >
                                   {copiedField === "payment-txn-id" ? (
-                                    <Check className="h-3 w-3 text-green-600" />
+                                    <Check className="h-3 w-3 text-primary" />
                                   ) : (
                                     <Copy className="h-3 w-3" />
                                   )}

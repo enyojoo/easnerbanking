@@ -1356,7 +1356,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                     <Ionicons 
                       name={showCountryDropdown ? "chevron-up" : "chevron-down"} 
                       size={16} 
-                      color="#6b7280" 
+                      color="#6F756F" 
                     />
                   </View>
                 </Pressable>
@@ -1488,7 +1488,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                         <Text style={styles.currencySelectorText}>
                           {newRecipient.provider || 'Select provider'}
                         </Text>
-                        <Ionicons name={showProviderDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6b7280" />
+                        <Ionicons name={showProviderDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6F756F" />
                       </View>
                     </Pressable>
                     {showProviderDropdown &&
@@ -1579,7 +1579,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                         <Text style={styles.currencySelectorText}>
                           {newRecipient.currency || 'Select asset'}
                         </Text>
-                        <Ionicons name={showWalletAssetDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6b7280" />
+                        <Ionicons name={showWalletAssetDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6F756F" />
                       </View>
                     </Pressable>
                     {showWalletAssetDropdown &&
@@ -1651,7 +1651,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                         <Text style={styles.currencySelectorText}>
                           {newRecipient.network || 'Select network'}
                         </Text>
-                        <Ionicons name={showWalletNetworkDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6b7280" />
+                        <Ionicons name={showWalletNetworkDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6F756F" />
                       </View>
                     </Pressable>
                     {showWalletNetworkDropdown &&

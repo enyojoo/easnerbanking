@@ -379,7 +379,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 8,
     borderLeftWidth: 4,
-    borderLeftColor: '#ef4444',
+    borderLeftColor: '#7A2E2E',
   },
   emergencyText: {
     fontSize: 14,
@@ -388,7 +388,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   emergencyButton: {
-    backgroundColor: '#ef4444',
+    backgroundColor: '#7A2E2E',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 6,

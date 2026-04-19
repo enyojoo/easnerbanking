@@ -56,8 +56,8 @@ export default function ForgotPasswordPage() {
           )}
 
           {message && (
-            <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-md">
-              <p className="text-sm text-green-700 dark:text-green-400">{message}</p>
+            <div className="p-3 bg-primary/10 border border-primary/20 rounded-xl">
+              <p className="text-sm text-primary">{message}</p>
             </div>
           )}
 
