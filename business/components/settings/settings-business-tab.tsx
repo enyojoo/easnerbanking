@@ -269,6 +269,23 @@ export function SettingsBusinessTab() {
   const selectedCountry = getCountryFromCode(countryCode)
   const kybFields = getKybFields(countryCode)
   const easetagDraftLen = formData.easetag.replace(/^@/, "").trim().length
+  const easetagStatus =
+    easetagDraftLen > 0 ?
+      easetagDraftLen < 4 ? (
+        <span className="text-muted-foreground">Min 4 characters</span>
+      ) : easetagAvail.checkingEasetag ? (
+        <span className="text-muted-foreground">Checking...</span>
+      ) : easetagAvail.easetagValidationError ? (
+        <span className="truncate text-destructive">{easetagAvail.easetagValidationError}</span>
+      ) : easetagAvail.easetagAvailable === true ? (
+        <span className="inline-flex items-center justify-end gap-1 text-primary">
+          <Check className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          Available
+        </span>
+      ) : easetagAvail.easetagAvailable === false ? (
+        <span className="text-destructive">Already taken</span>
+      ) : null
+    : null
 
   return (
     <div className="space-y-6">
@@ -332,8 +349,8 @@ export function SettingsBusinessTab() {
                 disabled={editingSection !== "business"}
               />
             </div>
-            <div className="min-w-0 space-y-1.5">
-              <div className="flex min-w-0 items-center justify-between gap-2">
+            <div className="relative min-w-0 space-y-1.5">
+              <div className="flex min-w-0 items-center gap-1.5">
                 <div className="flex min-w-0 items-center gap-1.5">
                   <Label htmlFor="businessEasetag" className="mb-0">
                     Easetag
@@ -356,23 +373,10 @@ export function SettingsBusinessTab() {
                   </TooltipProvider>
                 </div>
                 {editingSection === "business" ? (
-                  <div className="w-[10rem] shrink-0 text-right text-xs leading-tight text-balance break-words">
-                    {easetagDraftLen > 0 ? (
-                      easetagDraftLen < 4 ? (
-                        <span className="text-muted-foreground">Min 4 characters</span>
-                      ) : easetagAvail.checkingEasetag ? (
-                        <span className="text-muted-foreground">Checking…</span>
-                      ) : easetagAvail.easetagValidationError ? (
-                        <span className="line-clamp-2 text-destructive">{easetagAvail.easetagValidationError}</span>
-                      ) : easetagAvail.easetagAvailable === true ? (
-                        <span className="inline-flex items-center justify-end gap-1 text-primary">
-                          <Check className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                          Available
-                        </span>
-                      ) : easetagAvail.easetagAvailable === false ? (
-                        <span className="text-destructive">Already taken</span>
-                      ) : null
-                    ) : null}
+                  <div className="absolute right-0 top-0 w-[10rem] text-right text-xs leading-tight">
+                    <div className="flex min-h-5 items-center justify-end">
+                      {easetagStatus ? easetagStatus : <span className="invisible">Status</span>}
+                    </div>
                   </div>
                 ) : null}
               </div>
