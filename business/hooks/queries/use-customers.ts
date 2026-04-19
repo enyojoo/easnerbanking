@@ -12,8 +12,10 @@ export function useCustomersList() {
     queryKey: scope ? qk.customers.list(scope) : ["customers", "disabled"],
     enabled: Boolean(scope),
     queryFn: () => apiFetch<{ customers: Customer[] }>("/api/business/customers"),
-    staleTime: 60_000,
+    staleTime: 60 * 60_000,
     gcTime: 60 * 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     select: (d) => d.customers ?? [],
     meta: { safePersist: true, freshness: "operational" },
   })

@@ -14,6 +14,7 @@ import { COMMUNICATION_PREFERENCES_DISCLAIMER, DEFAULT_COMMUNICATION_PREFERENCES
 import { toast } from "sonner"
 
 const COMMUNICATION_SETTINGS_TTL_MS = 60 * 60 * 1000
+const COMMUNICATION_SETTINGS_PERSIST_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 
 export function SettingsCommunicationTab() {
   const { user, isLoading: authLoading } = useAuth()
@@ -29,7 +30,7 @@ export function SettingsCommunicationTab() {
     persistKey: user?.id ? `communication_preferences_${user.id}` : undefined,
     initialData: DEFAULT_COMMUNICATION_PREFERENCES,
     ttlMs: COMMUNICATION_SETTINGS_TTL_MS,
-    persistMaxAgeMs: COMMUNICATION_SETTINGS_TTL_MS,
+    persistMaxAgeMs: COMMUNICATION_SETTINGS_PERSIST_MAX_AGE_MS,
     fetcher: useCallback(async () => {
       const res = await fetchWithSession("/api/settings/communication")
       if (!res.ok) {

@@ -119,6 +119,7 @@ export async function updateBusinessProfile(payload: {
 export function useBusinessProfile() {
   const { user } = useAuth()
   const PROFILE_CACHE_TTL_MS = 60 * 60 * 1000
+  const PROFILE_PERSIST_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
   const cacheKey = user?.id ? CACHE_KEYS.BUSINESS_PROFILE(user.id) : null
   const { data: profileData, setData, loading: isLoading } = useCachedData<BusinessProfile>({
     enabled: Boolean(user?.id),
@@ -126,7 +127,7 @@ export function useBusinessProfile() {
     persistKey: user?.id ? `business_profile_cache_${user.id}` : undefined,
     initialData: DEFAULT_PROFILE,
     ttlMs: PROFILE_CACHE_TTL_MS,
-    persistMaxAgeMs: PROFILE_CACHE_TTL_MS,
+    persistMaxAgeMs: PROFILE_PERSIST_MAX_AGE_MS,
     fetcher: async () => {
       const res = await fetchWithSession("/api/business/profile")
       if (!res.ok) throw new Error("Failed to load profile")
