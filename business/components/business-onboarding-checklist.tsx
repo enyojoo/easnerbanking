@@ -30,6 +30,22 @@ function isSnapshotBalances(v: unknown): v is SnapshotBalances {
   return typeof o.USD === "string" && typeof o.EUR === "string"
 }
 
+function readTerminalPayoutIdFromLocalStorage(userId: string): string | null | undefined {
+  try {
+    const raw = localStorage.getItem(`terminal_payout_setup_${userId}`)
+    if (!raw) return undefined
+    const wrap = JSON.parse(raw) as { data?: unknown }
+    const data = wrap.data
+    if (!data || typeof data !== "object") return undefined
+    const defaultTerminalPayoutId = (data as Record<string, unknown>).defaultTerminalPayoutId
+    if (typeof defaultTerminalPayoutId === "string") return defaultTerminalPayoutId
+    if (defaultTerminalPayoutId === null) return null
+    return undefined
+  } catch {
+    return undefined
+  }
+}
+
 function readSnapshotBalancesFromLocalStorage(userId: string): SnapshotBalances | null {
   try {
     const raw = localStorage.getItem(businessNoahAccountsPersistKey(userId))
@@ -136,6 +152,11 @@ export function BusinessOnboardingChecklist() {
     const d = dataCache.get<TerminalPayoutSetupData>(CACHE_KEYS.TERMINAL_PAYOUT_SETUP(userId))
     if (d != null) {
       setTerminalPayoutId(d.defaultTerminalPayoutId)
+      return
+    }
+    const persistedDefaultId = readTerminalPayoutIdFromLocalStorage(userId)
+    if (persistedDefaultId !== undefined) {
+      setTerminalPayoutId(persistedDefaultId)
     }
   }, [userId])
 
@@ -148,7 +169,8 @@ export function BusinessOnboardingChecklist() {
       const data = await fetchTerminalPayoutSetup()
       setTerminalPayoutId(data.defaultTerminalPayoutId)
     } catch {
-      setTerminalPayoutId(null)
+      const persistedDefaultId = readTerminalPayoutIdFromLocalStorage(userId)
+      setTerminalPayoutId(persistedDefaultId ?? null)
     }
   }, [userId])
 
