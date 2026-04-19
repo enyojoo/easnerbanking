@@ -294,9 +294,9 @@ export function SettingsTeamTab() {
           <DialogHeader>
             <DialogTitle>Invite Team Members</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+          <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-1">
             {inviteRows.map((row, idx) => (
-              <div key={`invite-${idx}`} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+              <div key={`invite-${idx}`} className="grid grid-cols-1 gap-3 py-1 md:grid-cols-12 md:items-end">
                 <div className="md:col-span-4">
                   <Input
                     placeholder="Full name"
