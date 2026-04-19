@@ -17,11 +17,18 @@ const sizeClasses = {
 
 export function BusinessLogo({ size = "md", href = "/", className = "" }: BusinessLogoProps) {
   const img = (
-    <img
-      src={BRAND.logoBusiness}
-      alt="Easner Business"
-      className={`w-auto object-contain ${sizeClasses[size]} ${className}`}
-    />
+    <>
+      <img
+        src={BRAND.logoBusinessLight}
+        alt="Easner Business"
+        className={`w-auto object-contain dark:hidden ${sizeClasses[size]} ${className}`}
+      />
+      <img
+        src={BRAND.logoBusinessDark}
+        alt="Easner Business"
+        className={`hidden w-auto object-contain dark:block ${sizeClasses[size]} ${className}`}
+      />
+    </>
   )
 
   if (href) {

@@ -47,11 +47,18 @@ export function PayShell({ children }: { children: React.ReactNode }) {
                   rel="noopener noreferrer"
                   className="inline-flex items-center"
                 >
-                  <img
-                    src={BRAND.logoBusiness}
-                    alt="Easner Business"
-                    className="h-5 w-auto object-contain sm:h-6"
-                  />
+                  <>
+                    <img
+                      src={BRAND.logoBusinessLight}
+                      alt="Easner Business"
+                      className="h-5 w-auto object-contain dark:hidden sm:h-6"
+                    />
+                    <img
+                      src={BRAND.logoBusinessDark}
+                      alt="Easner Business"
+                      className="hidden h-5 w-auto object-contain dark:block sm:h-6"
+                    />
+                  </>
                 </a>
               </div>
               {user ? (

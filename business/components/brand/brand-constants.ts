@@ -3,7 +3,9 @@ const SUPABASE_BRAND = "https://seeqjiebmrnolcyydewj.supabase.co/storage/v1/obje
 export const BRAND = {
   name: "Easner",
   /** Full Easner Business logo (icon + Easner + Business) - used in auth, invoice view, sidebar */
-  logoBusiness: `${SUPABASE_BRAND}/Easner%20Business.svg`,
+  logoBusiness: "https://kixymrjsupzkxokujmwu.supabase.co/storage/v1/object/public/brand/Easner%20Businessblk.svg",
+  logoBusinessLight: "https://kixymrjsupzkxokujmwu.supabase.co/storage/v1/object/public/brand/Easner%20Businessblk.svg",
+  logoBusinessDark: "https://kixymrjsupzkxokujmwu.supabase.co/storage/v1/object/public/brand/Easner%20Businesswhite.svg",
   logo: `${SUPABASE_BRAND}/Easner%20Logo.svg`,
   /** Icon-only asset for card design (matches mobile) */
   icon: "/easner-icon.png",
