@@ -2,15 +2,7 @@ import type React from "react"
 import type { Metadata, Viewport } from "next"
 import { GeistSans } from "geist/font/sans"
 import { GeistMono } from "geist/font/mono"
-import { Playfair_Display } from "next/font/google"
 import { Toaster } from "@/components/ui/sonner"
-
-const playfair = Playfair_Display({
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-playfair",
-  weight: ["400", "500", "600", "700"],
-})
 import { ClientAuthProvider } from "@/components/client-auth-provider"
 import { ChunkLoadErrorHandler } from "@/components/chunk-load-error-handler"
 import { PostHogProvider } from "@/components/posthog-provider"
@@ -53,7 +45,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`font-sans ${GeistSans.variable} ${GeistMono.variable} ${playfair.variable}`}
+        className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}
         suppressHydrationWarning
       >
         <ChunkLoadErrorHandler />

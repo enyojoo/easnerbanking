@@ -1,7 +1,7 @@
 import { IconEurope } from "nucleo-flags"
 import type { IconProps } from "nucleo-flags"
 import { cn } from "../utils/cn"
-import { countryFlagIconByIso } from "./country-flag-icons"
+import { countryFlagIconByIso, type NucleoFlagComponent } from "./country-flag-icons"
 
 export type CountryFlagProps = IconProps & {
   /** ISO 3166-1 alpha-2 */
@@ -199,8 +199,9 @@ export type CurrencyFlagProps = Omit<IconProps, "ref"> & {
 export function CurrencyFlag({ currency, size = 24, className, fallbackSvg, title, ...rest }: CurrencyFlagProps) {
   const code = currency.trim().toUpperCase()
   if (code === "EUR") {
+    const EuropeIcon = IconEurope as unknown as NucleoFlagComponent
     return (
-      <IconEurope
+      <EuropeIcon
         size={size}
         className={cn("shrink-0 overflow-hidden rounded-sm", className)}
         title={title ?? "EUR"}

@@ -1,5 +1,5 @@
 /** Auto-built from business/lib/countries.ts + office/lib/country-service.ts — do not edit by hand */
-import type { FC } from "react"
+import type { ReactElement } from "react"
 import type { IconProps } from "nucleo-flags"
 import {
   IconAfghanistan,
@@ -206,9 +206,9 @@ import {
   IconZimbabwe,
 } from "nucleo-flags"
 
-export type NucleoFlagComponent = FC<IconProps>
+export type NucleoFlagComponent = (props: IconProps) => ReactElement | null
 
-export const countryFlagIconByIso: Record<string, NucleoFlagComponent> = {
+const countryFlagIconByIsoRaw = {
   AD: IconAndorra,
   AE: IconUnitedArabEmirates,
   AF: IconAfghanistan,
@@ -413,3 +413,4 @@ export const countryFlagIconByIso: Record<string, NucleoFlagComponent> = {
   ZW: IconZimbabwe,
 }
 
+export const countryFlagIconByIso = countryFlagIconByIsoRaw as unknown as Record<string, NucleoFlagComponent>
