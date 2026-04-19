@@ -5,6 +5,7 @@ import { Playfair_Display } from "next/font/google"
 import { AuthProvider } from "@/lib/auth-context"
 import { ProtectedRouteWrapper } from "@/components/auth/protected-route-wrapper"
 import { ThemeProvider } from "@/components/theme-provider"
+import { DesktopMinViewportGate } from "@/components/layout/desktop-min-viewport-gate"
 import "./globals.css"
 
 const playfair = Playfair_Display({
@@ -43,7 +44,9 @@ export default function RootLayout({
             disableTransitionOnChange
             storageKey="easner-office-theme"
           >
-            <ProtectedRouteWrapper>{children}</ProtectedRouteWrapper>
+            <DesktopMinViewportGate product="office">
+              <ProtectedRouteWrapper>{children}</ProtectedRouteWrapper>
+            </DesktopMinViewportGate>
           </ThemeProvider>
         </AuthProvider>
       </body>
