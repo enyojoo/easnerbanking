@@ -312,16 +312,6 @@
     background: transparent;
   }
 
-  [data-slot="dialog-content"]::-webkit-scrollbar-track-piece:start,
-  [data-slot="dialog-content"] *::-webkit-scrollbar-track-piece:start {
-    margin-top: 0.85rem;
-  }
-
-  [data-slot="dialog-content"]::-webkit-scrollbar-track-piece:end,
-  [data-slot="dialog-content"] *::-webkit-scrollbar-track-piece:end {
-    margin-bottom: 0.85rem;
-  }
-
   [data-slot="dialog-content"]::-webkit-scrollbar-thumb,
   [data-slot="dialog-content"] *::-webkit-scrollbar-thumb {
     border: 2px solid transparent;
