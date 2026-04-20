@@ -170,7 +170,8 @@ export default function InvoiceDetailPage() {
   const updateInvoiceMut = useUpdateInvoice()
   const { data: ledgerRows } = useTransactionsCached()
   const invoice = invoiceDetailQuery.data
-  const invoicesLoading = invoiceDetailQuery.isPending
+  /** Avoid full-page spinner when list cache seeds detail via `placeholderData`. */
+  const invoicesLoading = invoiceDetailQuery.isPending && !invoice
 
   const updateInvoice = (id: string, updates: Partial<Invoice>) => {
     void updateInvoiceMut.mutate({ id, updates })

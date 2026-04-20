@@ -36,7 +36,11 @@ import {
 } from "@/components/ui/alert-dialog"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { useQueryClient } from "@tanstack/react-query"
+import { qk } from "@easner/shared"
 import { formatDate, formatCurrency } from "@/lib/utils"
+import { apiFetch } from "@/lib/query/api-client"
+import { useScope } from "@/lib/query/scope"
 import { useInvoicesList } from "@/hooks/queries/use-invoices"
 import { useAddInvoice, useUpdateInvoice, useDeleteInvoice } from "@/hooks/mutations/use-invoices"
 import { formatInvoiceNumberFromClientId, generateInvoiceId } from "@/lib/invoice-id"
@@ -57,6 +61,8 @@ export default function InvoicesPage() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const queryClient = useQueryClient()
+  const { scope } = useScope()
   const listHere = currentLocationPath(pathname, searchParams)
   const profile = useBusinessProfile()
   const { tier1Complete } = profile
@@ -95,6 +101,15 @@ export default function InvoicesPage() {
     } catch {
       return false
     }
+  }
+
+  const prefetchInvoiceDetail = (id: string) => {
+    if (!scope) return
+    void queryClient.prefetchQuery({
+      queryKey: qk.invoices.detail(scope, id),
+      queryFn: () => apiFetch<Invoice>(`/api/business/b2b/invoices/${id}`),
+      staleTime: 60_000,
+    })
   }
   const [activeTab, setActiveTab] = useState("all")
 
@@ -366,6 +381,7 @@ export default function InvoicesPage() {
                     <tr
                       key={invoice.id}
                       className="hover:bg-muted/50 cursor-pointer"
+                      onMouseEnter={() => prefetchInvoiceDetail(invoice.id)}
                       onClick={() => router.push(withReturnTo(`/invoices/${invoice.id}`, listHere))}
                     >
                       <td className="p-4 align-middle min-w-0">
