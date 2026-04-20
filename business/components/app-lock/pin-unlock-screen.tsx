@@ -99,7 +99,6 @@ export function PinUnlockScreen({
           shake={shake}
           disabled={busy || lock.lockedOut}
         />
-        {busy ? <p className="text-center text-sm text-muted-foreground">{appPinStrings.lockVerifying}</p> : null}
         <p className="pt-6 text-center text-sm text-muted-foreground">
           {appPinStrings.lockNotYourAccount}{" "}
           <button type="button" className="font-medium text-primary underline underline-offset-2" onClick={() => void onLogout()}>

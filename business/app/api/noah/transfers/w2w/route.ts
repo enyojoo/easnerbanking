@@ -6,6 +6,8 @@ import { normalizeEasetag } from "@/lib/easetag-validation"
 import { isUndefinedEasetagColumnError } from "@/lib/easetag-global"
 import { getNoahWalletTransferPath } from "@/lib/noah/config"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
+import { pickTxAmountAndCurrency } from "@/lib/noah/map-transactions"
+import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 
 /**
  * Wallet-to-wallet (Easetag P2P): resolve payee Easetag → Noah wallet id, then POST Noah internal transfer.
@@ -142,6 +144,30 @@ export async function POST(request: Request) {
         path,
         json,
       })
+      const admin = createSupabaseAdmin()
+      const txId = String(tx.ID ?? tx.id ?? "").trim()
+      if (txId) {
+        const { amount: txAmount, currency: txCurrency } = pickTxAmountAndCurrency(tx)
+        await upsertLedgerTransaction(admin, {
+          userId: ctx.subjectUserId,
+          businessId: ctx.subjectBusinessId,
+          provider: "noah",
+          providerTransactionId: txId,
+          status: String(tx.Status ?? "pending").toLowerCase(),
+          amount: txAmount || amount,
+          currency: txCurrency || currency.toUpperCase(),
+          direction: "out",
+          payload: tx,
+          metadata: { source: "api_noah_transfers_w2w", destinationEasetag: payeeEasetagResolved },
+          txHash: String(tx.TxHash ?? tx.TransactionHash ?? "").trim() || null,
+          occurredAt: String(tx.Created ?? tx.Updated ?? new Date().toISOString()),
+          settledAt:
+            String(tx.Status ?? "").toLowerCase() === "settled"
+              ? String(tx.Updated ?? tx.Created ?? new Date().toISOString())
+              : null,
+          baseCurrency: txCurrency || currency.toUpperCase(),
+        })
+      }
       return NextResponse.json({ ok: true, path, transaction: tx })
     } catch (e) {
       lastErr = e instanceof Error ? e.message : String(e)

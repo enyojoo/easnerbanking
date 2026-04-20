@@ -4,6 +4,7 @@ import { requireOfficeAdmin } from "@/lib/api/admin-auth"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { parseEasnerNoahCustomerId } from "@/lib/noah/customer-id"
 import { pickTxAmountAndCurrency } from "@/lib/noah/map-transactions"
+import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 
 export async function POST(request: Request) {
   const auth = await requireOfficeAdmin(request)
@@ -49,22 +50,22 @@ export async function POST(request: Request) {
           }
 
           if (userId) {
-            const { error: txErr } = await admin.from("transactions").upsert(
-              {
-                user_id: userId,
-                business_id: businessId,
-                provider: "noah",
-                noah_transaction_id: id || null,
-                status,
-                amount,
-                currency,
-                direction,
-                payload: data,
-                metadata: { source: "replay_failed_webhook" },
-              },
-              { onConflict: "provider,noah_transaction_id" },
-            )
-            if (txErr) throw txErr
+            await upsertLedgerTransaction(admin, {
+              userId,
+              businessId,
+              provider: "noah",
+              providerTransactionId: id,
+              status,
+              amount,
+              currency,
+              direction,
+              payload: data,
+              metadata: { source: "replay_failed_webhook" },
+              occurredAt: String(data.Created ?? data.Updated ?? new Date().toISOString()),
+              settledAt: status === "settled" ? String(data.Updated ?? data.Created ?? new Date().toISOString()) : null,
+              txHash: String(data.TxHash ?? data.TransactionHash ?? "").trim() || null,
+              baseCurrency: currency,
+            })
           }
         }
       }

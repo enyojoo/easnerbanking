@@ -3,13 +3,59 @@ import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin
 import type { TransactionWithSource } from "@/lib/transactions"
 import { mapNoahTransactionToMobileItem } from "@/lib/noah/map-transactions"
 import { resolveLedgerListScope } from "@/lib/transactions-ledger-scope"
+import { displayEasnerTransactionId } from "@/lib/easner-transaction-id"
 
 const LEDGER_SELECT =
-  "id, status, amount, currency, direction, metadata, payload, noah_transaction_id, created_at, updated_at"
+  "id, easner_transaction_id, provider, provider_transaction_id, status, amount, currency, direction, metadata, payload, created_at, updated_at, occurred_at, settled_at, tx_hash, wallet_address, counterparty_address, asset, chain, base_currency, base_amount"
+
+function toProductTransactionLabel(input: {
+  provider: string
+  direction: "in" | "out"
+  metadata?: Record<string, unknown> | null
+}): string {
+  const provider = input.provider.toLowerCase()
+  const direction = input.direction
+  const collectionChannel = String(input.metadata?.collection_channel ?? "").toLowerCase()
+  const isStablecoin = provider === "turnkey" || collectionChannel === "autopayout"
+  if (isStablecoin) {
+    return direction === "in" ? "Stablecoin Deposit" : "Stablecoin Transfer"
+  }
+  return direction === "in" ? "Bank Deposit" : "Bank Transfer"
+}
+
+function deriveCounterpartyName(input: {
+  metadata?: Record<string, unknown> | null
+  payload?: Record<string, unknown> | null
+}): string | undefined {
+  const meta = input.metadata || {}
+  const payload = input.payload || {}
+  const candidates: unknown[] = [
+    meta.counterparty_name,
+    meta.recipient_name,
+    meta.sender_name,
+    meta.originator_name,
+    meta.beneficiary_name,
+    (meta.source as Record<string, unknown> | undefined)?.sender_name,
+    (meta.source as Record<string, unknown> | undefined)?.originator_name,
+    (meta.destination as Record<string, unknown> | undefined)?.recipient_name,
+    payload.counterpartyName,
+    payload.recipientName,
+    payload.senderName,
+    payload.originatorName,
+    (payload.source as Record<string, unknown> | undefined)?.sender_name,
+    (payload.source as Record<string, unknown> | undefined)?.originator_name,
+  ]
+  for (const value of candidates) {
+    const text = typeof value === "string" ? value.trim() : ""
+    if (text) return text
+  }
+  return undefined
+}
 
 function mapRowToBusinessTransaction(row: Record<string, unknown>): TransactionWithSource {
   const payload = row.payload as Record<string, unknown> | null | undefined
   const meta = row.metadata as Record<string, unknown> | null | undefined
+  const provider = String(row.provider ?? "noah").toLowerCase()
   const dirRaw = String(row.direction ?? "").toLowerCase()
   const direction = dirRaw === "in" ? "credit" : "debit"
   const st = String(row.status ?? "").toLowerCase()
@@ -20,26 +66,36 @@ function mapRowToBusinessTransaction(row: Record<string, unknown>): TransactionW
     : st === "unknown" ? "pending"
     : (st as "completed" | "pending" | "processing" | "failed")
 
-  const nameFromPayload =
-    payload && typeof payload === "object" ?
-      String(
-        (payload.FiatPayment as Record<string, unknown>)?.MerchantName ??
-          payload.MerchantName ??
-          payload.Network ??
-          "",
-      ).trim()
-    : ""
+  const description = toProductTransactionLabel({
+    provider,
+    direction: dirRaw === "in" ? "in" : "out",
+    metadata: meta,
+  })
 
-  const description =
-    nameFromPayload ||
-    (meta?.collection_channel === "autopayout" ? "Stablecoin QR Pay" : "Stablecoin activity")
-
-  const created = row.created_at != null ? String(row.created_at) : new Date().toISOString()
+  const created =
+    row.occurred_at != null ? String(row.occurred_at) : row.created_at != null ? String(row.created_at) : new Date().toISOString()
 
   const currencyCode = String(row.currency ?? "USD")
-  const noahId = row.noah_transaction_id != null ? String(row.noah_transaction_id) : undefined
+  const providerTxId = row.provider_transaction_id != null ? String(row.provider_transaction_id) : undefined
+  const easnerId = displayEasnerTransactionId({
+    easnerTransactionId: row.easner_transaction_id != null ? String(row.easner_transaction_id) : null,
+    metadata: meta,
+    providerTransactionId: providerTxId,
+    occurredAt: row.occurred_at != null ? String(row.occurred_at) : null,
+    createdAt: row.created_at != null ? String(row.created_at) : null,
+    fallbackId: row.id != null ? String(row.id) : null,
+  })
+  const paymentRail =
+    String(
+      meta?.payment_rail ??
+        meta?.source_payment_rail ??
+        meta?.destination_payment_rail ??
+        row.chain ??
+        "",
+    ).trim() || undefined
+  const counterpartyName = deriveCounterpartyName({ metadata: meta, payload })
   return {
-    id: String(row.id),
+    id: easnerId,
     type: "book" as const,
     amount: typeof row.amount === "number" ? row.amount : Number(row.amount) || 0,
     displayCurrency: currencyCode,
@@ -48,11 +104,23 @@ function mapRowToBusinessTransaction(row: Record<string, unknown>): TransactionW
     status,
     direction,
     source: "account" as const,
-    reference: noahId,
+    reference: easnerId,
+    transferId: providerTxId,
+    baseCurrency: row.base_currency != null ? String(row.base_currency) : undefined,
+    baseAmount: typeof row.base_amount === "number" ? row.base_amount : Number(row.base_amount) || undefined,
     collectionChannel:
       meta?.collection_channel != null ? String(meta.collection_channel) : undefined,
     autopayoutConfigId:
       meta?.autopayout_config_id != null ? String(meta.autopayout_config_id) : undefined,
+    paymentRail,
+    counterpartyName,
+    txHash: row.tx_hash != null ? String(row.tx_hash) : undefined,
+    walletAddress: row.wallet_address != null ? String(row.wallet_address) : undefined,
+    counterpartyAddress:
+      row.counterparty_address != null ? String(row.counterparty_address) : undefined,
+    asset: row.asset != null ? String(row.asset) : undefined,
+    chain: row.chain != null ? String(row.chain) : undefined,
+    settledAt: row.settled_at != null ? String(row.settled_at) : undefined,
   }
 }
 
@@ -70,13 +138,27 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
   const dirRaw = String(row.direction ?? "").toLowerCase()
   const transaction_type = dirRaw === "in" ? "receive" : "send"
   const st = mapNoahTxStatusFromLedger(String(row.status ?? ""))
-  const created = row.created_at != null ? String(row.created_at) : new Date().toISOString()
-  const noahId = row.noah_transaction_id != null ? String(row.noah_transaction_id) : ""
+  const created =
+    row.occurred_at != null ? String(row.occurred_at) : row.created_at != null ? String(row.created_at) : new Date().toISOString()
+  const providerTxId = row.provider_transaction_id != null ? String(row.provider_transaction_id) : ""
+  const meta = row.metadata as Record<string, unknown> | null | undefined
+  const easnerId = displayEasnerTransactionId({
+    easnerTransactionId: row.easner_transaction_id != null ? String(row.easner_transaction_id) : null,
+    metadata: meta,
+    providerTransactionId: providerTxId,
+    occurredAt: row.occurred_at != null ? String(row.occurred_at) : null,
+    createdAt: row.created_at != null ? String(row.created_at) : null,
+    fallbackId: row.id != null ? String(row.id) : null,
+  })
   const ledgerId = row.id != null ? String(row.id) : ""
-  const idForUi = noahId || ledgerId
+  const idForUi = easnerId || providerTxId || ledgerId
   const amount = typeof row.amount === "number" ? row.amount : Number(row.amount) || 0
   const currency = String(row.currency ?? "USD")
-  const name = transaction_type === "receive" ? "Bank Deposit" : "Sent"
+  const name = toProductTransactionLabel({
+    provider: String(row.provider ?? "noah"),
+    direction: dirRaw === "in" ? "in" : "out",
+    metadata: (row.metadata as Record<string, unknown> | null | undefined) ?? null,
+  })
   return {
     id: idForUi,
     transaction_id: idForUi,
@@ -119,7 +201,7 @@ export async function GET(request: Request) {
   let query = admin
     .from("transactions")
     .select(LEDGER_SELECT)
-    .eq("provider", "noah")
+    .order("occurred_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(limit)
 

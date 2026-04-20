@@ -212,17 +212,42 @@ export function TransactionReceiptPDFDocument({
     (transaction.direction === "credit" ? "+" : "-") +
     formatCurrency(Math.abs(transaction.amount), "USD")
 
+  const descriptionLower = transaction.description.toLowerCase()
+  const isStablecoin = descriptionLower.startsWith("stablecoin")
+  const isBank = descriptionLower.startsWith("bank")
+  const isCard = Boolean(cardLast4) || transaction.type === "card"
+  const partyLabel = transaction.direction === "credit" ? "Sender" : "Recipient"
+
   const rows: { label: string; value: string; valueStyle?: Style }[] = [
-    { label: "Merchant", value: transaction.description },
+    { label: "Transaction", value: transaction.description },
     { label: "Transaction ID", value: transaction.id },
-    { label: "Type", value: transaction.type.toUpperCase() },
-    {
-      label: cardLast4 ? "Card" : "Category",
-      value: cardLast4 ? `•••• ${cardLast4}` : transaction.category ?? "-",
-    },
   ]
 
-  if (transaction.reference) {
+  if (transaction.counterpartyName) {
+    rows.push({ label: partyLabel, value: transaction.counterpartyName })
+  }
+
+  if (isBank && transaction.paymentRail) {
+    rows.push({ label: "Payment Rail", value: transaction.paymentRail.toUpperCase() })
+  }
+
+  if (!isStablecoin && !isCard) {
+    rows.push({ label: "Type", value: transaction.type.toUpperCase() })
+  }
+
+  if (isCard) {
+    rows.push({
+      label: "Card",
+      value: cardLast4 ? `•••• ${cardLast4}` : "-",
+    })
+  } else if (transaction.category) {
+    rows.push({
+      label: "Category",
+      value: transaction.category,
+    })
+  }
+
+  if (!isStablecoin && transaction.reference) {
     rows.splice(2, 0, { label: "Reference", value: transaction.reference })
   }
   if (transaction.fee !== undefined && transaction.fee > 0) {

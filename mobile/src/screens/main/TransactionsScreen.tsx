@@ -396,12 +396,12 @@ function TransactionsContent({ navigation }: NavigationProps) {
       const params = new URLSearchParams()
       params.append('limit', '100')
 
-      // Try bridge transactions API first, fallback to combined transactions
-      let response = await apiGet(`/api/noah/transactions?${params.toString()}`)
+      // Try unified ledger first, fallback to Noah-only API.
+      let response = await apiGet(`/api/transactions?${params.toString()}`, {
+        headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
+      })
       if (!response.ok || (response as any).isNetworkError) {
-        response = await apiGet(`/api/transactions?${params.toString()}`, {
-          headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
-        })
+        response = await apiGet(`/api/noah/transactions?${params.toString()}`)
       }
       
       if (response.ok && !(response as any).isNetworkError) {

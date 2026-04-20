@@ -34,6 +34,10 @@ export function TransactionDetailsDialog({
   if (!transaction) return null
 
   const cardLast4 = transaction.cardLast4
+  const isStablecoin = transaction.description.toLowerCase().startsWith("stablecoin")
+  const isBank = transaction.description.toLowerCase().startsWith("bank")
+  const isCard = Boolean(cardLast4) || transaction.type === "card"
+  const partyLabel = transaction.direction === "credit" ? "Sender" : "Recipient"
 
   const handleCopy = async (text: string, key: string) => {
     try {
@@ -90,14 +94,14 @@ export function TransactionDetailsDialog({
           {/* Transaction Details Grid */}
           <div className="space-y-3">
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Merchant</span>
+              <span className="text-muted-foreground">Transaction</span>
               <span className="font-medium">{transaction.description}</span>
             </div>
 
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Transaction ID</span>
               <div className="flex items-center gap-2">
-                <span className="font-mono text-xs">{transaction.id}</span>
+                <span className="font-medium text-sm">{transaction.id}</span>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -113,7 +117,7 @@ export function TransactionDetailsDialog({
               </div>
             </div>
 
-            {transaction.reference && (
+            {!isStablecoin && transaction.reference && (
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Reference</span>
                 <div className="flex items-center gap-2">
@@ -134,14 +138,14 @@ export function TransactionDetailsDialog({
               </div>
             )}
 
-            {!hideType && (
+            {!hideType && !isStablecoin && (
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Type</span>
                 <span className="font-medium">{transaction.type.toUpperCase()}</span>
               </div>
             )}
 
-            {cardLast4 ? (
+            {isCard && cardLast4 ? (
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Card</span>
                 <span className="font-medium">•••• {cardLast4}</span>
@@ -150,6 +154,20 @@ export function TransactionDetailsDialog({
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Category</span>
                 <span className="font-medium">{transaction.category}</span>
+              </div>
+            ) : null}
+
+            {isBank && transaction.paymentRail ? (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Payment Rail</span>
+                <span className="font-medium">{transaction.paymentRail.toUpperCase()}</span>
+              </div>
+            ) : null}
+
+            {(isBank || isStablecoin || isCard) && transaction.counterpartyName ? (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">{partyLabel}</span>
+                <span className="font-medium">{transaction.counterpartyName}</span>
               </div>
             ) : null}
 

@@ -25,7 +25,7 @@ export function useTransactionsCached() {
 
   return {
     data: flattened,
-    loading: query.isPending,
+    loading: query.isPending && flattened.length === 0,
     error: query.error instanceof Error ? query.error.message : null,
     refetch: () => query.refetch(),
     isRefetching: query.isFetching,

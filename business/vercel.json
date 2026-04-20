@@ -5,6 +5,10 @@
     {
       "path": "/api/internal/wallet-provisioning/process",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/internal/fx-sync",
+      "schedule": "5 * * * *"
     }
   ]
 }

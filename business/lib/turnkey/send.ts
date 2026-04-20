@@ -1,0 +1,203 @@
+import type { SupabaseClient } from "@supabase/supabase-js"
+import { getTurnkeyApiClientForSubOrganization } from "@/lib/turnkey/client"
+import { resolveWalletOwnerIdForEasnerContext } from "@/lib/wallet/resolve-wallet-owner"
+import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
+import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
+
+export type TurnkeySendInput = {
+  ctx: NoahAccountContext
+  asset: "USDC" | "EURC"
+  chain: "solana"
+  destinationAddress: string
+  amount: number
+}
+
+type TurnkeyClientLike = Record<string, (...args: any[]) => Promise<any>>
+
+function mapAssetToCurrency(asset: "USDC" | "EURC"): "USD" | "EUR" {
+  return asset === "EURC" ? "EUR" : "USD"
+}
+
+async function resolveScopeOwner(admin: SupabaseClient, ctx: NoahAccountContext): Promise<{ userId: string; businessId: string | null }> {
+  if (ctx.scope === "business" && ctx.subjectBusinessId) {
+    const { data } = await admin
+      .from("users")
+      .select("id")
+      .eq("easner_business_id", ctx.subjectBusinessId)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    return { userId: String(data?.id || ctx.subjectUserId), businessId: ctx.subjectBusinessId }
+  }
+  return { userId: ctx.subjectUserId, businessId: null }
+}
+
+async function getSubOrgAndWallet(
+  admin: SupabaseClient,
+  ctx: NoahAccountContext,
+  asset: "USDC" | "EURC",
+): Promise<{ subOrgId: string; sourceAddress: string } | null> {
+  const ownerId = await resolveWalletOwnerIdForEasnerContext(admin, ctx)
+  if (!ownerId) return null
+
+  const { data: owner } = await admin
+    .from("wallet_owners")
+    .select("turnkey_sub_organization_id")
+    .eq("id", ownerId)
+    .maybeSingle()
+  const subOrgId = String(owner?.turnkey_sub_organization_id || "").trim()
+  if (!subOrgId) return null
+
+  const { data: wallet } = await admin
+    .from("wallet_accounts")
+    .select("address")
+    .eq("wallet_owner_id", ownerId)
+    .eq("status", "active")
+    .eq("chain", "solana")
+    .eq("asset", asset)
+    .limit(1)
+    .maybeSingle()
+  const sourceAddress = String(wallet?.address || "").trim()
+  if (!sourceAddress) return null
+
+  return { subOrgId, sourceAddress }
+}
+
+function parseTurnkeySendIds(response: Record<string, unknown>): {
+  providerTransactionId: string
+  providerEventId: string | null
+  txHash: string | null
+} {
+  const providerTransactionId = String(
+    response.sendTransactionStatusId ??
+      response.send_transaction_status_id ??
+      response.activityId ??
+      response.transactionId ??
+      response.id ??
+      "",
+  ).trim()
+  if (!providerTransactionId) {
+    throw new Error("Turnkey send did not return a transaction status id")
+  }
+  const providerEventId = String(response.eventId ?? response.requestId ?? "").trim() || null
+  const txHash =
+    String(response.signature ?? response.txHash ?? response.transactionHash ?? response.hash ?? "").trim() || null
+  return { providerTransactionId, providerEventId, txHash }
+}
+
+export async function createTurnkeySend(
+  admin: SupabaseClient,
+  input: TurnkeySendInput,
+): Promise<{ providerTransactionId: string; ledgerId: string; status: string }> {
+  const destinationAddress = String(input.destinationAddress || "").trim()
+  if (!destinationAddress) throw new Error("destinationAddress is required")
+  if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error("amount must be positive")
+
+  const scopeOwner = await resolveScopeOwner(admin, input.ctx)
+  const sender = await getSubOrgAndWallet(admin, input.ctx, input.asset)
+  if (!sender) throw new Error("No managed wallet found for requested asset")
+
+  const client = getTurnkeyApiClientForSubOrganization(sender.subOrgId) as TurnkeyClientLike | null
+  if (!client) throw new Error("Turnkey API client is not configured")
+  if (typeof client.solSendTransaction !== "function") {
+    throw new Error("Turnkey SDK does not expose solSendTransaction")
+  }
+
+  const sendRes = await client.solSendTransaction({
+    organizationId: sender.subOrgId,
+    sourceAddress: sender.sourceAddress,
+    destinationAddress,
+    amount: input.amount.toString(),
+    tokenSymbol: input.asset,
+    token: input.asset,
+  })
+  const parsed = parseTurnkeySendIds((sendRes || {}) as Record<string, unknown>)
+
+  await upsertLedgerTransaction(admin, {
+    userId: scopeOwner.userId,
+    businessId: scopeOwner.businessId,
+    provider: "turnkey",
+    providerTransactionId: parsed.providerTransactionId,
+    providerEventId: parsed.providerEventId,
+    status: "pending",
+    amount: input.amount,
+    amountMinor: Math.round(input.amount * 1_000_000),
+    currency: mapAssetToCurrency(input.asset),
+    direction: "out",
+    payload: (sendRes || {}) as Record<string, unknown>,
+    metadata: { source: "turnkey_send", turnkey_sub_org_id: sender.subOrgId },
+    txHash: parsed.txHash,
+    walletAddress: sender.sourceAddress,
+    counterpartyAddress: destinationAddress,
+    asset: input.asset,
+    chain: input.chain,
+    occurredAt: new Date().toISOString(),
+    baseCurrency: mapAssetToCurrency(input.asset),
+  })
+
+  try {
+    await reconcileTurnkeySendStatus(admin, {
+      subOrgId: sender.subOrgId,
+      providerTransactionId: parsed.providerTransactionId,
+    })
+  } catch {
+    // Best-effort reconciliation.
+  }
+
+  return { providerTransactionId: parsed.providerTransactionId, ledgerId: parsed.providerTransactionId, status: "pending" }
+}
+
+export async function reconcileTurnkeySendStatus(
+  admin: SupabaseClient,
+  params: { subOrgId: string; providerTransactionId: string },
+): Promise<{ status: "pending" | "settled" | "failed"; txHash: string | null }> {
+  const client = getTurnkeyApiClientForSubOrganization(params.subOrgId) as TurnkeyClientLike | null
+  if (!client) throw new Error("Turnkey API client is not configured")
+  if (typeof client.getSendTransactionStatus !== "function") {
+    return { status: "pending", txHash: null }
+  }
+  const res = await client.getSendTransactionStatus({
+    organizationId: params.subOrgId,
+    sendTransactionStatusId: params.providerTransactionId,
+  })
+  const statusRaw = String(
+    res?.status ?? res?.transactionStatus ?? res?.sendTransactionStatus ?? "",
+  ).toLowerCase()
+  const status =
+    statusRaw.includes("fail") || statusRaw.includes("revert")
+      ? "failed"
+      : statusRaw.includes("confirm") || statusRaw.includes("includ") || statusRaw.includes("complete")
+        ? "settled"
+        : "pending"
+  const txHash = String(res?.signature ?? res?.txHash ?? res?.transactionHash ?? "").trim() || null
+
+  const { data: existing } = await admin
+    .from("transactions")
+    .select("id, user_id, business_id, amount, currency, direction, wallet_address, counterparty_address, asset, chain")
+    .eq("provider", "turnkey")
+    .eq("provider_transaction_id", params.providerTransactionId)
+    .maybeSingle()
+  if (existing?.id) {
+    await upsertLedgerTransaction(admin, {
+      userId: String(existing.user_id),
+      businessId: existing.business_id ? String(existing.business_id) : null,
+      provider: "turnkey",
+      providerTransactionId: params.providerTransactionId,
+      status,
+      amount: Number(existing.amount ?? 0),
+      currency: String(existing.currency ?? "USD"),
+      direction: (String(existing.direction ?? "out").toLowerCase() === "in" ? "in" : "out"),
+      txHash,
+      walletAddress: existing.wallet_address ? String(existing.wallet_address) : null,
+      counterpartyAddress: existing.counterparty_address ? String(existing.counterparty_address) : null,
+      asset: existing.asset ? String(existing.asset) : null,
+      chain: existing.chain ? String(existing.chain) : null,
+      settledAt: status === "settled" ? new Date().toISOString() : null,
+      payload: (res || {}) as Record<string, unknown>,
+      metadata: { source: "turnkey_send_status" },
+      baseCurrency: String(existing.currency ?? "USD"),
+    })
+  }
+
+  return { status, txHash }
+}

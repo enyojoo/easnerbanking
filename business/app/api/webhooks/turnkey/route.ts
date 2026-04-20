@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { recordEventInbox, markEventInboxProcessed } from "@/lib/webhooks/event-inbox"
 import { verifyTurnkeyWebhookSignature } from "@/lib/turnkey/webhook-verify"
+import { applyTurnkeyWebhookSideEffects } from "@/lib/turnkey/chain-sync"
 
 export const runtime = "nodejs"
 
@@ -44,6 +45,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    await applyTurnkeyWebhookSideEffects(admin, p, eventId)
     await markEventInboxProcessed(admin, "turnkey", eventId, null)
     return NextResponse.json({ ok: true })
   } catch (e) {

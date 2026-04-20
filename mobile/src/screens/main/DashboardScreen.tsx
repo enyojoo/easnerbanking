@@ -200,16 +200,16 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
       const params = new URLSearchParams()
       params.append('limit', '5') // Only fetch 5 most recent for dashboard
 
-      let response = await apiGet(`/api/noah/transactions?${params.toString()}`)
+      let response = await apiGet(`/api/transactions?${params.toString()}`, {
+        headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
+      })
       let listBody: { transactions?: unknown[] } | null = null
       let fetchFailed = false
 
       if (response.ok && !(response as any).isNetworkError) {
         listBody = (await response.json().catch(() => ({}))) as { transactions?: unknown[] }
       } else {
-        const fallback = await apiGet(`/api/transactions?${params.toString()}`, {
-          headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
-        })
+        const fallback = await apiGet(`/api/noah/transactions?${params.toString()}`)
         if (fallback.ok && !(fallback as any).isNetworkError) {
           listBody = (await fallback.json().catch(() => ({}))) as { transactions?: unknown[] }
         } else if ((response as any).isNetworkError || (fallback as any).isNetworkError) {

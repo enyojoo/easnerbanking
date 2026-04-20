@@ -49,6 +49,7 @@ interface LedgerTransaction {
   receipt_trace_number?: string
   receipt_imad?: string
   receipt_destination_tx_hash?: string
+  tx_hash?: string
   receipt_final_amount?: number
   reference?: string
   metadata?: any
@@ -113,12 +114,12 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
       }
       setError(null)
 
-      // Try bridge transactions API first
-      let response = await apiGet(`/api/noah/transactions/${transactionId}`)
+      // Try unified ledger first, fallback to Noah-only API.
+      let response = await apiGet(`/api/transactions/${encodeURIComponent(transactionId)}`, {
+        headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
+      })
       if (!response.ok || (response as any).isNetworkError) {
-        response = await apiGet(`/api/transactions/${encodeURIComponent(transactionId)}`, {
-          headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
-        })
+        response = await apiGet(`/api/noah/transactions/${transactionId}`)
       }
 
       if (response.ok && !(response as any).isNetworkError) {
@@ -268,6 +269,13 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
       }
     }
     return getTransactionName()
+  }
+
+  const getMetadataString = (key: string): string | undefined => {
+    const value = transaction?.metadata?.[key]
+    if (typeof value !== 'string') return undefined
+    const trimmed = value.trim()
+    return trimmed || undefined
   }
 
   const getStatusInfo = (status: string) => {
@@ -635,12 +643,14 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                 </View>
 
                 {/* Type - always shown */}
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Type</Text>
-                  <Text style={styles.summaryValue}>
-                    {getTransactionTypeDisplay()}
-                  </Text>
-                </View>
+                {transaction.source_type !== 'liquidation_address' && (
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>Type</Text>
+                    <Text style={styles.summaryValue}>
+                      {getTransactionTypeDisplay()}
+                    </Text>
+                  </View>
+                )}
 
                 {/* For ACH/Wire deposits (virtual account) */}
                 {transaction.transaction_type === 'receive' && transaction.source_type === 'virtual_account' && (
@@ -703,6 +713,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                         {formatTimestamp(transaction.noah_created_at || transaction.created_at)}
                       </Text>
                     </View>
+
                   </>
                 )}
 
@@ -727,6 +738,13 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                       </View>
                     )}
 
+                    {transaction.recipient_name && (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Recipient</Text>
+                        <Text style={styles.summaryValue}>{transaction.recipient_name}</Text>
+                      </View>
+                    )}
+
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>Created</Text>
                       <Text style={styles.summaryValue}>
@@ -734,12 +752,6 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                       </Text>
                     </View>
 
-                    {transaction.completed_at && (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Completed</Text>
-                        <Text style={styles.summaryValue}>{formatTimestamp(transaction.completed_at)}</Text>
-                      </View>
-                    )}
                   </>
                 )}
               </View>

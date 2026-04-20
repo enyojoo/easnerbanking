@@ -72,7 +72,10 @@ export default function AccountsPage() {
                     <p className="mb-1 text-xs text-muted-foreground">Available Balance</p>
                     <p className="text-3xl font-semibold">
                       {getCurrencySymbol(account.currency)}
-                      {account.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                      {account.balance.toLocaleString("en-US", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
                     </p>
                   </div>
                 </div>

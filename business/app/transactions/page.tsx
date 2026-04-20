@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { useTransactionsCached } from "@/hooks/use-transactions-cached"
 import { useBusinessProfile } from "@/lib/use-business-profile"
+import { useFxRates } from "@/hooks/queries"
 
 function exportToCsv(
   transactions: {
@@ -76,6 +77,7 @@ export default function TransactionsPage() {
     to: undefined,
   })
   const [displayCount, setDisplayCount] = useState(10)
+  const { data: fxRates = [] } = useFxRates()
 
   useEffect(() => {
     const status = searchParams.get("status")
@@ -121,20 +123,40 @@ export default function TransactionsPage() {
   const displayedTransactions = filteredTransactions.slice(0, displayCount)
   const hasMore = displayCount < filteredTransactions.length
 
-  const totalsCurrency =
-    filteredTransactions.length === 0 ? null
-    : [...new Set(filteredTransactions.map((t) => t.displayCurrency || "USD"))].length === 1 ?
-      (filteredTransactions[0]!.displayCurrency || "USD")
-    : null
+  const getFxRate = (from: string, to: string): number | null => {
+    const f = from.toUpperCase()
+    const t = to.toUpperCase()
+    if (f === t) return 1
+    const direct = fxRates.find((r) => r.from_currency === f && r.to_currency === t)?.rate
+    if (direct && Number.isFinite(direct) && direct > 0) return direct
+    const inverse = fxRates.find((r) => r.from_currency === t && r.to_currency === f)?.rate
+    if (inverse && Number.isFinite(inverse) && inverse > 0) return 1 / inverse
+    return null
+  }
+
+  const amountInBase = (t: TransactionWithSource): number => {
+    if (
+      typeof t.baseAmount === "number" &&
+      Number.isFinite(t.baseAmount) &&
+      String(t.baseCurrency || "").toUpperCase() === baseCurrencyCode
+    ) {
+      return Math.abs(t.baseAmount)
+    }
+    const fromCurrency = String(t.displayCurrency || "USD").toUpperCase()
+    if (fromCurrency === baseCurrencyCode) return Math.abs(t.amount)
+    const rate = getFxRate(fromCurrency, baseCurrencyCode)
+    if (!rate) return Math.abs(t.amount)
+    return Math.abs(t.amount) * rate
+  }
 
   const totalCredit = filteredTransactions
     .filter((t) => t.direction === "credit")
-    .reduce((sum, t) => sum + Math.abs(t.amount), 0)
+    .reduce((sum, t) => sum + amountInBase(t), 0)
   const totalDebit = filteredTransactions
     .filter((t) => t.direction === "debit")
-    .reduce((sum, t) => sum + Math.abs(t.amount), 0)
+    .reduce((sum, t) => sum + amountInBase(t), 0)
 
-  const summaryCurrency = totalsCurrency ?? baseCurrencyCode
+  const summaryCurrency = baseCurrencyCode
 
   const handleFilterChange = (setter: (value: string) => void) => (value: string) => {
     setter(value)
@@ -158,7 +180,7 @@ export default function TransactionsPage() {
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Transactions</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Stablecoin and bank activity for your business.
+            Incoming and outgoing account activity for your business.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -211,11 +233,6 @@ export default function TransactionsPage() {
               <p className="text-3xl font-semibold tracking-tight tabular-nums text-primary">
                 +{formatCurrency(totalCredit, summaryCurrency)}
               </p>
-              {!totalsCurrency && filteredTransactions.length > 0 ?
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Mixed currencies (totals shown in {baseCurrencyCode})
-                </p>
-              : null}
             </div>
             <div className="text-center">
               <div className="flex items-center justify-center gap-2 mb-2">
@@ -232,9 +249,7 @@ export default function TransactionsPage() {
 
       <Card>
         <CardContent className="p-0">
-          {listLoading ?
-            <div className="py-12 text-center text-sm text-muted-foreground">Loading transactions…</div>
-          : filteredTransactions.length === 0 ?
+          {filteredTransactions.length === 0 ?
             <div className="py-12 text-center">
               <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center mx-auto mb-4">
                 <DollarSign className="h-6 w-6 text-muted-foreground" />
@@ -268,9 +283,13 @@ export default function TransactionsPage() {
                         <div className="min-w-0">
                           <p className="text-sm font-medium truncate">{txn.description}</p>
                           <p className="text-xs text-muted-foreground truncate">
-                            {txn.type.toUpperCase()} • Account • {new Date(txn.date).toLocaleDateString()} •{" "}
+                            {new Date(txn.date).toLocaleDateString("en-US", {
+                              month: "long",
+                              day: "numeric",
+                              year: "numeric",
+                            })}{" "}
+                            •{" "}
                             {txn.status.charAt(0).toUpperCase() + txn.status.slice(1)}
-                            {txn.collectionChannel === "autopayout" ? " • QR Pay" : ""}
                           </p>
                         </div>
                       </div>

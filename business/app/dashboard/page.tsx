@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import {
   ArrowDownLeft,
@@ -26,10 +26,13 @@ import {
   useBusinessAccountRows,
   parseBalanceString,
 } from "@/hooks/use-business-account-rows"
+import { useFxRates } from "@/hooks/queries"
 
 export default function DashboardPage() {
-  const { data: rows, loading: listLoading } = useTransactionsCached()
+  const { data: rows } = useTransactionsCached()
   const { balances, baseCurrency } = useBusinessAccountRows()
+  const { data: fxRates = [] } = useFxRates()
+  const [stablePrimaryBalance, setStablePrimaryBalance] = useState<number | null>(null)
 
   const [selectedTransaction, setSelectedTransaction] = useState<TransactionWithSource | null>(null)
   const [transactionDetailsOpen, setTransactionDetailsOpen] = useState(false)
@@ -51,19 +54,46 @@ export default function DashboardPage() {
     })
   }, [rows, start, end])
 
-  const totalsCurrency =
-    filteredTransactions.length === 0 ?
-      null
-    : [...new Set(filteredTransactions.map((t) => t.displayCurrency || "USD"))].length === 1 ?
-      (filteredTransactions[0]!.displayCurrency || "USD")
-    : null
+  const getFxRate = (from: string, to: string): number | null => {
+    const f = from.toUpperCase()
+    const t = to.toUpperCase()
+    if (f === t) return 1
+    const direct = fxRates.find((r) => r.from_currency === f && r.to_currency === t)?.rate
+    if (direct && Number.isFinite(direct) && direct > 0) return direct
+    const inverse = fxRates.find((r) => r.from_currency === t && r.to_currency === f)?.rate
+    if (inverse && Number.isFinite(inverse) && inverse > 0) return 1 / inverse
+    return null
+  }
+
+  const toBaseAmount = (amountAbs: number, currency: string, targetBase: string): number | null => {
+    const c = currency.toUpperCase()
+    const b = targetBase.toUpperCase()
+    if (c === b) return amountAbs
+    const rate = getFxRate(c, b)
+    if (!rate) return null
+    return amountAbs * rate
+  }
+
+  const amountInBase = (t: TransactionWithSource, targetBase: string): number => {
+    const absAmount = Math.abs(t.amount)
+    if (
+      typeof t.baseAmount === "number" &&
+      Number.isFinite(t.baseAmount) &&
+      String(t.baseCurrency || "").toUpperCase() === targetBase.toUpperCase()
+    ) {
+      return Math.abs(t.baseAmount)
+    }
+    const converted = toBaseAmount(absAmount, t.displayCurrency || "USD", targetBase)
+    if (converted != null) return converted
+    return absAmount
+  }
 
   const moneyIn = filteredTransactions
     .filter((t) => t.direction === "credit")
-    .reduce((sum, t) => sum + Math.abs(t.amount), 0)
+    .reduce((sum, t) => sum + amountInBase(t, baseCurrency), 0)
   const moneyOut = filteredTransactions
     .filter((t) => t.direction === "debit")
-    .reduce((sum, t) => sum + Math.abs(t.amount), 0)
+    .reduce((sum, t) => sum + amountInBase(t, baseCurrency), 0)
 
   const recentTransactions = useMemo(() => {
     return [...rows].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 6)
@@ -72,11 +102,34 @@ export default function DashboardPage() {
   const usdBal = parseBalanceString(balances.USD)
   const eurBal = parseBalanceString(balances.EUR)
   const code = baseCurrency
-  const primaryBalanceAmount =
-    code === "EUR" ? eurBal
-    : code === "USD" ? usdBal
-    : 0
-  const summaryCurrency = totalsCurrency ?? code
+  const usdInBase = toBaseAmount(usdBal, "USD", code)
+  const eurInBase = toBaseAmount(eurBal, "EUR", code)
+  const computedPrimaryBalance =
+    usdInBase != null && eurInBase != null ? usdInBase + eurInBase
+    : null
+  const summaryCurrency = code
+
+  useEffect(() => {
+    const cacheKey = `easner_primary_balance_${code}`
+    if (computedPrimaryBalance != null && Number.isFinite(computedPrimaryBalance)) {
+      setStablePrimaryBalance(computedPrimaryBalance)
+      try {
+        window.localStorage.setItem(cacheKey, String(computedPrimaryBalance))
+      } catch {
+        // ignore quota
+      }
+      return
+    }
+    try {
+      const raw = window.localStorage.getItem(cacheKey)
+      const cached = raw != null ? Number(raw) : Number.NaN
+      if (Number.isFinite(cached)) {
+        setStablePrimaryBalance(cached)
+      }
+    } catch {
+      // ignore read errors
+    }
+  }, [computedPrimaryBalance, code])
 
   return (
     <div className="space-y-8">
@@ -108,7 +161,7 @@ export default function DashboardPage() {
                       )}
                     >
                       {balancesVisible ?
-                        formatCurrency(primaryBalanceAmount, code)
+                        stablePrimaryBalance == null ? "—" : formatCurrency(stablePrimaryBalance, code)
                       : MASK}
                     </span>
                   </span>
@@ -167,11 +220,6 @@ export default function DashboardPage() {
                       : MASK}
                     </span>
                   </p>
-                  {!totalsCurrency && filteredTransactions.length > 0 && balancesVisible ?
-                    <p className="text-[10px] text-muted-foreground mt-0.5">
-                      Mixed currencies (totals shown in {code})
-                    </p>
-                  : null}
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -215,9 +263,7 @@ export default function DashboardPage() {
         </div>
         <Card>
           <CardContent className="p-0">
-            {listLoading ?
-              <div className="py-8 text-center text-sm text-muted-foreground">Loading activity…</div>
-            : recentTransactions.length === 0 ?
+            {recentTransactions.length === 0 ?
               <div className="py-8 text-center text-sm text-muted-foreground">No transactions yet</div>
             : <div className="divide-y">
                 {recentTransactions.map((txn) => {
@@ -248,7 +294,12 @@ export default function DashboardPage() {
                           <div className="min-w-0">
                             <p className="text-sm font-medium truncate">{txn.description}</p>
                             <p className="text-xs text-muted-foreground truncate">
-                              {txn.type.toUpperCase()} • {new Date(txn.date).toLocaleDateString()} •{" "}
+                              {new Date(txn.date).toLocaleDateString("en-US", {
+                                month: "long",
+                                day: "numeric",
+                                year: "numeric",
+                              })}{" "}
+                              •{" "}
                               {txn.status.charAt(0).toUpperCase() + txn.status.slice(1)}
                             </p>
                           </div>

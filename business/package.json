@@ -7,7 +7,8 @@
     "build": "next build --webpack",
     "dev": "NODE_OPTIONS='--max-http-header-size=1048576' next dev --port 3000 --turbo",
     "lint": "eslint .",
-    "start": "NODE_OPTIONS='--max-http-header-size=1048576' next start"
+    "start": "NODE_OPTIONS='--max-http-header-size=1048576' next start",
+    "test": "vitest run"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -40,6 +41,8 @@
     "@radix-ui/react-tooltip": "^1.1.6",
     "@react-pdf/renderer": "^4.3.2",
     "@sendgrid/mail": "^8.1.6",
+    "@solana/spl-token": "^0.4.14",
+    "@solana/web3.js": "^1.98.4",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.57.2",
     "@tanstack/react-query": "^5.99.1",
@@ -87,6 +90,7 @@
     "postcss": "^8.5",
     "tailwindcss": "^4.1.9",
     "tw-animate-css": "1.3.3",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.4"
   }
 }

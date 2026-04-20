@@ -6,6 +6,7 @@ import { mapNoahVerificationToKycStatus } from "@/lib/noah/map-kyc"
 import { pickTxAmountAndCurrency } from "@/lib/noah/map-transactions"
 import { provisionNoahArtifactsForCustomer } from "@/lib/noah/provisioning"
 import { scheduleTurnkeyWalletsAfterKycApproved } from "@/lib/wallet/turnkey-provisioning"
+import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 
 function pickTxHash(tx: Record<string, unknown>): string | null {
   const h = tx.TxHash ?? tx.TransactionHash ?? tx.txHash ?? tx.Hash
@@ -108,47 +109,28 @@ export async function applyNoahWebhookSideEffects(
         }
       }
 
-      if (userId) {
-        const noahTxId = id || null
-        let existingMeta: Record<string, unknown> = {}
-        if (noahTxId) {
-          const { data: existingTx } = await admin
-            .from("transactions")
-            .select("metadata")
-            .eq("provider", "noah")
-            .eq("noah_transaction_id", noahTxId)
-            .maybeSingle()
-          const raw = existingTx?.metadata
-          if (raw && typeof raw === "object" && !Array.isArray(raw)) {
-            existingMeta = { ...(raw as Record<string, unknown>) }
-          }
-        }
-
-        const metadata: Record<string, unknown> = {
-          ...existingMeta,
-          source: "webhook_transaction",
-        }
+      if (userId && id) {
+        const metadata: Record<string, unknown> = { source: "webhook_transaction" }
         if (autopayoutConfigId) {
           metadata.collection_channel = "autopayout"
           metadata.autopayout_config_id = autopayoutConfigId
         }
-
-        const { error: txErr } = await admin.from("transactions").upsert(
-          {
-            user_id: userId,
-            business_id: businessId,
-            provider: "noah",
-            noah_transaction_id: noahTxId,
-            status,
-            amount,
-            currency,
-            direction,
-            payload: txData,
-            metadata,
-          },
-          { onConflict: "provider,noah_transaction_id" },
-        )
-        if (txErr) throw txErr
+        await upsertLedgerTransaction(admin, {
+          userId,
+          businessId,
+          provider: "noah",
+          providerTransactionId: id,
+          status,
+          amount,
+          currency,
+          direction,
+          payload: txData,
+          metadata,
+          txHash: pickTxHash(txData),
+          occurredAt: String(txData.Created ?? txData.Updated ?? new Date().toISOString()),
+          settledAt: status === "settled" ? String(txData.Updated ?? txData.Created ?? new Date().toISOString()) : null,
+          baseCurrency: currency,
+        })
       }
 
       const wf = workflowIdFromTx(txData)

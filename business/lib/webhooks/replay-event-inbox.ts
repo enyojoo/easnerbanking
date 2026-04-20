@@ -1,16 +1,24 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { markEventInboxProcessed } from "@/lib/webhooks/event-inbox"
 import { applyNoahWebhookSideEffects } from "@/lib/noah/webhook-side-effects"
+import { applyTurnkeyWebhookSideEffects } from "@/lib/turnkey/chain-sync"
 
 export async function replayFailedNoahEventInbox(limit: number): Promise<{
   replayed: number
   failed: number
 }> {
+  return replayFailedEventInbox("noah", limit)
+}
+
+export async function replayFailedEventInbox(
+  provider: "noah" | "turnkey",
+  limit: number,
+): Promise<{ replayed: number; failed: number }> {
   const admin = createSupabaseAdmin()
   const { data: rows, error } = await admin
     .from("event_inbox")
     .select("event_id, payload")
-    .eq("provider", "noah")
+    .eq("provider", provider)
     .eq("status", "failed")
     .order("received_at", { ascending: true })
     .limit(limit)
@@ -22,16 +30,20 @@ export async function replayFailedNoahEventInbox(limit: number): Promise<{
   for (const row of rows || []) {
     const eventId = String(row.event_id || "")
     try {
-      await applyNoahWebhookSideEffects(admin, row.payload)
+      if (provider === "noah") {
+        await applyNoahWebhookSideEffects(admin, row.payload)
+      } else {
+        await applyTurnkeyWebhookSideEffects(admin, row.payload, eventId)
+      }
       if (eventId) {
-        await markEventInboxProcessed(admin, "noah", eventId, null)
+        await markEventInboxProcessed(admin, provider, eventId, null)
       }
       replayed++
     } catch (e) {
       failed++
       const msg = e instanceof Error ? e.message : String(e)
       if (eventId) {
-        await markEventInboxProcessed(admin, "noah", eventId, msg)
+        await markEventInboxProcessed(admin, provider, eventId, msg)
       }
     }
   }

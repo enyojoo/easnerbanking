@@ -15,12 +15,12 @@ import { BUSINESS_APP_SESSION_COOKIE } from "@/lib/app-session"
  * freshness model after hydration.
  */
 
-function resolveBaseUrl(): string {
+async function resolveBaseUrl(): Promise<string> {
   const explicit = process.env.BUSINESS_APP_URL ?? process.env.NEXT_PUBLIC_BUSINESS_APP_URL
   if (explicit) return explicit.replace(/\/$/, "")
   // Derive from the incoming request when possible (handles preview deploys).
   try {
-    const h = (headers() as unknown as { get: (k: string) => string | null })
+    const h = await headers()
     const host = h.get("x-forwarded-host") ?? h.get("host")
     const proto = h.get("x-forwarded-proto") ?? "https"
     if (host) return `${proto}://${host}`
@@ -51,7 +51,7 @@ function buildUrl(path: string, query: ServerFetchOptions["query"]): string {
 
 export async function serverApiFetch<T>(path: string, options: ServerFetchOptions = {}): Promise<T> {
   const { method = "GET", body, query, signal } = options
-  const baseUrl = resolveBaseUrl()
+  const baseUrl = await resolveBaseUrl()
   const url = `${baseUrl}${buildUrl(path, query)}`
   const store = await cookies()
   const sessionCookie = store.get(BUSINESS_APP_SESSION_COOKIE)?.value

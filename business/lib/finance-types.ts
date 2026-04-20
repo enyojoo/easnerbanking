@@ -42,6 +42,8 @@ export interface Transaction {
   id: string
   type: "ach" | "wire" | "book" | "card"
   amount: number
+  baseAmount?: number
+  baseCurrency?: string
   description: string
   date: string
   status: "completed" | "pending" | "processing" | "failed"
@@ -57,6 +59,14 @@ export interface Transaction {
   collectionChannel?: string
   autopayoutConfigId?: string
   displayCurrency?: string
+  paymentRail?: string
+  counterpartyName?: string
+  txHash?: string
+  walletAddress?: string
+  counterpartyAddress?: string
+  asset?: string
+  chain?: string
+  settledAt?: string
 }
 
 export interface StablecoinAccount {

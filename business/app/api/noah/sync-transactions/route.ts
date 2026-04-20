@@ -4,6 +4,7 @@ import { pickTxAmountAndCurrency } from "@/lib/noah/map-transactions"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "../_helpers"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
+import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 
 type TxResp = { Items?: Array<Record<string, unknown>>; PageToken?: string }
 
@@ -38,28 +39,28 @@ export async function POST(request: Request) {
       for (const tx of items) {
         if (String(tx.CustomerID ?? "") !== noahCustomerId) continue
         const id = String(tx.ID ?? "")
+        if (!id) continue
         const { amount, currency } = pickTxAmountAndCurrency(tx)
         const directionRaw = String(tx.Direction ?? "").toLowerCase()
         const direction = directionRaw === "in" ? "in" : directionRaw === "out" ? "out" : null
         const status = String(tx.Status ?? "").toLowerCase() || "unknown"
-        const { error } = await admin.from("transactions").upsert(
-          {
-            user_id: txUserId,
-            business_id: businessId,
-            provider: "noah",
-            noah_transaction_id: id || null,
-            status,
-            amount,
-            currency,
-            direction,
-            payload: tx,
-            metadata: {
-              source: "sync_transactions",
-            },
-          },
-          { onConflict: "provider,noah_transaction_id" },
-        )
-        if (!error) synced++
+        await upsertLedgerTransaction(admin, {
+          userId: txUserId,
+          businessId,
+          provider: "noah",
+          providerTransactionId: id,
+          status,
+          amount,
+          currency,
+          direction,
+          payload: tx,
+          metadata: { source: "sync_transactions" },
+          occurredAt: String(tx.Created ?? tx.Updated ?? new Date().toISOString()),
+          settledAt: status === "settled" ? String(tx.Updated ?? tx.Created ?? new Date().toISOString()) : null,
+          txHash: String(tx.TxHash ?? tx.TransactionHash ?? "").trim() || null,
+          baseCurrency: currency,
+        })
+        synced++
       }
       token = data.PageToken
       if (!token || items.length === 0) break

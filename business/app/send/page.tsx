@@ -249,7 +249,10 @@ export default function SendPage() {
 
   const getSourceDisplayLabel = () => {
     if (paymentMethod === "balance" && sourceAccount) {
-      const fig = displayBalanceForSource.toLocaleString("en-US", { minimumFractionDigits: 2 })
+      const fig = displayBalanceForSource.toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
       return `${sourceAccount.currency} Balance • ${getCurrencySymbol(sourceAccount.currency)}${fig}`
     }
     if (paymentMethod === "usdc") return "Pay with USDC"
@@ -501,12 +504,14 @@ export default function SendPage() {
                             {getCurrencySymbol(acc.currency)}
                             {acc.availableBalance.toLocaleString("en-US", {
                               minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
                             })}
                             {!sufficient && receiveAmount > 0 && (
                               <span className="block mt-0.5">
                                 Short by {getCurrencySymbol(acc.currency)}
                                 {(sendAmount - acc.availableBalance).toLocaleString("en-US", {
                                   minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
                                 })}
                               </span>
                             )}

@@ -4,6 +4,7 @@ import { pickTxAmountAndCurrency } from "@/lib/noah/map-transactions"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "../../_helpers"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
+import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 
 type Props = { params: Promise<{ transferId: string }> }
 
@@ -42,23 +43,22 @@ export async function GET(request: Request, routeCtx: Props) {
       const owner = await resolveBusinessOrgOwnerUserId(admin, noahCtx.businessId)
       if (owner) txUserId = owner
     }
-    await admin.from("transactions").upsert(
-      {
-        user_id: txUserId,
-        business_id: businessId,
-        noah_transaction_id: id,
-        provider: "noah",
-        status,
-        amount,
-        currency,
-        direction: "out",
-        payload: tx,
-        metadata: {
-          source: "api_noah_transfers_status",
-        },
-      },
-      { onConflict: "provider,noah_transaction_id" },
-    )
+    await upsertLedgerTransaction(admin, {
+      userId: txUserId,
+      businessId,
+      provider: "noah",
+      providerTransactionId: id,
+      status,
+      amount,
+      currency,
+      direction: "out",
+      payload: tx,
+      metadata: { source: "api_noah_transfers_status" },
+      occurredAt: String(tx.Created ?? tx.Updated ?? new Date().toISOString()),
+      settledAt: status === "settled" ? String(tx.Updated ?? tx.Created ?? new Date().toISOString()) : null,
+      txHash: String(tx.TxHash ?? tx.TransactionHash ?? "").trim() || null,
+      baseCurrency: currency,
+    })
     return NextResponse.json({
       id,
       transaction_id: id,

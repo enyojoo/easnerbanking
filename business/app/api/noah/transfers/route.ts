@@ -6,6 +6,7 @@ import { pickTxAmountAndCurrency } from "@/lib/noah/map-transactions"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { getNoahSettlementCryptoCurrency } from "@/lib/noah/payout-prepare"
+import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 
 export async function POST(request: Request) {
   const mis = requireNoahEnv()
@@ -132,26 +133,27 @@ export async function POST(request: Request) {
       const owner = await resolveBusinessOrgOwnerUserId(admin, noahCtx.businessId)
       if (owner) txUserId = owner
     }
-    await admin.from("transactions").upsert(
-      {
-        user_id: txUserId,
-        business_id: businessId,
-        noah_transaction_id: id || null,
-        provider: "noah",
-        status,
-        amount: txAmount || amount,
-        currency: currency || (isFormSessionSell ? fiatCurrency : currencyRaw),
-        direction: "out",
-        payload: tx,
-        metadata: {
-          sourceWalletId: sourceWalletId || null,
-          destinationExternalAccountId: destinationExternalAccountId || null,
-          ...metadataExtra,
-          source: "api_noah_transfers",
-        },
+    await upsertLedgerTransaction(admin, {
+      userId: txUserId,
+      businessId,
+      provider: "noah",
+      providerTransactionId: id,
+      status,
+      amount: txAmount || amount,
+      currency: currency || (isFormSessionSell ? fiatCurrency : currencyRaw),
+      direction: "out",
+      payload: tx,
+      metadata: {
+        sourceWalletId: sourceWalletId || null,
+        destinationExternalAccountId: destinationExternalAccountId || null,
+        ...metadataExtra,
+        source: "api_noah_transfers",
       },
-      { onConflict: "provider,noah_transaction_id" }
-    )
+      occurredAt: String(tx.Created ?? tx.Updated ?? new Date().toISOString()),
+      settledAt: status === "settled" ? String(tx.Updated ?? tx.Created ?? new Date().toISOString()) : null,
+      txHash: String(tx.TxHash ?? tx.TransactionHash ?? "").trim() || null,
+      baseCurrency: currency || (isFormSessionSell ? fiatCurrency : currencyRaw),
+    })
 
     return NextResponse.json({
       id: id || "",
