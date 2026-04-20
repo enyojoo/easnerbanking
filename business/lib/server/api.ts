@@ -35,6 +35,8 @@ export interface ServerFetchOptions {
   body?: unknown
   query?: Record<string, string | number | boolean | null | undefined>
   signal?: AbortSignal
+  /** Merged into the outgoing fetch (after JSON Accept / cookies). */
+  headers?: Record<string, string>
 }
 
 function buildUrl(path: string, query: ServerFetchOptions["query"]): string {
@@ -50,7 +52,7 @@ function buildUrl(path: string, query: ServerFetchOptions["query"]): string {
 }
 
 export async function serverApiFetch<T>(path: string, options: ServerFetchOptions = {}): Promise<T> {
-  const { method = "GET", body, query, signal } = options
+  const { method = "GET", body, query, signal, headers: extraHeaders } = options
   const baseUrl = await resolveBaseUrl()
   const url = `${baseUrl}${buildUrl(path, query)}`
   const store = await cookies()
@@ -64,6 +66,7 @@ export async function serverApiFetch<T>(path: string, options: ServerFetchOption
       Accept: "application/json",
       ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
       ...(sessionCookie ? { Cookie: `${BUSINESS_APP_SESSION_COOKIE}=${sessionCookie}` } : {}),
+      ...extraHeaders,
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
