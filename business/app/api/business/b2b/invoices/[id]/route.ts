@@ -9,6 +9,30 @@ import { requireBusinessOrg } from "@/lib/b2b/resolve-org"
 import type { Invoice } from "@/lib/b2b/types"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 
+/** Single-invoice fetch for the invoice detail page (`useInvoiceDetail`). */
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const ctx = await requireBusinessOrg(request)
+  if (!ctx.ok) return ctx.response
+  const { id } = await params
+  if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 })
+
+  const admin = createSupabaseAdmin()
+  const { data, error } = await admin
+    .from("invoices")
+    .select("*")
+    .eq("id", id)
+    .eq("business_id", ctx.businessId)
+    .maybeSingle()
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+  if (!data) {
+    return NextResponse.json({ error: "Invoice not found" }, { status: 404 })
+  }
+  return NextResponse.json(mapRowToInvoice(data as B2bInvoiceRow))
+}
+
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireBusinessOrg(request)
   if (!ctx.ok) return ctx.response
