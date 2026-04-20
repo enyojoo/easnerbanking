@@ -106,6 +106,42 @@ function ProgressRing({ pct }: { pct: number }) {
 }
 
 type StepVisual = "complete" | "error" | "pending"
+type StickyCompletedSteps = {
+  business: boolean
+  verify: boolean
+  terminal: boolean
+  fund: boolean
+}
+
+function defaultStickySteps(): StickyCompletedSteps {
+  return { business: false, verify: false, terminal: false, fund: false }
+}
+
+function readStickySteps(userId: string): StickyCompletedSteps {
+  if (typeof window === "undefined") return defaultStickySteps()
+  try {
+    const raw = localStorage.getItem(`business_onboarding_steps_${userId}`)
+    if (!raw) return defaultStickySteps()
+    const parsed = JSON.parse(raw) as Partial<StickyCompletedSteps>
+    return {
+      business: Boolean(parsed.business),
+      verify: Boolean(parsed.verify),
+      terminal: Boolean(parsed.terminal),
+      fund: Boolean(parsed.fund),
+    }
+  } catch {
+    return defaultStickySteps()
+  }
+}
+
+function persistStickySteps(userId: string, steps: StickyCompletedSteps) {
+  if (typeof window === "undefined") return
+  try {
+    localStorage.setItem(`business_onboarding_steps_${userId}`, JSON.stringify(steps))
+  } catch {
+    // ignore quota
+  }
+}
 
 export function BusinessOnboardingChecklist() {
   const { user } = useAuth()
@@ -114,11 +150,12 @@ export function BusinessOnboardingChecklist() {
   const [expanded, setExpanded] = useState(false)
   const [terminalPayoutId, setTerminalPayoutId] = useState<string | null | undefined>(undefined)
   const [funded, setFunded] = useState(false)
+  const [stickyDone, setStickyDone] = useState<StickyCompletedSteps>(defaultStickySteps())
 
-  const step1Done = isBusinessInfoStepComplete(profile)
-  const step2Done = profile.tier1Complete
+  const step1Raw = isBusinessInfoStepComplete(profile)
+  const step2Raw = profile.tier1Complete
   const verifyKind = tier1VerificationKind(profile.tier1Complete, profile.tier1VerificationStatus)
-  const step3Done = Boolean(terminalPayoutId)
+  const step3Raw = Boolean(terminalPayoutId)
 
   const refreshBalances = useCallback(async () => {
     if (!userId || !profile.tier1Complete) {
@@ -232,7 +269,42 @@ export function BusinessOnboardingChecklist() {
     }
   }, [expanded, refreshBalances, refreshTerminal])
 
-  const step4Done = profile.tier1Complete && funded
+  const step4Raw = profile.tier1Complete && funded
+
+  useEffect(() => {
+    if (!userId) {
+      setStickyDone(defaultStickySteps())
+      return
+    }
+    setStickyDone(readStickySteps(userId))
+  }, [userId])
+
+  useEffect(() => {
+    if (!userId) return
+    setStickyDone((prev) => {
+      const next: StickyCompletedSteps = {
+        business: prev.business || step1Raw,
+        verify: prev.verify || step2Raw,
+        terminal: prev.terminal || step3Raw,
+        fund: prev.fund || step4Raw,
+      }
+      if (
+        next.business === prev.business &&
+        next.verify === prev.verify &&
+        next.terminal === prev.terminal &&
+        next.fund === prev.fund
+      ) {
+        return prev
+      }
+      persistStickySteps(userId, next)
+      return next
+    })
+  }, [userId, step1Raw, step2Raw, step3Raw, step4Raw])
+
+  const step1Done = step1Raw || stickyDone.business
+  const step2Done = step2Raw || stickyDone.verify
+  const step3Done = step3Raw || stickyDone.terminal
+  const step4Done = step4Raw || stickyDone.fund
 
   const completedCount = [step1Done, step2Done, step3Done, step4Done].filter(Boolean).length
   const allDone = completedCount === 4
