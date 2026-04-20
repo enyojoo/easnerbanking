@@ -36,10 +36,12 @@ import { format } from "date-fns"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { formatCurrency } from "@/lib/utils"
-import { useInvoices } from "@/lib/invoices-context"
-import { useCustomers } from "@/lib/customers-context"
+import { useInvoicesList } from "@/hooks/queries/use-invoices"
+import { useCustomersList } from "@/hooks/queries/use-customers"
+import { useAddInvoice, useUpdateInvoice } from "@/hooks/mutations/use-invoices"
+import { useAddCustomer } from "@/hooks/mutations/use-customers"
 import { formatInvoiceNumberFromClientId, generateInvoiceId } from "@/lib/invoice-id"
-import type { Invoice } from "@/lib/b2b/types"
+import type { Customer, Invoice } from "@/lib/b2b/types"
 import { computeInvoiceTotals } from "@/lib/b2b/invoice-totals"
 import { AddEditCustomerDialog } from "@/components/add-edit-customer-dialog"
 import { BaseCurrencySelect } from "@/components/base-currency-select"
@@ -92,8 +94,33 @@ export default function CreateInvoicePage() {
   const searchParams = useSearchParams()
   const editId = searchParams.get("edit")
   const customerFromUrl = searchParams.get("customer")
-  const { invoices, addInvoice, updateInvoice } = useInvoices()
-  const { customers, addCustomer } = useCustomers()
+  const invoicesQuery = useInvoicesList()
+  const customersQuery = useCustomersList()
+  const addInvoiceMut = useAddInvoice()
+  const updateInvoiceMut = useUpdateInvoice()
+  const addCustomerMut = useAddCustomer()
+
+  const invoices = invoicesQuery.data ?? []
+  const customers = customersQuery.data ?? []
+
+  const addInvoice = async (invoice: Invoice) => {
+    const res = await addInvoiceMut.mutateAsync(invoice)
+    return res.invoice ?? null
+  }
+
+  const updateInvoice = async (id: string, updates: Partial<Invoice>) => {
+    const res = await updateInvoiceMut.mutateAsync({ id, updates })
+    return res.invoice ?? null
+  }
+
+  const addCustomer = async (c: Customer) => {
+    try {
+      const res = await addCustomerMut.mutateAsync(c)
+      return res.customer ?? null
+    } catch {
+      return null
+    }
+  }
   const { baseCurrency, isLoading: profileLoading } = useBusinessProfile()
   const invoiceToEdit = editId ? invoices.find((i) => i.id === editId) : null
   const isEditMode = !!invoiceToEdit

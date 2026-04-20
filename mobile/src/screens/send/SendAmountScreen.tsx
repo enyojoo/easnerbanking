@@ -37,7 +37,10 @@ import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { supabase } from '../../lib/supabase'
 import { Alert } from 'react-native'
-import { useUserData } from '../../contexts/UserDataContext'
+import { useQueryClient } from '@tanstack/react-query'
+import { useExchangeRatesList } from '../../hooks/queries'
+import { useScope } from '../../query/scope'
+import { invalidateRecipientsFeed } from '../../query/refresh-user-feeds'
 import { recipientService } from '../../lib/recipientService'
 import { isDraftEasenetRecipient } from '../../lib/draftEasenetRecipient'
 import { useAuth } from '../../contexts/AuthContext'
@@ -130,11 +133,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const noahKycStatus =
     userProfile?.noah_kyc_status ??
     (userProfile as { noah_kyc_status?: string; profile?: { noah_kyc_status?: string } })?.profile?.noah_kyc_status
-  const {
-    exchangeRates: exchangeRatesFromContext,
-    invalidateRecipients,
-    refreshRecipients,
-  } = useUserData()
+  const { data: exchangeRatesFromContext = [] } = useExchangeRatesList()
+  const qc = useQueryClient()
+  const { scope } = useScope()
   const { balances, updateBalanceOptimistically } = useBalance()
   // Ensure exchangeRates is always an array (fallback to empty array if undefined)
   const exchangeRates = exchangeRatesFromContext || []
@@ -1334,8 +1335,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                         payeeAvatarUrl: recipient.payee_avatar_url ?? null,
                         payeeAccountKind: recipient.payee_account_kind,
                       })
-                      await invalidateRecipients()
-                      await refreshRecipients(true)
+                      if (scope && user?.id) await invalidateRecipientsFeed(qc, scope, user.id)
                       recipientForDetails = created
                       void recordRecipientSentTouch(user.id, created.id)
                     } catch (persistErr) {

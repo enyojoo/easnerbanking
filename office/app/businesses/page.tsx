@@ -1,6 +1,7 @@
 "use client"
 
-import { Suspense, useEffect, useMemo, useState, useCallback, type ReactNode } from "react"
+import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react"
+import { useQuery } from "@tanstack/react-query"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layout"
@@ -13,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Badge } from "@/components/ui/badge"
 import { Eye, Building2, Search } from "lucide-react"
 import { officeFetch } from "@/lib/api-client"
+import { officeKeys } from "@/lib/query/keys"
 import { businessTypeDisplayText } from "@/lib/business-type-label"
 
 /** Mirrors `public.businesses` (+ owner fields from admin API). */
@@ -111,39 +113,26 @@ function BusinessesPageInner() {
   const searchParams = useSearchParams()
   const highlightBusinessId = searchParams.get("highlight")
 
-  const [rows, setRows] = useState<BusinessRow[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedBusiness, setSelectedBusiness] = useState<BusinessRow | null>(null)
 
-  const fetchRows = useCallback(() => {
-    let cancelled = false
-    setLoading(true)
-    officeFetch("/api/admin/business/businesses")
-      .then((r) => r.json())
-      .then((d) => {
-        if (cancelled) return
-        if (d.error) setError(d.error)
-        else {
-          setError(null)
-          setRows(d.businesses ?? [])
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setError("Failed to load")
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  const {
+    data: rows = [],
+    isPending: loading,
+    error: queryError,
+  } = useQuery({
+    queryKey: officeKeys.businesses(),
+    queryFn: async () => {
+      const r = await officeFetch("/api/admin/business/businesses")
+      const d = (await r.json()) as { businesses?: BusinessRow[]; error?: string }
+      if (d.error) throw new Error(d.error)
+      return d.businesses ?? []
+    },
+    staleTime: 60_000,
+  })
 
-  useEffect(() => {
-    return fetchRows()
-  }, [fetchRows])
+  const error =
+    queryError instanceof Error ? queryError.message : queryError ? String(queryError) : null
 
   const displayRows = useMemo(() => {
     const q = searchTerm.toLowerCase().trim()

@@ -15,10 +15,11 @@ import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { CommunicationPreferences } from '@easner/shared'
-import { COMMUNICATION_PREFERENCES_DISCLAIMER } from '@easner/shared'
+import { COMMUNICATION_PREFERENCES_DISCLAIMER, qk } from '@easner/shared'
+import { useQueryClient } from '@tanstack/react-query'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { useAuth } from '../../contexts/AuthContext'
-import { useUserData } from '../../contexts/UserDataContext'
+import { useCommunicationPreferences } from '../../hooks/queries'
 import { NavigationProps } from '../../types'
 import { colors, textStyles, spacing, motion } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
@@ -29,12 +30,15 @@ import { pushNotificationService } from '../../lib/pushNotificationService'
 export default function NotificationsScreen({ navigation }: NavigationProps) {
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
-  const {
-    communicationPreferences,
-    communicationPreferencesLoading,
-    refreshCommunicationPreferences,
-    commitCommunicationPreferences,
-  } = useUserData()
+  const qc = useQueryClient()
+  const commQuery = useCommunicationPreferences()
+  const communicationPreferences = commQuery.data ?? null
+  const communicationPreferencesLoading = commQuery.isPending
+  const refreshCommunicationPreferences = useCallback(() => commQuery.refetch(), [commQuery])
+  const commitCommunicationPreferences = async (prefs: CommunicationPreferences) => {
+    if (!user?.id) return
+    qc.setQueryData(qk.settings.communication(user.id), prefs)
+  }
 
   const [saving, setSaving] = useState(false)
   const [optimisticOverride, setOptimisticOverride] = useState<CommunicationPreferences | null>(null)
@@ -49,7 +53,7 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
   useFocusEffect(
     useCallback(() => {
       setOptimisticOverride(null)
-      void refreshCommunicationPreferences(false)
+      void refreshCommunicationPreferences()
     }, [refreshCommunicationPreferences]),
   )
 

@@ -126,7 +126,7 @@ export const mobileFxEngine = {
    * @param receiveAmount - Amount user entered (what recipient will receive)
    * @param sendCurrency - Source currency (what user is sending/paying with)
    * @param receiveCurrency - Target currency (what recipient receives)
-   * @param exchangeRates - Array of exchange rates from UserDataContext
+   * @param exchangeRates - Array of exchange rates (e.g. from `useExchangeRatesList`)
    * @returns Calculated order amounts including fees
    * @throws Error if exchange rate not found
    */

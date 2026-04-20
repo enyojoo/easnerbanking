@@ -1,44 +1,38 @@
 "use client"
 
-import { useCallback, useState } from "react"
-import { useCachedData } from "@/lib/use-cached-data"
+import { useCallback } from "react"
+import { useQuery } from "@tanstack/react-query"
 
 interface UseCommercialResourceOptions {
-  cacheKey: string
-  persistKey: string
-  ttlMs?: number
+  queryKey: readonly unknown[]
+  staleTimeMs?: number
 }
 
 export function useCommercialResource<T>(
   loader: () => Promise<T[]>,
-  { cacheKey, persistKey, ttlMs = 5 * 60 * 1000 }: UseCommercialResourceOptions,
+  { queryKey, staleTimeMs = 5 * 60 * 1000 }: UseCommercialResourceOptions,
 ) {
-  const [error, setError] = useState<string | null>(null)
-  const [refreshing, setRefreshing] = useState(false)
-  const { data: rows, setData: setRows, loading } = useCachedData<T[]>({
-    enabled: true,
-    cacheKey,
-    fetcher: loader,
-    initialData: [],
-    ttlMs,
-    persistKey,
-    persistMaxAgeMs: ttlMs,
-    onError: (e) => {
-      setError(e instanceof Error ? e.message : "Failed to load data")
-    },
+  const {
+    data: rows = [],
+    isPending,
+    isFetching,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey,
+    queryFn: loader,
+    staleTime: staleTimeMs,
+    gcTime: staleTimeMs * 2,
   })
-  const refresh = useCallback(async () => {
-    setRefreshing(true)
-    setError(null)
-    try {
-      const data = await loader()
-      setRows(data)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load data")
-    } finally {
-      setRefreshing(false)
-    }
-  }, [loader, setRows])
 
-  return { rows, setRows, loading: loading || refreshing, error, refresh }
+  const refresh = useCallback(async () => {
+    await refetch()
+  }, [refetch])
+
+  return {
+    rows,
+    loading: isPending || (isFetching && rows.length === 0),
+    error: error instanceof Error ? error.message : error ? String(error) : null,
+    refresh,
+  }
 }

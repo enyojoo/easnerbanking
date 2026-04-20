@@ -22,7 +22,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import KeyboardSafeContainer from '../../components/KeyboardSafeContainer'
 import { useAuth } from '../../contexts/AuthContext'
-import { useUserData } from '../../contexts/UserDataContext'
 import { NavigationProps } from '../../types'
 import {
   userService,
@@ -42,7 +41,6 @@ import { getApiBaseUrl } from '../../lib/apiClient'
 
 function ProfileEditContent({ navigation }: NavigationProps) {
   const { user, userProfile, refreshUserProfile, applyPersonalSettingsFromServer } = useAuth()
-  const { transactions } = useUserData()
   const insets = useSafeAreaInsets()
   const [isEditing, setIsEditing] = useState(false)
   const [loading, setLoading] = useState(false)

@@ -3,6 +3,7 @@ import { qk, type TxFilters } from '@easner/shared'
 import { apiFetch } from '../../query/api-client'
 import { useScope } from '../../query/scope'
 import { NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
+import type { Transaction } from '../../types'
 
 /**
  * Paginated personal transactions ledger for Easner mobile.
@@ -26,6 +27,30 @@ export type MobileTransactionRow = {
   name?: string
   description?: string | null
   [key: string]: unknown
+}
+
+/** Maps unified `/api/transactions` list rows to legacy `Transaction` for stats / send hub. */
+export function mapLedgerRowToTransaction(userId: string, row: Record<string, unknown>): Transaction {
+  const amount = Number(row.amount ?? 0)
+  return {
+    id: String(row.id ?? row.transaction_id ?? ''),
+    user_id: userId,
+    recipient_id: typeof row.recipient_id === 'string' ? row.recipient_id : undefined,
+    send_amount: amount,
+    send_currency: String(row.currency ?? 'USD'),
+    receive_amount: Number(row.final_amount ?? row.amount ?? 0),
+    receive_currency: String(row.currency ?? 'USD'),
+    exchange_rate: Number(row.exchange_rate ?? 1),
+    fee_amount: Number(row.fee_amount ?? 0),
+    fee_type: String(row.fee_type ?? ''),
+    total_amount: amount,
+    transaction_id: String(row.transaction_id ?? row.id ?? ''),
+    noah_transaction_id: String(row.noah_transaction_id ?? row.transaction_id ?? row.id ?? ''),
+    status: String(row.status ?? 'pending') as Transaction['status'],
+    created_at: String(row.created_at ?? new Date().toISOString()),
+    updated_at: String(row.updated_at ?? new Date().toISOString()),
+    metadata: (row.metadata as Record<string, unknown> | undefined) ?? undefined,
+  }
 }
 
 interface TransactionsResponse {
@@ -68,7 +93,7 @@ export function useTransactionDetail(txId: string | null) {
         : ['transactions', 'detail', 'disabled'],
     enabled: Boolean(scope) && Boolean(txId),
     queryFn: () =>
-      apiFetch<MobileTransactionRow>(`/api/transactions/${txId}`, {
+      apiFetch<{ transaction?: MobileTransactionRow }>(`/api/transactions/${txId}`, {
         headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
       }),
     staleTime: 45_000,

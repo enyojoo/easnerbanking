@@ -46,22 +46,15 @@ import type { Colors } from '../../theme/colors'
 import { scaledFontSize } from '../../theme/typography'
 import { ripple } from '../../lib/androidRipple'
 import { useEffect } from 'react'
-import { useUserData } from '../../contexts/UserDataContext'
 import { useFocusEffect } from '@react-navigation/native'
 import { useBalance } from '../../contexts/BalanceContext'
-import { apiGet, apiPost, NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
+import { apiGet, apiPost } from '../../lib/apiClient'
 import { ShimmerLoader } from '../../components/premium'
 import { getTransactionStatusDisplay } from '../../utils/formatters'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import { isTier1Complete } from '../../lib/compliance'
 import { noahService } from '../../lib/noahService'
-import {
-  buildUserCacheKey,
-  readUserCache,
-  writeUserCache,
-  isCacheStale,
-  CacheTTL,
-} from '../../lib/userCache'
+import { useTransactionsList } from '../../hooks/queries'
 
 const DASHBOARD_SELECTED_CURRENCY_KEY_PREFIX = 'easner_dashboard_selected_currency_'
 
@@ -87,7 +80,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const tabBarScrollInset = insets.bottom + layout.tabBarHeight + spacing[6]
   const styles = useMemo(() => createDashboardStyles(palette, tabBarScrollInset), [palette, tabBarScrollInset])
   const { user, userProfile, refreshUserProfile, loading: authLoading } = useAuth()
-  const { refreshStaleData, refreshing: dataRefreshing, financialFeedsEpoch } = useUserData()
+  const txQuery = useTransactionsList({}, 5)
   const { balances, refreshBalances } = useBalance()
   const [selectedCurrency, setSelectedCurrency] = useState<'USD' | 'EUR' | 'GBP'>('USD')
   const [balanceVisible, setBalanceVisible] = useState(true)
@@ -160,152 +153,19 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     }
   }, [userProfile?.id, user?.id])
 
-  const cacheKey = buildUserCacheKey('dashboardCombinedTx', userProfile?.id)
+  const queryRecent = useMemo<DashboardTransaction[]>(() => {
+    const firstPage = txQuery.data?.pages?.[0]?.transactions ?? []
+    return (firstPage as DashboardTransaction[]).slice(0, 5)
+  }, [txQuery.data])
 
-  // Fetch recent transactions with caching
   const fetchRecentTransactions = useCallback(async (force = false, silent = false) => {
-    if (!userProfile?.id) return
-
-    let cached: { data: DashboardTransaction[]; timestamp: number } | null = null
-
-    // Try to load from cache first (stale-while-revalidate)
-    // Note: Cache is already loaded on mount, so this is mainly for refresh scenarios
-    if (!force) {
-      cached = await readUserCache<DashboardTransaction[]>(cacheKey)
-      if (cached && !isCacheStale(cached.timestamp, CacheTTL.DASHBOARD_COMBINED_TX)) {
-        // Data is fresh, use cache (only update if different to avoid unnecessary re-renders)
-        if (JSON.stringify(cached.data) !== JSON.stringify(recentTransactions)) {
-          setRecentTransactions(cached.data)
-        }
-        setLoadingTransactions(false)
-        setHasAttemptedLoad(true)
-        dataLoadedRef.current = true
-        return
-      } else if (cached) {
-        // Data is stale, but already shown from mount - just fetch fresh in background
-        // Don't update state again (already set from mount)
-        setLoadingTransactions(false)
-        setHasAttemptedLoad(true)
-        dataLoadedRef.current = true
-        // Continue to fetch fresh data in background
-      }
-    }
-
-    try {
-      // Only show loading if not silent and we don't have cached data
-      if (!silent && (!cached || force)) {
-        setLoadingTransactions(true)
-      }
-
-      const params = new URLSearchParams()
-      params.append('limit', '5') // Only fetch 5 most recent for dashboard
-
-      let response = await apiGet(`/api/transactions?${params.toString()}`, {
-        headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
-      })
-      let listBody: { transactions?: unknown[] } | null = null
-      let fetchFailed = false
-
-      if (response.ok && !(response as any).isNetworkError) {
-        listBody = (await response.json().catch(() => ({}))) as { transactions?: unknown[] }
-      } else {
-        const fallback = await apiGet(`/api/noah/transactions?${params.toString()}`)
-        if (fallback.ok && !(fallback as any).isNetworkError) {
-          listBody = (await fallback.json().catch(() => ({}))) as { transactions?: unknown[] }
-        } else if ((response as any).isNetworkError || (fallback as any).isNetworkError) {
-          console.warn('Network error fetching transactions, keeping cached data')
-          if (!cached) {
-            setRecentTransactions([])
-          }
-          setHasAttemptedLoad(true)
-          fetchFailed = true
-        } else {
-          if (!cached) {
-            setRecentTransactions([])
-          }
-          setHasAttemptedLoad(true)
-          fetchFailed = true
-        }
-      }
-
-      if (!fetchFailed && listBody != null) {
-        const raw = listBody.transactions
-        const arr = Array.isArray(raw) ? raw : []
-        const transactionsList = arr.map((tx: any) => ({
-          id: tx.id,
-          transaction_id: tx.transaction_id,
-          type: tx.transaction_type ?? tx.type,
-          amount: tx.amount,
-          currency: tx.currency,
-          name: tx.name,
-          status: tx.status,
-          created_at: tx.created_at,
-          noah_created_at: tx.noah_created_at,
-          source_type: tx.source_type,
-          source_liquidation_address_id: tx.source_liquidation_address_id,
-          metadata: tx.metadata,
-        }))
-        setRecentTransactions(transactionsList)
-        await writeUserCache(cacheKey, transactionsList)
-        setHasAttemptedLoad(true)
-        dataLoadedRef.current = true
-      }
-    } catch (error: any) {
-      if (error?.message?.includes('Network request failed') || error?.name === 'TypeError') {
-        console.warn("Network error fetching transactions:", error?.message || 'Network unavailable')
-        // Keep cached data on network error
-        if (!cached) {
-          setRecentTransactions([])
-        }
-        setHasAttemptedLoad(true)
-      } else {
-        console.error("Error fetching transactions:", error)
-        if (!cached) {
-          setRecentTransactions([])
-        }
-        setHasAttemptedLoad(true)
-      }
-    } finally {
-      // Always mark that we've attempted to load (prevents empty state flash)
-      setHasAttemptedLoad(true)
-      // Always stop loading after API attempt completes
-      setLoadingTransactions(false)
-    }
-  }, [userProfile?.id, cacheKey, hasAttemptedLoad, recentTransactions])
-
-  // Load cached transactions immediately on mount (like balances - instant display)
-  useEffect(() => {
-    if (!userProfile?.id) {
-      setRecentTransactions([])
-      setLoadingTransactions(false)
-      setHasAttemptedLoad(true)
-      return
-    }
-    
-    // Load cache first (like BalanceContext) - show immediately if available
-    const loadCachedTransactions = async () => {
-      try {
-        const cached = await readUserCache<DashboardTransaction[]>(cacheKey)
-        if (cached && cached.data && cached.data.length > 0) {
-          // Show cached data immediately, even if stale (stale-while-revalidate)
-          setRecentTransactions(cached.data)
-          setLoadingTransactions(false) // Stop loading since we have data
-          setHasAttemptedLoad(true)
-          dataLoadedRef.current = true
-        } else {
-          // No cache - keep loading skeleton until API completes
-          // loadingTransactions already true from initial state
-          setHasAttemptedLoad(false)
-        }
-      } catch (error) {
-        // Silently fail - will fetch fresh data anyway
-        // Keep loading skeleton (already true from initial state)
-        setHasAttemptedLoad(false)
-      }
-    }
-    
-    loadCachedTransactions()
-  }, [userProfile?.id, cacheKey])
+    void force
+    void silent
+    setRecentTransactions(queryRecent)
+    setHasAttemptedLoad(true)
+    dataLoadedRef.current = true
+    setLoadingTransactions(txQuery.isPending && queryRecent.length === 0)
+  }, [queryRecent, txQuery.isPending])
 
   // Initial load - rely on webhooks and real-time for instant updates
   // Only sync for backfill on first load (once per session)
@@ -340,11 +200,9 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     triggerSync()
   }, [userProfile?.id, fetchRecentTransactions])
 
-  // Refetch dashboard combined feed when a transaction row changes in Supabase (deposits, synced activity).
   useEffect(() => {
-    if (!userProfile?.id || financialFeedsEpoch === 0) return
     fetchRecentTransactions(false, true).catch(() => {})
-  }, [financialFeedsEpoch, userProfile?.id, fetchRecentTransactions])
+  }, [fetchRecentTransactions])
 
   // Refresh balances on focus only if stale (don't fetch every time)
   useFocusEffect(
@@ -380,12 +238,9 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
       refreshBalances(false).catch(() => {
         // Silently fail
       })
-      // Refresh transactions if stale
-      if (dataLoadedRef.current) {
-        fetchRecentTransactions(false).catch(() => {
-          // Silently fail
-        })
-      }
+      fetchRecentTransactions(false).catch(() => {
+        // Silently fail
+      })
       loadAvailableCurrencies().catch(() => {
         // Silently fail
       })
@@ -738,16 +593,12 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                 void apiPost('/api/noah/sync-transactions').catch((error) => {
                   console.warn('[DASHBOARD] Sync failed on pull-to-refresh:', error)
                 })
-                // Keep spinner tied to balances + recent tx only — full `refreshStaleData({ force })` must not block RefreshControl.
-                await Promise.allSettled([refreshBalances(true), fetchRecentTransactions(true)])
+                await Promise.allSettled([refreshBalances(true), txQuery.refetch(), fetchRecentTransactions(true)])
               } catch (error) {
                 console.error('Error refreshing dashboard:', error)
               } finally {
                 setRefreshing(false)
               }
-              void refreshStaleData({ force: true }).catch((e) => {
-                console.warn('[DASHBOARD] Background user-data refresh after pull:', e)
-              })
             }}
             tintColor={palette.primary.main}
           />

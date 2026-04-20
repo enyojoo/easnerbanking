@@ -1,6 +1,9 @@
 import React, { useRef } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
-import { useUserData } from '../contexts/UserDataContext'
+import { useQueryClient } from '@tanstack/react-query'
+import { useAuth } from '../contexts/AuthContext'
+import { useScope } from '../query/scope'
+import { invalidateAllUserFeeds } from '../query/refresh-user-feeds'
 
 /**
  * Hook to refresh data when screen comes into focus
@@ -35,10 +38,19 @@ export function useFocusRefresh(
 
 /**
  * Hook to refresh all user data when screen comes into focus
- * Uses the UserDataContext's refreshStaleData for optimal performance
+ * Invalidates TanStack Query caches for currencies, FX, recipients, txs, VA payment methods, comm prefs.
  */
 export function useFocusRefreshAll(force: boolean = false) {
-  const { refreshStaleData } = useUserData()
-  useFocusRefresh(() => refreshStaleData(), 5 * 60 * 1000, force)
+  const qc = useQueryClient()
+  const { scope } = useScope()
+  const { user } = useAuth()
+  useFocusRefresh(
+    async () => {
+      if (!scope || !user?.id) return
+      await invalidateAllUserFeeds(qc, scope, user.id)
+    },
+    5 * 60 * 1000,
+    force,
+  )
 }
 

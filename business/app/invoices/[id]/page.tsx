@@ -48,7 +48,8 @@ import { Textarea } from "@/components/ui/textarea"
 import Link from "next/link"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { getInvoiceDiscountAmount } from "@/lib/b2b/invoice-totals"
-import { useInvoices } from "@/lib/invoices-context"
+import { useInvoiceDetail } from "@/hooks/queries/use-invoices"
+import { useAddInvoice, useUpdateInvoice } from "@/hooks/mutations/use-invoices"
 import { formatInvoiceNumberFromClientId, generateInvoiceId } from "@/lib/invoice-id"
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge"
 import { InvoicePaymentOptions } from "@/components/invoice-payment-options"
@@ -161,9 +162,28 @@ export default function InvoiceDetailPage() {
   const profile = useBusinessProfile()
   const { tier1Complete, easetag: orgEasetag } = profile
   const issuer = issuerFromBusinessProfile(profile)
-  const { invoices, loading: invoicesLoading, updateInvoice, addInvoice } = useInvoices()
+  const rawParamId = params?.id
+  const invoiceId =
+    typeof rawParamId === "string" ? rawParamId : Array.isArray(rawParamId) ? rawParamId[0] ?? null : null
+  const invoiceDetailQuery = useInvoiceDetail(invoiceId)
+  const addInvoiceMut = useAddInvoice()
+  const updateInvoiceMut = useUpdateInvoice()
   const { data: ledgerRows } = useTransactionsCached()
-  const invoice = invoices.find((i) => i.id === params.id)
+  const invoice = invoiceDetailQuery.data
+  const invoicesLoading = invoiceDetailQuery.isPending
+
+  const updateInvoice = (id: string, updates: Partial<Invoice>) => {
+    void updateInvoiceMut.mutate({ id, updates })
+  }
+
+  const addInvoice = async (inv: Invoice) => {
+    try {
+      const res = await addInvoiceMut.mutateAsync(inv)
+      return res.invoice ?? null
+    } catch {
+      return null
+    }
+  }
   const [showMoreActivities, setShowMoreActivities] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
   const [isSendingEmail, setIsSendingEmail] = useState(false)

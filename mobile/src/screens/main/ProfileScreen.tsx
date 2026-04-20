@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import {
   View,
   Text,
@@ -20,8 +20,8 @@ import { ripple } from '../../lib/androidRipple'
 import ExternalLinkModal from '../../components/ExternalLinkModal'
 import { useExternalLink } from '../../hooks/useExternalLink'
 import { useAuth } from '../../contexts/AuthContext'
-import { useUserData } from '../../contexts/UserDataContext'
 import { NavigationProps } from '../../types'
+import { useCurrenciesCatalog, useExchangeRatesList, useTransactionsList, mapLedgerRowToTransaction } from '../../hooks/queries'
 import {
   userService,
   UserProfileData,
@@ -36,7 +36,14 @@ import { supabase } from '../../lib/supabase'
 
 function ProfileContent({ navigation }: NavigationProps) {
   const { user, userProfile, signOut, refreshUserProfile, applyPersonalSettingsFromServer } = useAuth()
-  const { transactions, currencies, exchangeRates } = useUserData()
+  const txQuery = useTransactionsList({}, 20)
+  const { data: currencies = [] } = useCurrenciesCatalog()
+  const { data: exchangeRates = [] } = useExchangeRatesList()
+  const transactions = useMemo(() => {
+    if (!user?.id) return []
+    const rows = txQuery.data?.pages?.[0]?.transactions ?? []
+    return (rows as Record<string, unknown>[]).map((r) => mapLedgerRowToTransaction(user.id, r))
+  }, [txQuery.data, user?.id])
   const [isEditing, setIsEditing] = useState(false)
   const [loading, setLoading] = useState(false)
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false)

@@ -37,7 +37,8 @@ import {
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { formatDate, formatCurrency } from "@/lib/utils"
-import { useInvoices } from "@/lib/invoices-context"
+import { useInvoicesList } from "@/hooks/queries/use-invoices"
+import { useAddInvoice, useUpdateInvoice, useDeleteInvoice } from "@/hooks/mutations/use-invoices"
 import { formatInvoiceNumberFromClientId, generateInvoiceId } from "@/lib/invoice-id"
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge"
 import { downloadInvoicePdf } from "@/lib/use-invoice-pdf"
@@ -60,18 +61,54 @@ export default function InvoicesPage() {
   const profile = useBusinessProfile()
   const { tier1Complete } = profile
   const issuer = issuerFromBusinessProfile(profile)
-  const { invoices, loading, error: invoicesError, updateInvoice, addInvoice, deleteInvoice } =
-    useInvoices()
+  const invoicesQuery = useInvoicesList()
+  const addInvoiceMut = useAddInvoice()
+  const updateInvoiceMut = useUpdateInvoice()
+  const deleteInvoiceMut = useDeleteInvoice()
+
+  const invoices = invoicesQuery.data ?? []
+  const loading = invoicesQuery.isPending
+  const invoicesError =
+    invoicesQuery.error instanceof Error
+      ? invoicesQuery.error.message
+      : invoicesQuery.error
+        ? String(invoicesQuery.error)
+        : null
+
+  const updateInvoice = (id: string, updates: Partial<Invoice>) => {
+    void updateInvoiceMut.mutate({ id, updates })
+  }
+
+  const addInvoice = async (invoice: Invoice) => {
+    try {
+      const res = await addInvoiceMut.mutateAsync(invoice)
+      return res.invoice ?? null
+    } catch {
+      return null
+    }
+  }
+
+  const deleteInvoice = async (id: string) => {
+    try {
+      await deleteInvoiceMut.mutateAsync(id)
+      return true
+    } catch {
+      return false
+    }
+  }
   const [activeTab, setActiveTab] = useState("all")
 
   useEffect(() => {
     const deletedId = searchParams.get("deleted")
     if (!deletedId) return
     void (async () => {
-      await deleteInvoice(deletedId)
-      router.replace("/invoices")
+      try {
+        await deleteInvoiceMut.mutateAsync(deletedId)
+      } finally {
+        router.replace("/invoices")
+      }
     })()
-  }, [searchParams, deleteInvoice, router])
+  }, [searchParams, deleteInvoiceMut, router])
 
   const [searchTerm, setSearchTerm] = useState("")
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)

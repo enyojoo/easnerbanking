@@ -1,6 +1,7 @@
 "use client"
 
-import { useCallback, useState } from "react"
+import { useCallback } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -22,8 +23,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { officeFetch } from "@/lib/api-client"
 import type { OfficeOverviewResponse } from "@/lib/types/office-overview"
 import { useAuth } from "@/lib/auth-context"
-import { useCachedData } from "@/lib/use-cached-data"
-import { CACHE_KEYS } from "@/lib/cache"
+import { officeKeys } from "@/lib/query/keys"
 
 const OFFICE_OVERVIEW_TTL_MS = 5 * 60 * 1000
 const OVERVIEW_PRESET = "7d" as const
@@ -31,33 +31,31 @@ const OVERVIEW_PRESET = "7d" as const
 export default function AdminDashboardPage() {
   const { user, isAdmin } = useAuth()
   const enabled = Boolean(user && isAdmin)
-  const [loadError, setLoadError] = useState<string | null>(null)
 
-  const cacheKey = enabled ? `${CACHE_KEYS.OFFICE_OVERVIEW}:${OVERVIEW_PRESET}` : null
-  const persistKey = `office_overview_v1_${OVERVIEW_PRESET}`
-
-  const fetcher = useCallback(async (): Promise<OfficeOverviewResponse> => {
+  const fetchOverview = useCallback(async (): Promise<OfficeOverviewResponse> => {
     const r = await officeFetch(`/api/admin/office/overview?preset=${encodeURIComponent(OVERVIEW_PRESET)}`)
     const d = (await r.json()) as OfficeOverviewResponse & { error?: string }
     if (!r.ok || d.error) {
       throw new Error(typeof d.error === "string" ? d.error : r.statusText || "Overview request failed")
     }
-    setLoadError(null)
     return d
   }, [])
 
-  const { data: overview, loading } = useCachedData<OfficeOverviewResponse | null>({
+  const {
+    data: overview,
+    isPending,
+    error: overviewError,
+  } = useQuery({
+    queryKey: officeKeys.overview(OVERVIEW_PRESET),
     enabled,
-    cacheKey,
-    fetcher,
-    initialData: null,
-    ttlMs: OFFICE_OVERVIEW_TTL_MS,
-    persistKey,
-    persistMaxAgeMs: OFFICE_OVERVIEW_TTL_MS,
-    onError: (err) => {
-      setLoadError(err instanceof Error ? err.message : "Failed to load overview")
-    },
+    queryFn: fetchOverview,
+    staleTime: OFFICE_OVERVIEW_TTL_MS,
+    gcTime: OFFICE_OVERVIEW_TTL_MS * 2,
   })
+
+  const loading = isPending
+  const loadError =
+    overviewError instanceof Error ? overviewError.message : overviewError ? String(overviewError) : null
 
   const getActivityIcon = (type: string) => {
     if (type.includes("card_funding")) {

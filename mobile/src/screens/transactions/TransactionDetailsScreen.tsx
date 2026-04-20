@@ -20,15 +20,7 @@ import { NavigationProps } from '../../types'
 import { colors, textStyles, borderRadius, spacing, shadows, motion } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
-import { apiGet, NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
-import { useUserData } from '../../contexts/UserDataContext'
-import {
-  transactionDetailCacheKey,
-  readUserCache,
-  writeUserCache,
-  isCacheStale,
-  CacheTTL,
-} from '../../lib/userCache'
+import { useTransactionDetail, useCurrenciesCatalog } from '../../hooks/queries'
 
 interface LedgerTransaction {
   id: string
@@ -62,7 +54,8 @@ interface LedgerTransaction {
 export default function TransactionDetailsScreen({ navigation, route }: NavigationProps) {
   const { transactionId, fromScreen } = route.params as { transactionId: string; fromScreen?: string }
   const insets = useSafeAreaInsets()
-  const { currencies } = useUserData()
+  const detailQuery = useTransactionDetail(transactionId)
+  const { data: currencies = [] } = useCurrenciesCatalog()
   const [transaction, setTransaction] = useState<LedgerTransaction | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -74,61 +67,38 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   const headerAnim = useRef(new Animated.Value(0)).current
   const contentAnim = useRef(new Animated.Value(0)).current
 
-  const detailCacheKey = transactionDetailCacheKey(transactionId)
-
   useCalmParallelEnterWhen(true, headerAnim, contentAnim)
 
   useEffect(() => {
-    if (!dataLoadedRef.current) {
-      fetchTransactionDetails()
+    if (!transactionId) return
+    const raw = detailQuery.data
+    if (!raw) {
+      if (detailQuery.isFetched && !detailQuery.isPending) {
+        setError('Transaction not found')
+        setLoading(false)
+      }
+      return
     }
-  }, [transactionId])
+    const transactionData = ((raw as any)?.transaction ?? raw) as LedgerTransaction | null | undefined
+    if (transactionData) {
+      setTransaction(transactionData)
+      dataLoadedRef.current = true
+      setError(null)
+    } else if (detailQuery.isFetched && !detailQuery.isPending) {
+      setError('Transaction not found')
+    }
+    setLoading(detailQuery.isPending && !transactionData)
+  }, [transactionId, detailQuery.data, detailQuery.isFetched, detailQuery.isPending])
 
   const fetchTransactionDetails = useCallback(async (force = false) => {
-    // Prevent multiple simultaneous fetches
     if (dataLoadedRef.current && !force) return
-
-    let cached: { data: LedgerTransaction; timestamp: number } | null = null
-
-    // Try to load from cache first (stale-while-revalidate)
-    if (!force) {
-      cached = await readUserCache<LedgerTransaction>(detailCacheKey)
-      if (cached && !isCacheStale(cached.timestamp, CacheTTL.TRANSACTION_DETAIL)) {
-        // Data is fresh, use cache
-        setTransaction(cached.data)
-        setLoading(false)
-        dataLoadedRef.current = true
-        return
-      } else if (cached) {
-        // Data is stale, show cached data immediately, then fetch fresh
-        setTransaction(cached.data)
-        setLoading(false)
-        dataLoadedRef.current = true
-        // Continue to fetch fresh data in background
-      }
-    }
-
+    setLoading(true)
+    setError(null)
     try {
-      if (!cached || force) {
-        setLoading(true)
-      }
-      setError(null)
-
-      // Try unified ledger first, fallback to Noah-only API.
-      let response = await apiGet(`/api/transactions/${encodeURIComponent(transactionId)}`, {
-        headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
-      })
-      if (!response.ok || (response as any).isNetworkError) {
-        response = await apiGet(`/api/noah/transactions/${transactionId}`)
-      }
-
-      if (response.ok && !(response as any).isNetworkError) {
-        const data = await response.json()
-        const transactionData = data.transaction
-        
+      const result = await detailQuery.refetch()
+      const transactionData = ((result.data as any)?.transaction ?? result.data) as LedgerTransaction | null | undefined
+      if (transactionData) {
         setTransaction(transactionData)
-        // Cache the transaction
-        await writeUserCache(detailCacheKey, transactionData)
         dataLoadedRef.current = true
       } else {
         setError('Transaction not found')
@@ -139,7 +109,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
     } finally {
       setLoading(false)
     }
-  }, [transactionId, detailCacheKey])
+  }, [detailQuery])
 
   const onRefresh = async () => {
     setRefreshing(true)

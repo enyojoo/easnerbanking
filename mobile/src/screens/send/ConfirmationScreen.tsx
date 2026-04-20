@@ -14,7 +14,9 @@ import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '../../contexts/AuthContext'
-import { useUserData } from '../../contexts/UserDataContext'
+import { useQueryClient } from '@tanstack/react-query'
+import { useScope } from '../../query/scope'
+import { invalidateTransactionsFeed } from '../../query/refresh-user-feeds'
 import { NavigationProps } from '../../types'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { analytics } from '../../lib/analytics'
@@ -27,7 +29,8 @@ import { PinChallengeModal } from '../../components/pin'
 
 export default function ConfirmationScreen({ navigation, route }: NavigationProps) {
   const { userProfile, user } = useAuth()
-  const { refreshTransactions, invalidateTransactions } = useUserData()
+  const qc = useQueryClient()
+  const { scope } = useScope()
   const insets = useSafeAreaInsets()
   const [isProcessing, setIsProcessing] = useState(false)
   const [pinModalVisible, setPinModalVisible] = useState(false)
@@ -104,7 +107,7 @@ export default function ConfirmationScreen({ navigation, route }: NavigationProp
           {
             text: 'View Details',
             onPress: () => {
-              void invalidateTransactions().then(() => refreshTransactions(true))
+              if (scope && user?.id) void invalidateTransactionsFeed(qc, scope, user.id)
               navigation.navigate('LegacyTransactionDetails', { 
                 transactionId,
                 fromScreen: 'SendFlow'

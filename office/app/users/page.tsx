@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo, useCallback } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
 import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -35,6 +36,7 @@ import {
 import { supabase } from "@/lib/supabase"
 import { officeFetch } from "@/lib/api-client"
 import { useAuth } from "@/lib/auth-context"
+import { officeKeys } from "@/lib/query/keys"
 import type { CommunicationPreferences } from "@easner/shared"
 
 /** Mirrors `public.users` (+ `email_confirmed_at` merged from auth). */
@@ -125,15 +127,73 @@ interface TransactionData {
 }
 
 export default function AdminUsersPage() {
+  const queryClient = useQueryClient()
   const { user, isAdmin, loading: authLoading } = useAuth()
   const [searchTerm, setSearchTerm] = useState("")
   const [roleFilter, setRoleFilter] = useState<"all" | "individual" | "business">("all")
   const [verificationFilter, setVerificationFilter] = useState("all")
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null)
   const [userTransactions, setUserTransactions] = useState<TransactionData[]>([])
-  const [directoryUsers, setDirectoryUsers] = useState<UserData[]>([])
-  const [dirLoading, setDirLoading] = useState(true)
-  const [dirError, setDirError] = useState<string | null>(null)
+  const usersEnabled = !authLoading && Boolean(isAdmin && user)
+  const directoryQuery = useQuery({
+    queryKey: officeKeys.users(),
+    enabled: usersEnabled,
+    staleTime: 60_000,
+    gcTime: 5 * 60_000,
+    queryFn: async () => {
+      const r = await officeFetch("/api/admin/office/users")
+      const d = (await r.json()) as { users?: unknown[]; error?: string }
+      if (!r.ok || d.error) {
+        throw new Error(typeof d.error === "string" ? d.error : "Failed to load users")
+      }
+      const rows = d.users ?? []
+      return (rows as Record<string, unknown>[]).map((row) => {
+        const id = String(row.id)
+        const noahKycStatus = String(row.noah_kyc_status || "not_started")
+        return {
+          ...row,
+          id,
+          email: (row.email as string | null) ?? null,
+          full_name: (row.full_name as string | null) ?? null,
+          phone: (row.phone as string | null) ?? null,
+          date_of_birth: (row.date_of_birth as string | null) ?? null,
+          avatar_url: (row.avatar_url as string | null) ?? null,
+          role: String(row.role || "individual"),
+          easner_business_id: (row.easner_business_id as string | null) ?? null,
+          created_at: String(row.created_at),
+          updated_at: String(row.updated_at),
+          noah_customer_id: row.noah_customer_id as string | null | undefined,
+          noah_kyc_status: row.noah_kyc_status as string | null | undefined,
+          noah_kyc_rejection_reasons: row.noah_kyc_rejection_reasons,
+          noah_kyc_metadata: row.noah_kyc_metadata as UserData["noah_kyc_metadata"],
+          noah_signed_agreement_id: row.noah_signed_agreement_id as string | null | undefined,
+          noah_wallet_id: row.noah_wallet_id as string | null | undefined,
+          noah_usd_virtual_account_id: row.noah_usd_virtual_account_id as string | null | undefined,
+          noah_eur_virtual_account_id: row.noah_eur_virtual_account_id as string | null | undefined,
+          noah_gbp_virtual_account_id: row.noah_gbp_virtual_account_id as string | null | undefined,
+          noah_kyb_customer_id: row.noah_kyb_customer_id as string | null | undefined,
+          noah_kyb_status: row.noah_kyb_status as string | null | undefined,
+          linkedBusinessName: (row.linkedBusinessName as string | null | undefined) ?? null,
+          enabled_extra_account_currencies: row.enabled_extra_account_currencies as string[] | undefined,
+          email_confirmed_at: row.email_confirmed_at as string | null | undefined,
+          communicationPreferences: row.communicationPreferences as CommunicationPreferences | undefined,
+          hasExpoPushToken: Boolean(row.hasExpoPushToken),
+          totalTransactions: 0,
+          totalVolume: 0,
+          verificationStatus: noahKycStatus === "approved" ? "verified" : "pending",
+          noahKycStatus,
+        } as UserData
+      })
+    },
+  })
+  const directoryUsers = directoryQuery.data ?? []
+  const dirLoading = usersEnabled ? directoryQuery.isPending : false
+  const dirError =
+    directoryQuery.error instanceof Error
+      ? directoryQuery.error.message
+      : directoryQuery.error
+        ? String(directoryQuery.error)
+        : null
   const [mfaResetConfirmOpen, setMfaResetConfirmOpen] = useState(false)
   const [mfaResetLoading, setMfaResetLoading] = useState(false)
   const [mfaResetFeedback, setMfaResetFeedback] = useState<{ ok: boolean; message: string } | null>(null)
@@ -204,83 +264,6 @@ export default function AdminUsersPage() {
       setUserTransactions([])
     }
   }, [])
-
-  useEffect(() => {
-    if (authLoading) return
-    if (!isAdmin || !user) {
-      setDirLoading(false)
-      setDirectoryUsers([])
-      setDirError(null)
-      return
-    }
-
-    let cancelled = false
-    setDirLoading(true)
-    setDirError(null)
-
-    void officeFetch("/api/admin/office/users")
-      .then(async (r) => {
-        const d = (await r.json()) as { users?: unknown[]; error?: string }
-        if (!r.ok || d.error) {
-          throw new Error(typeof d.error === "string" ? d.error : "Failed to load users")
-        }
-        return d.users ?? []
-      })
-      .then((rows) => {
-        if (cancelled) return
-        const list: UserData[] = (rows as Record<string, unknown>[]).map((row) => {
-          const id = String(row.id)
-          const noahKycStatus = String(row.noah_kyc_status || "not_started")
-          return {
-            ...row,
-            id,
-            email: (row.email as string | null) ?? null,
-            full_name: (row.full_name as string | null) ?? null,
-            phone: (row.phone as string | null) ?? null,
-            date_of_birth: (row.date_of_birth as string | null) ?? null,
-            avatar_url: (row.avatar_url as string | null) ?? null,
-            role: String(row.role || "individual"),
-            easner_business_id: (row.easner_business_id as string | null) ?? null,
-            created_at: String(row.created_at),
-            updated_at: String(row.updated_at),
-            noah_customer_id: row.noah_customer_id as string | null | undefined,
-            noah_kyc_status: row.noah_kyc_status as string | null | undefined,
-            noah_kyc_rejection_reasons: row.noah_kyc_rejection_reasons,
-            noah_kyc_metadata: row.noah_kyc_metadata as UserData["noah_kyc_metadata"],
-            noah_signed_agreement_id: row.noah_signed_agreement_id as string | null | undefined,
-            noah_wallet_id: row.noah_wallet_id as string | null | undefined,
-            noah_usd_virtual_account_id: row.noah_usd_virtual_account_id as string | null | undefined,
-            noah_eur_virtual_account_id: row.noah_eur_virtual_account_id as string | null | undefined,
-            noah_gbp_virtual_account_id: row.noah_gbp_virtual_account_id as string | null | undefined,
-            noah_kyb_customer_id: row.noah_kyb_customer_id as string | null | undefined,
-            noah_kyb_status: row.noah_kyb_status as string | null | undefined,
-            linkedBusinessName: (row.linkedBusinessName as string | null | undefined) ?? null,
-            enabled_extra_account_currencies: row.enabled_extra_account_currencies as string[] | undefined,
-            email_confirmed_at: row.email_confirmed_at as string | null | undefined,
-            communicationPreferences: row.communicationPreferences as CommunicationPreferences | undefined,
-            hasExpoPushToken: Boolean(row.hasExpoPushToken),
-            totalTransactions: 0,
-            totalVolume: 0,
-            verificationStatus: noahKycStatus === "approved" ? "verified" : "pending",
-            noahKycStatus,
-          } as UserData
-        })
-        setDirectoryUsers(list)
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) {
-          setDirError(e instanceof Error ? e.message : "Failed to load users")
-          setDirectoryUsers([])
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setDirLoading(false)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [authLoading, isAdmin, user])
 
   const usersWithStats = useMemo(() => directoryUsers, [directoryUsers])
 
@@ -460,6 +443,7 @@ export default function AdminUsersPage() {
       if (Number(d.removed ?? 0) > 0) {
         setMfaStatus({ loading: false, hasTotp: false })
       }
+      void queryClient.invalidateQueries({ queryKey: officeKeys.users() })
     } catch (e: unknown) {
       setMfaResetFeedback({ ok: false, message: e instanceof Error ? e.message : "Request failed" })
     } finally {

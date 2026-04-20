@@ -56,6 +56,7 @@ export function useAddInvoice() {
         created,
         ...rows.filter((i) => i.id !== created.id && i.id !== invoice.id),
       ])
+      qc.setQueryData(qk.invoices.detail(scope, created.id), created)
     },
   })
 }
@@ -74,16 +75,24 @@ export function useUpdateInvoice() {
     onMutate: async ({ id, updates }) => {
       if (!scope) return {}
       const listKey = qk.invoices.list(scope, {})
+      const detailKey = qk.invoices.detail(scope, id)
       await qc.cancelQueries({ queryKey: listKey })
       const prev = qc.getQueryData<InvoicesListEnvelope>(listKey)
+      const prevDetail = qc.getQueryData<Invoice>(detailKey)
       patchList(qc, listKey, (rows) =>
         rows.map((i) => (i.id === id ? ({ ...i, ...updates, id } as Invoice) : i)),
       )
-      return { prev }
+      if (prevDetail) {
+        qc.setQueryData(detailKey, { ...prevDetail, ...updates, id } as Invoice)
+      }
+      return { prev, prevDetail }
     },
-    onError: (_err, _input, ctx) => {
+    onError: (_err, variables, ctx) => {
       if (!scope) return
       if (ctx?.prev) qc.setQueryData(qk.invoices.list(scope, {}), ctx.prev)
+      if (ctx?.prevDetail !== undefined && variables) {
+        qc.setQueryData(qk.invoices.detail(scope, variables.id), ctx.prevDetail)
+      }
     },
     onSuccess: (data, { id }) => {
       if (!scope) return
@@ -93,6 +102,7 @@ export function useUpdateInvoice() {
       patchList(qc, qk.invoices.list(scope, {}), (rows) =>
         rows.map((i) => (i.id === id ? updated : i)),
       )
+      qc.setQueryData(qk.invoices.detail(scope, id), updated)
     },
   })
 }
@@ -120,6 +130,7 @@ export function useDeleteInvoice() {
       if (ctx?.prev) qc.setQueryData(qk.invoices.list(scope, {}), ctx.prev)
     },
     onSuccess: (_data, id) => {
+      if (scope) qc.removeQueries({ queryKey: qk.invoices.detail(scope, id) })
       removeInvoiceFromStore(id)
     },
   })

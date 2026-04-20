@@ -22,19 +22,12 @@ import { ShimmerLoader } from '../../components/premium'
 import FrameContainer from '../../components/FrameContainer'
 import EmptyState from '../../components/EmptyState'
 import ErrorState from '../../components/ErrorState'
-import { useUserData } from '../../contexts/UserDataContext'
+import { useCurrenciesCatalog, useTransactionsList } from '../../hooks/queries'
 import { NavigationProps, Transaction } from '../../types'
 import { analytics } from '../../lib/analytics'
 import { useAuth } from '../../contexts/AuthContext'
 import { useFocusRefreshAll } from '../../hooks/useFocusRefresh'
-import { apiGet, apiPost, NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
-import {
-  buildUserCacheKey,
-  readUserCache,
-  writeUserCache,
-  isCacheStale,
-  CacheTTL,
-} from '../../lib/userCache'
+import { apiPost } from '../../lib/apiClient'
 import {
   colors,
   shadows,
@@ -52,9 +45,8 @@ import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { getTransactionStatusDisplay } from '../../utils/formatters'
 
-// Get currencies from useUserData for formatAmount
 function useCurrencies() {
-  const { currencies } = useUserData()
+  const { data: currencies = [] } = useCurrenciesCatalog()
   return currencies || []
 }
 
@@ -340,7 +332,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
   const insets = useSafeAreaInsets()
   const { userProfile } = useAuth()
   const currencies = useCurrencies()
-  const { transactions: userTransactions, refreshStaleData, financialFeedsEpoch } = useUserData()
+  const txQuery = useTransactionsList({}, 100)
   
   const [transactions, setTransactions] = useState<CombinedTransaction[]>([])
   const [loading, setLoading] = useState(true)
@@ -363,85 +355,18 @@ function TransactionsContent({ navigation }: NavigationProps) {
     analytics.trackScreenView('Transactions')
   }, [])
 
-  const cacheKey = buildUserCacheKey('combinedTxList', userProfile?.id)
+  const queryRows = useMemo<CombinedTransaction[]>(() => {
+    const pages = txQuery.data?.pages ?? []
+    return pages.flatMap((p) => (p.transactions ?? []) as CombinedTransaction[])
+  }, [txQuery.data])
 
-  // Fetch transactions with caching (stale-while-revalidate pattern)
   const fetchTransactions = React.useCallback(async (force = false, silent = false) => {
-    if (!userProfile?.id) return
-
-    let cached: { data: CombinedTransaction[]; timestamp: number } | null = null
-
-    // Try to load from cache first (stale-while-revalidate)
-    if (!force) {
-      cached = await readUserCache<CombinedTransaction[]>(cacheKey)
-      if (cached && !isCacheStale(cached.timestamp, CacheTTL.COMBINED_TX_LIST)) {
-        // Data is fresh, use cache
-        setTransactions(cached.data)
-        setLoading(false)
-        return
-      } else if (cached) {
-        // Data is stale, show cached data immediately, then fetch fresh
-        setTransactions(cached.data)
-        setLoading(false)
-        // Continue to fetch fresh data in background
-      }
-    }
-
-    try {
-      // Only show loading if not silent and we don't have cached data
-      if (!silent && (!cached || force)) {
-        setLoading(true)
-      }
-
-      const params = new URLSearchParams()
-      params.append('limit', '100')
-
-      // Try unified ledger first, fallback to Noah-only API.
-      let response = await apiGet(`/api/transactions?${params.toString()}`, {
-        headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
-      })
-      if (!response.ok || (response as any).isNetworkError) {
-        response = await apiGet(`/api/noah/transactions?${params.toString()}`)
-      }
-      
-      if (response.ok && !(response as any).isNetworkError) {
-        const data = await response.json()
-        const transactionsList = data.transactions || []
-        
-        setTransactions(transactionsList)
-        await writeUserCache(cacheKey, transactionsList)
-        setError(null)
-      } else if ((response as any).isNetworkError) {
-        // Network error - keep cached data if available
-        console.warn("Network error fetching transactions, keeping cached data")
-        if (!cached) {
-          setError("Network error. Please check your connection.")
-          setTransactions([])
-        }
-      } else {
-        if (!cached) {
-          setTransactions([])
-          setError("Failed to load transactions")
-        }
-      }
-    } catch (error: any) {
-      if (error?.message?.includes('Network request failed') || error?.name === 'TypeError') {
-        console.warn("Network error fetching transactions:", error?.message || 'Network unavailable')
-        if (!cached) {
-          setError("Network error. Please check your connection.")
-          setTransactions([])
-        }
-      } else {
-        console.error("Error fetching transactions:", error)
-        if (!cached) {
-          setError("Failed to load transactions")
-          setTransactions([])
-        }
-      }
-    } finally {
-      setLoading(false)
-    }
-  }, [userProfile?.id, cacheKey])
+    void force
+    void silent
+    setTransactions(queryRows)
+    setError(null)
+    setLoading(txQuery.isPending && queryRows.length === 0)
+  }, [queryRows, txQuery.isPending])
 
   // Initial load
   useEffect(() => {
@@ -449,11 +374,9 @@ function TransactionsContent({ navigation }: NavigationProps) {
     fetchTransactions(false)
   }, [userProfile?.id, fetchTransactions])
 
-  // Refetch combined list when a transaction row changes in Supabase (receives, card funding sync, etc.).
   useEffect(() => {
-    if (!userProfile?.id || financialFeedsEpoch === 0) return
     fetchTransactions(false, true).catch(() => {})
-  }, [financialFeedsEpoch, userProfile?.id, fetchTransactions])
+  }, [fetchTransactions])
 
   // Refresh stale data when screen comes into focus
   useFocusRefreshAll(false) // Only refresh if stale (> 5 minutes)
@@ -465,7 +388,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
       void apiPost('/api/noah/sync-transactions').catch((error) => {
         console.warn('[TRANSACTIONS] Sync failed on pull-to-refresh:', error)
       })
-      // Spinner follows this screen’s list fetch only — `refreshStaleData({ force })` can be slow and must not block RefreshControl.
+      await txQuery.refetch()
       await fetchTransactions(true)
     } catch (error: any) {
       if (error?.message?.includes('Network request failed') || error?.name === 'TypeError') {
@@ -476,9 +399,6 @@ function TransactionsContent({ navigation }: NavigationProps) {
     } finally {
       setRefreshing(false)
     }
-    void refreshStaleData({ force: true }).catch((e) => {
-      console.warn('[TRANSACTIONS] Background user-data refresh after pull:', e)
-    })
   }
 
   const formatAmount = (amount: number, currency: string, isReceived: boolean = false) => {

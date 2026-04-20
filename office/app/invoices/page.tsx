@@ -1,10 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { officeFetch } from "@/lib/api-client"
+import { useQuery } from "@tanstack/react-query"
+import { officeKeys } from "@/lib/query/keys"
 
 type Row = {
   id: string
@@ -17,24 +18,24 @@ type Row = {
 }
 
 export default function InvoicesPage() {
-  const [rows, setRows] = useState<Row[]>([])
-  const [error, setError] = useState<string | null>(null)
+  const { data: rows = [], error } = useQuery({
+    queryKey: officeKeys.businessInvoices(),
+    queryFn: async () => {
+      const r = await officeFetch("/api/admin/business/invoices")
+      const d = (await r.json()) as { invoices?: Row[]; error?: string }
+      if (d.error) throw new Error(d.error)
+      return d.invoices ?? []
+    },
+    staleTime: 60_000,
+  })
 
-  useEffect(() => {
-    officeFetch("/api/admin/business/invoices")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.error) setError(d.error)
-        else setRows(d.invoices ?? [])
-      })
-      .catch(() => setError("Failed to load"))
-  }, [])
+  const message = error instanceof Error ? error.message : error ? String(error) : null
 
   return (
     <OfficeDashboardLayout>
       <div className="p-6 space-y-4">
         <h1 className="text-2xl font-bold">Invoices</h1>
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {message && <p className="text-sm text-destructive">{message}</p>}
         <Card>
           <CardHeader>
             <CardTitle>All invoices</CardTitle>

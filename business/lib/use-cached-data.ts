@@ -1,7 +1,7 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
-import { dataCache } from "@/lib/cache"
+import { useCallback, useMemo } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 
 type SetStateAction<T> = T | ((prev: T) => T)
 
@@ -32,107 +32,58 @@ export function useCachedData<T>({
   persistMaxAgeMs = 30 * 24 * 60 * 60 * 1000,
   onError,
 }: UseCachedDataOptions<T>) {
-  const [data, setDataState] = useState<T>(initialData)
-  const [loading, setLoading] = useState<boolean>(enabled)
+  const queryClient = useQueryClient()
+  const queryKey = useMemo(
+    () => (cacheKey ? (["business", "compat-cache", cacheKey] as const) : (["business", "compat-cache", "disabled"] as const)),
+    [cacheKey],
+  )
 
-  // Callers often pass `initialData: []` or inline objects — new references each render.
-  // If `initialData` is a dependency of the cache effect, that causes an infinite update loop.
-  const initialDataRef = useRef(initialData)
-  initialDataRef.current = initialData
-
-  const fetcherRef = useRef(fetcher)
-  fetcherRef.current = fetcher
-  const onErrorRef = useRef(onError)
-  onErrorRef.current = onError
-
-  const fetchFresh = useCallback(() => {
-    if (!enabled || !cacheKey) return Promise.resolve()
-    return fetcherRef.current()
-      .then((fresh) => {
-        setDataState(fresh)
-        setLoading(false)
-        dataCache.set(cacheKey, fresh, ttlMs)
-        if (persistKey && typeof window !== "undefined") {
-          try {
-            localStorage.setItem(persistKey, JSON.stringify({ data: fresh, timestamp: Date.now() }))
-          } catch {
-            // Ignore localStorage write errors.
-          }
-        }
-      })
-      .catch((error) => {
-        setLoading(false)
-        onErrorRef.current?.(error)
-      })
-  }, [enabled, cacheKey, ttlMs, persistKey])
-
-  /** Avoid putting `fetchFresh` in effect deps (Turbopack/HMR can make dependency length look unstable). */
-  const fetchFreshRef = useRef(fetchFresh)
-  fetchFreshRef.current = fetchFresh
-
-  useEffect(() => {
-    if (!enabled || !cacheKey) {
-      setDataState(initialDataRef.current)
-      setLoading(false)
-      return
-    }
-
-    const cached = dataCache.get<T>(cacheKey)
-    if (cached != null) {
-      setDataState(cached)
-      setLoading(false)
-      // Return cached data instantly, then refresh in background if stale.
-      if (dataCache.isStale(cacheKey)) {
-        void fetchFreshRef.current()
+  const persistedInitial = useMemo(() => {
+    if (!persistKey || typeof window === "undefined") return undefined
+    try {
+      const raw = localStorage.getItem(persistKey)
+      if (!raw) return undefined
+      const parsed = JSON.parse(raw) as { data?: T; timestamp?: number }
+      const ts = typeof parsed?.timestamp === "number" ? parsed.timestamp : 0
+      if (parsed?.data != null && Date.now() - ts <= persistMaxAgeMs) {
+        return parsed.data
       }
-      return
+    } catch {
+      // Ignore localStorage read errors.
     }
+    return undefined
+  }, [persistKey, persistMaxAgeMs])
 
-    if (persistKey && typeof window !== "undefined") {
-      try {
-        const raw = localStorage.getItem(persistKey)
-        if (raw) {
-          const parsed = JSON.parse(raw) as { data?: T; timestamp?: number }
-          const ts = typeof parsed?.timestamp === "number" ? parsed.timestamp : 0
-          if (parsed?.data != null && Date.now() - ts <= persistMaxAgeMs) {
-            setDataState(parsed.data)
-            setLoading(false)
-            dataCache.set(cacheKey, parsed.data, ttlMs)
-            return
-          }
+  const {
+    data = persistedInitial ?? initialData,
+    isPending,
+    isFetching,
+    refetch: queryRefetch,
+  } = useQuery({
+    queryKey,
+    enabled: enabled && Boolean(cacheKey),
+    queryFn: async () => {
+      const fresh = await fetcher()
+      if (persistKey && typeof window !== "undefined") {
+        try {
+          localStorage.setItem(persistKey, JSON.stringify({ data: fresh, timestamp: Date.now() }))
+        } catch {
+          // Ignore localStorage write errors.
         }
-      } catch {
-        // Ignore localStorage read errors.
       }
-    }
-
-    setLoading(true)
-    void fetchFreshRef.current()
-
-    return () => {
-      // no-op
-    }
-  }, [enabled, cacheKey, persistKey, persistMaxAgeMs, ttlMs])
-
-  useEffect(() => {
-    if (!enabled || !cacheKey || typeof window === "undefined") return
-    const revalidateIfStale = () => {
-      if (document.visibilityState === "hidden") return
-      if (dataCache.isStale(cacheKey)) void fetchFreshRef.current()
-    }
-    window.addEventListener("focus", revalidateIfStale)
-    document.addEventListener("visibilitychange", revalidateIfStale)
-    return () => {
-      window.removeEventListener("focus", revalidateIfStale)
-      document.removeEventListener("visibilitychange", revalidateIfStale)
-    }
-  }, [enabled, cacheKey])
+      return fresh
+    },
+    staleTime: ttlMs,
+    gcTime: Math.max(ttlMs * 2, 30_000),
+    initialData: persistedInitial,
+    meta: { safePersist: true, freshness: "operational" },
+  })
 
   const setData = useCallback(
     (next: SetStateAction<T>) => {
-      setDataState((prev) => {
-        const resolved = typeof next === "function" ? (next as (value: T) => T)(prev) : next
-        if (cacheKey) dataCache.set(cacheKey, resolved, ttlMs)
+      queryClient.setQueryData<T>(queryKey, (prev) => {
+        const base = (prev ?? persistedInitial ?? initialData) as T
+        const resolved = typeof next === "function" ? (next as (value: T) => T)(base) : next
         if (persistKey && typeof window !== "undefined") {
           try {
             localStorage.setItem(persistKey, JSON.stringify({ data: resolved, timestamp: Date.now() }))
@@ -143,13 +94,18 @@ export function useCachedData<T>({
         return resolved
       })
     },
-    [cacheKey, ttlMs, persistKey],
+    [queryClient, queryKey, persistedInitial, initialData, persistKey],
   )
 
-  const refetch = useCallback(() => {
-    return fetchFresh()
-  }, [fetchFresh])
+  const refetch = useCallback(async () => {
+    try {
+      await queryRefetch()
+    } catch (error) {
+      onError?.(error)
+    }
+  }, [queryRefetch, onError])
 
+  const loading = enabled ? isPending || (isFetching && data == null) : false
   return { data, setData, loading, refetch }
 }
 

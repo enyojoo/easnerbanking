@@ -181,22 +181,25 @@ export function attachRealtime({
   // --- transactions: posted / updated ----------------------------------------
   channel.on(
     "postgres_changes",
-    { event: "INSERT", schema: "public", table: "transactions", filter: scopeFilter },
-    (p) => {
+    // IMPORTANT: ledger rows are scoped by `business_id`/`user_id`, while
+    // the client scope currently tracks entity separately. Avoid column
+    // filter mismatches by subscribing to all transaction events and
+    // relying on RLS + narrow query invalidation for correctness.
+    { event: "INSERT", schema: "public", table: "transactions" },
+    () => {
       health.lastEventAt = Date.now()
       emit()
-      const row = p.new as VersionedRecord & { id?: string }
-      if (!row.id) return
       const key = qk.transactions.root(scope)
       batcher.schedule(key, () => {
-        // Prepend to every active list cache (first page) without refetching.
-        qc.setQueriesData(
-          { queryKey: qk.transactions.root(scope), exact: false },
-          (data: unknown) => prependIntoFirstPage(data, row),
-        )
-        // Mark the rest stale so opening another page revalidates.
+        // Revalidate all active transaction consumers immediately so
+        // dashboard money in/out, recent activity, and /transactions
+        // stay in lock-step with the latest ledger write.
         qc.invalidateQueries({
-          queryKey: qk.transactions.root(scope),
+          queryKey: key,
+          refetchType: "active",
+        })
+        qc.invalidateQueries({
+          queryKey: key,
           refetchType: "inactive",
         })
       })
@@ -205,19 +208,20 @@ export function attachRealtime({
 
   channel.on(
     "postgres_changes",
-    { event: "UPDATE", schema: "public", table: "transactions", filter: scopeFilter },
-    (p) => {
+    { event: "UPDATE", schema: "public", table: "transactions" },
+    () => {
       health.lastEventAt = Date.now()
       emit()
-      const row = p.new as VersionedRecord & { id?: string }
-      if (!row.id) return
-      const detailKey = qk.transactions.detail(scope, row.id)
-      batcher.schedule(detailKey, () => {
-        qc.setQueryData(detailKey, (prev: VersionedRecord | undefined) => pickNewer(prev, row))
-        qc.setQueriesData(
-          { queryKey: qk.transactions.root(scope), exact: false },
-          (data: unknown) => patchRowInPages(data, row),
-        )
+      const key = qk.transactions.root(scope)
+      batcher.schedule(key, () => {
+        qc.invalidateQueries({
+          queryKey: key,
+          refetchType: "active",
+        })
+        qc.invalidateQueries({
+          queryKey: key,
+          refetchType: "inactive",
+        })
       })
     },
   )
@@ -297,79 +301,3 @@ export function attachRealtime({
   }
 }
 
-// ---- internal list helpers ---------------------------------------------------
-
-function prependIntoFirstPage(data: unknown, row: VersionedRecord & { id?: string }): unknown {
-  if (!data) return data
-  // useInfiniteQuery shape: { pages: [{ items: [...], nextCursor }, ...], pageParams }
-  if (typeof data === "object" && data !== null && Array.isArray((data as { pages?: unknown[] }).pages)) {
-    const d = data as { pages: unknown[]; pageParams: unknown[] }
-    const [firstPage, ...rest] = d.pages
-    const nextFirst = mergePrepend(firstPage, row)
-    return { ...d, pages: [nextFirst, ...rest] }
-  }
-  // useQuery list shape: plain array
-  if (Array.isArray(data)) {
-    return mergePrepend(data, row)
-  }
-  // object-with-items shape
-  if (typeof data === "object" && data !== null && Array.isArray((data as { items?: unknown[] }).items)) {
-    return mergePrepend(data, row)
-  }
-  return data
-}
-
-function mergePrepend(page: unknown, row: VersionedRecord & { id?: string }): unknown {
-  if (Array.isArray(page)) {
-    if (page.some((r) => (r as { id?: string }).id === row.id)) return page
-    return [row, ...page]
-  }
-  if (page && typeof page === "object" && Array.isArray((page as { items?: unknown[] }).items)) {
-    const p = page as { items: unknown[] }
-    if (p.items.some((r) => (r as { id?: string }).id === row.id)) return page
-    return { ...p, items: [row, ...p.items] }
-  }
-  return page
-}
-
-function patchRowInPages(data: unknown, row: VersionedRecord & { id?: string }): unknown {
-  if (!data) return data
-  if (typeof data === "object" && data !== null && Array.isArray((data as { pages?: unknown[] }).pages)) {
-    const d = data as { pages: unknown[]; pageParams: unknown[] }
-    let changed = false
-    const pages = d.pages.map((p) => {
-      const patched = patchPage(p, row)
-      if (patched !== p) changed = true
-      return patched
-    })
-    return changed ? { ...d, pages } : data
-  }
-  return patchPage(data, row)
-}
-
-function patchPage(page: unknown, row: VersionedRecord & { id?: string }): unknown {
-  if (Array.isArray(page)) {
-    let changed = false
-    const next = page.map((r) => {
-      if ((r as { id?: string }).id === row.id) {
-        changed = true
-        return pickNewer(r as VersionedRecord, row)
-      }
-      return r
-    })
-    return changed ? next : page
-  }
-  if (page && typeof page === "object" && Array.isArray((page as { items?: unknown[] }).items)) {
-    const p = page as { items: unknown[] }
-    let changed = false
-    const items = p.items.map((r) => {
-      if ((r as { id?: string }).id === row.id) {
-        changed = true
-        return pickNewer(r as VersionedRecord, row)
-      }
-      return r
-    })
-    return changed ? { ...p, items } : page
-  }
-  return page
-}

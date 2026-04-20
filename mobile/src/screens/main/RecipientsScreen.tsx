@@ -29,8 +29,11 @@ import ScreenWrapper from '../../components/ScreenWrapper'
 import KeyboardSafeContainer from '../../components/KeyboardSafeContainer'
 import ConfirmationDialog from '../../components/ConfirmationDialog'
 import { useToast } from '../../components/ToastProvider'
-import { useUserData } from '../../contexts/UserDataContext'
+import { useQueryClient } from '@tanstack/react-query'
 import { NavigationProps, Recipient } from '../../types'
+import { useRecipientsList, useCurrenciesCatalog } from '../../hooks/queries'
+import { useScope } from '../../query/scope'
+import { invalidateRecipientsFeed } from '../../query/refresh-user-feeds'
 import { recipientService, RecipientData } from '../../lib/recipientService'
 import { useAuth } from '../../contexts/AuthContext'
 import { analytics } from '../../lib/analytics'
@@ -85,7 +88,11 @@ function RecipientFormDropdownList({ children }: { children: React.ReactNode }) 
 
 function RecipientsContent({ navigation }: NavigationProps) {
   const { user, userProfile } = useAuth()
-  const { recipients, loading, refreshRecipients, invalidateRecipients, currencies } = useUserData()
+  const qc = useQueryClient()
+  const { scope } = useScope()
+  const recipientsQuery = useRecipientsList()
+  const { data: currencies = [] } = useCurrenciesCatalog()
+  const recipients = recipientsQuery.data ?? []
   const insets = useSafeAreaInsets()
   const [uiRecipients, setUiRecipients] = useState<Recipient[]>([])
   const [searchTerm, setSearchTerm] = useState('')
@@ -174,14 +181,11 @@ function RecipientsContent({ navigation }: NavigationProps) {
     analytics.trackScreenView('Recipients')
   }, [])
 
-  // Initial load - will use cache if available (stale-while-revalidate)
-  useEffect(() => {
-    refreshRecipients(false) // Not forced - will use cache
-  }, [])
-
   // Refresh when screen comes into focus if data is stale
   useFocusRefresh(
-    () => refreshRecipients(false), // Not forced - will check staleness
+    () => {
+      void recipientsQuery.refetch()
+    },
     5 * 60 * 1000, // 5 minutes
     false
   )
@@ -290,8 +294,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
   const onRefresh = async () => {
     setRefreshing(true)
     try {
-      await invalidateRecipients()
-      await refreshRecipients(true) // Force refresh on pull-to-refresh
+      if (scope && user?.id) await invalidateRecipientsFeed(qc, scope, user.id)
     } finally {
       setRefreshing(false)
     }
@@ -407,8 +410,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
           payeeAccountKind: easenetProfile.accountKind,
         })
         setUiRecipients((prev) => [createdRecipient, ...prev.filter((r) => r.id !== createdRecipient.id)])
-        await invalidateRecipients()
-        await refreshRecipients(true)
+        if (scope && user?.id) await invalidateRecipientsFeed(qc, scope, user.id)
         setError('')
         resetForm()
         setShowBankAccountForm(false)
@@ -454,8 +456,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
       setUiRecipients((prev) => [createdRecipient, ...prev.filter((r) => r.id !== createdRecipient.id)])
 
       // Refresh recipients data
-      await invalidateRecipients()
-      await refreshRecipients(true)
+      if (scope && user?.id) await invalidateRecipientsFeed(qc, scope, user.id)
       setError('')
 
       // Reset form and close modal
@@ -598,8 +599,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
           payeeAccountKind: easenetProfile.accountKind,
         })
         setUiRecipients((prev) => prev.map((r) => (r.id === updatedRecipient.id ? updatedRecipient : r)))
-        await invalidateRecipients()
-        await refreshRecipients(true)
+        if (scope && user?.id) await invalidateRecipientsFeed(qc, scope, user.id)
         setError('')
         setShowBankAccountForm(false)
         showSuccess('Recipient updated successfully')
@@ -643,8 +643,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
       setUiRecipients((prev) => prev.map((r) => (r.id === updatedRecipient.id ? updatedRecipient : r)))
 
       // Refresh recipients data
-      await invalidateRecipients()
-      await refreshRecipients(true)
+      if (scope && user?.id) await invalidateRecipientsFeed(qc, scope, user.id)
       setError('')
 
       // Close modal first, form reset handled by useEffect after animation
@@ -672,8 +671,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
       setDeletingId(deleteConfirmation.id)
       await recipientService.delete(deleteConfirmation.id, user.id)
       setUiRecipients((prev) => prev.filter((r) => r.id !== deleteConfirmation.id))
-      await invalidateRecipients()
-      await refreshRecipients(true)
+      if (scope && user?.id) await invalidateRecipientsFeed(qc, scope, user.id)
       showSuccess('Recipient deleted successfully')
     } catch (error: any) {
       console.error('Error deleting recipient:', error)

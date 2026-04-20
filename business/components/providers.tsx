@@ -4,8 +4,7 @@ import type React from "react"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { ThemeProvider } from "@/components/theme-provider"
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools"
-import { CustomersProvider } from "@/lib/customers-context"
-import { InvoicesProvider } from "@/lib/invoices-context"
+import { InvoiceModuleStoreSync } from "@/lib/invoice-module-store-sync"
 import { BusinessScopeProvider, useScope } from "@/lib/query/scope"
 import { getBrowserQueryClient } from "@/lib/query/query-client"
 import { useSupabaseRealtimeScope } from "@/lib/query/use-supabase-realtime-scope"
@@ -23,8 +22,8 @@ import { RealtimeHealthProvider } from "@/lib/query/realtime-health-context"
  *      the Supabase session comes back.
  *   3. The realtime bridge mounts inside the scope so a single channel
  *      is active per entity and persists across navigations.
- *   4. Legacy CustomersProvider / InvoicesProvider stay mounted during
- *      the migration and are removed in `web-migrate-contexts`.
+ *   4. InvoiceModuleStoreSync mirrors the invoices list query into the
+ *      legacy invoice module store for code paths that still read it.
  */
 export function Providers({ children }: { children: React.ReactNode }) {
   const queryClient = getBrowserQueryClient()
@@ -40,9 +39,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
       <BusinessScopeProvider>
         <ScopeRealtimeBridge>
-          <CustomersProvider>
-            <InvoicesProvider>{children}</InvoicesProvider>
-          </CustomersProvider>
+          <InvoiceModuleStoreSync />
+          {children}
         </ScopeRealtimeBridge>
       </BusinessScopeProvider>
       {process.env.NODE_ENV !== "production" ? (

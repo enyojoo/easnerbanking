@@ -23,7 +23,6 @@ import {
   PlayfairDisplay_700Bold,
 } from '@expo-google-fonts/playfair-display'
 import { AuthProvider, useAuth } from './src/contexts/AuthContext'
-import { UserDataProvider } from './src/contexts/UserDataContext'
 import { NotificationsProvider } from './src/contexts/NotificationsContext'
 import { BalanceProvider } from './src/contexts/BalanceContext'
 import { QueryProvider } from './src/query'
@@ -285,13 +284,11 @@ export default function App() {
                 <QueryProvider>
                   <PushNotificationBootstrap />
                   <BalanceProvider>
-                    <UserDataProvider>
-                      <NotificationsProvider>
-                        <ToastProvider>
-                          <AppContent />
-                        </ToastProvider>
-                      </NotificationsProvider>
-                    </UserDataProvider>
+                    <NotificationsProvider>
+                      <ToastProvider>
+                        <AppContent />
+                      </ToastProvider>
+                    </NotificationsProvider>
                   </BalanceProvider>
                 </QueryProvider>
               </AuthProvider>

@@ -3,6 +3,7 @@ import { GeistSans } from "geist/font/sans"
 import { GeistMono } from "geist/font/mono"
 import { Playfair_Display } from "next/font/google"
 import { AuthProvider } from "@/lib/auth-context"
+import { OfficeQueryProvider } from "@/components/providers"
 import { ProtectedRouteWrapper } from "@/components/auth/protected-route-wrapper"
 import { ThemeProvider } from "@/components/theme-provider"
 import { DesktopMinViewportGate } from "@/components/layout/desktop-min-viewport-gate"
@@ -37,17 +38,19 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable} ${playfair.variable}`} suppressHydrationWarning>
         <AuthProvider>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="light"
-            enableSystem
-            disableTransitionOnChange
-            storageKey="easner-office-theme"
-          >
-            <DesktopMinViewportGate product="office">
-              <ProtectedRouteWrapper>{children}</ProtectedRouteWrapper>
-            </DesktopMinViewportGate>
-          </ThemeProvider>
+          <OfficeQueryProvider>
+            <ThemeProvider
+              attribute="class"
+              defaultTheme="light"
+              enableSystem
+              disableTransitionOnChange
+              storageKey="easner-office-theme"
+            >
+              <DesktopMinViewportGate product="office">
+                <ProtectedRouteWrapper>{children}</ProtectedRouteWrapper>
+              </DesktopMinViewportGate>
+            </ThemeProvider>
+          </OfficeQueryProvider>
         </AuthProvider>
       </body>
     </html>

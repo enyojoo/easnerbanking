@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
 import { useAuth } from '../../contexts/AuthContext'
-import { useUserData } from '../../contexts/UserDataContext'
+import { useCurrenciesCatalog, usePaymentMethodsList } from '../../hooks/queries'
 import { NavigationProps } from '../../types'
 import { transactionService, TransactionData } from '../../lib/transactionService'
 import { Ionicons } from '@expo/vector-icons'
@@ -28,7 +28,8 @@ import { ripple } from '../../lib/androidRipple'
 
 export default function LegacyTransactionDetailsScreen({ navigation, route }: NavigationProps) {
   const { userProfile } = useAuth()
-  const { refreshTransactions, currencies, paymentMethods } = useUserData()
+  const { data: currencies = [] } = useCurrenciesCatalog()
+  const paymentMethods = usePaymentMethodsList().data ?? []
   const insets = useSafeAreaInsets()
   const [transaction, setTransaction] = useState<TransactionData | null>(null)
   const [refreshing, setRefreshing] = useState(false)

@@ -96,7 +96,9 @@ export function useCreateTransfer() {
     },
     onSettled: () => {
       if (!scope) return
+      qc.invalidateQueries({ queryKey: qk.transactions.root(scope), refetchType: 'active' })
       qc.invalidateQueries({ queryKey: qk.transactions.root(scope), refetchType: 'inactive' })
+      qc.invalidateQueries({ queryKey: qk.wallets.list(scope), refetchType: 'active' })
       qc.invalidateQueries({ queryKey: qk.wallets.list(scope), refetchType: 'inactive' })
     },
   })

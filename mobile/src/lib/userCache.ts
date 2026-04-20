@@ -30,7 +30,7 @@ export const CacheTTL = {
   CURRENCIES: 24 * 60 * 60 * 1000,
   EXCHANGE_RATES: 5 * 60 * 1000,
   RECIPIENTS: 60 * 60 * 1000,
-  /** Legacy / context Noah transaction list (`UserDataContext`). */
+  /** Legacy Noah transaction list cache key (TanStack lists use query cache now). */
   CONTEXT_TRANSACTIONS: 60 * 1000,
   PAYMENT_METHODS: 60 * 60 * 1000,
   /** Dashboard Noah combined feed (recent list). */

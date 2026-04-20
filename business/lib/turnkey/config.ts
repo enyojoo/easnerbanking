@@ -53,6 +53,24 @@ export function getTurnkeyWebhookSecret(): string {
   return (process.env.TURNKEY_WEBHOOK_SECRET || "").trim()
 }
 
+/** Organization-level Turnkey activity webhook destination. */
+export function getTurnkeyWebhookFeatureUrl(): string {
+  const explicit = (process.env.TURNKEY_WEBHOOK_URL || "").trim()
+  if (explicit) return explicit
+  const base =
+    (process.env.BUSINESS_APP_URL || process.env.NEXT_PUBLIC_BUSINESS_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || "").trim()
+  if (!base) return ""
+  try {
+    const u = new URL(base)
+    u.pathname = "/api/webhooks/turnkey"
+    u.search = ""
+    u.hash = ""
+    return u.toString().replace(/\/$/, "")
+  } catch {
+    return ""
+  }
+}
+
 /** Set to `"false"` to skip `getWalletAddressBalances` (UI shows zero balances for the on-chain line). */
 export function isTurnkeyOnChainBalanceQueryEnabled(): boolean {
   return process.env.TURNKEY_ONCHAIN_BALANCE_QUERY !== "false"

@@ -4,3 +4,4 @@ export type { CreateTransferInput, CreateTransferResult } from "./use-create-tra
 export { useApprovePayment } from "./use-approve-payment"
 export { useTagTransaction } from "./use-tag-transaction"
 export { useAddInvoice, useUpdateInvoice, useDeleteInvoice } from "./use-invoices"
+export { useAddCustomer, useUpdateCustomer, useDeleteCustomer } from "./use-customers"

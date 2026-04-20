@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
@@ -51,8 +51,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { useCustomers } from "@/lib/customers-context"
-import { useInvoices } from "@/lib/invoices-context"
+import { useCustomersList, useInvoicesList } from "@/hooks/queries"
+import { useAddCustomer, useUpdateCustomer, useDeleteCustomer } from "@/hooks/mutations"
 import { AddEditCustomerDialog } from "@/components/add-edit-customer-dialog"
 import { getCustomerStats } from "@/lib/b2b/customer-stats"
 import { formatCurrency, formatDate } from "@/lib/utils"
@@ -67,8 +67,57 @@ export function SettingsCustomersTab() {
   const settingsHere = currentLocationPath(pathname, searchParams)
   const detailId = searchParams.get("customer")?.trim() || null
 
-  const { customers, loading, error, addCustomer, updateCustomer, deleteCustomer } = useCustomers()
-  const { invoices } = useInvoices()
+  const customersQuery = useCustomersList()
+  const invoicesQuery = useInvoicesList()
+  const addCustomerMut = useAddCustomer()
+  const updateCustomerMut = useUpdateCustomer()
+  const deleteCustomerMut = useDeleteCustomer()
+
+  const customers = customersQuery.data ?? []
+  const invoices = invoicesQuery.data ?? []
+  const loading = customersQuery.isPending
+  const error =
+    customersQuery.error instanceof Error
+      ? customersQuery.error.message
+      : customersQuery.error
+        ? String(customersQuery.error)
+        : null
+
+  const addCustomer = useCallback(
+    async (row: Customer) => {
+      try {
+        const res = await addCustomerMut.mutateAsync(row)
+        return res.customer ?? null
+      } catch {
+        return null
+      }
+    },
+    [addCustomerMut],
+  )
+
+  const updateCustomer = useCallback(
+    async (id: string, updates: Partial<Customer>) => {
+      try {
+        const res = await updateCustomerMut.mutateAsync({ id, updates })
+        return res.customer ?? null
+      } catch {
+        return null
+      }
+    },
+    [updateCustomerMut],
+  )
+
+  const deleteCustomer = useCallback(
+    async (id: string) => {
+      try {
+        await deleteCustomerMut.mutateAsync(id)
+        return true
+      } catch {
+        return false
+      }
+    },
+    [deleteCustomerMut],
+  )
   const [searchTerm, setSearchTerm] = useState("")
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [editCustomer, setEditCustomer] = useState<Customer | null>(null)
@@ -374,8 +423,8 @@ function CustomerDetailInSettings({
   invoices: Invoice[]
   returnToPath: string
   onClose: () => void
-  updateCustomer: ReturnType<typeof useCustomers>["updateCustomer"]
-  deleteCustomer: ReturnType<typeof useCustomers>["deleteCustomer"]
+  updateCustomer: (id: string, updates: Partial<Customer>) => Promise<Customer | null>
+  deleteCustomer: (id: string) => Promise<boolean>
 }) {
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)

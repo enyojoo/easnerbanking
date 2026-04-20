@@ -18,8 +18,12 @@ import * as DocumentPicker from 'expo-document-picker'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '../../contexts/AuthContext'
 import { useBalance } from '../../contexts/BalanceContext'
-import { useUserData } from '../../contexts/UserDataContext'
-import { NavigationProps, PaymentMethod } from '../../types'
+import { useQueryClient } from '@tanstack/react-query'
+import { usePaymentMethodsList, useCurrenciesCatalog } from '../../hooks/queries'
+import { useScope } from '../../query/scope'
+import { invalidateTransactionsFeed } from '../../query/refresh-user-feeds'
+import { generateTransactionId } from '../../lib/transactionId'
+import { NavigationProps } from '../../types'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { analytics } from '../../lib/analytics'
 import { transactionService } from '../../lib/transactionService'
@@ -30,14 +34,10 @@ import { ripple } from '../../lib/androidRipple'
 
 export default function PaymentMethodScreen({ navigation, route }: NavigationProps) {
   const { userProfile } = useAuth()
-  const {
-    paymentMethods,
-    refreshPaymentMethods,
-    invalidatePaymentMethods,
-    currencies,
-    refreshTransactions,
-    invalidateTransactions,
-  } = useUserData()
+  const qc = useQueryClient()
+  const { scope } = useScope()
+  const paymentMethods = usePaymentMethodsList().data ?? []
+  const { data: currencies = [] } = useCurrenciesCatalog()
   const { updateBalanceOptimistically } = useBalance()
   const insets = useSafeAreaInsets()
   const [transactionId, setTransactionId] = useState('')
@@ -60,9 +60,11 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
   }, [])
 
   useEffect(() => {
-    void invalidatePaymentMethods().then(() => refreshPaymentMethods(true))
+    if (userProfile?.id) {
+      void qc.invalidateQueries({ queryKey: ['payment-methods', userProfile.id], refetchType: 'active' })
+    }
     setTransactionId(generateTransactionId())
-  }, [])
+  }, [qc, userProfile?.id])
 
   const getPaymentMethodsForCurrency = (currency: string) => {
     return paymentMethods.filter(method => 
@@ -149,8 +151,7 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
           console.log('Receipt upload would happen here:', uploadedFile)
       }
 
-      await invalidateTransactions()
-      await refreshTransactions(true)
+      if (scope && userProfile.id) await invalidateTransactionsFeed(qc, scope, userProfile.id)
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
 
       navigation.navigate('SendTransactionDetails', { 

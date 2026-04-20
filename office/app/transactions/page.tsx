@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -24,8 +25,8 @@ import {
   X,
 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { officeDataStore } from "@/lib/office-data-store"
-import { useOfficeData } from "@/hooks/use-office-data"
+import { officeKeys } from "@/lib/query/keys"
+import { supabase } from "@/lib/supabase"
 
 interface ProviderLedgerTx {
   id: string
@@ -45,54 +46,79 @@ interface ProviderLedgerTx {
 }
 
 export default function AdminTransactionsPage() {
-  const { data: adminData } = useOfficeData()
-  
-  // Initialize from cache synchronously to prevent flicker
-  const getInitialTransactions = (): ProviderLedgerTx[] => {
-    if (!adminData?.transactions) return []
-    return (adminData.transactions || []).map((tx: any) => ({
-      id: tx.id,
-      provider: tx.provider ?? null,
-      noah_transaction_id: tx.noah_transaction_id ?? null,
-      status: String(tx.status || "pending"),
-      created_at: tx.created_at,
-      updated_at: tx.updated_at,
-      direction: tx.direction ?? null,
-      amount: tx.amount ?? null,
-      currency: tx.currency ?? null,
-      user: tx.user,
-    }))
-  }
+  const queryClient = useQueryClient()
+  const transactionsQuery = useQuery({
+    queryKey: officeKeys.transactions(),
+    staleTime: 60_000,
+    queryFn: async (): Promise<ProviderLedgerTx[]> => {
+      const { data: rows, error } = await supabase
+        .from("transactions")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(200)
+      if (error) throw error
+      const list = rows || []
+      const userIds = [...new Set(list.map((t: { user_id?: string | null }) => t.user_id).filter(Boolean))] as string[]
+      const userById = new Map<string, { email: string | null; full_name: string | null }>()
+      if (userIds.length > 0) {
+        const { data: profiles, error: pe } = await supabase.from("users").select("id, email, full_name").in("id", userIds)
+        if (pe) throw pe
+        for (const u of profiles || []) {
+          const row = u as { id: string; email: string | null; full_name: string | null }
+          userById.set(row.id, { email: row.email ?? null, full_name: row.full_name ?? null })
+        }
+      }
+      return list.map((t: Record<string, unknown> & { user_id?: string | null }) => {
+        const uid = t.user_id ? String(t.user_id) : ""
+        const p = uid ? userById.get(uid) : undefined
+        const full = (p?.full_name || "").trim()
+        const parts = full ? full.split(/\s+/) : []
+        return {
+          ...(t as ProviderLedgerTx),
+          id: String(t.id || ""),
+          provider: (t.provider as string | null) ?? null,
+          noah_transaction_id: (t.noah_transaction_id as string | null) ?? null,
+          status: String(t.status || "pending"),
+          created_at: String(t.created_at || ""),
+          updated_at: (t.updated_at as string | undefined) ?? undefined,
+          direction: (t.direction as "in" | "out" | null) ?? null,
+          amount: (t.amount as number | null) ?? null,
+          currency: (t.currency as string | null) ?? null,
+          user: p
+            ? {
+                first_name: parts[0] || "",
+                last_name: parts.length > 1 ? parts.slice(1).join(" ") : "",
+                email: p.email || "",
+              }
+            : undefined,
+        }
+      })
+    },
+  })
 
-  const [transactions, setTransactions] = useState<ProviderLedgerTx[]>(() => getInitialTransactions())
+  const transactions = transactionsQuery.data ?? []
+  const updateStatus = useMutation({
+    mutationFn: async ({ transactionId, newStatus }: { transactionId: string; newStatus: string }) => {
+      const { error } = await supabase
+        .from("transactions")
+        .update({
+          status: newStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", transactionId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: officeKeys.transactions() })
+    },
+  })
+
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [directionFilter, setDirectionFilter] = useState<"all" | "in" | "out">("all")
   const [currencyFilter, setCurrencyFilter] = useState("all")
   const [selectedTransactions, setSelectedTransactions] = useState<string[]>([])
   const [selectedTransaction, setSelectedTransaction] = useState<ProviderLedgerTx | null>(null)
-
-  // Update transactions when adminData changes (from realtime updates or initial load)
-  useEffect(() => {
-    if (adminData?.transactions) {
-      const next: ProviderLedgerTx[] = (adminData.transactions || []).map((tx: any) => ({
-        id: tx.id,
-        provider: tx.provider ?? null,
-        noah_transaction_id: tx.noah_transaction_id ?? null,
-        status: String(tx.status || "pending"),
-        created_at: tx.created_at,
-        updated_at: tx.updated_at,
-        direction: tx.direction ?? null,
-        amount: tx.amount ?? null,
-        currency: tx.currency ?? null,
-        user: tx.user,
-      }))
-      setTransactions(next)
-    } else {
-      // If adminData is loaded but has no transactions, set empty array
-      setTransactions([])
-    }
-  }, [adminData])
 
   const filteredTransactions = transactions.filter((transaction) => {
     const matchesSearch =
@@ -110,6 +136,13 @@ export default function AdminTransactionsPage() {
 
     return matchesSearch && matchesStatus && matchesDirection && matchesCurrency
   })
+  const currencyOptions = Array.from(
+    new Set(
+      transactions
+        .map((t) => String(t.currency || "").toUpperCase())
+        .filter((code) => code.length > 0),
+    ),
+  ).sort()
 
   const formatTimestamp = (dateString: string) => {
     const date = new Date(dateString)
@@ -177,7 +210,7 @@ export default function AdminTransactionsPage() {
 
   const handleStatusUpdate = async (transactionId: string, newStatus: string) => {
     try {
-      await officeDataStore.updateTransactionStatus(transactionId, newStatus)
+      await updateStatus.mutateAsync({ transactionId, newStatus })
 
       // Update selectedTransaction if it's the one being updated
       if (selectedTransaction?.id === transactionId) {
@@ -192,7 +225,7 @@ export default function AdminTransactionsPage() {
     try {
       await Promise.all(
         selectedTransactions.map(async (transactionId) => {
-          await officeDataStore.updateTransactionStatus(transactionId, newStatus)
+          await updateStatus.mutateAsync({ transactionId, newStatus })
         })
       )
       setSelectedTransactions([])
@@ -308,9 +341,9 @@ export default function AdminTransactionsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Currencies</SelectItem>
-                {adminData?.currencies?.map((currency: any) => (
-                  <SelectItem key={currency.code} value={currency.code}>
-                    {currency.code}
+                {currencyOptions.map((code) => (
+                  <SelectItem key={code} value={code}>
+                    {code}
                   </SelectItem>
                 ))}
               </SelectContent>

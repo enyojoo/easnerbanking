@@ -44,8 +44,11 @@ import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import KeyboardSafeContainer from '../../components/KeyboardSafeContainer'
-import { useUserData } from '../../contexts/UserDataContext'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../contexts/AuthContext'
+import { useCurrenciesCatalog, useRecipientsList, useTransactionsList, mapLedgerRowToTransaction } from '../../hooks/queries'
+import { useScope } from '../../query/scope'
+import { invalidateRecipientsFeed } from '../../query/refresh-user-feeds'
 import { recipientService } from '../../lib/recipientService'
 import { getAccountTypeConfigFromCurrency } from '../../lib/currencyAccountTypes'
 import { formatIBAN, formatSortCode, formatRoutingNumber, formatAccountNumber } from '../../utils/formatters'
@@ -103,7 +106,18 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     | undefined
   const routeOtherCurrency = (route.params as any)?.selectedOtherCurrency as string | undefined
   const routeOtherPaymentMethod = (route.params as any)?.selectedOtherPaymentMethod as string | undefined
-  const { recipients, refreshRecipients, invalidateRecipients, currencies, transactions, loading: recipientsLoading } = useUserData()
+  const qc = useQueryClient()
+  const { scope } = useScope()
+  const recipientsQuery = useRecipientsList()
+  const { data: currencies = [] } = useCurrenciesCatalog()
+  const txHubQuery = useTransactionsList({}, 100)
+  const recipients = recipientsQuery.data ?? []
+  const recipientsLoading = recipientsQuery.isPending
+  const transactions = useMemo(() => {
+    if (!user?.id) return []
+    const rows = txHubQuery.data?.pages?.[0]?.transactions ?? []
+    return (rows as Record<string, unknown>[]).map((r) => mapLedgerRowToTransaction(user.id, r))
+  }, [txHubQuery.data, user?.id])
   const [searchTerm, setSearchTerm] = useState('')
   const [lastSentAtByRecipient, setLastSentAtByRecipient] = useState<Record<string, number>>({})
   
@@ -497,8 +511,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
           payeeAvatarUrl: easenetProfile.avatarUrl,
           payeeAccountKind: easenetProfile.accountKind,
         })
-        await invalidateRecipients()
-        await refreshRecipients(true)
+        if (scope && user?.id) await invalidateRecipientsFeed(qc, scope, user.id)
         setError('')
         resetForm()
         setShowBankAccountForm(false)
@@ -549,8 +562,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
         addressLine1: selectedCountryCurrency?.countryCode === 'US' ? newRecipient.addressLine1 || undefined : undefined,
       })
 
-      await invalidateRecipients()
-      await refreshRecipients(true)
+      if (scope && user?.id) await invalidateRecipientsFeed(qc, scope, user.id)
 
       setError('')
       resetForm()
