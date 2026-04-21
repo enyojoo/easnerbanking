@@ -12,13 +12,7 @@ import { Lock } from "lucide-react"
 import { getLockoutState, verifyPin, type VerifyPinResult } from "@/lib/login-pin"
 import { appPinStrings } from "@/lib/i18n/app-pin-en"
 import { PinEntryBlock } from "./pin-entry-block"
-
-function formatLockCountdown(msRemaining: number): string {
-  const totalSeconds = Math.max(0, Math.floor(msRemaining / 1000))
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
-}
+import { PinLockedHint } from "./pin-locked-hint"
 
 /**
  * Modal PIN challenge for sensitive actions (e.g. confirm send). Same keypad as full-screen lock.
@@ -82,7 +76,11 @@ export function PinChallengeDialog({
         onOpenChange(false)
         return
       }
-      setError(res.error)
+      if (res.lockedOut) {
+        setError(null)
+      } else {
+        setError(res.error)
+      }
       setShake(true)
       window.setTimeout(() => setShake(false), 500)
       setPin("")
@@ -97,23 +95,22 @@ export function PinChallengeDialog({
             <Lock className="h-5 w-5" />
             {title}
           </DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
+          {lock.lockedOut && lock.lockedUntil != null ? null : (
+            <DialogDescription>{description}</DialogDescription>
+          )}
         </DialogHeader>
         {lock.lockedOut && lock.lockedUntil != null ? (
-          <p className="text-center text-sm text-destructive">
-            {`PIN locked. Try again in ${formatLockCountdown(lock.msRemaining)}`}
-          </p>
+          <PinLockedHint msRemaining={lock.msRemaining} variant="destructive" />
         ) : null}
         <div className="py-2">
           <PinEntryBlock
             pin={pin}
             onChangePin={setPin}
-            error={error}
+            error={lock.lockedOut ? null : error}
             shake={shake}
             disabled={busy || lock.lockedOut}
           />
         </div>
-        {busy ? <p className="text-center text-sm text-muted-foreground">{appPinStrings.lockVerifying}</p> : null}
       </DialogContent>
     </Dialog>
   )

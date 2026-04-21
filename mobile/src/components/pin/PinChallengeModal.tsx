@@ -16,6 +16,7 @@ import { colors, textStyles, borderRadius, spacing, useThemeColors } from '../..
 import { ripple } from '../../lib/androidRipple'
 import { PinDotsRow } from './PinDotsRow'
 import { PinKeypad } from './PinKeypad'
+import { PinLockedHintText } from './PinLockedHintText'
 import { useDeferredLoading } from '../../hooks/useDeferredLoading'
 
 type Props = {
@@ -35,7 +36,7 @@ export function PinChallengeModal({ visible, userId, onClose, onVerified }: Prop
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lockedOut, setLockedOut] = useState(false)
-  const [lockMinutes, setLockMinutes] = useState(0)
+  const [lockMsRemaining, setLockMsRemaining] = useState(0)
   const lastTryRef = useRef('')
   const onVerifiedRef = useRef(onVerified)
   onVerifiedRef.current = onVerified
@@ -44,7 +45,7 @@ export function PinChallengeModal({ visible, userId, onClose, onVerified }: Prop
   const refreshLock = useCallback(async () => {
     const s = await getLockoutState(userId)
     setLockedOut(s.lockedOut)
-    setLockMinutes(s.lockedOut ? Math.max(1, Math.ceil(s.msRemaining / 60000)) : 0)
+    setLockMsRemaining(s.lockedOut ? Math.max(0, s.msRemaining) : 0)
   }, [userId])
 
   useEffect(() => {
@@ -79,10 +80,15 @@ export function PinChallengeModal({ visible, userId, onClose, onVerified }: Prop
         return
       }
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
-      setError(res.error || appPinStrings.lockIncorrect)
-      setLockedOut(res.locked || false)
-      if (res.lockedUntil) {
-        setLockMinutes(Math.max(1, Math.ceil((res.lockedUntil - Date.now()) / 60000)))
+      if (res.locked) {
+        setError(null)
+        setLockedOut(true)
+        if (res.lockedUntil) {
+          setLockMsRemaining(Math.max(0, res.lockedUntil - Date.now()))
+        }
+      } else {
+        setError(res.error || appPinStrings.lockIncorrect)
+        setLockedOut(false)
       }
       Animated.sequence([
         Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
@@ -120,9 +126,13 @@ export function PinChallengeModal({ visible, userId, onClose, onVerified }: Prop
           ) : null}
 
           {lockedOut ? (
-            <Text style={styles.lockout}>
-              {appPinStrings.lockLockedTryMinutes(lockMinutes)}
-            </Text>
+            <View style={styles.lockoutWrap}>
+              <PinLockedHintText
+                msRemaining={lockMsRemaining}
+                prefixStyle={styles.lockout}
+                digitsStyle={styles.lockout}
+              />
+            </View>
           ) : null}
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -137,7 +147,6 @@ export function PinChallengeModal({ visible, userId, onClose, onVerified }: Prop
           {showBusySpinner ? (
             <View style={styles.busy}>
               <ActivityIndicator size="small" color={palette.primary.main} />
-              <Text style={styles.busyText}>{appPinStrings.lockVerifying}</Text>
             </View>
           ) : (
             <PinKeypad
@@ -192,11 +201,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing[4],
   },
+  lockoutWrap: {
+    width: '100%',
+    marginBottom: spacing[3],
+    alignItems: 'center',
+  },
   lockout: {
     ...textStyles.bodyMedium,
     color: colors.error.dark,
     textAlign: 'center',
-    marginBottom: spacing[3],
     fontWeight: '600',
   },
   errorText: {
@@ -211,11 +224,6 @@ const styles = StyleSheet.create({
   busy: {
     alignItems: 'center',
     paddingVertical: spacing[4],
-    gap: spacing[2],
-  },
-  busyText: {
-    ...textStyles.bodySmall,
-    color: colors.text.secondary,
   },
   cancelBtn: {
     marginTop: spacing[4],

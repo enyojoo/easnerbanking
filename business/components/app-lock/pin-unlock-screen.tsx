@@ -1,19 +1,13 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { User } from "@supabase/supabase-js"
 import { getLockoutState, verifyPin, type VerifyPinResult } from "@/lib/login-pin"
 import { appPinStrings } from "@/lib/i18n/app-pin-en"
 import { usePersonalProfileAvatar } from "@/lib/use-personal-profile-avatar"
 import { PinEntryBlock } from "./pin-entry-block"
+import { PinLockedHint } from "./pin-locked-hint"
 import { PinUserAvatar } from "./pin-user-avatar"
-
-function formatLockCountdown(msRemaining: number): string {
-  const totalSeconds = Math.max(0, Math.floor(msRemaining / 1000))
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
-}
 
 function firstName(user: User): string {
   const meta = user.user_metadata as Record<string, unknown> | undefined
@@ -50,9 +44,15 @@ export function PinUnlockScreen({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [shake, setShake] = useState(false)
-  const lock = getLockoutState(user.id)
+  const [lockTick, setLockTick] = useState(0)
+  const lock = useMemo(() => getLockoutState(user.id), [user.id, lockTick])
   const lastAttemptRef = useRef<string>("")
   const { avatarUrl } = usePersonalProfileAvatar()
+
+  useEffect(() => {
+    const id = window.setInterval(() => setLockTick((t) => t + 1), 1000)
+    return () => window.clearInterval(id)
+  }, [])
 
   const runVerify = useCallback(
     async (code: string) => {
@@ -65,7 +65,11 @@ export function PinUnlockScreen({
         onUnlocked()
         return
       }
-      setError(res.error)
+      if (res.lockedOut) {
+        setError(null)
+      } else {
+        setError(res.error)
+      }
       setShake(true)
       window.setTimeout(() => setShake(false), 500)
       setPin("")
@@ -92,17 +96,16 @@ export function PinUnlockScreen({
         <PinUserAvatar initials={initials(user)} avatarUrl={avatarUrl} />
         <div className="space-y-1 text-center">
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">{appPinStrings.lockWelcome(name)}</h1>
-          <p className="text-sm text-muted-foreground">{appPinStrings.lockEnterPin}</p>
+          {lock.lockedOut && lock.lockedUntil != null ? (
+            <PinLockedHint msRemaining={lock.msRemaining} variant="muted" />
+          ) : (
+            <p className="text-sm text-muted-foreground">{appPinStrings.lockEnterPin}</p>
+          )}
         </div>
-        {lock.lockedOut && lock.lockedUntil != null ? (
-          <p className="text-center text-sm text-destructive">
-            {`PIN locked. Try again in ${formatLockCountdown(lock.msRemaining)}`}
-          </p>
-        ) : null}
         <PinEntryBlock
           pin={pin}
           onChangePin={setPin}
-          error={error}
+          error={lock.lockedOut ? null : error}
           shake={shake}
           disabled={busy || lock.lockedOut}
         />

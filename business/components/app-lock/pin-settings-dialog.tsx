@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
   Dialog,
   DialogContent,
@@ -10,9 +10,10 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Lock } from "lucide-react"
-import { hasPin, isLoginPinModuleAvailable, setPin, verifyPin } from "@/lib/login-pin"
+import { getLockoutState, hasPin, isLoginPinModuleAvailable, setPin, verifyPin } from "@/lib/login-pin"
 import { appPinStrings } from "@/lib/i18n/app-pin-en"
 import { PinEntryBlock } from "./pin-entry-block"
+import { PinLockedHint } from "./pin-locked-hint"
 
 /**
  * Settings: create or change app PIN (client-only; not server MFA).
@@ -44,6 +45,7 @@ export function PinSettingsDialog({
   const [error, setError] = useState<string | null>(null)
   const [shake, setShake] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [lockTick, setLockTick] = useState(0)
   const firstRef = useRef("")
 
   useEffect(() => {
@@ -71,6 +73,17 @@ export function PinSettingsDialog({
         : changeStep === "new"
           ? newFirst
           : newConfirm
+
+  const changeVerifyLock = useMemo(
+    () => (flow === "change" && changeStep === "verify" ? getLockoutState(userId) : null),
+    [flow, changeStep, userId, lockTick],
+  )
+
+  useEffect(() => {
+    if (!open || flow !== "change" || changeStep !== "verify") return
+    const id = window.setInterval(() => setLockTick((t) => t + 1), 1000)
+    return () => window.clearInterval(id)
+  }, [open, flow, changeStep])
 
   const setPinDigits = (next: string) => {
     setError(null)
@@ -130,7 +143,11 @@ export function PinSettingsDialog({
       const res = await verifyPin(userId, verifyPinState)
       setBusy(false)
       if (!res.ok) {
-        setError(res.error)
+        if (res.lockedOut) {
+          setError(null)
+        } else {
+          setError(res.error)
+        }
         setShake(true)
         window.setTimeout(() => setShake(false), 500)
         setVerifyPinState("")
@@ -214,6 +231,12 @@ export function PinSettingsDialog({
           ? appPinStrings.setupSubtitle
           : appPinStrings.confirmSubtitle
 
+  const verifyLocked =
+    flow === "change" &&
+    changeStep === "verify" &&
+    changeVerifyLock?.lockedOut &&
+    changeVerifyLock.lockedUntil != null
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -222,9 +245,20 @@ export function PinSettingsDialog({
             <Lock className="h-5 w-5" />
             {title}
           </DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
+          {verifyLocked ? null : <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
-        <PinEntryBlock pin={pin} onChangePin={setPinDigits} error={error} shake={shake} disabled={busy} />
+        {verifyLocked && changeVerifyLock ? (
+          <PinLockedHint msRemaining={changeVerifyLock.msRemaining} variant="destructive" />
+        ) : null}
+        <PinEntryBlock
+          pin={pin}
+          onChangePin={setPinDigits}
+          error={
+            flow === "change" && changeStep === "verify" && changeVerifyLock?.lockedOut ? null : error
+          }
+          shake={shake}
+          disabled={busy || !!(flow === "change" && changeStep === "verify" && changeVerifyLock?.lockedOut)}
+        />
       </DialogContent>
     </Dialog>
   )

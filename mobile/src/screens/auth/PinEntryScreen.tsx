@@ -23,15 +23,8 @@ import { useAuth } from '../../contexts/AuthContext'
 import { appPinStrings } from '../../constants/app-pin-en'
 import { displayFirstNameFromFullName, initialsFromFullName } from '../../lib/userProfileHelpers'
 import { useDeferredLoading } from '../../hooks/useDeferredLoading'
-import { PinKeypad } from '../../components/pin'
+import { PinKeypad, PinLockedHintText } from '../../components/pin'
 import { normalizeAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
-
-function formatLockCountdown(msRemaining: number): string {
-  const totalSeconds = Math.max(0, Math.floor(msRemaining / 1000))
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-}
 
 export default function PinEntryScreen({ navigation: navigationProp }: NavigationProps) {
   const palette = useThemeColors()
@@ -256,12 +249,13 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
             <View style={styles.hintSlot}>
               {error ? (
                 <Text style={styles.errorText}>{error}</Text>
+              ) : locked && lockedUntil ? (
+                <PinLockedHintText
+                  msRemaining={lockedUntil - Date.now()}
+                  prefixStyle={styles.subtitle}
+                />
               ) : (
-                <Text style={styles.subtitle}>
-                  {locked && lockedUntil
-                    ? `PIN locked. Try again in ${formatLockCountdown(lockedUntil - Date.now())}`
-                    : appPinStrings.lockEnterPin}
-                </Text>
+                <Text style={styles.subtitle}>{appPinStrings.lockEnterPin}</Text>
               )}
             </View>
           </View>

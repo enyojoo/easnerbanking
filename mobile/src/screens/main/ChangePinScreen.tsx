@@ -19,17 +19,11 @@ import { ripple } from '../../lib/androidRipple'
 import { useAuth } from '../../contexts/AuthContext'
 import { hasPin, setupPin, verifyPin, getLockoutState } from '../../lib/pinAuth'
 import { appPinStrings } from '../../constants/app-pin-en'
-import { PinKeypad } from '../../components/pin'
+import { PinKeypad, PinLockedHintText } from '../../components/pin'
 
 type Step = 'verify' | 'pin' | 'confirm'
 
 const empty4 = (): string[] => ['', '', '', '']
-function formatLockCountdown(msRemaining: number): string {
-  const totalSeconds = Math.max(0, Math.floor(msRemaining / 1000))
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-}
 
 export default function ChangePinScreen({ navigation }: NavigationProps) {
   const palette = useThemeColors()
@@ -116,8 +110,13 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
         return
       }
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
-      setError(res.error || appPinStrings.lockIncorrect)
-      setLockedOut(res.locked || false)
+      if (res.locked) {
+        setError(null)
+        setLockedOut(true)
+      } else {
+        setError(res.error || appPinStrings.lockIncorrect)
+        setLockedOut(false)
+      }
       runShake()
       setVerifyDigits(empty4())
       verifyTryRef.current = ''
@@ -275,7 +274,6 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
   const currentPinDisplay = step === 'verify' ? verifyDigits : step === 'pin' ? pin : confirmPin
   const filledCount = currentPinDisplay.filter((d) => d !== '').length
   const showPinAreaSpinner = verifyBusy || loading
-  const pinAreaSpinnerLabel = verifyBusy ? appPinStrings.lockVerifying : appPinStrings.pinSaving
 
   if (!ready) {
     return (
@@ -319,17 +317,10 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
             <Text style={styles.subtitle}>{helpBody}</Text>
           </View>
 
-          {lockedOut ? (
-            <Text style={styles.lockout}>
-              {`PIN locked. Try again in ${formatLockCountdown(lockMsRemaining)}`}
-            </Text>
-          ) : null}
-
           <View style={styles.pinDotsWrapper}>
             {showPinAreaSpinner ? (
               <View style={styles.pinDotsLoadingOnly}>
                 <ActivityIndicator size="small" color={palette.primary.main} />
-                <Text style={styles.pinAreaLoadingLabel}>{pinAreaSpinnerLabel}</Text>
               </View>
             ) : (
               <Animated.View
@@ -353,10 +344,14 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
             )}
           </View>
 
-          {/* Same as PinEntryScreen: incorrect PIN is plain text below dots, not in a tinted box */}
-          {error ? (
-            <View style={styles.verifyHintSlot}>
-              <Text style={styles.verifyErrorText}>{error}</Text>
+          {/* Same slot as PinEntryScreen hint: lock countdown OR incorrect PIN, never both */}
+          {lockedOut || error ? (
+            <View style={styles.hintSlot}>
+              {lockedOut ? (
+                <PinLockedHintText msRemaining={lockMsRemaining} prefixStyle={styles.hintSubtitle} />
+              ) : (
+                <Text style={styles.verifyErrorText}>{error}</Text>
+              )}
             </View>
           ) : null}
 
@@ -438,12 +433,6 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     width: '100%',
   },
-  lockout: {
-    ...textStyles.bodySmall,
-    color: colors.error.main,
-    textAlign: 'center',
-    marginBottom: spacing[2],
-  },
   pinDotsContainerWithHint: {
     marginBottom: 0,
   },
@@ -459,20 +448,20 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing[2],
   },
-  pinAreaLoadingLabel: {
-    ...textStyles.bodySmall,
-    color: colors.text.secondary,
-  },
-  verifyHintSlot: {
+  hintSlot: {
     width: '100%',
     minHeight: 48,
-    marginTop: spacing[6],
-    marginBottom: spacing[16],
+    marginTop: spacing[4],
+    marginBottom: spacing[4],
     paddingHorizontal: spacing[4],
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  hintSubtitle: {
+    ...textStyles.bodyMedium,
+    color: colors.text.secondary,
+    textAlign: 'center',
   },
   verifyErrorText: {
     ...textStyles.bodyMedium,

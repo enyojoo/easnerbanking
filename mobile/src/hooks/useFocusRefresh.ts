@@ -19,6 +19,9 @@ export function useFocusRefresh(
   force: boolean = false
 ) {
   const lastRefreshTime = useRef<number>(0)
+  /** Inline `refreshFn` from call sites changes every render — must not be a focus-effect dep or we loop refetch → render → new fn → refocus logic. */
+  const refreshFnRef = useRef(refreshFn)
+  refreshFnRef.current = refreshFn
 
   useFocusEffect(
     React.useCallback(() => {
@@ -28,11 +31,11 @@ export function useFocusRefresh(
       // Refresh if forced, or if data is stale
       if (force || timeSinceLastRefresh > staleThreshold) {
         lastRefreshTime.current = now
-        Promise.resolve(refreshFn()).catch(error => {
+        Promise.resolve(refreshFnRef.current()).catch(error => {
           console.warn('Focus refresh error:', error)
         })
       }
-    }, [refreshFn, staleThreshold, force])
+    }, [staleThreshold, force])
   )
 }
 
