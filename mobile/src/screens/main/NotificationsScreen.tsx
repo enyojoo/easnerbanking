@@ -7,7 +7,6 @@ import {
   Pressable, Platform,
   Switch,
   Animated,
-  ActivityIndicator,
   Alert,
 } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
@@ -15,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { CommunicationPreferences } from '@easner/shared'
-import { COMMUNICATION_PREFERENCES_DISCLAIMER, qk } from '@easner/shared'
+import { DEFAULT_COMMUNICATION_PREFERENCES, qk } from '@easner/shared'
 import { useQueryClient } from '@tanstack/react-query'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { useAuth } from '../../contexts/AuthContext'
@@ -32,27 +31,23 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
   const { user } = useAuth()
   const qc = useQueryClient()
   const commQuery = useCommunicationPreferences()
-  const communicationPreferences = commQuery.data ?? null
-  /** `isPending` stays true when the query is disabled or idle — use `isLoading` for true first-fetch-only UI. */
-  const communicationPreferencesLoading = commQuery.isLoading
+  const communicationPreferences =
+    commQuery.data ?? {
+      ...DEFAULT_COMMUNICATION_PREFERENCES,
+      channels: { ...DEFAULT_COMMUNICATION_PREFERENCES.channels },
+    }
   const commitCommunicationPreferences = async (prefs: CommunicationPreferences) => {
     if (!user?.id) return
     qc.setQueryData(qk.settings.communication(user.id), prefs)
   }
 
-  const [saving, setSaving] = useState(false)
-  const [optimisticOverride, setOptimisticOverride] = useState<CommunicationPreferences | null>(null)
-
-  const prefs = optimisticOverride ?? communicationPreferences
-  const loadingPrefs =
-    communicationPreferencesLoading && !communicationPreferences && !optimisticOverride
+  const prefs = communicationPreferences
 
   const headerAnim = useRef(new Animated.Value(0)).current
   const contentAnim = useRef(new Animated.Value(0)).current
 
   useFocusEffect(
     useCallback(() => {
-      setOptimisticOverride(null)
       if (commQuery.isStale) {
         void commQuery.refetch()
       }
@@ -76,8 +71,7 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
   }
 
   const patch = async (partial: Partial<CommunicationPreferences>) => {
-    if (!prefs || saving) return
-    setSaving(true)
+    if (!prefs) return
     const optimistic: CommunicationPreferences = {
       ...prefs,
       ...partial,
@@ -85,35 +79,29 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
         ? { ...prefs.channels, ...partial.channels }
         : prefs.channels,
     }
-    setOptimisticOverride(optimistic)
+    await commitCommunicationPreferences(optimistic)
     try {
       await patchPrefs(optimistic)
-      setOptimisticOverride(null)
     } catch {
-      setOptimisticOverride(null)
-    } finally {
-      setSaving(false)
+      // Keep user's chosen state in UI; background sync/retry can reconcile later.
     }
   }
 
   const handlePushToggle = async (wantPush: boolean) => {
-    if (!prefs || saving) return
-    setSaving(true)
+    if (!prefs) return
     if (wantPush) {
       const optimistic: CommunicationPreferences = {
         ...prefs,
         channels: { ...prefs.channels, push: true },
       }
-      setOptimisticOverride(optimistic)
+      await commitCommunicationPreferences(optimistic)
       try {
         const token = await pushNotificationService.registerForPushNotifications()
         if (!token) {
-          setOptimisticOverride(null)
           Alert.alert(
             'Push notifications',
             'Push was not enabled. Use a physical device and allow notifications in Settings if you previously denied them.',
           )
-          setSaving(false)
           return
         }
         await apiPost('/api/settings/push-token', { expoPushToken: token })
@@ -121,27 +109,21 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
           ...optimistic,
           channels: { ...optimistic.channels, push: true },
         })
-        setOptimisticOverride(null)
       } catch {
-        setOptimisticOverride(null)
-      } finally {
-        setSaving(false)
+        // Keep chosen state in UI.
       }
     } else {
       const optimistic: CommunicationPreferences = {
         ...prefs,
         channels: { ...prefs.channels, push: false },
       }
-      setOptimisticOverride(optimistic)
+      await commitCommunicationPreferences(optimistic)
       try {
         await patchPrefs(optimistic)
         await pushNotificationService.clearLocalPushToken()
         await apiPost('/api/settings/push-token', { expoPushToken: null })
-        setOptimisticOverride(null)
       } catch {
-        setOptimisticOverride(null)
-      } finally {
-        setSaving(false)
+        // Keep chosen state in UI.
       }
     }
   }
@@ -160,7 +142,6 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
       </View>
       <Switch
         value={value}
-        disabled={saving || loadingPrefs}
         onValueChange={async (v) => {
           await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
           onValueChange(v)
@@ -230,10 +211,6 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
               <Text style={styles.fallback}>
                 Sign in to load your preferences.
               </Text>
-            ) : loadingPrefs ? (
-              <View style={styles.loading}>
-                <ActivityIndicator color={colors.primary.main} />
-              </View>
             ) : !prefs ? (
               <Text style={styles.fallback}>
                 Preferences could not be loaded. Check your connection and try again.
@@ -245,7 +222,7 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
                   <View style={styles.sectionContent}>
                     {renderToggleItem(
                       'Push notifications',
-                      'Alerts on this device when enabled (requires permission)',
+                      'Alerts on this device when enabled',
                       prefs.channels.push,
                       (v) => void handlePushToggle(v),
                       true,
@@ -277,8 +254,6 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
                     )}
                   </View>
                 </View>
-
-                <Text style={styles.disclaimer}>{COMMUNICATION_PREFERENCES_DISCLAIMER}</Text>
               </>
             )}
           </Animated.View>
@@ -325,22 +300,10 @@ const styles = StyleSheet.create({
     padding: spacing[5],
     gap: spacing[4],
   },
-  loading: {
-    paddingVertical: spacing[8],
-    alignItems: 'center',
-  },
   fallback: {
     ...textStyles.bodyMedium,
     color: colors.text.secondary,
     lineHeight: 22,
-  },
-  /** Slightly smaller than bodySmall for legal-style footer copy ("We may still…"). */
-  disclaimer: {
-    fontFamily: textStyles.bodySmall.fontFamily,
-    fontSize: 10,
-    lineHeight: 14,
-    color: colors.text.secondary,
-    opacity: 0.9,
   },
   sectionCard: {
     backgroundColor: '#F9F9F9',

@@ -6,7 +6,7 @@
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icons/ios-light.png",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
@@ -37,7 +37,7 @@
       "icon": "./assets/icons/adaptive-icon.png",
       "adaptiveIcon": {
         "foregroundImage": "./assets/icons/adaptive-icon.png",
-        "backgroundColor": "#0F1110",
+        "backgroundColor": "#007ACC",
         "monochromeImage": "./assets/icons/adaptive-icon.png"
       },
       "edgeToEdgeEnabled": true,

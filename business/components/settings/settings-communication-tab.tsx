@@ -10,7 +10,7 @@ import { fetchWithSession } from "@/lib/fetch-with-session"
 import { CACHE_KEYS } from "@/lib/cache"
 import { useCachedData } from "@/lib/use-cached-data"
 import type { CommunicationPreferences } from "@easner/shared"
-import { COMMUNICATION_PREFERENCES_DISCLAIMER, DEFAULT_COMMUNICATION_PREFERENCES } from "@easner/shared"
+import { DEFAULT_COMMUNICATION_PREFERENCES } from "@easner/shared"
 import { toast } from "sonner"
 
 const COMMUNICATION_SETTINGS_TTL_MS = 60 * 60 * 1000
@@ -18,7 +18,6 @@ const COMMUNICATION_SETTINGS_PERSIST_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 
 export function SettingsCommunicationTab() {
   const { user, isLoading: authLoading } = useAuth()
-  const [saving, setSaving] = useState(false)
 
   const {
     data: prefs,
@@ -47,9 +46,7 @@ export function SettingsCommunicationTab() {
   })
 
   const patch = async (partial: Partial<CommunicationPreferences>) => {
-    if (!prefs || saving) return
-    setSaving(true)
-    const prev = prefs
+    if (!prefs) return
     const optimistic: CommunicationPreferences = {
       ...prefs,
       ...partial,
@@ -76,10 +73,8 @@ export function SettingsCommunicationTab() {
       const data = (await res.json()) as { preferences: CommunicationPreferences }
       setPrefs(data.preferences)
     } catch (e) {
-      setPrefs(prev)
+      // Keep user's chosen state in UI; follow-up refresh can reconcile.
       toast.error(e instanceof Error ? e.message : "Could not save")
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -112,7 +107,6 @@ export function SettingsCommunicationTab() {
                 </div>
                 <Switch
                   checked={prefs.productUpdates}
-                  disabled={saving}
                   onCheckedChange={(v) => patch({ productUpdates: v })}
                 />
               </div>
@@ -125,7 +119,6 @@ export function SettingsCommunicationTab() {
                 </div>
                 <Switch
                   checked={prefs.securityAlerts}
-                  disabled={saving}
                   onCheckedChange={(v) => patch({ securityAlerts: v })}
                 />
               </div>
@@ -138,11 +131,9 @@ export function SettingsCommunicationTab() {
                 </div>
                 <Switch
                   checked={prefs.marketingEmails}
-                  disabled={saving}
                   onCheckedChange={(v) => patch({ marketingEmails: v })}
                 />
               </div>
-              <p className="text-sm text-muted-foreground border-t pt-4">{COMMUNICATION_PREFERENCES_DISCLAIMER}</p>
             </>
           )}
         </CardContent>

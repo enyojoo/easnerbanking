@@ -17,7 +17,7 @@ export type CommunicationPreferences = {
 export const DEFAULT_COMMUNICATION_PREFERENCES: CommunicationPreferences = {
   productUpdates: true,
   securityAlerts: true,
-  marketingEmails: false,
+  marketingEmails: true,
   channels: {
     email: true,
     push: true,
