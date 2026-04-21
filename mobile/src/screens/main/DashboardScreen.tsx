@@ -631,7 +631,13 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                 await syncConsumerLedgerRemotes().catch((error) => {
                   console.warn('[DASHBOARD] Ledger sync failed on pull-to-refresh:', error)
                 })
-                await Promise.allSettled([refreshBalances(true), txQuery.refetch(), fetchRecentTransactions(true)])
+                // Keep pull-to-refresh deterministic: refresh tx list first, then force-balance fetch.
+                // A second follow-up fetch catches eventual-consistency lag from upstream remotes.
+                await txQuery.refetch()
+                await refreshBalances(true)
+                setTimeout(() => {
+                  void refreshBalances(true)
+                }, 1200)
               } catch (error) {
                 console.error('Error refreshing dashboard:', error)
               } finally {

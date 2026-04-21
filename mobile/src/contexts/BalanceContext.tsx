@@ -90,9 +90,12 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
 
   useEffect(() => {
     if (!query.data) return
+    const hasUSD = query.data._hasUSD === true
+    const hasEUR = query.data._hasEUR === true
+    const prev = lastKnownBalancesRef.current
     const next: Balances = {
-      USD: String(query.data.USD ?? '0'),
-      EUR: String(query.data.EUR ?? '0'),
+      USD: hasUSD ? String(query.data.USD ?? '0') : prev.USD,
+      EUR: hasEUR ? String(query.data.EUR ?? '0') : prev.EUR,
     }
     lastKnownBalancesRef.current = next
     setSeededBalances(next)
@@ -104,9 +107,10 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
 
   const balances: Balances = useMemo(() => {
     if (!query.data) return seededBalances ?? lastKnownBalancesRef.current
+    const prev = seededBalances ?? lastKnownBalancesRef.current
     return {
-      USD: String(query.data.USD ?? '0'),
-      EUR: String(query.data.EUR ?? '0'),
+      USD: query.data._hasUSD ? String(query.data.USD ?? '0') : prev.USD,
+      EUR: query.data._hasEUR ? String(query.data.EUR ?? '0') : prev.EUR,
     }
   }, [query.data, seededBalances])
 
