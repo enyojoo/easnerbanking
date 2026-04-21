@@ -34,8 +34,9 @@ export default function SendTransactionDetailsScreen({ navigation, route }: Navi
   const { data: currencies = [] } = useCurrenciesCatalog()
   const paymentMethods = usePaymentMethodsList().data ?? []
   const insets = useSafeAreaInsets()
-  const [transaction, setTransaction] = useState<TransactionData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const { transactionId, fromScreen, initialTransaction } = route.params || {}
+  const [transaction, setTransaction] = useState<TransactionData | null>(initialTransaction ?? null)
+  const [loading, setLoading] = useState(initialTransaction ? false : true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [currentTime, setCurrentTime] = useState(Date.now())
@@ -45,8 +46,6 @@ export default function SendTransactionDetailsScreen({ navigation, route }: Navi
   // Animation refs
   const headerAnim = useRef(new Animated.Value(0)).current
   const contentAnim = useRef(new Animated.Value(0)).current
-
-  const { transactionId, fromScreen } = route.params || {}
 
   useCalmParallelEnterWhen(true, headerAnim, contentAnim)
 
@@ -87,6 +86,12 @@ export default function SendTransactionDetailsScreen({ navigation, route }: Navi
       fetchTransactionDetails()
     }
   }, [transactionId, userProfile?.id])
+
+  useEffect(() => {
+    setTransaction(initialTransaction ?? null)
+    setError(null)
+    setLoading(initialTransaction ? false : true)
+  }, [transactionId, initialTransaction])
 
   useEffect(() => {
     if (!transaction || !userProfile?.id || !transactionId) return
@@ -134,7 +139,7 @@ export default function SendTransactionDetailsScreen({ navigation, route }: Navi
 
   const fetchTransactionDetails = async () => {
     try {
-      setLoading(true)
+      setLoading(!transaction)
       setError(null)
 
       const transactionData = await transactionService.getById(transactionId.toUpperCase())
@@ -307,7 +312,7 @@ export default function SendTransactionDetailsScreen({ navigation, route }: Navi
     )
   }
 
-  if (error || !transaction) {
+  if (!transaction && error) {
     return (
       <View style={[styles.container, { paddingTop: insets.top + spacing[4] }]}>
         <View style={styles.errorContainer}>
@@ -319,6 +324,16 @@ export default function SendTransactionDetailsScreen({ navigation, route }: Navi
           <Pressable android_ripple={ripple.neutral} style={styles.retryButton} onPress={fetchTransactionDetails}>
             <Text style={styles.retryButtonText}>Try Again</Text>
           </Pressable>
+        </View>
+      </View>
+    )
+  }
+
+  if (!transaction) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top + spacing[4] }]}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary.main} />
         </View>
       </View>
     )

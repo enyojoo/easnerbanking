@@ -22,6 +22,8 @@ import {
   IframeWebViewModalHeader,
   iframeModalTitleTextStyle,
 } from '../../components/IframeWebViewModalHeader'
+import ExternalLinkModal from '../../components/ExternalLinkModal'
+import { useExternalLink } from '../../hooks/useExternalLink'
 import { useAuth } from '../../contexts/AuthContext'
 import { NavigationProps } from '../../types'
 import { getApiBaseUrl } from '../../lib/apiClient'
@@ -60,7 +62,6 @@ function tierTitleDisplay(title: string) {
 function AccountVerificationContent({ navigation }: NavigationProps) {
   const { userProfile, refreshUserProfile } = useAuth()
   const insets = useSafeAreaInsets()
-  const [loading, setLoading] = useState(false)
 
   // TOS state
   const [tosLink, setTosLink] = useState<string | null>(null)
@@ -97,12 +98,13 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
   const [kycCompleted, setKycCompleted] = useState(false)
   const [tosCompleted, setTosCompleted] = useState(false)
   const kycProcessedRef = useRef(false)
+  const externalLink = useExternalLink()
 
   // Animation refs
   const headerAnim = useRef(new Animated.Value(0)).current
   const contentAnim = useRef(new Animated.Value(0)).current
 
-  useCalmParallelEnterWhen(!loading, headerAnim, contentAnim)
+  useCalmParallelEnterWhen(true, headerAnim, contentAnim)
 
   // Sync Noah customer status — fetches from the verification API and updates the database
   const syncNoahStatus = useCallback(async (silent: boolean = false, force: boolean = false) => {
@@ -652,7 +654,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
               console.log('[TOS-OPEN] Using TOS link from customer object')
               setTosLink(customerTosLink)
               setTosLinkId(`customer-${userData.noah_customer_id}`)
-              setShowTosModal(true)
+              await externalLink.openLink(customerTosLink, 'Partner Terms of Service')
               setLoadingTos(false)
               return
             }
@@ -681,7 +683,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
           return
         }
         
-        setShowTosModal(true)
+        await externalLink.openLink(link, 'Partner Terms of Service')
         } catch (tosLinkError: any) {
           // If TOS link creation fails (especially 401), check if TOS is already accepted
           console.warn('[TOS-OPEN] TOS link creation failed:', tosLinkError.message)
@@ -753,7 +755,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
           setLoadingTos(false)
           return
         }
-        setShowTosModal(true)
+        await externalLink.openLink(tosLink, 'Partner Terms of Service')
       }
     } catch (error: any) {
       console.error('Error opening TOS:', error)
@@ -946,7 +948,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
         return
       }
       
-      setShowKycModal(true)
+      await externalLink.openLink(buildKycIframeUrl(response.kyc_link), 'Verification for global banking')
     } catch (error: any) {
       console.error('Error opening KYC:', error)
       Alert.alert(
@@ -1077,16 +1079,6 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
           </View>
         )
     }
-  }
-
-  if (loading) {
-    return (
-      <ScreenWrapper>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007ACC" />
-        </View>
-      </ScreenWrapper>
-    )
   }
 
   const scrollBottomPad = Math.max(insets.bottom, spacing[4]) + spacing[5]
@@ -1725,6 +1717,12 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
+      <ExternalLinkModal
+        visible={externalLink.isVisible}
+        url={externalLink.url}
+        title={externalLink.title}
+        onClose={externalLink.closeLink}
+      />
     </ScreenWrapper>
   )
 }

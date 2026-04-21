@@ -14,7 +14,7 @@ import { invalidateAllUserFeeds } from '../query/refresh-user-feeds'
  * @param force - If true, always refresh regardless of staleness
  */
 export function useFocusRefresh(
-  refreshFn: () => Promise<void>,
+  refreshFn: () => Promise<void> | void,
   staleThreshold: number = 5 * 60 * 1000, // 5 minutes default
   force: boolean = false
 ) {
@@ -28,7 +28,7 @@ export function useFocusRefresh(
       // Refresh if forced, or if data is stale
       if (force || timeSinceLastRefresh > staleThreshold) {
         lastRefreshTime.current = now
-        refreshFn().catch(error => {
+        Promise.resolve(refreshFn()).catch(error => {
           console.warn('Focus refresh error:', error)
         })
       }

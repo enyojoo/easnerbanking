@@ -14,8 +14,6 @@ import { Ionicons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
 import ScreenWrapper from '../../components/ScreenWrapper'
-import ExternalLinkModal from '../../components/ExternalLinkModal'
-import { useExternalLink } from '../../hooks/useExternalLink'
 import { useAuth } from '../../contexts/AuthContext'
 import { NavigationProps, KYCSubmission } from '../../types'
 import { kycService } from '../../lib/kycService'
@@ -94,8 +92,6 @@ function MoreContent({ navigation }: NavigationProps) {
   const [kycSubmissions, setKycSubmissions] = useState<KYCSubmission[]>([])
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
-  const privacyLink = useExternalLink()
-  const termsLink = useExternalLink()
   const [mfaStatusLine, setMfaStatusLine] = useState('')
   const lastKycProfileRefreshRef = useRef(0)
   /** Latest profile for focus handler — avoids putting `noah_kyc_status` in `useFocusEffect` deps (would re-run MFA listFactors on every profile poll while More stays focused). */
@@ -273,16 +269,6 @@ function MoreContent({ navigation }: NavigationProps) {
     }
   }
 
-  const handlePrivacy = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    privacyLink.openLink('https://www.easner.com/privacy', 'Privacy Policy')
-  }
-
-  const handleTerms = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    termsLink.openLink('https://www.easner.com/terms', 'Terms of Service')
-  }
-
   const handleMfaRowPress = () => {
     if (!user?.id) return
     navigateFromMoreTab('MfaSetup', {
@@ -293,7 +279,9 @@ function MoreContent({ navigation }: NavigationProps) {
 
   const renderMenuItem = (
     title: string,
+    subtitle: string,
     onPress: () => void,
+    iconName: React.ComponentProps<typeof Ionicons>['name'],
     rightComponent?: React.ReactNode,
     isDestructive: boolean = false,
     isLast: boolean = false
@@ -305,9 +293,17 @@ function MoreContent({ navigation }: NavigationProps) {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
         onPress()
       }} >
-      <Text style={[styles.menuItemText, isDestructive && styles.destructiveText]}>
-        {title}
-      </Text>
+      <View style={styles.menuItemLeft}>
+        <View style={styles.menuItemIconWrap}>
+          <Ionicons name={iconName} size={18} color={colors.text.secondary} />
+        </View>
+        <View style={styles.menuItemTextWrap}>
+          <Text style={[styles.menuItemText, isDestructive && styles.destructiveText]}>
+            {title}
+          </Text>
+          <Text style={styles.menuItemSubtitle}>{subtitle}</Text>
+        </View>
+      </View>
       <View style={styles.menuItemRight}>
         {rightComponent}
         <Ionicons name="chevron-forward" size={20} color={colors.neutral[400]} />
@@ -338,7 +334,9 @@ function MoreContent({ navigation }: NavigationProps) {
             <View style={styles.sectionContent}>
               {renderMenuItem(
                 'Your Profile',
+                'Name, email, and personal details',
                 () => navigation.navigate('ProfileEdit' as never),
+                'person-outline',
                 undefined,
                 false,
                 false
@@ -350,7 +348,15 @@ function MoreContent({ navigation }: NavigationProps) {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                   navigateFromMoreTab('AccountVerification')
                 }} >
-                <Text style={styles.menuItemText}>Account verification</Text>
+                <View style={styles.menuItemLeft}>
+                  <View style={styles.menuItemIconWrap}>
+                    <Ionicons name="shield-checkmark-outline" size={18} color={colors.text.secondary} />
+                  </View>
+                  <View style={styles.menuItemTextWrap}>
+                    <Text style={styles.menuItemText}>Account verification</Text>
+                    <Text style={styles.menuItemSubtitle}>Tier status and onboarding progress</Text>
+                  </View>
+                </View>
                 <View style={styles.menuItemRight}>
                   {tierBadge.tone === 'green' ? (
                     <View style={styles.badgeGreen}>
@@ -369,14 +375,18 @@ function MoreContent({ navigation }: NavigationProps) {
               </Pressable>
               {renderMenuItem(
                 'Notifications',
+                'Alerts, pushes, and communication settings',
                 () => navigation.navigate('Notifications' as never),
+                'notifications-outline',
                 undefined,
                 false,
                 false
               )}
               {renderMenuItem(
                 'Recipients',
+                'Saved people and payout destinations',
                 () => navigateFromMoreTab('Recipients'),
+                'people-outline',
                 undefined,
                 false,
                 true
@@ -390,21 +400,27 @@ function MoreContent({ navigation }: NavigationProps) {
             <View style={styles.sectionContent}>
               {renderMenuItem(
                 'Change PIN',
+                'Update your app unlock PIN',
                 () => navigateFromMoreTab('ChangePin'),
+                'key-outline',
                 undefined,
                 false,
                 false
               )}
               {renderMenuItem(
                 'Change password',
+                'Reset your login password securely',
                 () => navigateFromMoreTab('ChangePassword'),
+                'lock-closed-outline',
                 undefined,
                 false,
                 false
               )}
               {renderMenuItem(
                 'Two-Factor Authentication',
+                'Manage authenticator app protection',
                 handleMfaRowPress,
+                'shield-outline',
                 <View style={mfaStatusLine === 'On' ? styles.badgeGreen : styles.badgeMuted}>
                   <Text
                     style={mfaStatusLine === 'On' ? styles.badgeTextGreen : styles.badgeTextMuted}
@@ -424,21 +440,18 @@ function MoreContent({ navigation }: NavigationProps) {
             <View style={styles.sectionContent}>
               {renderMenuItem(
                 'Support',
+                'Get help and contact our team',
                 () => navigateFromMoreTab('Support'),
+                'help-circle-outline',
                 undefined,
                 false,
                 false
               )}
               {renderMenuItem(
-                'Privacy Policy',
-                handlePrivacy,
-                undefined,
-                false,
-                false
-              )}
-              {renderMenuItem(
-                'Terms of Service',
-                handleTerms,
+                'Legal',
+                'Privacy policy and terms of service',
+                () => navigateFromMoreTab('Legal'),
+                'document-text-outline',
                 undefined,
                 false,
                 true
@@ -507,19 +520,6 @@ function MoreContent({ navigation }: NavigationProps) {
         </View>
       </Modal>
 
-      {/* External Link Modals */}
-      <ExternalLinkModal
-        visible={privacyLink.isVisible}
-        url={privacyLink.url}
-        title={privacyLink.title}
-        onClose={privacyLink.closeLink}
-      />
-      <ExternalLinkModal
-        visible={termsLink.isVisible}
-        url={termsLink.url}
-        title={termsLink.title}
-        onClose={termsLink.closeLink}
-          />
     </ScreenWrapper>
   )
 }
@@ -604,6 +604,32 @@ const styles = StyleSheet.create({
     ...textStyles.bodyMedium,
     color: colors.text.primary,
     fontFamily: 'Outfit-Medium',
+  },
+  menuItemTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  menuItemSubtitle: {
+    ...textStyles.bodySmall,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  menuItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    flex: 1,
+    minWidth: 0,
+  },
+  menuItemIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.background.primary,
+    borderWidth: 0.5,
+    borderColor: colors.frame.border,
   },
   menuItemTextDisabled: {
     opacity: 0.6,

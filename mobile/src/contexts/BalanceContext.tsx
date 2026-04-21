@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useCallback, useMemo, ReactNode } from 'react'
+import React, { createContext, useContext, useCallback, useMemo, ReactNode, useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { qk } from '@easner/shared'
 import { useWalletBalances } from '../hooks/queries/use-wallets'
@@ -57,9 +57,19 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
   const qc = useQueryClient()
   const scope = useMaybeScope()
   const query = useWalletBalances()
+  const lastKnownBalancesRef = useRef<Balances>(EMPTY_BALANCES)
+
+  useEffect(() => {
+    if (!query.data) return
+    const next: Balances = {
+      USD: String(query.data.USD ?? '0'),
+      EUR: String(query.data.EUR ?? '0'),
+    }
+    lastKnownBalancesRef.current = next
+  }, [query.data])
 
   const balances: Balances = useMemo(() => {
-    if (!query.data) return EMPTY_BALANCES
+    if (!query.data) return lastKnownBalancesRef.current
     return {
       USD: String(query.data.USD ?? '0'),
       EUR: String(query.data.EUR ?? '0'),

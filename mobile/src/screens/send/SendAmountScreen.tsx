@@ -1398,6 +1398,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
                 navigation.navigate('SendTransactionDetails' as never, {
                     transactionId: transfer.transaction_id || transfer.id,
+                  initialTransaction: transfer,
                   sendAmount: calculatedSendingAmount,
                   receiveAmount: receiveAmountValue,
                   sendCurrency: selectedBalanceCurrency,

@@ -20,6 +20,7 @@ import { ensureConsumerMobileAccess } from '../lib/validateAppSurface'
 import { hydratePayoutCorridorsFromStorage, refreshPayoutCorridors } from '../lib/payoutCorridors'
 import { readProfileSnapshot, writeProfileSnapshot } from '../lib/profileSnapshot'
 import { clearMfaVerified } from '../lib/mfaStatusCache'
+import { warmAvatarCache } from '../lib/avatarCache'
 
 function patchAuthUserWithPersonal(
   prev: AuthUser,
@@ -347,6 +348,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           profile,
         }
         setUserProfile(nextProfile)
+        warmAvatarCache(nextProfile.profile.avatar_url)
         void writeProfileSnapshot(nextProfile)
         return regularUser
       }
@@ -386,6 +388,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const nextAuth = patchAuthUserWithPersonal(prev, personal, options)
       setUser(nextAuth.profile)
       setUserProfile(nextAuth)
+      warmAvatarCache(nextAuth.profile.avatar_url)
       userProfileRef.current = nextAuth
       void writeProfileSnapshot(nextAuth)
     },
@@ -431,6 +434,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             if (!mounted || !snap || snap.id !== afterGate.user.id) return
             setUser(snap.profile)
             setUserProfile(snap)
+            warmAvatarCache(snap.profile.avatar_url)
           })
           fetchUserProfile(afterGate.user.id, mappedUser, { force: true }).catch(error => {
             console.error('Initial profile fetch error:', error)
@@ -497,6 +501,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             if (!mounted || !snap || snap.id !== afterGate.user.id) return
             setUser(snap.profile)
             setUserProfile(snap)
+            warmAvatarCache(snap.profile.avatar_url)
           })
           const profileForce =
             event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'PASSWORD_RECOVERY'
@@ -555,6 +560,30 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       console.log('AuthContext: Sign in successful, session:', !!data.session)
+      if (data.user) {
+        const { first_name, last_name } = mapNameFromMetadata(
+          data.user.user_metadata as Record<string, unknown> | undefined,
+        )
+        const mappedUser: User = {
+          id: data.user.id,
+          email: data.user.email || email.trim(),
+          full_name: [first_name, last_name].filter(Boolean).join(' ') || null,
+          first_name,
+          last_name,
+          phone: data.user.phone ?? undefined,
+          status: 'active',
+          base_currency: 'USD',
+          enabled_extra_account_currencies: [],
+          created_at: data.user.created_at,
+          updated_at: data.user.updated_at || data.user.created_at,
+        }
+        /**
+         * Immediate route handoff: show PIN/MFA stack without waiting for extra network checks.
+         * Any later gate failure (surface denied / missing factor) still signs out and resets state.
+         */
+        setUser(mappedUser)
+        setLoading(false)
+      }
 
       // Track successful sign in
       analytics.trackSignIn('email', {
@@ -626,6 +655,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       if (data.user?.id) {
+        if (data.session) {
+          const { first_name, last_name } = mapNameFromMetadata(
+            data.user.user_metadata as Record<string, unknown> | undefined,
+          )
+          const mappedUser: User = {
+            id: data.user.id,
+            email: data.user.email || email.trim(),
+            full_name: [first_name, last_name].filter(Boolean).join(' ') || null,
+            first_name,
+            last_name,
+            phone: data.user.phone ?? undefined,
+            status: 'active',
+            base_currency: 'USD',
+            enabled_extra_account_currencies: [],
+            created_at: data.user.created_at,
+            updated_at: data.user.updated_at || data.user.created_at,
+          }
+          setUser(mappedUser)
+          setLoading(false)
+        }
         analytics.identify(data.user.id, {
           email: data.user.email || email.trim(),
           name: name.trim(),

@@ -29,7 +29,7 @@
       ]
     },
     "androidStatusBar": {
-      "backgroundColor": "#F6F3EB",
+      "backgroundColor": "#007ACC",
       "barStyle": "dark-content"
     },
     "android": {
@@ -78,16 +78,17 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#F6F3EB",
+          "backgroundColor": "#007ACC",
           "dark": {
-            "backgroundColor": "#0F1110",
-            "image": "./assets/splash-icon-light.png",
+            "backgroundColor": "#007ACC",
+            "image": "./assets/icons/adaptive-icon.png",
             "imageWidth": 200
           },
-          "image": "./assets/splash-icon-light.png",
+          "image": "./assets/icons/adaptive-icon.png",
           "imageWidth": 200
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "owner": "easner"
   }

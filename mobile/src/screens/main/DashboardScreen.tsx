@@ -55,6 +55,7 @@ import { isTier1Complete } from '../../lib/compliance'
 import { noahService } from '../../lib/noahService'
 import { useTransactionsList } from '../../hooks/queries'
 import { isEasnerProductReceiveTitle, isEasnerProductSendTitle } from '@easner/shared'
+import { normalizeAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
 
 const DASHBOARD_SELECTED_CURRENCY_KEY_PREFIX = 'easner_dashboard_selected_currency_'
 
@@ -96,10 +97,6 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     { code: 'EUR', name: 'Euro', symbol: '€' },
   ])
   const [canOpenMoreCurrencies, setCanOpenMoreCurrencies] = useState(false)
-  const [recentTransactions, setRecentTransactions] = useState<DashboardTransaction[]>([])
-  const [loadingTransactions, setLoadingTransactions] = useState(true) // Start as loading until cache loads or API completes
-  const [hasAttemptedLoad, setHasAttemptedLoad] = useState(false) // Track if we've attempted to load data (cache or API)
-  const dataLoadedRef = useRef(false)
   const lastSyncTimeRef = useRef(0) // Track last sync time to prevent frequent syncs
   /** Throttle Noah sync on dashboard focus (parity with business `BusinessVerificationSection`). */
   const lastDashboardNoahSyncRef = useRef(0)
@@ -162,15 +159,9 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     const firstPage = txQuery.data?.pages?.[0]?.transactions ?? []
     return (firstPage as DashboardTransaction[]).slice(0, 5)
   }, [txQuery.data])
-
-  const fetchRecentTransactions = useCallback(async (force = false, silent = false) => {
-    void force
-    void silent
-    setRecentTransactions(queryRecent)
-    setHasAttemptedLoad(true)
-    dataLoadedRef.current = true
-    setLoadingTransactions(txQuery.isPending && queryRecent.length === 0)
-  }, [queryRecent, txQuery.isPending])
+  const recentTransactions = queryRecent
+  const loadingTransactions = txQuery.isLoading && recentTransactions.length === 0
+  const hasAttemptedLoad = txQuery.isFetched || recentTransactions.length > 0
 
   // Initial load - rely on webhooks and real-time for instant updates
   // Only sync for backfill on first load (once per session)
@@ -197,15 +188,9 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
       }
     }
     
-    // Fetch fresh transactions in background (cache already shown above)
-    fetchRecentTransactions(false)
     // Only sync once per session for backfill (webhooks handle new transactions)
     triggerSync()
-  }, [userProfile?.id, fetchRecentTransactions])
-
-  useEffect(() => {
-    fetchRecentTransactions(false, true).catch(() => {})
-  }, [fetchRecentTransactions])
+  }, [userProfile?.id])
 
   // Refresh balances on focus only if stale (don't fetch every time)
   useFocusEffect(
@@ -241,9 +226,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
       refreshBalances(false).catch(() => {
         // Silently fail
       })
-      fetchRecentTransactions(false).catch(() => {
-        // Silently fail
-      })
+      void txQuery.refetch()
       loadAvailableCurrencies().catch(() => {
         // Silently fail
       })
@@ -252,8 +235,8 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
       userProfile,
       refreshUserProfile,
       refreshBalances,
-      fetchRecentTransactions,
       loadAvailableCurrencies,
+      txQuery,
     ])
   )
 
@@ -271,10 +254,11 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     [user?.first_name, user?.last_name].filter(Boolean).join(' ') ||
     ''
 
-  const headerAvatarUrl =
-    typeof userProfile?.profile?.avatar_url === 'string' && userProfile.profile.avatar_url.trim()
-      ? userProfile.profile.avatar_url.trim()
-      : null
+  const headerAvatarUrl = normalizeAvatarUrl(userProfile?.profile?.avatar_url)
+
+  useEffect(() => {
+    warmAvatarCache(headerAvatarUrl)
+  }, [headerAvatarUrl])
 
   const handleCurrencyChange = (currency: 'USD' | 'EUR' | 'GBP') => {
     setSelectedCurrency(currency)
@@ -546,7 +530,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                 }} >
                 {headerAvatarUrl ? (
                   <Image
-                    source={{ uri: headerAvatarUrl }}
+                    source={{ uri: headerAvatarUrl, cache: 'force-cache' }}
                     style={userAvatarStyles.image}
                     resizeMode="cover"
                   />
@@ -771,6 +755,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                       transactionId:
                         transaction.ledger_row_id?.trim() || transaction.transaction_id,
                       fromScreen: 'Dashboard',
+                      initialTransaction: transaction,
                     } as never)
                   }} >
                   {getTransactionIcon(iconType, isReceived)}

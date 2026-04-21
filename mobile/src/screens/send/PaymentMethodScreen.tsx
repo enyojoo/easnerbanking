@@ -155,7 +155,8 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
 
       navigation.navigate('SendTransactionDetails', { 
-        transactionId: transaction.transaction_id 
+        transactionId: transaction.transaction_id,
+        initialTransaction: transaction,
       })
     } catch (error: any) {
       console.error('Error creating transaction:', error)

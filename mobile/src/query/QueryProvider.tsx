@@ -1,12 +1,14 @@
 import React from 'react'
 import { AppState, AppStateStatus, Platform } from 'react-native'
 import { QueryClientProvider, focusManager } from '@tanstack/react-query'
+import { qk } from '@easner/shared'
 import { getMobileQueryClient } from './client'
 import { startQueryPersistence, clearPersistedQueryCache } from './persister'
 import { PersonalScopeProvider, useScope } from './scope'
 import { useSupabaseRealtimeScope } from './use-supabase-realtime-scope'
 import { RealtimeHealthProvider } from './realtime-health-context'
 import { useAuth } from '../contexts/AuthContext'
+import { registerAppLockListener } from '../lib/app-lock-bus'
 
 /**
  * Root Query provider for the mobile app. Owns:
@@ -74,6 +76,51 @@ function ScopeRealtimeBridge({ children }: { children: React.ReactNode }) {
   return <RealtimeActive>{children}</RealtimeActive>
 }
 
+function ForegroundResumeRefresher({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth()
+  const { scope, isReady } = useScope()
+  const lastRefreshAtRef = React.useRef(0)
+
+  const refreshNow = React.useCallback(() => {
+      if (!user?.id || !scope || !isReady) return
+      const now = Date.now()
+      const MIN_INTERVAL_MS = 10_000
+      if (now - lastRefreshAtRef.current < MIN_INTERVAL_MS) return
+      lastRefreshAtRef.current = now
+
+      // Keep home data fresh after long idle: force a background refresh pass
+      // for wallets + transactions right when the app becomes active/unlocked.
+      void qc.invalidateQueries({
+        queryKey: qk.wallets.root(scope),
+        refetchType: 'all',
+      })
+      void qc.invalidateQueries({
+        queryKey: qk.transactions.root(scope),
+        refetchType: 'all',
+      })
+    }, [isReady, scope, user?.id])
+
+  React.useEffect(() => {
+    const sub = AppState.addEventListener('change', (status) => {
+      if (status === 'active') {
+        refreshNow()
+      }
+    })
+    return () => sub.remove()
+  }, [refreshNow])
+
+  React.useEffect(() => {
+    const off = registerAppLockListener((event) => {
+      if (event === 'unlocked') {
+        refreshNow()
+      }
+    })
+    return off
+  }, [refreshNow])
+
+  return <>{children}</>
+}
+
 function RealtimeActive({ children }: { children: React.ReactNode }) {
   const health = useSupabaseRealtimeScope()
   return <RealtimeHealthProvider value={health}>{children}</RealtimeHealthProvider>
@@ -84,7 +131,9 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={qc}>
       <AuthGatedCacheReset>
         <PersonalScopeProvider>
-          <ScopeRealtimeBridge>{children}</ScopeRealtimeBridge>
+          <ForegroundResumeRefresher>
+            <ScopeRealtimeBridge>{children}</ScopeRealtimeBridge>
+          </ForegroundResumeRefresher>
         </PersonalScopeProvider>
       </AuthGatedCacheReset>
     </QueryClientProvider>

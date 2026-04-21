@@ -12,6 +12,7 @@ import {
   Keyboard,
   ActivityIndicator,
   Platform,
+  Image,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -33,6 +34,9 @@ import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { analytics } from '../../lib/analytics'
 import { getApiBaseUrl } from '../../lib/apiClient'
 import { supabase } from '../../lib/supabase'
+import { userAvatarStyles } from '../../theme'
+import { initialsFromFullName } from '../../lib/userProfileHelpers'
+import { normalizeAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
 
 function ProfileContent({ navigation }: NavigationProps) {
   const { user, userProfile, signOut, refreshUserProfile, applyPersonalSettingsFromServer } = useAuth()
@@ -66,11 +70,23 @@ function ProfileContent({ navigation }: NavigationProps) {
   const easetagCheckSeqRef = useRef(0)
   const privacyLink = useExternalLink()
   const termsLink = useExternalLink()
+  const profileAvatarUrl = normalizeAvatarUrl(userProfile?.profile?.avatar_url)
+  const profileHeaderName =
+    userProfile?.profile?.full_name ||
+    [userProfile?.profile?.first_name, userProfile?.profile?.last_name].filter(Boolean).join(' ') ||
+    user?.full_name ||
+    [user?.first_name, user?.last_name].filter(Boolean).join(' ') ||
+    user?.email ||
+    ''
 
   // Track screen view
   useEffect(() => {
     analytics.trackScreenView('Profile')
   }, [])
+
+  useEffect(() => {
+    warmAvatarCache(profileAvatarUrl)
+  }, [profileAvatarUrl])
 
   // Load user profile data
   useEffect(() => {
@@ -548,6 +564,19 @@ function ProfileContent({ navigation }: NavigationProps) {
       >
       {/* Profile Header */}
       <View style={styles.header}>
+          <View style={styles.headerTopRow}>
+            <View style={styles.headerAvatar}>
+              {profileAvatarUrl ? (
+                <Image
+                  source={{ uri: profileAvatarUrl, cache: 'force-cache' }}
+                  style={userAvatarStyles.image}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Text style={userAvatarStyles.initials}>{initialsFromFullName(profileHeaderName)}</Text>
+              )}
+            </View>
+          </View>
           <Text style={styles.pageTitle}>Settings</Text>
           <Text style={styles.pageSubtitle}>Manage your account information</Text>
       </View>
@@ -717,6 +746,13 @@ const styles = StyleSheet.create({
   header: {
     padding: 24,
     backgroundColor: '#ffffff',
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  headerAvatar: {
+    ...userAvatarStyles.circle,
   },
   pageTitle: {
     fontSize: 24,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
+import { useQueryClient } from '@tanstack/react-query'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { ShimmerLoader } from '../../components/premium'
 import { NavigationProps } from '../../types'
@@ -22,8 +23,9 @@ import { colors, textStyles, borderRadius, spacing, shadows, motion } from '../.
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { useTransactionDetail, useCurrenciesCatalog } from '../../hooks/queries'
-import { isEasnerProductReceiveTitle, isEasnerProductSendTitle } from '@easner/shared'
+import { isEasnerProductReceiveTitle, isEasnerProductSendTitle, qk } from '@easner/shared'
 import { ApiError } from '../../query/api-client'
+import { useScope } from '../../query/scope'
 
 interface LedgerTransaction {
   id: string
@@ -59,12 +61,38 @@ interface LedgerTransaction {
 }
 
 export default function TransactionDetailsScreen({ navigation, route }: NavigationProps) {
-  const { transactionId, fromScreen } = route.params as { transactionId: string; fromScreen?: string }
+  const { transactionId, fromScreen, initialTransaction } = route.params as {
+    transactionId: string
+    fromScreen?: string
+    initialTransaction?: LedgerTransaction | null
+  }
   const insets = useSafeAreaInsets()
+  const qc = useQueryClient()
+  const { scope } = useScope()
   const detailQuery = useTransactionDetail(transactionId)
   const { data: currencies = [] } = useCurrenciesCatalog()
-  const [transaction, setTransaction] = useState<LedgerTransaction | null>(null)
-  const [loading, setLoading] = useState(true)
+  const cachedListSnapshot = useMemo<LedgerTransaction | null>(() => {
+    if (!scope || !transactionId) return null
+    const listState = qc.getQueryState(qk.transactions.list(scope, {}))
+    const listData = qc.getQueryData(qk.transactions.list(scope, {})) as
+      | { pages?: Array<{ transactions?: Array<Record<string, unknown>> }> }
+      | undefined
+    if (!listState || !listData?.pages?.length) return null
+    for (const page of listData.pages) {
+      for (const row of page.transactions ?? []) {
+        const id = String(row?.id ?? '')
+        const txid = String(row?.transaction_id ?? '')
+        const ledgerId = String(row?.ledger_row_id ?? '')
+        if (transactionId === id || transactionId === txid || transactionId === ledgerId) {
+          return row as unknown as LedgerTransaction
+        }
+      }
+    }
+    return null
+  }, [qc, scope, transactionId])
+
+  const [transaction, setTransaction] = useState<LedgerTransaction | null>(initialTransaction ?? null)
+  const [loading, setLoading] = useState(initialTransaction ? false : true)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>({})
@@ -78,16 +106,17 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
   useEffect(() => {
     dataLoadedRef.current = false
-    setTransaction(null)
+    setTransaction(initialTransaction ?? cachedListSnapshot ?? null)
     setError(null)
-    setLoading(true)
-  }, [transactionId])
+    setLoading(initialTransaction || cachedListSnapshot ? false : true)
+  }, [transactionId, initialTransaction, cachedListSnapshot])
 
   useEffect(() => {
     if (!transactionId) return
 
     if (detailQuery.isPending) {
-      setLoading(true)
+      // Keep initial row data visible; only show skeleton when we truly have nothing.
+      setLoading(!transaction)
       return
     }
 
@@ -100,7 +129,10 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
             : err.message
           : 'Failed to load transaction details'
       setError(msg)
-      setTransaction(null)
+      // Keep prior/initial snapshot visible instead of hard blanking.
+      if (!transaction) {
+        setTransaction(null)
+      }
       setLoading(false)
       return
     }

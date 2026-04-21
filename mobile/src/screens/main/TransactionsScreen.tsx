@@ -611,6 +611,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
                         navigation.navigate(detailScreen as never, {
                           transactionId: lookupId,
                           fromScreen: 'Transactions',
+                          initialTransaction: item,
                         } as never)
                       }}
                       formatAmount={formatAmount}
@@ -678,6 +679,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
                           navigation.navigate('TransactionDetails' as never, {
                             transactionId: transactionDetailLookupId(selectedTransaction),
                             fromScreen: 'Transactions',
+                            initialTransaction: selectedTransaction,
                           } as never)
                         }
                       >

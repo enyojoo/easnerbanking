@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import * as WebBrowser from 'expo-web-browser'
 
 interface UseExternalLinkOptions {
   showBackButton?: boolean
@@ -9,10 +10,20 @@ export function useExternalLink(options: UseExternalLinkOptions = {}) {
   const [url, setUrl] = useState<string>('')
   const [title, setTitle] = useState<string>('')
 
-  const openLink = useCallback((linkUrl: string, linkTitle?: string) => {
+  const openLink = useCallback(async (linkUrl: string, linkTitle?: string) => {
     setUrl(linkUrl)
     setTitle(linkTitle || '')
-    setIsVisible(true)
+    try {
+      await WebBrowser.openBrowserAsync(linkUrl, {
+        controlsColor: '#0F1110',
+        enableBarCollapsing: true,
+        showTitle: true,
+      })
+      setIsVisible(false)
+    } catch {
+      // Fallback to in-app modal WebView when native browser fails.
+      setIsVisible(true)
+    }
   }, [])
 
   const closeLink = useCallback(() => {

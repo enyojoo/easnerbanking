@@ -60,6 +60,7 @@ export default function MfaVerifyScreen() {
       <KeyboardAvoidingView
         style={styles.keyboard}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={insets.top + spacing[4]}
       >
         <ScrollView
           contentContainerStyle={[
@@ -69,6 +70,7 @@ export default function MfaVerifyScreen() {
               paddingBottom: Math.max(insets.bottom, spacing[6]),
             },
           ]}
+          automaticallyAdjustKeyboardInsets
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >

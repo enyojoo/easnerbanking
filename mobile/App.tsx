@@ -162,11 +162,11 @@ export default function App() {
   console.log('App.tsx: App component rendering')
   
   const [fontsLoaded] = useFonts({
-    'Geist-Regular': require('geist/dist/fonts/geist-sans/Geist-Regular.ttf'),
-    'Geist-Medium': require('geist/dist/fonts/geist-sans/Geist-Medium.ttf'),
-    'Geist-SemiBold': require('geist/dist/fonts/geist-sans/Geist-SemiBold.ttf'),
-    'Geist-Bold': require('geist/dist/fonts/geist-sans/Geist-Bold.ttf'),
-    'Geist-Black': require('geist/dist/fonts/geist-sans/Geist-Black.ttf'),
+    'Geist-Regular': require('../node_modules/geist/dist/fonts/geist-sans/Geist-Regular.ttf'),
+    'Geist-Medium': require('../node_modules/geist/dist/fonts/geist-sans/Geist-Medium.ttf'),
+    'Geist-SemiBold': require('../node_modules/geist/dist/fonts/geist-sans/Geist-SemiBold.ttf'),
+    'Geist-Bold': require('../node_modules/geist/dist/fonts/geist-sans/Geist-Bold.ttf'),
+    'Geist-Black': require('../node_modules/geist/dist/fonts/geist-sans/Geist-Black.ttf'),
   })
   
   // Initialize deep linking

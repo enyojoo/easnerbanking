@@ -31,7 +31,8 @@ export default function LegacyTransactionDetailsScreen({ navigation, route }: Na
   const { data: currencies = [] } = useCurrenciesCatalog()
   const paymentMethods = usePaymentMethodsList().data ?? []
   const insets = useSafeAreaInsets()
-  const [transaction, setTransaction] = useState<TransactionData | null>(null)
+  const { transactionId, fromScreen, initialTransaction } = route.params || {}
+  const [transaction, setTransaction] = useState<TransactionData | null>(initialTransaction ?? null)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [currentTime, setCurrentTime] = useState(Date.now())
@@ -41,8 +42,6 @@ export default function LegacyTransactionDetailsScreen({ navigation, route }: Na
   // Animation refs
   const headerAnim = useRef(new Animated.Value(0)).current
   const contentAnim = useRef(new Animated.Value(0)).current
-
-  const { transactionId, fromScreen } = route.params || {}
 
   useCalmParallelEnterWhen(true, headerAnim, contentAnim)
 
@@ -75,6 +74,11 @@ export default function LegacyTransactionDetailsScreen({ navigation, route }: Na
       fetchTransactionDetails()
     }
   }, [transactionId, userProfile?.id])
+
+  useEffect(() => {
+    setTransaction(initialTransaction ?? null)
+    setError(null)
+  }, [transactionId, initialTransaction])
 
   useEffect(() => {
     if (!transaction || !userProfile?.id) return
@@ -254,7 +258,7 @@ export default function LegacyTransactionDetailsScreen({ navigation, route }: Na
     }
   }
 
-  if (error) {
+  if (!transaction && error) {
     return (
       <View style={[styles.container, { paddingTop: insets.top + spacing[4] }]}>
         <View style={styles.errorContainer}>

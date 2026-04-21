@@ -6,7 +6,6 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
-  Alert,
 } from 'react-native'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { ripple } from '../../lib/androidRipple'
@@ -43,8 +42,10 @@ interface ReceiveTransaction {
 function ReceiveTransactionDetailsContent({ navigation, route }: NavigationProps) {
   const { userProfile } = useAuth()
   const transactionId = route?.params?.transactionId as string
-  const [transaction, setTransaction] = useState<ReceiveTransaction | null>(null)
-  const [loading, setLoading] = useState(true)
+  const initialTransaction = (route?.params as any)?.initialTransaction as ReceiveTransaction | null | undefined
+  const [transaction, setTransaction] = useState<ReceiveTransaction | null>(initialTransaction ?? null)
+  const [loading, setLoading] = useState(initialTransaction ? false : true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (transactionId) {
@@ -52,21 +53,30 @@ function ReceiveTransactionDetailsContent({ navigation, route }: NavigationProps
     }
   }, [transactionId])
 
+  useEffect(() => {
+    setTransaction(initialTransaction ?? null)
+    setLoading(initialTransaction ? false : true)
+    setError(null)
+  }, [transactionId, initialTransaction])
+
   const loadTransaction = async () => {
     try {
-      setLoading(true)
+      setLoading(!transaction)
+      setError(null)
       const response = await apiGet(`/api/crypto/receive/${transactionId}`)
       if (response.ok) {
         const data = await response.json()
-        setTransaction(data.transaction)
+        if (data?.transaction) {
+          setTransaction(data.transaction)
+        } else {
+          setError('Transaction not found')
+        }
       } else {
-        Alert.alert('Error', 'Transaction not found')
-        navigation.goBack()
+        setError('Transaction not found')
       }
     } catch (error) {
       console.error('Error loading transaction:', error)
-      Alert.alert('Error', 'Failed to load transaction')
-      navigation.goBack()
+      setError('Failed to load transaction')
     } finally {
       setLoading(false)
     }
@@ -131,13 +141,26 @@ function ReceiveTransactionDetailsContent({ navigation, route }: NavigationProps
     )
   }
 
+  if (!transaction && error) {
+    return (
+      <ScreenWrapper>
+        <View style={styles.centerContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+          <Pressable android_ripple={ripple.neutral} style={styles.backButton} onPress={loadTransaction}>
+            <Text style={styles.backButtonText}>Try again</Text>
+          </Pressable>
+        </View>
+      </ScreenWrapper>
+    )
+  }
+
   if (!transaction) {
     return (
       <ScreenWrapper>
         <View style={styles.centerContainer}>
-          <Text style={styles.errorText}>Transaction not found</Text>
-          <Pressable android_ripple={ripple.neutral} style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Text style={styles.backButtonText}>Go Back</Text>
+          <Text style={styles.errorText}>Transaction unavailable</Text>
+          <Pressable android_ripple={ripple.neutral} style={styles.backButton} onPress={loadTransaction}>
+            <Text style={styles.backButtonText}>Try again</Text>
           </Pressable>
         </View>
       </ScreenWrapper>

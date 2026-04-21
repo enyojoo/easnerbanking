@@ -11,10 +11,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useThemeColors, spacing, layout } from '../theme'
 import {
   isPinSetup,
-  evaluateIdleLock,
-  isAppLocked,
   dismissPinPrompt,
-  applyColdStartPinLockIfNeeded,
   markSessionInteraction,
 } from '../lib/pinAuth'
 import { emitAppLocked, registerAppLockListener } from '../lib/app-lock-bus'
@@ -56,6 +53,7 @@ import ChangePinScreen from '../screens/main/ChangePinScreen'
 import MfaSetupScreen from '../screens/main/MfaSetupScreen'
 import NotificationsScreen from '../screens/main/NotificationsScreen'
 import InAppNotificationsScreen from '../screens/main/InAppNotificationsScreen'
+import LegalScreen from '../screens/main/LegalScreen'
 
 // Transaction Screens
 import TransactionDetailsScreen from '../screens/transactions/TransactionDetailsScreen'
@@ -568,6 +566,14 @@ function MainStack() {
           ...mainStackPreset(),
         }}
       />
+      <Stack.Screen
+        name="Legal"
+        component={LegalScreen}
+        options={{
+          headerShown: false,
+          ...mainStackPreset(),
+        }}
+      />
       <Stack.Screen 
         name="ReceiveTransactionDetails" 
         component={ReceiveTransactionDetailsScreen}
@@ -767,8 +773,14 @@ export default function AppNavigator() {
   }, [user])
 
   useEffect(() => {
-    // Do not wait for AuthContext `loading` — it stays true until after `readProfileSnapshot` and
-    // would leave a blank frame between login and PIN. PIN only needs `user.id`.
+    // Avoid any post-login blank/loader gap: default to PIN entry immediately.
+    if (user?.id && !mfaPending && pinGate === 'loading') {
+      setPinGate('pin')
+    }
+  }, [user?.id, mfaPending, pinGate])
+
+  useEffect(() => {
+    // Post-auth route is immediate: either create PIN or enter PIN.
     if (!user?.id || mfaPending) return
     let cancelled = false
     void (async () => {
@@ -778,25 +790,12 @@ export default function AppNavigator() {
         setPinGate('setup')
         return
       }
-      await applyColdStartPinLockIfNeeded(user.id)
-      if (cancelled) return
-      const idle = await evaluateIdleLock(user.id)
-      if (cancelled) return
-      if (idle === 'signed_out') {
-        await signOut()
-        return
-      }
-      const locked = await isAppLocked(user.id)
-      if (locked) {
-        setPinGate('pin')
-        return
-      }
-      setPinGate('main')
+      setPinGate('pin')
     })()
     return () => {
       cancelled = true
     }
-  }, [user?.id, mfaPending, lockTick, signOut])
+  }, [user?.id, mfaPending])
 
   useEffect(() => {
     if (!user?.id || pinGate !== 'main') return
@@ -990,9 +989,12 @@ export default function AppNavigator() {
     return <AuthFlowLoadingShell palette={palette} testId="Restoring session" />
   }
 
-  /** Signed in but PIN route not resolved yet (single AsyncStorage read in typical case). */
+  /**
+   * Signed-in handoff must feel instant: default to PIN entry while we resolve whether
+   * this is first-time PIN setup. Effect below upgrades to setup when needed.
+   */
   if (user && pinGate === 'loading') {
-    return <AuthFlowLoadingShell palette={palette} testId="Loading" />
+    return <PinGateEntryStack />
   }
 
   if (user && pinGate === 'setup') {
