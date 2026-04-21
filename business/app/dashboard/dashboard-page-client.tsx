@@ -162,7 +162,7 @@ export function DashboardPageClient() {
                       )}
                     >
                       {balancesVisible ?
-                        stablePrimaryBalance == null ? "—" : formatCurrency(stablePrimaryBalance, code)
+                        formatCurrency(stablePrimaryBalance ?? 0, code)
                       : MASK}
                     </span>
                   </span>
