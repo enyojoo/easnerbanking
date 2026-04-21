@@ -47,7 +47,7 @@ import { ripple } from '../../lib/androidRipple'
 import { useEffect } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import { useBalance } from '../../contexts/BalanceContext'
-import { apiGet, syncConsumerLedgerRemotes, syncConsumerLedgerRemotesFireAndForget } from '../../lib/apiClient'
+import { apiGet } from '../../lib/apiClient'
 import { useQueryClient } from '@tanstack/react-query'
 import { useScope } from '../../query/scope'
 import { apiFetch } from '../../query/api-client'
@@ -103,7 +103,6 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     { code: 'EUR', name: 'Euro', symbol: '€' },
   ])
   const [canOpenMoreCurrencies, setCanOpenMoreCurrencies] = useState(false)
-  const lastSyncTimeRef = useRef(0) // Track last sync time to prevent frequent syncs
   /** Throttle Noah sync on dashboard focus (parity with business `BusinessVerificationSection`). */
   const lastDashboardNoahSyncRef = useRef(0)
 
@@ -187,35 +186,6 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
       })
     }
   }, [qc, recentTransactions, scope])
-
-  // Initial load - rely on webhooks and real-time for instant updates
-  // Only sync for backfill on first load (once per session)
-  useEffect(() => {
-    if (!userProfile?.id) return
-    
-    // Only trigger sync once per session for backfill
-    // Webhooks and real-time handle new transactions instantly
-    const triggerSync = async () => {
-      const now = Date.now()
-      const SYNC_COOLDOWN_MS = 30 * 60 * 1000 // 30 minutes - only for backfill
-      
-      if (now - lastSyncTimeRef.current < SYNC_COOLDOWN_MS) {
-        // Already synced recently, skip
-        return
-      }
-      
-      try {
-        lastSyncTimeRef.current = now
-        // Sync in background - don't block UI (Noah API + on-chain ledger for Turnkey deposits)
-        syncConsumerLedgerRemotesFireAndForget()
-      } catch (error) {
-        // Silently fail - sync is optional, webhooks handle new transactions
-      }
-    }
-    
-    // Only sync once per session for backfill (webhooks handle new transactions)
-    triggerSync()
-  }, [userProfile?.id])
 
   // Refresh balances on focus only if stale (don't fetch every time)
   useFocusEffect(
@@ -628,16 +598,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
             onRefresh={async () => {
               setRefreshing(true)
               try {
-                await syncConsumerLedgerRemotes().catch((error) => {
-                  console.warn('[DASHBOARD] Ledger sync failed on pull-to-refresh:', error)
-                })
-                // Keep pull-to-refresh deterministic: refresh tx list first, then force-balance fetch.
-                // A second follow-up fetch catches eventual-consistency lag from upstream remotes.
-                await txQuery.refetch()
-                await refreshBalances(true)
-                setTimeout(() => {
-                  void refreshBalances(true)
-                }, 1200)
+                await Promise.all([refreshBalances(true), txQuery.refetch()])
               } catch (error) {
                 console.error('Error refreshing dashboard:', error)
               } finally {

@@ -90,12 +90,9 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
 
   useEffect(() => {
     if (!query.data) return
-    const hasUSD = query.data._hasUSD === true
-    const hasEUR = query.data._hasEUR === true
-    const prev = lastKnownBalancesRef.current
     const next: Balances = {
-      USD: hasUSD ? String(query.data.USD ?? '0') : prev.USD,
-      EUR: hasEUR ? String(query.data.EUR ?? '0') : prev.EUR,
+      USD: String(query.data.USD ?? '0'),
+      EUR: String(query.data.EUR ?? '0'),
     }
     lastKnownBalancesRef.current = next
     setSeededBalances(next)
@@ -107,10 +104,9 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
 
   const balances: Balances = useMemo(() => {
     if (!query.data) return seededBalances ?? lastKnownBalancesRef.current
-    const prev = seededBalances ?? lastKnownBalancesRef.current
     return {
-      USD: query.data._hasUSD ? String(query.data.USD ?? '0') : prev.USD,
-      EUR: query.data._hasEUR ? String(query.data.EUR ?? '0') : prev.EUR,
+      USD: String(query.data.USD ?? '0'),
+      EUR: String(query.data.EUR ?? '0'),
     }
   }, [query.data, seededBalances])
 
@@ -120,7 +116,9 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
     async (force: boolean = false) => {
       if (!scope) return
       if (force) {
-        await qc.invalidateQueries({ queryKey: qk.wallets.list(scope) })
+        // Prefix matches `qk.wallets.list` and any wallet sub-keys (same as foreground resume).
+        await qc.invalidateQueries({ queryKey: qk.wallets.root(scope) })
+        return
       }
       await query.refetch()
     },
@@ -147,7 +145,7 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
       // Kick off a background refetch so the optimistic value is replaced
       // with authoritative server state within a few seconds. The realtime
       // bridge will also poke us independently if the channel is healthy.
-      qc.invalidateQueries({ queryKey: qk.wallets.list(scope) })
+      qc.invalidateQueries({ queryKey: qk.wallets.root(scope) })
     },
     [qc, scope],
   )

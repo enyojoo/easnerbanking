@@ -25,8 +25,8 @@ import { useCurrenciesCatalog, useTransactionsList } from '../../hooks/queries'
 import { NavigationProps, Transaction } from '../../types'
 import { analytics } from '../../lib/analytics'
 import { useAuth } from '../../contexts/AuthContext'
+import { useBalance } from '../../contexts/BalanceContext'
 import { useFocusRefreshAll } from '../../hooks/useFocusRefresh'
-import { syncConsumerLedgerRemotes } from '../../lib/apiClient'
 import { useQueryClient } from '@tanstack/react-query'
 import { useScope } from '../../query/scope'
 import { apiFetch } from '../../query/api-client'
@@ -362,6 +362,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
     }
   }, [windowWidth])
   const { userProfile } = useAuth()
+  const { refreshBalances } = useBalance()
   const { scope } = useScope()
   const qc = useQueryClient()
   const currencies = useCurrencies()
@@ -436,10 +437,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
     setRefreshing(true)
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-      await syncConsumerLedgerRemotes().catch((error) => {
-        console.warn('[TRANSACTIONS] Ledger sync failed on pull-to-refresh:', error)
-      })
-      await txQuery.refetch()
+      await Promise.all([refreshBalances(true), txQuery.refetch()])
       await fetchTransactions(true)
     } catch (error: any) {
       if (error?.message?.includes('Network request failed') || error?.name === 'TypeError') {

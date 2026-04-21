@@ -10,8 +10,6 @@ const NOAH_HEADERS = { "X-Easner-Noah-Scope": "business" } as const
 export interface OnChainBalances {
   USD?: string
   EUR?: string
-  _hasUSD?: boolean
-  _hasEUR?: boolean
   [currency: string]: string | undefined
 }
 
@@ -48,19 +46,7 @@ export function useWalletBalances() {
         }),
         apiFetch<DepositAddresses>("/api/wallets/deposit-addresses", { headers: NOAH_HEADERS }),
       ])
-      const hasUSD = Object.prototype.hasOwnProperty.call(balances ?? {}, "USD")
-      const hasEUR = Object.prototype.hasOwnProperty.call(balances ?? {}, "EUR")
-      return {
-        balances: {
-          ...balances,
-          USD: hasUSD ? (typeof balances?.USD === "string" ? balances.USD : "0") : undefined,
-          EUR: hasEUR ? (typeof balances?.EUR === "string" ? balances.EUR : "0") : undefined,
-          _hasUSD: hasUSD,
-          _hasEUR: hasEUR,
-        },
-        available,
-        deposits,
-      }
+      return { balances, available, deposits }
     },
     staleTime: 15_000,
     gcTime: 10 * 60_000,

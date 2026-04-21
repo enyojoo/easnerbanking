@@ -207,16 +207,12 @@ export function useBusinessAccountRows() {
           USD?: string
           EUR?: string
         }
-        const hasUSD = Object.prototype.hasOwnProperty.call(t ?? {}, "USD")
-        const hasEUR = Object.prototype.hasOwnProperty.call(t ?? {}, "EUR")
-        const prev = balancesRef.current
         nextBalances = {
-          USD: hasUSD ? (typeof t.USD === "string" ? t.USD : "0") : prev.USD,
-          EUR: hasEUR ? (typeof t.EUR === "string" ? t.EUR : "0") : prev.EUR,
+          USD: typeof t.USD === "string" ? t.USD : "0",
+          EUR: typeof t.EUR === "string" ? t.EUR : "0",
         }
       } else {
-        // Keep last known balances if refresh fails to avoid transient 0.00 flicker.
-        nextBalances = balancesRef.current
+        nextBalances = { USD: "0", EUR: "0" }
       }
       setBalances(nextBalances)
 

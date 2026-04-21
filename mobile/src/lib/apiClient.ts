@@ -175,28 +175,6 @@ export const apiRequest = async (
 /** Noah ledger/API scope: mobile consumer flows use individual (personal wallet), not org terminal. */
 export const NOAH_SCOPE_INDIVIDUAL_HEADERS = { 'X-Easner-Noah-Scope': 'individual' } as const
 
-const INDIVIDUAL_SCOPE_POST: RequestInit = { headers: NOAH_SCOPE_INDIVIDUAL_HEADERS }
-
-/**
- * Fire Noah + Turnkey chain ledger backfill for the signed-in consumer (non-blocking).
- * Balances can update from chain before Noah or webhooks write unified `transactions` rows.
- */
-export function syncConsumerLedgerRemotesFireAndForget(): void {
-  void apiPost('/api/noah/sync-transactions', undefined, INDIVIDUAL_SCOPE_POST).catch(() => {})
-  void apiPost('/api/wallets/sync-chain-ledger', undefined, INDIVIDUAL_SCOPE_POST).catch(() => {})
-}
-
-/**
- * Same as {@link syncConsumerLedgerRemotesFireAndForget} but waits for both requests to finish
- * (use on pull-to-refresh so refetch sees new ledger rows).
- */
-export async function syncConsumerLedgerRemotes(): Promise<void> {
-  await Promise.allSettled([
-    apiPost('/api/noah/sync-transactions', undefined, INDIVIDUAL_SCOPE_POST),
-    apiPost('/api/wallets/sync-chain-ledger', undefined, INDIVIDUAL_SCOPE_POST),
-  ])
-}
-
 /**
  * Helper for GET requests (`init` merges into fetch options, e.g. extra headers).
  */
