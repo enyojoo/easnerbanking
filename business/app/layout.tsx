@@ -10,7 +10,7 @@ import { Providers } from "@/components/providers"
 import { Suspense } from "react"
 import { PwaStandaloneRoot } from "@/components/pwa/pwa-standalone-root"
 import { PwaInstallProvider } from "@/components/pwa/pwa-install-provider"
-import { DesktopMinViewportGate } from "@/components/layout/desktop-min-viewport-gate"
+import { BusinessViewportGate } from "@/components/layout/business-viewport-gate"
 import "./globals.css"
 import { BRAND } from "@easner/shared"
 
@@ -55,7 +55,7 @@ export default function RootLayout({
               <PwaStandaloneRoot />
               <PwaInstallProvider>
                 <Providers>
-                  <DesktopMinViewportGate product="business">{children}</DesktopMinViewportGate>
+                  <BusinessViewportGate>{children}</BusinessViewportGate>
                 </Providers>
               </PwaInstallProvider>
             </ClientAuthProvider>
