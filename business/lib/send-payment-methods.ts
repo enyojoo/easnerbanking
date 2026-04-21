@@ -1,7 +1,6 @@
 export const otherCurrencies = [
   { code: "KES", name: "Kenyan Shilling", symbol: "KSh" },
   { code: "GHS", name: "Ghanaian Cedi", symbol: "₵" },
-  { code: "RUB", name: "Russian Ruble", symbol: "₽" },
 ] as const
 
 export type OtherCurrencyCode = (typeof otherCurrencies)[number]["code"]
@@ -17,10 +16,6 @@ export const currencyPaymentMethods: Record<
   KES: [
     { code: "mpesa", name: "M-Pesa" },
     { code: "bankTransfer", name: "Bank Transfer" },
-  ],
-  RUB: [
-    { code: "bankTransfer", name: "Bank Transfer" },
-    { code: "sbp", name: "SBP" },
   ],
 }
 

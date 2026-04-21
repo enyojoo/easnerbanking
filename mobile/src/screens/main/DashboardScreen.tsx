@@ -87,7 +87,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     Math.round(heroBalanceFontSize * lineHeight.tight) + (Platform.OS === 'android' ? 6 : 4)
   const { user, userProfile, refreshUserProfile, loading: authLoading } = useAuth()
   const txQuery = useTransactionsList({}, 5)
-  const { balances, refreshBalances } = useBalance()
+  const { balances, hasResolvedBalance, refreshBalances } = useBalance()
   const [selectedCurrency, setSelectedCurrency] = useState<'USD' | 'EUR' | 'GBP'>('USD')
   const [balanceVisible, setBalanceVisible] = useState(true)
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false)
@@ -160,8 +160,10 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     return (firstPage as DashboardTransaction[]).slice(0, 5)
   }, [txQuery.data])
   const recentTransactions = queryRecent
+  const hasAnyTransactionData = recentTransactions.length > 0
   const loadingTransactions = txQuery.isLoading && recentTransactions.length === 0
   const hasAttemptedLoad = txQuery.isFetched || recentTransactions.length > 0
+  const lastStableBalanceTextRef = useRef<Record<string, string>>({})
 
   // Initial load - rely on webhooks and real-time for instant updates
   // Only sync for backfill on first load (once per session)
@@ -240,7 +242,21 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     ])
   )
 
-  const balance = parseFloat((balances as any)[selectedCurrency] || '0')
+  const balanceRaw = (balances as Record<string, string | undefined>)[selectedCurrency]
+  const hasBalanceForSelectedCurrency = typeof balanceRaw === 'string' && balanceRaw.trim().length > 0
+  const balance = hasBalanceForSelectedCurrency ? parseFloat(balanceRaw as string) : 0
+  const canRenderNumericBalance = hasResolvedBalance && hasBalanceForSelectedCurrency
+  const resolvedBalanceText = canRenderNumericBalance
+    ? formatBalanceDisplay(balance, selectedCurrency)
+    : null
+  if (resolvedBalanceText) {
+    lastStableBalanceTextRef.current[selectedCurrency] = resolvedBalanceText
+  }
+  const visibleBalanceText = !balanceVisible
+    ? '••••••'
+    : resolvedBalanceText ??
+      lastStableBalanceTextRef.current[selectedCurrency] ??
+      (hasAnyTransactionData ? '—' : formatBalanceDisplay(0, selectedCurrency))
 
   /** Only after `userProfile` is loaded: `isTier1Complete(undefined)` is false and would flash the banner. */
   const showVerifyIdentityBanner =
@@ -390,7 +406,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     return 'outbox'
   }
 
-  const formatBalanceDisplay = (amount: number, currency: 'USD' | 'EUR' | 'GBP'): string => {
+  function formatBalanceDisplay(amount: number, currency: 'USD' | 'EUR' | 'GBP'): string {
     const currencySymbol =
       currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : currency
     
@@ -654,9 +670,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                 },
               ]}
             >
-              {balanceVisible 
-                ? formatBalanceDisplay(balance, selectedCurrency)
-                : '••••••'}
+              {visibleBalanceText}
             </Text>
             <Pressable 
              android_ripple={ripple.neutral} 
@@ -675,6 +689,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
             <GlossyPrimaryButton
               title="Receive"
               style={styles.actionButtonPremium}
+              borderColor={palette.primary.main}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                 navigation.navigate('ReceiveMoney' as never, {

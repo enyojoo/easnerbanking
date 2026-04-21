@@ -201,7 +201,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     { code: 'STABLE', name: 'Stablecoin', symbol: '' },
     { code: 'KES', name: 'Kenyan Shilling', symbol: 'KSh' },
     { code: 'GHS', name: 'Ghanaian Cedi', symbol: '₵' },
-    { code: 'RUB', name: 'Russian Ruble', symbol: '₽' },
   ]
   const stablecoinAssets = getWalletAssets()
 
@@ -222,10 +221,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     KES: [
       { code: 'mpesa', name: 'M-Pesa', icon: 'mpesa' },
       { code: 'bankTransfer', name: 'Bank Transfer' },
-    ],
-    RUB: [
-      { code: 'bankTransfer', name: 'Bank Transfer' },
-      { code: 'sbp', name: 'SBP', icon: 'sbp' },
     ],
   }
 

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useCallback, useMemo, ReactNode, useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { qk } from '@easner/shared'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useWalletBalances } from '../hooks/queries/use-wallets'
 import { useMaybeScope } from '../query/scope'
 
@@ -30,6 +31,7 @@ interface Balances {
 
 interface BalanceContextType {
   balances: Balances
+  hasResolvedBalance: boolean
   refreshBalances: (force?: boolean) => Promise<void>
   updateBalanceOptimistically: (
     currency: 'USD' | 'EUR',
@@ -42,6 +44,7 @@ interface BalanceContextType {
 const BalanceContext = createContext<BalanceContextType | undefined>(undefined)
 
 const EMPTY_BALANCES: Balances = { USD: '0', EUR: '0' }
+const BALANCE_CACHE_KEY_PREFIX = 'easner_balance_seed_v1_'
 
 export function useBalance() {
   const ctx = useContext(BalanceContext)
@@ -58,6 +61,32 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
   const scope = useMaybeScope()
   const query = useWalletBalances()
   const lastKnownBalancesRef = useRef<Balances>(EMPTY_BALANCES)
+  const [seededBalances, setSeededBalances] = React.useState<Balances | null>(null)
+
+  useEffect(() => {
+    let mounted = true
+    const userId = scope?.userId
+    if (!userId) {
+      setSeededBalances(null)
+      return
+    }
+    const key = `${BALANCE_CACHE_KEY_PREFIX}${userId}`
+    void AsyncStorage.getItem(key)
+      .then((raw) => {
+        if (!mounted || !raw) return
+        const parsed = JSON.parse(raw) as Partial<Balances> | null
+        const next: Balances = {
+          USD: String(parsed?.USD ?? '0'),
+          EUR: String(parsed?.EUR ?? '0'),
+        }
+        lastKnownBalancesRef.current = next
+        setSeededBalances(next)
+      })
+      .catch(() => undefined)
+    return () => {
+      mounted = false
+    }
+  }, [scope?.userId])
 
   useEffect(() => {
     if (!query.data) return
@@ -66,15 +95,22 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
       EUR: String(query.data.EUR ?? '0'),
     }
     lastKnownBalancesRef.current = next
-  }, [query.data])
+    setSeededBalances(next)
+    const userId = scope?.userId
+    if (!userId) return
+    const key = `${BALANCE_CACHE_KEY_PREFIX}${userId}`
+    void AsyncStorage.setItem(key, JSON.stringify(next)).catch(() => undefined)
+  }, [query.data, scope?.userId])
 
   const balances: Balances = useMemo(() => {
-    if (!query.data) return lastKnownBalancesRef.current
+    if (!query.data) return seededBalances ?? lastKnownBalancesRef.current
     return {
       USD: String(query.data.USD ?? '0'),
       EUR: String(query.data.EUR ?? '0'),
     }
-  }, [query.data])
+  }, [query.data, seededBalances])
+
+  const hasResolvedBalance = Boolean(query.data || seededBalances)
 
   const refreshBalances = useCallback(
     async (force: boolean = false) => {
@@ -113,8 +149,8 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
   )
 
   const value = useMemo<BalanceContextType>(
-    () => ({ balances, refreshBalances, updateBalanceOptimistically }),
-    [balances, refreshBalances, updateBalanceOptimistically],
+    () => ({ balances, hasResolvedBalance, refreshBalances, updateBalanceOptimistically }),
+    [balances, hasResolvedBalance, refreshBalances, updateBalanceOptimistically],
   )
 
   return <BalanceContext.Provider value={value}>{children}</BalanceContext.Provider>

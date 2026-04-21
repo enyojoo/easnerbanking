@@ -10,6 +10,7 @@ type GlossyPrimaryButtonProps = {
   onPress: () => void
   style?: StyleProp<ViewStyle>
   disabled?: boolean
+  borderColor?: string
 }
 
 export default function GlossyPrimaryButton({
@@ -17,6 +18,7 @@ export default function GlossyPrimaryButton({
   onPress,
   style,
   disabled = false,
+  borderColor,
 }: GlossyPrimaryButtonProps) {
   const palette = useThemeColors()
   const scale = useRef(new Animated.Value(1)).current
@@ -57,7 +59,7 @@ export default function GlossyPrimaryButton({
             colors={[palette.primary.dark, palette.primary.main]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={styles.gradient}
+            style={[styles.gradient, borderColor ? { borderColor } : null]}
           >
             <Text style={[styles.title, { color: palette.neutral.white }]}>{title}</Text>
           </LinearGradient>

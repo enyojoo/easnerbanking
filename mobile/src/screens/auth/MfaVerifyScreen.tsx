@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import {
   View,
   Text,
@@ -23,6 +23,7 @@ export default function MfaVerifyScreen() {
   const { verifyMfa, cancelMfaSignIn } = useAuth()
   const [code, setCode] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const scrollRef = useRef<ScrollView>(null)
 
   const handleSubmit = async () => {
     const digits = code.replace(/\D/g, '')
@@ -63,6 +64,7 @@ export default function MfaVerifyScreen() {
         keyboardVerticalOffset={insets.top + spacing[4]}
       >
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={[
             styles.scroll,
             {
@@ -89,6 +91,11 @@ export default function MfaVerifyScreen() {
               value={code}
               onChange={setCode}
               autoFocus
+              onFocus={() => {
+                requestAnimationFrame(() => {
+                  scrollRef.current?.scrollTo({ y: 140, animated: true })
+                })
+              }}
               disabled={submitting}
             />
           </View>

@@ -50,7 +50,7 @@ export default function OpenBankingPage() {
     }
   }, [router])
 
-  const isSBP = state?.paymentMethod === "sbp" || state?.sendCurrency === "RUB"
+  const isSBP = state?.paymentMethod === "sbp"
 
   const handleConnect = async () => {
     setLoading(true)

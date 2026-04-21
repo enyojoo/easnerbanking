@@ -60,6 +60,24 @@ interface LedgerTransaction {
   sender_display_name?: string
 }
 
+function mergeTransactionSnapshots(
+  primary: LedgerTransaction | null | undefined,
+  fallback: LedgerTransaction | null | undefined,
+): LedgerTransaction | null {
+  if (!primary && !fallback) return null
+  if (!primary) return fallback ?? null
+  if (!fallback) return primary
+
+  const merged = { ...fallback } as Record<string, unknown>
+  const source = primary as Record<string, unknown>
+  for (const [key, value] of Object.entries(source)) {
+    if (value !== undefined && value !== null && !(typeof value === 'string' && value.trim() === '')) {
+      merged[key] = value
+    }
+  }
+  return merged as LedgerTransaction
+}
+
 export default function TransactionDetailsScreen({ navigation, route }: NavigationProps) {
   const { transactionId, fromScreen, initialTransaction } = route.params as {
     transactionId: string
@@ -90,9 +108,24 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
     }
     return null
   }, [qc, scope, transactionId])
+  const cachedDetailSnapshot = useMemo<LedgerTransaction | null>(() => {
+    if (!scope || !transactionId) return null
+    const detailData = qc.getQueryData(qk.transactions.detail(scope, transactionId)) as
+      | { transaction?: LedgerTransaction }
+      | LedgerTransaction
+      | undefined
+    if (!detailData) return null
+    return ((detailData as { transaction?: LedgerTransaction })?.transaction ??
+      detailData) as LedgerTransaction
+  }, [qc, scope, transactionId])
 
-  const [transaction, setTransaction] = useState<LedgerTransaction | null>(initialTransaction ?? null)
-  const [loading, setLoading] = useState(initialTransaction ? false : true)
+  const [transaction, setTransaction] = useState<LedgerTransaction | null>(
+    mergeTransactionSnapshots(
+      initialTransaction ?? null,
+      mergeTransactionSnapshots(cachedDetailSnapshot, cachedListSnapshot),
+    ),
+  )
+  const [loading, setLoading] = useState(initialTransaction || cachedDetailSnapshot || cachedListSnapshot ? false : true)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>({})
@@ -106,10 +139,15 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
   useEffect(() => {
     dataLoadedRef.current = false
-    setTransaction(initialTransaction ?? cachedListSnapshot ?? null)
+    setTransaction(
+      mergeTransactionSnapshots(
+        initialTransaction ?? null,
+        mergeTransactionSnapshots(cachedDetailSnapshot, cachedListSnapshot),
+      ),
+    )
     setError(null)
-    setLoading(initialTransaction || cachedListSnapshot ? false : true)
-  }, [transactionId, initialTransaction, cachedListSnapshot])
+    setLoading(initialTransaction || cachedDetailSnapshot || cachedListSnapshot ? false : true)
+  }, [transactionId, initialTransaction, cachedDetailSnapshot, cachedListSnapshot])
 
   useEffect(() => {
     if (!transactionId) return
@@ -146,7 +184,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
     }
     const transactionData = ((raw as any)?.transaction ?? raw) as LedgerTransaction | null | undefined
     if (transactionData) {
-      setTransaction(transactionData)
+      setTransaction((prev) => mergeTransactionSnapshots(transactionData, prev))
       dataLoadedRef.current = true
       setError(null)
     } else {
@@ -170,7 +208,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
       const result = await detailQuery.refetch()
       const transactionData = ((result.data as any)?.transaction ?? result.data) as LedgerTransaction | null | undefined
       if (transactionData) {
-        setTransaction(transactionData)
+        setTransaction((prev) => mergeTransactionSnapshots(transactionData, prev))
         dataLoadedRef.current = true
       } else {
         setError('Transaction not found')

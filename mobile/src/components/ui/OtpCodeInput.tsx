@@ -19,6 +19,7 @@ export interface OtpCodeInputProps {
   onChange: (digits: string) => void
   autoFocus?: boolean
   disabled?: boolean
+  onFocus?: () => void
   /** Outer wrapper (e.g. opacity when submitting) */
   containerStyle?: StyleProp<ViewStyle>
 }
@@ -38,6 +39,7 @@ export function OtpCodeInput({
   onChange,
   autoFocus,
   disabled,
+  onFocus,
   containerStyle,
 }: OtpCodeInputProps) {
   const digits = value.replace(/\D/g, '').slice(0, length)
@@ -86,6 +88,7 @@ export function OtpCodeInput({
           maxLength={length}
           editable={!disabled}
           autoFocus={autoFocus}
+          onFocus={onFocus}
           caretHidden
           {...(Platform.OS === 'ios'
             ? { textContentType: 'oneTimeCode' as const }
