@@ -15,7 +15,8 @@ import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import ExternalLinkModal from '../../components/ExternalLinkModal'
-import { Button, TextField } from '../../components/ui'
+import { TextField } from '../../components/ui'
+import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
 import { GoogleOutlineButton, OrDivider } from '../../components/auth/AuthChrome'
 import { useExternalLink } from '../../hooks/useExternalLink'
 import { useAuth } from '../../contexts/AuthContext'
@@ -326,23 +327,22 @@ export default function AuthScreen({ navigation }: NavigationProps) {
               </Pressable>
             )}
 
-            <Button
-              title={
-                isLoading
-                  ? isLogin
-                    ? 'Signing in…'
-                    : 'Creating account…'
-                  : isLogin
-                    ? 'Sign in'
-                    : 'Create account'
-              }
-              onPress={handleSubmit}
-              disabled={isLoading}
-              loading={isLoading}
-              variant="default"
-              fullWidth
-              style={styles.primaryCta}
-            />
+            <View style={styles.primaryCtaWrap}>
+              <GlossyPrimaryButton
+                title={
+                  isLoading
+                    ? isLogin
+                      ? 'Signing in…'
+                      : 'Creating account…'
+                    : isLogin
+                      ? 'Sign in'
+                      : 'Create account'
+                }
+                onPress={handleSubmit}
+                disabled={isLoading}
+                style={styles.glossyCta}
+              />
+            </View>
 
             <View style={styles.footer}>
               <Text style={authScreenStyles.footerMuted}>
@@ -422,8 +422,14 @@ const styles = StyleSheet.create({
   fieldFlush: {
     marginBottom: spacing[3],
   },
-  primaryCta: {
+  primaryCtaWrap: {
+    width: '100%',
     marginBottom: spacing[4],
+  },
+  glossyCta: {
+    width: '100%',
+    flexGrow: 0,
+    minHeight: 52,
   },
   eyeButton: {
     padding: spacing[2],

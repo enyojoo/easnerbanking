@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
 import { Check, Copy, Loader2, Smartphone } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
 import { OtpCodeInput } from "@/components/otp-code-input"
 import {
   Dialog,
@@ -306,8 +305,7 @@ export function MfaSettingsDialog({
             </DialogTitle>
             {view === "enroll" ? (
               <DialogDescription>
-                Scan this QR code to set up your account using your preferred authenticator app. Popular choices
-                include Google Authenticator, Microsoft Authenticator, and Authy.
+                Scan this QR code to set up your account using your preferred authenticator app.
               </DialogDescription>
             ) : !showEnrolledCard ? (
               <DialogDescription>
@@ -367,7 +365,6 @@ export function MfaSettingsDialog({
                 )}
               </div>
               <div className="space-y-2">
-                <Label>Secret key</Label>
                 <div
                   className="flex items-center gap-1.5 rounded-md border bg-muted/40 py-2 pl-2.5 pr-1 text-[11px] leading-snug"
                   aria-busy={!secret}
@@ -398,7 +395,7 @@ export function MfaSettingsDialog({
               <div className={verifySubmitting ? "pointer-events-none opacity-80" : undefined}>
                 <OtpCodeInput
                   id="mfa-verify-code"
-                  label="6-digit code"
+                  label="Enter 6-digit code shown to you"
                   value={verifyCode}
                   onChange={setVerifyCode}
                   autoFocus

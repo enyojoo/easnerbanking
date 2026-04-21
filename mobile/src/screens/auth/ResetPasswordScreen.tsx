@@ -19,7 +19,8 @@ import { analytics } from '../../lib/analytics'
 import { colors, borderRadius, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
-import { Button, TextField } from '../../components/ui'
+import { TextField } from '../../components/ui'
+import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
 
 export default function ResetPasswordScreen({ navigation, route }: NavigationProps) {
   const [password, setPassword] = useState('')
@@ -258,15 +259,14 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
               }
             />
 
-            <Button
-              title={loading ? 'Updating…' : 'Update password'}
-              onPress={handleResetPassword}
-              disabled={loading}
-              loading={loading}
-              variant="default"
-              fullWidth
-              style={styles.primaryCta}
-            />
+            <View style={styles.primaryCtaWrap}>
+              <GlossyPrimaryButton
+                title={loading ? 'Updating…' : 'Update password'}
+                onPress={handleResetPassword}
+                disabled={loading}
+                style={styles.glossyCta}
+              />
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -331,8 +331,13 @@ const styles = StyleSheet.create({
   fieldFlush: {
     marginBottom: spacing[3],
   },
-  primaryCta: {
-    marginBottom: spacing[4],
+  primaryCtaWrap: {
+    width: '100%',
+  },
+  glossyCta: {
+    width: '100%',
+    flexGrow: 0,
+    minHeight: 52,
   },
   eyeButton: {
     padding: spacing[2],

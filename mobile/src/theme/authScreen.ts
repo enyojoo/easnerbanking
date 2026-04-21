@@ -5,9 +5,9 @@ import { colors, textStyles, borderRadius, spacing } from './index'
  * Shared typography and field styles for auth flows (AuthScreen, RegisterScreen, LoginScreen).
  * Uses design tokens only — no one-off font sizes.
  *
- * Form controls use `borderRadius.md` (8px) to match business `--radius` / shadcn defaults.
+ * Form controls use pill radius for mobile auth parity with `TextField` / premium fields.
  */
-export const AUTH_FIELD_MIN_HEIGHT = 44
+export const AUTH_FIELD_MIN_HEIGHT = 52
 
 export const authScreenStyles = StyleSheet.create({
   screenTitle: {
@@ -33,7 +33,7 @@ export const authScreenStyles = StyleSheet.create({
   textInput: {
     borderWidth: 1,
     borderColor: colors.semantic.border,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.full,
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
     ...textStyles.textInputSingleLine,
@@ -55,7 +55,7 @@ export const authScreenStyles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.semantic.border,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.full,
     backgroundColor: colors.semantic.background,
     minHeight: AUTH_FIELD_MIN_HEIGHT,
   },
@@ -96,7 +96,7 @@ export const authScreenStyles = StyleSheet.create({
   },
   primaryButton: {
     backgroundColor: colors.primary.main,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.full,
     paddingVertical: spacing[3],
     paddingHorizontal: spacing[5],
     alignItems: 'center',

@@ -16,7 +16,6 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import { ArrowDownLeft, ArrowUpRight, Monitor, Search } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { ShimmerLoader } from '../../components/premium'
 import FrameContainer from '../../components/FrameContainer'
@@ -27,14 +26,13 @@ import { NavigationProps, Transaction } from '../../types'
 import { analytics } from '../../lib/analytics'
 import { useAuth } from '../../contexts/AuthContext'
 import { useFocusRefreshAll } from '../../hooks/useFocusRefresh'
-import { apiPost } from '../../lib/apiClient'
+import { syncConsumerLedgerRemotes } from '../../lib/apiClient'
 import {
   colors,
   shadows,
   textStyles,
   borderRadius,
   spacing,
-  layout,
   motion,
   shouldPlayDecorativeMotionEnter,
   isRegularWidth,
@@ -44,6 +42,7 @@ import {
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { getTransactionStatusDisplay } from '../../utils/formatters'
+import { isEasnerProductReceiveTitle, isEasnerProductSendTitle } from '@easner/shared'
 
 function useCurrencies() {
   const { data: currencies = [] } = useCurrenciesCatalog()
@@ -53,6 +52,7 @@ function useCurrencies() {
 interface CombinedTransaction {
   id: string
   transaction_id: string
+  ledger_row_id?: string
   type: 'send' | 'receive' | 'card_funding'
   transaction_type?: 'send' | 'receive' // Bridge transactions use transaction_type
   status: string
@@ -88,33 +88,61 @@ interface CombinedTransaction {
   metadata?: any
 }
 
+/** Prefer ledger UUID for detail API — list `transaction_id` may be display-only (ETID…). */
+function transactionDetailLookupId(row: Pick<CombinedTransaction, 'ledger_row_id' | 'transaction_id' | 'id'>) {
+  const ledger = typeof row.ledger_row_id === 'string' ? row.ledger_row_id.trim() : ''
+  if (ledger) return ledger
+  return String(row.transaction_id || row.id || '')
+}
+
 // Helper function to get transaction name (defined outside component so it can be used in TransactionItem)
 function getTransactionName(item: CombinedTransaction, transactionType: string): string {
+  if (transactionType === 'card_funding') {
+    return 'Card Top-Up'
+  }
+
   if (transactionType === 'receive') {
-    // Check if it's a crypto deposit (stablecoin deposit via liquidation address)
     if (item.source_type === 'liquidation_address' || item.source_liquidation_address_id) {
       return 'Stablecoin Deposit'
     }
-    
-    // For fiat deposits (virtual account/ACH), show sender name only (not "Received from...")
+
+    const display = String(item.name || '').trim()
+    if (display === 'Stablecoin Deposit') {
+      return display
+    }
+
     if (item.source_type === 'virtual_account') {
-      // Check metadata for sender information
-      const senderName = item.metadata?.source?.sender_name || 
-                        item.metadata?.source?.originator_name ||
-                        item.name
+      const senderName =
+        item.metadata?.source?.sender_name ||
+        item.metadata?.source?.originator_name ||
+        item.name
       if (senderName) {
-        return senderName // Just the sender name for ACH deposits
+        return String(senderName).trim()
       }
       return 'Bank Deposit'
     }
-    
-    // Fallback for other receive types
-    return item.recipient_name ? `Received from ${item.recipient_name}` : 'Received'
-  } else if (transactionType === 'send') {
-    return item.recipient_name ? `Sent to ${item.recipient_name}` : 'Sent'
-  } else {
-    return 'Card Top-Up'
+
+    if (display && !isEasnerProductReceiveTitle(display)) {
+      return display
+    }
+
+    if (isEasnerProductReceiveTitle(display)) {
+      return display
+    }
+
+    const fromRecipient = item.recipient?.full_name
+    return fromRecipient ? `Received from ${fromRecipient}` : 'Received'
   }
+
+  if (transactionType === 'send') {
+    if (isEasnerProductSendTitle(item.name)) {
+      return String(item.name).trim()
+    }
+    const toName = item.recipient?.full_name
+    return toName ? `Sent to ${toName}` : 'Sent'
+  }
+
+  return 'Card Top-Up'
 }
 
 // Animated Transaction Item Component
@@ -329,7 +357,6 @@ function TransactionsContent({ navigation }: NavigationProps) {
       amountSize: scaledFontSize(24, windowWidth),
     }
   }, [windowWidth])
-  const insets = useSafeAreaInsets()
   const { userProfile } = useAuth()
   const currencies = useCurrencies()
   const txQuery = useTransactionsList({}, 100)
@@ -385,8 +412,8 @@ function TransactionsContent({ navigation }: NavigationProps) {
     setRefreshing(true)
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-      void apiPost('/api/noah/sync-transactions').catch((error) => {
-        console.warn('[TRANSACTIONS] Sync failed on pull-to-refresh:', error)
+      await syncConsumerLedgerRemotes().catch((error) => {
+        console.warn('[TRANSACTIONS] Ledger sync failed on pull-to-refresh:', error)
       })
       await txQuery.refetch()
       await fetchTransactions(true)
@@ -456,14 +483,19 @@ function TransactionsContent({ navigation }: NavigationProps) {
       setSelectedTransactionId(null)
       return
     }
-    if (!selectedTransactionId || !filteredTransactions.some((tx) => tx.transaction_id === selectedTransactionId)) {
-      setSelectedTransactionId(filteredTransactions[0]?.transaction_id || null)
+    if (
+      !selectedTransactionId ||
+      !filteredTransactions.some((tx) => transactionDetailLookupId(tx) === selectedTransactionId)
+    ) {
+      setSelectedTransactionId(
+        filteredTransactions[0] ? transactionDetailLookupId(filteredTransactions[0]) : null,
+      )
     }
   }, [filteredTransactions, regularWidth, selectedTransactionId])
 
   const selectedTransaction =
     regularWidth && selectedTransactionId
-      ? filteredTransactions.find((tx) => tx.transaction_id === selectedTransactionId) || null
+      ? filteredTransactions.find((tx) => transactionDetailLookupId(tx) === selectedTransactionId) || null
       : null
 
 
@@ -518,7 +550,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + layout.tabBarHeight + spacing[6] },
+          { paddingBottom: spacing[8] },
         ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -565,18 +597,19 @@ function TransactionsContent({ navigation }: NavigationProps) {
 
                   return (
                     <TransactionItem
-                      key={item.id || item.transaction_id || `tx-${item.created_at}`}
+                      key={item.ledger_row_id || item.id || item.transaction_id || `tx-${item.created_at}`}
                       item={item}
                       index={index}
                       isLast={isLast}
                       skipRowEntranceAnim={skipRowEntranceAnim}
                       onPress={() => {
+                        const lookupId = transactionDetailLookupId(item)
                         if (regularWidth) {
-                          setSelectedTransactionId(item.transaction_id)
+                          setSelectedTransactionId(lookupId)
                           return
                         }
                         navigation.navigate(detailScreen as never, {
-                          transactionId: item.transaction_id,
+                          transactionId: lookupId,
                           fromScreen: 'Transactions',
                         } as never)
                       }}
@@ -643,7 +676,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
                         style={styles.regularWidthDetailButton}
                         onPress={() =>
                           navigation.navigate('TransactionDetails' as never, {
-                            transactionId: selectedTransaction.transaction_id,
+                            transactionId: transactionDetailLookupId(selectedTransaction),
                             fromScreen: 'Transactions',
                           } as never)
                         }
@@ -790,7 +823,7 @@ const styles = StyleSheet.create({
   regularWidthDetailButtonText: {
     ...textStyles.labelLarge,
     color: colors.text.inverse,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: 'Geist-SemiBold',
   },
   skeletonContainer: {
     paddingHorizontal: 0,
@@ -826,13 +859,13 @@ const styles = StyleSheet.create({
   transactionName: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: 'Geist-Medium',
     marginBottom: spacing[1],
   },
   transactionDate: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: 'Geist-Regular',
   },
   transactionAmount: {
     ...textStyles.bodyLarge,

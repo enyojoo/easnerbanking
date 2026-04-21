@@ -111,7 +111,6 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     textAlign: 'center',
     marginBottom: spacing[2],
-    fontFamily: 'Outfit-Bold',
   },
   message: {
     ...textStyles.bodyMedium,
@@ -139,7 +138,6 @@ const styles = StyleSheet.create({
     ...textStyles.bodyMedium,
     color: colors.text.primary,
     fontWeight: '600',
-    fontFamily: 'Outfit-SemiBold',
   },
   setupButton: {
     flex: 1,
@@ -154,7 +152,6 @@ const styles = StyleSheet.create({
     ...textStyles.bodyMedium,
     color: colors.text.inverse,
     fontWeight: '600',
-    fontFamily: 'Outfit-SemiBold',
   },
   btnClip: {
     overflow: 'hidden',

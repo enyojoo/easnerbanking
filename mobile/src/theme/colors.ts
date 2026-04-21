@@ -14,13 +14,13 @@
 
 /** Core neutrals: blue-gray (~210°) so dark surfaces don’t read green vs emerald success. */
 const brand = {
-  graphite: '#121416',
+  graphite: '#0F1110',
   carbon: '#171a1c',
   ink: '#1b1f22',
-  ivory: '#F6F3EB',
-  cloud: '#F8F6F0',
-  mist: '#E9E4D8',
-  stone: '#D9D4C7',
+  ivory: '#FAFAFA',
+  cloud: '#FFFFFF',
+  mist: '#F1F2F4',
+  stone: '#E4E6EB',
   slate: '#6F7580',
   primary: '#007ACC',
   /** Hover / mid ramp — pairs with primary */
@@ -109,6 +109,8 @@ type ColorPalette = {
     background: string
     border: string
     backgroundDark: string
+    surface: string
+    highlight: string
   }
   status: {
     pending: string
@@ -195,16 +197,16 @@ export const lightColors: ColorPalette = {
   },
 
   background: {
-    primary: brand.ivory,
-    secondary: brand.cloud,
-    tertiary: brand.mist,
+    primary: '#FFFFFF',
+    secondary: '#FAFAFA',
+    tertiary: '#F4F5F7',
     dark: brand.graphite,
   },
 
   text: {
-    primary: brand.graphite,
-    secondary: brand.slate,
-    tertiary: '#8a919d',
+    primary: '#0F1110',
+    secondary: '#666E7A',
+    tertiary: '#8E96A3',
     inverse: brand.ivory,
     link: brand.primary,
   },
@@ -218,9 +220,11 @@ export const lightColors: ColorPalette = {
   },
 
   glass: {
-    background: 'rgba(246, 243, 235, 0.85)',
-    border: 'rgba(18, 20, 22, 0.08)',
+    background: 'rgba(255, 255, 255, 0.82)',
+    border: 'rgba(15, 17, 16, 0.08)',
     backgroundDark: 'rgba(18, 20, 22, 0.75)',
+    surface: 'rgba(255, 255, 255, 0.72)',
+    highlight: 'rgba(255, 255, 255, 0.92)',
   },
 
   status: {
@@ -232,25 +236,26 @@ export const lightColors: ColorPalette = {
   },
 
   border: {
-    light: brand.mist,
-    default: brand.stone,
-    dark: '#C1BDB1',
+    light: '#EEF0F3',
+    default: '#E2E5EA',
+    dark: '#D3D8E0',
   },
 
+  /** Raised panels / chips / list shells — subtle fill vs `background.primary` canvas (More section parity). */
   frame: {
-    background: brand.cloud,
-    border: brand.mist,
+    background: '#F9F9F9',
+    border: '#E2E2E2',
   },
 
   semantic: {
-    background: brand.ivory,
-    foreground: brand.graphite,
-    card: brand.cloud,
-    cardForeground: brand.graphite,
-    muted: brand.mist,
-    mutedForeground: brand.slate,
-    border: brand.stone,
-    input: brand.stone,
+    background: '#FFFFFF',
+    foreground: '#0F1110',
+    card: '#FFFFFF',
+    cardForeground: '#0F1110',
+    muted: '#F4F5F7',
+    mutedForeground: '#666E7A',
+    border: '#E2E5EA',
+    input: '#E2E5EA',
     destructive: brand.oxblood,
     destructiveForeground: brand.ivory,
     ring: brand.primary,

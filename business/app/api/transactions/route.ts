@@ -4,24 +4,10 @@ import type { TransactionWithSource } from "@/lib/transactions"
 import { mapNoahTransactionToMobileItem } from "@/lib/noah/map-transactions"
 import { resolveLedgerListScope } from "@/lib/transactions-ledger-scope"
 import { displayEasnerTransactionId } from "@/lib/easner-transaction-id"
+import { toEasnerTransactionPrimaryLabel } from "@easner/shared"
 
 const LEDGER_SELECT =
   "id, easner_transaction_id, provider, provider_transaction_id, status, amount, currency, direction, metadata, payload, created_at, updated_at, occurred_at, settled_at, tx_hash, wallet_address, counterparty_address, asset, chain, base_currency, base_amount"
-
-function toProductTransactionLabel(input: {
-  provider: string
-  direction: "in" | "out"
-  metadata?: Record<string, unknown> | null
-}): string {
-  const provider = input.provider.toLowerCase()
-  const direction = input.direction
-  const collectionChannel = String(input.metadata?.collection_channel ?? "").toLowerCase()
-  const isStablecoin = provider === "turnkey" || collectionChannel === "autopayout"
-  if (isStablecoin) {
-    return direction === "in" ? "Stablecoin Deposit" : "Stablecoin Transfer"
-  }
-  return direction === "in" ? "Bank Deposit" : "Bank Transfer"
-}
 
 function deriveCounterpartyName(input: {
   metadata?: Record<string, unknown> | null
@@ -66,10 +52,11 @@ function mapRowToBusinessTransaction(row: Record<string, unknown>): TransactionW
     : st === "unknown" ? "pending"
     : (st as "completed" | "pending" | "processing" | "failed")
 
-  const description = toProductTransactionLabel({
+  const description = toEasnerTransactionPrimaryLabel({
     provider,
     direction: dirRaw === "in" ? "in" : "out",
     metadata: meta,
+    payload,
   })
 
   const created =
@@ -93,7 +80,9 @@ function mapRowToBusinessTransaction(row: Record<string, unknown>): TransactionW
         row.chain ??
         "",
     ).trim() || undefined
-  const counterpartyName = deriveCounterpartyName({ metadata: meta, payload })
+  const counterpartyNameRaw = deriveCounterpartyName({ metadata: meta, payload })
+  const counterpartyName =
+    counterpartyNameRaw && counterpartyNameRaw !== description ? counterpartyNameRaw : undefined
   return {
     id: easnerId,
     type: "book" as const,
@@ -154,14 +143,18 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
   const idForUi = easnerId || providerTxId || ledgerId
   const amount = typeof row.amount === "number" ? row.amount : Number(row.amount) || 0
   const currency = String(row.currency ?? "USD")
-  const name = toProductTransactionLabel({
+  /** Supabase row id — use for `/api/transactions/[id]` when `id` / `transaction_id` are display-only (e.g. ETID…). */
+  const ledger_row_id = ledgerId || undefined
+  const name = toEasnerTransactionPrimaryLabel({
     provider: String(row.provider ?? "noah"),
     direction: dirRaw === "in" ? "in" : "out",
     metadata: (row.metadata as Record<string, unknown> | null | undefined) ?? null,
+    payload: row.payload as Record<string, unknown> | null | undefined,
   })
   return {
     id: idForUi,
     transaction_id: idForUi,
+    ledger_row_id,
     type: transaction_type,
     transaction_type,
     amount,

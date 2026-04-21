@@ -24,7 +24,7 @@ const APP_BUILD_ID =
   Constants.expoConfig?.version ??
   '0'
 
-const STORAGE_KEY = 'easner.query.cache.v1'
+const STORAGE_KEY = 'easner.query.cache.v2'
 
 function makePersister(): Persister {
   return createAsyncStoragePersister({
@@ -47,7 +47,9 @@ export function startQueryPersistence(qc: QueryClient): PersistenceHandle {
     maxAge: 7 * 24 * 60 * 60_000, // 7 days; anything older is refetched.
     buster: APP_BUILD_ID,
     dehydrateOptions: {
-      shouldDehydrateQuery: (q) => q.meta?.safePersist === true,
+      // Do not persist pending/loading states; rehydrating them can replay a
+      // request before auth is ready and emit noisy unauthorized rejections.
+      shouldDehydrateQuery: (q) => q.meta?.safePersist === true && q.state.status === 'success',
       shouldDehydrateMutation: () => false,
     },
     // Persisted rows are shown immediately. `staleTime: 0` isn't accepted in

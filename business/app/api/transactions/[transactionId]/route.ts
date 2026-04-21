@@ -3,24 +3,14 @@ import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin
 import { mapNoahTransactionToMobileDetail } from "@/lib/noah/map-transactions"
 import { resolveLedgerListScope } from "@/lib/transactions-ledger-scope"
 import { displayEasnerTransactionId } from "@/lib/easner-transaction-id"
+import {
+  deriveEasnerInboundRemitterDisplayName,
+  toEasnerTransactionPrimaryLabel,
+  toEasnerTransactionProductCategory,
+} from "@easner/shared"
 
 const LEDGER_SELECT =
   "id, easner_transaction_id, provider, provider_transaction_id, status, amount, currency, direction, metadata, payload, created_at, updated_at, occurred_at, settled_at, tx_hash, wallet_address, counterparty_address, asset, chain, base_currency, base_amount"
-
-function toProductTransactionLabel(input: {
-  provider: string
-  direction: "in" | "out"
-  metadata?: Record<string, unknown> | null
-}): string {
-  const provider = input.provider.toLowerCase()
-  const direction = input.direction
-  const collectionChannel = String(input.metadata?.collection_channel ?? "").toLowerCase()
-  const isStablecoin = provider === "turnkey" || collectionChannel === "autopayout"
-  if (isStablecoin) {
-    return direction === "in" ? "Stablecoin Deposit" : "Stablecoin Transfer"
-  }
-  return direction === "in" ? "Bank Deposit" : "Bank Transfer"
-}
 
 function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, unknown> {
   const dirRaw = String(row.direction ?? "").toLowerCase()
@@ -48,14 +38,17 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
   const idForUi = easnerId || providerTxId || ledgerId
   const amount = typeof row.amount === "number" ? row.amount : Number(row.amount) || 0
   const currency = String(row.currency ?? "USD")
-  const name = toProductTransactionLabel({
+  const ledger_row_id = ledgerId || undefined
+  const name = toEasnerTransactionPrimaryLabel({
     provider: String(row.provider ?? "noah"),
     direction: dirRaw === "in" ? "in" : "out",
     metadata: (row.metadata as Record<string, unknown> | null | undefined) ?? null,
+    payload: row.payload as Record<string, unknown> | null | undefined,
   })
   return {
     id: idForUi,
     transaction_id: idForUi,
+    ledger_row_id,
     type: transaction_type,
     transaction_type,
     amount,
@@ -98,8 +91,21 @@ function mapLedgerRowToMobileDetail(row: Record<string, unknown>): Record<string
     String(meta?.counterparty_name ?? (meta?.recipient_name as string | undefined) ?? "").trim() || undefined
   const reference =
     String(meta?.reference ?? meta?.narration ?? providerTxId ?? "").trim() || undefined
+  const payload = row.payload as Record<string, unknown> | null | undefined
+  const transaction_product = toEasnerTransactionProductCategory({
+    provider: String(row.provider ?? "noah"),
+    direction: dirRaw === "in" ? "in" : "out",
+    metadata: meta ?? null,
+    payload,
+  })
+  const sender_display_name =
+    dirRaw === "in" && transaction_product === "Bank Deposit"
+      ? deriveEasnerInboundRemitterDisplayName({ metadata: meta, payload }) || undefined
+      : undefined
   return {
     ...base,
+    transaction_product,
+    sender_display_name,
     noah_transaction_id: easnerId || undefined,
     final_amount: base.amount,
     updated_at: row.updated_at != null ? String(row.updated_at) : created,

@@ -1,0 +1,199 @@
+/**
+ * Product-facing transaction titles for ledger rows (matches business `/api/transactions` mapping).
+ */
+
+export type EasnerLedgerDirection = "in" | "out"
+
+function firstNonEmptyString(values: readonly unknown[]): string | undefined {
+  for (const v of values) {
+    if (typeof v === "string") {
+      const t = v.trim()
+      if (t) return t
+    }
+  }
+  return undefined
+}
+
+/** Noah-style inbound crypto (USDC/EURC on-chain) from a raw transaction payload. */
+function isNoahPayloadCryptoInbound(payload: Record<string, unknown> | null | undefined): boolean {
+  if (!payload || typeof payload !== "object") return false
+  const direction = String(payload.Direction ?? "")
+  if (direction !== "In") return false
+  const net = String(payload.Network ?? "")
+  const crypto = String(payload.CryptoCurrency ?? "").toUpperCase()
+  return !!(
+    net &&
+    net !== "OffNetwork" &&
+    (crypto.includes("USDC") || crypto.includes("EURC") || crypto.includes("BTC") || crypto.includes("ETH"))
+  )
+}
+
+/**
+ * Best-effort remitter / originator label for inbound bank (fiat) activity.
+ * Checks ledger metadata, Noah payload nesting, and common PSP field names.
+ */
+export function deriveEasnerInboundRemitterDisplayName(input: {
+  metadata?: Record<string, unknown> | null
+  payload?: Record<string, unknown> | null
+}): string | undefined {
+  const meta = input.metadata || {}
+  const payload = input.payload || {}
+  const noahWrapped = meta.noah
+  const noahTx =
+    noahWrapped && typeof noahWrapped === "object" && !Array.isArray(noahWrapped)
+      ? (noahWrapped as Record<string, unknown>)
+      : null
+  const tx =
+    noahTx ||
+    (payload && typeof payload === "object" && (payload.ID != null || payload.id != null)
+      ? (payload as Record<string, unknown>)
+      : null)
+
+  const candidates: unknown[] = [
+    meta.remitter_name,
+    meta.sender_name,
+    meta.originator_name,
+    meta.counterparty_name,
+    meta.debtor_name,
+    meta.merchant_name,
+    meta.company_name,
+    meta.sender_company,
+    meta.originator_company,
+    meta.remitting_company,
+    meta.beneficiary_name,
+    (meta.source as Record<string, unknown> | undefined)?.sender_name,
+    (meta.source as Record<string, unknown> | undefined)?.originator_name,
+    (meta.source as Record<string, unknown> | undefined)?.company_name,
+    (meta.source as Record<string, unknown> | undefined)?.merchant_name,
+    (meta.source as Record<string, unknown> | undefined)?.name,
+    (meta.source as Record<string, unknown> | undefined)?.legal_name,
+    (meta.destination as Record<string, unknown> | undefined)?.recipient_name,
+    payload.counterpartyName,
+    payload.recipientName,
+    payload.senderName,
+    payload.originatorName,
+    (payload.source as Record<string, unknown> | undefined)?.sender_name,
+    (payload.source as Record<string, unknown> | undefined)?.originator_name,
+    (payload.source as Record<string, unknown> | undefined)?.company_name,
+  ]
+
+  if (tx) {
+    const activity = tx.Activity as Record<string, unknown> | undefined
+    const source = (activity?.Source ?? tx.Source) as Record<string, unknown> | undefined
+    if (source) {
+      candidates.push(
+        source.SenderName,
+        source.sender_name,
+        source.OriginatorName,
+        source.originator_name,
+        source.CompanyName,
+        source.company_name,
+        source.MerchantName,
+        source.merchant_name,
+        source.Name,
+        source.LegalName,
+        source.DebtorName,
+        source.RemitterName,
+      )
+    }
+    const fp = tx.FiatPayment as Record<string, unknown> | undefined
+    if (fp) {
+      const fpSource = fp.Source as Record<string, unknown> | undefined
+      if (fpSource) {
+        candidates.push(
+          fpSource.SenderName,
+          fpSource.sender_name,
+          fpSource.CompanyName,
+          fpSource.company_name,
+          fpSource.MerchantName,
+          fpSource.merchant_name,
+          fpSource.Name,
+        )
+      }
+    }
+  }
+
+  return firstNonEmptyString(candidates)
+}
+
+/**
+ * Fixed product line for detail UIs (e.g. "Bank Deposit" vs sender name on a separate row).
+ * Does not substitute remitter — use {@link deriveEasnerInboundRemitterDisplayName} for that.
+ */
+export function toEasnerTransactionProductCategory(input: {
+  provider: string
+  direction: EasnerLedgerDirection
+  metadata?: Record<string, unknown> | null
+  payload?: Record<string, unknown> | null
+}): string {
+  const provider = input.provider.toLowerCase()
+  const direction = input.direction
+  const meta = input.metadata
+  const collectionChannel = String(meta?.collection_channel ?? "").toLowerCase()
+  const isStablecoin =
+    provider === "turnkey" ||
+    collectionChannel === "autopayout" ||
+    (direction === "in" && String(meta?.source_type ?? "").toLowerCase() === "liquidation_address") ||
+    (direction === "in" && isNoahPayloadCryptoInbound(input.payload ?? undefined))
+
+  if (isStablecoin) {
+    return direction === "in" ? "Stablecoin Deposit" : "Stablecoin Transfer"
+  }
+  if (direction === "in") return "Bank Deposit"
+  return "Bank Transfer"
+}
+
+/**
+ * Primary list/dialog title: stablecoin product labels, inbound bank = remitter when known, else "Bank Deposit".
+ */
+export function toEasnerTransactionPrimaryLabel(input: {
+  provider: string
+  direction: EasnerLedgerDirection
+  metadata?: Record<string, unknown> | null
+  payload?: Record<string, unknown> | null
+}): string {
+  const provider = input.provider.toLowerCase()
+  const direction = input.direction
+  const meta = input.metadata
+  const collectionChannel = String(meta?.collection_channel ?? "").toLowerCase()
+  const isStablecoin =
+    provider === "turnkey" ||
+    collectionChannel === "autopayout" ||
+    (direction === "in" && String(meta?.source_type ?? "").toLowerCase() === "liquidation_address") ||
+    (direction === "in" && isNoahPayloadCryptoInbound(input.payload ?? undefined))
+
+  if (isStablecoin) {
+    return direction === "in" ? "Stablecoin Deposit" : "Stablecoin Transfer"
+  }
+  if (direction === "in") {
+    return deriveEasnerInboundRemitterDisplayName({
+      metadata: input.metadata,
+      payload: input.payload,
+    }) ?? "Bank Deposit"
+  }
+  return "Bank Transfer"
+}
+
+/**
+ * @deprecated Prefer {@link toEasnerTransactionPrimaryLabel} with `payload` for inbound bank labels.
+ * Bank inbound without payload cannot resolve remitter from nested Noah data.
+ */
+export function toEasnerProductTransactionLabel(input: {
+  provider: string
+  direction: EasnerLedgerDirection
+  metadata?: Record<string, unknown> | null
+}): string {
+  return toEasnerTransactionPrimaryLabel({ ...input, payload: null })
+}
+
+/** Inbound titles when no remitter was resolved (generic product labels). */
+export function isEasnerProductReceiveTitle(name: string | null | undefined): boolean {
+  const n = String(name ?? "").trim()
+  return n === "Stablecoin Deposit" || n === "Bank Deposit"
+}
+
+/** Outbound titles from {@link toEasnerTransactionPrimaryLabel}. */
+export function isEasnerProductSendTitle(name: string | null | undefined): boolean {
+  const n = String(name ?? "").trim()
+  return n === "Stablecoin Transfer" || n === "Bank Transfer"
+}

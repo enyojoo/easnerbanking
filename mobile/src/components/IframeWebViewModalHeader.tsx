@@ -1,7 +1,7 @@
 import React from 'react'
 import { View, Text, Pressable, Platform, StyleSheet, type TextStyle } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { colors, textStyles, spacing } from '../theme'
+import { borderRadius, textStyles, spacing, useThemeColors } from '../theme'
 import { ripple } from '../lib/androidRipple'
 
 export type IframeWebViewModalHeaderProps = {
@@ -17,6 +17,7 @@ export type IframeWebViewModalHeaderProps = {
  * Use across `ExternalLinkModal`, verification flows, and any in-app browser sheet.
  */
 export function IframeWebViewModalHeader({ onClose, title, children }: IframeWebViewModalHeaderProps) {
+  const colors = useThemeColors()
   const left =
     children ??
     (title ? (
@@ -26,12 +27,13 @@ export function IframeWebViewModalHeader({ onClose, title, children }: IframeWeb
     ) : null)
 
   return (
-    <View style={styles.header}>
+    <View style={[styles.header, { borderBottomColor: colors.border.light }]}>
       <View style={styles.titleBlock}>{left}</View>
       <Pressable
         onPress={onClose}
         style={({ pressed }) => [
           styles.closeHit,
+          { backgroundColor: colors.glass.surface, borderColor: colors.glass.border },
           pressed && Platform.OS === 'ios' && styles.closeHitPressedIOS,
         ]}
         android_ripple={ripple.neutral}
@@ -39,7 +41,7 @@ export function IframeWebViewModalHeader({ onClose, title, children }: IframeWeb
         accessibilityLabel="Close"
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
-        <Ionicons name="close" size={22} color={colors.text.primary} />
+        <Ionicons name="close" size={20} color={colors.text.primary} />
       </Pressable>
     </View>
   )
@@ -54,7 +56,8 @@ const styles = StyleSheet.create({
     paddingTop: spacing[4],
     paddingBottom: spacing[3],
     borderBottomWidth: 1,
-    borderBottomColor: colors.border.light,
+    // Runtime theme value is applied inline in the component.
+    borderBottomColor: 'transparent',
   },
   titleBlock: {
     flex: 1,
@@ -62,7 +65,10 @@ const styles = StyleSheet.create({
     paddingRight: spacing[2],
   },
   closeHit: {
-    padding: spacing[1],
+    width: 38,
+    height: 38,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -71,8 +77,8 @@ const styles = StyleSheet.create({
   },
   titleText: {
     ...textStyles.titleMedium,
-    color: colors.text.primary,
-    fontWeight: '600',
+    color: '#0F1110',
+    fontWeight: '700',
     textAlign: 'left',
   },
 })

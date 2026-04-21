@@ -30,7 +30,7 @@ export const userAvatarStyles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: colors.primary.main,
-    fontFamily: 'Outfit-Bold',
+    fontFamily: 'Geist-Bold',
   },
   pinEntryCircle: {
     width: PIN_ENTRY_AVATAR_SIZE,
@@ -48,6 +48,6 @@ export const userAvatarStyles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: colors.primary.main,
-    fontFamily: 'Outfit-Bold',
+    fontFamily: 'Geist-Bold',
   },
 })

@@ -136,7 +136,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const { data: exchangeRatesFromContext = [] } = useExchangeRatesList()
   const qc = useQueryClient()
   const { scope } = useScope()
-  const { balances, updateBalanceOptimistically } = useBalance()
+  const { balances, updateBalanceOptimistically, refreshBalances } = useBalance()
   // Ensure exchangeRates is always an array (fallback to empty array if undefined)
   const exchangeRates = exchangeRatesFromContext || []
   
@@ -236,6 +236,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   // Update recipient when screen comes into focus (smooth transition)
   useFocusEffect(
     React.useCallback(() => {
+      /** Match dashboard Turnkey/Noah truth — send flow must not show stale wallet zeros. */
+      void refreshBalances(true).catch(() => {})
       if (noahKycStatus !== 'approved') {
         void refreshUserProfile()
       }
@@ -253,7 +255,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       if (typeof params?.selectedOtherPaymentMethod === 'string' || params?.selectedOtherPaymentMethod === null) {
         setSelectedOtherPaymentMethod(params.selectedOtherPaymentMethod ?? null)
       }
-    }, [route.params, refreshUserProfile, noahKycStatus])
+    }, [route.params, refreshUserProfile, noahKycStatus, refreshBalances])
   )
 
   useFocusEffect(
@@ -390,7 +392,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       : currency
   }
 
-  const currentBalance = parseFloat(balances[selectedBalanceCurrency as 'USD' | 'EUR'] || '0')
+  const currentBalance = Number.parseFloat(
+    String(balances[selectedBalanceCurrency as 'USD' | 'EUR'] || '0').replace(/,/g, ''),
+  ) || 0
   const enteredAmount = sendAmount ? Number.parseFloat(sendAmount.replace(/,/g, '')) || 0 : 0
   const receiveCurrency = recipient?.currency || 'EUR'
   const sendCurrency = selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency
@@ -489,6 +493,35 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     sendingAmount = receiveAmount
   }
 
+  /** Debit from wallet when paying from balance (includes fees when FX order amounts are available). */
+  const balanceDebitEstimate =
+    selectedPaymentMethod === 'balance' && recipient && receiveAmount > 0
+      ? totalAmount > 0
+        ? totalAmount
+        : sendingAmount > 0
+          ? sendingAmount
+          : 0
+      : 0
+
+  const balanceDebitCents = Math.round((Number.isFinite(balanceDebitEstimate) ? balanceDebitEstimate : 0) * 100)
+  const currentBalanceCents = Math.round((Number.isFinite(currentBalance) ? currentBalance : 0) * 100)
+  const hasInsufficientBalance =
+    selectedPaymentMethod === 'balance' &&
+    !!recipient &&
+    receiveAmount > 0 &&
+    balanceDebitCents > 0 &&
+    currentBalanceCents < balanceDebitCents
+
+  const displayBalanceAfterSend =
+    selectedPaymentMethod === 'balance'
+      ? currentBalance - (balanceDebitEstimate > 0 ? balanceDebitEstimate : 0)
+      : currentBalance
+
+  const formattedBalanceAfterSend = displayBalanceAfterSend.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+
   const toggleAmountDirection = () => {
     if (!recipient) return
     if (amountEntryMode === 'receive') {
@@ -525,7 +558,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     !payoutCorridorActive ||
     !selectedPaymentMethod ||
     (selectedPaymentMethod === 'otherCurrency' && (!selectedOtherCurrency || !selectedOtherPaymentMethod)) ||
-    verificationBlocksSend
+    verificationBlocksSend ||
+    hasInsufficientBalance
 
   useEffect(() => {
     let cancelled = false
@@ -884,19 +918,36 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                         : <CurrencyFlag currency={selectedOtherCurrency} size={24} style={styles.flagImage} />
                     ) : null}
               </View>
-                  <Text style={styles.balanceSelectorText} numberOfLines={1}>
-                    {selectedPaymentMethod === 'balance' 
-                      ? `${selectedBalanceCurrency} Balance`
-                      : selectedPaymentMethod === 'linkBank'
-                      ? 'Link Bank'
-                      : selectedPaymentMethod === 'virtualBank'
-                      ? 'Bank Transfer'
-                      : selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency && selectedOtherPaymentMethod
-                      ? currencyPaymentMethods[selectedOtherCurrency]?.find(m => m.code === selectedOtherPaymentMethod)?.name || 'Select Method'
-                      : selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency
-                      ? `${selectedOtherCurrency} - Select Method`
-                      : 'Select Method'}
-              </Text>
+                  {selectedPaymentMethod === 'balance' ? (
+                    <View style={styles.balanceSelectorTextCol}>
+                      <Text style={styles.balanceSelectorTitleLine} numberOfLines={1}>
+                        {selectedBalanceCurrency} Balance
+                      </Text>
+                      <Text
+                        style={[
+                          styles.balanceSelectorAmountLine,
+                          displayBalanceAfterSend < -1e-6 && { color: colors.semantic.destructive },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {getCurrencySymbol(selectedBalanceCurrency)}
+                        {formattedBalanceAfterSend}
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.balanceSelectorText} numberOfLines={1}>
+                      {selectedPaymentMethod === 'linkBank'
+                        ? 'Link Bank'
+                        : selectedPaymentMethod === 'virtualBank'
+                          ? 'Bank Transfer'
+                          : selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency && selectedOtherPaymentMethod
+                            ? currencyPaymentMethods[selectedOtherCurrency]?.find((m) => m.code === selectedOtherPaymentMethod)
+                                ?.name || 'Select Method'
+                            : selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency
+                              ? `${selectedOtherCurrency} - Select Method`
+                              : 'Select Method'}
+                    </Text>
+                  )}
                   <ChevronDown size={16} color={colors.text.primary} strokeWidth={2} />
                 </Pressable>
 
@@ -1505,9 +1556,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                     const balance = parseFloat(balances[item.code as 'USD' | 'EUR'] || '0')
                     const showLiveRemaining =
                       selectedPaymentMethod === 'balance' &&
-                      sendingAmount > 0 &&
+                      balanceDebitEstimate > 0 &&
                       item.code === selectedBalanceCurrency
-                    const displayBalance = showLiveRemaining ? balance - sendingAmount : balance
+                    const displayBalance = showLiveRemaining ? balance - balanceDebitEstimate : balance
+                    const rowShortBy =
+                      showLiveRemaining && displayBalance < 0 && receiveAmount > 0
+                        ? Math.max(0, balanceDebitEstimate - balance)
+                        : 0
                     const balanceFormatted = displayBalance.toLocaleString('en-US', {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2,
@@ -1541,6 +1596,15 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                           >
                             {item.symbol}{balanceFormatted}
                           </Text>
+                          {rowShortBy > 0 ? (
+                            <Text style={styles.currencyItemShortfall}>
+                              Short by {item.symbol}
+                              {rowShortBy.toLocaleString('en-US', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </Text>
+                          ) : null}
                         </View>
                         <View style={[
                           styles.checkbox,
@@ -1753,7 +1817,7 @@ const styles = StyleSheet.create({
   selectRecipientText: {
     ...textStyles.bodyMedium,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: 'Geist-Medium',
   },
   // Recipient Bar (when recipient is selected)
   recipientBar: {
@@ -1774,7 +1838,7 @@ const styles = StyleSheet.create({
   recipientLabel: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: 'Geist-Medium',
   },
   recipientAvatarCircleWrap: {
     position: 'relative',
@@ -1820,7 +1884,7 @@ const styles = StyleSheet.create({
   recipientAvatarInitials: {
     ...textStyles.titleSmall,
     color: colors.primary.main,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: 'Geist-SemiBold',
     fontWeight: '700',
   },
   recipientInfo: {
@@ -1831,14 +1895,14 @@ const styles = StyleSheet.create({
   recipientName: {
     ...textStyles.bodyLarge,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: 'Geist-SemiBold',
     lineHeight: 18,
     marginBottom: 0,
   },
   recipientDetails: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: 'Geist-Regular',
     lineHeight: 16,
   },
   changeRecipientIcon: {
@@ -1875,7 +1939,7 @@ const styles = StyleSheet.create({
     fontSize: 50,
     fontWeight: '900',
     color: '#000000',
-    fontFamily: 'Outfit-Black',
+    fontFamily: 'Geist-Black',
     marginRight: 2,
     includeFontPadding: false,
     paddingVertical: 0,
@@ -1903,7 +1967,7 @@ const styles = StyleSheet.create({
     fontSize: 50,
     fontWeight: '900',
     color: '#000000',
-    fontFamily: 'Outfit-Black',
+    fontFamily: 'Geist-Black',
     textAlign: 'left',
     paddingLeft: 0,
     paddingRight: 0,
@@ -1966,7 +2030,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '500',
     color: colors.primary.main,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: 'Geist-Medium',
     textAlign: 'center',
   },
   balanceSection: {
@@ -1980,13 +2044,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9F9F9',
     borderRadius: 100,
     paddingHorizontal: spacing[3],
-    paddingVertical: 0,
+    paddingVertical: spacing[2],
     marginBottom: spacing[2],
     gap: spacing[2],
     borderWidth: 0.5,
     borderColor: '#E2E2E2',
     minWidth: 180,
-    height: 48,
+    minHeight: 48,
     justifyContent: 'center',
   },
   flagContainer: {
@@ -2004,16 +2068,33 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
   },
+  balanceSelectorTextCol: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: 'center',
+  },
+  balanceSelectorTitleLine: {
+    fontSize: 14,
+    color: colors.text.primary,
+    fontFamily: 'Geist-Medium',
+  },
   balanceSelectorText: {
     flex: 1,
     fontSize: 14,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: 'Geist-Medium',
+  },
+  balanceSelectorAmountLine: {
+    fontSize: 12,
+    color: colors.text.secondary,
+    fontFamily: 'Geist-Medium',
+    marginTop: 2,
+    fontVariant: ['tabular-nums'],
   },
   balanceText: {
     ...textStyles.bodyMedium,
     color: colors.primary.main,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: 'Geist-Medium',
   },
   noteKeypadWrapper: {
     width: '100%',
@@ -2043,7 +2124,7 @@ const styles = StyleSheet.create({
     flex: 1,
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: 'Geist-Regular',
     fontSize: 13,
     lineHeight: 18,
     textAlignVertical: 'center',
@@ -2084,7 +2165,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     lineHeight: 34,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: 'Geist-SemiBold',
     fontWeight: '600',
   },
   bottomContainer: {
@@ -2106,12 +2187,12 @@ const styles = StyleSheet.create({
   verifyInlineText: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: 'Geist-Regular',
   },
   verifyInlineLink: {
     ...textStyles.bodySmall,
     color: colors.primary.main,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: 'Geist-SemiBold',
     textDecorationLine: 'underline',
   },
   sendButton: {
@@ -2130,7 +2211,7 @@ const styles = StyleSheet.create({
   sendButtonText: {
     ...textStyles.titleLarge,
     color: colors.text.inverse,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: 'Geist-SemiBold',
   },
   // Modal Styles
   modalOverlay: {
@@ -2168,7 +2249,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: 'Geist-SemiBold',
   },
   closeButton: {
     width: 40,
@@ -2185,7 +2266,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: colors.text.secondary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: 'Geist-SemiBold',
     marginBottom: spacing[2],
     marginTop: spacing[2],
     paddingHorizontal: spacing[5],
@@ -2220,15 +2301,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: 'Geist-SemiBold',
     marginBottom: 2,
   },
   currencyItemBalance: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: 'Geist-SemiBold',
     marginTop: 2,
+  },
+  currencyItemShortfall: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 4,
+    color: colors.semantic.destructive,
+    fontFamily: 'Geist-Medium',
   },
   checkbox: {
     width: 24,

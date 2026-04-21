@@ -27,7 +27,6 @@ import {
   Monitor,
   Apple,
   ShoppingBag,
-  ArrowRight,
   Check,
 } from 'lucide-react-native'
 import { useAuth } from '../../contexts/AuthContext'
@@ -40,7 +39,7 @@ import {
   shadows,
   userAvatarStyles,
   motion,
-  layout,
+  lineHeight,
 } from '../../theme'
 import type { Colors } from '../../theme/colors'
 import { scaledFontSize } from '../../theme/typography'
@@ -48,13 +47,14 @@ import { ripple } from '../../lib/androidRipple'
 import { useEffect } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import { useBalance } from '../../contexts/BalanceContext'
-import { apiGet, apiPost } from '../../lib/apiClient'
-import { ShimmerLoader } from '../../components/premium'
+import { apiGet, syncConsumerLedgerRemotes, syncConsumerLedgerRemotesFireAndForget } from '../../lib/apiClient'
+import { GlossyPrimaryButton, SecondaryOutlineButton, ShimmerLoader } from '../../components/premium'
 import { getTransactionStatusDisplay } from '../../utils/formatters'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import { isTier1Complete } from '../../lib/compliance'
 import { noahService } from '../../lib/noahService'
 import { useTransactionsList } from '../../hooks/queries'
+import { isEasnerProductReceiveTitle, isEasnerProductSendTitle } from '@easner/shared'
 
 const DASHBOARD_SELECTED_CURRENCY_KEY_PREFIX = 'easner_dashboard_selected_currency_'
 
@@ -62,6 +62,7 @@ const DASHBOARD_SELECTED_CURRENCY_KEY_PREFIX = 'easner_dashboard_selected_curren
 interface DashboardTransaction {
   id: string
   transaction_id: string
+  ledger_row_id?: string
   type: 'send' | 'receive'
   amount: number
   currency: string
@@ -77,8 +78,12 @@ interface DashboardTransaction {
 export default function DashboardScreen({ navigation }: NavigationProps) {
   const palette = useThemeColors()
   const insets = useSafeAreaInsets()
-  const tabBarScrollInset = insets.bottom + layout.tabBarHeight + spacing[6]
-  const styles = useMemo(() => createDashboardStyles(palette, tabBarScrollInset), [palette, tabBarScrollInset])
+  /** Tab bar is docked (not overlaying); only end-of-scroll breathing room. */
+  const scrollBottomPadding = spacing[8]
+  const styles = useMemo(() => createDashboardStyles(palette, scrollBottomPadding), [palette, scrollBottomPadding])
+  const heroBalanceFontSize = scaledFontSize(56)
+  const heroBalanceLineHeight =
+    Math.round(heroBalanceFontSize * lineHeight.tight) + (Platform.OS === 'android' ? 6 : 4)
   const { user, userProfile, refreshUserProfile, loading: authLoading } = useAuth()
   const txQuery = useTransactionsList({}, 5)
   const { balances, refreshBalances } = useBalance()
@@ -185,10 +190,8 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
       
       try {
         lastSyncTimeRef.current = now
-        // Sync in background - don't block UI
-        apiPost('/api/noah/sync-transactions').catch(() => {
-          // Silently fail - webhooks/real-time handle new transactions
-        })
+        // Sync in background - don't block UI (Noah API + on-chain ledger for Turnkey deposits)
+        syncConsumerLedgerRemotesFireAndForget()
       } catch (error) {
         // Silently fail - sync is optional, webhooks handle new transactions
       }
@@ -360,27 +363,39 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
 
   const getTransactionName = (transaction: DashboardTransaction): string => {
     if (transaction.type === 'receive') {
-      // Check if it's a crypto deposit (stablecoin deposit via liquidation address)
       if (transaction.source_type === 'liquidation_address' || transaction.source_liquidation_address_id) {
         return 'Stablecoin Deposit'
       }
-      
-      // For fiat deposits (virtual account/ACH), show sender name only (not "Received from...")
+
+      const display = String(transaction.name || '').trim()
+      if (display === 'Stablecoin Deposit') {
+        return display
+      }
+
       if (transaction.source_type === 'virtual_account') {
-        // Check metadata for sender information
-        const senderName = transaction.metadata?.source?.sender_name || 
-                          transaction.metadata?.source?.originator_name ||
-                          transaction.name
+        const senderName =
+          transaction.metadata?.source?.sender_name ||
+          transaction.metadata?.source?.originator_name ||
+          transaction.name
         if (senderName) {
-          return senderName // Just the sender name for ACH deposits
+          return String(senderName).trim()
         }
         return 'Bank Deposit'
       }
-      
-      // Fallback for other receive types
+
+      if (display && !isEasnerProductReceiveTitle(display)) {
+        return display
+      }
+
+      if (isEasnerProductReceiveTitle(display)) {
+        return display
+      }
+
       return transaction.name ? `Received from ${transaction.name}` : 'Received'
     } else {
-      // For sends, use recipient name
+      if (isEasnerProductSendTitle(transaction.name)) {
+        return String(transaction.name).trim()
+      }
       return transaction.name ? `Sent to ${transaction.name}` : 'Sent'
     }
   }
@@ -590,8 +605,8 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
             onRefresh={async () => {
               setRefreshing(true)
               try {
-                void apiPost('/api/noah/sync-transactions').catch((error) => {
-                  console.warn('[DASHBOARD] Sync failed on pull-to-refresh:', error)
+                await syncConsumerLedgerRemotes().catch((error) => {
+                  console.warn('[DASHBOARD] Ledger sync failed on pull-to-refresh:', error)
                 })
                 await Promise.allSettled([refreshBalances(true), txQuery.refetch(), fetchRecentTransactions(true)])
               } catch (error) {
@@ -648,7 +663,11 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
               style={[
                 textStyles.balanceDisplay,
                 styles.balanceAmount,
-                { color: palette.text.primary, fontSize: scaledFontSize(56) },
+                {
+                  color: palette.text.primary,
+                  fontSize: heroBalanceFontSize,
+                  lineHeight: heroBalanceLineHeight,
+                },
               ]}
             >
               {balanceVisible 
@@ -669,41 +688,37 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
               
           {/* Receive and Send Buttons */}
           <View style={styles.actionButtons}>
-            <Pressable
-             android_ripple={ripple.neutral}
-              style={styles.actionButton}
+            <GlossyPrimaryButton
+              title="Receive"
+              style={styles.actionButtonPremium}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                 navigation.navigate('ReceiveMoney' as never, {
                   currency: selectedCurrency,
                 } as never)
-              }} >
-              <ArrowDownLeft size={20} color={palette.primary.main} strokeWidth={2.5} />
-              <Text style={styles.actionButtonText}>Receive</Text>
-            </Pressable>
-
-            <Pressable 
-             android_ripple={ripple.neutral} 
-              style={styles.actionButton}
+              }}
+            />
+            <SecondaryOutlineButton
+              title="Send"
+              style={styles.actionButtonPremium}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                 navigation.navigate('SelectRecentRecipient' as never, {
-                  preferredBalanceCurrency: selectedCurrency === 'USD' || selectedCurrency === 'EUR'
-                    ? selectedCurrency
-                    : undefined,
+                  preferredBalanceCurrency:
+                    selectedCurrency === 'USD' || selectedCurrency === 'EUR'
+                      ? selectedCurrency
+                      : undefined,
                 } as never)
-              }} >
-              <ArrowUpRight size={20} color={palette.primary.main} strokeWidth={2.5} />
-              <Text style={styles.actionButtonText}>Send</Text>
-          </Pressable>
-        </View>
+              }}
+            />
+          </View>
         </View>
         
         {/* Transactions Section */}
         <View style={styles.transactionsSection}>
           {!loadingTransactions && recentTransactions.length > 0 && (
             <View style={styles.transactionsHeader}>
-              <Text style={styles.transactionsTitle}>Transactions</Text>
+              <Text style={styles.transactionsTitle}>Recent activity</Text>
               <Pressable 
                android_ripple={ripple.neutral} 
                 style={styles.viewAllButton}
@@ -711,8 +726,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                   navigation.navigate('Transactions' as never)
                 }} >
-                <Text style={styles.viewAllText}>All</Text>
-                <ArrowRight size={14} color={palette.primary.main} strokeWidth={2.5} />
+                <Text style={styles.viewAllText}>View all</Text>
               </Pressable>
             </View>
           )}
@@ -753,9 +767,10 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                   style={[styles.transactionItem, isLast && styles.transactionItemLast]}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                    navigation.navigate('TransactionDetails' as never, { 
-                      transactionId: transaction.transaction_id,
-                      fromScreen: 'Dashboard'
+                    navigation.navigate('TransactionDetails' as never, {
+                      transactionId:
+                        transaction.ledger_row_id?.trim() || transaction.transaction_id,
+                      fromScreen: 'Dashboard',
                     } as never)
                   }} >
                   {getTransactionIcon(iconType, isReceived)}
@@ -800,7 +815,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   )
 }
 
-function createDashboardStyles(c: Colors, tabBarScrollInset: number) {
+function createDashboardStyles(c: Colors, scrollBottomPadding: number) {
   return StyleSheet.create({
   container: {
     flex: 1,
@@ -854,12 +869,12 @@ function createDashboardStyles(c: Colors, tabBarScrollInset: number) {
     ...textStyles.bodySmall,
     color: c.text.primary,
     fontWeight: '600',
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: 'Geist-SemiBold',
   },
   verifyAccountBannerCta: {
     ...textStyles.bodySmall,
     color: c.primary.main,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: 'Geist-SemiBold',
     fontWeight: '600',
     textDecorationLine: 'underline',
     flexShrink: 0,
@@ -893,7 +908,7 @@ function createDashboardStyles(c: Colors, tabBarScrollInset: number) {
   scrollContent: {
     paddingTop: 0,
     flexGrow: 1,
-    paddingBottom: tabBarScrollInset,
+    paddingBottom: scrollBottomPadding,
   },
   whiteCard: {
     backgroundColor: c.background.primary,
@@ -937,7 +952,7 @@ function createDashboardStyles(c: Colors, tabBarScrollInset: number) {
   currencyText: {
     fontSize: 14,
     color: c.text.primary,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: 'Geist-Medium',
   },
   addFundsButton: {
     width: 44,
@@ -998,7 +1013,7 @@ function createDashboardStyles(c: Colors, tabBarScrollInset: number) {
     fontSize: 20,
     fontWeight: '700',
     color: c.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: 'Geist-SemiBold',
   },
   closeButton: {
     width: 40,
@@ -1028,14 +1043,14 @@ function createDashboardStyles(c: Colors, tabBarScrollInset: number) {
     fontSize: 16,
     fontWeight: '600',
     color: c.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: 'Geist-SemiBold',
     marginBottom: 2,
   },
   currencyItemBalance: {
     fontSize: 16,
     fontWeight: '600',
     color: c.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: 'Geist-SemiBold',
     marginTop: 2,
   },
   checkbox: {
@@ -1073,7 +1088,7 @@ function createDashboardStyles(c: Colors, tabBarScrollInset: number) {
   currencyOptionText: {
     ...textStyles.bodyMedium,
     color: c.text.primary,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: 'Geist-Medium',
   },
   balanceContainer: {
     flexDirection: 'row',
@@ -1096,25 +1111,14 @@ function createDashboardStyles(c: Colors, tabBarScrollInset: number) {
   },
   actionButtons: {
     flexDirection: 'row',
+    alignItems: 'stretch',
     gap: spacing[3],
     marginBottom: spacing[3],
   },
-  actionButton: {
+  actionButtonPremium: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing[2],
-    height: 50,
-    backgroundColor: c.frame.background,
-    borderRadius: borderRadius.xl,
-    borderWidth: 0.5,
-    borderColor: c.frame.border,
-  },
-  actionButtonText: {
-    ...textStyles.bodyLarge,
-    color: c.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    minWidth: 0,
+    height: 52,
   },
   transactionsSection: {
     paddingHorizontal: spacing[5],
@@ -1126,6 +1130,7 @@ function createDashboardStyles(c: Colors, tabBarScrollInset: number) {
     borderColor: c.frame.border,
     marginHorizontal: spacing[5],
     marginTop: spacing[3],
+    ...shadows.xs,
   },
   transactionsHeader: {
     flexDirection: 'row',
@@ -1136,21 +1141,19 @@ function createDashboardStyles(c: Colors, tabBarScrollInset: number) {
   transactionsTitle: {
     ...textStyles.headlineSmall,
     color: c.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: 'Geist-SemiBold',
   },
   viewAllButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[1],
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-    backgroundColor: '#B9CAFF',
-    borderRadius: borderRadius.full,
+    paddingVertical: spacing[1],
+    paddingHorizontal: spacing[1],
   },
   viewAllText: {
     ...textStyles.labelMedium,
     color: c.primary.main,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: 'Geist-SemiBold',
   },
   transactionItem: {
     flexDirection: 'row',
@@ -1179,13 +1182,13 @@ function createDashboardStyles(c: Colors, tabBarScrollInset: number) {
   transactionName: {
     ...textStyles.bodyMedium,
     color: c.text.primary,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: 'Geist-Medium',
     marginBottom: spacing[1],
   },
   transactionDate: {
     ...textStyles.bodySmall,
     color: c.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: 'Geist-Regular',
   },
   transactionAmountContainer: {
     alignItems: 'flex-end',
@@ -1194,14 +1197,14 @@ function createDashboardStyles(c: Colors, tabBarScrollInset: number) {
   transactionAmount: {
     ...textStyles.bodyLarge,
     color: c.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: 'Geist-SemiBold',
   },
   transactionAmountReceived: {
     color: c.primary.main,
   },
   transactionStatus: {
     ...textStyles.bodySmall,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: 'Geist-Regular',
   },
   emptyStateContainer: {
     alignItems: 'center',
@@ -1222,14 +1225,14 @@ function createDashboardStyles(c: Colors, tabBarScrollInset: number) {
   emptyStateTitle: {
     ...textStyles.titleLarge,
     color: c.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: 'Geist-SemiBold',
     marginBottom: spacing[2],
   },
   emptyStateText: {
     ...textStyles.bodyMedium,
     color: c.text.secondary,
     textAlign: 'center',
-    fontFamily: 'Outfit-Regular',
+    fontFamily: 'Geist-Regular',
   },
   skeletonContainer: {
     paddingHorizontal: spacing[5],

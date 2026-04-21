@@ -1,5 +1,11 @@
 /** Map Noah `Transaction` objects (see https://docs.noah.com/) to the mobile transaction list/detail shape. */
 
+import {
+  deriveEasnerInboundRemitterDisplayName,
+  toEasnerTransactionPrimaryLabel,
+  toEasnerTransactionProductCategory,
+} from "@easner/shared"
+
 function mapNoahTxStatus(s: string): string {
   const lower = s.toLowerCase()
   if (lower === "settled") return "completed"
@@ -43,9 +49,12 @@ export function mapNoahTransactionToMobileItem(tx: Record<string, unknown>): Rec
   const source_type = inferSourceType(tx)
   const name =
     direction === "In"
-      ? source_type === "liquidation_address"
-        ? "Stablecoin Deposit"
-        : "Bank Deposit"
+      ? toEasnerTransactionPrimaryLabel({
+          provider: "noah",
+          direction: "in",
+          metadata: { noah: tx },
+          payload: tx,
+        })
       : "Sent"
 
   return {
@@ -71,8 +80,20 @@ export function mapNoahTransactionToMobileDetail(tx: Record<string, unknown>): R
   const direction = String(tx.Direction ?? "")
   const st = String(tx.Status ?? "")
   const created = String(tx.Created ?? new Date().toISOString())
+  const transaction_product = toEasnerTransactionProductCategory({
+    provider: "noah",
+    direction: direction === "In" ? "in" : "out",
+    metadata: { noah: tx },
+    payload: tx,
+  })
+  const sender_display_name =
+    direction === "In" && transaction_product === "Bank Deposit"
+      ? deriveEasnerInboundRemitterDisplayName({ metadata: { noah: tx }, payload: tx }) || undefined
+      : undefined
   return {
     ...base,
+    transaction_product,
+    sender_display_name,
     id,
     transaction_id: id,
     noah_transaction_id: id,

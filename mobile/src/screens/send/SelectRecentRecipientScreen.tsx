@@ -112,7 +112,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   const { data: currencies = [] } = useCurrenciesCatalog()
   const txHubQuery = useTransactionsList({}, 100)
   const recipients = recipientsQuery.data ?? []
-  const recipientsLoading = recipientsQuery.isPending
+  const recipientsLoading = recipientsQuery.isLoading
   const transactions = useMemo(() => {
     if (!user?.id) return []
     const rows = txHubQuery.data?.pages?.[0]?.transactions ?? []

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react'
+import React, { useState, useRef, useCallback } from 'react'
 import {
   View,
   Text,
@@ -33,8 +33,8 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
   const qc = useQueryClient()
   const commQuery = useCommunicationPreferences()
   const communicationPreferences = commQuery.data ?? null
-  const communicationPreferencesLoading = commQuery.isPending
-  const refreshCommunicationPreferences = useCallback(() => commQuery.refetch(), [commQuery])
+  /** `isPending` stays true when the query is disabled or idle — use `isLoading` for true first-fetch-only UI. */
+  const communicationPreferencesLoading = commQuery.isLoading
   const commitCommunicationPreferences = async (prefs: CommunicationPreferences) => {
     if (!user?.id) return
     qc.setQueryData(qk.settings.communication(user.id), prefs)
@@ -53,8 +53,10 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
   useFocusEffect(
     useCallback(() => {
       setOptimisticOverride(null)
-      void refreshCommunicationPreferences()
-    }, [refreshCommunicationPreferences]),
+      if (commQuery.isStale) {
+        void commQuery.refetch()
+      }
+    }, [commQuery.isStale, commQuery.refetch]),
   )
 
   useCalmParallelEnterWhen(true, headerAnim, contentAnim)
@@ -224,14 +226,14 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
               },
             ]}
           >
-            {loadingPrefs ? (
-              <View style={styles.loading}>
-                <ActivityIndicator color={colors.primary.main} />
-              </View>
-            ) : !user ? (
+            {!user ? (
               <Text style={styles.fallback}>
                 Sign in to load your preferences.
               </Text>
+            ) : loadingPrefs ? (
+              <View style={styles.loading}>
+                <ActivityIndicator color={colors.primary.main} />
+              </View>
             ) : !prefs ? (
               <Text style={styles.fallback}>
                 Preferences could not be loaded. Check your connection and try again.
@@ -376,7 +378,7 @@ const styles = StyleSheet.create({
   toggleTitle: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: 'Geist-Medium',
     marginBottom: spacing[1],
   },
   toggleDescription: {

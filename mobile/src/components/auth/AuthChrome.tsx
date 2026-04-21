@@ -5,7 +5,7 @@ import * as Haptics from 'expo-haptics'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 
-/** Matches business `login` / `signup` pages: horizontal rule + centered “Or”. Form/outline: 8px radius, semantic border. */
+/** Matches auth fields: pill radius + semantic border. */
 export function OrDivider() {
   return (
     <View style={styles.orWrap}>
@@ -22,7 +22,7 @@ type GoogleButtonProps = {
   disabled?: boolean
 }
 
-/** Outline full-width button like shadcn `Button variant="outline"`. */
+/** Outline full-width button (pill radius, parity with `TextField`). */
 export function GoogleOutlineButton({ label, onPress, disabled }: GoogleButtonProps) {
   return (
     <Pressable
@@ -68,10 +68,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing[2],
-    minHeight: 44,
+    minHeight: 52,
     paddingVertical: spacing[3],
     paddingHorizontal: spacing[4],
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.full,
     borderWidth: 1,
     borderColor: colors.semantic.border,
     backgroundColor: colors.semantic.background,

@@ -22,6 +22,7 @@ import { cn, formatCurrency } from "@/lib/utils"
 import { withReturnTo } from "@/lib/invoice-navigation"
 import { useTransactionsCached } from "@/hooks/use-transactions-cached"
 import { getDateRange, type TransactionWithSource } from "@/lib/transactions"
+import { formatTransactionRowDateTime, transactionStatusRowPresentation } from "@/lib/transaction-row-present"
 import {
   useBusinessAccountRows,
   parseBalanceString,
@@ -268,14 +269,15 @@ export function DashboardPageClient() {
             : <div className="divide-y">
                 {recentTransactions.map((txn) => {
                   const cur = txn.displayCurrency || "USD"
+                  const statusRow = transactionStatusRowPresentation(txn.status)
                   return (
                     <div
                       key={txn.id}
-                      className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors cursor-pointer"
+                      className="flex min-w-0 items-center gap-3 p-4 transition-colors hover:bg-muted/50 cursor-pointer"
                     >
                       <Link
                         href={`/transactions?txnId=${encodeURIComponent(txn.id)}`}
-                        className="flex min-w-0 flex-1 items-center justify-between gap-4"
+                        className="flex min-w-0 flex-1 items-center gap-3"
                         onClick={(e) => {
                           if (e.metaKey || e.ctrlKey) return
                           e.preventDefault()
@@ -283,33 +285,30 @@ export function DashboardPageClient() {
                           setTransactionDetailsOpen(true)
                         }}
                       >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div
-                            className={`shrink-0 rounded-full p-2 ${txn.direction === "credit" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}
-                          >
-                            {txn.direction === "credit" ?
-                              <ArrowDownLeft className="h-4 w-4" />
-                            : <ArrowUpRight className="h-4 w-4" />}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium truncate">{txn.description}</p>
-                            <p className="text-xs text-muted-foreground truncate">
-                              {new Date(txn.date).toLocaleDateString("en-US", {
-                                month: "long",
-                                day: "numeric",
-                                year: "numeric",
-                              })}{" "}
-                              •{" "}
-                              {txn.status.charAt(0).toUpperCase() + txn.status.slice(1)}
-                            </p>
-                          </div>
-                        </div>
-                        <p
-                          className={`shrink-0 text-sm font-semibold tabular-nums ${txn.direction === "credit" ? "text-primary" : "text-foreground"}`}
+                        <div
+                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-background ${
+                            txn.direction === "credit" ? "text-primary" : "text-muted-foreground"
+                          }`}
                         >
-                          {txn.direction === "credit" ? "+" : "-"}
-                          {formatCurrency(Math.abs(txn.amount), cur)}
-                        </p>
+                          {txn.direction === "credit" ?
+                            <ArrowDownLeft className="h-4 w-4" />
+                          : <ArrowUpRight className="h-4 w-4" />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-foreground">{txn.description}</p>
+                          <p className="mt-1 truncate text-xs text-muted-foreground">
+                            {formatTransactionRowDateTime(txn.date)}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 flex-col items-end gap-0.5 text-right">
+                          <p
+                            className={`text-sm font-semibold tabular-nums ${txn.direction === "credit" ? "text-primary" : "text-foreground"}`}
+                          >
+                            {txn.direction === "credit" ? "+" : "-"}
+                            {formatCurrency(Math.abs(txn.amount), cur)}
+                          </p>
+                          <p className={`text-xs font-medium ${statusRow.className}`}>{statusRow.label}</p>
+                        </div>
                       </Link>
                     </div>
                   )

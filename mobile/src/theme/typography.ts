@@ -1,32 +1,28 @@
 /**
  * Easner Design System — Mobile typography
  *
- * Two-layer type system, parity with web (`--font-serif` + `--font-sans`):
- *   - Sans: Inter (UI, body, numerals)
- *   - Serif: Playfair Display (display + hero balance + brand moments)
+ * Unified sans type system:
+ *   - Sans: Geist Sans (UI + numerals + hero money)
  *
- * Outfit has been fully removed. Legacy `balanceDisplay` now uses the
- * serif face so the mobile hero balance visually matches the web
- * `font-serif tabular-nums` balance treatment.
+ * No serif styles in mobile.
  */
 
 import { TextStyle, Platform, Dimensions, PixelRatio } from 'react-native'
 
 /**
  * Font PostScript names — these must match the keys registered via
- * `@expo-google-fonts/inter` + `@expo-google-fonts/playfair-display`
  * in `mobile/App.tsx`.
  */
 export const fontFamily = {
-  regular: 'Inter_400Regular',
-  medium: 'Inter_500Medium',
-  semibold: 'Inter_600SemiBold',
-  bold: 'Inter_700Bold',
-  black: 'Inter_800ExtraBold',
-  serifRegular: 'PlayfairDisplay_400Regular',
-  serifMedium: 'PlayfairDisplay_500Medium',
-  serifSemibold: 'PlayfairDisplay_600SemiBold',
-  serifBold: 'PlayfairDisplay_700Bold',
+  regular: 'Geist-Regular',
+  medium: 'Geist-Medium',
+  semibold: 'Geist-SemiBold',
+  bold: 'Geist-Bold',
+  black: 'Geist-Black',
+  serifRegular: 'Geist-Regular',
+  serifMedium: 'Geist-Medium',
+  serifSemibold: 'Geist-SemiBold',
+  serifBold: 'Geist-Bold',
 }
 
 export const fontWeight = {
@@ -85,7 +81,7 @@ export const letterSpacing = {
 
 export const textStyles: Record<string, TextStyle> = {
   // ---------------------------------------------------------------
-  // Serif display — used for hero balances + brand moments
+  // Legacy serif tokens map to Geist for compatibility
   // ---------------------------------------------------------------
   displaySerifXl: {
     fontFamily: fontFamily.serifBold,
@@ -283,8 +279,7 @@ export const textStyles: Record<string, TextStyle> = {
   },
 
   /**
-   * Primary balance line on Dashboard / SendAmount — mirrors the web
-   * `font-serif` hero balance. Playfair Display, tabular numerals.
+   * Primary balance line on Dashboard / SendAmount.
    */
   balanceDisplay: {
     fontFamily: fontFamily.serifBold,

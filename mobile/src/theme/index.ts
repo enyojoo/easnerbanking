@@ -6,6 +6,8 @@
 
 export { colors } from './colors'
 export type { Colors } from './colors'
+export { resolveSurfaceTokens } from './surfaces'
+export type { SurfaceTokens } from './surfaces'
 
 export { resolveThemeColors } from './resolveThemeColors'
 export { layout } from './layout'
@@ -75,6 +77,7 @@ export const borderRadius = {
   xl: 16,
   '2xl': 20,
   '3xl': 24,
+  '4xl': 28,
   full: 9999,
 }
 

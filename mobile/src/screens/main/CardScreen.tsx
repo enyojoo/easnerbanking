@@ -15,10 +15,9 @@ import { BlurView } from 'expo-blur'
 import * as Haptics from 'expo-haptics'
 import { Plus, Snowflake, Settings, Eye } from 'lucide-react-native'
 import Svg, { Circle, Defs, Path, Pattern, Rect } from 'react-native-svg'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
-import { colors, textStyles, borderRadius, spacing, layout, motion } from '../../theme'
+import { colors, textStyles, borderRadius, spacing, motion } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { EASNER_CARD_ICON_URL } from '../../lib/easnerBrand'
@@ -72,9 +71,11 @@ function MastercardMark() {
 
 export default function CardScreen({ navigation: _navigation }: NavigationProps) {
   const { width: windowWidth } = useWindowDimensions()
-  const insets = useSafeAreaInsets()
-  const CARD_WIDTH = Math.min(windowWidth - spacing[5] * 2, 323)
-  const CARD_HEIGHT = Math.round(CARD_WIDTH / 1.586)
+  /** ISO/IEC 7810 ID-1 physical card ratio (85.60mm × 53.98mm). */
+  const CARD_ASPECT = 85.6 / 53.98
+  /** Full-bleed minus screen padding; cap keeps very wide tablets from oversized carousel cards. */
+  const CARD_WIDTH = Math.min(windowWidth - spacing[5] * 2, 420)
+  const CARD_HEIGHT = Math.round(CARD_WIDTH / CARD_ASPECT)
   const cardStride = CARD_WIDTH + CARD_SPACING * 2
 
   const scrollX = useRef(new Animated.Value(0)).current
@@ -129,7 +130,7 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingBottom: insets.bottom + layout.tabBarHeight + spacing[6] },
+            { paddingBottom: spacing[8] },
           ]}
           showsVerticalScrollIndicator={false}
         >
@@ -423,7 +424,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.9)',
     textTransform: 'lowercase',
     letterSpacing: 0.5,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: 'Geist-Medium',
   },
   panBlock: {
     paddingVertical: spacing[4],
@@ -459,7 +460,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#FFFFFF',
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: 'Geist-SemiBold',
     letterSpacing: 0.6,
   },
   comingSoonWrap: {
@@ -504,7 +505,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: colors.background.secondary,
+    backgroundColor: colors.frame.background,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 0.5,

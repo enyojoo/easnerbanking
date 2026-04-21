@@ -46,7 +46,7 @@ function extractOwnerContext(
 
 export async function backfillTurnkeyOnchainTransactions(
   admin: SupabaseClient,
-  input?: { signaturesPerAddress?: number },
+  input?: { signaturesPerAddress?: number; walletOwnerId?: string },
 ): Promise<{
   addressesScanned: number
   signaturesScanned: number
@@ -57,12 +57,19 @@ export async function backfillTurnkeyOnchainTransactions(
   const limit = Math.max(1, Math.min(200, Math.floor(input?.signaturesPerAddress ?? 120)))
   const connection = new Connection(getRpcUrl(), "confirmed")
 
-  const { data: accounts } = await admin
+  let accQuery = admin
     .from("wallet_accounts")
     .select("wallet_owner_id,address,asset,chain")
     .eq("status", "active")
     .eq("chain", "solana")
     .in("asset", ["USDC", "EURC"])
+
+  const ownerFilter = String(input?.walletOwnerId ?? "").trim()
+  if (ownerFilter) {
+    accQuery = accQuery.eq("wallet_owner_id", ownerFilter)
+  }
+
+  const { data: accounts } = await accQuery
 
   const rows = (accounts || []).filter((r) => String(r.address || "").trim())
   let signaturesScanned = 0

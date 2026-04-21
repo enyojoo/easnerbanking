@@ -21,7 +21,8 @@ import { analytics } from '../../lib/analytics'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
-import { Button, TextField } from '../../components/ui'
+import { TextField } from '../../components/ui'
+import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
 
 export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
   const [step, setStep] = useState<'email' | 'otp'>('email')
@@ -296,15 +297,14 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
                   containerStyle={styles.fieldFlush}
                 />
 
-                <Button
-                  title={loading ? 'Sending…' : 'Send verification code'}
-                  onPress={handleEmailSubmit}
-                  disabled={loading}
-                  loading={loading}
-                  variant="default"
-                  fullWidth
-                  style={styles.primaryCta}
-                />
+                <View style={styles.primaryCtaWrap}>
+                  <GlossyPrimaryButton
+                    title={loading ? 'Sending…' : 'Send verification code'}
+                    onPress={handleEmailSubmit}
+                    disabled={loading}
+                    style={styles.glossyCta}
+                  />
+                </View>
               </>
             ) : (
               <>
@@ -333,15 +333,14 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
                   </View>
                 </View>
 
-                <Button
-                  title={loading ? 'Verifying…' : 'Verify code'}
-                  onPress={handleOtpSubmit}
-                  disabled={loading || otp.join('').length !== 6}
-                  loading={loading}
-                  variant="default"
-                  fullWidth
-                  style={styles.primaryCta}
-                />
+                <View style={styles.primaryCtaWrap}>
+                  <GlossyPrimaryButton
+                    title={loading ? 'Verifying…' : 'Verify code'}
+                    onPress={handleOtpSubmit}
+                    disabled={loading || otp.join('').length !== 6}
+                    style={styles.glossyCta}
+                  />
+                </View>
 
                 <Pressable
                  android_ripple={ripple.neutral}
@@ -445,8 +444,14 @@ const styles = StyleSheet.create({
   fieldFlush: {
     marginBottom: spacing[3],
   },
-  primaryCta: {
+  primaryCtaWrap: {
+    width: '100%',
     marginBottom: spacing[4],
+  },
+  glossyCta: {
+    width: '100%',
+    flexGrow: 0,
+    minHeight: 52,
   },
   otpSection: {
     marginBottom: spacing[5],
@@ -462,7 +467,7 @@ const styles = StyleSheet.create({
     height: 52,
     borderWidth: 1,
     borderColor: colors.semantic.border,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.full,
     textAlign: 'center',
     ...textStyles.titleMedium,
     fontWeight: '600',

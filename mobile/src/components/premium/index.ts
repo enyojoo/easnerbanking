@@ -8,6 +8,11 @@ export { default as HapticButton } from './HapticButton'
 export { default as GradientCard } from './GradientCard'
 export { default as AnimatedNumber, FadeNumber } from './AnimatedNumber'
 export { default as QuickActionButton } from './QuickActionButton'
+export { default as PremiumSurface } from './PremiumSurface'
+export { default as GlossyPrimaryButton } from './GlossyPrimaryButton'
+export { default as SecondaryOutlineButton } from './SecondaryOutlineButton'
+export { default as PremiumTextField } from './PremiumTextField'
+export { default as PremiumModalSheet } from './PremiumModalSheet'
 export { 
   default as ShimmerLoader,
   ShimmerCard,

@@ -18,10 +18,11 @@ import { useAuth } from '../../contexts/AuthContext'
 import { NavigationProps } from '../../types'
 import { analytics } from '../../lib/analytics'
 import { useThemeColors, borderRadius, spacing, motion } from '../../theme'
+import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
-import { Button, TextField } from '../../components/ui'
+import { TextField } from '../../components/ui'
 
 export default function LoginScreen({ navigation }: NavigationProps) {
   const themeColors = useThemeColors()
@@ -163,15 +164,14 @@ export default function LoginScreen({ navigation }: NavigationProps) {
                 </Pressable>
               </View>
 
-              <Button
-                title={isLoading ? 'Signing in…' : 'Sign in'}
-                onPress={handleLogin}
-                disabled={isLoading}
-                loading={isLoading}
-                variant="default"
-                fullWidth
-                style={styles.primaryCta}
-              />
+              <View style={styles.primaryCtaWrap}>
+                <GlossyPrimaryButton
+                  title={isLoading ? 'Signing in…' : 'Sign in'}
+                  onPress={handleLogin}
+                  disabled={isLoading}
+                  style={styles.glossyCta}
+                />
+              </View>
 
               <Pressable
                android_ripple={ripple.neutral}
@@ -227,8 +227,14 @@ const styles = StyleSheet.create({
   fieldFlush: {
     marginBottom: spacing[3],
   },
-  primaryCta: {
+  primaryCtaWrap: {
+    width: '100%',
     marginBottom: spacing[4],
+  },
+  glossyCta: {
+    width: '100%',
+    flexGrow: 0,
+    minHeight: 52,
   },
   rememberMeContainer: {
     marginBottom: spacing[5],

@@ -23,7 +23,7 @@ import {
 import { ripple } from '../../lib/androidRipple'
 import * as Haptics from 'expo-haptics'
 import { LinearGradient } from 'expo-linear-gradient'
-import { colors, shadows, textStyles, borderRadius } from '../../theme'
+import { shadows, textStyles, borderRadius, useThemeColors } from '../../theme'
 
 interface HapticButtonProps {
   children?: React.ReactNode
@@ -58,6 +58,7 @@ export default function HapticButton({
   fullWidth = false,
   gradient,
 }: HapticButtonProps) {
+  const colors = useThemeColors()
   const scaleAnim = useRef(new Animated.Value(1)).current
 
   const handlePressIn = useCallback(() => {

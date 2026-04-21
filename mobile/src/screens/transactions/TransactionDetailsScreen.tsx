@@ -4,7 +4,8 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Pressable, Platform,
+  Pressable,
+  Platform,
   Clipboard,
   RefreshControl,
   Alert,
@@ -21,6 +22,8 @@ import { colors, textStyles, borderRadius, spacing, shadows, motion } from '../.
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { useTransactionDetail, useCurrenciesCatalog } from '../../hooks/queries'
+import { isEasnerProductReceiveTitle, isEasnerProductSendTitle } from '@easner/shared'
+import { ApiError } from '../../query/api-client'
 
 interface LedgerTransaction {
   id: string
@@ -49,6 +52,10 @@ interface LedgerTransaction {
   updated_at: string
   completed_at?: string
   noah_created_at?: string
+  /** Product line for summary ("Bank Deposit", "Stablecoin Deposit", …) — separate from sender name. */
+  transaction_product?: string
+  /** Inbound bank: remitter / company / merchant (detail API). */
+  sender_display_name?: string
 }
 
 export default function TransactionDetailsScreen({ navigation, route }: NavigationProps) {
@@ -70,13 +77,39 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   useCalmParallelEnterWhen(true, headerAnim, contentAnim)
 
   useEffect(() => {
+    dataLoadedRef.current = false
+    setTransaction(null)
+    setError(null)
+    setLoading(true)
+  }, [transactionId])
+
+  useEffect(() => {
     if (!transactionId) return
+
+    if (detailQuery.isPending) {
+      setLoading(true)
+      return
+    }
+
+    if (detailQuery.isError) {
+      const err = detailQuery.error
+      const msg =
+        err instanceof ApiError
+          ? err.status === 404
+            ? 'Transaction not found'
+            : err.message
+          : 'Failed to load transaction details'
+      setError(msg)
+      setTransaction(null)
+      setLoading(false)
+      return
+    }
+
     const raw = detailQuery.data
     if (!raw) {
-      if (detailQuery.isFetched && !detailQuery.isPending) {
-        setError('Transaction not found')
-        setLoading(false)
-      }
+      setError('Transaction not found')
+      setTransaction(null)
+      setLoading(false)
       return
     }
     const transactionData = ((raw as any)?.transaction ?? raw) as LedgerTransaction | null | undefined
@@ -84,11 +117,18 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
       setTransaction(transactionData)
       dataLoadedRef.current = true
       setError(null)
-    } else if (detailQuery.isFetched && !detailQuery.isPending) {
+    } else {
       setError('Transaction not found')
+      setTransaction(null)
     }
-    setLoading(detailQuery.isPending && !transactionData)
-  }, [transactionId, detailQuery.data, detailQuery.isFetched, detailQuery.isPending])
+    setLoading(false)
+  }, [
+    transactionId,
+    detailQuery.data,
+    detailQuery.isPending,
+    detailQuery.isError,
+    detailQuery.error,
+  ])
 
   const fetchTransactionDetails = useCallback(async (force = false) => {
     if (dataLoadedRef.current && !force) return
@@ -234,11 +274,22 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
       if (transaction.source_type === 'liquidation_address') {
         return 'Stablecoin Deposit'
       }
-      if (transaction.source_type === 'virtual_account') {
-        return 'Bank Deposit'
-      }
+      const n = String(transaction.name || '').trim()
+      if (n) return n
+      return 'Bank Deposit'
+    }
+    if (transaction.transaction_type === 'send' && isEasnerProductSendTitle(transaction.name)) {
+      return String(transaction.name).trim()
     }
     return getTransactionName()
+  }
+
+  /** First summary row: fixed category from API when present, else legacy heuristic. */
+  const getSummaryTransactionProductLine = (): string => {
+    if (!transaction) return ''
+    const p = typeof transaction.transaction_product === 'string' ? transaction.transaction_product.trim() : ''
+    if (p) return p
+    return getTransactionTypeDisplay()
   }
 
   const getMetadataString = (key: string): string | undefined => {
@@ -292,27 +343,42 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
   const getTransactionName = (): string => {
     if (!transaction) return ''
-    
+
     if (transaction.transaction_type === 'receive') {
-      // Check if it's a crypto deposit (stablecoin deposit via liquidation address)
       if (transaction.source_type === 'liquidation_address') {
         return 'Stablecoin Deposit'
       }
-      
-      // For fiat deposits (virtual account/ACH), show sender name only (not "Received from...")
+
       if (transaction.source_type === 'virtual_account') {
-        const senderName = transaction.metadata?.source?.sender_name || 
-                          transaction.metadata?.source?.originator_name ||
-                          transaction.name
+        const senderName =
+          transaction.metadata?.source?.sender_name ||
+          transaction.metadata?.source?.originator_name ||
+          transaction.name
         if (senderName) {
-          return senderName // Just the sender name for ACH deposits
+          return String(senderName).trim()
         }
         return 'Bank Deposit'
       }
-      
+
+      const n = String(transaction.name || '').trim()
+      if (n && !isEasnerProductReceiveTitle(n)) {
+        return n
+      }
+      if (isEasnerProductReceiveTitle(n)) {
+        return n
+      }
+
       return transaction.name ? `Received from ${transaction.name}` : 'Received'
     } else {
-      return transaction.name ? `Sent to ${transaction.name}` : 'Sent'
+      if (isEasnerProductSendTitle(transaction.name)) {
+        return String(transaction.name).trim()
+      }
+      const counterparty = transaction.recipient_name
+      return counterparty
+        ? `Sent to ${counterparty}`
+        : transaction.name
+          ? `Sent to ${transaction.name}`
+          : 'Sent'
     }
   }
 
@@ -591,50 +657,42 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
               </View>
               
               <View style={styles.summaryRows}>
-                {/* Transaction ID - always shown */}
+                {/* Match business transaction dialog: product label + monospace ID */}
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Transaction</Text>
+                  <Text style={styles.summaryValue}>{getSummaryTransactionProductLine()}</Text>
+                </View>
+
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Transaction ID</Text>
-                  <Pressable 
-                   android_ripple={ripple.neutral} 
+                  <Pressable
+                    android_ripple={ripple.neutral}
                     style={styles.copyableValueRow}
-                    onPress={() => handleCopy(transaction.transaction_id, "transactionId")}
+                    onPress={() => handleCopy(transaction.transaction_id, 'transactionId')}
                   >
-                    <Text style={styles.summaryValue} numberOfLines={1}>
+                    <Text style={[styles.summaryValue, styles.summaryMonoValue]} selectable>
                       {transaction.transaction_id}
                     </Text>
                     <View style={[styles.copyIcon, copiedStates.transactionId && styles.copyIconSuccess]}>
-                      <Ionicons 
-                        name={copiedStates.transactionId ? "checkmark" : "copy-outline"} 
-                        size={14} 
-                        color={copiedStates.transactionId ? colors.success.main : colors.primary.main} 
+                      <Ionicons
+                        name={copiedStates.transactionId ? 'checkmark' : 'copy-outline'}
+                        size={14}
+                        color={copiedStates.transactionId ? colors.success.main : colors.primary.main}
                       />
                     </View>
                   </Pressable>
                 </View>
 
-                {/* Type - always shown */}
-                {transaction.source_type !== 'liquidation_address' && (
+                {transaction.sender_display_name ? (
                   <View style={styles.summaryRow}>
-                    <Text style={styles.summaryLabel}>Type</Text>
-                    <Text style={styles.summaryValue}>
-                      {getTransactionTypeDisplay()}
-                    </Text>
+                    <Text style={styles.summaryLabel}>Sender</Text>
+                    <Text style={styles.summaryValue}>{transaction.sender_display_name}</Text>
                   </View>
-                )}
+                ) : null}
 
                 {/* For ACH/Wire deposits (virtual account) */}
                 {transaction.transaction_type === 'receive' && transaction.source_type === 'virtual_account' && (
                   <>
-                    {/* Sender */}
-                    {transaction.name && (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Sender</Text>
-                        <Text style={styles.summaryValue}>
-                          {transaction.name}
-                        </Text>
-                      </View>
-                    )}
-
                     {/* Scheme */}
                     {transaction.source_payment_rail && (
                       <View style={styles.summaryRow}>
@@ -981,6 +1039,11 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'right',
     marginLeft: spacing[2],
+  },
+  summaryMonoValue: {
+    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
+    fontSize: 13,
+    fontWeight: '500',
   },
   copyableValueRow: {
     flexDirection: 'row',

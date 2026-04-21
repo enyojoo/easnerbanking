@@ -1460,7 +1460,7 @@ const styles = StyleSheet.create({
   currencyText: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: 'Geist-SemiBold',
   },
   tabsContainer: {
     flexDirection: 'row',
@@ -1484,7 +1484,7 @@ const styles = StyleSheet.create({
   tabText: {
     ...textStyles.bodyMedium,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: 'Geist-Medium',
   },
   tabTextActive: {
     color: colors.text.inverse,
@@ -1512,7 +1512,7 @@ const styles = StyleSheet.create({
   fieldLabel: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: 'Geist-Regular',
     marginBottom: spacing[1],
   },
   fieldValueContainer: {

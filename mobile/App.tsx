@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native'
 import { StatusBar } from 'expo-status-bar'
-import { View, Text, StyleSheet, Animated, Platform, Appearance } from 'react-native'
+import { View, Text, StyleSheet, Animated, Platform } from 'react-native'
 import * as BackgroundTask from 'expo-background-task'
 import * as TaskManager from 'expo-task-manager'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
@@ -9,19 +9,6 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { useFonts } from 'expo-font'
 import * as SplashScreen from 'expo-splash-screen'
 import * as SystemUI from 'expo-system-ui'
-import {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
-  Inter_800ExtraBold,
-} from '@expo-google-fonts/inter'
-import {
-  PlayfairDisplay_400Regular,
-  PlayfairDisplay_500Medium,
-  PlayfairDisplay_600SemiBold,
-  PlayfairDisplay_700Bold,
-} from '@expo-google-fonts/playfair-display'
 import { AuthProvider, useAuth } from './src/contexts/AuthContext'
 import { NotificationsProvider } from './src/contexts/NotificationsContext'
 import { BalanceProvider } from './src/contexts/BalanceContext'
@@ -33,16 +20,15 @@ import { deepLinkService } from './src/services/DeepLinkService'
 import { pushNotificationService } from './src/lib/pushNotificationService'
 import AppNavigator from './src/navigation/AppNavigator'
 import { PushNotificationBootstrap } from './src/components/PushNotificationBootstrap'
-import { resolveThemeColors } from './src/theme'
 import {
   ThemePaletteProvider,
   useThemeColors,
-  useThemeScheme,
 } from './src/contexts/ThemePaletteContext'
 import {
   BACKGROUND_TASK_IDENTIFIER,
   registerBackgroundTaskAsync,
 } from './src/lib/backgroundTasks'
+import { lightColors } from './src/theme/colors'
 
 // Keep the splash screen visible while we load fonts
 SplashScreen.preventAutoHideAsync()
@@ -53,7 +39,6 @@ function AppContent() {
   const routeNameRef = useRef<string>('')
   const { loading: authLoading } = useAuth()
   const palette = useThemeColors()
-  const scheme = useThemeScheme()
   const getActiveRouteName = (route: any): string => {
     if (!route) return 'Unknown'
     if (route.state && route.state.index != null) {
@@ -134,7 +119,7 @@ function AppContent() {
           }
         }}
         theme={{
-          dark: scheme === 'dark',
+          dark: false,
           colors: {
             primary: palette.primary.main,
             background: palette.background.primary,
@@ -145,26 +130,26 @@ function AppContent() {
           },
           fonts: {
             regular: {
-              fontFamily: 'Inter_400Regular',
+              fontFamily: 'Geist-Regular',
               fontWeight: '400' as const,
             },
             medium: {
-              fontFamily: 'Inter_500Medium',
+              fontFamily: 'Geist-Medium',
               fontWeight: '500' as const,
             },
             bold: {
-              fontFamily: 'Inter_700Bold',
+              fontFamily: 'Geist-Bold',
               fontWeight: '700' as const,
             },
             heavy: {
-              fontFamily: 'Inter_800ExtraBold',
+              fontFamily: 'Geist-Black',
               fontWeight: '800' as const,
             },
           },
         }}
       >
         <StatusBar
-          style={scheme === 'dark' ? 'light' : 'dark'}
+          style="dark"
           backgroundColor={Platform.OS === 'android' ? palette.background.primary : undefined}
         />
         <AppNavigator />
@@ -177,15 +162,11 @@ export default function App() {
   console.log('App.tsx: App component rendering')
   
   const [fontsLoaded] = useFonts({
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    Inter_700Bold,
-    Inter_800ExtraBold,
-    PlayfairDisplay_400Regular,
-    PlayfairDisplay_500Medium,
-    PlayfairDisplay_600SemiBold,
-    PlayfairDisplay_700Bold,
+    'Geist-Regular': require('geist/dist/fonts/geist-sans/Geist-Regular.ttf'),
+    'Geist-Medium': require('geist/dist/fonts/geist-sans/Geist-Medium.ttf'),
+    'Geist-SemiBold': require('geist/dist/fonts/geist-sans/Geist-SemiBold.ttf'),
+    'Geist-Bold': require('geist/dist/fonts/geist-sans/Geist-Bold.ttf'),
+    'Geist-Black': require('geist/dist/fonts/geist-sans/Geist-Black.ttf'),
   })
   
   // Initialize deep linking
@@ -195,13 +176,7 @@ export default function App() {
 
   // Edge-to-edge: match root window / nav bar scrim to app background; supports `userInterfaceStyle` with expo-system-ui.
   useEffect(() => {
-    const applyBackground = () => {
-      const bg = resolveThemeColors(Appearance.getColorScheme()).background.primary
-      void SystemUI.setBackgroundColorAsync(bg)
-    }
-    applyBackground()
-    const sub = Appearance.addChangeListener(() => applyBackground())
-    return () => sub.remove()
+    void SystemUI.setBackgroundColorAsync(lightColors.background.primary)
   }, [])
 
   // Foreground/tap listeners only; token registration is gated on user prefs in PushNotificationBootstrap

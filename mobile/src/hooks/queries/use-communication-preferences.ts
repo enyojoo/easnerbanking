@@ -1,6 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import type { CommunicationPreferences } from '@easner/shared'
-import { parseCommunicationPreferences, qk } from '@easner/shared'
+import {
+  DEFAULT_COMMUNICATION_PREFERENCES,
+  parseCommunicationPreferences,
+  qk,
+} from '@easner/shared'
 import { apiGet } from '../../lib/apiClient'
 import { useScope } from '../../query/scope'
 
@@ -9,6 +13,11 @@ export function useCommunicationPreferences() {
   return useQuery({
     queryKey: scope ? qk.settings.communication(scope.userId) : ['communication', 'disabled'],
     enabled: Boolean(scope),
+    /** Show toggles immediately; server response replaces placeholder when it arrives. */
+    placeholderData: () => ({
+      ...DEFAULT_COMMUNICATION_PREFERENCES,
+      channels: { ...DEFAULT_COMMUNICATION_PREFERENCES.channels },
+    }),
     queryFn: async () => {
       const res = await apiGet('/api/settings/communication')
       const body = (await res.json().catch(() => ({}))) as {

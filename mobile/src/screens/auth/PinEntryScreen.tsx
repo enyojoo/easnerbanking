@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { NavigationProps } from '../../types'
-import { colors, textStyles, borderRadius, spacing, userAvatarStyles } from '../../theme'
+import { colors, textStyles, borderRadius, spacing, userAvatarStyles, useThemeColors } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { verifyPin, getPinLockTimeRemaining, updateSessionActivity, setAppLocked } from '../../lib/pinAuth'
 import { emitAppLocked } from '../../lib/app-lock-bus'
@@ -26,6 +26,7 @@ import { useDeferredLoading } from '../../hooks/useDeferredLoading'
 import { PinKeypad } from '../../components/pin'
 
 export default function PinEntryScreen({ navigation: navigationProp }: NavigationProps) {
+  const palette = useThemeColors()
   const { user, userProfile, signOut } = useAuth()
   const [pin, setPin] = useState<string[]>(['', '', '', ''])
   const [loading, setLoading] = useState(false)
@@ -193,7 +194,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
             style={styles.headerButton}
             onPress={handleForgotPin} >
             <View style={styles.headerButtonCircle}>
-              <Ionicons name="help-circle-outline" size={20} color={colors.text.primary} />
+              <Ionicons name="help-circle-outline" size={20} color={palette.text.primary} />
             </View>
           </Pressable>
         </View>
@@ -221,7 +222,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
             <View style={styles.pinDotsWrapper}>
               {showVerifySpinner ? (
                 <View style={styles.pinDotsLoadingOnly}>
-                  <ActivityIndicator size="small" color={colors.primary.main} />
+                  <ActivityIndicator size="small" color={palette.primary.main} />
                 </View>
               ) : (
                 <Animated.View
@@ -297,7 +298,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background.primary,
+    backgroundColor: colors.semantic.background,
   },
   keyboardView: {
     flex: 1,
@@ -340,11 +341,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing[4],
   },
   greeting: {
-    fontSize: 32,
-    lineHeight: 40,
+    ...textStyles.headlineLarge,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Bold',
-    fontWeight: '700',
     textAlign: 'center',
   },
   errorText: {
@@ -413,17 +411,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logoutText: {
-    fontSize: 14,
-    lineHeight: 20,
+    ...textStyles.bodySmall,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
   },
   logoutLinkText: {
-    fontSize: 14,
-    lineHeight: 20,
+    ...textStyles.bodySmall,
     color: colors.text.primary,
     textDecorationLine: 'underline',
-    fontFamily: 'Outfit-SemiBold',
     fontWeight: '600',
   },
 })

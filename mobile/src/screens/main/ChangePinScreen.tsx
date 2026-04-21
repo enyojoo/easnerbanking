@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { NavigationProps } from '../../types'
-import { colors, textStyles, borderRadius, spacing } from '../../theme'
+import { colors, textStyles, borderRadius, spacing, useThemeColors } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { useAuth } from '../../contexts/AuthContext'
 import { hasPin, setupPin, verifyPin, getLockoutState } from '../../lib/pinAuth'
@@ -26,6 +26,7 @@ type Step = 'verify' | 'pin' | 'confirm'
 const empty4 = (): string[] => ['', '', '', '']
 
 export default function ChangePinScreen({ navigation }: NavigationProps) {
+  const palette = useThemeColors()
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
   const [ready, setReady] = useState(false)
@@ -272,7 +273,7 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
     return (
       <View style={[styles.container, { paddingTop: insets.top + spacing[4] }]}>
         <View style={styles.loadingOnly}>
-          <ActivityIndicator color={colors.primary.main} size="large" />
+          <ActivityIndicator color={palette.primary.main} size="large" />
         </View>
       </View>
     )
@@ -290,7 +291,7 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
             onPress={handleHeaderBack} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <View style={styles.headerButtonCircle}>
-              <Ionicons name="arrow-back" size={20} color={colors.text.primary} />
+              <Ionicons name="arrow-back" size={20} color={palette.text.primary} />
             </View>
           </Pressable>
           <View style={styles.headerSpacer} />
@@ -299,7 +300,7 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
             style={styles.headerButton}
             onPress={() => Alert.alert(helpTitle, helpBody)} >
             <View style={styles.headerButtonCircle}>
-              <Ionicons name="help-circle-outline" size={20} color={colors.text.primary} />
+              <Ionicons name="help-circle-outline" size={20} color={palette.text.primary} />
             </View>
           </Pressable>
         </View>
@@ -355,7 +356,7 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
       {verifyBusy ? (
         <View style={styles.loadingOverlay} pointerEvents="box-none">
           <View style={styles.loadingCard}>
-            <ActivityIndicator size="large" color={colors.primary.main} />
+            <ActivityIndicator size="large" color={palette.primary.main} />
             <Text style={styles.loadingLabel}>{appPinStrings.lockVerifying}</Text>
           </View>
         </View>
@@ -364,7 +365,7 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
       {loading ? (
         <View style={styles.loadingOverlay} pointerEvents="box-none">
           <View style={styles.loadingCard}>
-            <ActivityIndicator size="large" color={colors.primary.main} />
+            <ActivityIndicator size="large" color={palette.primary.main} />
             <Text style={styles.loadingLabel}>{appPinStrings.pinSaving}</Text>
           </View>
         </View>
@@ -376,7 +377,7 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background.primary,
+    backgroundColor: colors.semantic.background,
   },
   loadingOnly: {
     flex: 1,
@@ -423,12 +424,16 @@ const styles = StyleSheet.create({
     gap: spacing[3],
   },
   title: {
-    fontSize: 32,
-    lineHeight: 40,
+    ...textStyles.headlineLarge,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Bold',
-    fontWeight: '700',
     textAlign: 'center',
+    width: '100%',
+  },
+  subtitle: {
+    ...textStyles.bodyMedium,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    lineHeight: 22,
     width: '100%',
   },
   lockout: {

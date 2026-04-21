@@ -89,7 +89,13 @@ export default function SupportScreen({ navigation }: NavigationProps) {
     )
   }
 
-  const renderContactButton = (title: string, onPress: () => void, icon: string, isLast: boolean = false) => (
+  const renderContactButton = (
+    title: string,
+    onPress: () => void,
+    icon: string,
+    isLast: boolean = false,
+    subtitle?: string,
+  ) => (
     <Pressable
      android_ripple={ripple.neutral}
       style={[styles.contactButton, isLast && styles.contactButtonLast]}
@@ -100,6 +106,7 @@ export default function SupportScreen({ navigation }: NavigationProps) {
       <Text style={styles.contactIcon}>{icon}</Text>
       <View style={styles.contactInfo}>
         <Text style={styles.contactTitle}>{title}</Text>
+        {subtitle ? <Text style={styles.contactSubtitle}>{subtitle}</Text> : null}
       </View>
       <Ionicons name="chevron-forward" size={20} color={colors.neutral[400]} />
     </Pressable>
@@ -159,19 +166,13 @@ export default function SupportScreen({ navigation }: NavigationProps) {
       {/* Contact Options */}
             <View style={styles.sectionCard}>
         <Text style={styles.sectionTitle}>Get in Touch</Text>
+        {renderContactButton('Email Support', handleEmailSupport, '📧', false, 'support@easner.com')}
         {renderContactButton(
-          'Email Support',
-          'support@easner.com',
-          handleEmailSupport,
-          '📧',
-          false
-        )}
-        {renderContactButton(
-                'Telegram Chat',
-                'Chat with us on Telegram',
-                handleOpenTelegram,
+          'Telegram Chat',
+          handleOpenTelegram,
           '💬',
-          true
+          true,
+          'Chat with us on Telegram',
         )}
             </View>
 
@@ -275,6 +276,11 @@ const styles = StyleSheet.create({
     ...textStyles.bodyMedium,
     fontWeight: '500',
     color: colors.text.primary,
+  },
+  contactSubtitle: {
+    ...textStyles.bodySmall,
+    color: colors.text.secondary,
+    marginTop: 2,
   },
   inputContainer: {
     marginBottom: 16,

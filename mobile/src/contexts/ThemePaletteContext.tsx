@@ -8,10 +8,8 @@ import React, {
   useState,
   type ReactNode,
 } from 'react'
-import { Appearance, useColorScheme, type ColorSchemeName } from 'react-native'
 import { lightColors } from '../theme/colors'
 import type { Colors } from '../theme/colors'
-import { resolveThemeColors } from '../theme/resolveThemeColors'
 
 /**
  * Theme mode supported by the app.
@@ -23,7 +21,7 @@ import { resolveThemeColors } from '../theme/resolveThemeColors'
 export type ThemeMode = 'system' | 'light' | 'dark'
 
 const STORAGE_KEY = '@easner/theme-mode'
-const ALLOWED_MODES: ReadonlyArray<ThemeMode> = ['system', 'light', 'dark']
+const ALLOWED_MODES: ReadonlyArray<ThemeMode> = ['light']
 
 type ThemePaletteContextValue = {
   colors: Colors
@@ -41,16 +39,8 @@ const defaultValue: ThemePaletteContextValue = {
 
 const ThemePaletteContext = createContext<ThemePaletteContextValue>(defaultValue)
 
-function normalizeScheme(scheme: ColorSchemeName | null | undefined): 'light' | 'dark' {
-  return scheme === 'dark' ? 'dark' : 'light'
-}
-
 export function ThemePaletteProvider({ children }: { children: ReactNode }) {
-  const systemScheme = useColorScheme()
   const [mode, setModeState] = useState<ThemeMode>('light')
-  const [systemOverride, setSystemOverride] = useState<'light' | 'dark'>(
-    normalizeScheme(systemScheme),
-  )
 
   useEffect(() => {
     let cancelled = false
@@ -69,32 +59,13 @@ export function ThemePaletteProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  useEffect(() => {
-    const next = normalizeScheme(systemScheme)
-    setSystemOverride((prev) => (prev === next ? prev : next))
-  }, [systemScheme])
+  const scheme: 'light' | 'dark' = 'light'
+  const colors = lightColors
 
-  useEffect(() => {
-    const sub = Appearance.addChangeListener(({ colorScheme }) => {
-      setSystemOverride((prev) => {
-        const next = normalizeScheme(colorScheme)
-        return prev === next ? prev : next
-      })
-    })
-    return () => sub.remove()
-  }, [])
-
-  const scheme: 'light' | 'dark' = useMemo(() => {
-    if (mode === 'light' || mode === 'dark') return mode
-    return systemOverride
-  }, [mode, systemOverride])
-
-  const colors = useMemo(() => resolveThemeColors(scheme), [scheme])
-
-  const setMode = useCallback(async (next: ThemeMode) => {
-    setModeState(next)
+  const setMode = useCallback(async (_next: ThemeMode) => {
+    setModeState('light')
     try {
-      await AsyncStorage.setItem(STORAGE_KEY, next)
+      await AsyncStorage.setItem(STORAGE_KEY, 'light')
     } catch {
       /* non-fatal — state is already updated in memory */
     }

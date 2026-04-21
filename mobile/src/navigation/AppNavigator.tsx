@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { View, Platform, Text, AppState, AppStateStatus, StyleSheet } from 'react-native'
+import { View, Platform, AppState, AppStateStatus, StyleSheet, ActivityIndicator } from 'react-native'
 import { createStackNavigator } from '@react-navigation/stack'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { useNavigation } from '@react-navigation/native'
-import { Ionicons } from '@expo/vector-icons'
+import { BlurView } from 'expo-blur'
 import { House, CreditCard, ChartSpline, Grip } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useAuth } from '../contexts/AuthContext'
-import { useThemeColors, shadows, borderRadius, spacing, layout } from '../theme'
+import { useThemeColors, spacing, layout } from '../theme'
 import {
   isPinSetup,
   evaluateIdleLock,
@@ -170,16 +170,49 @@ function MainTabs() {
   const tabBarStyles = React.useMemo(
     () =>
       StyleSheet.create({
+        tabBarGlassRoot: {
+          ...StyleSheet.absoluteFillObject,
+          overflow: 'hidden',
+        },
+        tabBarTint: {
+          ...StyleSheet.absoluteFillObject,
+          backgroundColor: palette.glass.surface,
+        },
+        tabBarTopHairline: {
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: StyleSheet.hairlineWidth,
+          backgroundColor: palette.glass.border,
+        },
         activeIconContainer: {
-          width: 44,
-          height: 44,
-          borderRadius: 22,
-          backgroundColor: `${palette.primary.main}1A`,
+          width: 40,
+          height: 40,
+          borderRadius: 20,
+          backgroundColor: palette.glass.highlight,
           justifyContent: 'center',
           alignItems: 'center',
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: palette.glass.border,
         },
       }),
-    [palette.primary.main],
+    [palette.glass.border, palette.glass.highlight, palette.glass.surface],
+  )
+
+  const tabBarBackground = React.useCallback(
+    () => (
+      <View style={tabBarStyles.tabBarGlassRoot}>
+        <BlurView
+          style={StyleSheet.absoluteFill}
+          intensity={Platform.OS === 'ios' ? 72 : 48}
+          tint="light"
+        />
+        <View style={tabBarStyles.tabBarTint} pointerEvents="none" />
+        <View style={tabBarStyles.tabBarTopHairline} pointerEvents="none" />
+      </View>
+    ),
+    [tabBarStyles],
   )
 
   return (
@@ -187,36 +220,37 @@ function MainTabs() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: palette.semantic.background,
-          borderTopWidth: StyleSheet.hairlineWidth,
-          borderTopColor: palette.semantic.border,
+          backgroundColor: Platform.OS === 'android' ? palette.glass.background : 'transparent',
+          borderTopWidth: 0,
           elevation: 0,
-          shadowColor: 'transparent',
           shadowOpacity: 0,
+          shadowOffset: { width: 0, height: 0 },
           shadowRadius: 0,
           height: layout.tabBarHeight + insets.bottom,
           paddingBottom: insets.bottom,
-          paddingTop: spacing[2],
-          paddingHorizontal: spacing[2],
-          marginHorizontal: 0,
-          marginBottom: 0,
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          overflow: 'hidden',
+          paddingTop: spacing[1],
+          paddingHorizontal: 0,
+          margin: 0,
+          position: 'relative',
         },
-        tabBarShowLabel: false,
+        tabBarBackground,
+        tabBarShowLabel: true,
         tabBarActiveTintColor: activeColor,
         tabBarInactiveTintColor: inactiveColor,
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontFamily: 'Geist-Medium',
+          fontWeight: '500',
+          marginTop: 2,
+        },
         tabBarItemStyle: {
           flex: 1,
           alignItems: 'center',
           justifyContent: 'center',
-          paddingHorizontal: 10,
+          paddingTop: spacing[1],
         },
         tabBarIconStyle: {
-          marginTop: spacing[1],
+          marginBottom: 0,
         },
       }}
     >
@@ -224,10 +258,11 @@ function MainTabs() {
         name="Dashboard"
         component={DashboardScreen}
         options={{
+          tabBarLabel: 'Home',
           tabBarIcon: ({ focused }) => (
             <View style={focused ? tabBarStyles.activeIconContainer : null}>
               <House
-                size={24}
+                size={22}
                 color={focused ? activeColor : inactiveColor}
                 strokeWidth={focused ? 2.25 : 1.75}
               />
@@ -239,10 +274,11 @@ function MainTabs() {
         name="Card"
         component={CardScreen}
         options={{
+          tabBarLabel: 'Cards',
           tabBarIcon: ({ focused }) => (
             <View style={focused ? tabBarStyles.activeIconContainer : null}>
               <CreditCard
-                size={24}
+                size={22}
                 color={focused ? activeColor : inactiveColor}
                 strokeWidth={focused ? 2.25 : 1.75}
               />
@@ -254,10 +290,11 @@ function MainTabs() {
         name="Transactions"
         component={TransactionsScreen}
         options={{
+          tabBarLabel: 'Transactions',
           tabBarIcon: ({ focused }) => (
             <View style={focused ? tabBarStyles.activeIconContainer : null}>
               <ChartSpline
-                size={24}
+                size={22}
                 color={focused ? activeColor : inactiveColor}
                 strokeWidth={focused ? 2.25 : 1.75}
               />
@@ -269,10 +306,11 @@ function MainTabs() {
         name="More"
         component={MoreScreen}
         options={{
+          tabBarLabel: 'More',
           tabBarIcon: ({ focused }) => (
             <View style={focused ? tabBarStyles.activeIconContainer : null}>
               <Grip
-                size={24}
+                size={22}
                 color={focused ? activeColor : inactiveColor}
                 strokeWidth={focused ? 2.25 : 1.75}
               />
@@ -621,8 +659,34 @@ function PinGateEntryStack() {
   )
 }
 
+/** Same canvas as PIN screens — avoids blank frames during auth / PIN / main handoffs. */
+function AuthFlowLoadingShell({
+  palette,
+  testId,
+}: {
+  palette: ReturnType<typeof useThemeColors>
+  testId?: string
+}) {
+  return (
+    <View
+      style={[
+        StyleSheet.absoluteFill,
+        {
+          backgroundColor: palette.semantic.background,
+          justifyContent: 'center',
+          alignItems: 'center',
+        },
+      ]}
+      accessibilityLabel={testId}
+    >
+      <ActivityIndicator color={palette.primary.main} />
+    </View>
+  )
+}
+
 export default function AppNavigator() {
   const { user, userProfile, loading, mfaPending, signOut } = useAuth()
+  const palette = useThemeColors()
   const [pinGate, setPinGate] = useState<'loading' | 'setup' | 'pin' | 'main'>('loading')
   const [lockTick, setLockTick] = useState(0)
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null)
@@ -703,7 +767,9 @@ export default function AppNavigator() {
   }, [user])
 
   useEffect(() => {
-    if (!user?.id || loading || mfaPending) return
+    // Do not wait for AuthContext `loading` — it stays true until after `readProfileSnapshot` and
+    // would leave a blank frame between login and PIN. PIN only needs `user.id`.
+    if (!user?.id || mfaPending) return
     let cancelled = false
     void (async () => {
       const setup = await isPinSetup(user.id)
@@ -730,7 +796,7 @@ export default function AppNavigator() {
     return () => {
       cancelled = true
     }
-  }, [user?.id, loading, mfaPending, lockTick, signOut])
+  }, [user?.id, mfaPending, lockTick, signOut])
 
   useEffect(() => {
     if (!user?.id || pinGate !== 'main') return
@@ -891,9 +957,9 @@ export default function AppNavigator() {
   //   }
   // }, [pinSetup])
 
-  // Show loading screen while checking initial onboarding status
+  // Onboarding key read — match app background so the chain onboarding → auth → PIN → main never flashes empty.
   if (onboardingCompleted === null || checkingAuth) {
-    return null // Return null instead of loading spinner for faster transition
+    return <AuthFlowLoadingShell palette={palette} testId="Bootstrapping app" />
   }
 
   // If onboarding not completed, show onboarding screen FIRST (before checking user)
@@ -919,12 +985,14 @@ export default function AppNavigator() {
     return <MfaStack key="mfa-stack" />
   }
 
-  if (loading) {
-    return null
+  /** Session bootstrap without a user — rare gap after splash; same shell as PIN resolving. */
+  if (loading && !user) {
+    return <AuthFlowLoadingShell palette={palette} testId="Restoring session" />
   }
 
+  /** Signed in but PIN route not resolved yet (single AsyncStorage read in typical case). */
   if (user && pinGate === 'loading') {
-    return null
+    return <AuthFlowLoadingShell palette={palette} testId="Loading" />
   }
 
   if (user && pinGate === 'setup') {

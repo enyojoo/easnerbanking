@@ -34,8 +34,12 @@ export function TransactionDetailsDialog({
   if (!transaction) return null
 
   const cardLast4 = transaction.cardLast4
-  const isStablecoin = transaction.description.toLowerCase().startsWith("stablecoin")
-  const isBank = transaction.description.toLowerCase().startsWith("bank")
+  const descLower = transaction.description.toLowerCase()
+  const isStablecoin =
+    descLower.startsWith("stablecoin") ||
+    String(transaction.collectionChannel ?? "").toLowerCase() === "autopayout"
+  /** Fiat activity: use payment rail from ledger (description may be remitter name on inbound credits). */
+  const isBank = !isStablecoin && transaction.type === "book" && Boolean(transaction.paymentRail)
   const isCard = Boolean(cardLast4) || transaction.type === "card"
   const partyLabel = transaction.direction === "credit" ? "Sender" : "Recipient"
 

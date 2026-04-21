@@ -2,7 +2,15 @@ import React from 'react'
 import { View, Text, Pressable, Platform, StyleSheet, useWindowDimensions } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
-import { colors, borderRadius, spacing, computeKeypadCellSize, layout, getContentWidth } from '../../theme'
+import {
+  borderRadius,
+  spacing,
+  computeKeypadCellSize,
+  layout,
+  getContentWidth,
+  useThemeColors,
+  fontFamily,
+} from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 
 type Props = {
@@ -23,6 +31,7 @@ export function PinKeypad({
   backspaceActiveColor,
   maxButtonSize = 92,
 }: Props) {
+  const palette = useThemeColors()
   const { width } = useWindowDimensions()
   const contentWidth = getContentWidth(width, layout.screenHorizontal)
   const keypadSizing = computeKeypadCellSize(contentWidth, {
@@ -48,6 +57,7 @@ export function PinKeypad({
                 width: keypadSizing.buttonWidth,
                 height: keypadSizing.buttonWidth,
                 borderRadius: Math.max(borderRadius.xl, Math.floor(keypadSizing.buttonWidth * 0.28)),
+                backgroundColor: palette.semantic.muted,
               },
               pressed && Platform.OS === 'ios' && styles.keypadPressedIOS,
             ]}
@@ -58,7 +68,7 @@ export function PinKeypad({
             disabled={disabled}
             android_ripple={ripple.neutral}
           >
-            <Text style={styles.keypadButtonText}>{num}</Text>
+            <Text style={[styles.keypadButtonText, { color: palette.text.primary }]}>{num}</Text>
           </Pressable>
         ))}
       </View>
@@ -71,6 +81,7 @@ export function PinKeypad({
               width: keypadSizing.buttonWidth,
               height: keypadSizing.buttonWidth,
               borderRadius: Math.max(borderRadius.xl, Math.floor(keypadSizing.buttonWidth * 0.28)),
+              backgroundColor: palette.semantic.muted,
             },
             pressed && Platform.OS === 'ios' && styles.keypadPressedIOS,
           ]}
@@ -79,7 +90,7 @@ export function PinKeypad({
           disabled={disabled}
           android_ripple={ripple.neutral}
         >
-          <Text style={styles.keypadButtonText}>0</Text>
+          <Text style={[styles.keypadButtonText, { color: palette.text.primary }]}>0</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [
@@ -88,6 +99,7 @@ export function PinKeypad({
               width: keypadSizing.buttonWidth,
               height: keypadSizing.buttonWidth,
               borderRadius: Math.max(borderRadius.xl, Math.floor(keypadSizing.buttonWidth * 0.28)),
+              backgroundColor: palette.semantic.muted,
             },
             pressed && Platform.OS === 'ios' && styles.keypadPressedIOS,
           ]}
@@ -99,7 +111,9 @@ export function PinKeypad({
           <Ionicons
             name="backspace"
             size={24}
-            color={filledCount === 0 ? colors.text.secondary : backspaceActiveColor || colors.text.primary}
+            color={
+              filledCount === 0 ? palette.text.secondary : backspaceActiveColor || palette.text.primary
+            }
           />
         </Pressable>
       </View>
@@ -123,7 +137,6 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: borderRadius['2xl'],
-    backgroundColor: colors.background.secondary,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
@@ -144,8 +157,7 @@ const styles = StyleSheet.create({
   keypadButtonText: {
     fontSize: 26,
     lineHeight: 32,
-    color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     fontWeight: '600',
   },
   keypadBottomRow: {

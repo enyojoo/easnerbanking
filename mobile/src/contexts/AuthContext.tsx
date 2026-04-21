@@ -215,11 +215,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (vErr) {
         return { error: new Error(vErr.message || 'Invalid code.') }
       }
-      setMfaPending(null)
       const surfaceGate = await ensureConsumerMobileAccess()
       if (surfaceGate.error) {
         return { error: surfaceGate.error }
       }
+      /** After surface is OK — avoids a blank frame: clearing MFA before this left AppNavigator without MfaStack while still awaiting network. */
+      setMfaPending(null)
       return { error: null }
     },
     [],
@@ -425,11 +426,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
             updated_at: afterGate.user.updated_at || afterGate.user.created_at,
           }
           setUser(mappedUser)
-          const snap = await readProfileSnapshot(afterGate.user.id)
-          if (snap?.id === afterGate.user.id) {
+          /** Do not await — blocks AppNavigator (PIN gate) on AsyncStorage; hydrate when ready. */
+          void readProfileSnapshot(afterGate.user.id).then((snap) => {
+            if (!mounted || !snap || snap.id !== afterGate.user.id) return
             setUser(snap.profile)
             setUserProfile(snap)
-          }
+          })
           fetchUserProfile(afterGate.user.id, mappedUser, { force: true }).catch(error => {
             console.error('Initial profile fetch error:', error)
           })
@@ -490,11 +492,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
             updated_at: afterGate.user.updated_at || afterGate.user.created_at,
           }
           setUser(mappedUser)
-          const snap = await readProfileSnapshot(afterGate.user.id)
-          if (snap?.id === afterGate.user.id) {
+          /** Do not await — same as cold start; login → PIN must not wait on snapshot I/O. */
+          void readProfileSnapshot(afterGate.user.id).then((snap) => {
+            if (!mounted || !snap || snap.id !== afterGate.user.id) return
             setUser(snap.profile)
             setUserProfile(snap)
-          }
+          })
           const profileForce =
             event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'PASSWORD_RECOVERY'
           fetchUserProfile(afterGate.user.id, mappedUser, {

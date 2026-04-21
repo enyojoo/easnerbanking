@@ -16,6 +16,8 @@ export type TotpEnrollSetup = {
   factorId: string
   qrDataUrl: string
   secret: string | null
+  /** GoTrue `key.URL()` when the API returns it — preferred for client-rendered QR. */
+  keyUri: string | null
 }
 
 /** `listFactors().totp` may omit unverified factors; use `all` filtered by type. */
@@ -63,6 +65,18 @@ export function isDuplicateMfaFriendlyNameError(message: string): boolean {
 /** Name shown in authenticator apps from the otpauth URI / factor metadata. */
 export const MFA_TOTP_ISSUER = 'Easner Banking'
 
+/**
+ * otpauth:// URI matching GoTrue TOTP enrollment (`issuer` + account email in the path label).
+ * Use with `react-native-qrcode-svg` for a pixel-aligned square QR like the receive screen.
+ */
+export function totpKeyUriForEnroll(secret: string, email: string | null | undefined): string {
+  const issuer = MFA_TOTP_ISSUER
+  const account = email?.trim() || 'user'
+  const label = encodeURIComponent(`${issuer}:${account}`)
+  const encIssuer = encodeURIComponent(issuer)
+  return `otpauth://totp/${label}?secret=${encodeURIComponent(secret)}&issuer=${encIssuer}`
+}
+
 export async function beginTotpEnrollment(client: SupabaseClient): Promise<TotpEnrollSetup> {
   await unenrollUnverifiedTotpFactors(client)
 
@@ -91,15 +105,23 @@ export async function beginTotpEnrollment(client: SupabaseClient): Promise<TotpE
     throw new Error('Unexpected response from the server.')
   }
 
-  const { qr_code, secret } = data.totp
+  const totpPayload = data.totp as {
+    qr_code: string
+    secret?: string
+    uri?: string
+  }
+  const { qr_code, secret, uri: keyUriRaw } = totpPayload
   const qrDataUrl = qr_code.startsWith('data:')
     ? qr_code
     : `data:image/svg+xml;utf-8,${encodeURIComponent(qr_code)}`
+  const keyUri =
+    typeof keyUriRaw === 'string' && keyUriRaw.startsWith('otpauth://') ? keyUriRaw.trim() : null
 
   return {
     factorId: data.id,
     qrDataUrl,
     secret: secret ?? null,
+    keyUri,
   }
 }
 

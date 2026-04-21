@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   Animated,
   Platform,
 } from 'react-native'
+import QRCode from 'react-native-qrcode-svg'
 import { SvgXml } from 'react-native-svg'
 import { useFocusEffect, useRoute } from '@react-navigation/native'
 import * as Haptics from 'expo-haptics'
@@ -26,14 +27,16 @@ import {
   getVerifiedTotpFactorId,
   listFactorsForMfaStatus,
   totpFactorsFromListResponse,
+  totpKeyUriForEnroll,
   unenrollUnverifiedTotpFactors,
   type TotpFactorLike,
 } from '../../lib/auth-mfa'
 import { saveMfaVerified } from '../../lib/mfaStatusCache'
-import { colors, textStyles, borderRadius, spacing, motion } from '../../theme'
+import { colors, textStyles, borderRadius, spacing, motion, shadows } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { NavigationProps } from '../../types'
+import { useAuth } from '../../contexts/AuthContext'
 
 function svgXmlFromQrDataUrl(qrDataUrl: string | null): string | null {
   if (!qrDataUrl || !qrDataUrl.startsWith('data:image/svg')) return null
@@ -46,27 +49,28 @@ function svgXmlFromQrDataUrl(qrDataUrl: string | null): string | null {
   }
 }
 
-/** Same strings as `business/components/settings/mfa-settings-dialog.tsx` */
+/** MFA enroll copy (kept in sync with `business/components/settings/mfa-settings-dialog.tsx`). */
 const MFA_COPY = {
   title: 'Two-factor authentication',
   enrollDescription:
-    'Scan this QR code to set up your account using your preferred authenticator app. Popular choices include Google Authenticator, Microsoft Authenticator, and Authy.',
+    'Scan this QR code to set up your account using your preferred authenticator app.',
   alreadyEnabled: 'Two-factor authentication is already enabled for this account.',
   /** List-only edge case: no manual Set up — enrollment starts from Security when MFA is off. */
   listNotEnabledHint:
     'Two-factor authentication is not enabled. Open Security and tap MFA when your status shows Off to continue.',
-  secretLabel: 'Secret key',
-  digitCodeLabel: '6-digit code',
+  digitCodeLabel: 'Enter 6-digit code shown to you',
   digitCodeError: 'Enter the 6-digit code from your authenticator app.',
   enable: 'Enable',
   enabling: 'Enabling…',
 } as const
 
-/** Outer square (border included in layout). */
-const MFA_QR_FRAME = 192
-/** Padding so the QR module grid clears the border and rounded corners (avoids “cut” edges). */
-const MFA_QR_INSET = spacing[2]
-const MFA_QR_DRAW_SIZE = MFA_QR_FRAME - MFA_QR_INSET * 2
+/**
+ * Match `ReceiveMoneyScreen` stablecoin QR: 240×240 frame, `spacing[3]` inset, 200×200 code.
+ * Keeps modules centered and clear of the rounded frame.
+ */
+const MFA_QR_CONTAINER = 240
+const MFA_QR_SIZE = 200
+const MFA_QR_PADDING = spacing[3]
 const MFA_SECRET_BOX_HEIGHT = 56
 
 type MfaRouteParams = { autoStartEnroll?: boolean; mfaVerifiedOnCard?: boolean }
@@ -75,6 +79,7 @@ type MfaRouteParams = { autoStartEnroll?: boolean; mfaVerifiedOnCard?: boolean }
 type MfaListSnapshot = { factors: TotpFactorLike[]; loaded: boolean }
 
 export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
+  const { user } = useAuth()
   const insets = useSafeAreaInsets()
   const navRoute = useRoute()
   const params = ((navRoute.params ?? route?.params) ?? {}) as MfaRouteParams
@@ -95,6 +100,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
   const [error, setError] = useState<string | null>(null)
   const [enrollFactorId, setEnrollFactorId] = useState<string | null>(null)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
+  const [enrollKeyUri, setEnrollKeyUri] = useState<string | null>(null)
   const [secret, setSecret] = useState<string | null>(null)
   const [verifyCode, setVerifyCode] = useState('')
   const [enrollFetching, setEnrollFetching] = useState(false)
@@ -133,6 +139,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
   const resetLocal = useCallback(() => {
     setEnrollFactorId(null)
     setQrDataUrl(null)
+    setEnrollKeyUri(null)
     setSecret(null)
     setVerifyCode('')
     setShowDisableOtp(false)
@@ -152,6 +159,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
       if (generation !== enrollGenRef.current) return
       setEnrollFactorId(setup.factorId)
       setQrDataUrl(setup.qrDataUrl)
+      setEnrollKeyUri(setup.keyUri)
       setSecret(setup.secret)
     } catch (e) {
       if (generation !== enrollGenRef.current) return
@@ -169,6 +177,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
     const generation = enrollGenRef.current
     setEnrollFactorId(null)
     setQrDataUrl(null)
+    setEnrollKeyUri(null)
     setSecret(null)
     setVerifyCode('')
     setError(null)
@@ -441,6 +450,12 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
   }, [])
 
   const enrollQrSvg = showEnrollUi ? svgXmlFromQrDataUrl(qrDataUrl) : null
+  const totpQrValue = useMemo(
+    () =>
+      enrollKeyUri ||
+      (secret ? totpKeyUriForEnroll(secret, user?.email ?? undefined) : null),
+    [enrollKeyUri, secret, user?.email],
+  )
 
   return (
     <ScreenWrapper>
@@ -564,16 +579,37 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
             {showEnrollUi && (
               <View style={styles.sectionCard}>
                 <Text style={styles.enrollIntro}>{MFA_COPY.enrollDescription}</Text>
-                <View style={styles.qrWrap}>
-                  {enrollQrSvg ? (
-                    <SvgXml xml={enrollQrSvg} width={MFA_QR_DRAW_SIZE} height={MFA_QR_DRAW_SIZE} />
-                  ) : qrDataUrl ? (
-                    <Image source={{ uri: qrDataUrl }} style={styles.qr} resizeMode="contain" />
-                  ) : (
-                    <SkeletonLoader width={MFA_QR_DRAW_SIZE} height={MFA_QR_DRAW_SIZE} borderRadius={8} />
-                  )}
+                <View style={styles.qrSection}>
+                  <View style={styles.qrContainer}>
+                    {totpQrValue ? (
+                      <QRCode
+                        value={totpQrValue}
+                        size={MFA_QR_SIZE}
+                        color={colors.text.primary}
+                        backgroundColor={colors.background.primary}
+                      />
+                    ) : enrollQrSvg ? (
+                      <View style={styles.qrCanvas}>
+                        <SvgXml
+                          xml={enrollQrSvg}
+                          width={MFA_QR_SIZE}
+                          height={MFA_QR_SIZE}
+                          preserveAspectRatio="xMidYMid slice"
+                        />
+                      </View>
+                    ) : qrDataUrl ? (
+                      <View style={styles.qrCanvas}>
+                        <Image
+                          source={{ uri: qrDataUrl }}
+                          style={styles.qrImageFill}
+                          resizeMode="cover"
+                        />
+                      </View>
+                    ) : (
+                      <SkeletonLoader width={MFA_QR_SIZE} height={MFA_QR_SIZE} borderRadius={borderRadius.lg} />
+                    )}
+                  </View>
                 </View>
-                <Text style={styles.label}>{MFA_COPY.secretLabel}</Text>
                 <View style={styles.secretBox} accessibilityState={{ busy: !secret }}>
                   {secret ? (
                     <View style={styles.secretRowInner}>
@@ -607,7 +643,10 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
                   )}
                 </View>
                 <View
-                  style={verifySubmitting ? styles.otpVerifyLock : undefined}
+                  style={[
+                    styles.otpAfterSecret,
+                    verifySubmitting ? styles.otpVerifyLock : undefined,
+                  ]}
                   pointerEvents={verifySubmitting ? 'none' : 'auto'}
                 >
                   <OtpCodeInput
@@ -716,28 +755,33 @@ const styles = StyleSheet.create({
     ...textStyles.bodySmall,
     color: colors.error.main,
   },
-  qrWrap: {
+  /** Parity with `ReceiveMoneyScreen` `qrSection` / `qrContainer` / `qrImage`. */
+  qrSection: {
     alignItems: 'center',
+    marginBottom: spacing[4],
+  },
+  qrContainer: {
+    width: MFA_QR_CONTAINER,
+    height: MFA_QR_CONTAINER,
+    borderRadius: borderRadius.xl,
     justifyContent: 'center',
-    marginVertical: spacing[4],
-    borderWidth: 1,
-    borderColor: colors.semantic.border,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.semantic.card,
-    width: MFA_QR_FRAME,
-    height: MFA_QR_FRAME,
-    padding: MFA_QR_INSET,
+    alignItems: 'center',
+    backgroundColor: colors.background.primary,
+    padding: MFA_QR_PADDING,
+    borderWidth: 0.5,
+    borderColor: colors.frame.border,
+    ...shadows.sm,
+  },
+  /** Clip SVG/PNG fallovers so the code fills the 200×200 slot (Receive parity for raster). */
+  qrCanvas: {
+    width: MFA_QR_SIZE,
+    height: MFA_QR_SIZE,
+    borderRadius: borderRadius.lg,
     overflow: 'hidden',
-    alignSelf: 'center',
   },
-  qr: {
-    width: MFA_QR_DRAW_SIZE,
-    height: MFA_QR_DRAW_SIZE,
-  },
-  label: {
-    ...textStyles.labelLarge,
-    color: colors.text.primary,
-    marginBottom: spacing[2],
+  qrImageFill: {
+    width: MFA_QR_SIZE,
+    height: MFA_QR_SIZE,
   },
   secretBox: {
     borderWidth: 0.5,
@@ -747,7 +791,7 @@ const styles = StyleSheet.create({
     paddingLeft: spacing[3],
     paddingRight: spacing[1],
     paddingVertical: spacing[2],
-    marginBottom: spacing[4],
+    marginBottom: 0,
     height: MFA_SECRET_BOX_HEIGHT,
     justifyContent: 'center',
   },
@@ -769,6 +813,9 @@ const styles = StyleSheet.create({
     marginLeft: spacing[1],
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  otpAfterSecret: {
+    marginTop: spacing[10],
   },
   otpVerifyLock: {
     opacity: 0.8,

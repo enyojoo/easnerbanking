@@ -11,7 +11,8 @@ import {
 } from 'react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Button, OtpCodeInput } from '../../components/ui'
+import { OtpCodeInput } from '../../components/ui'
+import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
 import { useAuth } from '../../contexts/AuthContext'
 import { colors, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
@@ -90,13 +91,14 @@ export default function MfaVerifyScreen() {
             />
           </View>
 
-          <Button
-            title="Continue"
-            fullWidth
-            onPress={() => void handleSubmit()}
-            disabled={submitting || code.replace(/\D/g, '').length !== 6}
-            loading={submitting}
-          />
+          <View style={styles.primaryCtaWrap}>
+            <GlossyPrimaryButton
+              title={submitting ? 'Verifying…' : 'Continue'}
+              onPress={() => void handleSubmit()}
+              disabled={submitting || code.replace(/\D/g, '').length !== 6}
+              style={styles.glossyCta}
+            />
+          </View>
 
           <Pressable
            android_ripple={ripple.neutral}
@@ -125,6 +127,15 @@ const styles = StyleSheet.create({
   },
   subtitleMargin: {
     marginBottom: spacing[6],
+  },
+  primaryCtaWrap: {
+    width: '100%',
+    marginTop: spacing[5],
+  },
+  glossyCta: {
+    width: '100%',
+    flexGrow: 0,
+    minHeight: 52,
   },
   otpVerifyLock: {
     opacity: 0.8,

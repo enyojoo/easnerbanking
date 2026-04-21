@@ -64,3 +64,12 @@ export {
 } from "./business-industries"
 export type { BusinessIndustryItem, BusinessIndustryGroup } from "./business-industries"
 export * from "./query"
+export {
+  toEasnerTransactionPrimaryLabel,
+  toEasnerTransactionProductCategory,
+  toEasnerProductTransactionLabel,
+  deriveEasnerInboundRemitterDisplayName,
+  isEasnerProductReceiveTitle,
+  isEasnerProductSendTitle,
+} from "./transactions/product-label"
+export type { EasnerLedgerDirection } from "./transactions/product-label"

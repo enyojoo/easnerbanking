@@ -12,7 +12,7 @@ import {
 import * as Haptics from 'expo-haptics'
 import { getLockoutState, verifyPin } from '../../lib/pinAuth'
 import { appPinStrings } from '../../constants/app-pin-en'
-import { colors, textStyles, borderRadius, spacing } from '../../theme'
+import { colors, textStyles, borderRadius, spacing, useThemeColors } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { PinDotsRow } from './PinDotsRow'
 import { PinKeypad } from './PinKeypad'
@@ -30,6 +30,7 @@ type Props = {
  * Modal PIN challenge for sensitive actions (e.g. confirm send). Same keypad/dots/shake as unlock.
  */
 export function PinChallengeModal({ visible, userId, onClose, onVerified }: Props) {
+  const palette = useThemeColors()
   const [pin, setPin] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -135,7 +136,7 @@ export function PinChallengeModal({ visible, userId, onClose, onVerified }: Prop
 
           {showBusySpinner ? (
             <View style={styles.busy}>
-              <ActivityIndicator size="small" color={colors.primary.main} />
+              <ActivityIndicator size="small" color={palette.primary.main} />
               <Text style={styles.busyText}>{appPinStrings.lockVerifying}</Text>
             </View>
           ) : (
@@ -172,7 +173,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[5],
   },
   card: {
-    backgroundColor: colors.background.primary,
+    width: '100%',
+    maxWidth: 400,
+    alignSelf: 'center',
+    backgroundColor: colors.semantic.background,
     borderRadius: borderRadius.xl,
     padding: spacing[5],
   },

@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { NavigationProps } from '../../types'
-import { colors, textStyles, borderRadius, spacing } from '../../theme'
+import { colors, textStyles, borderRadius, spacing, useThemeColors } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import {
   setupPin,
@@ -29,6 +29,7 @@ import { appPinStrings } from '../../constants/app-pin-en'
 import { PinKeypad } from '../../components/pin'
 
 export default function PinSetupScreen({ navigation, route }: NavigationProps) {
+  const palette = useThemeColors()
   const { user, signOut } = useAuth()
   const [pin, setPin] = useState<string[]>(['', '', '', ''])
   const [confirmPin, setConfirmPin] = useState<string[]>(['', '', '', ''])
@@ -194,7 +195,7 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
               )
             }} >
             <View style={styles.headerButtonCircle}>
-              <Ionicons name="help-circle-outline" size={20} color={colors.text.primary} />
+              <Ionicons name="help-circle-outline" size={20} color={palette.text.primary} />
             </View>
           </Pressable>
         </View>
@@ -214,7 +215,7 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
           <View style={styles.pinDotsWrapper}>
             {showSaveSpinner ? (
               <View style={styles.pinDotsLoadingOnly}>
-                <ActivityIndicator size="small" color={colors.primary.main} />
+                <ActivityIndicator size="small" color={palette.primary.main} />
               </View>
             ) : (
               <View style={styles.pinDotsContainer}>
@@ -277,7 +278,7 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background.primary,
+    backgroundColor: colors.semantic.background,
   },
   keyboardView: {
     flex: 1,
@@ -320,11 +321,8 @@ const styles = StyleSheet.create({
     gap: spacing[3],
   },
   title: {
-    fontSize: 32,
-    lineHeight: 40,
+    ...textStyles.headlineLarge,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Bold',
-    fontWeight: '700',
     textAlign: 'center',
     width: '100%',
   },
@@ -374,17 +372,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logoutText: {
-    fontSize: 14,
-    lineHeight: 20,
+    ...textStyles.bodySmall,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
   },
   logoutLinkText: {
-    fontSize: 14,
-    lineHeight: 20,
+    ...textStyles.bodySmall,
     color: colors.text.primary,
     textDecorationLine: 'underline',
-    fontFamily: 'Outfit-SemiBold',
     fontWeight: '600',
   },
 })

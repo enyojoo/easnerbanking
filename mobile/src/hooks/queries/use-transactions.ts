@@ -17,6 +17,8 @@ import type { Transaction } from '../../types'
 export type MobileTransactionRow = {
   id?: string
   transaction_id?: string
+  /** Supabase `transactions.id` — preferred when opening detail (display id may be synthetic). */
+  ledger_row_id?: string
   currency?: string
   amount?: string | number
   status?: string
@@ -26,6 +28,8 @@ export type MobileTransactionRow = {
   noah_created_at?: string
   name?: string
   description?: string | null
+  transaction_product?: string
+  sender_display_name?: string
   [key: string]: unknown
 }
 
@@ -93,9 +97,12 @@ export function useTransactionDetail(txId: string | null) {
         : ['transactions', 'detail', 'disabled'],
     enabled: Boolean(scope) && Boolean(txId),
     queryFn: () =>
-      apiFetch<{ transaction?: MobileTransactionRow }>(`/api/transactions/${txId}`, {
-        headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
-      }),
+      apiFetch<{ transaction?: MobileTransactionRow }>(
+        `/api/transactions/${encodeURIComponent(txId!)}`,
+        {
+          headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
+        },
+      ),
     staleTime: 45_000,
     gcTime: 10 * 60_000,
     meta: { safePersist: false, freshness: 'operational' },

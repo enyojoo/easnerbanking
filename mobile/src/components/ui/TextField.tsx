@@ -10,7 +10,6 @@ import {
   ViewStyle,
 } from 'react-native'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
-import { AUTH_FIELD_MIN_HEIGHT } from '../../theme/authScreen'
 
 export type TextFieldProps = {
   label: string
@@ -21,9 +20,9 @@ export type TextFieldProps = {
   style?: TextInputProps['style']
 }
 
-/**
- * Label + input + optional error — matches business `Input` + `Label`; 8px radius, semantic border.
- */
+const FIELD_MIN_H = 52
+
+/** Label + input + optional error — pill radius (auth parity with premium fields). */
 export function TextField({
   label,
   error,
@@ -81,20 +80,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.full,
     backgroundColor: colors.semantic.background,
-    minHeight: AUTH_FIELD_MIN_HEIGHT,
+    minHeight: FIELD_MIN_H,
     paddingRight: spacing[2],
   },
   input: {
     borderWidth: 1,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.full,
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
     ...textStyles.textInputSingleLine,
     color: colors.semantic.foreground,
     backgroundColor: colors.semantic.background,
-    minHeight: AUTH_FIELD_MIN_HEIGHT,
+    minHeight: FIELD_MIN_H,
     textAlignVertical: 'center',
     ...Platform.select({
       android: {
@@ -112,7 +111,7 @@ const styles = StyleSheet.create({
     ...textStyles.textInputSingleLine,
     color: colors.semantic.foreground,
     borderWidth: 0,
-    minHeight: AUTH_FIELD_MIN_HEIGHT - 2,
+    minHeight: FIELD_MIN_H - 2,
     backgroundColor: 'transparent',
     textAlignVertical: 'center',
     ...Platform.select({

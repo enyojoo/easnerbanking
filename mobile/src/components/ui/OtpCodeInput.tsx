@@ -8,7 +8,7 @@ import {
   StyleProp,
   ViewStyle,
 } from 'react-native'
-import { colors, spacing, textStyles } from '../../theme'
+import { colors, spacing, textStyles, borderRadius } from '../../theme'
 
 export interface OtpCodeInputProps {
   /** Defaults to `otp-code` */
@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
   box: {
     width: BOX_W,
     height: BOX_H,
-    borderRadius: 8,
+    borderRadius: borderRadius.full,
     borderWidth: 2,
     borderStyle: 'solid',
     backgroundColor: colors.semantic.background,

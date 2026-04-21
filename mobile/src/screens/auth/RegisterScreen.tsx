@@ -25,8 +25,9 @@ import { colors, spacing, motion } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
+import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
 import { TERMS_URL } from '../../constants/auth'
-import { Button, TextField } from '../../components/ui'
+import { TextField } from '../../components/ui'
 
 export default function RegisterScreen({ navigation }: NavigationProps) {
   const [formData, setFormData] = useState({
@@ -234,15 +235,14 @@ export default function RegisterScreen({ navigation }: NavigationProps) {
                 }
               />
 
-              <Button
-                title={loading ? 'Creating account…' : 'Create account'}
-                onPress={handleRegister}
-                disabled={loading}
-                loading={loading}
-                variant="default"
-                fullWidth
-                style={styles.primaryCta}
-              />
+              <View style={styles.primaryCtaWrap}>
+                <GlossyPrimaryButton
+                  title={loading ? 'Creating account…' : 'Create account'}
+                  onPress={handleRegister}
+                  disabled={loading}
+                  style={styles.glossyCta}
+                />
+              </View>
             </View>
           </Animated.View>
 
@@ -294,8 +294,13 @@ const styles = StyleSheet.create({
   fieldFlush: {
     marginBottom: spacing[3],
   },
-  primaryCta: {
-    marginBottom: 0,
+  primaryCtaWrap: {
+    width: '100%',
+  },
+  glossyCta: {
+    width: '100%',
+    flexGrow: 0,
+    minHeight: 52,
   },
   eyeButton: {
     padding: spacing[3],
