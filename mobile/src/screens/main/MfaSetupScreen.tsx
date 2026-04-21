@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
+  KeyboardAvoidingView,
   Image,
   Alert,
   ActivityIndicator,
@@ -92,6 +93,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
   const suppressVerifiedApiPopRef = useRef(false)
   /** `beforeRemove` blocks pops while on enroll; set true right before intentional `goBack`. */
   const allowRemoveRef = useRef(false)
+  const scrollRef = useRef<ScrollView>(null)
   const secretCopiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [mfaList, setMfaList] = useState<MfaListSnapshot>({ factors: [], loaded: false })
@@ -460,12 +462,19 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
   return (
     <ScreenWrapper>
       <View style={styles.container}>
-        <ScrollView
-          style={styles.scrollContainer}
-          contentContainerStyle={{ paddingBottom: insets.bottom + spacing[5] }}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
+        <KeyboardAvoidingView
+          style={styles.keyboard}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={insets.top + spacing[4]}
         >
+          <ScrollView
+            ref={scrollRef}
+            style={styles.scrollContainer}
+            contentContainerStyle={{ paddingBottom: insets.bottom + spacing[5] }}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+          >
           <Animated.View
             style={[
               styles.header,
@@ -535,6 +544,11 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
                           value={disableOtpCode}
                           onChange={setDisableOtpCode}
                           autoFocus
+                          onFocus={() => {
+                            requestAnimationFrame(() => {
+                              scrollRef.current?.scrollToEnd({ animated: true })
+                            })
+                          }}
                           disabled={turnOffSubmitting}
                         />
                         <Button
@@ -655,6 +669,11 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
                     value={verifyCode}
                     onChange={setVerifyCode}
                     autoFocus={!!enrollFactorId && !enrollFetching}
+                    onFocus={() => {
+                      requestAnimationFrame(() => {
+                        scrollRef.current?.scrollToEnd({ animated: true })
+                      })
+                    }}
                     disabled={verifySubmitting || enrollFetching || !enrollFactorId}
                   />
                 </View>
@@ -668,7 +687,8 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
               </View>
             )}
           </Animated.View>
-        </ScrollView>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </View>
     </ScreenWrapper>
   )
@@ -680,6 +700,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.primary,
   },
   scrollContainer: {
+    flex: 1,
+  },
+  keyboard: {
     flex: 1,
   },
   header: {

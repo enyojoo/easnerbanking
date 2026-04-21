@@ -1555,10 +1555,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       balanceDebitEstimate > 0 &&
                       item.code === selectedBalanceCurrency
                     const displayBalance = showLiveRemaining ? balance - balanceDebitEstimate : balance
-                    const rowShortBy =
-                      showLiveRemaining && displayBalance < 0 && receiveAmount > 0
-                        ? Math.max(0, balanceDebitEstimate - balance)
-                        : 0
                     const balanceFormatted = displayBalance.toLocaleString('en-US', {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2,
@@ -1592,15 +1588,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                           >
                             {item.symbol}{balanceFormatted}
                           </Text>
-                          {rowShortBy > 0 ? (
-                            <Text style={styles.currencyItemShortfall}>
-                              Short by {item.symbol}
-                              {rowShortBy.toLocaleString('en-US', {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              })}
-                            </Text>
-                          ) : null}
                         </View>
                         <View style={[
                           styles.checkbox,
@@ -2306,13 +2293,6 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontFamily: 'Geist-SemiBold',
     marginTop: 2,
-  },
-  currencyItemShortfall: {
-    fontSize: 13,
-    lineHeight: 18,
-    marginTop: 4,
-    color: colors.semantic.destructive,
-    fontFamily: 'Geist-Medium',
   },
   checkbox: {
     width: 24,

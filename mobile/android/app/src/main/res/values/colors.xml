@@ -1,7 +1,6 @@
 <resources>
-  <color name="splashscreen_background">#F6F3EB</color>
-  <color name="iconBackground">#0F1110</color>
-  <color name="colorPrimary">#007ACC</color>
-  <!-- Hover / darker primary — matches tokens primaryHover -->
-  <color name="colorPrimaryDark">#0062A3</color>
+  <color name="splashscreen_background">#007ACC</color>
+  <color name="iconBackground">#007ACC</color>
+  <color name="colorPrimary">#023c69</color>
+  <color name="colorPrimaryDark">#007ACC</color>
 </resources>
