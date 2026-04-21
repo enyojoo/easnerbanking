@@ -23,6 +23,7 @@ export default function AccountsPage() {
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const {
     accountRows,
+    loading,
     loadError,
     profileLoading,
     refreshAccounts,
@@ -54,77 +55,114 @@ export default function AccountsPage() {
       {loadError ? <p className="text-sm text-destructive">{loadError}</p> : null}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {accountRows.map((account) => (
-          <Card key={account.id} className="transition-shadow hover:shadow-md">
-            <CardContent className="p-6">
-              <div className="flex h-full flex-col">
-                <div className="flex-1 space-y-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <CurrencyFlag currency={account.currency} size={40} className="rounded-md" />
-                      <div>
-                        <h3 className="text-lg font-semibold">{account.currency}</h3>
+        {loading && accountRows.length === 0 ? (
+          <>
+            <Card>
+              <CardContent className="space-y-6 p-6">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-10 w-10 rounded-md" />
+                  <Skeleton className="h-6 w-16" />
+                </div>
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-10 w-40" />
+                </div>
+                <div className="flex gap-2">
+                  <Skeleton className="h-9 w-28" />
+                  <Skeleton className="h-9 w-9" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="space-y-6 p-6">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-10 w-10 rounded-md" />
+                  <Skeleton className="h-6 w-16" />
+                </div>
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-10 w-40" />
+                </div>
+                <div className="flex gap-2">
+                  <Skeleton className="h-9 w-28" />
+                  <Skeleton className="h-9 w-9" />
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        ) : (
+          accountRows.map((account) => (
+            <Card key={account.id} className="transition-shadow hover:shadow-md">
+              <CardContent className="p-6">
+                <div className="flex h-full flex-col">
+                  <div className="flex-1 space-y-4">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <CurrencyFlag currency={account.currency} size={40} className="rounded-md" />
+                        <div>
+                          <h3 className="text-lg font-semibold">{account.currency}</h3>
+                        </div>
                       </div>
+                    </div>
+
+                    <div className="mb-10">
+                      <p className="mb-1 text-xs text-muted-foreground">Available Balance</p>
+                      <p className="text-3xl font-semibold">
+                        {getCurrencySymbol(account.currency)}
+                        {account.balance.toLocaleString("en-US", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </p>
                     </div>
                   </div>
 
-                  <div className="mb-10">
-                    <p className="mb-1 text-xs text-muted-foreground">Available Balance</p>
-                    <p className="text-3xl font-semibold">
-                      {getCurrencySymbol(account.currency)}
-                      {account.balance.toLocaleString("en-US", {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </p>
+                  <div className="flex items-center gap-2">
+                    <CurrencyDepositDialog
+                      account={account}
+                      copiedField={copiedField}
+                      onCopy={copyToClipboard}
+                    />
+
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="bg-transparent px-2">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <StatementDownloadDialog
+                          noahScopeHeader={noahHeaders}
+                          accountCurrency={account.currency}
+                          trigger={
+                            <DropdownMenuItem
+                              className="gap-2"
+                              onSelect={(e) => e.preventDefault()}
+                            >
+                              <FileText className="h-4 w-4" />
+                              Download Statement
+                            </DropdownMenuItem>
+                          }
+                        />
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="gap-2">
+                          <Ban className="h-4 w-4" />
+                          Disable Account
+                        </DropdownMenuItem>
+                        {account.currency !== "USD" && account.currency !== "EUR" ? (
+                          <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive">
+                            <Trash2 className="h-4 w-4" />
+                            Delete Account
+                          </DropdownMenuItem>
+                        ) : null}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <CurrencyDepositDialog
-                    account={account}
-                    copiedField={copiedField}
-                    onCopy={copyToClipboard}
-                  />
-
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm" className="bg-transparent px-2">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <StatementDownloadDialog
-                        noahScopeHeader={noahHeaders}
-                        accountCurrency={account.currency}
-                        trigger={
-                          <DropdownMenuItem
-                            className="gap-2"
-                            onSelect={(e) => e.preventDefault()}
-                          >
-                            <FileText className="h-4 w-4" />
-                            Download Statement
-                          </DropdownMenuItem>
-                        }
-                      />
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem className="gap-2">
-                        <Ban className="h-4 w-4" />
-                        Disable Account
-                      </DropdownMenuItem>
-                      {account.currency !== "USD" && account.currency !== "EUR" ? (
-                        <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive">
-                          <Trash2 className="h-4 w-4" />
-                          Delete Account
-                        </DropdownMenuItem>
-                      ) : null}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          ))
+        )}
       </div>
     </div>
   )

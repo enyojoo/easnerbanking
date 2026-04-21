@@ -118,7 +118,7 @@ function BusinessesPageInner() {
 
   const {
     data: rows = [],
-    isPending: loading,
+    isPending,
     error: queryError,
   } = useQuery({
     queryKey: officeKeys.businesses(),
@@ -133,6 +133,7 @@ function BusinessesPageInner() {
 
   const error =
     queryError instanceof Error ? queryError.message : queryError ? String(queryError) : null
+  const loading = isPending && rows.length === 0
 
   const displayRows = useMemo(() => {
     const q = searchTerm.toLowerCase().trim()
@@ -462,17 +463,7 @@ function BusinessesPageInner() {
 
 export default function BusinessesPage() {
   return (
-    <Suspense
-      fallback={
-        <OfficeDashboardLayout>
-          <div className="p-6 space-y-4">
-            <Skeleton className="h-8 w-48" />
-            <Skeleton className="h-24 w-full max-w-4xl" />
-            <Skeleton className="h-72 w-full" />
-          </div>
-        </OfficeDashboardLayout>
-      }
-    >
+    <Suspense fallback={null}>
       <BusinessesPageInner />
     </Suspense>
   )

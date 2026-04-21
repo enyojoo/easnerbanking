@@ -141,7 +141,7 @@ function TransferStatusContent() {
 
 export default function TransferStatusPage() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={null}>
       <TransferStatusContent />
     </Suspense>
   )

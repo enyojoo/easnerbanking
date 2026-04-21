@@ -75,7 +75,7 @@ function PricingFxHubBody() {
 
 export default function PricingFxPage() {
   return (
-    <Suspense fallback={<OfficeDashboardLayout><div className="p-6 text-sm text-muted-foreground">Loading…</div></OfficeDashboardLayout>}>
+    <Suspense fallback={null}>
       <PricingFxHubBody />
     </Suspense>
   )

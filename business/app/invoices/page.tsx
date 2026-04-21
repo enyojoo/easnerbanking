@@ -73,7 +73,7 @@ export default function InvoicesPage() {
   const deleteInvoiceMut = useDeleteInvoice()
 
   const invoices = invoicesQuery.data ?? []
-  const loading = invoicesQuery.isPending
+  const loading = invoicesQuery.isPending && invoices.length === 0
   const invoicesError =
     invoicesQuery.error instanceof Error
       ? invoicesQuery.error.message

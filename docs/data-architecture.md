@@ -30,13 +30,13 @@ The product goals the architecture is optimised for:
 
 | Layer | Lives in | Refresh trigger | Notes |
 | --- | --- | --- | --- |
-| **Server snapshot** | `app/(route)/layout.tsx` (RSC) | per request | Prefetches the critical-freshness queries and hands them to the client via `HydrationBoundary`. |
+| **Server snapshot** | route `page.tsx` / `layout.tsx` server components (RSC) | per request | Prefetches the critical-freshness queries and hands them to the client via `HydrationBoundary`. |
 | **Client cache (TanStack Query v5)** | Per-request on server, singleton in the browser, one-per-user on mobile | SWR (`staleTime`, focus, reconnect) | Single source of truth for every screen. |
 | **Realtime updates** | Supabase Realtime `postgres_changes` | server events | Surgically mutates cache entries. Only wired for critical tables. |
 
 See:
 - `packages/shared/src/query/client.ts` — `createBaseQueryClient`
-- `business/app/(dashboard)/layout.tsx` — SSR prefetch + hydration
+- `business/app/dashboard/page.tsx` — SSR prefetch + hydration
 - `packages/shared/src/query/realtime.ts` — realtime bridge
 
 ## 2. Shared query package
@@ -81,12 +81,12 @@ numbers, or KYC status as safePersist.
 2. `BusinessScopeProvider` — derives the active scope from the session.
 3. `ScopeRealtimeBridge` — one Supabase channel per scope, publishes
    `RealtimeHealth` via `RealtimeHealthContext`.
-4. `CustomersProvider` / `InvoicesProvider` — thin compatibility shims
-   over TanStack Query hooks during migration.
+4. `InvoiceModuleStoreSync` — mirrors the invoices query into the legacy
+   invoice module store for compatibility during migration.
 
-Legacy data contexts (`CustomersProvider`, `InvoicesProvider`,
-`useTransactionsCached`) are now compatibility shims over TanStack Query
-hooks. Call sites can migrate piecemeal without a flag day.
+Legacy data helpers such as `useTransactionsCached` and
+`useCachedData` are compatibility shims over TanStack Query hooks. Call
+sites can migrate piecemeal without a flag day.
 
 ## 5. Mobile provider layering
 
@@ -114,7 +114,9 @@ Server components that sit above a data-dense surface:
    `serverApiFetch` (`business/lib/server/api.ts`).
 4. `dehydrate(qc)` into a `<HydrationBoundary>`.
 
-`business/app/(dashboard)/layout.tsx` is the canonical example.
+`business/app/dashboard/page.tsx` is the canonical example. The paired
+`business/app/dashboard/layout.tsx` remains shell-only so client-side
+navigation stays instant.
 
 ## 7. Query hooks
 
@@ -163,6 +165,24 @@ Found under `business/components/data/` and
 - `useHoverPrefetch` (web) / `usePressPrefetch` (mobile) — row-level
   prefetch so detail screens open on populated cache.
 
+## 9a. Loading contract
+
+This contract is mandatory for every data-bearing screen, route section,
+card, or list across Business, Mobile, and Office:
+
+- Show a skeleton only when the first request is pending **and** there is
+  no hydrated, cached, placeholder, or persisted-safe data to render.
+- When data already exists, keep rendering it while `isFetching` /
+  `isRefetching`; background refresh must never collapse the page back to
+  a blank state or full-page skeleton.
+- When a refetch fails after prior success, keep the stale data visible
+  and show an inline error treatment.
+- Show an empty state only after a successful empty response, never as a
+  placeholder for “still loading”.
+- Do not persist raw balances to disk. If a surface needs instant paint
+  for money data, use query hydration, in-memory cache continuity, or
+  realtime-backed refresh instead of ad-hoc storage.
+
 ## 10. Storage policy
 
 `STORAGE_POLICY` in the shared package is the single source of truth.
@@ -171,6 +191,9 @@ Summarised:
 - **Web session** → `httpOnly` cookies only.
 - **Web UI prefs** (theme, layout toggles) → `localStorage`.
 - **Mobile cache** → `AsyncStorage`, filtered by `meta.safePersist`.
+- **Mobile balance-adjacent hints** → only non-sensitive metadata such as
+  `lastKnown.balanceMetadata` when explicitly allowed by
+  `STORAGE_POLICY`; never raw balances.
 - **Mobile secrets** (refresh tokens, PIN salts) → `SecureStore`.
 - **Forbidden:** never persist balances, card numbers, masked PANs,
   session tokens, or KYC status to `localStorage` or `AsyncStorage`.

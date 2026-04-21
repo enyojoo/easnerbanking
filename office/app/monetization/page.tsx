@@ -70,7 +70,7 @@ function MonetizationHubBody() {
 
 export default function MonetizationPage() {
   return (
-    <Suspense fallback={<OfficeDashboardLayout><div className="p-6 text-sm text-muted-foreground">Loading…</div></OfficeDashboardLayout>}>
+    <Suspense fallback={null}>
       <MonetizationHubBody />
     </Suspense>
   )

@@ -78,7 +78,8 @@ export function SettingsCommunicationTab() {
     }
   }
 
-  const showSkeleton = authLoading || loading || !user?.id
+  const hasPrefs = Boolean(prefs)
+  const shouldShowSkeleton = authLoading || !user?.id || (loading && !hasPrefs)
 
   return (
     <div className="space-y-6">
@@ -90,7 +91,7 @@ export function SettingsCommunicationTab() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          {showSkeleton ? (
+          {shouldShowSkeleton ? (
             <div className="space-y-4">
               <div className="h-14 w-full animate-pulse rounded-md bg-muted" />
               <div className="h-14 w-full animate-pulse rounded-md bg-muted" />

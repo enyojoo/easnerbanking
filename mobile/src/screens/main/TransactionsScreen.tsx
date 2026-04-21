@@ -24,7 +24,6 @@ import ErrorState from '../../components/ErrorState'
 import { useCurrenciesCatalog, useTransactionsList } from '../../hooks/queries'
 import { NavigationProps, Transaction } from '../../types'
 import { analytics } from '../../lib/analytics'
-import { useAuth } from '../../contexts/AuthContext'
 import { useBalance } from '../../contexts/BalanceContext'
 import { useFocusRefreshAll } from '../../hooks/useFocusRefresh'
 import { useQueryClient } from '@tanstack/react-query'
@@ -361,16 +360,12 @@ function TransactionsContent({ navigation }: NavigationProps) {
       amountSize: scaledFontSize(24, windowWidth),
     }
   }, [windowWidth])
-  const { userProfile } = useAuth()
   const { refreshBalances } = useBalance()
   const { scope } = useScope()
   const qc = useQueryClient()
   const currencies = useCurrencies()
   const txQuery = useTransactionsList({}, 100)
   
-  const [transactions, setTransactions] = useState<CombinedTransaction[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null)
@@ -393,6 +388,8 @@ function TransactionsContent({ navigation }: NavigationProps) {
     const pages = txQuery.data?.pages ?? []
     return pages.flatMap((p) => (p.transactions ?? []) as CombinedTransaction[])
   }, [txQuery.data])
+  const transactions = queryRows
+  const loading = txQuery.isPending && transactions.length === 0
 
   useEffect(() => {
     if (!scope || queryRows.length === 0) return
@@ -412,24 +409,6 @@ function TransactionsContent({ navigation }: NavigationProps) {
     }
   }, [qc, queryRows, scope])
 
-  const fetchTransactions = React.useCallback(async (force = false, silent = false) => {
-    void force
-    void silent
-    setTransactions(queryRows)
-    setError(null)
-    setLoading(txQuery.isPending && queryRows.length === 0)
-  }, [queryRows, txQuery.isPending])
-
-  // Initial load
-  useEffect(() => {
-    if (!userProfile?.id) return
-    fetchTransactions(false)
-  }, [userProfile?.id, fetchTransactions])
-
-  useEffect(() => {
-    fetchTransactions(false, true).catch(() => {})
-  }, [fetchTransactions])
-
   // Refresh stale data when screen comes into focus
   useFocusRefreshAll(false) // Only refresh if stale (> 5 minutes)
 
@@ -438,7 +417,6 @@ function TransactionsContent({ navigation }: NavigationProps) {
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
       await Promise.all([refreshBalances(true), txQuery.refetch()])
-      await fetchTransactions(true)
     } catch (error: any) {
       if (error?.message?.includes('Network request failed') || error?.name === 'TypeError') {
         console.warn("Network error refreshing transactions:", error?.message || 'Network unavailable')
@@ -482,7 +460,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
     return `${month} ${day}, ${year} • ${displayHours}:${minutes} ${ampm}`
   }
 
-  const filteredTransactions = (transactions || []).filter(transaction => {
+  const filteredTransactions = transactions.filter(transaction => {
     if (!transaction) return false
     if (!searchTerm.trim()) return true
     

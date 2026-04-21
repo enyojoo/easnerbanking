@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
-import { qk } from '@easner/shared'
+import { pollingIntervalFor, qk } from '@easner/shared'
 import { apiFetch } from '../../query/api-client'
 import { useScope } from '../../query/scope'
 import { NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
+import { useRealtimeHealth } from '../../query/realtime-health-context'
 
 /**
  * Mobile wallet balances for the authenticated Personal scope.
@@ -24,6 +25,7 @@ export interface WalletBalancesEnvelope {
 
 export function useWalletBalances() {
   const { scope } = useScope()
+  const realtimeHealth = useRealtimeHealth()
   return useQuery({
     queryKey: scope ? qk.wallets.list(scope) : ['wallets', 'disabled'],
     enabled: Boolean(scope),
@@ -45,7 +47,7 @@ export function useWalletBalances() {
     // Fallback polling when realtime is unhealthy. The realtime bridge
     // pokes `qk.wallets.list` on balance events so this rarely actually
     // fires when the channel is happy.
-    refetchInterval: 60_000,
+    refetchInterval: pollingIntervalFor('critical', realtimeHealth),
     refetchIntervalInBackground: false,
     // Balances are sensitive — NEVER persist to disk.
     meta: { safePersist: false, freshness: 'critical' },

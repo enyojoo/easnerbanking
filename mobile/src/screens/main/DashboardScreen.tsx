@@ -166,7 +166,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   }, [txQuery.data])
   const recentTransactions = queryRecent
   const hasAnyTransactionData = recentTransactions.length > 0
-  const loadingTransactions = txQuery.isLoading && recentTransactions.length === 0
+  const loadingTransactions = txQuery.isPending && !hasAnyTransactionData
   const hasAttemptedLoad = txQuery.isFetched || recentTransactions.length > 0
   const lastStableBalanceTextRef = useRef<Record<string, string>>({})
 
@@ -1229,4 +1229,3 @@ function createDashboardStyles(c: Colors, scrollBottomPadding: number) {
   },
   })
 }
-

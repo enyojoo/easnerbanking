@@ -75,7 +75,7 @@ export function SettingsCustomersTab() {
 
   const customers = customersQuery.data ?? []
   const invoices = invoicesQuery.data ?? []
-  const loading = customersQuery.isPending
+  const loading = customersQuery.isPending && customers.length === 0
   const error =
     customersQuery.error instanceof Error
       ? customersQuery.error.message
@@ -403,7 +403,11 @@ export function SettingsCustomersTab() {
               </div>
             </>
           ) : (
-            <div className="px-6 py-10 text-sm text-muted-foreground">Loading…</div>
+            <div className="space-y-3 px-6 py-6">
+              <div className="h-6 w-40 animate-pulse rounded bg-muted" />
+              <div className="h-20 w-full animate-pulse rounded bg-muted" />
+              <div className="h-32 w-full animate-pulse rounded bg-muted" />
+            </div>
           )}
         </DialogContent>
       </Dialog>

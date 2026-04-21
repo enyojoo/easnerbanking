@@ -2,6 +2,7 @@
 
 import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { officeFetch } from "@/lib/api-client"
 import { useQuery } from "@tanstack/react-query"
@@ -31,7 +32,7 @@ function fmtFiat(amount: number | string | null, currency: string | null) {
 }
 
 export default function TerminalPage() {
-  const { data: rows = [], error } = useQuery({
+  const { data: rows = [], error, isPending } = useQuery({
     queryKey: officeKeys.terminalSessions(),
     queryFn: async () => {
       const r = await officeFetch("/api/admin/business/terminal-sessions")
@@ -43,6 +44,7 @@ export default function TerminalPage() {
   })
 
   const message = error instanceof Error ? error.message : error ? String(error) : null
+  const loading = isPending && rows.length === 0
 
   return (
     <OfficeDashboardLayout>
@@ -54,48 +56,56 @@ export default function TerminalPage() {
             <CardTitle>All terminal sessions</CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Fiat</TableHead>
-                  <TableHead>Crypto</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Settlement</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead>Business</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.length === 0 ? (
+            {loading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={6} className="text-sm text-muted-foreground">
-                      No terminal sessions yet.
-                    </TableCell>
+                    <TableHead>Fiat</TableHead>
+                    <TableHead>Crypto</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Settlement</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead>Business</TableHead>
                   </TableRow>
-                ) : (
-                  rows.map((s) => (
-                    <TableRow key={s.id}>
-                      <TableCell>{fmtFiat(s.fiat_amount, s.fiat_currency)}</TableCell>
-                      <TableCell className="text-sm">
-                        {s.crypto_currency && s.network ? `${s.crypto_currency} · ${s.network}` : "—"}
-                        {s.crypto_amount_expected ? (
-                          <span className="block text-muted-foreground text-xs">Exp. {s.crypto_amount_expected}</span>
-                        ) : null}
+                </TableHeader>
+                <TableBody>
+                  {rows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-sm text-muted-foreground">
+                        No terminal sessions yet.
                       </TableCell>
-                      <TableCell>{s.status}</TableCell>
-                      <TableCell className="text-sm">
-                        {s.settlement_destination ?? "—"}
-                        {s.balance_currency ? (
-                          <span className="block text-muted-foreground text-xs">{s.balance_currency}</span>
-                        ) : null}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-sm">{s.created_at}</TableCell>
-                      <TableCell className="font-mono text-xs">{s.business_id}</TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                  ) : (
+                    rows.map((s) => (
+                      <TableRow key={s.id}>
+                        <TableCell>{fmtFiat(s.fiat_amount, s.fiat_currency)}</TableCell>
+                        <TableCell className="text-sm">
+                          {s.crypto_currency && s.network ? `${s.crypto_currency} · ${s.network}` : "—"}
+                          {s.crypto_amount_expected ? (
+                            <span className="block text-muted-foreground text-xs">Exp. {s.crypto_amount_expected}</span>
+                          ) : null}
+                        </TableCell>
+                        <TableCell>{s.status}</TableCell>
+                        <TableCell className="text-sm">
+                          {s.settlement_destination ?? "—"}
+                          {s.balance_currency ? (
+                            <span className="block text-muted-foreground text-xs">{s.balance_currency}</span>
+                          ) : null}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-sm">{s.created_at}</TableCell>
+                        <TableCell className="font-mono text-xs">{s.business_id}</TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       </div>

@@ -93,6 +93,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
   const recipientsQuery = useRecipientsList()
   const { data: currencies = [] } = useCurrenciesCatalog()
   const recipients = recipientsQuery.data ?? []
+  const recipientsLoading = recipientsQuery.isPending && recipients.length === 0
   const insets = useSafeAreaInsets()
   const [uiRecipients, setUiRecipients] = useState<Recipient[]>([])
   const [searchTerm, setSearchTerm] = useState('')
@@ -1055,7 +1056,12 @@ function RecipientsContent({ navigation }: NavigationProps) {
               }
             ]}
           >
-            {filteredRecipients.length > 0 ? (
+            {recipientsLoading ? (
+              <View style={styles.emptyState}>
+                <ActivityIndicator size="small" color={colors.primary.main} />
+                <Text style={[styles.emptyText, { marginTop: spacing[3] }]}>Loading recipients…</Text>
+              </View>
+            ) : filteredRecipients.length > 0 ? (
               <FlatList
                 data={filteredRecipients}
                 renderItem={renderRecipient}
@@ -1076,11 +1082,11 @@ function RecipientsContent({ navigation }: NavigationProps) {
               />
             ) : (
               <View style={styles.emptyState}>
-                <View style={styles.emptyIconContainer}>
-                  <Ionicons name="people-outline" size={48} color={colors.text.secondary} />
-                </View>
-                <Text style={styles.emptyTitle}>No recipients found</Text>
-                <Text style={styles.emptyText}>Add a new recipient to get started</Text>
+                <Ionicons name="people-outline" size={48} color={colors.text.secondary} />
+                <Text style={styles.emptyText}>{searchTerm.trim() ? 'No matches' : 'No recipients found'}</Text>
+                <Text style={styles.emptySubtext}>
+                  {searchTerm.trim() ? 'Try another search' : 'Add a new recipient to get started'}
+                </Text>
               </View>
             )}
           </Animated.View>

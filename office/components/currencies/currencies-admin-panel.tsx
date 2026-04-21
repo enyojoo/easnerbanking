@@ -70,6 +70,7 @@ export function CurrenciesAdminPanel() {
         return { code: upper, name: displayName, active }
       })
   }, [catalog, overrides])
+  const showTableSkeleton = loading && rows.length === 0
 
   const handleToggleCurrency = async (code: string, nextActive: boolean) => {
     const upper = code.toUpperCase()
@@ -165,14 +166,14 @@ export function CurrenciesAdminPanel() {
                   </TableCell>
                 </TableRow>
               ))}
-              {!loading && rows.length === 0 && (
+              {!showTableSkeleton && rows.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={4} className="py-10 text-center text-sm text-gray-500">
                     No currencies available.
                   </TableCell>
                 </TableRow>
               )}
-              {loading && (
+              {showTableSkeleton && (
                 <TableRow>
                   <TableCell colSpan={4} className="py-10 text-center text-sm text-gray-500">
                     Loading currencies…

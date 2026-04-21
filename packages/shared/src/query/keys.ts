@@ -61,6 +61,8 @@ export const qk = {
   wallets: {
     root: (scope: Scope) => [...scopeKey(scope), "wallets"] as const,
     list: (scope: Scope) => [...scopeKey(scope), "wallets", "list"] as const,
+    virtualAccounts: (scope: Scope, currencies: readonly string[]) =>
+      [...scopeKey(scope), "wallets", "virtual-accounts", [...currencies].sort()] as const,
     detail: (scope: Scope, walletId: string) =>
       [...scopeKey(scope), "wallets", walletId] as const,
     balance: (scope: Scope, walletId: string) =>

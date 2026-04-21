@@ -49,6 +49,7 @@ export function SettingsRecipientsTab() {
     () => beneficiariesRaw.map(coerceBeneficiaryEasenetDisplay),
     [beneficiariesRaw],
   )
+  const showLoading = isRecipientsLoading && beneficiaries.length === 0
 
   const reconcileRecipientsFromServer = () => {
     if (!user?.id) return
@@ -166,7 +167,7 @@ export function SettingsRecipientsTab() {
           </div>
         </CardHeader>
         <CardContent>
-          {isRecipientsLoading ? (
+          {showLoading ? (
             <div className="space-y-4">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

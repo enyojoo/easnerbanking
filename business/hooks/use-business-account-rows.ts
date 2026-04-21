@@ -1,15 +1,13 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { fetchWithSession } from "@/lib/fetch-with-session"
-import { useAuth } from "@/lib/auth-context"
+import { useCallback, useEffect, useMemo } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { qk } from "@easner/shared"
+import { apiFetch } from "@/lib/query/api-client"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import type { Account } from "@/lib/finance-types"
-import {
-  businessNoahAccountsPersistKey,
-  CACHE_KEYS,
-  dataCache,
-} from "@/lib/cache"
+import { useWalletBalances } from "@/hooks/queries/use-wallets"
+import { useScope } from "@/lib/query/scope"
 
 type VaJson = {
   hasAccount?: boolean
@@ -24,16 +22,7 @@ type VaJson = {
   accountHolderName?: string
 }
 
-type AccountSnapshot = {
-  balances: { USD: string; EUR: string }
-  enabledExtras: string[]
-  /** Turnkey Solana receive addresses (USDC → USD bucket, EURC → EUR bucket). */
-  stablecoinDeposit: { USD: string; EUR: string }
-  vaByCurrency: Record<string, VaJson | null>
-}
-
-const SNAPSHOT_TTL_MS = 2 * 60 * 1000
-const BALANCE_POLL_MS = 45 * 1000
+const NOAH_HEADERS = { "X-Easner-Noah-Scope": "business" } as const
 
 function maskTail(s: string | undefined, visible = 4): string {
   if (!s) return "—"
@@ -47,248 +36,77 @@ export function parseBalanceString(bal: string | undefined): number {
   return Number.isFinite(n) ? n : 0
 }
 
-function isAccountSnapshot(v: unknown): v is AccountSnapshot {
-  if (!v || typeof v !== "object") return false
-  const o = v as Record<string, unknown>
-  const b = o.balances
-  if (!b || typeof b !== "object") return false
-  const bb = b as Record<string, unknown>
-  const sd = o.stablecoinDeposit
-  if (!sd || typeof sd !== "object") return false
-  const sdd = sd as Record<string, unknown>
-  return (
-    typeof bb.USD === "string" &&
-    typeof bb.EUR === "string" &&
-    typeof sdd.USD === "string" &&
-    typeof sdd.EUR === "string"
-  )
-}
-
-function readSnapshotFromLocalStorage(userId: string): AccountSnapshot | null {
-  try {
-    const raw = localStorage.getItem(businessNoahAccountsPersistKey(userId))
-    if (!raw) return null
-    const wrap = JSON.parse(raw) as { data?: unknown }
-    return isAccountSnapshot(wrap.data) ? wrap.data : null
-  } catch {
-    return null
-  }
-}
-
-function persistSnapshot(userId: string, snapshot: AccountSnapshot) {
-  const key = CACHE_KEYS.BUSINESS_NOAH_ACCOUNT_SNAPSHOT(userId)
-  dataCache.set(key, snapshot, SNAPSHOT_TTL_MS)
-  try {
-    localStorage.setItem(
-      businessNoahAccountsPersistKey(userId),
-      JSON.stringify({ data: snapshot, timestamp: Date.now() }),
-    )
-  } catch {
-    /* ignore quota */
-  }
-}
-
-function applySnapshotToSetter(
-  snapshot: AccountSnapshot,
-  setBalances: (b: { USD: string; EUR: string }) => void,
-  setEnabledExtras: (e: string[]) => void,
-  setStablecoinDeposit: (s: { USD: string; EUR: string }) => void,
-  setVaByCurrency: (v: Record<string, VaJson | null>) => void,
-) {
-  setBalances(snapshot.balances)
-  setEnabledExtras(snapshot.enabledExtras)
-  setStablecoinDeposit(snapshot.stablecoinDeposit)
-  setVaByCurrency(snapshot.vaByCurrency)
+function normalizeAvailableExtras(input: string[] | undefined): string[] {
+  return (input ?? []).map((c) => c.toUpperCase())
 }
 
 export function useBusinessAccountRows() {
-  const { user } = useAuth()
-  const userId = user?.id ?? null
+  const queryClient = useQueryClient()
+  const { scope } = useScope()
   const { tier1Complete, isLoading: profileLoading, name, baseCurrency } = useBusinessProfile()
-  const [balances, setBalances] = useState<{ USD: string; EUR: string }>({ USD: "0", EUR: "0" })
-  const [enabledExtras, setEnabledExtras] = useState<string[]>([])
-  const [stablecoinDeposit, setStablecoinDeposit] = useState<{ USD: string; EUR: string }>({
-    USD: "",
-    EUR: "",
-  })
-  const [vaByCurrency, setVaByCurrency] = useState<Record<string, VaJson | null>>({})
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const walletQuery = useWalletBalances()
 
-  const hasFetchedOnceRef = useRef(false)
-  const restoredFromCacheRef = useRef(false)
-  /** Avoid re-applying disk snapshot on every profile refetch (would stomp fresher polled balances). */
-  const diskHydrateDoneForTierRef = useRef(false)
-  const balancesRef = useRef(balances)
-  const enabledExtrasRef = useRef(enabledExtras)
-  const stablecoinDepositRef = useRef(stablecoinDeposit)
-  const vaByCurrencyRef = useRef(vaByCurrency)
-  balancesRef.current = balances
-  enabledExtrasRef.current = enabledExtras
-  stablecoinDepositRef.current = stablecoinDeposit
-  vaByCurrencyRef.current = vaByCurrency
-
-  const noahHeaders = useMemo(
-    () => ({
-      "X-Easner-Noah-Scope": "business",
-    }),
-    [],
+  const enabledExtras = useMemo(
+    () =>
+      tier1Complete
+        ? normalizeAvailableExtras(walletQuery.data?.available?.enabledExtras)
+        : [],
+    [tier1Complete, walletQuery.data?.available?.enabledExtras],
   )
 
-  /** Restore from memory / localStorage once per Tier-1 session so first paint has balances. */
-  useEffect(() => {
-    if (!userId || profileLoading || !tier1Complete || diskHydrateDoneForTierRef.current) return
-    const key = CACHE_KEYS.BUSINESS_NOAH_ACCOUNT_SNAPSHOT(userId)
-    const mem = dataCache.get<AccountSnapshot>(key)
-    const snap =
-      mem && isAccountSnapshot(mem) ? mem : readSnapshotFromLocalStorage(userId)
-    diskHydrateDoneForTierRef.current = true
-    if (!snap) return
-    applySnapshotToSetter(snap, setBalances, setEnabledExtras, setStablecoinDeposit, setVaByCurrency)
-    dataCache.set(key, snap, SNAPSHOT_TTL_MS)
-    restoredFromCacheRef.current = true
-    hasFetchedOnceRef.current = true
-    setLoading(false)
-  }, [userId, profileLoading, tier1Complete])
+  const balances = useMemo(
+    () => ({
+      USD: tier1Complete ? String(walletQuery.data?.balances?.USD ?? "0") : "0",
+      EUR: tier1Complete ? String(walletQuery.data?.balances?.EUR ?? "0") : "0",
+    }),
+    [tier1Complete, walletQuery.data?.balances?.EUR, walletQuery.data?.balances?.USD],
+  )
 
-  useEffect(() => {
-    if (!tier1Complete) {
-      hasFetchedOnceRef.current = false
-      restoredFromCacheRef.current = false
-      diskHydrateDoneForTierRef.current = false
-    }
-  }, [tier1Complete])
+  const stablecoinDeposit = useMemo(
+    () => ({
+      USD: tier1Complete ? String(walletQuery.data?.deposits?.USD?.address ?? "") : "",
+      EUR: tier1Complete ? String(walletQuery.data?.deposits?.EUR?.address ?? "") : "",
+    }),
+    [tier1Complete, walletQuery.data?.deposits?.EUR?.address, walletQuery.data?.deposits?.USD?.address],
+  )
 
-  const refreshAccounts = useCallback(async () => {
-    setLoadError(null)
-    if (!userId) {
-      setLoading(false)
-      return
-    }
+  const vaCurrencies = useMemo(() => {
+    const extras = enabledExtras.filter((c) => c !== "USD" && c !== "EUR")
+    return ["USD", "EUR", ...extras]
+  }, [enabledExtras])
 
-    if (!tier1Complete) {
-      setBalances({ USD: "0", EUR: "0" })
-      setEnabledExtras([])
-      setStablecoinDeposit({ USD: "", EUR: "" })
-      setVaByCurrency({})
-      hasFetchedOnceRef.current = false
-      restoredFromCacheRef.current = false
-      setLoading(false)
-      return
-    }
-
-    const silent =
-      hasFetchedOnceRef.current || restoredFromCacheRef.current
-    if (!silent) {
-      setLoading(true)
-    }
-    restoredFromCacheRef.current = false
-
-    try {
-      const [availRes, tkBalRes, depositRes] = await Promise.all([
-        fetchWithSession("/api/accounts/available-currencies", { headers: noahHeaders }),
-        fetchWithSession("/api/wallets/on-chain-balances", { headers: noahHeaders }),
-        fetchWithSession("/api/wallets/deposit-addresses", { headers: noahHeaders }),
-      ])
-
-      const avail = (await availRes.json().catch(() => ({}))) as {
-        enabledExtras?: string[]
-        error?: string
-      }
-      let nextExtras = enabledExtrasRef.current
-      if (availRes.ok) {
-        nextExtras = (avail.enabledExtras ?? []).map((c) => c.toUpperCase())
-        setEnabledExtras(nextExtras)
-      }
-
-      let nextBalances: { USD: string; EUR: string }
-      if (tkBalRes.ok) {
-        const t = (await tkBalRes.json().catch(() => ({}))) as {
-          USD?: string
-          EUR?: string
-        }
-        nextBalances = {
-          USD: typeof t.USD === "string" ? t.USD : "0",
-          EUR: typeof t.EUR === "string" ? t.EUR : "0",
-        }
-      } else {
-        nextBalances = { USD: "0", EUR: "0" }
-      }
-      setBalances(nextBalances)
-
-      let nextDeposit = stablecoinDepositRef.current
-      if (depositRes.ok) {
-        const d = (await depositRes.json()) as {
-          USD?: { address?: string }
-          EUR?: { address?: string }
-        }
-        nextDeposit = {
-          USD: typeof d.USD?.address === "string" ? d.USD.address : "",
-          EUR: typeof d.EUR?.address === "string" ? d.EUR.address : "",
-        }
-        setStablecoinDeposit(nextDeposit)
-      }
-
-      const extras = nextExtras
-      const codes = ["USD", "EUR", ...extras.filter((c) => c !== "USD" && c !== "EUR")]
-
-      const vaEntries: Record<string, VaJson | null> = {}
-      await Promise.all(
-        codes.map(async (code) => {
+  const virtualAccountsQuery = useQuery({
+    queryKey: scope ? qk.wallets.virtualAccounts(scope, vaCurrencies) : ["wallets", "virtual-accounts", "disabled"],
+    enabled: Boolean(scope) && tier1Complete && vaCurrencies.length > 0,
+    queryFn: async () => {
+      const entries = await Promise.all(
+        vaCurrencies.map(async (code) => {
           const cur = code.toLowerCase()
           if (cur !== "usd" && cur !== "eur" && cur !== "gbp") {
-            vaEntries[code] = null
-            return
+            return [code, null] as const
           }
-          const r = await fetchWithSession(`/api/noah/virtual-accounts?currency=${cur}`, {
-            headers: noahHeaders,
-          })
-          if (!r.ok) {
-            vaEntries[code] = null
-            return
+          try {
+            const value = await apiFetch<VaJson>(`/api/noah/virtual-accounts`, {
+              query: { currency: cur },
+              headers: NOAH_HEADERS,
+            })
+            return [code, value] as const
+          } catch {
+            return [code, null] as const
           }
-          vaEntries[code] = (await r.json()) as VaJson
         }),
       )
-      setVaByCurrency(vaEntries)
+      return Object.fromEntries(entries) as Record<string, VaJson | null>
+    },
+    staleTime: 5 * 60_000,
+    gcTime: 15 * 60_000,
+    meta: { safePersist: false, freshness: "operational" },
+  })
 
-      hasFetchedOnceRef.current = true
-      persistSnapshot(userId, {
-        balances: nextBalances,
-        enabledExtras: nextExtras,
-        stablecoinDeposit: nextDeposit,
-        vaByCurrency: vaEntries,
-      })
-    } catch (e: unknown) {
-      setLoadError(e instanceof Error ? e.message : "Could not load accounts.")
-    } finally {
-      setLoading(false)
-      hasFetchedOnceRef.current = true
-    }
-  }, [noahHeaders, tier1Complete, userId])
-
-  useEffect(() => {
-    if (profileLoading) return
-    void refreshAccounts()
-  }, [profileLoading, refreshAccounts])
-
-  useEffect(() => {
-    if (!userId || !tier1Complete || profileLoading) return
-    const id = window.setInterval(() => {
-      void refreshAccounts()
-    }, BALANCE_POLL_MS)
-    return () => window.clearInterval(id)
-  }, [userId, tier1Complete, profileLoading, refreshAccounts])
-
-  useEffect(() => {
-    const onVis = () => {
-      if (document.visibilityState === "visible" && tier1Complete && userId && !profileLoading) {
-        void refreshAccounts()
-      }
-    }
-    document.addEventListener("visibilitychange", onVis)
-    return () => document.removeEventListener("visibilitychange", onVis)
-  }, [profileLoading, refreshAccounts, tier1Complete, userId])
+  const refreshAccounts = useCallback(async () => {
+    if (!scope) return
+    await queryClient.invalidateQueries({ queryKey: qk.wallets.root(scope) })
+  }, [queryClient, scope])
 
   useEffect(() => {
     const onRefresh = () => {
@@ -299,10 +117,23 @@ export function useBusinessAccountRows() {
   }, [refreshAccounts])
 
   const displayName = name?.trim() || "Business"
+  const vaByCurrency = useMemo(
+    () => virtualAccountsQuery.data ?? {},
+    [virtualAccountsQuery.data],
+  )
+  const loadError =
+    walletQuery.error instanceof Error
+      ? walletQuery.error.message
+      : virtualAccountsQuery.error instanceof Error
+        ? virtualAccountsQuery.error.message
+        : walletQuery.error
+          ? String(walletQuery.error)
+          : virtualAccountsQuery.error
+            ? String(virtualAccountsQuery.error)
+            : null
 
   const accountRows: Account[] = useMemo(() => {
-    const extras = enabledExtras.filter((c) => c !== "USD" && c !== "EUR")
-    const codes = ["USD", "EUR", ...extras] as Account["currency"][]
+    const codes = ["USD", "EUR", ...enabledExtras.filter((c) => c !== "USD" && c !== "EUR")] as Account["currency"][]
     return codes.map((currency) => {
       const va = vaByCurrency[currency]
       const bal =
@@ -340,7 +171,14 @@ export function useBusinessAccountRows() {
         stablecoinToken: usdc ? "USDC" : eurc ? "EURC" : "USDC",
       }
     })
-  }, [balances, displayName, enabledExtras, stablecoinDeposit, tier1Complete, vaByCurrency])
+  }, [balances.EUR, balances.USD, displayName, enabledExtras, stablecoinDeposit.EUR, stablecoinDeposit.USD, tier1Complete, vaByCurrency])
+
+  const loading =
+    profileLoading ||
+    (tier1Complete &&
+      accountRows.length === 0 &&
+      ((walletQuery.isPending && !walletQuery.data) ||
+        (virtualAccountsQuery.isPending && !virtualAccountsQuery.data)))
 
   return {
     accountRows,
@@ -349,7 +187,7 @@ export function useBusinessAccountRows() {
     tier1Complete,
     profileLoading,
     refreshAccounts,
-    noahHeaders,
+    noahHeaders: NOAH_HEADERS,
     displayName,
     balances,
     baseCurrency: baseCurrency?.toUpperCase() || "USD",

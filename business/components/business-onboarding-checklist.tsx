@@ -5,66 +5,14 @@ import Link from "next/link"
 import { Check, ChevronDown, ChevronUp, CircleDashed, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/auth-context"
-import { fetchWithSession } from "@/lib/fetch-with-session"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { isBusinessInfoStepComplete } from "@/lib/business-tab-completion"
 import { parseBalanceString } from "@/hooks/use-business-account-rows"
-import {
-  businessNoahAccountsPersistKey,
-  CACHE_KEYS,
-  dataCache,
-  EASNER_TERMINAL_PAYOUT_SETUP_UPDATED_EVENT,
-} from "@/lib/cache"
-import {
-  fetchTerminalPayoutSetup,
-  type TerminalPayoutSetupData,
-} from "@/hooks/use-terminal-payout-setup-cached"
-
-const NOAH_BUSINESS_HEADERS = { "X-Easner-Noah-Scope": "business" } as const
+import { EASNER_TERMINAL_PAYOUT_SETUP_UPDATED_EVENT } from "@/lib/cache"
+import { useTerminalPayoutSetupCached } from "@/hooks/use-terminal-payout-setup-cached"
+import { useWalletBalances } from "@/hooks/queries/use-wallets"
 
 type SnapshotBalances = { USD: string; EUR: string }
-
-function isSnapshotBalances(v: unknown): v is SnapshotBalances {
-  if (!v || typeof v !== "object") return false
-  const o = v as Record<string, unknown>
-  return typeof o.USD === "string" && typeof o.EUR === "string"
-}
-
-function readTerminalPayoutIdFromLocalStorage(userId: string): string | null | undefined {
-  try {
-    const raw = localStorage.getItem(`terminal_payout_setup_${userId}`)
-    if (!raw) return undefined
-    const wrap = JSON.parse(raw) as { data?: unknown }
-    const data = wrap.data
-    if (!data || typeof data !== "object") return undefined
-    const defaultTerminalPayoutId = (data as Record<string, unknown>).defaultTerminalPayoutId
-    if (typeof defaultTerminalPayoutId === "string") return defaultTerminalPayoutId
-    if (defaultTerminalPayoutId === null) return null
-    return undefined
-  } catch {
-    return undefined
-  }
-}
-
-function readSnapshotBalancesFromLocalStorage(userId: string): SnapshotBalances | null {
-  try {
-    const raw = localStorage.getItem(businessNoahAccountsPersistKey(userId))
-    if (!raw) return null
-    const wrap = JSON.parse(raw) as { data?: unknown }
-    const d = wrap.data
-    if (!d || typeof d !== "object") return null
-    const b = (d as Record<string, unknown>).balances
-    return isSnapshotBalances(b) ? b : null
-  } catch {
-    return null
-  }
-}
-
-function balancesFromCache(userId: string): SnapshotBalances | null {
-  const snap = dataCache.get<{ balances: SnapshotBalances }>(CACHE_KEYS.BUSINESS_NOAH_ACCOUNT_SNAPSHOT(userId))
-  if (snap?.balances && isSnapshotBalances(snap.balances)) return snap.balances
-  return readSnapshotBalancesFromLocalStorage(userId)
-}
 
 function hasPositiveFiat(b: SnapshotBalances | null): boolean {
   if (!b) return false
@@ -147,10 +95,19 @@ export function BusinessOnboardingChecklist() {
   const { user } = useAuth()
   const userId = user?.id ?? null
   const profile = useBusinessProfile()
+  const walletQuery = useWalletBalances()
+  const { data: terminalSetup, refetch: refetchTerminalSetup } = useTerminalPayoutSetupCached()
   const [expanded, setExpanded] = useState(false)
-  const [terminalPayoutId, setTerminalPayoutId] = useState<string | null | undefined>(undefined)
-  const [funded, setFunded] = useState(false)
   const [stickyDone, setStickyDone] = useState<StickyCompletedSteps>(defaultStickySteps())
+  const terminalPayoutId = userId ? terminalSetup.defaultTerminalPayoutId : undefined
+  const funded = hasPositiveFiat(
+    walletQuery.data?.balances
+      ? {
+          USD: String(walletQuery.data.balances.USD ?? "0"),
+          EUR: String(walletQuery.data.balances.EUR ?? "0"),
+        }
+      : null,
+  )
 
   const step1Raw = isBusinessInfoStepComplete(profile)
   const step2Raw = profile.tier1Complete
@@ -158,67 +115,14 @@ export function BusinessOnboardingChecklist() {
   const step3Raw = Boolean(terminalPayoutId)
 
   const refreshBalances = useCallback(async () => {
-    if (!userId || !profile.tier1Complete) {
-      setFunded(false)
-      return
-    }
-    const cached = balancesFromCache(userId)
-    if (hasPositiveFiat(cached)) {
-      setFunded(true)
-      return
-    }
-    try {
-      const tkRes = await fetchWithSession("/api/wallets/on-chain-balances", { headers: NOAH_BUSINESS_HEADERS })
-      if (!tkRes.ok) {
-        setFunded(hasPositiveFiat(cached))
-        return
-      }
-      const t = (await tkRes.json()) as { USD?: string; EUR?: string }
-      const next: SnapshotBalances = {
-        USD: typeof t.USD === "string" ? t.USD : "0",
-        EUR: typeof t.EUR === "string" ? t.EUR : "0",
-      }
-      setFunded(hasPositiveFiat(next))
-    } catch {
-      setFunded(hasPositiveFiat(cached))
-    }
-  }, [profile.tier1Complete, userId])
-
-  const applyTerminalFromCache = useCallback(() => {
-    if (!userId) return
-    const d = dataCache.get<TerminalPayoutSetupData>(CACHE_KEYS.TERMINAL_PAYOUT_SETUP(userId))
-    if (d != null) {
-      setTerminalPayoutId(d.defaultTerminalPayoutId)
-      return
-    }
-    const persistedDefaultId = readTerminalPayoutIdFromLocalStorage(userId)
-    if (persistedDefaultId !== undefined) {
-      setTerminalPayoutId(persistedDefaultId)
-    }
-  }, [userId])
+    if (!userId || !profile.tier1Complete) return
+    await walletQuery.refetch()
+  }, [profile.tier1Complete, userId, walletQuery])
 
   const refreshTerminal = useCallback(async () => {
-    if (!userId) {
-      setTerminalPayoutId(undefined)
-      return
-    }
-    try {
-      const data = await fetchTerminalPayoutSetup()
-      setTerminalPayoutId(data.defaultTerminalPayoutId)
-    } catch {
-      const persistedDefaultId = readTerminalPayoutIdFromLocalStorage(userId)
-      setTerminalPayoutId(persistedDefaultId ?? null)
-    }
-  }, [userId])
-
-  useEffect(() => {
-    if (!userId) {
-      setTerminalPayoutId(undefined)
-      return
-    }
-    applyTerminalFromCache()
-    void refreshTerminal()
-  }, [applyTerminalFromCache, refreshTerminal, userId])
+    if (!userId) return
+    await refetchTerminalSetup()
+  }, [refetchTerminalSetup, userId])
 
   useEffect(() => {
     if (!userId) return
@@ -246,21 +150,19 @@ export function BusinessOnboardingChecklist() {
 
   useEffect(() => {
     const onProfile = () => {
-      applyTerminalFromCache()
       void refreshTerminal()
     }
     window.addEventListener("business-profile-updated", onProfile)
     return () => window.removeEventListener("business-profile-updated", onProfile)
-  }, [applyTerminalFromCache, refreshTerminal])
+  }, [refreshTerminal])
 
   useEffect(() => {
     const onTerminalUpdated = () => {
-      applyTerminalFromCache()
       void refreshTerminal()
     }
     window.addEventListener(EASNER_TERMINAL_PAYOUT_SETUP_UPDATED_EVENT, onTerminalUpdated)
     return () => window.removeEventListener(EASNER_TERMINAL_PAYOUT_SETUP_UPDATED_EVENT, onTerminalUpdated)
-  }, [applyTerminalFromCache, refreshTerminal])
+  }, [refreshTerminal])
 
   useEffect(() => {
     if (expanded) {

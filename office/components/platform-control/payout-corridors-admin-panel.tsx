@@ -15,6 +15,7 @@ export function PayoutCorridorsAdminPanel() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState<string | null>(null)
+  const showTableSkeleton = loading && rows.length === 0
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -74,6 +75,7 @@ export function PayoutCorridorsAdminPanel() {
           </p>
         </div>
         <Button type="button" variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
+          {loading && rows.length > 0 ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
           Refresh
         </Button>
       </div>
@@ -89,7 +91,7 @@ export function PayoutCorridorsAdminPanel() {
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          {loading ? (
+          {showTableSkeleton ? (
             <div className="flex items-center gap-2 p-6 text-muted-foreground text-sm">
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading…

@@ -119,7 +119,7 @@ function SessionsTable({ sessions }: { sessions: TerminalSessionListItem[] }) {
 export default function TerminalPage() {
   const { isLoading: authLoading } = useAuth()
   const { data: sessions, loading: sessionsLoading } = useTerminalSessionsCached()
-  const showTableSkeleton = authLoading || sessionsLoading
+  const showTableSkeleton = (authLoading && sessions.length === 0) || (sessionsLoading && sessions.length === 0)
 
   const [payUrl, setPayUrl] = useState(() => {
     const envOrigin = getBusinessAppPublicOrigin()

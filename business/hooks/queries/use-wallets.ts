@@ -1,9 +1,10 @@
 "use client"
 
 import { useQuery } from "@tanstack/react-query"
-import { qk } from "@easner/shared"
+import { pollingIntervalFor, qk } from "@easner/shared"
 import { apiFetch } from "@/lib/query/api-client"
 import { useScope } from "@/lib/query/scope"
+import { useRealtimeHealth } from "@/lib/query/realtime-health-context"
 
 const NOAH_HEADERS = { "X-Easner-Noah-Scope": "business" } as const
 
@@ -35,6 +36,7 @@ export interface AvailableCurrencies {
  */
 export function useWalletBalances() {
   const { scope } = useScope()
+  const realtimeHealth = useRealtimeHealth()
   return useQuery({
     queryKey: scope ? qk.wallets.list(scope) : ["wallets", "disabled"],
     enabled: Boolean(scope),
@@ -52,7 +54,7 @@ export function useWalletBalances() {
     gcTime: 10 * 60_000,
     // Fallback poll only; disabled when realtime is healthy (handled by
     // the realtime bridge invalidating `qk.wallets.list` on balance events).
-    refetchInterval: 30_000,
+    refetchInterval: pollingIntervalFor("critical", realtimeHealth),
     refetchIntervalInBackground: false,
     meta: { safePersist: false, freshness: "critical" },
   })

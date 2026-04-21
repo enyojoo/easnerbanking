@@ -85,7 +85,7 @@ function PlatformControlHubBody() {
 
 export default function PlatformControlPage() {
   return (
-    <Suspense fallback={<OfficeDashboardLayout><div className="p-6 text-sm text-muted-foreground">Loading…</div></OfficeDashboardLayout>}>
+    <Suspense fallback={null}>
       <PlatformControlHubBody />
     </Suspense>
   )

@@ -11,6 +11,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Plus } from "lucide-react"
 import type { AccountCurrencyOffer } from "@/lib/accounts/open-currency-catalog"
 
@@ -129,7 +130,16 @@ export function OpenCurrencyAccountDialog({ onAdded }: { onAdded: () => void }) 
         </DialogHeader>
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         {loading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <ul className="space-y-2" aria-hidden>
+            <li className="rounded-md border border-border px-3 py-2">
+              <Skeleton className="h-4 w-36" />
+              <Skeleton className="mt-2 h-3 w-24" />
+            </li>
+            <li className="rounded-md border border-border px-3 py-2">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="mt-2 h-3 w-20" />
+            </li>
+          </ul>
         ) : data ? (
           <ul className="space-y-2">
             {data.offers.map((o) => {

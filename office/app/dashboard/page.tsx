@@ -53,7 +53,7 @@ export default function AdminDashboardPage() {
     gcTime: OFFICE_OVERVIEW_TTL_MS * 2,
   })
 
-  const loading = isPending
+  const loading = isPending && !overview
   const loadError =
     overviewError instanceof Error ? overviewError.message : overviewError ? String(overviewError) : null
 

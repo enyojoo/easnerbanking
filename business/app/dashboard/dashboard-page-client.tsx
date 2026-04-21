@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import {
   ArrowDownLeft,
@@ -33,7 +33,6 @@ export function DashboardPageClient() {
   const { data: rows } = useTransactionsCached()
   const { balances, baseCurrency } = useBusinessAccountRows()
   const { data: fxRates = [] } = useFxRates()
-  const [stablePrimaryBalance, setStablePrimaryBalance] = useState<number | null>(null)
 
   const [selectedTransaction, setSelectedTransaction] = useState<TransactionWithSource | null>(null)
   const [transactionDetailsOpen, setTransactionDetailsOpen] = useState(false)
@@ -70,6 +69,8 @@ export function DashboardPageClient() {
     const c = currency.toUpperCase()
     const b = targetBase.toUpperCase()
     if (c === b) return amountAbs
+    // No FX pair needed for a zero bucket; avoids "—" when rates are loading/stale/empty.
+    if (amountAbs === 0) return 0
     const rate = getFxRate(c, b)
     if (!rate) return null
     return amountAbs * rate
@@ -110,28 +111,6 @@ export function DashboardPageClient() {
     : null
   const summaryCurrency = code
 
-  useEffect(() => {
-    const cacheKey = `easner_primary_balance_${code}`
-    if (computedPrimaryBalance != null && Number.isFinite(computedPrimaryBalance)) {
-      setStablePrimaryBalance(computedPrimaryBalance)
-      try {
-        window.localStorage.setItem(cacheKey, String(computedPrimaryBalance))
-      } catch {
-        // ignore quota
-      }
-      return
-    }
-    try {
-      const raw = window.localStorage.getItem(cacheKey)
-      const cached = raw != null ? Number(raw) : Number.NaN
-      if (Number.isFinite(cached)) {
-        setStablePrimaryBalance(cached)
-      }
-    } catch {
-      // ignore read errors
-    }
-  }, [computedPrimaryBalance, code])
-
   return (
     <div className="space-y-8">
       <Card>
@@ -162,7 +141,7 @@ export function DashboardPageClient() {
                       )}
                     >
                       {balancesVisible ?
-                        stablePrimaryBalance == null ? "—" : formatCurrency(stablePrimaryBalance, code)
+                        computedPrimaryBalance == null ? "—" : formatCurrency(computedPrimaryBalance, code)
                       : MASK}
                     </span>
                   </span>

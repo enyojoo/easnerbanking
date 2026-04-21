@@ -120,7 +120,11 @@ export default function QrPayPage() {
       <Card>
         <CardContent className="p-0">
           {loading ?
-            <div className="py-12 text-center text-sm text-muted-foreground">Loading…</div>
+            <div className="space-y-3 p-4">
+              <div className="h-16 animate-pulse rounded-md bg-muted" />
+              <div className="h-16 animate-pulse rounded-md bg-muted" />
+              <div className="h-16 animate-pulse rounded-md bg-muted" />
+            </div>
           : rows.length === 0 ?
             <div className="flex flex-1 flex-col items-center justify-center gap-2 py-12 text-center">
               <p className="text-lg font-semibold">Your counter, one scan away</p>

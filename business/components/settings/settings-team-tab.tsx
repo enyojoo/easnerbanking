@@ -147,7 +147,7 @@ export function SettingsTeamTab() {
     setInviteOpen(false)
   }
 
-  const showLoading = isLoading || teamLoading || loadingMembers
+  const showLoading = (isLoading || teamLoading || loadingMembers) && members.length === 0
 
   const updateMemberRole = async (member: TeamMember, role: InviteDraft["role"]) => {
     const mid = membershipIdForRow(member)

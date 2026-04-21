@@ -318,6 +318,7 @@ export function CommercialPromoPanel() {
   const [name, setName] = useState("")
   const [discountType, setDiscountType] = useState("percentage")
   const [discountValue, setDiscountValue] = useState("0")
+  const showTableSkeleton = loading && rows.length === 0
 
   const load = async () => {
     setLoading(true)
@@ -393,7 +394,7 @@ export function CommercialPromoPanel() {
           <CardTitle>Promo Rules</CardTitle>
         </CardHeader>
         <CardContent>
-          {loading ? (
+          {showTableSkeleton ? (
             <p className="text-sm text-muted-foreground">Loading promo rules...</p>
           ) : (
             <Table>

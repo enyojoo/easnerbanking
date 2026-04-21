@@ -158,8 +158,16 @@ export function SettingsPersonalTab() {
 
   const canUsePassword = hasEmailPasswordIdentity(user)
   const mfaVerifiedOn = mfaStatusLine === "On"
+  const hasPersonalData = Boolean(
+    personalData.personal.fullName ||
+      personalData.personal.email ||
+      personalData.personal.phone ||
+      personalData.personal.dateOfBirth ||
+      personalData.personal.avatarUrl,
+  )
+  const showPersonalSkeleton = loading && !hasPersonalData
   /** MFA row stays in the same loading pass as personal settings until both API + factors are ready. */
-  const mfaRowLoading = loading || !mfaStatusKnown
+  const mfaRowLoading = (loading && !hasPersonalData) || !mfaStatusKnown
 
   useLayoutEffect(() => {
     mfaDialogOpenRef.current = mfaDialogOpen
@@ -351,7 +359,7 @@ export function SettingsPersonalTab() {
               <IdCard className="h-5 w-5" aria-hidden />
               Personal Information
             </CardTitle>
-            {loading ? (
+            {showPersonalSkeleton ? (
               <div className="h-9 w-24 animate-pulse rounded-md bg-muted" />
             ) : editingSection === "personal" ? (
               <div className="flex items-center gap-2">
@@ -377,7 +385,7 @@ export function SettingsPersonalTab() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {loading ? (
+          {showPersonalSkeleton ? (
             <div className="flex gap-2">
               <div className="h-14 w-14 shrink-0 animate-pulse rounded-full bg-muted" />
               <div className="h-9 w-24 animate-pulse rounded-md bg-muted" />
@@ -393,7 +401,7 @@ export function SettingsPersonalTab() {
             <Label htmlFor="fullName">Full Name</Label>
             <div className="flex items-center gap-2">
               <User className="h-4 w-4 text-muted-foreground" aria-hidden />
-              {loading ? (
+              {showPersonalSkeleton ? (
                 <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
               ) : (
                 <Input
@@ -410,7 +418,7 @@ export function SettingsPersonalTab() {
             <Label htmlFor="email">Email Address</Label>
             <div className="flex items-center gap-2">
               <Mail className="h-4 w-4 text-muted-foreground" />
-              {loading ? (
+              {showPersonalSkeleton ? (
                 <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
               ) : (
                 <Input
@@ -428,7 +436,7 @@ export function SettingsPersonalTab() {
             <Label htmlFor="phone">Phone Number</Label>
             <div className="flex items-center gap-2">
               <Phone className="h-4 w-4 text-muted-foreground" />
-              {loading ? (
+              {showPersonalSkeleton ? (
                 <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
               ) : (
                 <Input
@@ -446,7 +454,7 @@ export function SettingsPersonalTab() {
             <Label htmlFor="dateOfBirth">Date of Birth</Label>
             <div className="flex items-center gap-2">
               <Calendar className="h-4 w-4 text-muted-foreground" />
-              {loading ? (
+              {showPersonalSkeleton ? (
                 <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
               ) : (
                 <Input

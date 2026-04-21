@@ -187,7 +187,7 @@ export default function AdminUsersPage() {
     },
   })
   const directoryUsers = directoryQuery.data ?? []
-  const dirLoading = usersEnabled ? directoryQuery.isPending : false
+  const dirLoading = usersEnabled ? directoryQuery.isPending && directoryUsers.length === 0 : false
   const dirError =
     directoryQuery.error instanceof Error
       ? directoryQuery.error.message
