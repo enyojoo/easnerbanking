@@ -27,6 +27,10 @@ import { analytics } from '../../lib/analytics'
 import { useAuth } from '../../contexts/AuthContext'
 import { useFocusRefreshAll } from '../../hooks/useFocusRefresh'
 import { syncConsumerLedgerRemotes } from '../../lib/apiClient'
+import { useQueryClient } from '@tanstack/react-query'
+import { useScope } from '../../query/scope'
+import { apiFetch } from '../../query/api-client'
+import { NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
 import {
   colors,
   shadows,
@@ -42,7 +46,7 @@ import {
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { getTransactionStatusDisplay } from '../../utils/formatters'
-import { isEasnerProductReceiveTitle, isEasnerProductSendTitle } from '@easner/shared'
+import { isEasnerProductReceiveTitle, isEasnerProductSendTitle, qk } from '@easner/shared'
 
 function useCurrencies() {
   const { data: currencies = [] } = useCurrenciesCatalog()
@@ -358,6 +362,8 @@ function TransactionsContent({ navigation }: NavigationProps) {
     }
   }, [windowWidth])
   const { userProfile } = useAuth()
+  const { scope } = useScope()
+  const qc = useQueryClient()
   const currencies = useCurrencies()
   const txQuery = useTransactionsList({}, 100)
   
@@ -386,6 +392,24 @@ function TransactionsContent({ navigation }: NavigationProps) {
     const pages = txQuery.data?.pages ?? []
     return pages.flatMap((p) => (p.transactions ?? []) as CombinedTransaction[])
   }, [txQuery.data])
+
+  useEffect(() => {
+    if (!scope || queryRows.length === 0) return
+    const recentRows = queryRows.slice(0, 30)
+    for (const row of recentRows) {
+      const txId = transactionDetailLookupId(row)
+      if (!txId) continue
+      void qc.prefetchQuery({
+        queryKey: qk.transactions.detail(scope, txId),
+        queryFn: () =>
+          apiFetch<{ transaction?: CombinedTransaction }>(
+            `/api/transactions/${encodeURIComponent(txId)}`,
+            { headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS } },
+          ),
+        staleTime: 45_000,
+      })
+    }
+  }, [qc, queryRows, scope])
 
   const fetchTransactions = React.useCallback(async (force = false, silent = false) => {
     void force

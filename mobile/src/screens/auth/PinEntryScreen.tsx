@@ -26,6 +26,13 @@ import { useDeferredLoading } from '../../hooks/useDeferredLoading'
 import { PinKeypad } from '../../components/pin'
 import { normalizeAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
 
+function formatLockCountdown(msRemaining: number): string {
+  const totalSeconds = Math.max(0, Math.floor(msRemaining / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+}
+
 export default function PinEntryScreen({ navigation: navigationProp }: NavigationProps) {
   const palette = useThemeColors()
   const { user, userProfile, signOut } = useAuth()
@@ -252,9 +259,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
               ) : (
                 <Text style={styles.subtitle}>
                   {locked && lockedUntil
-                    ? appPinStrings.lockLockedTryMinutes(
-                        Math.max(1, Math.ceil((lockedUntil - Date.now()) / 60000)),
-                      )
+                    ? `PIN locked. Try again in ${formatLockCountdown(lockedUntil - Date.now())}`
                     : appPinStrings.lockEnterPin}
                 </Text>
               )}

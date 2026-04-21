@@ -24,6 +24,12 @@ import { PinKeypad } from '../../components/pin'
 type Step = 'verify' | 'pin' | 'confirm'
 
 const empty4 = (): string[] => ['', '', '', '']
+function formatLockCountdown(msRemaining: number): string {
+  const totalSeconds = Math.max(0, Math.floor(msRemaining / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+}
 
 export default function ChangePinScreen({ navigation }: NavigationProps) {
   const palette = useThemeColors()
@@ -38,7 +44,7 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
   const [verifyBusy, setVerifyBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lockedOut, setLockedOut] = useState(false)
-  const [lockMinutes, setLockMinutes] = useState(0)
+  const [lockMsRemaining, setLockMsRemaining] = useState(0)
   const newPinRef = useRef('')
   const verifyTryRef = useRef('')
   const shakeAnim = useRef(new Animated.Value(0)).current
@@ -49,7 +55,7 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
     if (!userId) return
     const s = await getLockoutState(userId)
     setLockedOut(s.lockedOut)
-    setLockMinutes(s.lockedOut ? Math.max(1, Math.ceil(s.msRemaining / 60000)) : 0)
+    setLockMsRemaining(s.lockedOut ? Math.max(0, s.msRemaining) : 0)
   }, [userId])
 
   useEffect(() => {
@@ -268,6 +274,8 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
 
   const currentPinDisplay = step === 'verify' ? verifyDigits : step === 'pin' ? pin : confirmPin
   const filledCount = currentPinDisplay.filter((d) => d !== '').length
+  const showPinAreaSpinner = verifyBusy || loading
+  const pinAreaSpinnerLabel = verifyBusy ? appPinStrings.lockVerifying : appPinStrings.pinSaving
 
   if (!ready) {
     return (
@@ -312,27 +320,38 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
           </View>
 
           {lockedOut ? (
-            <Text style={styles.lockout}>{appPinStrings.lockLockedTryMinutes(lockMinutes)}</Text>
+            <Text style={styles.lockout}>
+              {`PIN locked. Try again in ${formatLockCountdown(lockMsRemaining)}`}
+            </Text>
           ) : null}
 
-          <Animated.View
-            style={[
-              styles.pinDotsContainer,
-              error ? styles.pinDotsContainerWithHint : null,
-              { transform: [{ translateX: shakeAnim }] },
-            ]}
-          >
-            {currentPinDisplay.map((digit, index) => (
-              <View
-                key={index}
+          <View style={styles.pinDotsWrapper}>
+            {showPinAreaSpinner ? (
+              <View style={styles.pinDotsLoadingOnly}>
+                <ActivityIndicator size="small" color={palette.primary.main} />
+                <Text style={styles.pinAreaLoadingLabel}>{pinAreaSpinnerLabel}</Text>
+              </View>
+            ) : (
+              <Animated.View
                 style={[
-                  styles.pinDot,
-                  digit !== '' && styles.pinDotFilled,
-                  !!error && styles.pinDotError,
+                  styles.pinDotsContainer,
+                  error ? styles.pinDotsContainerWithHint : null,
+                  { transform: [{ translateX: shakeAnim }] },
                 ]}
-              />
-            ))}
-          </Animated.View>
+              >
+                {currentPinDisplay.map((digit, index) => (
+                  <View
+                    key={index}
+                    style={[
+                      styles.pinDot,
+                      digit !== '' && styles.pinDotFilled,
+                      !!error && styles.pinDotError,
+                    ]}
+                  />
+                ))}
+              </Animated.View>
+            )}
+          </View>
 
           {/* Same as PinEntryScreen: incorrect PIN is plain text below dots, not in a tinted box */}
           {error ? (
@@ -353,23 +372,6 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
         </View>
       </KeyboardAvoidingView>
 
-      {verifyBusy ? (
-        <View style={styles.loadingOverlay} pointerEvents="box-none">
-          <View style={styles.loadingCard}>
-            <ActivityIndicator size="large" color={palette.primary.main} />
-            <Text style={styles.loadingLabel}>{appPinStrings.lockVerifying}</Text>
-          </View>
-        </View>
-      ) : null}
-
-      {loading ? (
-        <View style={styles.loadingOverlay} pointerEvents="box-none">
-          <View style={styles.loadingCard}>
-            <ActivityIndicator size="large" color={palette.primary.main} />
-            <Text style={styles.loadingLabel}>{appPinStrings.pinSaving}</Text>
-          </View>
-        </View>
-      ) : null}
     </View>
   )
 }
@@ -445,6 +447,24 @@ const styles = StyleSheet.create({
   pinDotsContainerWithHint: {
     marginBottom: 0,
   },
+  pinDotsWrapper: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 56,
+    marginBottom: spacing[16],
+  },
+  pinDotsLoadingOnly: {
+    minHeight: 56,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+  },
+  pinAreaLoadingLabel: {
+    ...textStyles.bodySmall,
+    color: colors.text.secondary,
+  },
   verifyHintSlot: {
     width: '100%',
     minHeight: 48,
@@ -465,7 +485,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: spacing[4],
-    marginBottom: spacing[16],
+    marginBottom: 0,
   },
   pinDot: {
     width: 14,
@@ -485,20 +505,5 @@ const styles = StyleSheet.create({
   keypadContainer: {
     width: '100%',
     marginBottom: spacing[8],
-  },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 100,
-  },
-  loadingCard: {
-    alignItems: 'center',
-    gap: spacing[4],
-  },
-  loadingLabel: {
-    ...textStyles.bodyMedium,
-    color: colors.text.secondary,
   },
 })

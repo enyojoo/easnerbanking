@@ -8,6 +8,13 @@ import { usePersonalProfileAvatar } from "@/lib/use-personal-profile-avatar"
 import { PinEntryBlock } from "./pin-entry-block"
 import { PinUserAvatar } from "./pin-user-avatar"
 
+function formatLockCountdown(msRemaining: number): string {
+  const totalSeconds = Math.max(0, Math.floor(msRemaining / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
+}
+
 function firstName(user: User): string {
   const meta = user.user_metadata as Record<string, unknown> | undefined
   const name = typeof meta?.name === "string" ? meta.name.trim() : ""
@@ -89,7 +96,7 @@ export function PinUnlockScreen({
         </div>
         {lock.lockedOut && lock.lockedUntil != null ? (
           <p className="text-center text-sm text-destructive">
-            {appPinStrings.lockLockedTryMinutes(Math.max(1, Math.ceil(lock.msRemaining / 60000)))}
+            {`PIN locked. Try again in ${formatLockCountdown(lock.msRemaining)}`}
           </p>
         ) : null}
         <PinEntryBlock

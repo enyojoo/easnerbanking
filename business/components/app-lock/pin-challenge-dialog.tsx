@@ -13,6 +13,13 @@ import { getLockoutState, verifyPin, type VerifyPinResult } from "@/lib/login-pi
 import { appPinStrings } from "@/lib/i18n/app-pin-en"
 import { PinEntryBlock } from "./pin-entry-block"
 
+function formatLockCountdown(msRemaining: number): string {
+  const totalSeconds = Math.max(0, Math.floor(msRemaining / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
+}
+
 /**
  * Modal PIN challenge for sensitive actions (e.g. confirm send). Same keypad as full-screen lock.
  * PIN is client-only UX; not server MFA.
@@ -94,7 +101,7 @@ export function PinChallengeDialog({
         </DialogHeader>
         {lock.lockedOut && lock.lockedUntil != null ? (
           <p className="text-center text-sm text-destructive">
-            {appPinStrings.lockLockedTryMinutes(Math.max(1, Math.ceil(lock.msRemaining / 60000)))}
+            {`PIN locked. Try again in ${formatLockCountdown(lock.msRemaining)}`}
           </p>
         ) : null}
         <div className="py-2">

@@ -48,13 +48,17 @@ import { useEffect } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import { useBalance } from '../../contexts/BalanceContext'
 import { apiGet, syncConsumerLedgerRemotes, syncConsumerLedgerRemotesFireAndForget } from '../../lib/apiClient'
+import { useQueryClient } from '@tanstack/react-query'
+import { useScope } from '../../query/scope'
+import { apiFetch } from '../../query/api-client'
+import { NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
 import { GlossyPrimaryButton, SecondaryOutlineButton, ShimmerLoader } from '../../components/premium'
 import { getTransactionStatusDisplay } from '../../utils/formatters'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import { isTier1Complete } from '../../lib/compliance'
 import { noahService } from '../../lib/noahService'
 import { useTransactionsList } from '../../hooks/queries'
-import { isEasnerProductReceiveTitle, isEasnerProductSendTitle } from '@easner/shared'
+import { isEasnerProductReceiveTitle, isEasnerProductSendTitle, qk } from '@easner/shared'
 import { normalizeAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
 
 const DASHBOARD_SELECTED_CURRENCY_KEY_PREFIX = 'easner_dashboard_selected_currency_'
@@ -86,6 +90,8 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const heroBalanceLineHeight =
     Math.round(heroBalanceFontSize * lineHeight.tight) + (Platform.OS === 'android' ? 6 : 4)
   const { user, userProfile, refreshUserProfile, loading: authLoading } = useAuth()
+  const { scope } = useScope()
+  const qc = useQueryClient()
   const txQuery = useTransactionsList({}, 5)
   const { balances, hasResolvedBalance, refreshBalances } = useBalance()
   const [selectedCurrency, setSelectedCurrency] = useState<'USD' | 'EUR' | 'GBP'>('USD')
@@ -164,6 +170,23 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const loadingTransactions = txQuery.isLoading && recentTransactions.length === 0
   const hasAttemptedLoad = txQuery.isFetched || recentTransactions.length > 0
   const lastStableBalanceTextRef = useRef<Record<string, string>>({})
+
+  useEffect(() => {
+    if (!scope || recentTransactions.length === 0) return
+    for (const row of recentTransactions.slice(0, 10)) {
+      const txId = String(row.ledger_row_id?.trim() || row.transaction_id || row.id || '').trim()
+      if (!txId) continue
+      void qc.prefetchQuery({
+        queryKey: qk.transactions.detail(scope, txId),
+        queryFn: () =>
+          apiFetch<{ transaction?: DashboardTransaction }>(
+            `/api/transactions/${encodeURIComponent(txId)}`,
+            { headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS } },
+          ),
+        staleTime: 45_000,
+      })
+    }
+  }, [qc, recentTransactions, scope])
 
   // Initial load - rely on webhooks and real-time for instant updates
   // Only sync for backfill on first load (once per session)
