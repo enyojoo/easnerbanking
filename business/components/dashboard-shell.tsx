@@ -46,6 +46,53 @@ export function DashboardShell({ children, mainClassName = "", constrained = fal
     }
   }, [user, isLoading, router])
 
+  useEffect(() => {
+    if (isLoading || !user?.id) return
+    const criticalRoutes = [
+      "/dashboard",
+      "/send",
+      "/transactions",
+      "/accounts",
+    ] as const
+
+    const secondaryRoutes = [
+      "/cards",
+      "/invoices",
+      "/terminal",
+      "/qr-pay",
+      "/settings",
+    ] as const
+
+    // Prefetch critical routes immediately (first click feels instant).
+    for (const href of criticalRoutes) {
+      try {
+        router.prefetch(href)
+      } catch {
+        // Best-effort only; never block render.
+      }
+    }
+
+    const prefetchSecondary = () => {
+      for (const href of secondaryRoutes) {
+        try {
+          router.prefetch(href)
+        } catch {
+          // Best-effort only; never block render.
+        }
+      }
+    }
+
+    // Prefetch after first paint so it doesn't compete with hydration.
+    // Use idle time when available; fallback to a small delay.
+    const w = window as any
+    if (typeof w.requestIdleCallback === "function") {
+      const id = w.requestIdleCallback(prefetchSecondary, { timeout: 2000 })
+      return () => w.cancelIdleCallback?.(id)
+    }
+    const t = window.setTimeout(prefetchSecondary, 250)
+    return () => window.clearTimeout(t)
+  }, [isLoading, router, user?.id])
+
   if (isLoading || !user) {
     return null
   }
