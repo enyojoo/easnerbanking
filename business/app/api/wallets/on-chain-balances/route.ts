@@ -4,6 +4,7 @@ import { requireAuth, requireNoahEnv } from "@/app/api/noah/_helpers"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
 import { getTurnkeyDisplayBalancesUsdEur } from "@/lib/wallet/turnkey-chain-balances"
+import { upsertWalletBalanceSnapshot } from "@/lib/wallet/wallet-balances-db"
 
 export const runtime = "nodejs"
 
@@ -32,7 +33,61 @@ export async function GET(request: Request) {
   if (guard) return guard
 
   const admin = createSupabaseAdmin()
+
+  const businessId = acc.ctx.scope === "business" ? acc.ctx.subjectBusinessId : null
+  const userId = acc.ctx.scope === "individual" ? acc.ctx.subjectUserId : null
+
+  // Prefer DB snapshot so we don't hammer Turnkey (which rate limits with "Resource exhausted").
+  try {
+    let q = admin
+      .from("wallet_balances")
+      .select("currency,available_balance,updated_at,version")
+      .in("currency", ["USD", "EUR"])
+      .limit(2)
+    if (businessId) q = q.eq("business_id", businessId)
+    if (!businessId && userId) q = q.eq("user_id", userId)
+    const { data: rows, error } = await q
+    if (!error && rows && rows.length > 0) {
+      const map = new Map<string, number>()
+      for (const r of rows as any[]) {
+        map.set(String(r.currency).toUpperCase(), Number(r.available_balance ?? 0))
+      }
+      return NextResponse.json({
+        USD: String(map.get("USD") ?? 0),
+        EUR: String(map.get("EUR") ?? 0),
+        source: "db",
+        balanceCaip2: "solana:mainnet",
+        detail: "wallet_balances_snapshot",
+      })
+    }
+  } catch {
+    // If the table doesn't exist yet (migration not applied), fall back to Turnkey.
+  }
+
   const result = await getTurnkeyDisplayBalancesUsdEur(admin, acc.ctx)
+
+  // Persist DB snapshot when Turnkey returns an authoritative read.
+  // This enables realtime dashboards to update without hammering Turnkey.
+  if (result.source === "turnkey") {
+    try {
+      await Promise.all([
+        upsertWalletBalanceSnapshot(admin, {
+          businessId,
+          userId,
+          currency: "USD",
+          availableBalance: Number(result.USD) || 0,
+        }),
+        upsertWalletBalanceSnapshot(admin, {
+          businessId,
+          userId,
+          currency: "EUR",
+          availableBalance: Number(result.EUR) || 0,
+        }),
+      ])
+    } catch {
+      // Don't fail the endpoint if balance snapshot persistence isn't available yet.
+    }
+  }
 
   return NextResponse.json({
     USD: result.USD,

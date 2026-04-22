@@ -18,20 +18,36 @@ export async function GET(request: Request) {
 
   const admin = createSupabaseAdmin()
   const { data, error } = await admin
-    .from("users")
+    .from("user_preferences")
     .select("communication_preferences")
-    .eq("id", user.id)
+    .eq("user_id", user.id)
     .maybeSingle()
 
   if (error && error.code !== "42703") {
     console.error("communication GET:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    // If user_preferences table doesn't exist yet, fall back to legacy users column.
+    if (error.code !== "42P01") {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
   }
 
-  const raw = data && "communication_preferences" in data ? data.communication_preferences : undefined
-  const preferences = parseCommunicationPreferences(raw)
+  let preferences: CommunicationPreferences | null = null
+  if (data && "communication_preferences" in data) {
+    preferences = parseCommunicationPreferences(data.communication_preferences)
+  } else {
+    const legacy = await admin
+      .from("users")
+      .select("communication_preferences")
+      .eq("id", user.id)
+      .maybeSingle()
+    const raw =
+      legacy.data && "communication_preferences" in legacy.data
+        ? legacy.data.communication_preferences
+        : undefined
+    preferences = parseCommunicationPreferences(raw)
+  }
 
-  return NextResponse.json({ preferences })
+  return NextResponse.json({ preferences: preferences ?? parseCommunicationPreferences(undefined) })
 }
 
 export async function PATCH(request: Request) {
@@ -46,20 +62,25 @@ export async function PATCH(request: Request) {
   }
 
   const admin = createSupabaseAdmin()
-  const { data: row, error: readErr } = await admin
-    .from("users")
+  // Read current from user_preferences when available; otherwise fall back to legacy users column.
+  let current: CommunicationPreferences = parseCommunicationPreferences(undefined)
+  const prefRead = await admin
+    .from("user_preferences")
     .select("communication_preferences")
-    .eq("id", user.id)
+    .eq("user_id", user.id)
     .maybeSingle()
-
-  if (readErr && readErr.code !== "42703") {
-    console.error("communication PATCH read:", readErr)
-    return NextResponse.json({ error: readErr.message }, { status: 500 })
+  if (!prefRead.error && prefRead.data && "communication_preferences" in prefRead.data) {
+    current = parseCommunicationPreferences(prefRead.data.communication_preferences)
+  } else {
+    const legacy = await admin
+      .from("users")
+      .select("communication_preferences")
+      .eq("id", user.id)
+      .maybeSingle()
+    if (!legacy.error && legacy.data && "communication_preferences" in legacy.data) {
+      current = parseCommunicationPreferences(legacy.data.communication_preferences)
+    }
   }
-
-  const current = parseCommunicationPreferences(
-    row && "communication_preferences" in row ? row.communication_preferences : undefined,
-  )
 
   const next: CommunicationPreferences = {
     productUpdates:
@@ -78,26 +99,31 @@ export async function PATCH(request: Request) {
     },
   }
 
-  const { error: upErr } = await admin
+  // Write to user_preferences (authoritative). If table missing, still try legacy users update.
+  const nowIso = new Date().toISOString()
+  const prefUpsert = await admin
+    .from("user_preferences")
+    .upsert(
+      { user_id: user.id, communication_preferences: next, updated_at: nowIso },
+      { onConflict: "user_id" },
+    )
+
+  if (prefUpsert.error && prefUpsert.error.code !== "42P01") {
+    console.error("communication PATCH user_preferences:", prefUpsert.error)
+    return NextResponse.json({ error: prefUpsert.error.message }, { status: 500 })
+  }
+
+  // Compatibility: keep legacy column in sync when present.
+  const legacyUp = await admin
     .from("users")
     .update({
       communication_preferences: next,
-      updated_at: new Date().toISOString(),
+      updated_at: nowIso,
     })
     .eq("id", user.id)
 
-  if (upErr) {
-    if (upErr.code === "42703") {
-      return NextResponse.json(
-        {
-          error:
-            "communication_preferences column missing — apply latest Supabase migrations.",
-        },
-        { status: 503 },
-      )
-    }
-    console.error("communication PATCH:", upErr)
-    return NextResponse.json({ error: upErr.message }, { status: 500 })
+  if (legacyUp.error && legacyUp.error.code !== "42703") {
+    console.warn("communication PATCH legacy users update (non-fatal):", legacyUp.error)
   }
 
   await syncSendGridMarketingState(user.email ?? "", next).catch((e) =>

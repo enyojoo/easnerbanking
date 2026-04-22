@@ -9,6 +9,40 @@ import {
 } from "@/lib/turnkey/config"
 import { resolveWalletOwnerIdForEasnerContext } from "@/lib/wallet/resolve-wallet-owner"
 
+type TurnkeyBalanceResult = Awaited<ReturnType<typeof getTurnkeyDisplayBalancesUsdEur>>
+
+type CacheEntry = {
+  value: TurnkeyBalanceResult
+  fetchedAt: number
+  cooldownUntil: number
+  inFlight?: Promise<TurnkeyBalanceResult>
+}
+
+/**
+ * Process-local cache & in-flight de-dupe for Turnkey balance queries.
+ *
+ * Turnkey will occasionally return `Resource exhausted` (rate limiting / capacity).
+ * Without caching, every reload + multi-tab can stampede Turnkey and we end up
+ * returning `{ USD: "0", EUR: "0", source: "none" }`, which the UI renders as `0.00`.
+ *
+ * This cache ensures:
+ * - multiple callers share the same in-flight request
+ * - we return last-known-good Turnkey balances during transient failures
+ * - we back off during "resource exhausted" windows to avoid repeated failures
+ */
+const BALANCE_CACHE = new Map<string, CacheEntry>()
+const OK_TTL_MS = 30_000
+const DEFAULT_COOLDOWN_MS = 60_000
+
+function cacheKey(params: { ownerId: string; subOrg: string; balanceCaip2: string }): string {
+  return `${params.ownerId}:${params.subOrg}:${params.balanceCaip2}`
+}
+
+function isResourceExhausted(detail: string | undefined): boolean {
+  const d = String(detail ?? "")
+  return /resource exhausted/i.test(d)
+}
+
 /**
  * Convert atomic integer string to a decimal string (no locale), for display sums.
  */
@@ -163,6 +197,21 @@ export async function getTurnkeyDisplayBalancesUsdEur(
     return { USD: "0", EUR: "0", source: "none", balanceCaip2, detail: "no_sub_org" }
   }
 
+  const key = cacheKey({ ownerId, subOrg, balanceCaip2 })
+  const now = Date.now()
+  const cached = BALANCE_CACHE.get(key)
+  if (cached?.inFlight) {
+    return await cached.inFlight
+  }
+  if (cached?.value?.source === "turnkey") {
+    if (now < cached.cooldownUntil) {
+      return { ...cached.value, detail: "cached_due_to_turnkey_cooldown" }
+    }
+    if (now - cached.fetchedAt < OK_TTL_MS) {
+      return cached.value
+    }
+  }
+
   const { data: accounts } = await admin
     .from("wallet_accounts")
     .select("address, asset, chain")
@@ -198,6 +247,7 @@ export async function getTurnkeyDisplayBalancesUsdEur(
     }
   }
 
+  const run = (async (): Promise<TurnkeyBalanceResult> => {
   let usd = "0"
   let eur = "0"
   let anyOk = false
@@ -221,14 +271,63 @@ export async function getTurnkeyDisplayBalancesUsdEur(
   }
 
   if (!anyOk) {
-    return {
+    const failed: TurnkeyBalanceResult = {
       USD: "0",
       EUR: "0",
       source: "none",
       balanceCaip2,
       detail: lastErr ? `turnkey_balance_query_failed:${lastErr}` : "turnkey_balance_query_failed",
     }
+    const prevOk = BALANCE_CACHE.get(key)?.value
+    if (prevOk?.source === "turnkey") {
+      // Serve stale-but-correct values instead of "0.00" during transient Turnkey failures.
+      // Apply a cooldown if Turnkey explicitly rate-limited us.
+      const exhausted = isResourceExhausted(failed.detail)
+      const nextCooldown = exhausted ? now + DEFAULT_COOLDOWN_MS : now + 15_000
+      BALANCE_CACHE.set(key, {
+        value: prevOk,
+        fetchedAt: BALANCE_CACHE.get(key)?.fetchedAt ?? now,
+        cooldownUntil: Math.max(BALANCE_CACHE.get(key)?.cooldownUntil ?? 0, nextCooldown),
+      })
+      return { ...prevOk, detail: exhausted ? "served_cached_due_to_resource_exhausted" : "served_cached_due_to_transient_failure" }
+    }
+    return failed
   }
 
-  return { USD: usd, EUR: eur, source: "turnkey", balanceCaip2 }
+    const ok: TurnkeyBalanceResult = { USD: usd, EUR: eur, source: "turnkey", balanceCaip2 }
+    return ok
+  })()
+
+  BALANCE_CACHE.set(key, {
+    value: cached?.value ?? { USD: "0", EUR: "0", source: "none", balanceCaip2, detail: "warming_cache" },
+    fetchedAt: cached?.fetchedAt ?? 0,
+    cooldownUntil: cached?.cooldownUntil ?? 0,
+    inFlight: run,
+  })
+
+  try {
+    const result = await run
+    if (result.source === "turnkey") {
+      BALANCE_CACHE.set(key, { value: result, fetchedAt: Date.now(), cooldownUntil: 0 })
+    } else {
+      // Maintain any cooldown set by failure handling above.
+      const after = BALANCE_CACHE.get(key)
+      BALANCE_CACHE.set(key, {
+        value: after?.value ?? result,
+        fetchedAt: after?.fetchedAt ?? 0,
+        cooldownUntil: after?.cooldownUntil ?? 0,
+      })
+    }
+    return result
+  } finally {
+    const after = BALANCE_CACHE.get(key)
+    if (after?.inFlight) {
+      // Clear inFlight pointer without dropping cached value.
+      BALANCE_CACHE.set(key, {
+        value: after.value,
+        fetchedAt: after.fetchedAt,
+        cooldownUntil: after.cooldownUntil,
+      })
+    }
+  }
 }

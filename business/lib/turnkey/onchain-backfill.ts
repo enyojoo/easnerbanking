@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { Connection, PublicKey } from "@solana/web3.js"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
+import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
 const EURC_MINT = "HzwqbKZw8HxMN6bF2yFZNrht3c2iXXzpKcFu7uBEDKtr"
@@ -202,6 +203,14 @@ export async function backfillTurnkeyOnchainTransactions(
             baseCurrency: currency,
           })
           upserts += 1
+          // Apply the same delta to the DB snapshot so dashboards can update from DB truth.
+          const signed = direction === "in" ? amount : -amount
+          await applyWalletBalanceDelta(admin, {
+            businessId: ctx.businessId ? ctx.businessId : null,
+            userId: ctx.businessId ? null : ctx.userId,
+            currency,
+            delta: signed,
+          })
         } catch (e) {
           skipped += 1
           const msg = errorMessage(e)

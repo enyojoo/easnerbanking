@@ -133,7 +133,7 @@ export interface AttachRealtimeOptions {
 }
 
 function defaultFilter(scope: Scope): string | undefined {
-  if (scope.kind === "business") return `entity_id=eq.${scope.entityId}`
+  if (scope.kind === "business") return `business_id=eq.${scope.orgId}`
   return `user_id=eq.${scope.userId}`
 }
 
@@ -168,12 +168,49 @@ export function attachRealtime({
       emit()
       const row = (p.new ?? p.old) as VersionedRecord & { wallet_id?: string; id?: string }
       const walletId = row.wallet_id ?? row.id
-      if (!walletId) return
-      const key = qk.wallets.balance(scope, walletId)
-      batcher.schedule(key, () => {
-        qc.setQueryData(key, (prev: VersionedRecord | undefined) => pickNewer(prev, row))
-        // narrow list refresh so balance totals on dashboards stay consistent
-        qc.invalidateQueries({ queryKey: qk.wallets.list(scope), refetchType: "inactive" })
+      const key = walletId ? qk.wallets.balance(scope, walletId) : null
+      batcher.schedule(key ?? qk.wallets.list(scope), () => {
+        if (key) {
+          qc.setQueryData(key, (prev: VersionedRecord | undefined) => pickNewer(prev, row))
+        }
+        /**
+         * Keep aggregate balances in sync without forcing a refetch.
+         *
+         * The wallets list query should not have to call Turnkey (or any provider)
+         * on every realtime balance tick — that can stampede external services
+         * and regress UX. When the payload includes a currency + balance-like
+         * field, patch it into the list cache directly.
+         */
+        qc.setQueryData(qk.wallets.list(scope), (prev: unknown) => {
+          if (!prev || typeof prev !== "object") return prev
+          const base = prev as Record<string, any>
+          const balances = (base as any).balances
+          if (!balances || typeof balances !== "object") return prev
+
+          const currencyRaw = (row as any).currency ?? (row as any).code
+          const currency = typeof currencyRaw === "string" ? currencyRaw.toUpperCase() : null
+          if (currency !== "USD" && currency !== "EUR") return prev
+
+          const nextVal =
+            (row as any).available_balance ??
+            (row as any).availableBalance ??
+            (row as any).balance ??
+            (row as any).amount
+          if (nextVal == null) return prev
+
+          const n = Number.parseFloat(String(nextVal))
+          if (!Number.isFinite(n)) return prev
+
+          return {
+            ...base,
+            balances: {
+              ...balances,
+              [currency]: String(n),
+              source: "realtime",
+              detail: "wallet_balances_realtime",
+            },
+          }
+        })
       })
     },
   )
@@ -227,18 +264,8 @@ export function attachRealtime({
   )
 
   // --- approvals -------------------------------------------------------------
-  channel.on(
-    "postgres_changes",
-    { event: "*", schema: "public", table: "approvals", filter: scopeFilter },
-    (p) => {
-      health.lastEventAt = Date.now()
-      emit()
-      const key = qk.approvals.root(scope)
-      batcher.schedule(key, () => {
-        qc.invalidateQueries({ queryKey: key })
-      })
-    },
-  )
+  // NOTE: approvals were planned but are not present in all Supabase schemas.
+  // Do not subscribe to a non-existent table; reintroduce when the table lands.
 
   // --- cards -----------------------------------------------------------------
   channel.on(
@@ -257,20 +284,21 @@ export function attachRealtime({
     },
   )
 
-  // --- notifications (personal only) -----------------------------------------
+  // --- user preferences (personal only) --------------------------------------
+  // Communication preferences are per-user and live in `public.user_preferences`.
   if (scope.kind === "personal") {
     channel.on(
       "postgres_changes",
       {
-        event: "INSERT",
+        event: "*",
         schema: "public",
-        table: "notifications",
+        table: "user_preferences",
         filter: `user_id=eq.${scope.userId}`,
       },
-      (p) => {
+      () => {
         health.lastEventAt = Date.now()
         emit()
-        const key = qk.notifications.root(scope.userId)
+        const key = qk.settings.communication(scope.userId)
         batcher.schedule(key, () => {
           qc.invalidateQueries({ queryKey: key })
         })

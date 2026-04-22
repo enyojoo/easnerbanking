@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { getApiBaseUrl } from './apiClient'
 import { supabase } from './supabase'
 import type { PayeeAccountKind } from './easnerBrand'
+import { Image as ExpoImage } from 'expo-image'
 
 export type EasenetPublicProfile =
   | { found: true; easetag: string; fullName: string; avatarUrl: string | null; accountKind: PayeeAccountKind }
@@ -44,13 +45,24 @@ export async function fetchEasenetPublicProfile(rawTag: string): Promise<Easenet
     return { found: false, reason: data.reason }
   }
   const accountKind: PayeeAccountKind = data.accountKind === 'business' ? 'business' : 'personal'
-  return {
+  const profile: Extract<EasenetPublicProfile, { found: true }> = {
     found: true,
     easetag: String(data.easetag || clean),
     fullName: String(data.fullName || clean).trim() || clean,
     avatarUrl: data.avatarUrl ?? null,
     accountKind,
   }
+  // Warm image cache to avoid avatar "misses" between screens.
+  if (profile.avatarUrl) {
+    try {
+      // `expo-image` prefetch is best-effort; ignore failures.
+      // @ts-expect-error -- expo-image typings vary; both string + string[] are accepted across versions.
+      await ExpoImage.prefetch(profile.avatarUrl)
+    } catch {
+      // ignore
+    }
+  }
+  return profile
 }
 
 /** In-memory: avoid re-reading disk on every navigation in the same session. */
@@ -139,6 +151,14 @@ export async function primeEasenetPublicProfileCache(
   }
   cachedProfiles.set(key, { at: Date.now(), value })
   await writePersistedEasenetProfile(key, value)
+  if (value.avatarUrl) {
+    try {
+      // @ts-expect-error see note above
+      await ExpoImage.prefetch(value.avatarUrl)
+    } catch {
+      // ignore
+    }
+  }
 }
 
 /**
@@ -203,6 +223,14 @@ export async function fetchEasenetPublicProfileCached(rawTag: string): Promise<E
       inflightProfiles.delete(key)
       if (v.found) {
         await writePersistedEasenetProfile(key, v)
+        if (v.avatarUrl) {
+          try {
+            // @ts-expect-error see note above
+            await ExpoImage.prefetch(v.avatarUrl)
+          } catch {
+            // ignore
+          }
+        }
       }
       return v
     })

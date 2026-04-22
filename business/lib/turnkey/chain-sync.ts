@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
+import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 
 type TurnkeyEvent = Record<string, unknown>
 
@@ -246,5 +247,19 @@ export async function applyTurnkeyWebhookSideEffects(
     amountMinor,
     baseCurrency: currency,
   })
+
+  // Update DB-backed balance snapshot for realtime dashboards.
+  // For settled events we apply the delta; pending/failed should not move balances.
+  if (status === "settled") {
+    const businessScopeId = businessId ? businessId : null
+    const userScopeId = businessId ? null : userId
+    const signed = direction === "in" ? amount : -amount
+    await applyWalletBalanceDelta(admin, {
+      businessId: businessScopeId,
+      userId: userScopeId,
+      currency,
+      delta: signed,
+    })
+  }
   return true
 }

@@ -2,6 +2,7 @@
 
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { normalizeEasetag } from "@/lib/easetag-validation"
+import { writeEasenetPublicProfileCache } from "@/lib/easenet-public-profile-cache"
 
 import type { PayeeAccountKind } from "@/lib/easner-brand"
 
@@ -32,11 +33,27 @@ export async function fetchEasenetProfileByTag(rawTag: string): Promise<EasenetP
     return { found: false, reason: data.reason }
   }
   const accountKind: PayeeAccountKind = data.accountKind === "business" ? "business" : "personal"
-  return {
+  const profile: EasenetPublicProfile = {
     found: true,
     easetag: String(data.easetag || clean),
     fullName: String(data.fullName || clean),
     avatarUrl: data.avatarUrl ?? null,
     accountKind,
   }
+  // Persist to cache so settings/send flows reuse the same avatar/name without refetch.
+  writeEasenetPublicProfileCache(profile.easetag, {
+    avatarUrl: profile.avatarUrl,
+    fullName: profile.fullName,
+    accountKind: profile.accountKind,
+  })
+  // Warm browser image cache (best-effort).
+  if (typeof window !== "undefined" && profile.avatarUrl) {
+    try {
+      const img = new Image()
+      img.src = profile.avatarUrl
+    } catch {
+      // ignore
+    }
+  }
+  return profile
 }

@@ -338,7 +338,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     ? '••••••'
     : resolvedBalanceText ??
       lastStableBalanceTextRef.current[selectedCurrency] ??
-      (hasAnyTransactionData ? '—' : formatBalanceDisplay(0, selectedCurrency))
+      '—'
 
   /** Only after `userProfile` is loaded: `isTier1Complete(undefined)` is false and would flash the banner. */
   const showVerifyIdentityBanner =

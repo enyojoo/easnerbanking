@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo } from "react"
+import { useCallback, useEffect, useMemo, useRef } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { qk } from "@easner/shared"
 import { apiFetch } from "@/lib/query/api-client"
@@ -45,6 +45,27 @@ export function useBusinessAccountRows() {
   const { scope } = useScope()
   const { tier1Complete, isLoading: profileLoading, name, baseCurrency } = useBusinessProfile()
   const walletQuery = useWalletBalances()
+  const lastKnownAuthoritativeBalancesRef = useRef<{ USD: string; EUR: string } | null>(null)
+
+  const balancesSource = walletQuery.data?.balances?.source
+  // Treat missing `source` as non-authoritative (older cache shapes).
+  const isAuthoritativeBalanceRead =
+    Boolean(walletQuery.data) &&
+    (balancesSource === "turnkey" || balancesSource === "db" || balancesSource === "realtime")
+
+  useEffect(() => {
+    if (!tier1Complete) return
+    if (!isAuthoritativeBalanceRead) return
+    lastKnownAuthoritativeBalancesRef.current = {
+      USD: String(walletQuery.data?.balances?.USD ?? "0"),
+      EUR: String(walletQuery.data?.balances?.EUR ?? "0"),
+    }
+  }, [
+    isAuthoritativeBalanceRead,
+    tier1Complete,
+    walletQuery.data?.balances?.EUR,
+    walletQuery.data?.balances?.USD,
+  ])
 
   const enabledExtras = useMemo(
     () =>
@@ -56,10 +77,18 @@ export function useBusinessAccountRows() {
 
   const balances = useMemo(
     () => ({
-      USD: tier1Complete ? String(walletQuery.data?.balances?.USD ?? "0") : "0",
-      EUR: tier1Complete ? String(walletQuery.data?.balances?.EUR ?? "0") : "0",
+      USD: tier1Complete
+        ? isAuthoritativeBalanceRead
+          ? String(walletQuery.data?.balances?.USD ?? "0")
+          : (lastKnownAuthoritativeBalancesRef.current?.USD ?? "0")
+        : "0",
+      EUR: tier1Complete
+        ? isAuthoritativeBalanceRead
+          ? String(walletQuery.data?.balances?.EUR ?? "0")
+          : (lastKnownAuthoritativeBalancesRef.current?.EUR ?? "0")
+        : "0",
     }),
-    [tier1Complete, walletQuery.data?.balances?.EUR, walletQuery.data?.balances?.USD],
+    [isAuthoritativeBalanceRead, tier1Complete, walletQuery.data?.balances?.EUR, walletQuery.data?.balances?.USD],
   )
 
   const stablecoinDeposit = useMemo(
@@ -133,6 +162,11 @@ export function useBusinessAccountRows() {
             : null
 
   const accountRows: Account[] = useMemo(() => {
+    // Tier 1 complete but we have no authoritative balance yet (e.g. transient provider failure).
+    // Return empty rows so screens render skeletons instead of flashing 0.00.
+    if (tier1Complete && !isAuthoritativeBalanceRead && !lastKnownAuthoritativeBalancesRef.current) {
+      return []
+    }
     const codes = ["USD", "EUR", ...enabledExtras.filter((c) => c !== "USD" && c !== "EUR")] as Account["currency"][]
     return codes.map((currency) => {
       const va = vaByCurrency[currency]
@@ -171,7 +205,17 @@ export function useBusinessAccountRows() {
         stablecoinToken: usdc ? "USDC" : eurc ? "EURC" : "USDC",
       }
     })
-  }, [balances.EUR, balances.USD, displayName, enabledExtras, stablecoinDeposit.EUR, stablecoinDeposit.USD, tier1Complete, vaByCurrency])
+  }, [
+    balances.EUR,
+    balances.USD,
+    displayName,
+    enabledExtras,
+    isAuthoritativeBalanceRead,
+    stablecoinDeposit.EUR,
+    stablecoinDeposit.USD,
+    tier1Complete,
+    vaByCurrency,
+  ])
 
   const loading =
     profileLoading ||
@@ -179,6 +223,10 @@ export function useBusinessAccountRows() {
       accountRows.length === 0 &&
       ((walletQuery.isPending && !walletQuery.data) ||
         (virtualAccountsQuery.isPending && !virtualAccountsQuery.data)))
+    ||
+    // If Tier1 is complete but we have no authoritative balances yet, keep skeletons up
+    // instead of rendering empty rows or fake 0.00.
+    (tier1Complete && accountRows.length === 0 && !isAuthoritativeBalanceRead && !lastKnownAuthoritativeBalancesRef.current)
 
   return {
     accountRows,
@@ -190,6 +238,8 @@ export function useBusinessAccountRows() {
     noahHeaders: NOAH_HEADERS,
     displayName,
     balances,
+    balancesSource: balancesSource ?? null,
+    hasAuthoritativeBalances: isAuthoritativeBalanceRead,
     baseCurrency: baseCurrency?.toUpperCase() || "USD",
   }
 }

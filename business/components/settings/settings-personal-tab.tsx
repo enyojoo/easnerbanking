@@ -311,14 +311,32 @@ export function SettingsPersonalTab() {
 
   useEffect(() => {
     const p = personalData.personal
-    setFormData({
+    const next = {
       fullName: p.fullName || "",
       email: p.email || "",
       phone: p.phone || "",
       dateOfBirth: p.dateOfBirth || "",
       avatarUrl: p.avatarUrl ?? null,
+    }
+    setFormData((prev) => {
+      if (
+        prev.fullName === next.fullName &&
+        prev.email === next.email &&
+        prev.phone === next.phone &&
+        prev.dateOfBirth === next.dateOfBirth &&
+        prev.avatarUrl === next.avatarUrl
+      ) {
+        return prev
+      }
+      return next
     })
-  }, [personalData])
+  }, [
+    personalData.personal.fullName,
+    personalData.personal.email,
+    personalData.personal.phone,
+    personalData.personal.dateOfBirth,
+    personalData.personal.avatarUrl,
+  ])
 
   const handleEdit = (section: string) => setEditingSection(section)
   const handleCancel = () => setEditingSection(null)

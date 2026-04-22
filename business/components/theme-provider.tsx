@@ -1,11 +1,13 @@
 'use client'
 
 import * as React from 'react'
-import {
-  ThemeProvider as NextThemesProvider,
-  type ThemeProviderProps,
-} from 'next-themes'
+import type { ThemeProviderProps } from 'next-themes'
 
 export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
-  return <NextThemesProvider {...props}>{children}</NextThemesProvider>
+  // `next-themes` renders an inline <script> to sync theme early.
+  // With React 19 + Next 16, this triggers a console error in our setup.
+  // Easner Business currently uses a light-first theme; keep the provider as a
+  // no-op wrapper until we revisit dark mode.
+  void props
+  return <>{children}</>
 }

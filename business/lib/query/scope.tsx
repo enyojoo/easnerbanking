@@ -3,6 +3,7 @@
 import * as React from "react"
 import type { BusinessScope } from "@easner/shared"
 import { useAuth } from "@/lib/auth-context"
+import { fetchWithSession } from "@/lib/fetch-with-session"
 
 /**
  * Client-side scope context for the Easner Business app.
@@ -30,11 +31,35 @@ const ScopeContext = React.createContext<BusinessScopeContextValue | undefined>(
 export function BusinessScopeProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
   const [override, setOverride] = React.useState<BusinessScope | null>(null)
+  const [businessId, setBusinessId] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    if (!user?.id) {
+      setBusinessId(null)
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await fetchWithSession("/api/business/profile")
+        if (!res.ok) return
+        const json = (await res.json().catch(() => null)) as { profile?: { businessId?: string | null } } | null
+        const id = json?.profile?.businessId ? String(json.profile.businessId) : null
+        if (!cancelled) setBusinessId(id)
+      } catch {
+        // ignore; fall back to user.id scope
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id])
 
   const derived = React.useMemo<BusinessScope | null>(() => {
     if (!user?.id) return null
-    return { kind: "business", orgId: user.id, entityId: user.id }
-  }, [user?.id])
+    const org = businessId ?? user.id
+    return { kind: "business", orgId: org, entityId: org }
+  }, [businessId, user?.id])
 
   const value = React.useMemo<BusinessScopeContextValue>(() => {
     const scope = override ?? derived

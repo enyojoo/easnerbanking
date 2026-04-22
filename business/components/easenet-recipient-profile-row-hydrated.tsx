@@ -49,12 +49,29 @@ export function EasenetRecipientProfileRowHydrated({
         fullName,
         accountKind: accountKind === "business" ? "business" : "personal",
       })
+      // Warm image cache before first paint (prevents AvatarImage empty flash).
+      if (typeof window !== "undefined") {
+        try {
+          const img = new Image()
+          img.src = propAvatar
+        } catch {
+          // ignore
+        }
+      }
       setRemote(null)
       return
     }
 
     const cached = readEasenetPublicProfileCache(easetag)
     if (cached) {
+      if (typeof window !== "undefined" && cached.avatarUrl) {
+        try {
+          const img = new Image()
+          img.src = cached.avatarUrl
+        } catch {
+          // ignore
+        }
+      }
       setRemote(cached)
     } else {
       setRemote(null)
@@ -78,6 +95,14 @@ export function EasenetRecipientProfileRowHydrated({
         accountKind: res.accountKind,
       }
       writeEasenetPublicProfileCache(easetag, next)
+      if (typeof window !== "undefined" && next.avatarUrl) {
+        try {
+          const img = new Image()
+          img.src = next.avatarUrl
+        } catch {
+          // ignore
+        }
+      }
       setRemote(next)
     })()
     return () => {

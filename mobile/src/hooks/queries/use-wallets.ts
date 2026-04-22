@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { pollingIntervalFor, qk } from '@easner/shared'
 import { apiFetch } from '../../query/api-client'
 import { useScope } from '../../query/scope'
@@ -18,16 +18,18 @@ import { useRealtimeHealth } from '../../query/realtime-health-context'
 export interface WalletBalancesEnvelope {
   USD: string
   EUR: string
-  source?: 'turnkey' | 'none'
+  source?: 'turnkey' | 'db' | 'realtime' | 'none'
   detail?: string
   balanceCaip2?: string
 }
 
 export function useWalletBalances() {
   const { scope } = useScope()
+  const qc = useQueryClient()
   const realtimeHealth = useRealtimeHealth()
+  const queryKey = scope ? qk.wallets.list(scope) : (['wallets', 'disabled'] as const)
   return useQuery({
-    queryKey: scope ? qk.wallets.list(scope) : ['wallets', 'disabled'],
+    queryKey,
     enabled: Boolean(scope),
     queryFn: async () => {
       const body = await apiFetch<Partial<WalletBalancesEnvelope>>(
@@ -40,8 +42,9 @@ export function useWalletBalances() {
         source === 'none' &&
         (detail === 'turnkey_balance_query_failed' || detail.startsWith('turnkey_balance_query_failed:'))
       if (isTransientTurnkeyFailure) {
-        // Keep last known good balance in cache on temporary provider/read failures
-        // instead of flashing "0.00" on dashboard during background refetches.
+        // Keep last known good balance in cache on temporary provider/read failures.
+        const prev = qc.getQueryData<WalletBalancesEnvelope>(queryKey as unknown as any)
+        if (prev) return prev
         throw new Error('Transient Turnkey balance lookup failure')
       }
       return {

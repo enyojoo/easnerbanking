@@ -26,7 +26,19 @@ export function getBrowserQueryClient(): QueryClient {
     return createBaseQueryClient()
   }
   if (!browserClient) {
-    browserClient = createBaseQueryClient()
+    browserClient = createBaseQueryClient({
+      defaultOptions: {
+        queries: {
+          /**
+           * Business UX relies on realtime + scoped polling for critical data.
+           * Refetching on every focus/reconnect can create noticeable navigation
+           * jank (waterfalls) when many screens mount query-heavy components.
+           */
+          refetchOnWindowFocus: false,
+          refetchOnReconnect: false,
+        },
+      },
+    })
   }
   return browserClient
 }

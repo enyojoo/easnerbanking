@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import {
   ArrowDownLeft,
@@ -32,7 +32,7 @@ import { useTurnkeyLedgerRepair } from "@/hooks/use-turnkey-ledger-repair"
 
 export function DashboardPageClient() {
   const { data: rows } = useTransactionsCached()
-  const { balances, baseCurrency } = useBusinessAccountRows()
+  const { balances, baseCurrency, hasAuthoritativeBalances } = useBusinessAccountRows()
   const { data: fxRates = [] } = useFxRates()
   useTurnkeyLedgerRepair()
 
@@ -44,7 +44,7 @@ export function DashboardPageClient() {
     to: undefined,
   })
   const [balancesVisible, setBalancesVisible] = useState(true)
-  const lastStableBalanceTextRef = useRef<string | null>(null)
+  const [lastStableBalanceText, setLastStableBalanceText] = useState<string | null>(null)
 
   const MASK = "******"
 
@@ -109,11 +109,14 @@ export function DashboardPageClient() {
   const computedPrimaryBalance = usdInBase + eurInBase
   const summaryCurrency = code
   const computedPrimaryBalanceText = formatCurrency(computedPrimaryBalance, code)
-  if (Number.isFinite(computedPrimaryBalance)) {
-    lastStableBalanceTextRef.current = computedPrimaryBalanceText
-  }
+  useEffect(() => {
+    if (!hasAuthoritativeBalances) return
+    if (!Number.isFinite(computedPrimaryBalance)) return
+    setLastStableBalanceText(computedPrimaryBalanceText)
+  }, [computedPrimaryBalance, computedPrimaryBalanceText, hasAuthoritativeBalances])
   const visiblePrimaryBalanceText = balancesVisible
-    ? (lastStableBalanceTextRef.current ?? computedPrimaryBalanceText)
+    ? (lastStableBalanceText ??
+        (hasAuthoritativeBalances ? computedPrimaryBalanceText : "—"))
     : MASK
 
   return (
