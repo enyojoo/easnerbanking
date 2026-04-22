@@ -33,10 +33,8 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#F6F3EB" },
-    { media: "(prefers-color-scheme: dark)", color: "#0F1110" },
-  ],
+  // Business web is light-only; match browser chrome to ivory surface
+  themeColor: "#F6F3EB",
 }
 
 export default function RootLayout({
@@ -45,7 +43,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className="light" suppressHydrationWarning>
       <body
         className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}
         suppressHydrationWarning

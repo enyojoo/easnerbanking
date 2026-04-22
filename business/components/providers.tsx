@@ -48,13 +48,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   )
 
   return (
-    <ThemeProvider
-      attribute="class"
-      defaultTheme="light"
-      enableSystem
-      disableTransitionOnChange
-      storageKey="easner-business-theme"
-    >
+    <ThemeProvider>
       <PersistQueryClientProvider
         client={queryClient}
         persistOptions={{

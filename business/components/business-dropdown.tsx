@@ -1,7 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useTheme } from "next-themes"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -12,8 +11,6 @@ import {
   HelpCircle,
   Building2,
   User,
-  Sun,
-  Moon,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -25,50 +22,6 @@ import {
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { normalizeBusinessLogoUrl, normalizeProfileImageUrl } from "@/lib/image-cache"
-
-/** Sun/Moon only; active state follows resolved appearance (system + OS → correct icon). */
-function ThemePreferenceItems() {
-  const { resolvedTheme, setTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
-
-  if (!mounted) {
-    return <div className="mx-1 flex h-9 gap-1 rounded-md bg-muted/50" aria-hidden />
-  }
-
-  const isDark = resolvedTheme === "dark"
-
-  return (
-    <div
-      className="mx-1 flex gap-1"
-      role="group"
-      aria-label="Theme"
-    >
-      <Button
-        type="button"
-        variant={!isDark ? "secondary" : "ghost"}
-        size="icon-sm"
-        className="h-9 flex-1 rounded-md"
-        onClick={() => setTheme("light")}
-        aria-label="Light mode"
-        aria-pressed={!isDark}
-      >
-        <Sun className="h-4 w-4 shrink-0 stroke-[1.5]" />
-      </Button>
-      <Button
-        type="button"
-        variant={isDark ? "secondary" : "ghost"}
-        size="icon-sm"
-        className="h-9 flex-1 rounded-md"
-        onClick={() => setTheme("dark")}
-        aria-label="Dark mode"
-        aria-pressed={isDark}
-      >
-        <Moon className="h-4 w-4 shrink-0 stroke-[1.5]" />
-      </Button>
-    </div>
-  )
-}
 
 interface BusinessDropdownProps {
   businessName: string
@@ -203,8 +156,6 @@ export function BusinessDropdown({
             <span>Account settings</span>
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <ThemePreferenceItems />
         <DropdownMenuSeparator />
         <DropdownMenuItem className="gap-2 text-red-600 focus:text-red-600" onClick={onSignOut}>
           <LogOut className="h-4 w-4" />
