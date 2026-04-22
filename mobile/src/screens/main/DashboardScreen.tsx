@@ -338,7 +338,9 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     ? '••••••'
     : resolvedBalanceText ??
       lastStableBalanceTextRef.current[selectedCurrency] ??
-      '—'
+      null
+
+  const shouldShowBalanceSkeleton = balanceVisible && !visibleBalanceText
 
   /** Only after `userProfile` is loaded: `isTier1Complete(undefined)` is false and would flash the banner. */
   const showVerifyIdentityBanner =
@@ -740,19 +742,29 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
 
           {/* Balance Display */}
           <View style={styles.balanceContainer}>
-            <Text
-              style={[
-                textStyles.balanceDisplay,
-                styles.balanceAmount,
-                {
-                  color: palette.text.primary,
-                  fontSize: heroBalanceFontSize,
-                  lineHeight: heroBalanceLineHeight,
-                },
-              ]}
-            >
-              {visibleBalanceText}
-            </Text>
+            {shouldShowBalanceSkeleton ? (
+              <View style={styles.balanceSkeletonWrap}>
+                <ShimmerLoader
+                  width={240}
+                  height={Math.max(48, Math.round(heroBalanceFontSize * 0.8))}
+                  borderRadius={borderRadius.lg}
+                />
+              </View>
+            ) : (
+              <Text
+                style={[
+                  textStyles.balanceDisplay,
+                  styles.balanceAmount,
+                  {
+                    color: palette.text.primary,
+                    fontSize: heroBalanceFontSize,
+                    lineHeight: heroBalanceLineHeight,
+                  },
+                ]}
+              >
+                {visibleBalanceText}
+              </Text>
+            )}
             <Pressable 
              android_ripple={ripple.neutral} 
               style={styles.hideBalanceButton}
@@ -1179,6 +1191,10 @@ function createDashboardStyles(c: Colors, scrollBottomPadding: number) {
   },
   balanceAmount: {
     flex: 1,
+  },
+  balanceSkeletonWrap: {
+    flex: 1,
+    justifyContent: 'center',
   },
   hideBalanceButton: {
     width: 40,

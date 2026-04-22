@@ -99,7 +99,13 @@ export function useWalletBalances() {
         // Only hydrate from an authoritative snapshot.
         // Older cached payloads may not include `source`; treat them as non-authoritative.
         if (!parsed?.balances) return undefined
-        if (parsed.balances.source !== "turnkey") return undefined
+        if (
+          parsed.balances.source !== "turnkey" &&
+          parsed.balances.source !== "db" &&
+          parsed.balances.source !== "realtime"
+        ) {
+          return undefined
+        }
         return {
           balances: parsed.balances ?? {},
           available: parsed.available ?? {},

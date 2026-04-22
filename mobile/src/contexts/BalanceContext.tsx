@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useCallback, useMemo, ReactNode, useEffect, useRef } from 'react'
+import React, { createContext, useContext, useCallback, useMemo, ReactNode, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { qk } from '@easner/shared'
 import { useWalletBalances } from '../hooks/queries/use-wallets'
 import { useMaybeScope } from '../query/scope'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 
 /**
  * Compatibility shim over the TanStack Query `useWalletBalances` hook.
@@ -44,6 +45,7 @@ interface BalanceContextType {
 const BalanceContext = createContext<BalanceContextType | undefined>(undefined)
 
 const EMPTY_BALANCES: Balances = { USD: '0', EUR: '0' }
+const BALANCE_SNAPSHOT_KEY_PREFIX = 'easner_wallet_balances_snapshot_v1_'
 
 export function useBalance() {
   const ctx = useContext(BalanceContext)
@@ -60,7 +62,38 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
   const scope = useMaybeScope()
   const query = useWalletBalances()
   const lastKnownBalancesRef = useRef<Balances>(EMPTY_BALANCES)
+  const [hydratedFromDisk, setHydratedFromDisk] = useState(false)
   const isAuthoritativeBalanceRead = query.data?.source !== 'none'
+
+  // Hydrate last-known authoritative snapshot for instant cold-start UX.
+  useEffect(() => {
+    if (!scope) return
+    let cancelled = false
+    const key = `${BALANCE_SNAPSHOT_KEY_PREFIX}${scope.kind === 'business' ? scope.orgId : scope.userId}`
+    void AsyncStorage.getItem(key)
+      .then((raw) => {
+        if (cancelled) return
+        if (!raw) return
+        const parsed = JSON.parse(raw) as { USD?: string; EUR?: string; ts?: number }
+        const next: Balances = {
+          USD: typeof parsed?.USD === 'string' ? parsed.USD : '0',
+          EUR: typeof parsed?.EUR === 'string' ? parsed.EUR : '0',
+        }
+        // Only accept if at least one currency is present (avoid overwriting defaults with junk).
+        if (next.USD.trim().length > 0 || next.EUR.trim().length > 0) {
+          lastKnownBalancesRef.current = next
+        }
+      })
+      .catch(() => {
+        // ignore
+      })
+      .finally(() => {
+        if (!cancelled) setHydratedFromDisk(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [scope])
 
   useEffect(() => {
     if (!query.data) return
@@ -70,6 +103,11 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
       EUR: String(query.data.EUR ?? '0'),
     }
     lastKnownBalancesRef.current = next
+    if (!scope) return
+    const key = `${BALANCE_SNAPSHOT_KEY_PREFIX}${scope.kind === 'business' ? scope.orgId : scope.userId}`
+    AsyncStorage.setItem(key, JSON.stringify({ ...next, ts: Date.now() })).catch(() => {
+      // ignore
+    })
   }, [isAuthoritativeBalanceRead, query.data])
 
   const balances: Balances = useMemo(() => {
@@ -81,7 +119,7 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
     }
   }, [isAuthoritativeBalanceRead, query.data])
 
-  const hasResolvedBalance = Boolean(query.data)
+  const hasResolvedBalance = Boolean(query.data) || hydratedFromDisk
 
   const refreshBalances = useCallback(
     async (force: boolean = false) => {
