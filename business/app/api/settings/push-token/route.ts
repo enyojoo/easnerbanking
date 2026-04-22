@@ -26,7 +26,31 @@ export async function POST(request: Request) {
 
   const admin = createSupabaseAdmin()
   const now = new Date().toISOString()
-  const { error } = await admin
+  const prefUpsert = await admin
+    .from("user_preferences")
+    .upsert(
+      {
+        user_id: user.id,
+        expo_push_token: token,
+        expo_push_token_updated_at: token ? now : null,
+        updated_at: now,
+      },
+      { onConflict: "user_id" },
+    )
+
+  if (prefUpsert.error) {
+    if (prefUpsert.error.code === "42P01" || prefUpsert.error.code === "42703") {
+      return NextResponse.json(
+        { error: "user_preferences push-token columns missing — apply latest Supabase migrations." },
+        { status: 503 },
+      )
+    }
+    console.error("push-token POST user_preferences:", prefUpsert.error)
+    return NextResponse.json({ error: prefUpsert.error.message }, { status: 500 })
+  }
+
+  // Compatibility: keep legacy users columns in sync when present.
+  const legacyUp = await admin
     .from("users")
     .update({
       expo_push_token: token,
@@ -34,16 +58,8 @@ export async function POST(request: Request) {
       updated_at: now,
     })
     .eq("id", user.id)
-
-  if (error) {
-    if (error.code === "42703") {
-      return NextResponse.json(
-        { error: "expo_push_token column missing — apply latest Supabase migrations." },
-        { status: 503 },
-      )
-    }
-    console.error("push-token POST:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  if (legacyUp.error && legacyUp.error.code !== "42703") {
+    console.warn("push-token POST legacy users update (non-fatal):", legacyUp.error)
   }
 
   return NextResponse.json({ ok: true, hasExpoPushToken: Boolean(token) })

@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { ensureExchangeRatesFresh, findExchangeRate } from "@/lib/fx/exchange-rates"
 import { ensureEasnerTransactionId } from "@/lib/easner-transaction-id"
+import { sendTransactionSettledPush } from "@/lib/notifications/expo-push"
+import { buildTransactionSettledPushContent } from "@/lib/notifications/transaction-settled-content"
 
 export type LedgerDirection = "in" | "out"
 
@@ -28,6 +30,7 @@ export type UpsertLedgerTransactionInput = {
 }
 
 export type UpsertLedgerTransactionResult = {
+  transactionId: string
   inserted: boolean
   updated: boolean
   previousStatus: string | null
@@ -142,10 +145,56 @@ export async function upsertLedgerTransaction(
       .update(record)
       .eq("id", existing.id)
     if (error) throw error
-    return { inserted: false, updated: true, previousStatus, nextStatus, becameSettled }
+    if (becameSettled) {
+      const { title, body } = buildTransactionSettledPushContent({
+        provider,
+        direction,
+        amount,
+        currency,
+        metadata: mergedMetadata,
+        payload: (input.payload ?? null) as Record<string, unknown> | null,
+      })
+      await sendTransactionSettledPush(admin, {
+        userId: input.userId,
+        transactionId: existing.id,
+        title,
+        body,
+        data: { type: "transaction_settled", transactionId: existing.id },
+      }).catch((e) => console.warn("transaction settled push (non-fatal):", e))
+    }
+    return { transactionId: existing.id, inserted: false, updated: true, previousStatus, nextStatus, becameSettled }
   }
 
-  const { error } = await admin.from("transactions").insert(record)
-  if (error) throw error
-  return { inserted: true, updated: false, previousStatus: null, nextStatus, becameSettled: nextStatus === "settled" }
+  const insert = await admin.from("transactions").insert(record).select("id").maybeSingle()
+  if (insert.error) throw insert.error
+  const insertedId = String((insert.data as any)?.id || "").trim()
+  if (!insertedId) throw new Error("Inserted transaction missing id")
+
+  const insertedBecameSettled = nextStatus === "settled"
+  if (insertedBecameSettled) {
+    const { title, body } = buildTransactionSettledPushContent({
+      provider,
+      direction,
+      amount,
+      currency,
+      metadata: mergedMetadata,
+      payload: (input.payload ?? null) as Record<string, unknown> | null,
+    })
+    await sendTransactionSettledPush(admin, {
+      userId: input.userId,
+      transactionId: insertedId,
+      title,
+      body,
+      data: { type: "transaction_settled", transactionId: insertedId },
+    }).catch((e) => console.warn("transaction settled push (non-fatal):", e))
+  }
+
+  return {
+    transactionId: insertedId,
+    inserted: true,
+    updated: false,
+    previousStatus: null,
+    nextStatus,
+    becameSettled: insertedBecameSettled,
+  }
 }
