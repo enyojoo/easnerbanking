@@ -17,6 +17,6 @@ export function useCustomersList() {
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     select: (d) => d.customers ?? [],
-    meta: { safePersist: true, freshness: "operational" },
+    meta: { safePersist: true, webPersist: "reduced", freshness: "operational" },
   })
 }

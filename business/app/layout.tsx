@@ -12,6 +12,7 @@ import { LoadingSpinner } from "@/components/loading-spinner"
 import { PwaStandaloneRoot } from "@/components/pwa/pwa-standalone-root"
 import { PwaInstallProvider } from "@/components/pwa/pwa-install-provider"
 import { BusinessViewportGate } from "@/components/layout/business-viewport-gate"
+import { AppSurfaceLayout } from "@/components/app-surface-layout"
 import "./globals.css"
 import { BRAND } from "@easner/shared"
 
@@ -56,7 +57,9 @@ export default function RootLayout({
               <PwaStandaloneRoot />
               <PwaInstallProvider>
                 <Providers>
-                  <BusinessViewportGate>{children}</BusinessViewportGate>
+                  <BusinessViewportGate>
+                    <AppSurfaceLayout>{children}</AppSurfaceLayout>
+                  </BusinessViewportGate>
                 </Providers>
               </PwaInstallProvider>
             </ClientAuthProvider>

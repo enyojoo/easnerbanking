@@ -7,6 +7,7 @@
  * `staleTime` / `refetchInterval` or via `meta`:
  *
  *   - `meta.safePersist`   → persist to disk on mobile (non-sensitive only)
+ *   - `meta.webPersist`    → reduced-query persistence for web app reload UX
  *   - `meta.noDehydrate`   → skip SSR hydration for this query
  *
  * Defaults are tuned for a fintech SWR feel:
@@ -30,6 +31,8 @@ declare module "@tanstack/react-query" {
     queryMeta: {
       /** Persist this query to AsyncStorage on mobile. Never for sensitive data. */
       safePersist?: boolean
+      /** Persist a reduced query snapshot to localStorage on web for reload UX. */
+      webPersist?: "none" | "reduced"
       /** Exclude from SSR dehydration on web. */
       noDehydrate?: boolean
       /** Logical freshness band. Used by the realtime layer and UX rules. */

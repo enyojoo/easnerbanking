@@ -4,6 +4,7 @@ import * as React from "react"
 import type { BusinessScope } from "@easner/shared"
 import { useAuth } from "@/lib/auth-context"
 import { fetchWithSession } from "@/lib/fetch-with-session"
+import { readBusinessStartupSnapshot } from "@/lib/query/web-persist"
 
 /**
  * Client-side scope context for the Easner Business app.
@@ -36,6 +37,11 @@ export function BusinessScopeProvider({ children }: { children: React.ReactNode 
   // Seed scope from persisted business profile (avoids an extra /api/business/profile fetch on reload).
   React.useEffect(() => {
     if (!user?.id) return
+    const startup = readBusinessStartupSnapshot()
+    if (startup?.userId === user.id && startup.businessId) {
+      setBusinessId(startup.businessId)
+      return
+    }
     try {
       const raw = localStorage.getItem(`business_profile_cache_${user.id}`)
       if (!raw) return

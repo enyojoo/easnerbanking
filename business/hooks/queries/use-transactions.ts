@@ -45,7 +45,7 @@ export function useTransactionsList(filters: TxFilters = {}) {
     getNextPageParam: (last) => last.nextCursor,
     staleTime: 30_000,
     gcTime: 30 * 60_000,
-    meta: { safePersist: true, freshness: "operational" },
+    meta: { safePersist: true, webPersist: "reduced", freshness: "operational" },
   })
 }
 
@@ -61,7 +61,7 @@ export function useTransactionDetail(txId: string | null) {
     queryFn: () => apiFetch<TransactionWithSource>(`/api/transactions/${txId}`),
     staleTime: 30_000,
     gcTime: 10 * 60_000,
-    meta: { safePersist: false, freshness: "operational" },
+    meta: { safePersist: false, webPersist: "none", freshness: "operational" },
   })
 }
 

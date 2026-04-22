@@ -30,7 +30,14 @@ export async function GET(request: Request) {
   // Return DB rows immediately; refresh stale rates asynchronously.
   triggerExchangeRatesBackgroundRefresh(admin, normalized)
 
-  return NextResponse.json({
-    rates: normalized,
-  })
+  return NextResponse.json(
+    {
+      rates: normalized,
+    },
+    {
+      headers: {
+        "Cache-Control": "private, max-age=30, stale-while-revalidate=300",
+      },
+    },
+  )
 }

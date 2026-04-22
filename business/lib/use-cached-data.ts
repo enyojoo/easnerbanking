@@ -76,7 +76,7 @@ export function useCachedData<T>({
     staleTime: ttlMs,
     gcTime: Math.max(ttlMs * 2, 30_000),
     initialData: persistedInitial,
-    meta: { safePersist: true, freshness: "operational" },
+    meta: { safePersist: true, webPersist: "none", freshness: "operational" },
   })
 
   const setData = useCallback(
@@ -108,4 +108,3 @@ export function useCachedData<T>({
   const loading = enabled ? isPending || (isFetching && data == null) : false
   return { data, setData, loading, refetch }
 }
-

@@ -42,14 +42,21 @@ export async function GET(request: Request) {
     (o) => !DEFAULTS.includes(o.code as (typeof DEFAULTS)[number]) && !o.alreadyAdded && !o.disabledReason,
   )
 
-  return NextResponse.json({
-    defaults: [...DEFAULTS],
-    defaultPolicies: {
-      USD: policies.USD,
-      EUR: policies.EUR,
+  return NextResponse.json(
+    {
+      defaults: [...DEFAULTS],
+      defaultPolicies: {
+        USD: policies.USD,
+        EUR: policies.EUR,
+      },
+      enabledExtras,
+      offers,
+      hasOpenableExtraCurrencies,
     },
-    enabledExtras,
-    offers,
-    hasOpenableExtraCurrencies,
-  })
+    {
+      headers: {
+        "Cache-Control": "private, max-age=30, stale-while-revalidate=300",
+      },
+    },
+  )
 }

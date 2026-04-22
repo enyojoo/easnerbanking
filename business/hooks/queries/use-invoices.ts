@@ -25,7 +25,7 @@ export function useInvoicesList(filters: QueryFilters = {}) {
     staleTime: 60_000,
     gcTime: 30 * 60_000,
     select: (d) => d.invoices ?? [],
-    meta: { safePersist: true, freshness: "operational" },
+    meta: { safePersist: true, webPersist: "reduced", freshness: "operational" },
   })
 }
 
@@ -49,6 +49,6 @@ export function useInvoiceDetail(invoiceId: string | null) {
     staleTime: 60_000,
     gcTime: 30 * 60_000,
     placeholderData: listPlaceholder,
-    meta: { safePersist: true, freshness: "operational" },
+    meta: { safePersist: true, webPersist: "none", freshness: "operational" },
   })
 }

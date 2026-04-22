@@ -1,7 +1,4 @@
-"use client"
-
-import type React from "react"
-import { DashboardShell } from "@/components/dashboard-shell"
+import type { ReactNode } from "react"
 
 /**
  * Client layout matches other shell routes (e.g. `/transactions`): no async
@@ -9,6 +6,6 @@ import { DashboardShell } from "@/components/dashboard-shell"
  * page loads transactions via `useTransactionsCached` / React Query like
  * elsewhere; `constrained` keeps the narrower max width for this screen.
  */
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  return <DashboardShell constrained>{children}</DashboardShell>
+export default function DashboardLayout({ children }: { children: ReactNode }) {
+  return children
 }

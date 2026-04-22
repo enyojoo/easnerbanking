@@ -38,6 +38,6 @@ export function useApprovalsQueue(status: ApprovalStatus = "open") {
     gcTime: 10 * 60_000,
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
-    meta: { safePersist: false, freshness: "operational" },
+    meta: { safePersist: false, webPersist: "none", freshness: "operational" },
   })
 }

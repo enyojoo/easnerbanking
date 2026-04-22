@@ -1,8 +1,5 @@
-"use client"
+import type { ReactNode } from "react"
 
-import type React from "react"
-import { DashboardShell } from "@/components/dashboard-shell"
-
-export default function TransactionsLayout({ children }: { children: React.ReactNode }) {
-  return <DashboardShell>{children}</DashboardShell>
+export default function TransactionsLayout({ children }: { children: ReactNode }) {
+  return children
 }

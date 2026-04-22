@@ -23,10 +23,23 @@ export const STORAGE_POLICY = {
       "selectedEntity",
       "selectedOrg",
     ],
-    localStorage: ["ui.theme", "ui.density", "ui.sidebarCollapsed"],
+    localStorage: [
+      "ui.theme",
+      "ui.density",
+      "ui.sidebarCollapsed",
+      "qc.reducedBusinessSnapshot",
+      "businessStartupSnapshot",
+    ],
     sessionStorage: [] as string[],
     urlSearchParams: ["filters", "dateRange", "tabId"],
-    forbidden: ["balance", "ledger", "rawToken", "pii", "pan", "cvv"],
+    forbidden: [
+      "balance.rawAuthoritative",
+      "ledger.fullDetail",
+      "rawToken",
+      "pii.sensitive",
+      "pan",
+      "cvv",
+    ],
   },
   mobile: {
     secureStore: [

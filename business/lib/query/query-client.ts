@@ -17,6 +17,7 @@ import type { QueryClient } from "@tanstack/react-query"
  */
 
 let browserClient: QueryClient | null = null
+const BROWSER_QUERY_CACHE_GC_MS = 24 * 60 * 60 * 1000
 
 export function getBrowserQueryClient(): QueryClient {
   if (typeof window === "undefined") {
@@ -34,6 +35,7 @@ export function getBrowserQueryClient(): QueryClient {
            * Refetching on every focus/reconnect can create noticeable navigation
            * jank (waterfalls) when many screens mount query-heavy components.
            */
+          gcTime: BROWSER_QUERY_CACHE_GC_MS,
           refetchOnWindowFocus: false,
           refetchOnReconnect: false,
         },
@@ -41,4 +43,8 @@ export function getBrowserQueryClient(): QueryClient {
     })
   }
   return browserClient
+}
+
+export function clearBrowserQueryClient(): void {
+  browserClient?.clear()
 }

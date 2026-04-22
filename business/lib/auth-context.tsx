@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
 import type { User } from "@supabase/supabase-js"
 import { clearBusinessAppSessionCookie } from "@/lib/app-session-client"
+import { ensureBusinessAppSession } from "@/lib/app-session-client"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { clearLegacySupabaseAuthCookiesOnce } from "@/lib/supabase/clear-legacy-auth-cookies"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
@@ -12,6 +13,8 @@ import { resetSessionActivity } from "@/lib/session-activity"
 import { IdleSessionBridge } from "@/components/idle-session-bridge"
 import { analytics } from "@/lib/analytics"
 import { ensureBusinessWebSurface } from "@/lib/auth/validate-surface-client"
+import { clearBrowserQueryClient } from "@/lib/query/query-client"
+import { clearAllBusinessBrowserState } from "@/lib/query/web-persist"
 
 interface AuthContextType {
   user: User | null
@@ -31,6 +34,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [mounted, setMounted] = useState(false)
+  const bootstrapFullName = useMemo(() => {
+    if (!user) return ""
+    const fullNameFromMeta =
+      typeof user.user_metadata?.name === "string"
+        ? user.user_metadata.name
+        : [user.user_metadata?.first_name, user.user_metadata?.last_name].filter(Boolean).join(" ")
+    return String(fullNameFromMeta ?? "").trim()
+  }, [user])
 
   useEffect(() => {
     setMounted(true)
@@ -38,10 +49,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let active = true
 
     supabase.auth
-      .getUser()
+      .getSession()
       .then(({ data }) => {
         if (!active) return
-        setUser(data.user ?? null)
+        const nextUser = data.session?.user ?? null
+        setUser(nextUser)
+        if (!nextUser) {
+          clearBrowserQueryClient()
+          clearAllBusinessBrowserState()
+        }
       })
       .finally(() => {
         if (!active) return
@@ -49,7 +65,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
+      setUser((prev) => {
+        const nextUser = session?.user ?? null
+        if (!nextUser) {
+          if (prev?.id) clearAllBusinessBrowserState(prev.id)
+          clearBrowserQueryClient()
+          return null
+        }
+        if (prev?.id && prev.id !== nextUser.id) {
+          clearAllBusinessBrowserState(prev.id)
+          clearBrowserQueryClient()
+        }
+        return nextUser
+      })
       if (!session) {
         clearBusinessAppSessionCookie()
       }
@@ -91,11 +119,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const onboarding = getOnboarding()
       const countryCode = onboarding?.countryCode?.trim() || undefined
       const role = "business"
-      const fullNameFromMeta =
-        typeof user.user_metadata?.name === "string"
-          ? user.user_metadata.name
-          : [user.user_metadata?.first_name, user.user_metadata?.last_name].filter(Boolean).join(" ")
-      const trimmedBootstrapName = String(fullNameFromMeta ?? "").trim()
 
       try {
         const bootRes = await fetchWithSession("/api/auth/bootstrap", {
@@ -104,7 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           body: JSON.stringify({
             ...(countryCode ? { countryCode } : {}),
             role,
-            ...(trimmedBootstrapName ? { fullName: trimmedBootstrapName } : {}),
+            ...(bootstrapFullName ? { fullName: bootstrapFullName } : {}),
           }),
         })
         if (bootRes.ok) {
@@ -137,7 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const t = window.setTimeout(() => void bootstrap(), 350)
     return () => window.clearTimeout(t)
-  }, [supabase, user?.id])
+  }, [bootstrapFullName, supabase, user?.id])
 
   useEffect(() => {
     if (!user?.id) return
@@ -161,6 +184,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       analytics.trackSignIn("email", { userId: data.user.id })
     }
     await ensureBusinessWebSurface(supabase)
+    await ensureBusinessAppSession(true)
   }
 
   const signup = async (email: string, password: string, name: string) => {
@@ -200,6 +224,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = async () => {
+    const currentUserId = user?.id ?? null
     try {
       const { data } = await supabase.auth.getUser()
       const uid = data.user?.id
@@ -208,6 +233,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // ignore
     }
     clearBusinessAppSessionCookie()
+    clearBrowserQueryClient()
+    clearAllBusinessBrowserState(currentUserId)
     analytics.trackSignOut({ userId: user?.id || null })
     analytics.reset()
     await supabase.auth.signOut()

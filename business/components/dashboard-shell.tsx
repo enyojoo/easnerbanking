@@ -12,7 +12,6 @@ import { BusinessOnboardingDialog } from "@/components/business-onboarding-dialo
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { usePersonalProfileAvatar } from "@/lib/use-personal-profile-avatar"
 import { cn } from "@/lib/utils"
-import { LoadingSpinner } from "@/components/loading-spinner"
 
 interface DashboardShellProps {
   children: React.ReactNode
@@ -22,10 +21,6 @@ interface DashboardShellProps {
   constrained?: boolean
 }
 
-function DashboardShellLoadingState() {
-  return <LoadingSpinner />
-}
-
 export function DashboardShell({ children, mainClassName = "", constrained = false }: DashboardShellProps) {
   const { user, isLoading, logout } = useAuth()
   const router = useRouter()
@@ -33,12 +28,10 @@ export function DashboardShell({ children, mainClassName = "", constrained = fal
     name: businessName,
     ownerName,
     isLoading: profileLoading,
-    hasData: hasBusinessProfileData,
     tier1Complete,
   } = useBusinessProfile()
   const { avatarUrl: profileImageUrl } = usePersonalProfileAvatar()
   const showTier1Banner = !profileLoading && !tier1Complete
-  const showWorkspaceLoadingState = !isLoading && !!user && profileLoading && !hasBusinessProfileData
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -95,10 +88,6 @@ export function DashboardShell({ children, mainClassName = "", constrained = fal
 
   if (isLoading || !user) {
     return null
-  }
-
-  if (showWorkspaceLoadingState) {
-    return <DashboardShellLoadingState />
   }
 
   return (

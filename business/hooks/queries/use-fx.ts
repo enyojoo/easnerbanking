@@ -54,7 +54,7 @@ export function useFxRates() {
     initialData: readCachedFxRates(),
     staleTime: 30_000,
     gcTime: 30 * 60_000,
-    meta: { safePersist: true, freshness: "reference" },
+    meta: { safePersist: true, webPersist: "reduced", freshness: "reference" },
   })
 }
 

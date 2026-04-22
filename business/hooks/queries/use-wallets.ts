@@ -85,7 +85,7 @@ export function useWalletBalances() {
     // the realtime bridge invalidating `qk.wallets.list` on balance events).
     refetchInterval: pollingIntervalFor("critical", realtimeHealth),
     refetchIntervalInBackground: false,
-    meta: { safePersist: false, freshness: "critical" },
+    meta: { safePersist: false, webPersist: "reduced", freshness: "critical" },
     initialData: () => {
       if (!storageKey || typeof window === "undefined") return undefined
       try {
@@ -146,6 +146,6 @@ export function useWalletBalance(walletId: string | null) {
     queryFn: () => apiFetch<unknown>(`/api/wallets/balance/${walletId}`, { headers: NOAH_HEADERS }),
     staleTime: 15_000,
     gcTime: 10 * 60_000,
-    meta: { safePersist: false, freshness: "critical" },
+    meta: { safePersist: false, webPersist: "none", freshness: "critical" },
   })
 }

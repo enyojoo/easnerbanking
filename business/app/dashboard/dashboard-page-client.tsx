@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import dynamic from "next/dynamic"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import {
   ArrowDownLeft,
@@ -16,7 +17,6 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { TransactionDetailsDialog } from "@/components/transaction-details-dialog"
 import { DateRangeFilter, type TimePeriod } from "@/components/date-range-filter"
 import { cn, formatCurrency } from "@/lib/utils"
 import { withReturnTo } from "@/lib/invoice-navigation"
@@ -29,6 +29,10 @@ import {
 } from "@/hooks/use-business-account-rows"
 import { useFxRates } from "@/hooks/queries"
 import { useTurnkeyLedgerRepair } from "@/hooks/use-turnkey-ledger-repair"
+
+const TransactionDetailsDialog = dynamic(
+  () => import("@/components/transaction-details-dialog").then((mod) => mod.TransactionDetailsDialog),
+)
 
 export function DashboardPageClient() {
   const { data: rows } = useTransactionsCached()

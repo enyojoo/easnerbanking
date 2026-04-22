@@ -17,7 +17,7 @@ import {
   SmartphoneNfc,
 } from "lucide-react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { BusinessLogo } from "@/components/brand/business-logo"
 import { useBusinessProfile } from "@/lib/use-business-profile"
@@ -25,8 +25,21 @@ import { Tier1VerificationBadge } from "@/components/compliance/tier1-verificati
 import { BusinessOnboardingChecklist } from "@/components/business-onboarding-checklist"
 import { normalizeBusinessLogoUrl } from "@/lib/image-cache"
 
+function deriveOpenGroups(pathname: string) {
+  const openGroups = new Set<string>()
+  if (
+    pathname.startsWith("/invoices") ||
+    pathname.startsWith("/terminal") ||
+    pathname.startsWith("/qr-pay")
+  ) {
+    openGroups.add("collections")
+  }
+  return openGroups
+}
+
 export function DashboardNav() {
   const pathname = usePathname()
+  const router = useRouter()
   const {
     name: businessName,
     logoUrl: businessLogoUrl,
@@ -38,22 +51,10 @@ export function DashboardNav() {
   const hasBusinessLogo = Boolean(businessLogoUrl?.trim())
   const normalizedBusinessLogoUrl = normalizeBusinessLogoUrl(businessLogoUrl)
 
-  const getInitialOpenGroups = () => {
-    const openGroups = new Set<string>()
-    if (
-      pathname.startsWith("/invoices") ||
-      pathname.startsWith("/terminal") ||
-      pathname.startsWith("/qr-pay")
-    ) {
-      openGroups.add("collections")
-    }
-    return openGroups
-  }
-
-  const [openGroups, setOpenGroups] = useState<Set<string>>(getInitialOpenGroups())
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => deriveOpenGroups(pathname))
 
   useEffect(() => {
-    setOpenGroups(getInitialOpenGroups())
+    setOpenGroups(deriveOpenGroups(pathname))
   }, [pathname])
 
   const toggleGroup = (groupKey: string) => {
@@ -96,6 +97,14 @@ export function DashboardNav() {
     "bg-card text-foreground font-semibold shadow-card border border-border/70 [&_svg]:text-primary"
   const iconBase = "h-[18px] w-[18px] flex-shrink-0 stroke-[1.5]"
 
+  const prefetchHref = (href: string) => {
+    try {
+      router.prefetch(href)
+    } catch {
+      // Best-effort only.
+    }
+  }
+
   return (
     <div className="fixed left-0 top-0 h-screen w-64 border-r border-sidebar-border bg-sidebar text-sidebar-foreground flex flex-col">
       <div className="flex h-16 min-h-16 items-center gap-3 border-b border-sidebar-border px-5">
@@ -136,7 +145,8 @@ export function DashboardNav() {
               <Link
                 key={item.href}
                 href={item.href || "#"}
-                prefetch={false}
+                onMouseEnter={() => prefetchHref(item.href)}
+                onFocus={() => prefetchHref(item.href)}
                 aria-current={isActive ? "page" : undefined}
               >
                 <div
@@ -185,7 +195,8 @@ export function DashboardNav() {
                         <Link
                           key={child.href}
                           href={child.href}
-                          prefetch={false}
+                          onMouseEnter={() => prefetchHref(child.href)}
+                          onFocus={() => prefetchHref(child.href)}
                           aria-current={isActive ? "page" : undefined}
                         >
                           <div

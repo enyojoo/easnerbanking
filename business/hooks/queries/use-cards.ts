@@ -34,7 +34,7 @@ export function useCardsList() {
     queryFn: () => apiFetch<{ cards: CardRow[] }>("/api/business/cards"),
     staleTime: 30_000,
     gcTime: 10 * 60_000,
-    meta: { safePersist: true, freshness: "operational" },
+    meta: { safePersist: true, webPersist: "reduced", freshness: "operational" },
   })
 }
 
@@ -46,7 +46,7 @@ export function useCardDetail(cardId: string | null) {
     queryFn: () => apiFetch<CardRow>(`/api/business/cards/${cardId}`),
     staleTime: 30_000,
     gcTime: 10 * 60_000,
-    meta: { safePersist: true, freshness: "operational" },
+    meta: { safePersist: true, webPersist: "none", freshness: "operational" },
   })
 }
 
@@ -60,6 +60,6 @@ export function useCardControls(cardId: string | null) {
     queryFn: () => apiFetch<CardControls>(`/api/business/cards/${cardId}/controls`),
     staleTime: 60_000,
     gcTime: 10 * 60_000,
-    meta: { safePersist: false, freshness: "operational" },
+    meta: { safePersist: false, webPersist: "none", freshness: "operational" },
   })
 }

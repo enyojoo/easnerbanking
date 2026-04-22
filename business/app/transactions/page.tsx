@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
+import dynamic from "next/dynamic"
 import { useSearchParams, useRouter } from "next/navigation"
 import { getDateRange } from "@/lib/transactions"
 import type { TransactionWithSource } from "@/lib/transactions"
@@ -17,7 +18,6 @@ import {
   Download,
   DollarSign,
 } from "lucide-react"
-import { TransactionDetailsDialog } from "@/components/transaction-details-dialog"
 import { DateRangeFilter, type TimePeriod } from "@/components/date-range-filter"
 import { Button } from "@/components/ui/button"
 import { formatCurrency, formatDate } from "@/lib/utils"
@@ -26,6 +26,10 @@ import { useBusinessProfile } from "@/lib/use-business-profile"
 import { useFxRates } from "@/hooks/queries"
 import { formatTransactionRowDateTime, transactionStatusRowPresentation } from "@/lib/transaction-row-present"
 import { useTurnkeyLedgerRepair } from "@/hooks/use-turnkey-ledger-repair"
+
+const TransactionDetailsDialog = dynamic(
+  () => import("@/components/transaction-details-dialog").then((mod) => mod.TransactionDetailsDialog),
+)
 
 function exportToCsv(
   transactions: {

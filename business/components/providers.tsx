@@ -1,7 +1,8 @@
 "use client"
 
-import type React from "react"
-import { QueryClientProvider } from "@tanstack/react-query"
+import * as React from "react"
+import { useQueryClient } from "@tanstack/react-query"
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client"
 import { ThemeProvider } from "@/components/theme-provider"
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools"
 import { InvoiceModuleStoreSync } from "@/lib/invoice-module-store-sync"
@@ -9,6 +10,17 @@ import { BusinessScopeProvider, useScope } from "@/lib/query/scope"
 import { getBrowserQueryClient } from "@/lib/query/query-client"
 import { useSupabaseRealtimeScope } from "@/lib/query/use-supabase-realtime-scope"
 import { RealtimeHealthProvider } from "@/lib/query/realtime-health-context"
+import { useAuth } from "@/lib/auth-context"
+import { ensureBusinessAppSession } from "@/lib/app-session-client"
+import {
+  BUSINESS_WEB_QUERY_CACHE_BUSTER,
+  BUSINESS_WEB_QUERY_CACHE_MAX_AGE_MS,
+  createBusinessQueryPersister,
+  readStoredSupabaseSessionUserId,
+  shouldPersistBusinessQuery,
+  writeBusinessStartupSnapshot,
+  clearAllBusinessBrowserState,
+} from "@/lib/query/web-persist"
 
 /**
  * Root client provider tree for Easner Business.
@@ -27,6 +39,13 @@ import { RealtimeHealthProvider } from "@/lib/query/realtime-health-context"
  */
 export function Providers({ children }: { children: React.ReactNode }) {
   const queryClient = getBrowserQueryClient()
+  const { user } = useAuth()
+  const restoredSessionUserId = React.useMemo(() => readStoredSupabaseSessionUserId(), [])
+  const persistedUserId = user?.id ?? restoredSessionUserId
+  const persister = React.useMemo(
+    () => createBusinessQueryPersister(persistedUserId),
+    [persistedUserId],
+  )
 
   return (
     <ThemeProvider
@@ -36,17 +55,28 @@ export function Providers({ children }: { children: React.ReactNode }) {
       disableTransitionOnChange
       storageKey="easner-business-theme"
     >
-      <QueryClientProvider client={queryClient}>
-      <BusinessScopeProvider>
-        <ScopeRealtimeBridge>
-          <InvoiceModuleStoreSync />
-          {children}
-        </ScopeRealtimeBridge>
-      </BusinessScopeProvider>
-      {process.env.NODE_ENV !== "production" ? (
-        <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-right" />
-      ) : null}
-    </QueryClientProvider>
+      <PersistQueryClientProvider
+        client={queryClient}
+        persistOptions={{
+          persister,
+          buster: BUSINESS_WEB_QUERY_CACHE_BUSTER,
+          maxAge: BUSINESS_WEB_QUERY_CACHE_MAX_AGE_MS,
+          dehydrateOptions: {
+            shouldDehydrateQuery: shouldPersistBusinessQuery,
+          },
+        }}
+      >
+        <BusinessScopeProvider>
+          <ScopeRealtimeBridge>
+            <PersistedBusinessLifecycleBridge />
+            <InvoiceModuleStoreSync />
+            {children}
+          </ScopeRealtimeBridge>
+        </BusinessScopeProvider>
+        {process.env.NODE_ENV !== "production" ? (
+          <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-right" />
+        ) : null}
+      </PersistQueryClientProvider>
     </ThemeProvider>
   )
 }
@@ -55,4 +85,88 @@ function ScopeRealtimeBridge({ children }: { children: React.ReactNode }) {
   const { scope } = useScope()
   const health = useSupabaseRealtimeScope(scope)
   return <RealtimeHealthProvider value={health}>{children}</RealtimeHealthProvider>
+}
+
+function PersistedBusinessLifecycleBridge() {
+  const { user } = useAuth()
+  const { scope } = useScope()
+  const queryClient = useQueryClient()
+
+  React.useEffect(() => {
+    if (!user?.id || !scope) return
+    writeBusinessStartupSnapshot({
+      userId: user.id,
+      businessId: scope.orgId,
+    })
+  }, [scope, user?.id])
+
+  React.useEffect(() => {
+    if (!user?.id || !scope) return
+
+    let cancelled = false
+    const refreshActiveReducedQueries = async () => {
+      try {
+        await ensureBusinessAppSession()
+        if (cancelled) return
+        await queryClient.invalidateQueries({
+          predicate: (query) => query.meta?.webPersist === "reduced",
+          refetchType: "active",
+        })
+      } catch {
+        // ignore background warm failures
+      }
+    }
+
+    const w = window as Window & {
+      requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number
+      cancelIdleCallback?: (id: number) => void
+    }
+    if (typeof w.requestIdleCallback === "function") {
+      const id = w.requestIdleCallback(() => {
+        void refreshActiveReducedQueries()
+      }, { timeout: 250 })
+      return () => {
+        cancelled = true
+        w.cancelIdleCallback?.(id)
+      }
+    }
+
+    const timeout = window.setTimeout(() => {
+      void refreshActiveReducedQueries()
+    }, 150)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeout)
+    }
+  }, [queryClient, scope, user?.id])
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return
+
+      void (async () => {
+        const ok = await ensureBusinessAppSession()
+        if (!ok) {
+          clearAllBusinessBrowserState(user?.id ?? null)
+          if (!window.location.pathname.startsWith("/auth/")) {
+            window.location.assign("/auth/login")
+          }
+          return
+        }
+
+        await queryClient.invalidateQueries({
+          predicate: (query) => query.meta?.webPersist === "reduced",
+          refetchType: "active",
+        })
+      })()
+    }
+
+    window.addEventListener("pageshow", onPageShow)
+    return () => window.removeEventListener("pageshow", onPageShow)
+  }, [queryClient, user?.id])
+
+  return null
 }

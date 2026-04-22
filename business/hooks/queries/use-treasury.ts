@@ -33,7 +33,7 @@ export function useTreasurySummary() {
     queryFn: () => apiFetch<TreasurySummary>("/api/business/treasury/summary"),
     staleTime: 60_000,
     gcTime: 30 * 60_000,
-    meta: { safePersist: true, freshness: "operational" },
+    meta: { safePersist: true, webPersist: "reduced", freshness: "operational" },
   })
 }
 
@@ -52,6 +52,6 @@ export function useTreasuryCashflow(range: DateRange) {
       }),
     staleTime: 2 * 60_000,
     gcTime: 30 * 60_000,
-    meta: { safePersist: true, freshness: "analytics" },
+    meta: { safePersist: true, webPersist: "none", freshness: "analytics" },
   })
 }
