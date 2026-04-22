@@ -968,7 +968,14 @@ export default function AppNavigator() {
   }
 
   // After onboarding is completed, check user authentication
-  // If user is logged out, show auth stack
+  // IMPORTANT: during cold start, Supabase session restore happens asynchronously.
+  // While `loading` is true, do NOT flash the Auth stack (login screen) — keep a
+  // consistent loading shell until the auth state is resolved.
+  if (loading && !user) {
+    return <AuthFlowLoadingShell palette={palette} testId="Restoring session" />
+  }
+
+  // If user is logged out (and we're not restoring), show auth stack
   if (!user) {
     return <AuthStack key="auth-stack-logged-out" />
   }
@@ -984,7 +991,7 @@ export default function AppNavigator() {
     return <MfaStack key="mfa-stack" />
   }
 
-  /** Session bootstrap without a user — rare gap after splash; same shell as PIN resolving. */
+  /** Session bootstrap without a user — should be handled above (kept for safety). */
   if (loading && !user) {
     return <AuthFlowLoadingShell palette={palette} testId="Restoring session" />
   }

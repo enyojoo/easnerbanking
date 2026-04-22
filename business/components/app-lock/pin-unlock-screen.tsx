@@ -96,16 +96,18 @@ export function PinUnlockScreen({
         <PinUserAvatar initials={initials(user)} avatarUrl={avatarUrl} />
         <div className="space-y-1 text-center">
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">{appPinStrings.lockWelcome(name)}</h1>
-          {lock.lockedOut && lock.lockedUntil != null ? (
-            <PinLockedHint msRemaining={lock.msRemaining} variant="muted" />
-          ) : (
-            <p className="text-sm text-muted-foreground">{appPinStrings.lockEnterPin}</p>
-          )}
         </div>
         <PinEntryBlock
           pin={pin}
           onChangePin={setPin}
           error={lock.lockedOut ? null : error}
+          message={
+            lock.lockedOut && lock.lockedUntil != null ? (
+              <PinLockedHint msRemaining={lock.msRemaining} variant="muted" />
+            ) : (
+              <p className="text-center text-sm text-muted-foreground">{appPinStrings.lockEnterPin}</p>
+            )
+          }
           shake={shake}
           disabled={busy || lock.lockedOut}
         />

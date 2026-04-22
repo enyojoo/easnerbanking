@@ -99,14 +99,16 @@ export function PinChallengeDialog({
             <DialogDescription>{description}</DialogDescription>
           )}
         </DialogHeader>
-        {lock.lockedOut && lock.lockedUntil != null ? (
-          <PinLockedHint msRemaining={lock.msRemaining} variant="destructive" />
-        ) : null}
         <div className="py-2">
           <PinEntryBlock
             pin={pin}
             onChangePin={setPin}
             error={lock.lockedOut ? null : error}
+            message={
+              lock.lockedOut && lock.lockedUntil != null ? (
+                <PinLockedHint msRemaining={lock.msRemaining} variant="destructive" />
+              ) : null
+            }
             shake={shake}
             disabled={busy || lock.lockedOut}
           />

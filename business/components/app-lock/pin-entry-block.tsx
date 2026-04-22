@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { PinDotsRow } from "./pin-dots-row"
 import { PinKeypad } from "./pin-keypad"
@@ -25,12 +25,15 @@ export function PinEntryBlock({
   pin,
   onChangePin,
   error,
+  message,
   shake,
   disabled,
 }: {
   pin: string
   onChangePin: (next: string) => void
   error?: string | null
+  /** Rendered in the same slot as `error` when `error` is not present. */
+  message?: ReactNode
   shake?: boolean
   disabled?: boolean
 }) {
@@ -81,7 +84,9 @@ export function PinEntryBlock({
       <div className={cn(shake && "animate-pin-shake")}>
         <PinDotsRow filledLength={pin.length} />
       </div>
-      {error ? <p className="text-center text-sm text-destructive">{error}</p> : null}
+      <div className="min-h-5">
+        {error ? <p className="text-center text-sm text-destructive">{error}</p> : message ?? null}
+      </div>
       <PinKeypad onDigit={onDigit} onBackspace={onBackspace} disabled={disabled} />
     </div>
   )

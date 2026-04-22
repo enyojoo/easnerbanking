@@ -247,14 +247,16 @@ export function PinSettingsDialog({
           </DialogTitle>
           {verifyLocked ? null : <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
-        {verifyLocked && changeVerifyLock ? (
-          <PinLockedHint msRemaining={changeVerifyLock.msRemaining} variant="destructive" />
-        ) : null}
         <PinEntryBlock
           pin={pin}
           onChangePin={setPinDigits}
           error={
             flow === "change" && changeStep === "verify" && changeVerifyLock?.lockedOut ? null : error
+          }
+          message={
+            verifyLocked && changeVerifyLock ? (
+              <PinLockedHint msRemaining={changeVerifyLock.msRemaining} variant="destructive" />
+            ) : null
           }
           shake={shake}
           disabled={busy || !!(flow === "change" && changeStep === "verify" && changeVerifyLock?.lockedOut)}

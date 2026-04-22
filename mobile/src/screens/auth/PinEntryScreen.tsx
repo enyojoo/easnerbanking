@@ -253,7 +253,8 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
               ) : locked && lockedUntil ? (
                 <PinLockedHintText
                   msRemaining={lockedUntil - Date.now()}
-                  prefixStyle={styles.subtitle}
+                  prefixStyle={styles.errorText}
+                  digitsStyle={styles.errorText}
                 />
               ) : (
                 <Text style={styles.subtitle}>{appPinStrings.lockEnterPin}</Text>

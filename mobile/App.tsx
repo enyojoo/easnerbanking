@@ -48,9 +48,8 @@ function AppContent() {
   }
 
   const [splashFinished, setSplashFinished] = useState(false)
+  const [navReady, setNavReady] = useState(false)
   const appFadeAnim = useRef(new Animated.Value(0)).current
-  /** When `AppContent` first mounts (fonts already loaded), for minimum branded splash duration. */
-  const splashMountAt = useRef(Date.now())
 
   // Expose navigation ref globally for logout navigation
   useEffect(() => {
@@ -60,29 +59,29 @@ function AppContent() {
     }
   }, [])
 
-  // Single native splash (`app.json` + `expo-splash-screen`): hide only after auth is ready and min display time.
-  // Avoids a second JS `Image` pass that looked like a different logo (native vs Metro scaling / stale prebuild assets).
+  // Single native splash (`app.json` + `expo-splash-screen`): keep it visible until:
+  // - Supabase session restore has resolved (`authLoading` false)
+  // - React Navigation has mounted (`navReady` true)
+  //
+  // This avoids the "blank gap" / auth flash between Splash → Login → PIN on cold starts.
   useEffect(() => {
-    if (authLoading || splashFinished) return
-    const elapsed = Date.now() - splashMountAt.current
-    const remaining = Math.max(0, 3000 - elapsed)
+    if (splashFinished) return
+    if (authLoading) return
+    if (!navReady) return
     let cancelled = false
-    const t = setTimeout(() => {
-      void (async () => {
-        if (cancelled) return
-        try {
-          await SplashScreen.hideAsync()
-        } catch (e) {
-          console.warn('SplashScreen.hideAsync', e)
-        }
-        if (!cancelled) setSplashFinished(true)
-      })()
-    }, remaining)
+    void (async () => {
+      if (cancelled) return
+      try {
+        await SplashScreen.hideAsync()
+      } catch (e) {
+        console.warn('SplashScreen.hideAsync', e)
+      }
+      if (!cancelled) setSplashFinished(true)
+    })()
     return () => {
       cancelled = true
-      clearTimeout(t)
     }
-  }, [authLoading, splashFinished])
+  }, [authLoading, navReady, splashFinished])
 
   // Fade in app content when splash finishes
   useEffect(() => {
@@ -95,15 +94,12 @@ function AppContent() {
     }
   }, [splashFinished, appFadeAnim])
 
-  if (!splashFinished) {
-    return null
-  }
-
   return (
-    <Animated.View style={{ flex: 1, opacity: appFadeAnim }}>
+    <Animated.View style={{ flex: 1, opacity: splashFinished ? appFadeAnim : 0 }}>
       <NavigationContainer
         ref={navigationRef}
         onReady={() => {
+          setNavReady(true)
           analytics.setScreenTrackingMode('auto')
           const currentRoute = navigationRef.current?.getCurrentRoute()
           const currentRouteName = getActiveRouteName(currentRoute)
