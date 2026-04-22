@@ -23,6 +23,7 @@ import { BusinessLogo } from "@/components/brand/business-logo"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { Tier1VerificationBadge } from "@/components/compliance/tier1-verification-badge"
 import { BusinessOnboardingChecklist } from "@/components/business-onboarding-checklist"
+import { normalizeBusinessLogoUrl } from "@/lib/image-cache"
 
 export function DashboardNav() {
   const pathname = usePathname()
@@ -35,6 +36,7 @@ export function DashboardNav() {
   } = useBusinessProfile()
 
   const hasBusinessLogo = Boolean(businessLogoUrl?.trim())
+  const normalizedBusinessLogoUrl = normalizeBusinessLogoUrl(businessLogoUrl)
 
   const getInitialOpenGroups = () => {
     const openGroups = new Set<string>()
@@ -101,8 +103,8 @@ export function DashboardNav() {
           key={hasBusinessLogo ? "nav-logo" : "nav-placeholder"}
           className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-card shadow-soft border border-border/60"
         >
-          {hasBusinessLogo ? (
-            <img src={businessLogoUrl!} alt="" className="h-full w-full object-cover" />
+          {hasBusinessLogo && normalizedBusinessLogoUrl ? (
+            <img src={normalizedBusinessLogoUrl} alt="" className="h-full w-full object-cover" />
           ) : (
             <Building2 className="h-[18px] w-[18px] text-primary stroke-[1.5]" />
           )}

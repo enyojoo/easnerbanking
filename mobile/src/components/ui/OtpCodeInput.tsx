@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Platform,
   StyleProp,
+  TextStyle,
   ViewStyle,
 } from 'react-native'
 import { colors, spacing, textStyles, borderRadius } from '../../theme'
@@ -22,6 +23,10 @@ export interface OtpCodeInputProps {
   onFocus?: () => void
   /** Outer wrapper (e.g. opacity when submitting) */
   containerStyle?: StyleProp<ViewStyle>
+  /** Center the label text above the OTP boxes. */
+  centerLabel?: boolean
+  /** Optional extra spacing between label and OTP boxes. */
+  labelStyle?: StyleProp<TextStyle>
 }
 
 const BOX_W = 44
@@ -41,6 +46,8 @@ export function OtpCodeInput({
   disabled,
   onFocus,
   containerStyle,
+  centerLabel = false,
+  labelStyle,
 }: OtpCodeInputProps) {
   const digits = value.replace(/\D/g, '').slice(0, length)
   const activeIndex = Math.min(digits.length, length - 1)
@@ -52,7 +59,10 @@ export function OtpCodeInput({
   return (
     <View style={[styles.wrap, containerStyle]}>
       {label ? (
-        <Text style={styles.label} accessibilityRole="text">
+        <Text
+          style={[styles.label, centerLabel ? styles.labelCentered : undefined, labelStyle]}
+          accessibilityRole="text"
+        >
           {label}
         </Text>
       ) : null}
@@ -111,6 +121,9 @@ const styles = StyleSheet.create({
     ...textStyles.labelLarge,
     color: colors.semantic.foreground,
     marginBottom: spacing[2],
+  },
+  labelCentered: {
+    textAlign: 'center',
   },
   inputStack: {
     position: 'relative',

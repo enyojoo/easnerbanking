@@ -47,7 +47,7 @@ import { ripple } from '../../lib/androidRipple'
 import { useEffect } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import { useBalance } from '../../contexts/BalanceContext'
-import { apiGet } from '../../lib/apiClient'
+import { apiGet, apiPost } from '../../lib/apiClient'
 import { useQueryClient } from '@tanstack/react-query'
 import { useScope } from '../../query/scope'
 import { apiFetch } from '../../query/api-client'
@@ -58,10 +58,12 @@ import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import { isTier1Complete } from '../../lib/compliance'
 import { noahService } from '../../lib/noahService'
 import { useTransactionsList } from '../../hooks/queries'
-import { isEasnerProductReceiveTitle, isEasnerProductSendTitle, qk } from '@easner/shared'
-import { normalizeAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
+import { isEasnerProductReceiveTitle, isEasnerProductSendTitle, markRecentMoneyActivity, qk } from '@easner/shared'
+import { avatarImageSource, normalizeAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
 
 const DASHBOARD_SELECTED_CURRENCY_KEY_PREFIX = 'easner_dashboard_selected_currency_'
+const DASHBOARD_RECENT_TX_CACHE_KEY_PREFIX = 'easner_dashboard_recent_tx_'
+const DASHBOARD_RECENT_TX_CACHE_TTL_MS = 60 * 60 * 1000
 
 // Transaction interface for dashboard
 interface DashboardTransaction {
@@ -105,6 +107,45 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const [canOpenMoreCurrencies, setCanOpenMoreCurrencies] = useState(false)
   /** Throttle Noah sync on dashboard focus (parity with business `BusinessVerificationSection`). */
   const lastDashboardNoahSyncRef = useRef(0)
+  /** Throttle chain-ledger repair scans (missed Turnkey deposit recovery). */
+  const lastDashboardChainLedgerSyncRef = useRef(0)
+  const chainLedgerSyncInFlightRef = useRef<Promise<boolean> | null>(null)
+
+  const syncChainLedgerIfDue = useCallback(
+    async (force: boolean = false): Promise<boolean> => {
+      const now = Date.now()
+      const MIN_MS = 10 * 60_000
+      if (!force && now - lastDashboardChainLedgerSyncRef.current < MIN_MS) return false
+      if (chainLedgerSyncInFlightRef.current) {
+        return chainLedgerSyncInFlightRef.current
+      }
+
+      const run = (async () => {
+        try {
+          const response = await apiPost('/api/wallets/sync-chain-ledger', undefined, {
+            headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
+          })
+          if (!response.ok) return false
+          lastDashboardChainLedgerSyncRef.current = Date.now()
+          const payload = await response.json().catch(() => null)
+          const upserts = Number(
+            (payload as any)?.result?.upserts ?? (payload as any)?.result?.upserted ?? 0,
+          )
+          const inserted = Number.isFinite(upserts) && upserts > 0
+          if (inserted) markRecentMoneyActivity()
+          return inserted
+        } catch {
+          return false
+        } finally {
+          chainLedgerSyncInFlightRef.current = null
+        }
+      })()
+
+      chainLedgerSyncInFlightRef.current = run
+      return run
+    },
+    [],
+  )
 
   const loadAvailableCurrencies = useCallback(async () => {
     try {
@@ -164,11 +205,52 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     const firstPage = txQuery.data?.pages?.[0]?.transactions ?? []
     return (firstPage as DashboardTransaction[]).slice(0, 5)
   }, [txQuery.data])
-  const recentTransactions = queryRecent
+  const [cachedRecentTransactions, setCachedRecentTransactions] = useState<DashboardTransaction[]>([])
+  const recentTransactions = queryRecent.length > 0 ? queryRecent : cachedRecentTransactions
   const hasAnyTransactionData = recentTransactions.length > 0
   const loadingTransactions = txQuery.isPending && !hasAnyTransactionData
   const hasAttemptedLoad = txQuery.isFetched || recentTransactions.length > 0
   const lastStableBalanceTextRef = useRef<Record<string, string>>({})
+
+  useEffect(() => {
+    const uid = userProfile?.id || user?.id
+    if (!uid) return
+    const key = `${DASHBOARD_RECENT_TX_CACHE_KEY_PREFIX}${uid}`
+    let mounted = true
+    const loadCachedRecent = async () => {
+      try {
+        const raw = await AsyncStorage.getItem(key)
+        if (!raw) return
+        const parsed = JSON.parse(raw) as { at?: number; rows?: DashboardTransaction[] } | null
+        const at = Number(parsed?.at ?? 0)
+        const rows = Array.isArray(parsed?.rows) ? parsed?.rows : []
+        if (!Number.isFinite(at) || Date.now() - at > DASHBOARD_RECENT_TX_CACHE_TTL_MS) return
+        if (mounted && rows.length > 0) {
+          setCachedRecentTransactions(rows.slice(0, 5))
+        }
+      } catch {
+        // Ignore malformed/expired cache.
+      }
+    }
+    void loadCachedRecent()
+    return () => {
+      mounted = false
+    }
+  }, [userProfile?.id, user?.id])
+
+  useEffect(() => {
+    const uid = userProfile?.id || user?.id
+    if (!uid) return
+    if (queryRecent.length === 0) return
+    const key = `${DASHBOARD_RECENT_TX_CACHE_KEY_PREFIX}${uid}`
+    const payload = JSON.stringify({
+      at: Date.now(),
+      rows: queryRecent.slice(0, 5),
+    })
+    AsyncStorage.setItem(key, payload).catch(() => {
+      // Ignore storage write failures.
+    })
+  }, [queryRecent, userProfile?.id, user?.id])
 
   useEffect(() => {
     if (!scope || recentTransactions.length === 0) return
@@ -199,7 +281,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
         !!user?.id && !!userProfile?.id && role !== 'business' && !isTier1Complete(userProfile)
       if (needsConsumerTier1Sync) {
         const now = Date.now()
-        const MIN_MS = 90_000
+        const MIN_MS = 10 * 60_000
         if (now - lastDashboardNoahSyncRef.current >= MIN_MS) {
           lastDashboardNoahSyncRef.current = now
           void (async () => {
@@ -221,6 +303,12 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
       refreshBalances(false).catch(() => {
         // Silently fail
       })
+      void (async () => {
+        const insertedRows = await syncChainLedgerIfDue(false)
+        if (insertedRows) {
+          await txQuery.refetch()
+        }
+      })()
       void txQuery.refetch()
       loadAvailableCurrencies().catch(() => {
         // Silently fail
@@ -231,6 +319,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
       refreshUserProfile,
       refreshBalances,
       loadAvailableCurrencies,
+      syncChainLedgerIfDue,
       txQuery,
     ])
   )
@@ -264,6 +353,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     ''
 
   const headerAvatarUrl = normalizeAvatarUrl(userProfile?.profile?.avatar_url)
+  const headerAvatarSource = avatarImageSource(userProfile?.profile?.avatar_url)
 
   useEffect(() => {
     warmAvatarCache(headerAvatarUrl)
@@ -537,9 +627,9 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                   navigation.navigate('ProfileEdit' as any)
                 }} >
-                {headerAvatarUrl ? (
+                {headerAvatarSource ? (
                   <Image
-                    source={{ uri: headerAvatarUrl, cache: 'force-cache' }}
+                    source={headerAvatarSource}
                     style={userAvatarStyles.image}
                     resizeMode="cover"
                   />
@@ -598,6 +688,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
             onRefresh={async () => {
               setRefreshing(true)
               try {
+                await syncChainLedgerIfDue(true)
                 await Promise.all([refreshBalances(true), txQuery.refetch()])
               } catch (error) {
                 console.error('Error refreshing dashboard:', error)

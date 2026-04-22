@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth-context"
 import { countries } from "@/lib/countries"
 import { CACHE_KEYS, dataCache } from "@/lib/cache"
 import { useCachedData } from "@/lib/use-cached-data"
+import { normalizeBusinessLogoUrl } from "@/lib/image-cache"
 
 export type BusinessProfile = {
   businessId: string | null
@@ -175,6 +176,7 @@ export function useBusinessProfile() {
   const profile = useMemo(
     () => ({
       ...profileData,
+      logoUrl: normalizeBusinessLogoUrl(profileData.logoUrl),
       countryCode: profileData.countryCode ?? countryCodeFromName(profileData.country),
     }),
     [profileData],

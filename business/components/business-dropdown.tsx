@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
+import { normalizeBusinessLogoUrl, normalizeProfileImageUrl } from "@/lib/image-cache"
 
 /** Sun/Moon only; active state follows resolved appearance (system + OS → correct icon). */
 function ThemePreferenceItems() {
@@ -92,8 +93,10 @@ export function BusinessDropdown({
   variant = "sidebar",
 }: BusinessDropdownProps) {
   const [isOpen, setIsOpen] = useState(false)
-  const hasProfileImage = Boolean(profileImageUrl?.trim())
-  const hasBusinessLogo = Boolean(businessLogoUrl?.trim())
+  const normalizedProfileImageUrl = normalizeProfileImageUrl(profileImageUrl)
+  const normalizedBusinessLogoUrl = normalizeBusinessLogoUrl(businessLogoUrl)
+  const hasProfileImage = Boolean(normalizedProfileImageUrl)
+  const hasBusinessLogo = Boolean(normalizedBusinessLogoUrl)
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
@@ -107,7 +110,7 @@ export function BusinessDropdown({
               key={hasProfileImage ? "profile-img" : "profile-placeholder"}
               className="h-9 w-9 shrink-0 border-2 border-border"
             >
-              {hasProfileImage ? <AvatarImage src={profileImageUrl!} alt="" /> : null}
+              {hasProfileImage ? <AvatarImage src={normalizedProfileImageUrl!} alt="" /> : null}
               <AvatarFallback className="bg-primary/10 text-primary">
                 <User className="h-[1.125rem] w-[1.125rem]" />
               </AvatarFallback>
@@ -126,7 +129,7 @@ export function BusinessDropdown({
           >
             <div className="flex items-center gap-3 flex-1 min-w-0">
               <Avatar key={hasBusinessLogo ? "biz-logo" : "biz-placeholder"} className="h-8 w-8">
-                {hasBusinessLogo ? <AvatarImage src={businessLogoUrl!} alt="" /> : null}
+                {hasBusinessLogo ? <AvatarImage src={normalizedBusinessLogoUrl!} alt="" /> : null}
                 <AvatarFallback className="bg-primary/10 text-primary">
                   <Building2 className="h-4 w-4" />
                 </AvatarFallback>
@@ -168,7 +171,7 @@ export function BusinessDropdown({
             <div className="px-3 py-2">
               <div className="flex items-center gap-3">
                 <Avatar key={hasBusinessLogo ? "menu-biz-logo" : "menu-biz-placeholder"} className="h-8 w-8">
-                  {hasBusinessLogo ? <AvatarImage src={businessLogoUrl!} alt="" /> : null}
+                  {hasBusinessLogo ? <AvatarImage src={normalizedBusinessLogoUrl!} alt="" /> : null}
                   <AvatarFallback className="bg-primary/10 text-primary">
                     <Building2 className="h-4 w-4" />
                   </AvatarFallback>

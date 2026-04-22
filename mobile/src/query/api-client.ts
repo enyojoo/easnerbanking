@@ -44,6 +44,27 @@ export interface ApiFetchOptions<TBody = unknown> {
   anonymous?: boolean
 }
 
+let rateLimitCooldownUntilMs = 0
+
+function parseRetryAfterToMs(value: string | null): number | null {
+  if (!value) return null
+  const seconds = Number(value)
+  if (Number.isFinite(seconds) && seconds > 0) return Math.round(seconds * 1000)
+  const at = Date.parse(value)
+  if (Number.isFinite(at)) {
+    const delta = at - Date.now()
+    return delta > 0 ? delta : 0
+  }
+  return null
+}
+
+function setRateLimitCooldownFromResponse(res: Response): void {
+  const retryAfterMs = parseRetryAfterToMs(res.headers.get('retry-after'))
+  const fallbackMs = 30_000
+  const cooldownMs = Math.max(retryAfterMs ?? fallbackMs, 1_000)
+  rateLimitCooldownUntilMs = Date.now() + cooldownMs
+}
+
 function buildUrl(path: string, query: ApiFetchOptions['query']): string {
   const base = getApiBaseUrl()
   const full = path.startsWith('http') ? path : `${base}${path.startsWith('/') ? path : `/${path}`}`
@@ -66,6 +87,16 @@ export async function apiFetch<TResponse = unknown, TBody = unknown>(
   path: string,
   options: ApiFetchOptions<TBody> = {},
 ): Promise<TResponse> {
+  if (Date.now() < rateLimitCooldownUntilMs) {
+    const waitMs = rateLimitCooldownUntilMs - Date.now()
+    throw new ApiError(
+      `Rate limited; retry in ${Math.max(Math.ceil(waitMs / 1000), 1)}s`,
+      429,
+      'RATE_LIMITED',
+      { retryAfterMs: waitMs },
+    )
+  }
+
   const { method = 'GET', body, query, signal, headers, anonymous = false } = options
   const url = buildUrl(path, query)
 
@@ -97,6 +128,7 @@ export async function apiFetch<TResponse = unknown, TBody = unknown>(
   const parsed = text ? safeJson(text) : undefined
 
   if (!res.ok) {
+    if (res.status === 429) setRateLimitCooldownFromResponse(res)
     const code = extractCode(parsed)
     const message = extractMessage(parsed) ?? `${method} ${path} failed (${res.status})`
     throw new ApiError(message, res.status, code, parsed)

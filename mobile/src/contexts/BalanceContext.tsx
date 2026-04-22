@@ -60,23 +60,26 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
   const scope = useMaybeScope()
   const query = useWalletBalances()
   const lastKnownBalancesRef = useRef<Balances>(EMPTY_BALANCES)
+  const isAuthoritativeBalanceRead = query.data?.source !== 'none'
 
   useEffect(() => {
     if (!query.data) return
+    if (!isAuthoritativeBalanceRead) return
     const next: Balances = {
       USD: String(query.data.USD ?? '0'),
       EUR: String(query.data.EUR ?? '0'),
     }
     lastKnownBalancesRef.current = next
-  }, [query.data])
+  }, [isAuthoritativeBalanceRead, query.data])
 
   const balances: Balances = useMemo(() => {
     if (!query.data) return lastKnownBalancesRef.current
+    if (!isAuthoritativeBalanceRead) return lastKnownBalancesRef.current
     return {
       USD: String(query.data.USD ?? '0'),
       EUR: String(query.data.EUR ?? '0'),
     }
-  }, [query.data])
+  }, [isAuthoritativeBalanceRead, query.data])
 
   const hasResolvedBalance = Boolean(query.data)
 

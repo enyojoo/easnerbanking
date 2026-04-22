@@ -5,6 +5,7 @@ import type { Recipient } from '../types'
 import { getPayoutRecipientSubtitleParts } from '../lib/recipientPayoutPreview'
 import { getTokenIconUrl } from '../lib/cryptoIcons'
 import { PayoutSubtitleRow } from '../lib/easenetRecipientUi'
+import { avatarImageSource } from '../lib/avatarCache'
 import { CountryFlag } from './flags/CountryFlag'
 import { getCountryCodeForCurrency } from '@easner/shared'
 import { colors, spacing, borderRadius, textStyles } from '../theme'
@@ -29,6 +30,7 @@ export function RecipientPayoutPreview({ recipient, getInitials, variant = 'card
     (recipient.currency === 'EUR' ? 'EU' : getCountryCodeForCurrency(recipient.currency) || 'US')
 
   const uri = String(recipient.payee_avatar_url || '').trim()
+  const avatarSource = avatarImageSource(uri)
   const [imageFailed, setImageFailed] = useState(false)
   useEffect(() => {
     setImageFailed(false)
@@ -39,9 +41,9 @@ export function RecipientPayoutPreview({ recipient, getInitials, variant = 'card
   return (
     <View style={[styles.wrap, row && styles.wrapRow]}>
       <View style={styles.avatarWrap}>
-        {uri && !imageFailed ? (
+        {avatarSource && !imageFailed ? (
           <Image
-            source={{ uri }}
+            source={avatarSource}
             style={styles.avatarImg}
             resizeMode="cover"
             onError={() => setImageFailed(true)}

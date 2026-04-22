@@ -32,6 +32,19 @@ function pickNestedString(payload: TurnkeyEvent, keys: string[]): string | null 
   return found
 }
 
+function collectNestedStrings(payload: TurnkeyEvent, keys: string[]): string[] {
+  const out = new Set<string>()
+  walkObject(payload, (obj) => {
+    for (const key of keys) {
+      const v = obj[key]
+      if (v == null) continue
+      const text = String(v).trim()
+      if (text) out.add(text)
+    }
+  })
+  return [...out]
+}
+
 function toIsoOrNow(raw: string | number | Record<string, unknown> | null): string {
   if (raw == null) return new Date().toISOString()
   if (typeof raw === "object") {
@@ -92,23 +105,45 @@ export async function applyTurnkeyWebhookSideEffects(
   eventId: string,
 ): Promise<boolean> {
   const event = (payload || {}) as TurnkeyEvent
+  const toCandidates = new Set<string>([
+    ...collectNestedStrings(event, ["toAddress", "destinationAddress", "recipientAddress", "accountAddress"]),
+    ...(() => {
+      const direct = pickFirstString(event, ["toAddress", "destinationAddress", "recipientAddress", "accountAddress"])
+      return direct ? [direct] : []
+    })(),
+  ])
+  const fromCandidates = new Set<string>([
+    ...collectNestedStrings(event, ["fromAddress", "sourceAddress", "senderAddress"]),
+    ...(() => {
+      const direct = pickFirstString(event, ["fromAddress", "sourceAddress", "senderAddress"])
+      return direct ? [direct] : []
+    })(),
+  ])
+  const genericCandidates = new Set<string>([
+    ...collectNestedStrings(event, ["walletAddress", "address"]),
+    ...(() => {
+      const direct = pickFirstString(event, ["walletAddress", "address"])
+      return direct ? [direct] : []
+    })(),
+  ])
+  const addressCandidates = [...new Set<string>([...toCandidates, ...fromCandidates, ...genericCandidates])]
+  if (addressCandidates.length === 0) return false
 
-  const walletAddress = pickFirstString(event, [
-    "walletAddress",
-    "address",
-    "destinationAddress",
-    "toAddress",
-    "accountAddress",
-  ]) || pickNestedString(event, ["walletAddress", "destinationAddress", "toAddress", "accountAddress", "address"])
-  if (!walletAddress) return false
-
-  const { data: walletAccount } = await admin
+  const { data: walletAccounts } = await admin
     .from("wallet_accounts")
     .select("wallet_owner_id, address, asset, chain")
     .eq("status", "active")
-    .eq("address", walletAddress)
-    .maybeSingle()
+    .in("address", addressCandidates)
+    .limit(5)
+  if (!walletAccounts?.length) return false
+
+  const walletAccount =
+    walletAccounts.find((row) => toCandidates.has(String(row.address || ""))) ||
+    walletAccounts.find((row) => fromCandidates.has(String(row.address || ""))) ||
+    walletAccounts[0]
   if (!walletAccount?.wallet_owner_id) return false
+  const walletAddress = String(walletAccount.address || "").trim()
+  if (!walletAddress) return false
 
   const { data: owner } = await admin
     .from("wallet_owners")
@@ -135,11 +170,15 @@ export async function applyTurnkeyWebhookSideEffects(
   if (!userId) return false
 
   let direction = deriveDirection(event)
-  const maybeToAddress = pickFirstString(event, ["toAddress", "destinationAddress"]) || pickNestedString(event, ["toAddress", "destinationAddress"])
-  const maybeFromAddress = pickFirstString(event, ["fromAddress", "sourceAddress", "senderAddress"]) || pickNestedString(event, ["fromAddress", "sourceAddress", "senderAddress"])
+  const maybeToAddress =
+    pickFirstString(event, ["toAddress", "destinationAddress", "recipientAddress"]) ||
+    pickNestedString(event, ["toAddress", "destinationAddress", "recipientAddress"])
+  const maybeFromAddress =
+    pickFirstString(event, ["fromAddress", "sourceAddress", "senderAddress"]) ||
+    pickNestedString(event, ["fromAddress", "sourceAddress", "senderAddress"])
   if (!direction) {
-    if (maybeToAddress && maybeToAddress.toLowerCase() === walletAddress.toLowerCase()) direction = "in"
-    else if (maybeFromAddress && maybeFromAddress.toLowerCase() === walletAddress.toLowerCase()) direction = "out"
+    if (toCandidates.has(walletAddress) || (maybeToAddress && maybeToAddress === walletAddress)) direction = "in"
+    else if (fromCandidates.has(walletAddress) || (maybeFromAddress && maybeFromAddress === walletAddress)) direction = "out"
   }
   if (!direction) return false
 

@@ -30,8 +30,9 @@ export function isOpenExchangeRatesConfigured(): boolean {
 }
 
 export function getFxRefreshTtlMs(): number {
-  const parsed = Number.parseInt(process.env.OPEN_EXCHANGE_RATES_TTL_MS || "3600000", 10)
-  if (!Number.isFinite(parsed) || parsed <= 0) return 3_600_000
+  // Default to daily refresh; can be overridden via env if needed.
+  const parsed = Number.parseInt(process.env.OPEN_EXCHANGE_RATES_TTL_MS || "86400000", 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) return 86_400_000
   return parsed
 }
 
@@ -52,6 +53,39 @@ export async function listExchangeRates(admin: SupabaseClient): Promise<Exchange
     rate: Number(row.rate ?? 0),
     as_of: String(row.as_of ?? new Date().toISOString()),
   }))
+}
+
+function newestExchangeRateMs(rates: ExchangeRateRow[]): number {
+  return rates.reduce((latest, row) => Math.max(latest, new Date(row.as_of).getTime()), 0)
+}
+
+function areExchangeRatesFresh(rates: ExchangeRateRow[], maxAgeMs: number): boolean {
+  const newestMs = newestExchangeRateMs(rates)
+  return newestMs > 0 && Date.now() - newestMs <= maxAgeMs
+}
+
+let backgroundSyncInFlight: Promise<void> | null = null
+
+/**
+ * Fire-and-forget refresh for request paths that should return cached DB rows
+ * immediately while opportunistically refreshing stale rates in the background.
+ */
+export function triggerExchangeRatesBackgroundRefresh(
+  admin: SupabaseClient,
+  currentRates: ExchangeRateRow[],
+  maxAgeMs = getFxRefreshTtlMs(),
+): void {
+  if (areExchangeRatesFresh(currentRates, maxAgeMs)) return
+  if (backgroundSyncInFlight) return
+  backgroundSyncInFlight = (async () => {
+    try {
+      await syncOpenExchangeRates(admin)
+    } catch {
+      // Best-effort background refresh only.
+    } finally {
+      backgroundSyncInFlight = null
+    }
+  })()
 }
 
 export async function syncOpenExchangeRates(
@@ -146,8 +180,7 @@ export function findExchangeRate(
 
 export async function ensureExchangeRatesFresh(admin: SupabaseClient): Promise<ExchangeRateRow[]> {
   const current = await listExchangeRates(admin)
-  const newestMs = current.reduce((latest, row) => Math.max(latest, new Date(row.as_of).getTime()), 0)
-  if (newestMs > 0 && Date.now() - newestMs <= getFxRefreshTtlMs()) {
+  if (areExchangeRatesFresh(current, getFxRefreshTtlMs())) {
     return current
   }
 

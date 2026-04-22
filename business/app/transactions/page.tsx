@@ -25,6 +25,7 @@ import { useTransactionsCached } from "@/hooks/use-transactions-cached"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { useFxRates } from "@/hooks/queries"
 import { formatTransactionRowDateTime, transactionStatusRowPresentation } from "@/lib/transaction-row-present"
+import { useTurnkeyLedgerRepair } from "@/hooks/use-turnkey-ledger-repair"
 
 function exportToCsv(
   transactions: {
@@ -64,6 +65,7 @@ function exportToCsv(
 
 export default function TransactionsPage() {
   const { data: rows, loading: listLoading } = useTransactionsCached()
+  useTurnkeyLedgerRepair()
   const { baseCurrency: profileBaseCurrency } = useBusinessProfile()
   const baseCurrencyCode = (profileBaseCurrency || "USD").toUpperCase()
   const searchParams = useSearchParams()

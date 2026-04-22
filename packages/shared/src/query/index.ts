@@ -35,5 +35,10 @@ export type {
   AttachRealtimeOptions,
 } from "./realtime"
 
-export { pollingIntervalFor, isChannelHealthy } from "./polling-fallback"
+export {
+  pollingIntervalFor,
+  isChannelHealthy,
+  markRecentMoneyActivity,
+  hasRecentMoneyActivity,
+} from "./polling-fallback"
 export type { FreshnessBand } from "./polling-fallback"

@@ -1,7 +1,7 @@
 "use client"
 
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { qk } from "@easner/shared"
+import { markRecentMoneyActivity, qk } from "@easner/shared"
 import { apiFetch } from "@/lib/query/api-client"
 import { useScope } from "@/lib/query/scope"
 import type { TransactionsPage } from "@/hooks/queries/use-transactions"
@@ -49,6 +49,8 @@ export function useCreateTransfer() {
         headers: input.idempotencyKey ? { "Idempotency-Key": input.idempotencyKey } : undefined,
       }),
     onMutate: async (input) => {
+      // Temporarily speed fallback polling right after money movement.
+      markRecentMoneyActivity()
       if (!scope) return {}
       const listKey = qk.transactions.list(scope, {})
       await qc.cancelQueries({ queryKey: qk.transactions.root(scope) })

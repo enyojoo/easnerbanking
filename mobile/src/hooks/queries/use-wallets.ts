@@ -34,15 +34,25 @@ export function useWalletBalances() {
         '/api/wallets/on-chain-balances',
         { headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS } },
       )
+      const source = body?.source
+      const detail = String(body?.detail ?? '')
+      const isTransientTurnkeyFailure =
+        source === 'none' &&
+        (detail === 'turnkey_balance_query_failed' || detail.startsWith('turnkey_balance_query_failed:'))
+      if (isTransientTurnkeyFailure) {
+        // Keep last known good balance in cache on temporary provider/read failures
+        // instead of flashing "0.00" on dashboard during background refetches.
+        throw new Error('Transient Turnkey balance lookup failure')
+      }
       return {
         USD: String(body?.USD ?? '0'),
         EUR: String(body?.EUR ?? '0'),
-        source: body?.source,
+        source,
         detail: body?.detail,
         balanceCaip2: body?.balanceCaip2,
       } satisfies WalletBalancesEnvelope
     },
-    staleTime: 30_000,
+    staleTime: 60_000,
     gcTime: 30 * 60_000,
     // Fallback polling when realtime is unhealthy. The realtime bridge
     // pokes `qk.wallets.list` on balance events so this rarely actually

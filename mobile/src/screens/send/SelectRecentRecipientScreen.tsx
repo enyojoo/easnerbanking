@@ -62,6 +62,7 @@ import {
 } from '../../lib/recipientCatalog'
 import { getAllowedCountriesCached } from '../../lib/jurisdictionCountryPolicy'
 import { getNetworkIconUrl, getTokenIconUrl } from '../../lib/cryptoIcons'
+import { loadRecipientsListCache, saveRecipientsListCache } from '../../lib/recipientsListCache'
 import { ShimmerLoader } from '../../components/premium'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { CountryFlag } from '../../components/flags/CountryFlag'
@@ -111,7 +112,9 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   const recipientsQuery = useRecipientsList()
   const { data: currencies = [] } = useCurrenciesCatalog()
   const txHubQuery = useTransactionsList({}, 100)
-  const recipients = recipientsQuery.data ?? []
+  const [cachedRecipients, setCachedRecipients] = useState<Recipient[]>([])
+  const queryRecipients = recipientsQuery.data ?? []
+  const recipients = queryRecipients.length > 0 ? queryRecipients : cachedRecipients
   const recipientsLoading = recipientsQuery.isPending && recipients.length === 0
   const transactions = useMemo(() => {
     if (!user?.id) return []
@@ -200,6 +203,25 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   const contentAnim = useRef(new Animated.Value(0)).current
 
   useCalmParallelEnterWhen(true, headerAnim, contentAnim)
+
+  useEffect(() => {
+    const uid = userProfile?.id || user?.id
+    if (!uid) return
+    let mounted = true
+    void loadRecipientsListCache(uid).then((rows) => {
+      if (!mounted || rows.length === 0) return
+      setCachedRecipients(rows)
+    })
+    return () => {
+      mounted = false
+    }
+  }, [userProfile?.id, user?.id])
+
+  useEffect(() => {
+    const uid = userProfile?.id || user?.id
+    if (!uid || queryRecipients.length === 0) return
+    void saveRecipientsListCache(uid, queryRecipients)
+  }, [queryRecipients, userProfile?.id, user?.id])
 
   useEffect(() => {
     if (!user?.id) {

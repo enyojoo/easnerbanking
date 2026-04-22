@@ -13,6 +13,7 @@ import {
   Platform,
   useWindowDimensions,
 } from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Ionicons } from '@expo/vector-icons'
 import { ArrowDownLeft, ArrowUpRight, Monitor, Search } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
@@ -45,7 +46,13 @@ import {
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { getTransactionStatusDisplay } from '../../utils/formatters'
-import { isEasnerProductReceiveTitle, isEasnerProductSendTitle, qk } from '@easner/shared'
+import { isEasnerProductReceiveTitle, isEasnerProductSendTitle, markRecentMoneyActivity, qk } from '@easner/shared'
+import { useFocusEffect } from '@react-navigation/native'
+import { apiPost } from '../../lib/apiClient'
+import { useAuth } from '../../contexts/AuthContext'
+
+const TRANSACTIONS_CACHE_KEY_PREFIX = 'easner_transactions_screen_list_'
+const TRANSACTIONS_CACHE_TTL_MS = 60 * 60 * 1000
 
 function useCurrencies() {
   const { data: currencies = [] } = useCurrenciesCatalog()
@@ -361,6 +368,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
     }
   }, [windowWidth])
   const { refreshBalances } = useBalance()
+  const { user, userProfile } = useAuth()
   const { scope } = useScope()
   const qc = useQueryClient()
   const currencies = useCurrencies()
@@ -369,6 +377,8 @@ function TransactionsContent({ navigation }: NavigationProps) {
   const [refreshing, setRefreshing] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null)
+  const lastChainLedgerSyncRef = useRef(0)
+  const chainLedgerSyncInFlightRef = useRef<Promise<boolean> | null>(null)
   
   const headerAnim = useRef(new Animated.Value(0)).current
   const [skipRowEntranceAnim, setSkipRowEntranceAnim] = useState(false)
@@ -388,8 +398,49 @@ function TransactionsContent({ navigation }: NavigationProps) {
     const pages = txQuery.data?.pages ?? []
     return pages.flatMap((p) => (p.transactions ?? []) as CombinedTransaction[])
   }, [txQuery.data])
-  const transactions = queryRows
+  const [cachedRows, setCachedRows] = useState<CombinedTransaction[]>([])
+  const transactions = queryRows.length > 0 ? queryRows : cachedRows
   const loading = txQuery.isPending && transactions.length === 0
+
+  useEffect(() => {
+    const uid = userProfile?.id || user?.id
+    if (!uid) return
+    const key = `${TRANSACTIONS_CACHE_KEY_PREFIX}${uid}`
+    let mounted = true
+    const loadCachedTransactions = async () => {
+      try {
+        const raw = await AsyncStorage.getItem(key)
+        if (!raw) return
+        const parsed = JSON.parse(raw) as { at?: number; rows?: CombinedTransaction[] } | null
+        const at = Number(parsed?.at ?? 0)
+        const rows = Array.isArray(parsed?.rows) ? parsed?.rows : []
+        if (!Number.isFinite(at) || Date.now() - at > TRANSACTIONS_CACHE_TTL_MS) return
+        if (mounted && rows.length > 0) {
+          setCachedRows(rows.slice(0, 200))
+        }
+      } catch {
+        // Ignore malformed cache.
+      }
+    }
+    void loadCachedTransactions()
+    return () => {
+      mounted = false
+    }
+  }, [userProfile?.id, user?.id])
+
+  useEffect(() => {
+    const uid = userProfile?.id || user?.id
+    if (!uid) return
+    if (queryRows.length === 0) return
+    const key = `${TRANSACTIONS_CACHE_KEY_PREFIX}${uid}`
+    const payload = JSON.stringify({
+      at: Date.now(),
+      rows: queryRows.slice(0, 200),
+    })
+    AsyncStorage.setItem(key, payload).catch(() => {
+      // Ignore storage write failures.
+    })
+  }, [queryRows, userProfile?.id, user?.id])
 
   useEffect(() => {
     if (!scope || queryRows.length === 0) return
@@ -412,10 +463,58 @@ function TransactionsContent({ navigation }: NavigationProps) {
   // Refresh stale data when screen comes into focus
   useFocusRefreshAll(false) // Only refresh if stale (> 5 minutes)
 
+  const syncChainLedgerIfDue = React.useCallback(
+    async (force: boolean = false): Promise<boolean> => {
+      const now = Date.now()
+      const MIN_MS = 10 * 60_000
+      if (!force && now - lastChainLedgerSyncRef.current < MIN_MS) return false
+      if (chainLedgerSyncInFlightRef.current) {
+        return chainLedgerSyncInFlightRef.current
+      }
+
+      const run = (async () => {
+        try {
+          const response = await apiPost('/api/wallets/sync-chain-ledger', undefined, {
+            headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
+          })
+          if (!response.ok) return false
+          lastChainLedgerSyncRef.current = Date.now()
+          const payload = await response.json().catch(() => null)
+          const upserts = Number(
+            (payload as any)?.result?.upserts ?? (payload as any)?.result?.upserted ?? 0,
+          )
+          const inserted = Number.isFinite(upserts) && upserts > 0
+          if (inserted) markRecentMoneyActivity()
+          return inserted
+        } catch {
+          return false
+        } finally {
+          chainLedgerSyncInFlightRef.current = null
+        }
+      })()
+
+      chainLedgerSyncInFlightRef.current = run
+      return run
+    },
+    [],
+  )
+
+  useFocusEffect(
+    React.useCallback(() => {
+      void (async () => {
+        const insertedRows = await syncChainLedgerIfDue(false)
+        if (insertedRows) {
+          await txQuery.refetch()
+        }
+      })()
+    }, [syncChainLedgerIfDue, txQuery]),
+  )
+
   const onRefresh = async () => {
     setRefreshing(true)
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+      await syncChainLedgerIfDue(true)
       await Promise.all([refreshBalances(true), txQuery.refetch()])
     } catch (error: any) {
       if (error?.message?.includes('Network request failed') || error?.name === 'TypeError') {

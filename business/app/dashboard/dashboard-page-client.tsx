@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import {
   ArrowDownLeft,
@@ -28,11 +28,13 @@ import {
   parseBalanceString,
 } from "@/hooks/use-business-account-rows"
 import { useFxRates } from "@/hooks/queries"
+import { useTurnkeyLedgerRepair } from "@/hooks/use-turnkey-ledger-repair"
 
 export function DashboardPageClient() {
   const { data: rows } = useTransactionsCached()
   const { balances, baseCurrency } = useBusinessAccountRows()
   const { data: fxRates = [] } = useFxRates()
+  useTurnkeyLedgerRepair()
 
   const [selectedTransaction, setSelectedTransaction] = useState<TransactionWithSource | null>(null)
   const [transactionDetailsOpen, setTransactionDetailsOpen] = useState(false)
@@ -42,6 +44,7 @@ export function DashboardPageClient() {
     to: undefined,
   })
   const [balancesVisible, setBalancesVisible] = useState(true)
+  const lastStableBalanceTextRef = useRef<string | null>(null)
 
   const MASK = "******"
 
@@ -65,14 +68,13 @@ export function DashboardPageClient() {
     return null
   }
 
-  const toBaseAmount = (amountAbs: number, currency: string, targetBase: string): number | null => {
+  const toBaseAmount = (amountAbs: number, currency: string, targetBase: string): number => {
     const c = currency.toUpperCase()
     const b = targetBase.toUpperCase()
     if (c === b) return amountAbs
-    // No FX pair needed for a zero bucket; avoids "—" when rates are loading/stale/empty.
     if (amountAbs === 0) return 0
     const rate = getFxRate(c, b)
-    if (!rate) return null
+    if (!rate) return amountAbs
     return amountAbs * rate
   }
 
@@ -85,9 +87,7 @@ export function DashboardPageClient() {
     ) {
       return Math.abs(t.baseAmount)
     }
-    const converted = toBaseAmount(absAmount, t.displayCurrency || "USD", targetBase)
-    if (converted != null) return converted
-    return absAmount
+    return toBaseAmount(absAmount, t.displayCurrency || "USD", targetBase)
   }
 
   const moneyIn = filteredTransactions
@@ -106,10 +106,15 @@ export function DashboardPageClient() {
   const code = baseCurrency
   const usdInBase = toBaseAmount(usdBal, "USD", code)
   const eurInBase = toBaseAmount(eurBal, "EUR", code)
-  const computedPrimaryBalance =
-    usdInBase != null && eurInBase != null ? usdInBase + eurInBase
-    : null
+  const computedPrimaryBalance = usdInBase + eurInBase
   const summaryCurrency = code
+  const computedPrimaryBalanceText = formatCurrency(computedPrimaryBalance, code)
+  if (Number.isFinite(computedPrimaryBalance)) {
+    lastStableBalanceTextRef.current = computedPrimaryBalanceText
+  }
+  const visiblePrimaryBalanceText = balancesVisible
+    ? (lastStableBalanceTextRef.current ?? computedPrimaryBalanceText)
+    : MASK
 
   return (
     <div className="space-y-8">
@@ -140,9 +145,7 @@ export function DashboardPageClient() {
                         !balancesVisible && "tracking-[0.2em]",
                       )}
                     >
-                      {balancesVisible ?
-                        computedPrimaryBalance == null ? "—" : formatCurrency(computedPrimaryBalance, code)
-                      : MASK}
+                      {visiblePrimaryBalanceText}
                     </span>
                   </span>
                 </h2>

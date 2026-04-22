@@ -6,6 +6,7 @@ import { X, User } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { uploadProfileAvatar } from "@/lib/upload-client"
+import { bustProfileImageUrl, normalizeProfileImageUrl } from "@/lib/image-cache"
 
 export function ProfilePhotoField({
   value,
@@ -21,7 +22,8 @@ export function ProfilePhotoField({
   const inputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
-  const hasImage = Boolean(value?.trim())
+  const normalizedProfileImageUrl = normalizeProfileImageUrl(value)
+  const hasImage = Boolean(normalizedProfileImageUrl)
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
@@ -42,7 +44,7 @@ export function ProfilePhotoField({
         setUploadError(result.error)
         return
       }
-      onChange(result.url)
+      onChange(bustProfileImageUrl(result.url))
     } finally {
       setUploading(false)
     }
@@ -57,7 +59,7 @@ export function ProfilePhotoField({
           className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border bg-muted/30"
         >
           {hasImage ? (
-            <img src={value!} alt="" className="h-full w-full object-cover" />
+            <img src={normalizedProfileImageUrl!} alt="" className="h-full w-full object-cover" />
           ) : (
             <User className="h-6 w-6 text-muted-foreground" />
           )}

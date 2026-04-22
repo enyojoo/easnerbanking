@@ -36,7 +36,7 @@ import { getApiBaseUrl } from '../../lib/apiClient'
 import { supabase } from '../../lib/supabase'
 import { userAvatarStyles } from '../../theme'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
-import { normalizeAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
+import { avatarImageSource, normalizeAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
 
 function ProfileContent({ navigation }: NavigationProps) {
   const { user, userProfile, signOut, refreshUserProfile, applyPersonalSettingsFromServer } = useAuth()
@@ -71,6 +71,7 @@ function ProfileContent({ navigation }: NavigationProps) {
   const privacyLink = useExternalLink()
   const termsLink = useExternalLink()
   const profileAvatarUrl = normalizeAvatarUrl(userProfile?.profile?.avatar_url)
+  const profileAvatarSource = avatarImageSource(userProfile?.profile?.avatar_url)
   const profileHeaderName =
     userProfile?.profile?.full_name ||
     [userProfile?.profile?.first_name, userProfile?.profile?.last_name].filter(Boolean).join(' ') ||
@@ -566,9 +567,9 @@ function ProfileContent({ navigation }: NavigationProps) {
       <View style={styles.header}>
           <View style={styles.headerTopRow}>
             <View style={styles.headerAvatar}>
-              {profileAvatarUrl ? (
+              {profileAvatarSource ? (
                 <Image
-                  source={{ uri: profileAvatarUrl, cache: 'force-cache' }}
+                  source={profileAvatarSource}
                   style={userAvatarStyles.image}
                   resizeMode="cover"
                 />

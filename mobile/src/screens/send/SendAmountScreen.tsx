@@ -67,6 +67,7 @@ import {
 import { getPayoutRecipientSubtitleParts, isMobileMoneyRecipient } from '../../lib/recipientPayoutPreview'
 import { useEasenetRecipientHydration, type HydratedEasenetProfile } from '../../hooks/useEasenetRecipientHydration'
 import { navigateToSendRecipientHub } from '../../lib/sendFlowNavigation'
+import { avatarImageSource } from '../../lib/avatarCache'
 
 function inferCountryFromRecipientCurrency(currency: string): string | undefined {
   const m: Record<string, string> = {
@@ -2345,15 +2346,16 @@ function EasenetSendRecipientAvatar({
 }) {
   const displayName = (easenetPreview?.fullName || recipient.full_name).trim()
   const uri = String(easenetPreview?.avatarUrl || recipient.payee_avatar_url || '').trim()
+  const avatarSource = avatarImageSource(uri)
   const [imgFailed, setImgFailed] = useState(false)
   useEffect(() => {
     setImgFailed(false)
   }, [uri])
   return (
     <View style={styles.recipientAvatarCircle}>
-      {uri && !imgFailed ? (
+      {avatarSource && !imgFailed ? (
         <Image
-          source={{ uri }}
+          source={avatarSource}
           style={styles.recipientAvatarFill}
           resizeMode="cover"
           onError={() => setImgFailed(true)}
@@ -2376,12 +2378,13 @@ function PayoutSendRecipientAvatar({
     recipient.country_code ||
     (recipient.currency === 'EUR' ? 'EU' : getCountryCodeForCurrency(recipient.currency) || 'US')
   const uri = String(recipient.payee_avatar_url || '').trim()
+  const avatarSource = avatarImageSource(uri)
   const [imgFailed, setImgFailed] = useState(false)
   useEffect(() => {
     setImgFailed(false)
   }, [uri])
 
-  const hasPhoto = Boolean(uri && !imgFailed)
+  const hasPhoto = Boolean(avatarSource && !imgFailed)
 
   /** No photo: full-bleed flag or token in the circle (same visual weight as Easenet’s full-bleed photo). */
   if (!hasPhoto) {
@@ -2401,7 +2404,7 @@ function PayoutSendRecipientAvatar({
     <View style={styles.recipientAvatarCircleWrap}>
       <View style={styles.recipientAvatarCircle}>
         <Image
-          source={{ uri }}
+          source={avatarSource!}
           style={styles.recipientAvatarFill}
           resizeMode="cover"
           onError={() => setImgFailed(true)}

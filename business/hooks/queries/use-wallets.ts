@@ -1,16 +1,20 @@
 "use client"
 
+import { useEffect, useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { pollingIntervalFor, qk } from "@easner/shared"
+import { pollingIntervalFor, qk, scopeKey } from "@easner/shared"
 import { apiFetch } from "@/lib/query/api-client"
 import { useScope } from "@/lib/query/scope"
 import { useRealtimeHealth } from "@/lib/query/realtime-health-context"
 
 const NOAH_HEADERS = { "X-Easner-Noah-Scope": "business" } as const
+const WALLET_LIST_CACHE_KEY_PREFIX = "easner_business_wallets_list_v1_"
 
 export interface OnChainBalances {
   USD?: string
   EUR?: string
+  source?: "turnkey" | "none"
+  detail?: string
   [currency: string]: string | undefined
 }
 
@@ -37,7 +41,12 @@ export interface AvailableCurrencies {
 export function useWalletBalances() {
   const { scope } = useScope()
   const realtimeHealth = useRealtimeHealth()
-  return useQuery({
+  const storageKey = useMemo(
+    () => (scope ? `${WALLET_LIST_CACHE_KEY_PREFIX}${scopeKey(scope)}` : null),
+    [scope],
+  )
+
+  const query = useQuery({
     queryKey: scope ? qk.wallets.list(scope) : ["wallets", "disabled"],
     enabled: Boolean(scope),
     queryFn: async () => {
@@ -48,16 +57,55 @@ export function useWalletBalances() {
         }),
         apiFetch<DepositAddresses>("/api/wallets/deposit-addresses", { headers: NOAH_HEADERS }),
       ])
+      const detail = String(balances?.detail ?? "")
+      const isTransientTurnkeyFailure =
+        balances?.source === "none" &&
+        (detail === "turnkey_balance_query_failed" || detail.startsWith("turnkey_balance_query_failed:"))
+      if (isTransientTurnkeyFailure) {
+        // Keep last known good values in Query cache when provider reads fail
+        // briefly instead of flashing "0.00" on the dashboard.
+        throw new Error("Transient Turnkey balance lookup failure")
+      }
       return { balances, available, deposits }
     },
-    staleTime: 15_000,
+    staleTime: 60_000,
     gcTime: 10 * 60_000,
     // Fallback poll only; disabled when realtime is healthy (handled by
     // the realtime bridge invalidating `qk.wallets.list` on balance events).
     refetchInterval: pollingIntervalFor("critical", realtimeHealth),
     refetchIntervalInBackground: false,
     meta: { safePersist: false, freshness: "critical" },
+    initialData: () => {
+      if (!storageKey || typeof window === "undefined") return undefined
+      try {
+        const raw = window.localStorage.getItem(storageKey)
+        if (!raw) return undefined
+        const parsed = JSON.parse(raw) as {
+          balances?: OnChainBalances
+          available?: AvailableCurrencies
+          deposits?: DepositAddresses
+        }
+        return {
+          balances: parsed.balances ?? {},
+          available: parsed.available ?? {},
+          deposits: parsed.deposits ?? {},
+        }
+      } catch {
+        return undefined
+      }
+    },
   })
+
+  useEffect(() => {
+    if (!storageKey || !query.data || typeof window === "undefined") return
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(query.data))
+    } catch {
+      // Ignore storage quota/write errors.
+    }
+  }, [query.data, storageKey])
+
+  return query
 }
 
 /**

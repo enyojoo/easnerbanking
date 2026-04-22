@@ -25,11 +25,23 @@ export type FreshnessBand = "critical" | "operational" | "reference" | "analytic
  * unhealthy; healthy channels return `false` (no polling).
  */
 const BASE_INTERVAL_MS: Record<FreshnessBand, number> = {
-  critical: 15_000,
-  operational: 60_000,
+  critical: 60_000,
+  operational: 2 * 60_000,
   reference: 10 * 60_000,
   analytics: 5 * 60_000,
 }
+
+/**
+ * Short-lived "live activity" boost used right after money-moving actions.
+ * Keeps fallback polling snappy for a couple minutes, then automatically
+ * returns to calm cadence.
+ */
+const ACTIVITY_BOOST_WINDOW_MS = 3 * 60_000
+const BOOST_INTERVAL_MS: Partial<Record<FreshnessBand, number>> = {
+  critical: 15_000,
+  operational: 30_000,
+}
+let lastMoneyActivityAt = 0
 
 /**
  * Considered stale if we haven't received any event in this window AND
@@ -37,6 +49,15 @@ const BASE_INTERVAL_MS: Record<FreshnessBand, number> = {
  * reconnects from turning into a polling storm.
  */
 const HEALTH_STALE_MS = 45_000
+
+export function markRecentMoneyActivity(atMs: number = Date.now()): void {
+  if (!Number.isFinite(atMs) || atMs <= 0) return
+  if (atMs > lastMoneyActivityAt) lastMoneyActivityAt = atMs
+}
+
+export function hasRecentMoneyActivity(nowMs: number = Date.now()): boolean {
+  return nowMs - lastMoneyActivityAt < ACTIVITY_BOOST_WINDOW_MS
+}
 
 export function isChannelHealthy(h: RealtimeHealth | null | undefined): boolean {
   if (!h) return false
@@ -50,5 +71,9 @@ export function pollingIntervalFor(
   band: FreshnessBand,
   health: RealtimeHealth | null | undefined,
 ): number | false {
-  return isChannelHealthy(health) ? false : BASE_INTERVAL_MS[band]
+  if (isChannelHealthy(health)) return false
+  const base = BASE_INTERVAL_MS[band]
+  const boosted = BOOST_INTERVAL_MS[band]
+  if (boosted && hasRecentMoneyActivity()) return Math.min(base, boosted)
+  return base
 }

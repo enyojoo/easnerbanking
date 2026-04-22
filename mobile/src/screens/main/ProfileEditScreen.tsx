@@ -38,6 +38,7 @@ import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import * as ImagePicker from 'expo-image-picker'
 import { uploadProfileAvatar, PROFILE_AVATAR_MAX_BYTES } from '../../lib/profileAvatarUpload'
 import { getApiBaseUrl } from '../../lib/apiClient'
+import { avatarImageSource, bustAvatarUrl, normalizeAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
 
 function ProfileEditContent({ navigation }: NavigationProps) {
   const { user, userProfile, refreshUserProfile, applyPersonalSettingsFromServer } = useAuth()
@@ -75,6 +76,8 @@ function ProfileEditContent({ navigation }: NavigationProps) {
     date.setFullYear(date.getFullYear() - 25)
     return date
   })
+  const editAvatarSource = avatarImageSource(editProfileData.avatarUrl)
+  const profileAvatarSource = avatarImageSource(profileData.avatarUrl)
 
   // Animation refs
   const headerAnim = useRef(new Animated.Value(0)).current
@@ -264,7 +267,9 @@ function ProfileEditContent({ navigation }: NavigationProps) {
         Alert.alert('Upload failed', up.error)
         return
       }
-      setEditProfileData((prev) => ({ ...prev, avatarUrl: up.url }))
+      const bustedUrl = bustAvatarUrl(up.url)
+      setEditProfileData((prev) => ({ ...prev, avatarUrl: bustedUrl }))
+      warmAvatarCache(bustedUrl)
     } finally {
       setUploadingAvatar(false)
     }
@@ -686,9 +691,9 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                           !editProfileData.avatarUrl?.trim() && styles.avatarEditCircleEmpty,
                         ]}
                       >
-                        {editProfileData.avatarUrl?.trim() ? (
+                      {editAvatarSource ? (
                           <>
-                            <Image source={{ uri: editProfileData.avatarUrl.trim() }} style={userAvatarStyles.image} />
+                            <Image source={editAvatarSource} style={userAvatarStyles.image} />
                             <View style={styles.avatarEditPhotoOverlay} pointerEvents="none">
                               <Ionicons name="camera" size={22} color={colors.text.inverse} />
                             </View>
@@ -710,9 +715,9 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                     </Pressable>
                   ) : (
                     <View style={[userAvatarStyles.circle, styles.profileAvatarCircle]}>
-                      {profileData.avatarUrl?.trim() ? (
+                      {profileAvatarSource ? (
                         <Image
-                          source={{ uri: profileData.avatarUrl.trim() }}
+                          source={profileAvatarSource}
                           style={userAvatarStyles.image}
                         />
                       ) : (

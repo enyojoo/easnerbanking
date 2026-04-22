@@ -61,6 +61,8 @@ const MFA_COPY = {
     'Two-factor authentication is not enabled. Open Security and tap MFA when your status shows Off to continue.',
   digitCodeLabel: 'Enter 6-digit code shown to you',
   digitCodeError: 'Enter the 6-digit code from your authenticator app.',
+  invalidCodeError: 'You entered an invalid code, try again',
+  continueSetup: 'Continue Setup',
   enable: 'Enable',
   enabling: 'Enabling…',
 } as const
@@ -105,6 +107,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
   const [enrollKeyUri, setEnrollKeyUri] = useState<string | null>(null)
   const [secret, setSecret] = useState<string | null>(null)
   const [verifyCode, setVerifyCode] = useState('')
+  const [showVerifyInput, setShowVerifyInput] = useState(false)
   const [enrollFetching, setEnrollFetching] = useState(false)
   const [verifySubmitting, setVerifySubmitting] = useState(false)
   const [turnOffSubmitting, setTurnOffSubmitting] = useState(false)
@@ -144,6 +147,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
     setEnrollKeyUri(null)
     setSecret(null)
     setVerifyCode('')
+    setShowVerifyInput(false)
     setShowDisableOtp(false)
     setDisableOtpCode('')
     setError(null)
@@ -182,6 +186,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
     setEnrollKeyUri(null)
     setSecret(null)
     setVerifyCode('')
+    setShowVerifyInput(false)
     setError(null)
     // Do not call `loadFactors()` here: `beginTotpEnrollment` already lists factors via
     // `unenrollUnverifiedTotpFactors`. Parallel `listFactorsForMfaStatus` (retries) was doubling
@@ -264,7 +269,12 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
         code,
       })
       if (vErr) {
-        setError(vErr.message || 'Invalid code.')
+        const raw = String(vErr.message || '').toLowerCase()
+        if (raw.includes('invalid') || raw.includes('code')) {
+          setError(MFA_COPY.invalidCodeError)
+        } else {
+          setError(vErr.message || MFA_COPY.invalidCodeError)
+        }
         return
       }
       suppressVerifiedApiPopRef.current = true
@@ -406,7 +416,12 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
         code,
       })
       if (vErr) {
-        setError(vErr.message || 'Invalid code.')
+        const raw = String(vErr.message || '').toLowerCase()
+        if (raw.includes('invalid') || raw.includes('code')) {
+          setError(MFA_COPY.invalidCodeError)
+        } else {
+          setError(vErr.message || MFA_COPY.invalidCodeError)
+        }
         return
       }
       const { error: uErr } = await supabase.auth.mfa.unenroll({ factorId: id })
@@ -452,6 +467,8 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
   }, [])
 
   const enrollQrSvg = showEnrollUi ? svgXmlFromQrDataUrl(qrDataUrl) : null
+  const verifyCodeDigits = verifyCode.replace(/\D/g, '')
+  const canSubmitVerifyCode = verifyCodeDigits.length === 6
   const totpQrValue = useMemo(
     () =>
       enrollKeyUri ||
@@ -518,12 +535,6 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
               },
             ]}
           >
-            {error ? (
-              <View style={styles.errorBox}>
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            ) : null}
-
             {showListUi && (
               <View style={styles.sectionCard}>
                 {showListSpinner ? (
@@ -570,6 +581,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
                           }}
                           disabled={turnOffSubmitting}
                         />
+                        {error ? <Text style={styles.inlineErrorText}>{error}</Text> : null}
                       </>
                     ) : (
                       <Button
@@ -583,6 +595,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
                         loading={turnOffSubmitting || (!verifiedFactorId && !mfaVerifiedOnCard)}
                       />
                     )}
+                    {!showDisableOtp && error ? <Text style={styles.inlineErrorText}>{error}</Text> : null}
                   </>
                 ) : (
                   <Text style={[styles.body, styles.mt]}>{MFA_COPY.listNotEnabledHint}</Text>
@@ -592,98 +605,132 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
 
             {showEnrollUi && (
               <View style={styles.sectionCard}>
-                <Text style={styles.enrollIntro}>{MFA_COPY.enrollDescription}</Text>
-                <View style={styles.qrSection}>
-                  <View style={styles.qrContainer}>
-                    {totpQrValue ? (
-                      <QRCode
-                        value={totpQrValue}
-                        size={MFA_QR_SIZE}
-                        color={colors.text.primary}
-                        backgroundColor={colors.background.primary}
-                      />
-                    ) : enrollQrSvg ? (
-                      <View style={styles.qrCanvas}>
-                        <SvgXml
-                          xml={enrollQrSvg}
-                          width={MFA_QR_SIZE}
-                          height={MFA_QR_SIZE}
-                          preserveAspectRatio="xMidYMid slice"
-                        />
+                {!showVerifyInput ? (
+                  <>
+                    <Text style={styles.enrollIntro}>{MFA_COPY.enrollDescription}</Text>
+                    <View style={styles.qrSection}>
+                      <View style={styles.qrContainer}>
+                        {totpQrValue ? (
+                          <QRCode
+                            value={totpQrValue}
+                            size={MFA_QR_SIZE}
+                            color={colors.text.primary}
+                            backgroundColor={colors.background.primary}
+                          />
+                        ) : enrollQrSvg ? (
+                          <View style={styles.qrCanvas}>
+                            <SvgXml
+                              xml={enrollQrSvg}
+                              width={MFA_QR_SIZE}
+                              height={MFA_QR_SIZE}
+                              preserveAspectRatio="xMidYMid slice"
+                            />
+                          </View>
+                        ) : qrDataUrl ? (
+                          <View style={styles.qrCanvas}>
+                            <Image
+                              source={{ uri: qrDataUrl }}
+                              style={styles.qrImageFill}
+                              resizeMode="cover"
+                            />
+                          </View>
+                        ) : (
+                          <SkeletonLoader width={MFA_QR_SIZE} height={MFA_QR_SIZE} borderRadius={borderRadius.lg} />
+                        )}
                       </View>
-                    ) : qrDataUrl ? (
-                      <View style={styles.qrCanvas}>
-                        <Image
-                          source={{ uri: qrDataUrl }}
-                          style={styles.qrImageFill}
-                          resizeMode="cover"
-                        />
-                      </View>
-                    ) : (
-                      <SkeletonLoader width={MFA_QR_SIZE} height={MFA_QR_SIZE} borderRadius={borderRadius.lg} />
-                    )}
-                  </View>
-                </View>
-                <View style={styles.secretBox} accessibilityState={{ busy: !secret }}>
-                  {secret ? (
-                    <View style={styles.secretRowInner}>
-                      <Text
-                        style={styles.secretText}
-                        selectable
-                        numberOfLines={2}
-                        {...Platform.select({
-                          android: { includeFontPadding: false },
-                        })}
-                      >
-                        {secret}
-                      </Text>
-                      <Pressable
-                       android_ripple={ripple.neutral}
-                        style={styles.copySecretButton}
-                        onPress={() => void copySecret()}
-                        accessibilityRole="button"
-                        accessibilityLabel={secretJustCopied ? 'Copied' : 'Copy secret key'}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      >
-                        <Ionicons
-                          name={secretJustCopied ? 'checkmark-circle' : 'copy-outline'}
-                          size={18}
-                          color={secretJustCopied ? colors.success.main : colors.primary.main}
-                        />
-                      </Pressable>
                     </View>
-                  ) : (
-                    <SkeletonLoader width="100%" height={20} borderRadius={4} />
-                  )}
-                </View>
-                <View
-                  style={[
-                    styles.otpAfterSecret,
-                    verifySubmitting ? styles.otpVerifyLock : undefined,
-                  ]}
-                  pointerEvents={verifySubmitting ? 'none' : 'auto'}
-                >
-                  <OtpCodeInput
-                    id="mfa-verify-code"
-                    label={MFA_COPY.digitCodeLabel}
-                    value={verifyCode}
-                    onChange={setVerifyCode}
-                    autoFocus={!!enrollFactorId && !enrollFetching}
-                    onFocus={() => {
-                      requestAnimationFrame(() => {
-                        scrollRef.current?.scrollToEnd({ animated: true })
-                      })
+                    <View style={styles.secretBox} accessibilityState={{ busy: !secret }}>
+                      {secret ? (
+                        <View style={styles.secretRowInner}>
+                          <Text
+                            style={styles.secretText}
+                            selectable
+                            numberOfLines={2}
+                            {...Platform.select({
+                              android: { includeFontPadding: false },
+                            })}
+                          >
+                            {secret}
+                          </Text>
+                          <Pressable
+                           android_ripple={ripple.neutral}
+                            style={styles.copySecretButton}
+                            onPress={() => void copySecret()}
+                            accessibilityRole="button"
+                            accessibilityLabel={secretJustCopied ? 'Copied' : 'Copy secret key'}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          >
+                            <Ionicons
+                              name={secretJustCopied ? 'checkmark-circle' : 'copy-outline'}
+                              size={18}
+                              color={secretJustCopied ? colors.success.main : colors.primary.main}
+                            />
+                          </Pressable>
+                        </View>
+                      ) : (
+                        <SkeletonLoader width="100%" height={20} borderRadius={4} />
+                      )}
+                    </View>
+                  </>
+                ) : null}
+                {showVerifyInput ? (
+                  <View
+                    style={[
+                      styles.otpAfterSecret,
+                      verifySubmitting ? styles.otpVerifyLock : undefined,
+                    ]}
+                    pointerEvents={verifySubmitting ? 'none' : 'auto'}
+                  >
+                    <OtpCodeInput
+                      id="mfa-verify-code"
+                      label={MFA_COPY.digitCodeLabel}
+                      centerLabel
+                      labelStyle={styles.verifyCodeLabel}
+                      value={verifyCode}
+                      onChange={setVerifyCode}
+                      autoFocus={!!enrollFactorId && !enrollFetching}
+                      onFocus={() => {
+                        requestAnimationFrame(() => {
+                          scrollRef.current?.scrollToEnd({ animated: true })
+                        })
+                      }}
+                      disabled={verifySubmitting || enrollFetching || !enrollFactorId}
+                    />
+                  </View>
+                ) : null}
+                <View style={[styles.enrollCtaWrap, showVerifyInput ? styles.enrollCtaWrapAfterOtp : undefined]}>
+                  <Button
+                    title={
+                      showVerifyInput
+                        ? verifySubmitting
+                          ? MFA_COPY.enabling
+                          : MFA_COPY.enable
+                        : MFA_COPY.continueSetup
+                    }
+                    fullWidth
+                    onPress={() => {
+                      if (!showVerifyInput) {
+                        setError(null)
+                        setShowVerifyInput(true)
+                        requestAnimationFrame(() => {
+                          scrollRef.current?.scrollToEnd({ animated: true })
+                        })
+                        return
+                      }
+                      void completeEnroll()
                     }}
-                    disabled={verifySubmitting || enrollFetching || !enrollFactorId}
+                    disabled={
+                      verifySubmitting ||
+                      enrollFetching ||
+                      !enrollFactorId ||
+                      (showVerifyInput && !canSubmitVerifyCode)
+                    }
+                    loading={showVerifyInput && verifySubmitting}
                   />
                 </View>
-                <Button
-                  title={verifySubmitting ? MFA_COPY.enabling : MFA_COPY.enable}
-                  fullWidth
-                  onPress={() => void completeEnroll()}
-                  disabled={verifySubmitting || enrollFetching || !enrollFactorId}
-                  loading={verifySubmitting}
-                />
+                {error ? (
+                  <Text style={[styles.inlineErrorText, styles.inlineErrorTextCentered]}>{error}</Text>
+                ) : null}
               </View>
             )}
           </Animated.View>
@@ -766,17 +813,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing[6],
   },
-  errorBox: {
-    borderWidth: 1,
-    borderColor: colors.error.main,
-    backgroundColor: 'rgba(220, 38, 38, 0.08)',
-    borderRadius: borderRadius.md,
-    padding: spacing[3],
-    marginBottom: spacing[4],
-  },
-  errorText: {
+  inlineErrorText: {
     ...textStyles.bodySmall,
     color: colors.error.main,
+    marginTop: spacing[3],
+  },
+  inlineErrorTextCentered: {
+    textAlign: 'center',
   },
   /** Parity with `ReceiveMoneyScreen` `qrSection` / `qrContainer` / `qrImage`. */
   qrSection: {
@@ -842,5 +885,14 @@ const styles = StyleSheet.create({
   },
   otpVerifyLock: {
     opacity: 0.8,
+  },
+  enrollCtaWrap: {
+    marginTop: spacing[4],
+  },
+  enrollCtaWrapAfterOtp: {
+    marginTop: spacing[3],
+  },
+  verifyCodeLabel: {
+    marginBottom: spacing[4],
   },
 })

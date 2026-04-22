@@ -6,6 +6,7 @@ import { X, Building2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { uploadOrganizationLogo } from "@/lib/upload-client"
+import { bustBusinessLogoUrl, normalizeBusinessLogoUrl } from "@/lib/image-cache"
 
 export function BusinessLogoField({
   value,
@@ -24,7 +25,8 @@ export function BusinessLogoField({
   const inputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
-  const hasLogo = Boolean(value?.trim())
+  const normalizedLogoUrl = normalizeBusinessLogoUrl(value)
+  const hasLogo = Boolean(normalizedLogoUrl)
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
@@ -45,7 +47,7 @@ export function BusinessLogoField({
         setUploadError(result.error)
         return
       }
-      onChange(result.url)
+      onChange(bustBusinessLogoUrl(result.url))
     } finally {
       setUploading(false)
     }
@@ -63,7 +65,7 @@ export function BusinessLogoField({
           )}
         >
           {hasLogo ? (
-            <img src={value!} alt="" className="h-full w-full object-cover" />
+            <img src={normalizedLogoUrl!} alt="" className="h-full w-full object-cover" />
           ) : (
             <Building2 className="h-4 w-4 text-muted-foreground" />
           )}

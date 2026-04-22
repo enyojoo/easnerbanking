@@ -24,7 +24,7 @@ import { appPinStrings } from '../../constants/app-pin-en'
 import { displayFirstNameFromFullName, initialsFromFullName } from '../../lib/userProfileHelpers'
 import { useDeferredLoading } from '../../hooks/useDeferredLoading'
 import { PinKeypad, PinLockedHintText } from '../../components/pin'
-import { normalizeAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
+import { avatarImageSource, normalizeAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
 
 export default function PinEntryScreen({ navigation: navigationProp }: NavigationProps) {
   const palette = useThemeColors()
@@ -47,6 +47,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
     ''
 
   const headerAvatarUrl = normalizeAvatarUrl(userProfile?.profile?.avatar_url)
+  const headerAvatarSource = avatarImageSource(userProfile?.profile?.avatar_url)
 
   useEffect(() => {
     setAvatarLoadFailed(false)
@@ -205,9 +206,9 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
         <View style={styles.content}>
           <View style={styles.topBlock}>
             <View style={userAvatarStyles.pinEntryCircle}>
-              {headerAvatarUrl && !avatarLoadFailed ? (
+              {headerAvatarSource && !avatarLoadFailed ? (
                 <Image
-                  source={{ uri: headerAvatarUrl, cache: 'force-cache' }}
+                  source={headerAvatarSource}
                   style={userAvatarStyles.image}
                   resizeMode="cover"
                   onError={() => setAvatarLoadFailed(true)}
