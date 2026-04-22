@@ -103,7 +103,7 @@ export function PinUnlockScreen({
           error={lock.lockedOut ? null : error}
           message={
             lock.lockedOut && lock.lockedUntil != null ? (
-              <PinLockedHint msRemaining={lock.msRemaining} variant="muted" />
+              <PinLockedHint msRemaining={lock.msRemaining} variant="destructive" />
             ) : (
               <p className="text-center text-sm text-muted-foreground">{appPinStrings.lockEnterPin}</p>
             )
