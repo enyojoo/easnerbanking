@@ -181,7 +181,7 @@ export async function backfillTurnkeyOnchainTransactions(
         const occurredAt = sig.blockTime ? new Date(sig.blockTime * 1000).toISOString() : new Date().toISOString()
 
         try {
-          await upsertLedgerTransaction(admin, {
+          const upsert = await upsertLedgerTransaction(admin, {
             userId: ctx.userId,
             businessId: ctx.businessId,
             provider: "turnkey",
@@ -203,14 +203,16 @@ export async function backfillTurnkeyOnchainTransactions(
             baseCurrency: currency,
           })
           upserts += 1
-          // Apply the same delta to the DB snapshot so dashboards can update from DB truth.
-          const signed = direction === "in" ? amount : -amount
-          await applyWalletBalanceDelta(admin, {
-            businessId: ctx.businessId ? ctx.businessId : null,
-            userId: ctx.businessId ? null : ctx.userId,
-            currency,
-            delta: signed,
-          })
+          // Apply the same delta to the DB snapshot exactly once per transaction id.
+          if (upsert.inserted || upsert.becameSettled) {
+            const signed = direction === "in" ? amount : -amount
+            await applyWalletBalanceDelta(admin, {
+              businessId: ctx.businessId ? ctx.businessId : null,
+              userId: ctx.businessId ? null : ctx.userId,
+              currency,
+              delta: signed,
+            })
+          }
         } catch (e) {
           skipped += 1
           const msg = errorMessage(e)

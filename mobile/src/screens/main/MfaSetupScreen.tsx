@@ -481,8 +481,10 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
       <View style={styles.container}>
         <KeyboardAvoidingView
           style={styles.keyboard}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={insets.top + spacing[4]}
+          // Keep layout stable: don't resize/squash when keyboard opens.
+          // iOS gets gentle padding; Android relies on the screen layout already being above keyboard.
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
         >
           <ScrollView
             ref={scrollRef}
@@ -490,7 +492,8 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
             contentContainerStyle={{ paddingBottom: insets.bottom + spacing[5] }}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
-            automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+            // Avoid shifting the whole layout when the keyboard opens; the OTP row is already placed safely.
+            automaticallyAdjustKeyboardInsets={false}
           >
           <Animated.View
             style={[

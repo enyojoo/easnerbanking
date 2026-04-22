@@ -213,7 +213,7 @@ export function TransactionReceiptPDFDocument({
     formatCurrency(Math.abs(transaction.amount), "USD")
 
   const descriptionLower = transaction.description.toLowerCase()
-  const isStablecoin = descriptionLower.startsWith("stablecoin")
+  const isStablecoin = transaction.type === "stablecoin" || descriptionLower.startsWith("stablecoin")
   const isBank = descriptionLower.startsWith("bank")
   const isCard = Boolean(cardLast4) || transaction.type === "card"
   const partyLabel = transaction.direction === "credit" ? "Sender" : "Recipient"

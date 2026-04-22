@@ -1,11 +1,10 @@
-import React, { useRef, useState } from 'react'
+import React, { useState } from 'react'
 import {
   View,
   Text,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   Pressable,
   Alert,
 } from 'react-native'
@@ -23,7 +22,7 @@ export default function MfaVerifyScreen() {
   const { verifyMfa, cancelMfaSignIn } = useAuth()
   const [code, setCode] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const scrollRef = useRef<ScrollView>(null)
+  void useRef
 
   const handleSubmit = async () => {
     const digits = code.replace(/\D/g, '')
@@ -60,22 +59,12 @@ export default function MfaVerifyScreen() {
     <View style={styles.container}>
       <KeyboardAvoidingView
         style={styles.keyboard}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={insets.top + spacing[4]}
+        // Keep the screen static; the OTP row is positioned so the keyboard won't cover it.
+        // Only apply iOS padding for safe insets.
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
       >
-        <ScrollView
-          ref={scrollRef}
-          contentContainerStyle={[
-            styles.scroll,
-            {
-              paddingTop: insets.top + spacing[5],
-              paddingBottom: Math.max(insets.bottom, spacing[6]),
-            },
-          ]}
-          automaticallyAdjustKeyboardInsets
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
+        <View style={[styles.scroll, { paddingTop: insets.top + spacing[5], paddingBottom: Math.max(insets.bottom, spacing[6]) }]}>
           <Text style={authScreenStyles.screenTitle}>Two-factor authentication</Text>
           <Text style={[authScreenStyles.subtitle, styles.subtitleMargin]}>
             Enter the 6-digit code from your authenticator app.
@@ -91,11 +80,6 @@ export default function MfaVerifyScreen() {
               value={code}
               onChange={setCode}
               autoFocus
-              onFocus={() => {
-                requestAnimationFrame(() => {
-                  scrollRef.current?.scrollTo({ y: 140, animated: true })
-                })
-              }}
               disabled={submitting}
             />
           </View>
@@ -116,7 +100,7 @@ export default function MfaVerifyScreen() {
           >
             <Text style={styles.secondaryText}>Use a different account</Text>
           </Pressable>
-        </ScrollView>
+        </View>
       </KeyboardAvoidingView>
     </View>
   )

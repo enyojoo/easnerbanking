@@ -225,7 +225,7 @@ export async function applyTurnkeyWebhookSideEffects(
   const { amount, amountMinor } = parseAmountMajor(event)
   const currency = mapAssetToCurrency(asset)
 
-  await upsertLedgerTransaction(admin, {
+  const upsert = await upsertLedgerTransaction(admin, {
     userId,
     businessId,
     provider: "turnkey",
@@ -250,7 +250,7 @@ export async function applyTurnkeyWebhookSideEffects(
 
   // Update DB-backed balance snapshot for realtime dashboards.
   // For settled events we apply the delta; pending/failed should not move balances.
-  if (status === "settled") {
+  if (status === "settled" && (upsert.inserted || upsert.becameSettled)) {
     const businessScopeId = businessId ? businessId : null
     const userScopeId = businessId ? null : userId
     const signed = direction === "in" ? amount : -amount

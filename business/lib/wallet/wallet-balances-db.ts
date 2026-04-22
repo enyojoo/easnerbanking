@@ -54,16 +54,40 @@ export async function upsertWalletBalanceSnapshot(
   if (businessId) q = q.eq("business_id", businessId)
   if (!businessId && userId) q = q.eq("user_id", userId)
 
-  const { data: existing } = await q.maybeSingle()
+  const { data: existing, error: existingErr } = await q.maybeSingle()
+  if (existingErr) throw existingErr
+
   const nextVersion = Number(existing?.version ?? 0) + 1
 
-  const { error } = await admin
+  // IMPORTANT:
+  // Supabase/PostgREST upsert `onConflict` cannot target partial unique indexes
+  // (like `... where business_id is not null`). Use explicit insert/update so
+  // snapshot writes work in all environments.
+  if (existing?.id) {
+    const { error } = await admin
+      .from("wallet_balances")
+      .update({ ...payload, version: nextVersion })
+      .eq("id", existing.id)
+    if (error) throw error
+    return
+  }
+
+  const { error: insertErr } = await admin.from("wallet_balances").insert({ ...payload, version: nextVersion })
+  if (!insertErr) return
+
+  // If a concurrent writer inserted the row first, retry as update.
+  const code = (insertErr as any)?.code
+  if (code !== "23505") throw insertErr
+
+  const { data: after, error: afterErr } = await q.maybeSingle()
+  if (afterErr) throw afterErr
+  if (!after?.id) throw insertErr
+  const afterVersion = Number(after?.version ?? 0) + 1
+  const { error: updateErr } = await admin
     .from("wallet_balances")
-    .upsert(
-      { ...payload, version: nextVersion },
-      { onConflict: businessId ? "business_id,currency" : "user_id,currency" },
-    )
-  if (error) throw error
+    .update({ ...payload, version: afterVersion })
+    .eq("id", after.id)
+  if (updateErr) throw updateErr
 }
 
 export async function applyWalletBalanceDelta(

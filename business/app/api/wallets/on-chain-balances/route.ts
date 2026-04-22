@@ -84,8 +84,11 @@ export async function GET(request: Request) {
           availableBalance: Number(result.EUR) || 0,
         }),
       ])
-    } catch {
-      // Don't fail the endpoint if balance snapshot persistence isn't available yet.
+    } catch (e) {
+      // Don't fail the endpoint if balance snapshot persistence isn't available yet,
+      // but log it so we can detect schema/policy issues in production.
+      const msg = e instanceof Error ? e.message : String(e)
+      console.warn("[on-chain-balances] failed to persist wallet_balances snapshot:", msg)
     }
   }
 

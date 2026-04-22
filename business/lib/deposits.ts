@@ -16,6 +16,18 @@ export interface InboundDeposit {
 function ledgerCreditToInboundDeposit(t: Transaction): InboundDeposit | null {
   if (t.direction !== "credit") return null
   if (t.type === "card") return null
+  if (t.type === "stablecoin") {
+    const cur = t.displayCurrency || "USD"
+    return {
+      id: t.id,
+      amount: Math.abs(t.amount),
+      currency: cur,
+      date: t.date,
+      source: "stablecoin",
+      label: t.description || "Stablecoin Deposit",
+      reference: t.reference,
+    }
+  }
   const method =
     t.type === "ach" ? "ACH" : t.type === "wire" ? "Wire" : t.type === "book" ? "Book" : t.type
   const cur = t.displayCurrency || "USD"

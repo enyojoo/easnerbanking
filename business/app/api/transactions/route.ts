@@ -83,9 +83,17 @@ function mapRowToBusinessTransaction(row: Record<string, unknown>): TransactionW
   const counterpartyNameRaw = deriveCounterpartyName({ metadata: meta, payload })
   const counterpartyName =
     counterpartyNameRaw && counterpartyNameRaw !== description ? counterpartyNameRaw : undefined
+
+  const hasStablecoinSignals =
+    paymentRail != null ||
+    row.chain != null ||
+    row.asset != null ||
+    row.tx_hash != null ||
+    row.wallet_address != null
+  const type = hasStablecoinSignals ? ("stablecoin" as const) : ("book" as const)
   return {
     id: easnerId,
-    type: "book" as const,
+    type,
     amount: typeof row.amount === "number" ? row.amount : Number(row.amount) || 0,
     displayCurrency: currencyCode,
     description,

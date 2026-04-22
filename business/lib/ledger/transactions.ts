@@ -27,6 +27,14 @@ export type UpsertLedgerTransactionInput = {
   baseCurrency?: string | null
 }
 
+export type UpsertLedgerTransactionResult = {
+  inserted: boolean
+  updated: boolean
+  previousStatus: string | null
+  nextStatus: string
+  becameSettled: boolean
+}
+
 function normalizeStatus(raw: string | null | undefined): string {
   const lower = String(raw || "").trim().toLowerCase()
   if (!lower) return "unknown"
@@ -61,7 +69,7 @@ function mergeMetadata(
 export async function upsertLedgerTransaction(
   admin: SupabaseClient,
   input: UpsertLedgerTransactionInput,
-): Promise<void> {
+): Promise<UpsertLedgerTransactionResult> {
   const provider = String(input.provider || "").trim().toLowerCase()
   const providerTransactionId = String(input.providerTransactionId || "").trim()
   if (!provider || !providerTransactionId) {
@@ -80,17 +88,22 @@ export async function upsertLedgerTransaction(
   const baseAmount = fxRate != null ? Math.abs(amount) * fxRate : null
   const fxAsOf = fx?.asOf ?? null
 
-  const { data: existing } = await admin
+  const { data: existing, error: existingErr } = await admin
     .from("transactions")
-    .select("metadata")
+    .select("id,status,metadata")
     .eq("provider", provider)
     .eq("provider_transaction_id", providerTransactionId)
     .maybeSingle()
+  if (existingErr) throw existingErr
 
   const mergedMetadata = mergeMetadata(
     (existing?.metadata as Record<string, unknown> | undefined) ?? null,
     input.metadata,
   )
+
+  const previousStatus = existing?.status ? String(existing.status) : null
+  const nextStatus = status
+  const becameSettled = previousStatus !== "settled" && nextStatus === "settled"
 
   const record = {
     user_id: input.userId,
@@ -123,23 +136,16 @@ export async function upsertLedgerTransaction(
     updated_at: new Date().toISOString(),
   }
 
-  const { data: existingRow, error: existingErr } = await admin
-    .from("transactions")
-    .select("id")
-    .eq("provider", provider)
-    .eq("provider_transaction_id", providerTransactionId)
-    .maybeSingle()
-  if (existingErr) throw existingErr
-
-  if (existingRow?.id) {
+  if (existing?.id) {
     const { error } = await admin
       .from("transactions")
       .update(record)
-      .eq("id", existingRow.id)
+      .eq("id", existing.id)
     if (error) throw error
-    return
+    return { inserted: false, updated: true, previousStatus, nextStatus, becameSettled }
   }
 
   const { error } = await admin.from("transactions").insert(record)
   if (error) throw error
+  return { inserted: true, updated: false, previousStatus: null, nextStatus, becameSettled: nextStatus === "settled" }
 }

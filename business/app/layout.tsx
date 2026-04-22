@@ -8,6 +8,7 @@ import { ChunkLoadErrorHandler } from "@/components/chunk-load-error-handler"
 import { PostHogProvider } from "@/components/posthog-provider"
 import { Providers } from "@/components/providers"
 import { Suspense } from "react"
+import { LoadingSpinner } from "@/components/loading-spinner"
 import { PwaStandaloneRoot } from "@/components/pwa/pwa-standalone-root"
 import { PwaInstallProvider } from "@/components/pwa/pwa-install-provider"
 import { BusinessViewportGate } from "@/components/layout/business-viewport-gate"
@@ -49,7 +50,7 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <ChunkLoadErrorHandler />
-        <Suspense fallback={null}>
+        <Suspense fallback={<LoadingSpinner />}>
           <PostHogProvider>
             <ClientAuthProvider>
               <PwaStandaloneRoot />

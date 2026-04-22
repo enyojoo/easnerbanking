@@ -40,7 +40,7 @@ export interface Card {
 
 export interface Transaction {
   id: string
-  type: "ach" | "wire" | "book" | "card"
+  type: "ach" | "wire" | "book" | "card" | "stablecoin"
   amount: number
   baseAmount?: number
   baseCurrency?: string

@@ -8,6 +8,10 @@ import { backfillTurnkeyOnchainTransactions } from "@/lib/turnkey/onchain-backfi
 
 export const runtime = "nodejs"
 
+const MIN_SYNC_INTERVAL_MS = 10 * 60_000
+const lastSyncAtByOwner = new Map<string, number>()
+const inFlightByOwner = new Map<string, Promise<unknown>>()
+
 /**
  * POST — scan Solana USDC/EURC activity for the caller's Turnkey vault addresses and upsert
  * matching rows into the unified `transactions` ledger.
@@ -39,14 +43,43 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, skipped: true, reason: "no_wallet_owner" })
   }
 
-  try {
-    const result = await backfillTurnkeyOnchainTransactions(admin, {
-      walletOwnerId,
-      signaturesPerAddress: 120,
+  const now = Date.now()
+  const lastAt = lastSyncAtByOwner.get(walletOwnerId) ?? 0
+  if (now - lastAt < MIN_SYNC_INTERVAL_MS) {
+    return NextResponse.json({
+      ok: true,
+      skipped: true,
+      reason: "cooldown",
+      retryAfterMs: Math.max(MIN_SYNC_INTERVAL_MS - (now - lastAt), 0),
     })
+  }
+
+  const inFlight = inFlightByOwner.get(walletOwnerId)
+  if (inFlight) {
+    try {
+      const awaited = await inFlight
+      return NextResponse.json({ ok: true, deduped: true, result: awaited })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      return NextResponse.json({ ok: false, deduped: true, error: msg }, { status: 500 })
+    }
+  }
+
+  try {
+    const run = backfillTurnkeyOnchainTransactions(admin, {
+      walletOwnerId,
+      // Keep this cheap; this endpoint is triggered by clients and can be called often.
+      // Increase only for one-off manual repairs.
+      signaturesPerAddress: 40,
+    })
+    inFlightByOwner.set(walletOwnerId, run)
+    const result = await run
+    lastSyncAtByOwner.set(walletOwnerId, Date.now())
     return NextResponse.json({ ok: true, result })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     return NextResponse.json({ ok: false, error: msg }, { status: 500 })
+  } finally {
+    inFlightByOwner.delete(walletOwnerId)
   }
 }
