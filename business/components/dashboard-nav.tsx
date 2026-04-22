@@ -136,6 +136,7 @@ export function DashboardNav() {
               <Link
                 key={item.href}
                 href={item.href || "#"}
+                prefetch={false}
                 aria-current={isActive ? "page" : undefined}
               >
                 <div
@@ -184,6 +185,7 @@ export function DashboardNav() {
                         <Link
                           key={child.href}
                           href={child.href}
+                          prefetch={false}
                           aria-current={isActive ? "page" : undefined}
                         >
                           <div

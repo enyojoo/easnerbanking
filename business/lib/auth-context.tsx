@@ -65,6 +65,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user?.id) return
 
     const bootstrap = async () => {
+      // Throttle bootstrap on reload; it's idempotent server-side but can compete with initial navigation.
+      try {
+        const key = `easner_business_bootstrap_v1_${user.id}`
+        const raw = localStorage.getItem(key)
+        const last = raw ? Number(raw) : 0
+        const MIN_MS = 6 * 60 * 60 * 1000 // 6h
+        if (Number.isFinite(last) && last > 0 && Date.now() - last < MIN_MS) {
+          return
+        }
+        localStorage.setItem(key, String(Date.now()))
+      } catch {
+        // ignore storage errors
+      }
+
       const { data } = await supabase.auth.getSession()
       if (!data.session) return
       try {
@@ -115,7 +129,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    void bootstrap()
+    // Run bootstrap after first paint / in idle time to avoid blocking initial interactivity.
+    const w = window as any
+    if (typeof w.requestIdleCallback === "function") {
+      const id = w.requestIdleCallback(() => void bootstrap(), { timeout: 2000 })
+      return () => w.cancelIdleCallback?.(id)
+    }
+    const t = window.setTimeout(() => void bootstrap(), 350)
+    return () => window.clearTimeout(t)
   }, [supabase, user?.id])
 
   useEffect(() => {

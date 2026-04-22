@@ -33,6 +33,20 @@ export function BusinessScopeProvider({ children }: { children: React.ReactNode 
   const [override, setOverride] = React.useState<BusinessScope | null>(null)
   const [businessId, setBusinessId] = React.useState<string | null>(null)
 
+  // Seed scope from persisted business profile (avoids an extra /api/business/profile fetch on reload).
+  React.useEffect(() => {
+    if (!user?.id) return
+    try {
+      const raw = localStorage.getItem(`business_profile_cache_${user.id}`)
+      if (!raw) return
+      const parsed = JSON.parse(raw) as { data?: { businessId?: string | null }; timestamp?: number }
+      const id = parsed?.data?.businessId ? String(parsed.data.businessId) : null
+      if (id) setBusinessId(id)
+    } catch {
+      // ignore
+    }
+  }, [user?.id])
+
   React.useEffect(() => {
     if (!user?.id) {
       setBusinessId(null)
