@@ -1,20 +1,22 @@
 import { useMemo } from 'react'
 import { useWindowDimensions } from 'react-native'
 import { CONTENT_MAX_WIDTH, REGULAR_WIDTH_BREAKPOINT, getContentWidth } from '../theme/layoutMetrics'
+import { getEffectiveWindowPoints } from '../lib/effective-window'
 
 type UseContentLayoutOptions = {
   horizontalInset: number
 }
 
 export function useContentLayout({ horizontalInset }: UseContentLayoutOptions) {
-  const { width } = useWindowDimensions()
+  const { width, height } = useWindowDimensions()
   return useMemo(() => {
-    const contentWidth = getContentWidth(width, horizontalInset)
+    const effective = getEffectiveWindowPoints({ width, height })
+    const contentWidth = getContentWidth(effective.width, horizontalInset)
     return {
-      windowWidth: width,
+      windowWidth: effective.width,
       contentWidth,
-      isRegularWidth: width >= REGULAR_WIDTH_BREAKPOINT,
+      isRegularWidth: effective.width >= REGULAR_WIDTH_BREAKPOINT,
       contentMaxWidth: CONTENT_MAX_WIDTH,
     }
-  }, [horizontalInset, width])
+  }, [height, horizontalInset, width])
 }

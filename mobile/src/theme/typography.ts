@@ -8,6 +8,7 @@
  */
 
 import { TextStyle, Platform, Dimensions, PixelRatio } from 'react-native'
+import { getEffectiveWindowPoints } from '../lib/effective-window'
 
 /**
  * Font PostScript names — these must match the keys registered via
@@ -51,7 +52,7 @@ export const fontSize = {
 
 /** Clamp font scale for accessibility (v2 money + titles). */
 export function typographyScale(width?: number): number {
-  const w = width ?? Dimensions.get('window').width
+  const w = width ?? getEffectiveWindowPoints(Dimensions.get('window')).width
   const fs = PixelRatio.getFontScale()
   const widthFactor = Math.min(Math.max(w / 375, 0.92), 1.14)
   const fontFactor = Math.min(Math.max(fs, 1), 1.2)
