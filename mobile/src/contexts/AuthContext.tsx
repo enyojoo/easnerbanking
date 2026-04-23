@@ -741,20 +741,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
       analytics.trackSignIn('google')
 
       /**
-       * Use the same in-app browser style as Terms links (SFSafariViewController / Chrome Custom Tab).
-       * `openAuthSessionAsync` triggers iOS's “<app> wants to use <domain> to sign in” consent modal
-       * (ASWebAuthenticationSession). That prompt is expected, but it’s jarring in Expo Go where the
-       * app name shows as “Expo”.
-       *
-       * We open a normal in-app browser, then rely on the Linking listener above to consume the
-       * `code` on redirect and complete the session.
+       * Use an OS-managed auth session so the callback URL is reliably delivered to the app
+       * (and the browser closes automatically).
        */
-      // Match the same native in-app browser configuration as `useExternalLink` (Terms, Legal, etc).
-      await WebBrowser.openBrowserAsync(authUrl, {
-        controlsColor: '#0F1110',
-        enableBarCollapsing: true,
-        showTitle: true,
-      })
+      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectTo)
+      if (result.type === 'success' && typeof result.url === 'string') {
+        const { code, error: oauthErr, errorDescription } = parseAuthCallbackUrl(result.url)
+        if (oauthErr) {
+          return { error: new Error(errorDescription || oauthErr) }
+        }
+        if (code) {
+          const { error: exErr } = await supabase.auth.exchangeCodeForSession(code)
+          if (exErr) {
+            return { error: new Error(exErr.message || 'Unable to complete Google sign-in.') }
+          }
+        }
+      }
 
       return { error: null }
     } catch (e) {
