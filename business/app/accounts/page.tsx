@@ -24,7 +24,6 @@ export default function AccountsPage() {
   const {
     accountRows,
     loading,
-    loadError,
     profileLoading,
     refreshAccounts,
     noahHeaders,
@@ -51,8 +50,6 @@ export default function AccountsPage() {
           <OpenCurrencyAccountDialog onAdded={() => void refreshAccounts()} />
         )}
       </div>
-
-      {loadError ? <p className="text-sm text-destructive">{loadError}</p> : null}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {loading && accountRows.length === 0 ? (

@@ -113,6 +113,7 @@ export function DashboardPageClient() {
   const computedPrimaryBalance = usdInBase + eurInBase
   const summaryCurrency = code
   const computedPrimaryBalanceText = formatCurrency(computedPrimaryBalance, code)
+  const zeroPrimaryBalanceText = useMemo(() => formatCurrency(0, code), [code])
   useEffect(() => {
     if (!hasAuthoritativeBalances) return
     if (!Number.isFinite(computedPrimaryBalance)) return
@@ -120,7 +121,7 @@ export function DashboardPageClient() {
   }, [computedPrimaryBalance, computedPrimaryBalanceText, hasAuthoritativeBalances])
   const visiblePrimaryBalanceText = balancesVisible
     ? (lastStableBalanceText ??
-        (hasAuthoritativeBalances ? computedPrimaryBalanceText : "—"))
+        (hasAuthoritativeBalances ? computedPrimaryBalanceText : zeroPrimaryBalanceText))
     : MASK
 
   return (
