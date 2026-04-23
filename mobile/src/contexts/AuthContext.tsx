@@ -780,6 +780,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const authUrl = data?.url
       if (!authUrl) return { error: new Error('Unable to start Google sign-in.') }
 
+      try {
+        const u = new URL(authUrl)
+        const redirectToInAuthUrl = u.searchParams.get('redirect_to') ?? u.searchParams.get('redirectTo')
+        if (__DEV__) {
+          // If this URL does not EXACTLY match a Supabase "Redirect URL" allow-list entry, Supabase
+          // will fall back to the project's "Site URL" (often a Vercel business preview), and the
+          // in-app browser will appear to "randomly" open the business website instead of `easner://...`.
+          console.log('[google-oauth] redirectTo (must be allow-listed in Supabase):', redirectTo)
+          if (redirectToInAuthUrl) {
+            console.log('[google-oauth] redirect_to embedded in auth URL:', redirectToInAuthUrl)
+          }
+        }
+      } catch {
+        // ignore
+      }
+
       analytics.trackSignIn('google')
 
       /**
@@ -811,6 +827,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
           return { error: new Error(sErr.message || 'Unable to complete Google sign-in.') }
         }
       } else {
+        if (result.url.startsWith('http')) {
+          try {
+            const u = new URL(result.url)
+            if (u.hostname.endsWith('vercel.app')) {
+              return {
+                error: new Error(
+                  'OAuth returned to a web URL (commonly a Supabase "Site URL" fallback) instead of the app deep link. Add the exact "[google-oauth] redirectTo" value to Supabase Auth → URL Configuration → Additional Redirect URLs.',
+                ),
+              }
+            }
+          } catch {
+            // ignore
+          }
+        }
         return { error: new Error('Missing OAuth tokens in redirect. Check Supabase redirect URL settings.') }
       }
 
