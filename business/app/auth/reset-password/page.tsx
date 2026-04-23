@@ -1,16 +1,14 @@
 "use client"
 
 import type React from "react"
-import { Suspense, useState, useEffect } from "react"
+import { Suspense, useMemo, useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
-import type { EmailOtpType } from "@supabase/supabase-js"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ArrowLeft, Eye, EyeOff } from "lucide-react"
-import { createSupabaseBrowser } from "@/lib/supabase/browser"
 
 function ResetPasswordForm() {
   const router = useRouter()
@@ -20,44 +18,40 @@ function ResetPasswordForm() {
   const [isLoading, setIsLoading] = useState(false)
   const [ready, setReady] = useState(false)
   const [error, setError] = useState("")
+  const tokenFromQuery = searchParams.get("token") || ""
+  const emailFromQuery = searchParams.get("email") || ""
+
+  const { token, email } = useMemo(() => {
+    if (tokenFromQuery && emailFromQuery) {
+      return { token: tokenFromQuery, email: emailFromQuery }
+    }
+    if (typeof window === "undefined") return { token: "", email: "" }
+    return {
+      token: sessionStorage.getItem("reset-token") || "",
+      email: sessionStorage.getItem("reset-email") || "",
+    }
+  }, [emailFromQuery, tokenFromQuery])
 
   useEffect(() => {
     let active = true
-    const supabase = createSupabaseBrowser()
-    const code = searchParams.get("code")
-    const tokenHash = searchParams.get("token_hash")
-    const otpType = searchParams.get("type")
 
     ;(async () => {
       try {
-        if (code) {
-          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
-          if (exchangeError) throw exchangeError
-        } else if (tokenHash && otpType === "recovery") {
-          const { error: verifyError } = await supabase.auth.verifyOtp({
-            type: otpType as EmailOtpType,
-            token_hash: tokenHash,
-          })
-          if (verifyError) throw verifyError
-        }
-        const { data } = await supabase.auth.getSession()
-        if (!data.session) {
-          throw new Error("No recovery session")
-        }
+        if (!token || !email) throw new Error("No reset token")
         if (!active) return
         setReady(true)
         setError("")
       } catch {
         if (!active) return
         setReady(false)
-        setError("Invalid or expired reset link. Please request a new password reset.")
+        setError("Invalid or expired reset session. Please request a new password reset.")
       }
     })()
 
     return () => {
       active = false
     }
-  }, [searchParams])
+  }, [email, token])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -65,11 +59,25 @@ function ResetPasswordForm() {
     setError("")
 
     try {
-      const supabase = createSupabaseBrowser()
-      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword })
-      if (updateError) throw updateError
-
-      await supabase.auth.signOut()
+      const res = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          email,
+          newPassword,
+        }),
+      })
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string }
+      if (!res.ok || !json.ok) {
+        throw new Error(typeof json.error === "string" ? json.error : "Failed to reset password.")
+      }
+      try {
+        sessionStorage.removeItem("reset-token")
+        sessionStorage.removeItem("reset-email")
+      } catch {
+        // ignore
+      }
       router.push("/auth/login?message=Password reset successful. Please sign in with your new password.")
     } catch {
       setError("An error occurred. Please try again.")

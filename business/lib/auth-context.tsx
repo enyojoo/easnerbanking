@@ -30,6 +30,7 @@ interface AuthContextType {
   user: User | null
   login: (email: string, password: string) => Promise<void>
   signup: (email: string, password: string, name: string) => Promise<{ needsEmailConfirmation: boolean }>
+  verifySignupOtp: (email: string, otp: string) => Promise<void>
   signInWithGoogle: () => Promise<void>
   logout: () => Promise<void>
   /** Reset idle timer (after PIN unlock, etc.). */
@@ -256,13 +257,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const signup = async (email: string, password: string, name: string) => {
-    const origin = typeof window !== "undefined" ? window.location.origin : ""
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
       options: {
         data: { name: name.trim() },
-        emailRedirectTo: `${origin}/auth/callback`,
       },
     })
     if (error) throw error
@@ -277,6 +276,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
     }
     return { needsEmailConfirmation: !data.session }
+  }
+
+  const verifySignupOtp = async (email: string, otp: string) => {
+    const token = otp.replace(/\D/g, "").slice(0, 6)
+    if (token.length !== 6) {
+      throw new Error("Enter the 6-digit code from your email.")
+    }
+    const { error } = await supabase.auth.verifyOtp({
+      email: email.trim(),
+      token,
+      type: "signup",
+    })
+    if (error) throw error
+    await ensureBusinessWebSurface(supabase)
+    await ensureBusinessAppSession(true)
   }
 
   const signInWithGoogle = async () => {
@@ -312,6 +326,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     login,
     signup,
+    verifySignupOtp,
     signInWithGoogle,
     logout,
     resetSessionActivity,
@@ -322,7 +337,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   if (!mounted) {
     return (
       <AuthContext.Provider
-        value={{ user: null, login, signup, signInWithGoogle, logout, resetSessionActivity, isLoading: true }}
+        value={{
+          user: null,
+          login,
+          signup,
+          verifySignupOtp,
+          signInWithGoogle,
+          logout,
+          resetSessionActivity,
+          isLoading: true,
+        }}
       >
         {children}
       </AuthContext.Provider>

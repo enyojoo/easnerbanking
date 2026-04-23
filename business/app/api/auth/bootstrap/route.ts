@@ -265,8 +265,23 @@ export async function POST(request: Request) {
       businessId = insertedWithCountry.id
     }
   }
-  // Do not overwrite `businesses.country` on existing orgs: settings / onboarding may diverge from
-  // signup localStorage, and the client defaults a missing code to US — that would revert KYB country.
+  /**
+   * Do not overwrite `businesses.country` on existing orgs.
+   *
+   * Exception: if the org country is still null/empty (new org created without country or older data),
+   * and the signup bootstrap provides an explicit country, backfill it once.
+   */
+  if (businessId && country) {
+    try {
+      const { data: orgRow } = await admin.from("businesses").select("country").eq("id", businessId).maybeSingle()
+      const cur = typeof orgRow?.country === "string" ? orgRow.country.trim() : ""
+      if (!cur) {
+        await admin.from("businesses").update({ country, updated_at: new Date().toISOString() }).eq("id", businessId)
+      }
+    } catch {
+      // non-fatal
+    }
+  }
 
   const userLinkPayload = {
     id: user.id,

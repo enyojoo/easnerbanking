@@ -75,17 +75,21 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
     setMessage('')
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: 'easner://reset-password',
+      const apiUrl = getApiBaseUrl()
+      const response = await fetch(`${apiUrl}/api/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
       })
 
-      if (error) {
-        setError(error.message)
-      } else {
-        setStep('otp')
-        setMessage('')
-        startResendCooldown()
+      if (!response.ok) {
+        setError('Unable to send verification code. Please try again.')
+        return
       }
+
+      setStep('otp')
+      setMessage('')
+      startResendCooldown()
     } catch (error) {
       setError('An unexpected error occurred')
     } finally {
@@ -197,16 +201,20 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
     setError('')
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: 'easner://reset-password',
+      const apiUrl = getApiBaseUrl()
+      const response = await fetch(`${apiUrl}/api/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
       })
 
-      if (error) {
+      if (!response.ok) {
         setError('Failed to resend code. Please try again.')
-      } else {
-        setMessage('New code sent to your email address.')
-        startResendCooldown()
+        return
       }
+
+      setMessage('New code sent to your email address.')
+      startResendCooldown()
     } catch (error) {
       setError('An error occurred. Please try again.')
     } finally {

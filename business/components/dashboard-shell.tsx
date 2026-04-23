@@ -8,7 +8,6 @@ import Link from "next/link"
 import { DashboardNav } from "@/components/dashboard-nav"
 import { BusinessDropdown } from "@/components/business-dropdown"
 import { AppLockProvider } from "@/components/app-lock/app-lock-provider"
-import { BusinessOnboardingDialog } from "@/components/business-onboarding-dialog"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { usePersonalProfileAvatar } from "@/lib/use-personal-profile-avatar"
 import { cn } from "@/lib/utils"
@@ -93,7 +92,6 @@ export function DashboardShell({ children, mainClassName = "", constrained = fal
   return (
     <AppLockProvider>
       <div className="min-h-screen bg-background text-foreground">
-        <BusinessOnboardingDialog />
         <DashboardNav />
         <div className="ml-64 flex min-h-screen flex-col">
           <header className="fixed top-0 left-64 right-0 z-30 flex h-16 min-h-16 items-center justify-end gap-4 border-b border-border/60 bg-background/80 px-8 backdrop-blur-md supports-[backdrop-filter]:bg-background/70">

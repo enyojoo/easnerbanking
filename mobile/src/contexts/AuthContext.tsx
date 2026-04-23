@@ -82,6 +82,7 @@ interface AuthContextType {
   /** Set after password sign-in when AAL1→AAL2 is required; cleared after successful TOTP verify or sign-out. */
   mfaPending: { factorId: string } | null
   signIn: (email: string, password: string, rememberMe?: boolean) => Promise<{ error: any }>
+  verifySignupOtp: (email: string, otp: string) => Promise<{ error: Error | null }>
   verifyMfa: (code: string) => Promise<{ error: Error | null }>
   cancelMfaSignIn: () => Promise<void>
   signUp: (
@@ -226,6 +227,29 @@ export function AuthProvider({ children }: AuthProviderProps) {
     },
     [],
   )
+
+  const verifySignupOtp = useCallback(async (email: string, otp: string): Promise<{ error: Error | null }> => {
+    try {
+      const digits = String(otp || '').replace(/\D/g, '').slice(0, 6)
+      if (digits.length !== 6) {
+        return { error: new Error('Enter the 6-digit code from your email.') }
+      }
+      const { error } = await supabase.auth.verifyOtp({
+        email: email.trim(),
+        token: digits,
+        type: 'signup',
+      })
+      if (error) return { error: new Error(error.message || 'Invalid verification code.') }
+
+      // Surface gate as soon as the session exists; PIN gate will happen in AppNavigator.
+      const surfaceGate = await ensureConsumerMobileAccess()
+      if (surfaceGate.error) return { error: surfaceGate.error }
+
+      return { error: null }
+    } catch (e) {
+      return { error: e instanceof Error ? e : new Error('Unable to verify code.') }
+    }
+  }, [])
 
   const fetchUserProfile = async (
     userId: string,
@@ -747,6 +771,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     loading,
     mfaPending,
     signIn,
+    verifySignupOtp,
     verifyMfa,
     cancelMfaSignIn,
     signUp,

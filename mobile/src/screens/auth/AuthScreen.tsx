@@ -15,7 +15,7 @@ import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import ExternalLinkModal from '../../components/ExternalLinkModal'
-import { TextField } from '../../components/ui'
+import { OtpCodeInput, TextField } from '../../components/ui'
 import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
 import { GoogleOutlineButton, OrDivider } from '../../components/auth/AuthChrome'
 import { useExternalLink } from '../../hooks/useExternalLink'
@@ -36,6 +36,7 @@ import { AUTH_INITIAL_MODE_KEY, TERMS_URL } from '../../constants/auth'
  * Form content sits on the page background — no inset card frame (unlike web’s bordered card).
  */
 type AuthMode = 'login' | 'signup'
+type SignupStep = 'form' | 'otp'
 
 const FROM_ONBOARDING_KEY = '@easner_from_onboarding'
 
@@ -48,7 +49,9 @@ export default function AuthScreen({ navigation }: NavigationProps) {
   const [fullName, setFullName] = useState('')
   const [passwordVisible, setPasswordVisible] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const { signIn, signUp } = useAuth()
+  const { signIn, signUp, verifySignupOtp } = useAuth()
+  const [signupStep, setSignupStep] = useState<SignupStep>('form')
+  const [signupOtp, setSignupOtp] = useState('')
 
   const mode = modeStack[modeStack.length - 1]!
   const showBackButton = modeStack.length > 1 || fromOnboarding
@@ -85,6 +88,8 @@ export default function AuthScreen({ navigation }: NavigationProps) {
     setEmail('')
     setPassword('')
     setFullName('')
+    setSignupStep('form')
+    setSignupOtp('')
   }
 
   const handleBack = useCallback(async () => {
@@ -94,6 +99,8 @@ export default function AuthScreen({ navigation }: NavigationProps) {
       setPassword('')
       setFullName('')
       setPasswordVisible(false)
+      setSignupStep('form')
+      setSignupOtp('')
       setModeStack((prev) => prev.slice(0, -1))
       return
     }
@@ -155,6 +162,21 @@ export default function AuthScreen({ navigation }: NavigationProps) {
   }
 
   const handleSubmit = async () => {
+    if (mode === 'signup' && signupStep === 'otp') {
+      setIsLoading(true)
+      try {
+        const { error } = await verifySignupOtp(email, signupOtp)
+        if (error) {
+          Alert.alert('Verify code', error.message || 'Invalid verification code.')
+          return
+        }
+        Alert.alert('Account verified', 'Continue in the app.', [{ text: 'OK' }])
+      } finally {
+        setIsLoading(false)
+      }
+      return
+    }
+
     if (!validateForm()) return
 
     setIsLoading(true)
@@ -178,11 +200,9 @@ export default function AuthScreen({ navigation }: NavigationProps) {
         if (signUpError) {
           Alert.alert('Create account', signUpError.message || 'Something went wrong.')
         } else if (needsEmailConfirmation) {
-          Alert.alert(
-            'Check your email',
-            'We sent a confirmation link. After verifying, you can sign in.',
-            [{ text: 'OK', onPress: () => switchMode('login') }]
-          )
+          setSignupStep('otp')
+          setSignupOtp('')
+          Alert.alert('Check your email', 'Enter the 6-digit code we sent you to finish signing up.')
         } else {
           Alert.alert(
             'Account ready',
@@ -204,6 +224,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
   }
 
   const isLogin = mode === 'login'
+  const isSignupOtp = !isLogin && signupStep === 'otp'
 
   return (
     <View style={styles.container}>
@@ -238,11 +259,11 @@ export default function AuthScreen({ navigation }: NavigationProps) {
           </View>
 
           <Text style={authScreenStyles.screenTitle}>
-            {isLogin ? 'Welcome back' : 'Open an account'}
+            {isLogin ? 'Welcome back' : isSignupOtp ? 'Enter verification code' : 'Open an account'}
           </Text>
 
           <View style={styles.form}>
-            {!isLogin && (
+            {!isLogin && signupStep === 'form' && (
               <Text style={authScreenStyles.termsIntro}>
                 By creating an account you agree to our{' '}
                 <Text
@@ -263,7 +284,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
 
             <OrDivider />
 
-            {!isLogin && (
+            {!isLogin && signupStep === 'form' && (
               <TextField
                 label="Full name"
                 value={fullName}
@@ -327,16 +348,31 @@ export default function AuthScreen({ navigation }: NavigationProps) {
               </Pressable>
             )}
 
+            {!isLogin && signupStep === 'otp' && (
+              <OtpCodeInput
+                label="6-digit code"
+                value={signupOtp}
+                onChange={setSignupOtp}
+                autoFocus
+                disabled={isLoading}
+                centerLabel
+              />
+            )}
+
             <View style={styles.primaryCtaWrap}>
               <GlossyPrimaryButton
                 title={
                   isLoading
                     ? isLogin
                       ? 'Signing in…'
-                      : 'Creating account…'
+                      : signupStep === 'otp'
+                        ? 'Verifying…'
+                        : 'Creating account…'
                     : isLogin
                       ? 'Sign in'
-                      : 'Create account'
+                      : signupStep === 'otp'
+                        ? 'Verify and continue'
+                        : 'Create account'
                 }
                 onPress={handleSubmit}
                 disabled={isLoading}

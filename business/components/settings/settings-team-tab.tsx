@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Loader2, Trash2, Users } from "lucide-react"
@@ -43,13 +43,11 @@ export function SettingsTeamTab() {
   const { isLoading, user } = useAuth()
   const supabase = useMemo(() => createSupabaseBrowser(), [])
   const [loadingMembers, setLoadingMembers] = useState(false)
-  const [members, setMembers] = useState<TeamMember[]>([])
   const [inviteOpen, setInviteOpen] = useState(false)
   const [submittingInvites, setSubmittingInvites] = useState(false)
   const [inviteRows, setInviteRows] = useState<InviteDraft[]>([{ fullName: "", email: "", role: "Member" }])
   const [inviteError, setInviteError] = useState("")
   const [membersError, setMembersError] = useState("")
-  const [canManageMembers, setCanManageMembers] = useState(false)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const {
     data: teamData,
@@ -94,10 +92,8 @@ export function SettingsTeamTab() {
     }
   }, [setTeamData, user?.id])
 
-  useEffect(() => {
-    setMembers(teamData.members || [])
-    setCanManageMembers(Boolean(teamData.canManageMembers))
-  }, [teamData])
+  const members = teamData.members ?? []
+  const canManageMembers = Boolean(teamData.canManageMembers)
 
   const addInviteRow = () => setInviteRows((prev) => [...prev, { fullName: "", email: "", role: "Member" }])
   const removeInviteRow = (idx: number) =>
