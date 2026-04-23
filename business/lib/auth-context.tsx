@@ -16,6 +16,16 @@ import { ensureBusinessWebSurface } from "@/lib/auth/validate-surface-client"
 import { clearBrowserQueryClient } from "@/lib/query/query-client"
 import { clearAllBusinessBrowserState } from "@/lib/query/web-persist"
 
+function parseAuthFragment(hash: string): Record<string, string> {
+  const raw = hash.replace(/^#/, "")
+  const params = new URLSearchParams(raw)
+  const out: Record<string, string> = {}
+  params.forEach((value, key) => {
+    out[key] = value
+  })
+  return out
+}
+
 interface AuthContextType {
   user: User | null
   login: (email: string, password: string) => Promise<void>
@@ -48,21 +58,79 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearLegacySupabaseAuthCookiesOnce()
     let active = true
 
-    supabase.auth
-      .getSession()
-      .then(({ data }) => {
-        if (!active) return
-        const nextUser = data.session?.user ?? null
-        setUser(nextUser)
-        if (!nextUser) {
-          clearBrowserQueryClient()
-          clearAllBusinessBrowserState()
+    const consumeAuthCallbackIfPresent = async () => {
+      if (typeof window === "undefined") return
+
+      // Support OAuth and email verification without a dedicated callback UI route.
+      const url = new URL(window.location.href)
+      const code = url.searchParams.get("code")
+      const tokenHash = url.searchParams.get("token_hash")
+      const type = url.searchParams.get("type")
+      const qsError = url.searchParams.get("error")
+      const qsErrorDesc = url.searchParams.get("error_description")
+
+      const frag = window.location.hash && window.location.hash.length > 1 ? parseAuthFragment(window.location.hash) : null
+      const fragError = frag?.error
+      const fragErrorDesc = frag?.error_description
+
+      if (qsError || fragError) {
+        const message = (qsErrorDesc || fragErrorDesc || qsError || fragError || "Authentication error").toString()
+        window.history.replaceState({}, "", url.pathname)
+        window.location.replace(`/auth/login?message=${encodeURIComponent(message)}`)
+        return
+      }
+
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code)
+        if (error) throw error
+        window.history.replaceState({}, "", url.pathname)
+        return
+      }
+
+      if (tokenHash && type) {
+        const { error } = await supabase.auth.verifyOtp({ type: type as any, token_hash: tokenHash })
+        if (error) throw error
+        // Preserve `type=recovery` so reset-password flow still works.
+        if (type === "recovery") {
+          window.history.replaceState({}, "", url.pathname)
+          window.location.replace("/auth/reset-password")
+          return
         }
-      })
-      .finally(() => {
-        if (!active) return
-        setIsLoading(false)
-      })
+        window.history.replaceState({}, "", url.pathname)
+        return
+      }
+
+      const accessToken = frag?.access_token
+      const refreshToken = frag?.refresh_token
+      if (accessToken && refreshToken) {
+        const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+        if (error) throw error
+        window.history.replaceState({}, "", url.pathname)
+      }
+    }
+
+    void (async () => {
+      try {
+        await consumeAuthCallbackIfPresent()
+      } catch (e) {
+        console.warn("AuthProvider callback consume failed", e)
+        if (typeof window !== "undefined") {
+          const msg = e instanceof Error ? e.message : "This link is invalid or expired."
+          window.location.replace(`/auth/login?message=${encodeURIComponent(msg)}`)
+          return
+        }
+      }
+
+      const { data } = await supabase.auth.getSession()
+      if (!active) return
+      const nextUser = data.session?.user ?? null
+      setUser(nextUser)
+      if (!nextUser) {
+        clearBrowserQueryClient()
+        clearAllBusinessBrowserState()
+      }
+      setIsLoading(false)
+    })()
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser((prev) => {
