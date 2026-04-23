@@ -23,9 +23,15 @@ import { hydratePayoutCorridorsFromStorage, refreshPayoutCorridors } from '../li
 import { readProfileSnapshot, writeProfileSnapshot } from '../lib/profileSnapshot'
 import { clearMfaVerified } from '../lib/mfaStatusCache'
 import { warmAvatarCache } from '../lib/avatarCache'
+import Constants from 'expo-constants'
 
 // Completes the auth session on iOS when returning from SFSafariViewController.
 WebBrowser.maybeCompleteAuthSession()
+
+function isProbablySupabaseSiteUrlFallbackRedirect(redirectTo: string | null | undefined): boolean {
+  if (!redirectTo) return false
+  return /^https?:\/\//i.test(redirectTo)
+}
 
 function parseAuthCallbackUrl(url: string): {
   code: string | null
@@ -782,14 +788,35 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       try {
         const u = new URL(authUrl)
-        const redirectToInAuthUrl = u.searchParams.get('redirect_to') ?? u.searchParams.get('redirectTo')
-        if (__DEV__) {
-          // If this URL does not EXACTLY match a Supabase "Redirect URL" allow-list entry, Supabase
-          // will fall back to the project's "Site URL" (often a Vercel business preview), and the
-          // in-app browser will appear to "randomly" open the business website instead of `easner://...`.
-          console.log('[google-oauth] redirectTo (must be allow-listed in Supabase):', redirectTo)
-          if (redirectToInAuthUrl) {
-            console.log('[google-oauth] redirect_to embedded in auth URL:', redirectToInAuthUrl)
+        const redirectToInAuthUrlRaw = u.searchParams.get('redirect_to') ?? u.searchParams.get('redirectTo')
+        const redirectToInAuthUrl =
+          typeof redirectToInAuthUrlRaw === 'string' ? decodeURIComponent(redirectToInAuthUrlRaw) : null
+
+        const supabaseProjectUrl =
+          (Constants.expoConfig?.extra as { supabaseUrl?: string } | undefined)?.supabaseUrl || ''
+
+        // If this URL does not EXACTLY match a Supabase "Redirect URL" allow-list entry, Supabase
+        // will fall back to the project's "Site URL" (often a Vercel business preview), and the
+        // in-app browser will appear to open the business website instead of `easner://...`.
+        console.warn('[google-oauth] supabase project:', supabaseProjectUrl)
+        console.warn('[google-oauth] expected app redirectTo (must be allow-listed in THIS Supabase project):', redirectTo)
+        if (redirectToInAuthUrl) {
+          console.warn('[google-oauth] redirect_to embedded in auth URL (decoded):', redirectToInAuthUrl)
+        }
+
+        if (isProbablySupabaseSiteUrlFallbackRedirect(redirectToInAuthUrl)) {
+          return {
+            error: new Error(
+              `Supabase rejected the app redirect URL and fell back to a website URL (${redirectToInAuthUrl}). Add "${redirectTo}" to Supabase Auth → URL Configuration → Redirect URLs for the SAME project as EXPO_PUBLIC_SUPABASE_URL (${supabaseProjectUrl}).`,
+            ),
+          }
+        }
+
+        if (redirectToInAuthUrl && redirectToInAuthUrl !== redirectTo) {
+          return {
+            error: new Error(
+              `Supabase OAuth redirect mismatch. Expected "${redirectTo}" but got "${redirectToInAuthUrl}". Fix Supabase redirect allow-list / Site URL settings for project ${supabaseProjectUrl}.`,
+            ),
           }
         }
       } catch {
@@ -833,7 +860,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             if (u.hostname.endsWith('vercel.app')) {
               return {
                 error: new Error(
-                  'OAuth returned to a web URL (commonly a Supabase "Site URL" fallback) instead of the app deep link. Add the exact "[google-oauth] redirectTo" value to Supabase Auth → URL Configuration → Additional Redirect URLs.',
+                  'OAuth returned to a web URL (commonly a Supabase "Site URL" fallback) instead of the app deep link. Add the logged `expected app redirectTo` value to Supabase Auth → URL Configuration → Redirect URLs for the same Supabase project as the mobile app.',
                 ),
               }
             }
