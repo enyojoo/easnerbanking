@@ -3,6 +3,7 @@ import * as Linking from 'expo-linking'
 import * as WebBrowser from 'expo-web-browser'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase, clearInvalidPersistedAuthSession } from '../lib/supabase'
+import { getSessionReliable } from '../lib/authSession'
 import { User, AuthUser } from '../types'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 import { analytics } from '../lib/analytics'
@@ -783,33 +784,54 @@ export function AuthProvider({ children }: AuthProviderProps) {
        * (and the browser closes automatically).
        */
       const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectTo)
-      if (result.type === 'success' && typeof result.url === 'string') {
-        const { code, accessToken, refreshToken, error: oauthErr, errorDescription } = parseAuthCallbackUrl(result.url)
-        if (oauthErr) {
-          return { error: new Error(errorDescription || oauthErr) }
-        }
-        if (code) {
-          const { error: exErr } = await supabase.auth.exchangeCodeForSession(code)
-          if (exErr) {
-            return { error: new Error(exErr.message || 'Unable to complete Google sign-in.') }
-          }
-        } else if (accessToken) {
-          const { error: sErr } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken ?? '',
-          })
-          if (sErr) {
-            return { error: new Error(sErr.message || 'Unable to complete Google sign-in.') }
-          }
-        }
-        try {
-          // Ensure the in-app auth browser / ASWebAuthenticationSession is dismissed.
-          // `openAuthSessionAsync` already dismisses on success, but this is a safe no-op on web.
-          WebBrowser.dismissAuthSession()
-        } catch {
-          // ignore
-        }
+
+      if (result.type !== 'success' || typeof result.url !== 'string') {
+        return { error: new Error('Google sign-in was not completed.') }
       }
+
+      const { code, accessToken, refreshToken, error: oauthErr, errorDescription } = parseAuthCallbackUrl(result.url)
+      if (oauthErr) {
+        return { error: new Error(errorDescription || oauthErr) }
+      }
+
+      if (code) {
+        const { error: exErr } = await supabase.auth.exchangeCodeForSession(code)
+        if (exErr) {
+          return { error: new Error(exErr.message || 'Unable to complete Google sign-in.') }
+        }
+      } else if (accessToken) {
+        const { error: sErr } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken ?? '',
+        })
+        if (sErr) {
+          return { error: new Error(sErr.message || 'Unable to complete Google sign-in.') }
+        }
+      } else {
+        return { error: new Error('Missing OAuth tokens in redirect. Check Supabase redirect URL settings.') }
+      }
+
+      try {
+        // Ensure the in-app auth browser / ASWebAuthenticationSession is dismissed.
+        // `openAuthSessionAsync` already dismisses on success, but this is a safe no-op on web.
+        WebBrowser.dismissAuthSession()
+      } catch {
+        // ignore
+      }
+
+      const session = await getSessionReliable()
+      if (!session?.access_token) {
+        return { error: new Error('Google sign-in did not create a session in the app.') }
+      }
+
+      const surfaceGate = await ensureConsumerMobileAccess()
+      if (surfaceGate.error) {
+        const msg = surfaceGate.error.message || 'This account cannot use the Easner mobile app.'
+        await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
+        return { error: new Error(msg) }
+      }
+
+      await ensureBusinessAppUserBootstrap()
 
       return { error: null }
     } catch (e) {
