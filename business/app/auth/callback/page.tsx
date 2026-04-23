@@ -30,6 +30,22 @@ function AuthCallbackContent() {
             token_hash: tokenHash,
           })
           if (verifyError) throw verifyError
+        } else if (typeof window !== "undefined" && window.location.hash) {
+          // Some auth flows return tokens in the URL fragment, e.g.
+          // /auth/callback#access_token=...&refresh_token=...&expires_in=...
+          const raw = window.location.hash.replace(/^#/, "")
+          const frag = new URLSearchParams(raw)
+          const accessToken = frag.get("access_token") || undefined
+          const refreshToken = frag.get("refresh_token") || undefined
+          if (accessToken && refreshToken) {
+            const { error: setErr } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            })
+            if (setErr) throw setErr
+          } else {
+            throw new Error("Invalid confirmation link")
+          }
         } else {
           throw new Error("Invalid confirmation link")
         }
