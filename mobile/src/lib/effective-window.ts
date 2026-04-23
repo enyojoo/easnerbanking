@@ -5,7 +5,7 @@ export const MAC_INSTALLED_MOBILE_DESIGN_POINTS = {
   height: 926,
 } as const
 
-function platformLooksLikeIosOnMac(): boolean {
+export function isIosOnMac(): boolean {
   if (Platform.OS !== 'ios') return false
   const constants = (Platform as unknown as { constants?: Record<string, unknown> }).constants
   const c = constants ?? {}
@@ -24,7 +24,7 @@ function platformLooksLikeIosOnMac(): boolean {
 export function getEffectiveWindowPoints(input?: { width: number; height: number }): { width: number; height: number } {
   const raw = input ?? Dimensions.get('window')
 
-  if (platformLooksLikeIosOnMac()) {
+  if (isIosOnMac()) {
     return {
       width: MAC_INSTALLED_MOBILE_DESIGN_POINTS.width,
       height: MAC_INSTALLED_MOBILE_DESIGN_POINTS.height,

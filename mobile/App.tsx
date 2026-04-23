@@ -29,6 +29,7 @@ import {
   registerBackgroundTaskAsync,
 } from './src/lib/backgroundTasks'
 import { lightColors } from './src/theme/colors'
+import { isIosOnMac, MAC_INSTALLED_MOBILE_DESIGN_POINTS } from './src/lib/effective-window'
 
 // Keep the splash screen visible while we load fonts
 SplashScreen.preventAutoHideAsync()
@@ -94,62 +95,82 @@ function AppContent() {
     }
   }, [splashFinished, appFadeAnim])
 
-  return (
-    <Animated.View style={{ flex: 1, opacity: splashFinished ? appFadeAnim : 0 }}>
-      <NavigationContainer
-        ref={navigationRef}
-        onReady={() => {
-          setNavReady(true)
-          analytics.setScreenTrackingMode('auto')
-          const currentRoute = navigationRef.current?.getCurrentRoute()
-          const currentRouteName = getActiveRouteName(currentRoute)
+  const nav = (
+    <NavigationContainer
+      ref={navigationRef}
+      onReady={() => {
+        setNavReady(true)
+        analytics.setScreenTrackingMode('auto')
+        const currentRoute = navigationRef.current?.getCurrentRoute()
+        const currentRouteName = getActiveRouteName(currentRoute)
+        routeNameRef.current = currentRouteName
+        analytics.trackNavigationScreenView(currentRouteName)
+      }}
+      onStateChange={() => {
+        const currentRoute = navigationRef.current?.getCurrentRoute()
+        const currentRouteName = getActiveRouteName(currentRoute)
+        if (routeNameRef.current !== currentRouteName) {
           routeNameRef.current = currentRouteName
           analytics.trackNavigationScreenView(currentRouteName)
-        }}
-        onStateChange={() => {
-          const currentRoute = navigationRef.current?.getCurrentRoute()
-          const currentRouteName = getActiveRouteName(currentRoute)
-          if (routeNameRef.current !== currentRouteName) {
-            routeNameRef.current = currentRouteName
-            analytics.trackNavigationScreenView(currentRouteName)
-          }
-        }}
-        theme={{
-          dark: false,
-          colors: {
-            primary: palette.primary.main,
-            background: palette.background.primary,
-            card: palette.semantic.card,
-            text: palette.text.primary,
-            border: palette.semantic.border,
-            notification: palette.error.main,
+        }
+      }}
+      theme={{
+        dark: false,
+        colors: {
+          primary: palette.primary.main,
+          background: palette.background.primary,
+          card: palette.semantic.card,
+          text: palette.text.primary,
+          border: palette.semantic.border,
+          notification: palette.error.main,
+        },
+        fonts: {
+          regular: {
+            fontFamily: 'Geist-Regular',
+            fontWeight: '400' as const,
           },
-          fonts: {
-            regular: {
-              fontFamily: 'Geist-Regular',
-              fontWeight: '400' as const,
-            },
-            medium: {
-              fontFamily: 'Geist-Medium',
-              fontWeight: '500' as const,
-            },
-            bold: {
-              fontFamily: 'Geist-Bold',
-              fontWeight: '700' as const,
-            },
-            heavy: {
-              fontFamily: 'Geist-Black',
-              fontWeight: '800' as const,
-            },
+          medium: {
+            fontFamily: 'Geist-Medium',
+            fontWeight: '500' as const,
           },
-        }}
-      >
-        <StatusBar
-          style="dark"
-          backgroundColor={Platform.OS === 'android' ? palette.background.primary : undefined}
-        />
-        <AppNavigator />
-      </NavigationContainer>
+          bold: {
+            fontFamily: 'Geist-Bold',
+            fontWeight: '700' as const,
+          },
+          heavy: {
+            fontFamily: 'Geist-Black',
+            fontWeight: '800' as const,
+          },
+        },
+      }}
+    >
+      <StatusBar
+        style="dark"
+        backgroundColor={Platform.OS === 'android' ? palette.background.primary : undefined}
+      />
+      <AppNavigator />
+    </NavigationContainer>
+  )
+
+  return (
+    <Animated.View style={[styles.appRoot, { opacity: splashFinished ? appFadeAnim : 0 }]}>
+      {isIosOnMac() ? (
+        <View style={[styles.macFrameOuter, { backgroundColor: palette.background.primary }]}>
+          <View
+            style={[
+              styles.macFrameInner,
+              {
+                width: MAC_INSTALLED_MOBILE_DESIGN_POINTS.width,
+                backgroundColor: palette.background.primary,
+              },
+            ]}
+          >
+            {nav}
+          </View>
+        </View>
+      ) : (
+        nav
+      )}
     </Animated.View>
   )
 }
@@ -279,6 +300,20 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  appRoot: {
+    flex: 1,
+  },
+  macFrameOuter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  macFrameInner: {
+    flex: 1,
+    maxWidth: '100%',
+    alignSelf: 'center',
+    overflow: 'hidden',
+  },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
