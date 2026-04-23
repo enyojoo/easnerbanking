@@ -40,8 +40,10 @@ import { uploadProfileAvatar, PROFILE_AVATAR_MAX_BYTES } from '../../lib/profile
 import { getApiBaseUrl } from '../../lib/apiClient'
 import { avatarImageSource, bustAvatarUrl, normalizeAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
 
+const ACCOUNT_DELETED_FLAG_KEY = '@easner_account_deleted'
+
 function ProfileEditContent({ navigation }: NavigationProps) {
-  const { user, userProfile, refreshUserProfile, applyPersonalSettingsFromServer } = useAuth()
+  const { user, userProfile, refreshUserProfile, applyPersonalSettingsFromServer, signOut } = useAuth()
   const insets = useSafeAreaInsets()
   const [isEditing, setIsEditing] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -452,9 +454,46 @@ function ProfileEditContent({ navigation }: NavigationProps) {
 
   const handleDeleteAccount = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-    // TODO: Implement delete account API call
-    Alert.alert('Info', 'Delete account functionality will be implemented')
-    setShowDeleteDialog(false)
+    try {
+      if (!user?.id) return
+      setLoading(true)
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        Alert.alert('Delete account', 'Your session expired. Please sign in again.')
+        return
+      }
+      const apiUrl = getApiBaseUrl()
+      const res = await fetch(`${apiUrl}/api/settings/delete-account`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      })
+      if (!res.ok) {
+        let msg = 'Unable to delete account.'
+        try {
+          const data = (await res.json()) as { error?: string }
+          if (data?.error) msg = data.error
+        } catch {
+          // ignore
+        }
+        Alert.alert('Delete account', msg)
+        return
+      }
+
+      setShowDeleteDialog(false)
+      // Show "Account deleted" message after we return to onboarding.
+      await AsyncStorage.setItem(ACCOUNT_DELETED_FLAG_KEY, '1').catch(() => undefined)
+      // Ensure local state is cleared and user exits to Auth stack.
+      await signOut()
+    } catch (e) {
+      Alert.alert('Delete account', e instanceof Error ? e.message : 'Unable to delete account.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const renderProfileField = (label: string, value: string, onChangeText: (text: string) => void, disabled: boolean = false) => {

@@ -1241,9 +1241,9 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                     </Text>
                     <Text style={styles.kycNoticeText}>
                       {kycStatus === 'in_review'
-                        ? 'Your verification is currently being reviewed. Once approved, your account information will appear here automatically.'
+                        ? 'Your verification is currently being reviewed.'
                         : !kycStatus
-                        ? 'Please complete your identity verification to receive bank and stablecoin deposit information. Once approved, your account information will appear here automatically.'
+                        ? 'Please complete your identity verification to receive bank and stablecoin deposit information.'
                         : kycStatus === 'rejected'
                         ? 'Your verification was not approved. Please complete identity verification again to receive your account details.'
                         : kycStatus === 'approved'
@@ -1376,9 +1376,9 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                     </Text>
                     <Text style={styles.kycNoticeText}>
                       {kycStatus === 'in_review'
-                        ? 'Your verification is currently being reviewed. Once approved, your wallet information will appear here automatically.'
+                        ? 'Your verification is currently being reviewed.'
                         : !kycStatus
-                        ? `Please complete your identity verification to receive bank and stablecoin deposit information. Once approved, your wallet information will appear here automatically.`
+                        ? `Please complete your identity verification to receive bank and stablecoin deposit information.`
                         : kycStatus === 'rejected'
                         ? 'Your verification was not approved. Please complete identity verification again to receive your wallet address.'
                         : kycStatus === 'approved'

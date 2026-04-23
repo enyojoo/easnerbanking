@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react'
 import * as Linking from 'expo-linking'
+import * as WebBrowser from 'expo-web-browser'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase, clearInvalidPersistedAuthSession } from '../lib/supabase'
 import { User, AuthUser } from '../types'
@@ -21,6 +22,27 @@ import { hydratePayoutCorridorsFromStorage, refreshPayoutCorridors } from '../li
 import { readProfileSnapshot, writeProfileSnapshot } from '../lib/profileSnapshot'
 import { clearMfaVerified } from '../lib/mfaStatusCache'
 import { warmAvatarCache } from '../lib/avatarCache'
+
+// Completes the auth session on iOS when returning from SFSafariViewController.
+WebBrowser.maybeCompleteAuthSession()
+
+function parseAuthCallbackUrl(url: string): {
+  code: string | null
+  error: string | null
+  errorDescription: string | null
+} {
+  const parsed = Linking.parse(url)
+  const qp = (parsed.queryParams ?? {}) as Record<string, unknown>
+  const code = typeof qp.code === 'string' ? qp.code : null
+  const error = typeof qp.error === 'string' ? qp.error : null
+  const errorDescription =
+    typeof qp.error_description === 'string'
+      ? qp.error_description
+      : typeof qp.errorDescription === 'string'
+        ? qp.errorDescription
+        : null
+  return { code, error, errorDescription }
+}
 
 function patchAuthUserWithPersonal(
   prev: AuthUser,
@@ -82,6 +104,8 @@ interface AuthContextType {
   /** Set after password sign-in when AAL1→AAL2 is required; cleared after successful TOTP verify or sign-out. */
   mfaPending: { factorId: string } | null
   signIn: (email: string, password: string, rememberMe?: boolean) => Promise<{ error: any }>
+  signInWithGoogle: () => Promise<{ error: Error | null }>
+  resendSignupOtp: (email: string) => Promise<{ error: Error | null }>
   verifySignupOtp: (email: string, otp: string) => Promise<{ error: Error | null }>
   verifyMfa: (code: string) => Promise<{ error: Error | null }>
   cancelMfaSignIn: () => Promise<void>
@@ -421,16 +445,46 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     let mounted = true
+    let oauthConsumeInFlight = false
+
+    const consumeOAuthCallbackIfPresent = async (url: string) => {
+      if (oauthConsumeInFlight) return
+      const { code, error, errorDescription } = parseAuthCallbackUrl(url)
+      if (error) {
+        console.warn('AuthContext: OAuth error:', error, errorDescription ?? '')
+        return
+      }
+      if (!code) return
+      oauthConsumeInFlight = true
+      try {
+        const { error: exErr } = await supabase.auth.exchangeCodeForSession(code)
+        if (exErr) {
+          console.warn('AuthContext: exchangeCodeForSession failed:', exErr.message)
+        }
+      } finally {
+        oauthConsumeInFlight = false
+      }
+    }
+
+    const linkSub = Linking.addEventListener('url', (event) => {
+      void consumeOAuthCallbackIfPresent(event.url)
+    })
 
     // Get initial session
     const getInitialSession = async () => {
+      let hadSessionUser = false
       try {
+        const initialUrl = await Linking.getInitialURL()
+        if (initialUrl) {
+          await consumeOAuthCallbackIfPresent(initialUrl)
+        }
         await clearInvalidPersistedAuthSession()
         const {
           data: { session },
         } = await supabase.auth.getSession()
 
         if (mounted && session?.user) {
+          hadSessionUser = true
           /** Resolve MFA gate before `setUser` so navigation order is always Login → MFA → PIN → app. */
           await syncMfaGateFromSession()
           const {
@@ -467,7 +521,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
       } catch (error) {
         console.error('Error getting initial session:', error)
       } finally {
-        if (mounted) {
+        /**
+         * Important UX invariant:
+         * - If `getSession()` returns null on cold start, Supabase may still restore the session
+         *   moments later via the `INITIAL_SESSION` auth event.
+         * - If we set `loading=false` here in the null-session case, AppNavigator will briefly render
+         *   the logged-out Auth stack, then immediately jump to PIN when the auth event arrives.
+         *
+         * Therefore: only end loading here when we actually saw a session user.
+         * The `onAuthStateChange` listener below is the source of truth for the null-session path.
+         */
+        if (mounted && hadSessionUser) {
           setLoading(false)
         }
       }
@@ -558,6 +622,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     return () => {
       mounted = false
+      linkSub.remove()
       subscription.unsubscribe()
     }
   }, [syncMfaGateFromSession])
@@ -661,6 +726,56 @@ export function AuthProvider({ children }: AuthProviderProps) {
       return { error }
     }
   }
+
+  const signInWithGoogle = useCallback(async (): Promise<{ error: Error | null }> => {
+    try {
+      const redirectTo = Linking.createURL('auth/callback')
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo },
+      })
+      if (error) return { error: new Error(error.message || 'Unable to start Google sign-in.') }
+      const authUrl = data?.url
+      if (!authUrl) return { error: new Error('Unable to start Google sign-in.') }
+
+      analytics.trackSignIn('google')
+
+      /**
+       * Use the same in-app browser style as Terms links (SFSafariViewController / Chrome Custom Tab).
+       * `openAuthSessionAsync` triggers iOS's “<app> wants to use <domain> to sign in” consent modal
+       * (ASWebAuthenticationSession). That prompt is expected, but it’s jarring in Expo Go where the
+       * app name shows as “Expo”.
+       *
+       * We open a normal in-app browser, then rely on the Linking listener above to consume the
+       * `code` on redirect and complete the session.
+       */
+      // Match the same native in-app browser configuration as `useExternalLink` (Terms, Legal, etc).
+      await WebBrowser.openBrowserAsync(authUrl, {
+        controlsColor: '#0F1110',
+        enableBarCollapsing: true,
+        showTitle: true,
+      })
+
+      return { error: null }
+    } catch (e) {
+      return { error: e instanceof Error ? e : new Error('Unable to continue with Google.') }
+    }
+  }, [])
+
+  const resendSignupOtp = useCallback(async (email: string): Promise<{ error: Error | null }> => {
+    try {
+      const addr = email.trim()
+      if (!addr) return { error: new Error('Enter your email address first.') }
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: addr,
+      })
+      if (error) return { error: new Error(error.message || 'Unable to resend code.') }
+      return { error: null }
+    } catch (e) {
+      return { error: e instanceof Error ? e : new Error('Unable to resend code.') }
+    }
+  }, [])
 
   const signUp = async (email: string, password: string, name: string) => {
     try {
@@ -771,6 +886,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     loading,
     mfaPending,
     signIn,
+    signInWithGoogle,
+    resendSignupOtp,
     verifySignupOtp,
     verifyMfa,
     cancelMfaSignIn,

@@ -1,20 +1,18 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   View,
   Text,
-  TextInput,
   Pressable,
   StyleSheet,
   Alert,
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Keyboard,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { supabase } from '../../lib/supabase'
 import { getApiBaseUrl } from '../../lib/apiClient'
 import { NavigationProps } from '../../types'
 import { analytics } from '../../lib/analytics'
@@ -23,16 +21,16 @@ import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
 import { TextField } from '../../components/ui'
 import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
+import { PinKeypad } from '../../components/pin'
 
 export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
   const [step, setStep] = useState<'email' | 'otp'>('email')
   const [email, setEmail] = useState('')
-  const [otp, setOtp] = useState(['', '', '', '', '', ''])
+  const [otpCode, setOtpCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [resendCooldown, setResendCooldown] = useState(0)
-  const otpRefs = useRef<(TextInput | null)[]>([])
   const insets = useSafeAreaInsets()
 
   // Track screen view
@@ -44,7 +42,7 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     if (step === 'otp') {
       setStep('email')
-      setOtp(['', '', '', '', '', ''])
+      setOtpCode('')
       setError('')
       setMessage('')
       setResendCooldown(0)
@@ -89,6 +87,7 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
 
       setStep('otp')
       setMessage('')
+      setOtpCode('')
       startResendCooldown()
     } catch (error) {
       setError('An unexpected error occurred')
@@ -97,54 +96,30 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
     }
   }
 
-  const handleOtpChange = (index: number, value: string) => {
-    if (value.length > 1) {
-      const digits = value.replace(/\D/g, '').slice(0, 6)
-      
-      if (digits.length === 6) {
-        const newOtp = digits.split('')
-        setOtp(newOtp)
-        setTimeout(() => {
-          otpRefs.current[5]?.focus()
-        }, 0)
-        return
-      } else if (digits.length > 0) {
-        const newOtp = [...otp]
-        for (let i = 0; i < Math.min(digits.length, 6); i++) {
-          newOtp[i] = digits[i]
-        }
-        setOtp(newOtp)
-        const nextIndex = Math.min(digits.length, 5)
-        setTimeout(() => {
-          otpRefs.current[nextIndex]?.focus()
-        }, 0)
-        return
-      }
-    }
+  const otpDigits = otpCode.replace(/\D/g, '').slice(0, 6)
+  const otpActiveIndex = Math.min(otpDigits.length, 5)
 
-    if (value.length > 1) return
-
-    const newOtp = [...otp]
-    newOtp[index] = value
-    setOtp(newOtp)
-
-    if (value && index < 5) {
+  const handleOtpDigit = (d: string) => {
+    if (loading) return
+    if (otpDigits.length >= 6) return
+    const next = `${otpDigits}${d}`.slice(0, 6)
+    setOtpCode(next)
+    if (next.length === 6) {
       setTimeout(() => {
-        otpRefs.current[index + 1]?.focus()
-      }, 0)
+        void handleOtpSubmit(next)
+      }, 80)
     }
   }
 
-  const handleOtpKeyPress = (index: number, e: any) => {
-    if (e.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
-      otpRefs.current[index - 1]?.focus()
-    }
+  const handleOtpBackspace = () => {
+    if (loading) return
+    if (otpDigits.length === 0) return
+    setOtpCode(otpDigits.slice(0, -1))
   }
 
-  const handleOtpSubmit = async () => {
-    const otpCode = otp.join('')
-
-    if (otpCode.length !== 6) {
+  const handleOtpSubmit = async (overrideCode?: string) => {
+    const code = (overrideCode ?? otpDigits).replace(/\D/g, '').slice(0, 6)
+    if (code.length !== 6) {
       setError('Please enter all 6 digits')
       return
     }
@@ -161,7 +136,7 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
         },
         body: JSON.stringify({
           email: email,
-          otp: otpCode,
+          otp: code,
         }),
       })
 
@@ -274,11 +249,7 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
             {step === 'email' ? 'Forgot password?' : 'Enter verification code'}
           </Text>
 
-          {step === 'otp' && error ? (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          ) : null}
+          {/* Error is shown in a fixed slot under the OTP boxes (PIN-style). */}
 
           {message ? (
             <View style={styles.messageContainer}>
@@ -317,37 +288,37 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
             ) : (
               <>
                 <View style={styles.otpSection}>
-                  <Text style={authScreenStyles.fieldLabel}>Enter 6-digit code</Text>
                   <Text style={styles.subtitle}>
                     We've sent a 6-digit code to {email}
                   </Text>
-                  <View style={styles.otpContainer}>
-                    {otp.map((digit, index) => (
-                      <TextInput
-                        key={index}
-                        ref={(ref) => {
-                          otpRefs.current[index] = ref
-                        }}
-                        style={styles.otpInput}
-                        value={digit}
-                        onChangeText={(value) => handleOtpChange(index, value)}
-                        onKeyPress={(e) => handleOtpKeyPress(index, e)}
-                        keyboardType="numeric"
-                        maxLength={6}
-                        editable={!loading}
-                        selectTextOnFocus
-                      />
-                    ))}
+                  <View style={styles.otpBoxesRow} accessibilityLabel="One-time code">
+                    {loading ? (
+                      <View style={styles.otpBoxesLoadingOnly}>
+                        <ActivityIndicator size="small" color={colors.primary.main} />
+                      </View>
+                    ) : (
+                      Array.from({ length: 6 }, (_, i) => (
+                        <View
+                          key={i}
+                          style={[
+                            styles.otpBox,
+                            otpActiveIndex === i ? styles.otpBoxActive : styles.otpBoxIdle,
+                          ]}
+                          accessibilityElementsHidden
+                          importantForAccessibility="no-hide-descendants"
+                        >
+                          <Text style={styles.otpDigit}>{otpDigits[i] ?? ''}</Text>
+                        </View>
+                      ))
+                    )}
                   </View>
-                </View>
-
-                <View style={styles.primaryCtaWrap}>
-                  <GlossyPrimaryButton
-                    title={loading ? 'Verifying…' : 'Verify code'}
-                    onPress={handleOtpSubmit}
-                    disabled={loading || otp.join('').length !== 6}
-                    style={styles.glossyCta}
-                  />
+                  <View style={styles.otpHintSlot} accessibilityLiveRegion="polite">
+                    {error ? (
+                      <Text style={styles.otpErrorText}>{error}</Text>
+                    ) : (
+                      <Text style={styles.otpHintPlaceholder}>{' '}</Text>
+                    )}
+                  </View>
                 </View>
 
                 <Pressable
@@ -359,6 +330,15 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
                     {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : 'Resend code'}
                   </Text>
                 </Pressable>
+
+                <View style={styles.otpKeypad}>
+                  <PinKeypad
+                    onDigit={handleOtpDigit}
+                    onBackspace={handleOtpBackspace}
+                    disabled={loading}
+                    filledCount={otpDigits.length}
+                  />
+                </View>
               </>
             )}
           </View>
@@ -419,19 +399,24 @@ const styles = StyleSheet.create({
     ...textStyles.bodySmall,
     color: colors.text.secondary,
     marginBottom: spacing[4],
+    textAlign: 'center',
   },
-  errorContainer: {
-    marginBottom: spacing[4],
-    padding: spacing[3],
-    backgroundColor: colors.error.background,
-    borderRadius: borderRadius.xl,
-    borderWidth: 1,
-    borderColor: colors.error.light,
+  otpHintSlot: {
+    width: '100%',
+    minHeight: 44,
+    paddingHorizontal: spacing[4],
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  errorText: {
+  otpErrorText: {
     ...textStyles.bodySmall,
     color: colors.error.main,
     textAlign: 'center',
+    fontWeight: '600',
+  },
+  otpHintPlaceholder: {
+    fontSize: 1,
+    color: 'transparent',
   },
   messageContainer: {
     marginBottom: spacing[4],
@@ -464,23 +449,43 @@ const styles = StyleSheet.create({
   otpSection: {
     marginBottom: spacing[5],
   },
-  otpContainer: {
+  otpBoxesRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing[2],
     marginTop: spacing[2],
+    marginBottom: spacing[6],
   },
-  otpInput: {
-    flex: 1,
-    height: 52,
-    borderWidth: 1,
-    borderColor: colors.semantic.border,
+  otpBoxesLoadingOnly: {
+    width: 50 * 6 + spacing[2] * 5,
+    height: 58,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  otpBox: {
+    width: 50,
+    height: 58,
     borderRadius: borderRadius.full,
-    textAlign: 'center',
-    ...textStyles.titleMedium,
-    fontWeight: '600',
+    borderWidth: 2,
     backgroundColor: colors.semantic.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  otpBoxIdle: {
+    borderColor: colors.semantic.input,
+  },
+  otpBoxActive: {
+    borderColor: colors.primary.main,
+  },
+  otpDigit: {
+    fontSize: 22,
+    fontWeight: '600',
     color: colors.semantic.foreground,
+  },
+  otpKeypad: {
+    width: '100%',
+    marginTop: spacing[4],
   },
   resendButton: {
     alignItems: 'center',

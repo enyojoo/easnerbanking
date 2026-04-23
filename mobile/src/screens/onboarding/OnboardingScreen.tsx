@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   NativeScrollEvent,
   NativeSyntheticEvent,
   useWindowDimensions,
+  Alert,
 } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -41,12 +42,36 @@ const ONBOARDING_DATA = [
 ]
 
 const ONBOARDING_COMPLETED_KEY = '@easner_onboarding_completed'
+const ACCOUNT_DELETED_FLAG_KEY = '@easner_account_deleted'
 
 export default function OnboardingScreen({ navigation }: NavigationProps) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions()
   const [currentIndex, setCurrentIndex] = useState(0)
   const scrollViewRef = useRef<ScrollView>(null)
   const insets = useSafeAreaInsets()
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const flag = await AsyncStorage.getItem(ACCOUNT_DELETED_FLAG_KEY)
+        if (cancelled) return
+        if (flag === '1') {
+          await AsyncStorage.removeItem(ACCOUNT_DELETED_FLAG_KEY).catch(() => undefined)
+          Alert.alert(
+            'Account deleted',
+            "We're sorry to see you go, come back again.\n\nIf you have any questions, email us: support@easner.com",
+            [{ text: 'OK' }],
+          )
+        }
+      } catch {
+        // ignore
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   /** Only sync index when paging settles — `onScroll` + Math.round caused label/dot flicker mid-animation. */
   const handleMomentumScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {

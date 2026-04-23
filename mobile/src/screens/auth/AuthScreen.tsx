@@ -15,7 +15,7 @@ import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import ExternalLinkModal from '../../components/ExternalLinkModal'
-import { OtpCodeInput, TextField } from '../../components/ui'
+import { TextField } from '../../components/ui'
 import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
 import { GoogleOutlineButton, OrDivider } from '../../components/auth/AuthChrome'
 import { useExternalLink } from '../../hooks/useExternalLink'
@@ -26,6 +26,8 @@ import { colors, borderRadius, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
 import { AUTH_INITIAL_MODE_KEY, TERMS_URL } from '../../constants/auth'
+import { PinKeypad } from '../../components/pin'
+import { ActivityIndicator } from 'react-native'
 
 /**
  * Layout mirrors business auth pages:
@@ -49,9 +51,11 @@ export default function AuthScreen({ navigation }: NavigationProps) {
   const [fullName, setFullName] = useState('')
   const [passwordVisible, setPasswordVisible] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const { signIn, signUp, verifySignupOtp } = useAuth()
+  const { signIn, signInWithGoogle, resendSignupOtp, signUp, verifySignupOtp } = useAuth()
   const [signupStep, setSignupStep] = useState<SignupStep>('form')
   const [signupOtp, setSignupOtp] = useState('')
+  const [signupOtpError, setSignupOtpError] = useState('')
+  const [signupResendCooldown, setSignupResendCooldown] = useState(0)
 
   const mode = modeStack[modeStack.length - 1]!
   const showBackButton = modeStack.length > 1 || fromOnboarding
@@ -90,6 +94,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
     setFullName('')
     setSignupStep('form')
     setSignupOtp('')
+    setSignupOtpError('')
   }
 
   const handleBack = useCallback(async () => {
@@ -101,6 +106,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
       setPasswordVisible(false)
       setSignupStep('form')
       setSignupOtp('')
+      setSignupOtpError('')
       setModeStack((prev) => prev.slice(0, -1))
       return
     }
@@ -161,16 +167,18 @@ export default function AuthScreen({ navigation }: NavigationProps) {
     return true
   }
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (opts?: { otp?: string }) => {
     if (mode === 'signup' && signupStep === 'otp') {
+      const otpToVerify = (opts?.otp ?? signupOtp).replace(/\D/g, '').slice(0, 6)
       setIsLoading(true)
+      setSignupOtpError('')
       try {
-        const { error } = await verifySignupOtp(email, signupOtp)
+        const { error } = await verifySignupOtp(email, otpToVerify)
         if (error) {
-          Alert.alert('Verify code', error.message || 'Invalid verification code.')
+          setSignupOtpError(error.message || 'Invalid verification code.')
           return
         }
-        Alert.alert('Account verified', 'Continue in the app.', [{ text: 'OK' }])
+        // No modal: successful verification continues into PIN/app flow via auth state change.
       } finally {
         setIsLoading(false)
       }
@@ -202,7 +210,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
         } else if (needsEmailConfirmation) {
           setSignupStep('otp')
           setSignupOtp('')
-          Alert.alert('Check your email', 'Enter the 6-digit code we sent you to finish signing up.')
+          // No modal: OTP screen copy + keypad flow is the guidance.
         } else {
           Alert.alert(
             'Account ready',
@@ -220,11 +228,49 @@ export default function AuthScreen({ navigation }: NavigationProps) {
 
   const handleGoogleAuth = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    Alert.alert('Coming soon', 'Google sign-in will be available in a future update.')
+    setIsLoading(true)
+    try {
+      const { error } = await signInWithGoogle()
+      if (error) {
+        Alert.alert('Google sign-in', error.message || 'Unable to continue with Google.')
+      }
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const isLogin = mode === 'login'
   const isSignupOtp = !isLogin && signupStep === 'otp'
+  const signupOtpDigits = signupOtp.replace(/\D/g, '').slice(0, 6)
+  const otpActiveIndex = Math.min(signupOtpDigits.length, 5)
+
+  const handleOtpDigit = (d: string) => {
+    if (isLoading) return
+    if (signupOtpDigits.length >= 6) return
+    const next = `${signupOtpDigits}${d}`.slice(0, 6)
+    setSignupOtp(next)
+    if (signupOtpError) setSignupOtpError('')
+    if (next.length === 6) {
+      setTimeout(() => {
+        void handleSubmit({ otp: next })
+      }, 80)
+    }
+  }
+
+  const handleOtpBackspace = () => {
+    if (isLoading) return
+    if (signupOtpDigits.length === 0) return
+    if (signupOtpError) setSignupOtpError('')
+    setSignupOtp(signupOtpDigits.slice(0, -1))
+  }
+
+  useEffect(() => {
+    if (signupResendCooldown <= 0) return
+    const id = setInterval(() => {
+      setSignupResendCooldown((prev) => (prev <= 1 ? 0 : prev - 1))
+    }, 1000)
+    return () => clearInterval(id)
+  }, [signupResendCooldown])
 
   return (
     <View style={styles.container}>
@@ -259,7 +305,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
           </View>
 
           <Text style={authScreenStyles.screenTitle}>
-            {isLogin ? 'Welcome back' : isSignupOtp ? 'Enter verification code' : 'Open an account'}
+            {isLogin ? 'Welcome back' : isSignupOtp ? 'Verify your email' : 'Open an account'}
           </Text>
 
           <View style={styles.form}>
@@ -276,13 +322,16 @@ export default function AuthScreen({ navigation }: NavigationProps) {
               </Text>
             )}
 
-            <GoogleOutlineButton
-              label={isLogin ? 'Sign in with Google' : 'Sign up with Google'}
-              onPress={handleGoogleAuth}
-              disabled={isLoading}
-            />
-
-            <OrDivider />
+            {!isSignupOtp && (
+              <>
+                <GoogleOutlineButton
+                  label={isLogin ? 'Sign in with Google' : 'Sign up with Google'}
+                  onPress={handleGoogleAuth}
+                  disabled={isLoading}
+                />
+                <OrDivider />
+              </>
+            )}
 
             {!isLogin && signupStep === 'form' && (
               <TextField
@@ -297,44 +346,48 @@ export default function AuthScreen({ navigation }: NavigationProps) {
               />
             )}
 
-            <TextField
-              label="Email"
-              value={email}
-              onChangeText={setEmail}
-              placeholder="you@example.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="next"
-              editable={!isLoading}
-              containerStyle={styles.fieldFlush}
-            />
+            {!isSignupOtp && (
+              <>
+                <TextField
+                  label="Email"
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="you@example.com"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="next"
+                  editable={!isLoading}
+                  containerStyle={styles.fieldFlush}
+                />
 
-            <TextField
-              label="Password"
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Password"
-              secureTextEntry={!passwordVisible}
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!isLoading}
-              containerStyle={styles.fieldFlush}
-              rightAccessory={
-                <Pressable
-                 android_ripple={ripple.neutral}
-                  style={styles.eyeButton}
-                  onPress={() => setPasswordVisible(!passwordVisible)} >
-                  <View style={styles.eyeButtonCircle}>
-                    <Ionicons
-                      name={passwordVisible ? 'eye-off' : 'eye'}
-                      size={18}
-                      color={colors.semantic.mutedForeground}
-                    />
-                  </View>
-                </Pressable>
-              }
-            />
+                <TextField
+                  label="Password"
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="Password"
+                  secureTextEntry={!passwordVisible}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isLoading}
+                  containerStyle={styles.fieldFlush}
+                  rightAccessory={
+                    <Pressable
+                     android_ripple={ripple.neutral}
+                      style={styles.eyeButton}
+                      onPress={() => setPasswordVisible(!passwordVisible)} >
+                      <View style={styles.eyeButtonCircle}>
+                        <Ionicons
+                          name={passwordVisible ? 'eye-off' : 'eye'}
+                          size={18}
+                          color={colors.semantic.mutedForeground}
+                        />
+                      </View>
+                    </Pressable>
+                  }
+                />
+              </>
+            )}
 
             {isLogin && (
               <Pressable
@@ -349,36 +402,93 @@ export default function AuthScreen({ navigation }: NavigationProps) {
             )}
 
             {!isLogin && signupStep === 'otp' && (
-              <OtpCodeInput
-                label="6-digit code"
-                value={signupOtp}
-                onChange={setSignupOtp}
-                autoFocus
-                disabled={isLoading}
-                centerLabel
-              />
+              <View style={styles.otpWrap}>
+                <Text style={styles.otpHint}>
+                  Enter the 6-digit code we sent to {email || 'your email'}
+                </Text>
+                <View style={styles.otpBoxesRow} accessibilityLabel="One-time code">
+                  {isLoading ? (
+                    <View style={styles.otpBoxesLoadingOnly}>
+                      <ActivityIndicator size="small" color={colors.primary.main} />
+                    </View>
+                  ) : (
+                    Array.from({ length: 6 }, (_, i) => (
+                      <View
+                        key={i}
+                        style={[
+                          styles.otpBox,
+                          otpActiveIndex === i ? styles.otpBoxActive : styles.otpBoxIdle,
+                        ]}
+                        accessibilityElementsHidden
+                        importantForAccessibility="no-hide-descendants"
+                      >
+                        <Text style={styles.otpDigit}>{signupOtpDigits[i] ?? ''}</Text>
+                      </View>
+                    ))
+                  )}
+                </View>
+                <View style={styles.otpHintSlot} accessibilityLiveRegion="polite">
+                  {signupOtpError ? (
+                    <Text style={styles.otpErrorText}>{signupOtpError}</Text>
+                  ) : (
+                    <Text style={styles.otpHintPlaceholder}>{' '}</Text>
+                  )}
+                </View>
+                <Pressable
+                  android_ripple={ripple.neutral}
+                  onPress={async () => {
+                    if (signupResendCooldown > 0 || isLoading) return
+                    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                    const { error } = await resendSignupOtp(email)
+                    if (error) {
+                      setSignupOtpError(error.message || 'Unable to resend code.')
+                      return
+                    }
+                    setSignupResendCooldown(60)
+                  }}
+                  disabled={signupResendCooldown > 0 || isLoading}
+                  style={styles.resendButton}
+                >
+                  <Text
+                    style={[
+                      styles.resendText,
+                      (signupResendCooldown > 0 || isLoading) && styles.resendTextDisabled,
+                    ]}
+                  >
+                    {signupResendCooldown > 0
+                      ? `Resend code in ${signupResendCooldown}s`
+                      : 'Resend code'}
+                  </Text>
+                </Pressable>
+                <View style={styles.otpKeypad}>
+                  <PinKeypad
+                    onDigit={handleOtpDigit}
+                    onBackspace={handleOtpBackspace}
+                    disabled={isLoading}
+                    filledCount={signupOtpDigits.length}
+                  />
+                </View>
+              </View>
             )}
 
-            <View style={styles.primaryCtaWrap}>
-              <GlossyPrimaryButton
-                title={
-                  isLoading
-                    ? isLogin
-                      ? 'Signing in…'
-                      : signupStep === 'otp'
-                        ? 'Verifying…'
+            {!isSignupOtp && (
+              <View style={styles.primaryCtaWrap}>
+                <GlossyPrimaryButton
+                  title={
+                    isLoading
+                      ? isLogin
+                        ? 'Signing in…'
                         : 'Creating account…'
-                    : isLogin
-                      ? 'Sign in'
-                      : signupStep === 'otp'
-                        ? 'Verify and continue'
+                      : isLogin
+                        ? 'Sign in'
                         : 'Create account'
-                }
-                onPress={handleSubmit}
-                disabled={isLoading}
-                style={styles.glossyCta}
-              />
-            </View>
+                  }
+                  onPress={handleSubmit}
+                  disabled={isLoading}
+                  style={styles.glossyCta}
+                />
+              </View>
+            )}
 
             <View style={styles.footer}>
               <Text style={authScreenStyles.footerMuted}>
@@ -454,6 +564,84 @@ const styles = StyleSheet.create({
   },
   form: {
     width: '100%',
+  },
+  otpWrap: {
+    width: '100%',
+    marginTop: spacing[2],
+    marginBottom: spacing[4],
+    alignItems: 'center',
+  },
+  otpHint: {
+    ...authScreenStyles.termsIntro,
+    textAlign: 'center',
+    marginBottom: spacing[4],
+  },
+  otpBoxesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    marginBottom: spacing[6],
+  },
+  otpBoxesLoadingOnly: {
+    width: 50 * 6 + spacing[2] * 5,
+    height: 58,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  otpBox: {
+    width: 50,
+    height: 58,
+    borderRadius: borderRadius.full,
+    borderWidth: 2,
+    backgroundColor: colors.semantic.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  otpBoxIdle: {
+    borderColor: colors.semantic.input,
+  },
+  otpBoxActive: {
+    borderColor: colors.primary.main,
+  },
+  otpDigit: {
+    fontSize: 22,
+    fontWeight: '600',
+    color: colors.semantic.foreground,
+  },
+  otpKeypad: {
+    width: '100%',
+    marginTop: spacing[4],
+  },
+  otpHintSlot: {
+    width: '100%',
+    minHeight: 44,
+    paddingHorizontal: spacing[4],
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing[2],
+  },
+  otpErrorText: {
+    ...authScreenStyles.forgotPasswordText,
+    color: colors.error.dark,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  otpHintPlaceholder: {
+    fontSize: 1,
+    color: 'transparent',
+  },
+  resendButton: {
+    alignItems: 'center',
+    padding: spacing[2],
+    marginBottom: spacing[2],
+  },
+  resendText: {
+    ...authScreenStyles.footerLink,
+    textAlign: 'center',
+  },
+  resendTextDisabled: {
+    color: colors.text.secondary,
   },
   fieldFlush: {
     marginBottom: spacing[3],

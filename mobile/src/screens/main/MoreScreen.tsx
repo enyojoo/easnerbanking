@@ -57,12 +57,12 @@ function tierBadgeForProfile(
     return { label: 'Tier 2', tone: 'green' }
   }
   if (tier1) {
-    return { label: 'Tier 1', tone: 'green' }
+    return { label: 'Tier 1', sub: 'Verified', tone: 'green' }
   }
   if (verificationStatus === 'in_review') {
     return { label: 'Tier 1', sub: 'In review', tone: 'yellow' }
   }
-  return { label: 'Tier 1', sub: 'Action needed', tone: 'yellow' }
+  return { label: 'Tier 1', sub: 'Unverified', tone: 'yellow' }
 }
 
 function MoreContent({ navigation }: NavigationProps) {
