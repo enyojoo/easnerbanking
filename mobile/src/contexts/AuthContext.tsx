@@ -28,12 +28,38 @@ WebBrowser.maybeCompleteAuthSession()
 
 function parseAuthCallbackUrl(url: string): {
   code: string | null
+  accessToken: string | null
+  refreshToken: string | null
   error: string | null
   errorDescription: string | null
 } {
-  const parsed = Linking.parse(url)
-  const qp = (parsed.queryParams ?? {}) as Record<string, unknown>
+  // Supabase can return different shapes depending on flow / provider callback:
+  // - PKCE: `?code=...`
+  // - Some native redirects: tokens in the URL hash `#access_token=...&refresh_token=...`
+  const tryParse = (raw: string) => {
+    const parsed = Linking.parse(raw)
+    return (parsed.queryParams ?? {}) as Record<string, unknown>
+  }
+
+  const qp1 = tryParse(url)
+
+  let qp2: Record<string, unknown> = {}
+  try {
+    const hashIdx = url.indexOf('#')
+    if (hashIdx >= 0) {
+      const frag = url.slice(hashIdx + 1)
+      // `Linking.parse` expects a scheme; a bare fragment is not parseable, so prefix a dummy.
+      qp2 = tryParse(`easner://auth/callback?${frag}`)
+    }
+  } catch {
+    qp2 = {}
+  }
+
+  const qp: Record<string, unknown> = { ...qp1, ...qp2 }
+
   const code = typeof qp.code === 'string' ? qp.code : null
+  const accessToken = typeof qp.access_token === 'string' ? qp.access_token : null
+  const refreshToken = typeof qp.refresh_token === 'string' ? qp.refresh_token : null
   const error = typeof qp.error === 'string' ? qp.error : null
   const errorDescription =
     typeof qp.error_description === 'string'
@@ -41,7 +67,7 @@ function parseAuthCallbackUrl(url: string): {
       : typeof qp.errorDescription === 'string'
         ? qp.errorDescription
         : null
-  return { code, error, errorDescription }
+  return { code, accessToken, refreshToken, error, errorDescription }
 }
 
 function patchAuthUserWithPersonal(
@@ -449,17 +475,29 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     const consumeOAuthCallbackIfPresent = async (url: string) => {
       if (oauthConsumeInFlight) return
-      const { code, error, errorDescription } = parseAuthCallbackUrl(url)
+      const { code, accessToken, refreshToken, error, errorDescription } = parseAuthCallbackUrl(url)
       if (error) {
         console.warn('AuthContext: OAuth error:', error, errorDescription ?? '')
         return
       }
-      if (!code) return
+      if (!code && !accessToken) return
       oauthConsumeInFlight = true
       try {
-        const { error: exErr } = await supabase.auth.exchangeCodeForSession(code)
-        if (exErr) {
-          console.warn('AuthContext: exchangeCodeForSession failed:', exErr.message)
+        if (code) {
+          const { error: exErr } = await supabase.auth.exchangeCodeForSession(code)
+          if (exErr) {
+            console.warn('AuthContext: exchangeCodeForSession failed:', exErr.message)
+          }
+          return
+        }
+        if (accessToken) {
+          const { error: sErr } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken ?? '',
+          })
+          if (sErr) {
+            console.warn('AuthContext: setSession (OAuth fragment) failed:', sErr.message)
+          }
         }
       } finally {
         oauthConsumeInFlight = false
@@ -746,7 +784,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
        */
       const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectTo)
       if (result.type === 'success' && typeof result.url === 'string') {
-        const { code, error: oauthErr, errorDescription } = parseAuthCallbackUrl(result.url)
+        const { code, accessToken, refreshToken, error: oauthErr, errorDescription } = parseAuthCallbackUrl(result.url)
         if (oauthErr) {
           return { error: new Error(errorDescription || oauthErr) }
         }
@@ -755,6 +793,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
           if (exErr) {
             return { error: new Error(exErr.message || 'Unable to complete Google sign-in.') }
           }
+        } else if (accessToken) {
+          const { error: sErr } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken ?? '',
+          })
+          if (sErr) {
+            return { error: new Error(sErr.message || 'Unable to complete Google sign-in.') }
+          }
+        }
+        try {
+          // Ensure the in-app auth browser / ASWebAuthenticationSession is dismissed.
+          // `openAuthSessionAsync` already dismisses on success, but this is a safe no-op on web.
+          WebBrowser.dismissAuthSession()
+        } catch {
+          // ignore
         }
       }
 
