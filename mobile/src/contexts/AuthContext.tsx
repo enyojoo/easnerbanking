@@ -7,7 +7,7 @@ import { getSessionReliable } from '../lib/authSession'
 import { User, AuthUser } from '../types'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 import { analytics } from '../lib/analytics'
-import { ensureBusinessAppUserBootstrap } from '../lib/apiClient'
+import { ensureBusinessAppUserBootstrap, getApiBaseUrl } from '../lib/apiClient'
 import { clearJurisdictionCountryPolicyCache } from '../lib/jurisdictionCountryPolicy'
 import { clearPinAuth, updateSessionActivity, markFirstLoginAfterVerification } from '../lib/pinAuth'
 import { AUTH_INITIAL_MODE_KEY } from '../constants/auth'
@@ -337,6 +337,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return null
       }
 
+      const boot = await ensureBusinessAppUserBootstrap()
+      if (!boot.ok) {
+        console.warn('AuthContext: user bootstrap failed:', boot.status, boot.errorText)
+      }
+
       const surfaceGate = await ensureConsumerMobileAccess()
       if (surfaceGate.error) {
         /** Session not hydrated yet — never clear user; profile fetch will run again. */
@@ -350,8 +355,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setLoading(false)
         return null
       }
-
-      await ensureBusinessAppUserBootstrap()
 
       // Get email_confirmed_at from Supabase auth user
       const { data: { session } } = await supabase.auth.getSession()
@@ -824,6 +827,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return { error: new Error('Google sign-in did not create a session in the app.') }
       }
 
+      const boot = await ensureBusinessAppUserBootstrap()
+      if (!boot.ok) {
+        await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
+        return {
+          error: new Error(
+            `Account setup failed (bootstrap). API=${getApiBaseUrl()} status=${boot.status ?? 'n/a'}`,
+          ),
+        }
+      }
+
       const surfaceGate = await ensureConsumerMobileAccess()
       if (surfaceGate.error) {
         const msg = surfaceGate.error.message || 'This account cannot use the Easner mobile app.'
@@ -831,7 +844,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return { error: new Error(msg) }
       }
 
-      await ensureBusinessAppUserBootstrap()
+      const { data: userRow, error: userRowErr } = await supabase
+        .from('users')
+        .select('id,role')
+        .eq('id', session.user.id)
+        .maybeSingle()
+      if (userRowErr) {
+        await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
+        return { error: new Error(userRowErr.message || 'Could not load your user profile.') }
+      }
+      if (!userRow?.id) {
+        await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
+        return { error: new Error('Account setup did not create a user profile row. Please try again.') }
+      }
 
       return { error: null }
     } catch (e) {

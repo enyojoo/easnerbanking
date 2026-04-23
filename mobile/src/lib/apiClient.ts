@@ -39,13 +39,13 @@ export const getApiBaseUrl = (): string => {
  * Same as business web `POST /api/auth/bootstrap` (Bearer + service-role upsert to public.users).
  * Call after session exists; `role: individual` skips org/country (no country on mobile).
  */
-export async function ensureBusinessAppUserBootstrap(): Promise<void> {
+export async function ensureBusinessAppUserBootstrap(): Promise<{ ok: boolean; status?: number; errorText?: string }> {
   const apiBase = getApiBaseUrl()
   try {
     const {
       data: { session },
     } = await supabase.auth.getSession()
-    if (!session?.access_token) return
+    if (!session?.access_token) return { ok: false, errorText: 'No session' }
 
     const fullName =
       typeof session.user.user_metadata?.name === 'string'
@@ -67,7 +67,7 @@ export async function ensureBusinessAppUserBootstrap(): Promise<void> {
     if (!res.ok) {
       const text = await res.text().catch(() => '')
       console.warn('auth bootstrap failed:', res.status, text)
-      return
+      return { ok: false, status: res.status, errorText: text }
     }
     /** Bootstrap may align `user_metadata.name` with `users.full_name` server-side — refresh JWT. */
     await supabase.auth.refreshSession().catch(() => undefined)
@@ -88,8 +88,10 @@ export async function ensureBusinessAppUserBootstrap(): Promise<void> {
     } catch (e) {
       console.warn('ensure-sub-org after bootstrap error:', e)
     }
+    return { ok: true }
   } catch (e) {
     console.warn('auth bootstrap error:', e)
+    return { ok: false, errorText: e instanceof Error ? e.message : String(e) }
   }
 }
 
