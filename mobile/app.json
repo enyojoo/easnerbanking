@@ -18,7 +18,7 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "UIViewControllerBasedStatusBarAppearance": true,
-        "UIStatusBarStyle": "UIStatusBarStyleDarkContent",
+        "UIStatusBarStyle": "UIStatusBarStyleLightContent",
         "UIBackgroundModes": [
           "processing"
         ],
