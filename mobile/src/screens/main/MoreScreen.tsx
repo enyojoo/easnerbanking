@@ -51,10 +51,10 @@ function tierBadgeForProfile(
   const tier2 = TIER2_COMPLETE_PLACEHOLDER
   const tier3 = TIER3_COMPLETE_PLACEHOLDER
   if (tier1 && tier2 && tier3) {
-    return { label: 'Tier 3', tone: 'green' }
+    return { label: 'Tier 3', sub: 'Verified', tone: 'green' }
   }
   if (tier1 && tier2) {
-    return { label: 'Tier 2', tone: 'green' }
+    return { label: 'Tier 2', sub: 'Verified', tone: 'green' }
   }
   if (tier1) {
     return { label: 'Tier 1', sub: 'Verified', tone: 'green' }
@@ -359,8 +359,11 @@ function MoreContent({ navigation }: NavigationProps) {
                 </View>
                 <View style={styles.menuItemRight}>
                   {tierBadge.tone === 'green' ? (
-                    <View style={styles.badgeGreen}>
+                    <View style={[styles.badgeGreen, tierBadge.sub && styles.badgeGreenTall]}>
                       <Text style={styles.badgeTextGreen}>{tierBadge.label}</Text>
+                      {tierBadge.sub ? (
+                        <Text style={styles.badgeTextGreenSub}>{tierBadge.sub}</Text>
+                      ) : null}
                     </View>
                   ) : (
                     <View style={[styles.badgeYellow, tierBadge.sub && styles.badgeYellowTall]}>
@@ -648,10 +651,22 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[1],
     borderRadius: borderRadius.sm,
   },
+  badgeGreenTall: {
+    paddingVertical: spacing[1] + 1,
+    alignItems: 'flex-end',
+  },
   badgeTextGreen: {
     ...textStyles.labelSmall,
     color: colors.success.dark,
     fontWeight: '600',
+  },
+  badgeTextGreenSub: {
+    ...textStyles.bodySmall,
+    color: colors.success.dark,
+    fontWeight: '500',
+    marginTop: 1,
+    fontSize: 10,
+    lineHeight: 12,
   },
   badgeYellow: {
     backgroundColor: colors.warning.background,

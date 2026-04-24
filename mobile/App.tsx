@@ -146,7 +146,9 @@ function AppContent() {
       }}
     >
       <StatusBar
-        style="dark"
+        // While the native splash is still visible, force a white status bar
+        // so it contrasts with the blue splash background on iOS.
+        style={splashFinished ? 'dark' : 'light'}
         backgroundColor={Platform.OS === 'android' ? palette.background.primary : undefined}
       />
       <AppNavigator />

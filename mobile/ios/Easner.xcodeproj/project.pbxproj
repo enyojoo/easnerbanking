@@ -7,26 +7,26 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		06347D34A67395C01F342C71 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A25B03DCD63A3C89B34911A5 /* ExpoModulesProvider.swift */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		3E7886BABA3FB930D3C94565 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31F2C2A1696E03D9DA01072F /* ExpoModulesProvider.swift */; };
-		8716B78C21593C07086AA2B5 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C8B6FFB5CCC89937E953A583 /* PrivacyInfo.xcprivacy */; };
-		AB3E277881BC227F574B9964 /* libPods-Easner.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 1917DE4E93B1006BE2F7717D /* libPods-Easner.a */; };
+		ACF5DF4464FBCF3C4C7A8202 /* libPods-Easner.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 7C757F92F10DEEDE947ECA2E /* libPods-Easner.a */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
+		ED7C3FDA0A506FFB45B0E9CD /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 08CD860F4EAEC3B9E970A324 /* PrivacyInfo.xcprivacy */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		08CD860F4EAEC3B9E970A324 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = Easner/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* Easner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Easner.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = Easner/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Easner/Info.plist; sourceTree = "<group>"; };
-		1917DE4E93B1006BE2F7717D /* libPods-Easner.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Easner.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		26F869389B4D284A3012918E /* Pods-Easner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Easner.debug.xcconfig"; path = "Target Support Files/Pods-Easner/Pods-Easner.debug.xcconfig"; sourceTree = "<group>"; };
-		31F2C2A1696E03D9DA01072F /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Easner/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
-		69512AAA60B2A3917976899A /* Pods-Easner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Easner.release.xcconfig"; path = "Target Support Files/Pods-Easner/Pods-Easner.release.xcconfig"; sourceTree = "<group>"; };
+		7C757F92F10DEEDE947ECA2E /* libPods-Easner.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Easner.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A25B03DCD63A3C89B34911A5 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Easner/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = Easner/SplashScreen.storyboard; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		C8B6FFB5CCC89937E953A583 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = Easner/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		C039EBDE9592EB30C745C6D6 /* Pods-Easner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Easner.debug.xcconfig"; path = "Target Support Files/Pods-Easner/Pods-Easner.debug.xcconfig"; sourceTree = "<group>"; };
+		C390B4C66BEA3443BC00BD59 /* Pods-Easner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Easner.release.xcconfig"; path = "Target Support Files/Pods-Easner/Pods-Easner.release.xcconfig"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Easner/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* Easner-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Easner-Bridging-Header.h"; path = "Easner/Easner-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -37,7 +37,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				AB3E277881BC227F574B9964 /* libPods-Easner.a in Frameworks */,
+				ACF5DF4464FBCF3C4C7A8202 /* libPods-Easner.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -53,7 +53,7 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				C8B6FFB5CCC89937E953A583 /* PrivacyInfo.xcprivacy */,
+				08CD860F4EAEC3B9E970A324 /* PrivacyInfo.xcprivacy */,
 			);
 			name = Easner;
 			sourceTree = "<group>";
@@ -62,17 +62,27 @@
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				1917DE4E93B1006BE2F7717D /* libPods-Easner.a */,
+				7C757F92F10DEEDE947ECA2E /* libPods-Easner.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		7B4D7470B9A9612722F40C87 /* Easner */ = {
+		477A78D378B7244E5970A1C6 /* ExpoModulesProviders */ = {
 			isa = PBXGroup;
 			children = (
-				31F2C2A1696E03D9DA01072F /* ExpoModulesProvider.swift */,
+				AE1ECB6D84FD7001201B2B64 /* Easner */,
 			);
-			name = Easner;
+			name = ExpoModulesProviders;
+			sourceTree = "<group>";
+		};
+		5EB28517F15510379B685C43 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				C039EBDE9592EB30C745C6D6 /* Pods-Easner.debug.xcconfig */,
+				C390B4C66BEA3443BC00BD59 /* Pods-Easner.release.xcconfig */,
+			);
+			name = Pods;
+			path = Pods;
 			sourceTree = "<group>";
 		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
@@ -89,8 +99,8 @@
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				F82BD0C22FE069908F03F71D /* Pods */,
-				C9572092E00253F6757324AD /* ExpoModulesProviders */,
+				5EB28517F15510379B685C43 /* Pods */,
+				477A78D378B7244E5970A1C6 /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -105,6 +115,14 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		AE1ECB6D84FD7001201B2B64 /* Easner */ = {
+			isa = PBXGroup;
+			children = (
+				A25B03DCD63A3C89B34911A5 /* ExpoModulesProvider.swift */,
+			);
+			name = Easner;
+			sourceTree = "<group>";
+		};
 		BB2F792B24A3F905000567C9 /* Supporting */ = {
 			isa = PBXGroup;
 			children = (
@@ -112,24 +130,6 @@
 			);
 			name = Supporting;
 			path = Easner/Supporting;
-			sourceTree = "<group>";
-		};
-		C9572092E00253F6757324AD /* ExpoModulesProviders */ = {
-			isa = PBXGroup;
-			children = (
-				7B4D7470B9A9612722F40C87 /* Easner */,
-			);
-			name = ExpoModulesProviders;
-			sourceTree = "<group>";
-		};
-		F82BD0C22FE069908F03F71D /* Pods */ = {
-			isa = PBXGroup;
-			children = (
-				26F869389B4D284A3012918E /* Pods-Easner.debug.xcconfig */,
-				69512AAA60B2A3917976899A /* Pods-Easner.release.xcconfig */,
-			);
-			name = Pods;
-			path = Pods;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -140,13 +140,13 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "Easner" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				5EFFFF4E9273B9973AAD52D5 /* [Expo] Configure project */,
+				8ADCFAC40C6124A0058CEF92 /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				4FADDAED5D5BD147BDE65E57 /* [CP] Embed Pods Frameworks */,
+				3E73D4F9E6057791A04646FA /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -196,7 +196,7 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				8716B78C21593C07086AA2B5 /* PrivacyInfo.xcprivacy in Resources */,
+				ED7C3FDA0A506FFB45B0E9CD /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -242,7 +242,7 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		4FADDAED5D5BD147BDE65E57 /* [CP] Embed Pods Frameworks */ = {
+		3E73D4F9E6057791A04646FA /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -265,30 +265,6 @@
 			shellPath = /bin/sh;
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Easner/Pods-Easner-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
-		};
-		5EFFFF4E9273B9973AAD52D5 /* [Expo] Configure project */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"$(SRCROOT)/.xcode.env",
-				"$(SRCROOT)/.xcode.env.local",
-				"$(SRCROOT)/Easner/Easner.entitlements",
-				"$(SRCROOT)/Pods/Target Support Files/Pods-Easner/expo-configure-project.sh",
-			);
-			name = "[Expo] Configure project";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(SRCROOT)/Pods/Target Support Files/Pods-Easner/ExpoModulesProvider.swift",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-Easner/expo-configure-project.sh\"\n";
 		};
 		800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -336,6 +312,30 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Easner/Pods-Easner-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
+		8ADCFAC40C6124A0058CEF92 /* [Expo] Configure project */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/.xcode.env",
+				"$(SRCROOT)/.xcode.env.local",
+				"$(SRCROOT)/Easner/Easner.entitlements",
+				"$(SRCROOT)/Pods/Target Support Files/Pods-Easner/expo-configure-project.sh",
+			);
+			name = "[Expo] Configure project";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/Pods/Target Support Files/Pods-Easner/ExpoModulesProvider.swift",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-Easner/expo-configure-project.sh\"\n";
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -344,7 +344,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				3E7886BABA3FB930D3C94565 /* ExpoModulesProvider.swift in Sources */,
+				06347D34A67395C01F342C71 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -353,7 +353,7 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 26F869389B4D284A3012918E /* Pods-Easner.debug.xcconfig */;
+			baseConfigurationReference = C039EBDE9592EB30C745C6D6 /* Pods-Easner.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -389,7 +389,7 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 69512AAA60B2A3917976899A /* Pods-Easner.release.xcconfig */;
+			baseConfigurationReference = C390B4C66BEA3443BC00BD59 /* Pods-Easner.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;

@@ -20,6 +20,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { hasPin, setupPin, verifyPin, getLockoutState } from '../../lib/pinAuth'
 import { appPinStrings } from '../../constants/app-pin-en'
 import { PinKeypad, PinLockedHintText } from '../../components/pin'
+import { useDeferredLoading } from '../../hooks/useDeferredLoading'
 
 type Step = 'verify' | 'pin' | 'confirm'
 
@@ -273,7 +274,7 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
 
   const currentPinDisplay = step === 'verify' ? verifyDigits : step === 'pin' ? pin : confirmPin
   const filledCount = currentPinDisplay.filter((d) => d !== '').length
-  const showPinAreaSpinner = verifyBusy || loading
+  const showPinAreaSpinner = useDeferredLoading(verifyBusy || loading)
 
   if (!ready) {
     return (
