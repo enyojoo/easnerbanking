@@ -780,7 +780,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const redirectTo = Linking.createURL('auth/callback')
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo },
+        options: {
+          redirectTo,
+          // Always show Google account chooser (don’t auto-reuse the last signed-in Google session on device).
+          queryParams: { prompt: 'select_account' },
+        },
       })
       if (error) return { error: new Error(error.message || 'Unable to start Google sign-in.') }
       const authUrl = data?.url
@@ -826,60 +830,30 @@ export function AuthProvider({ children }: AuthProviderProps) {
       analytics.trackSignIn('google')
 
       /**
-       * Use an OS-managed auth session so the callback URL is reliably delivered to the app
-       * (and the browser closes automatically).
+       * Match the same native in-app browser configuration as `useExternalLink` (Terms, Legal, etc).
+       *
+       * OAuth completion is handled by the `Linking` listener (`consumeOAuthCallbackIfPresent`) which
+       * exchanges the `code` for a session, then we wait briefly for the session to hydrate.
        */
-      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectTo)
+      await WebBrowser.openBrowserAsync(authUrl, {
+        controlsColor: '#0F1110',
+        enableBarCollapsing: true,
+        showTitle: true,
+      })
 
-      if (result.type !== 'success' || typeof result.url !== 'string') {
-        return { error: new Error('Google sign-in was not completed.') }
-      }
-
-      const { code, accessToken, refreshToken, error: oauthErr, errorDescription } = parseAuthCallbackUrl(result.url)
-      if (oauthErr) {
-        return { error: new Error(errorDescription || oauthErr) }
-      }
-
-      if (code) {
-        const { error: exErr } = await supabase.auth.exchangeCodeForSession(code)
-        if (exErr) {
-          return { error: new Error(exErr.message || 'Unable to complete Google sign-in.') }
+      // User may return via deep link while the in-app browser is still animating closed; give GoTrue
+      // a short window to persist + hydrate the session from SecureStore/AsyncStorage.
+      let session = await getSessionReliable()
+      if (!session?.access_token) {
+        const started = Date.now()
+        while (Date.now() - started < 20_000) {
+          // eslint-disable-next-line no-await-in-loop
+          await new Promise((r) => setTimeout(r, 150))
+          // eslint-disable-next-line no-await-in-loop
+          session = await getSessionReliable()
+          if (session?.access_token) break
         }
-      } else if (accessToken) {
-        const { error: sErr } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken ?? '',
-        })
-        if (sErr) {
-          return { error: new Error(sErr.message || 'Unable to complete Google sign-in.') }
-        }
-      } else {
-        if (result.url.startsWith('http')) {
-          try {
-            const u = new URL(result.url)
-            if (u.hostname.endsWith('vercel.app')) {
-              return {
-                error: new Error(
-                  'OAuth returned to a web URL (commonly a Supabase "Site URL" fallback) instead of the app deep link. Add the logged `expected app redirectTo` value to Supabase Auth → URL Configuration → Redirect URLs for the same Supabase project as the mobile app.',
-                ),
-              }
-            }
-          } catch {
-            // ignore
-          }
-        }
-        return { error: new Error('Missing OAuth tokens in redirect. Check Supabase redirect URL settings.') }
       }
-
-      try {
-        // Ensure the in-app auth browser / ASWebAuthenticationSession is dismissed.
-        // `openAuthSessionAsync` already dismisses on success, but this is a safe no-op on web.
-        WebBrowser.dismissAuthSession()
-      } catch {
-        // ignore
-      }
-
-      const session = await getSessionReliable()
       if (!session?.access_token) {
         return { error: new Error('Google sign-in did not create a session in the app.') }
       }

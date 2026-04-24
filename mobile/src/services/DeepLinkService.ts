@@ -1,6 +1,15 @@
 import * as Linking from 'expo-linking'
 import { getApiBaseUrl } from '../lib/apiClient'
 
+/** Do not map Supabase / Google OAuth return URLs to in-app "Dashboard" — AuthContext owns that flow. */
+function isSupabaseOauthAppCallback(url: string): boolean {
+  if (url.includes('auth/callback')) return true
+  if (url.includes('access_token=') || url.includes('refresh_token=') || /(^|[?#&])code=/.test(url)) {
+    return /easner|exp\+|exp:\/\//.test(url)
+  }
+  return false
+}
+
 export interface DeepLinkData {
   screen: string
   params?: Record<string, string>
@@ -26,14 +35,10 @@ export class DeepLinkService {
    */
   async initialize(): Promise<void> {
     try {
-      // Handle deep links when app is already running
+      // Handle deep links when the app is already running.
+      // Do NOT call `getInitialURL()` here — that URL is single-flight on some platforms, and
+      // `AuthContext` must be the one to read it for OAuth (PKCE + fragment) during cold start.
       const subscription = Linking.addEventListener('url', this.handleDeepLink)
-      
-      // Handle deep links when app is opened from a closed state
-      const initialUrl = await Linking.getInitialURL()
-      if (initialUrl) {
-        this.handleDeepLink({ url: initialUrl })
-      }
 
       return () => subscription?.remove()
     } catch (error) {
@@ -47,7 +52,9 @@ export class DeepLinkService {
   private handleDeepLink = (event: { url: string }): void => {
     try {
       console.log('DeepLinkService: Received deep link:', event.url)
-      
+      if (isSupabaseOauthAppCallback(event.url)) {
+        return
+      }
       const { screen, params } = this.parseUrl(event.url)
       
       if (screen) {

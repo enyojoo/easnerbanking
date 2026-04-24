@@ -124,3 +124,6 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Cursor
+.cursor/
