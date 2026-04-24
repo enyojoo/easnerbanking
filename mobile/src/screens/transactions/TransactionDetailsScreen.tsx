@@ -131,6 +131,22 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>({})
   const dataLoadedRef = useRef(false)
 
+  const hasCoreDetailFields = useMemo(() => {
+    if (!transaction) return false
+    // "Atomic render" gate: require the minimum set of fields that the UI depends on
+    // (status header card + timestamp formatting + direction label).
+    const hasAmount = typeof transaction.amount === 'number' && Number.isFinite(transaction.amount)
+    const hasCurrency = typeof transaction.currency === 'string' && transaction.currency.trim().length > 0
+    const hasStatus = typeof transaction.status === 'string' && transaction.status.trim().length > 0
+    const hasType =
+      transaction.transaction_type === 'send' || transaction.transaction_type === 'receive'
+    const hasCreated =
+      typeof transaction.created_at === 'string' && transaction.created_at.trim().length > 0
+    const hasTransactionId =
+      typeof transaction.transaction_id === 'string' && transaction.transaction_id.trim().length > 0
+    return hasAmount && hasCurrency && hasStatus && hasType && hasCreated && hasTransactionId
+  }, [transaction])
+
   // Animation refs
   const headerAnim = useRef(new Animated.Value(0)).current
   const contentAnim = useRef(new Animated.Value(0)).current
@@ -538,7 +554,13 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
     </View>
   )
 
-  if (loading && !transaction) {
+  // Prevent a partially-populated cached snapshot from rendering a mostly-empty UI.
+  // If we don't have core fields yet, treat the view as loading until the detail query resolves.
+  const shouldShowSkeleton =
+    (loading && (!transaction || !hasCoreDetailFields)) ||
+    (detailQuery.isPending && !hasCoreDetailFields && !error)
+
+  if (shouldShowSkeleton) {
     return (
       <ScreenWrapper>
         <TransactionDetailsSkeleton />

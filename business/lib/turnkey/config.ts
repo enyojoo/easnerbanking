@@ -86,6 +86,32 @@ export function getTurnkeyBalanceCaip2(): string {
   return (process.env.TURNKEY_BALANCE_CAIP2?.trim() || "solana:mainnet").trim()
 }
 
+/**
+ * Enable Turnkey Gas Sponsorship on Solana sends.
+ *
+ * Requires Turnkey dashboard:
+ * - Gas Sponsorship enabled
+ * - (Recommended) Sponsor Solana Rent enabled for account-creation instructions
+ */
+export function isTurnkeySolSponsorshipEnabled(): boolean {
+  return process.env.TURNKEY_SOL_SPONSORSHIP_ENABLED !== "false"
+}
+
+/**
+ * CAIP-2 chain id passed to Turnkey `solSendTransaction` for sponsored Solana sends.
+ * Turnkey requires `caip2` when `sponsor: true`.
+ *
+ * Prefer `TURNKEY_SOLANA_CAIP2` when set; otherwise reuse `TURNKEY_BALANCE_CAIP2`
+ * so devnet/mainnet stays consistent across balances and broadcasts.
+ *
+ * Accepted values include aliases like `solana:mainnet` / `solana:devnet`.
+ * @see https://docs.turnkey.com/concepts/broadcasting#solana
+ */
+export function getTurnkeySolanaBroadcastCaip2(): string {
+  const explicit = (process.env.TURNKEY_SOLANA_CAIP2 || "").trim()
+  return (explicit || getTurnkeyBalanceCaip2()).trim()
+}
+
 /** When `false`, skip server-side `createSubOrganization` (e.g. bootstrap auto-provision). */
 export function isTurnkeyServerSubOrgCreationEnabled(): boolean {
   return process.env.TURNKEY_SERVER_SUB_ORG_CREATION_ENABLED !== "false"

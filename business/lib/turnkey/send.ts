@@ -1,5 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { getTurnkeyApiClientForSubOrganization } from "@/lib/turnkey/client"
+import {
+  getTurnkeySolanaBroadcastCaip2,
+  isTurnkeySolSponsorshipEnabled,
+} from "@/lib/turnkey/config"
 import { resolveWalletOwnerIdForEasnerContext } from "@/lib/wallet/resolve-wallet-owner"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
@@ -16,6 +20,23 @@ type TurnkeyClientLike = Record<string, (...args: any[]) => Promise<any>>
 
 function mapAssetToCurrency(asset: "USDC" | "EURC"): "USD" | "EUR" {
   return asset === "EURC" ? "EUR" : "USD"
+}
+
+function mapTurnkeySponsoredSendError(message: string): string | null {
+  const m = String(message || "").toLowerCase()
+  if (!m) return null
+
+  // Keep these intentionally broad; Turnkey error strings can change.
+  if (m.includes("gas sponsorship") && (m.includes("limit") || m.includes("exceed"))) {
+    return "gas_sponsorship_limit_exceeded"
+  }
+  if (m.includes("sponsor solana rent") || (m.includes("rent") && m.includes("sponsor"))) {
+    return "solana_rent_sponsorship_required"
+  }
+  if (m.includes("gas sponsorship") && (m.includes("not enabled") || m.includes("disabled"))) {
+    return "gas_sponsorship_not_enabled"
+  }
+  return null
 }
 
 async function resolveScopeOwner(admin: SupabaseClient, ctx: NoahAccountContext): Promise<{ userId: string; businessId: string | null }> {
@@ -103,14 +124,41 @@ export async function createTurnkeySend(
     throw new Error("Turnkey SDK does not expose solSendTransaction")
   }
 
-  const sendRes = await client.solSendTransaction({
-    organizationId: sender.subOrgId,
-    sourceAddress: sender.sourceAddress,
-    destinationAddress,
-    amount: input.amount.toString(),
-    tokenSymbol: input.asset,
-    token: input.asset,
-  })
+  const sponsor = isTurnkeySolSponsorshipEnabled()
+  const caip2 = sponsor ? getTurnkeySolanaBroadcastCaip2() : undefined
+
+  let sendRes: unknown
+  try {
+    console.info("turnkey_sol_send_transaction", {
+      sponsor,
+      caip2: caip2 ?? null,
+      asset: input.asset,
+      chain: input.chain,
+      subOrgId: sender.subOrgId,
+    })
+    sendRes = await client.solSendTransaction({
+      organizationId: sender.subOrgId,
+      sourceAddress: sender.sourceAddress,
+      destinationAddress,
+      amount: input.amount.toString(),
+      tokenSymbol: input.asset,
+      token: input.asset,
+      ...(sponsor ? { sponsor: true, caip2 } : {}),
+    })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error("turnkey_sol_send_transaction_failed", {
+      sponsor,
+      caip2: caip2 ?? null,
+      asset: input.asset,
+      chain: input.chain,
+      subOrgId: sender.subOrgId,
+      detail: msg.slice(0, 500),
+    })
+    const mapped = sponsor ? mapTurnkeySponsoredSendError(msg) : null
+    if (mapped) throw new Error(mapped)
+    throw e
+  }
   const parsed = parseTurnkeySendIds((sendRes || {}) as Record<string, unknown>)
 
   await upsertLedgerTransaction(admin, {
@@ -125,7 +173,12 @@ export async function createTurnkeySend(
     currency: mapAssetToCurrency(input.asset),
     direction: "out",
     payload: (sendRes || {}) as Record<string, unknown>,
-    metadata: { source: "turnkey_send", turnkey_sub_org_id: sender.subOrgId },
+    metadata: {
+      source: "turnkey_send",
+      turnkey_sub_org_id: sender.subOrgId,
+      turnkey_sponsor_requested: sponsor ? "true" : "false",
+      turnkey_solana_caip2: caip2 ?? null,
+    },
     txHash: parsed.txHash,
     walletAddress: sender.sourceAddress,
     counterpartyAddress: destinationAddress,

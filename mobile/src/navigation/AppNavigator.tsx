@@ -13,6 +13,7 @@ import {
   isPinSetup,
   dismissPinPrompt,
   markSessionInteraction,
+  evaluateIdleLock,
 } from '../lib/pinAuth'
 import { emitAppLocked, registerAppLockListener } from '../lib/app-lock-bus'
 import { useBusinessNoahSync } from '../hooks/useBusinessNoahSync'
@@ -800,12 +801,16 @@ export default function AppNavigator() {
   useEffect(() => {
     if (!user?.id || pinGate !== 'main') return
     const id = setInterval(async () => {
-      const r = await evaluateIdleLock(user.id)
-      if (r === 'signed_out') {
-        await signOut()
-        return
+      try {
+        const r = await evaluateIdleLock(user.id)
+        if (r === 'signed_out') {
+          await signOut()
+          return
+        }
+        if (r === 'locked') emitAppLocked('locked')
+      } catch (e) {
+        console.warn('evaluateIdleLock interval failed:', e)
       }
-      if (r === 'locked') emitAppLocked('locked')
     }, 30000)
     return () => clearInterval(id)
   }, [user?.id, pinGate, signOut])
@@ -814,12 +819,16 @@ export default function AppNavigator() {
     if (!user?.id || pinGate !== 'main') return
     const handleAppStateChange = async (nextAppState: AppStateStatus) => {
       if (nextAppState !== 'active') return
-      const r = await evaluateIdleLock(user.id)
-      if (r === 'signed_out') {
-        await signOut()
-        return
+      try {
+        const r = await evaluateIdleLock(user.id)
+        if (r === 'signed_out') {
+          await signOut()
+          return
+        }
+        if (r === 'locked') emitAppLocked('locked')
+      } catch (e) {
+        console.warn('evaluateIdleLock on active failed:', e)
       }
-      if (r === 'locked') emitAppLocked('locked')
     }
     const subscription = AppState.addEventListener('change', handleAppStateChange)
     return () => subscription.remove()

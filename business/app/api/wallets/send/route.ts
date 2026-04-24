@@ -51,7 +51,24 @@ export async function POST(request: Request) {
       status: created.status,
     })
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "send_failed"
-    return NextResponse.json({ ok: false, error: msg }, { status: 400 })
+    const correlationId = crypto.randomUUID()
+    const raw = e instanceof Error ? e.message : String(e)
+    const publicError =
+      raw === "gas_sponsorship_limit_exceeded"
+        ? "gas_sponsorship_limit_exceeded"
+        : raw === "solana_rent_sponsorship_required"
+          ? "solana_rent_sponsorship_required"
+          : raw === "gas_sponsorship_not_enabled"
+            ? "gas_sponsorship_not_enabled"
+            : "send_failed"
+
+    console.error("wallet_send_failed", {
+      correlationId,
+      provider: "turnkey",
+      publicError,
+      detail: raw.slice(0, 500),
+    })
+
+    return NextResponse.json({ ok: false, error: publicError, correlation_id: correlationId }, { status: 400 })
   }
 }

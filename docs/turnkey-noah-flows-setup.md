@@ -41,12 +41,18 @@ Webhook verification and behaviour: see `business/lib/noah/webhook-verify.ts` an
 | `TURNKEY_API_KEY_CURVE` | Optional — default `API_KEY_CURVE_P256`; use `API_KEY_CURVE_SECP256K1` if your dashboard key used secp256k1 |
 | `TURNKEY_API_BASE_URL` | Optional — default `https://api.turnkey.com` |
 | `TURNKEY_BALANCE_CAIP2` | Optional — default `solana:mainnet` for `getWalletAddressBalances` |
+| `TURNKEY_SOL_SPONSORSHIP_ENABLED` | Optional — default on; set to `false` to disable passing `sponsor: true` on Solana sends |
+| `TURNKEY_SOLANA_CAIP2` | Optional — CAIP-2 for sponsored Solana broadcast; if unset, Easner reuses `TURNKEY_BALANCE_CAIP2` |
 | `TURNKEY_ONCHAIN_BALANCE_QUERY` | Set to `false` only if you want to disable balance queries (UI shows zero) |
 | `TURNKEY_WALLET_AUTOPROVISION_ENABLED` | Default on; set to `false` to disable provisioning worker processing |
 | `TURNKEY_WEBHOOK_SECRET` | For HMAC verification on `POST /api/webhooks/turnkey` |
 | `TURNKEY_FALLBACK_SUB_ORGAN_ID` | Dev-only convenience — see `business/lib/turnkey/config.ts` |
 
 Turnkey documents **Get balances** / `get_wallet_address_balances` as **beta** — ensure your org is enabled before relying on `/api/wallets/on-chain-balances`.
+
+Gas Sponsorship notes:
+- Gas Sponsorship + **Sponsor Solana Rent** must be enabled in the Turnkey dashboard for fully gasless Solana sends (fees + rent for account creation).
+- When sponsorship is enabled, Easner sends `sponsor: true` and `caip2` on `solSendTransaction` (see Turnkey broadcasting docs).
 
 ### Internal workers
 
