@@ -12,7 +12,7 @@ import type { Invoice } from "@/lib/b2b/types"
  *
  * Replaces the hand-rolled `InvoicesProvider` (which keyed a per-user
  * `localStorage` cache via `useCachedData` + `CACHE_KEYS.B2B_INVOICES`).
- * Staleness is 60s; most invoice mutations update the cache directly
+ * Staleness is 60m; most invoice mutations update the cache directly
  * via `setQueryData` so we don't refetch the full list on create/edit.
  */
 export function useInvoicesList(filters: QueryFilters = {}) {
@@ -22,8 +22,8 @@ export function useInvoicesList(filters: QueryFilters = {}) {
     enabled: Boolean(scope),
     queryFn: () =>
       apiFetch<{ invoices: Invoice[] }>("/api/business/b2b/invoices", { query: filters }),
-    staleTime: 60_000,
-    gcTime: 30 * 60_000,
+    staleTime: 60 * 60_000,
+    gcTime: 60 * 60_000,
     select: (d) => d.invoices ?? [],
     meta: { safePersist: true, webPersist: "reduced", freshness: "operational" },
   })
@@ -46,8 +46,8 @@ export function useInvoiceDetail(invoiceId: string | null) {
       : ["invoices", "detail", "disabled"],
     enabled: Boolean(scope) && Boolean(invoiceId),
     queryFn: () => apiFetch<Invoice>(`/api/business/b2b/invoices/${invoiceId}`),
-    staleTime: 60_000,
-    gcTime: 30 * 60_000,
+    staleTime: 60 * 60_000,
+    gcTime: 60 * 60_000,
     placeholderData: listPlaceholder,
     meta: { safePersist: true, webPersist: "none", freshness: "operational" },
   })
