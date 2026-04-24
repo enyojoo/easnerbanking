@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import {
   View,
   Text,
@@ -22,6 +22,7 @@ import { authScreenStyles } from '../../theme/authScreen'
 import { TextField } from '../../components/ui'
 import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
 import { PinKeypad } from '../../components/pin'
+import { useOtpClipboardAutofill } from '../../hooks/useOtpClipboardAutofill'
 
 export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
   const [step, setStep] = useState<'email' | 'otp'>('email')
@@ -99,33 +100,25 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
   const otpDigits = otpCode.replace(/\D/g, '').slice(0, 6)
   const otpActiveIndex = Math.min(otpDigits.length, 5)
 
-  const handleOtpDigit = (d: string) => {
-    if (loading) return
-    if (otpDigits.length >= 6) return
-    const next = `${otpDigits}${d}`.slice(0, 6)
-    setOtpCode(next)
-    if (next.length === 6) {
-      setTimeout(() => {
-        void handleOtpSubmit(next)
-      }, 80)
-    }
-  }
-
   const handleOtpBackspace = () => {
     if (loading) return
     if (otpDigits.length === 0) return
+    if (error) setError('')
+    if (message) setMessage('')
     setOtpCode(otpDigits.slice(0, -1))
   }
 
   const handleOtpSubmit = async (overrideCode?: string) => {
     const code = (overrideCode ?? otpDigits).replace(/\D/g, '').slice(0, 6)
     if (code.length !== 6) {
+      setMessage('')
       setError('Please enter all 6 digits')
       return
     }
 
     setLoading(true)
     setError('')
+    setMessage('')
 
     try {
       const apiUrl = getApiBaseUrl()
@@ -169,11 +162,39 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
     }
   }
 
+  const applyOtpCode = useCallback(
+    (nextValue: string) => {
+      const digits = nextValue.replace(/\D/g, '').slice(0, 6)
+      setOtpCode(digits)
+      if (error) setError('')
+      if (message) setMessage('')
+      if (digits.length === 6) {
+        setTimeout(() => {
+          void handleOtpSubmit(digits)
+        }, 80)
+      }
+    },
+    [error, handleOtpSubmit, message],
+  )
+
+  useOtpClipboardAutofill({
+    enabled: step === 'otp' && !loading,
+    value: otpCode,
+    onAutofill: applyOtpCode,
+  })
+
+  const handleOtpDigit = (d: string) => {
+    if (loading) return
+    if (otpDigits.length >= 6) return
+    applyOtpCode(`${otpDigits}${d}`)
+  }
+
   const handleResendOtp = async () => {
     if (resendCooldown > 0) return
 
     setLoading(true)
     setError('')
+    setMessage('')
 
     try {
       const apiUrl = getApiBaseUrl()
@@ -249,14 +270,6 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
             {step === 'email' ? 'Forgot password?' : 'Enter verification code'}
           </Text>
 
-          {/* Error is shown in a fixed slot under the OTP boxes (PIN-style). */}
-
-          {message ? (
-            <View style={styles.messageContainer}>
-              <Text style={styles.messageText}>{message}</Text>
-            </View>
-          ) : null}
-
           <View style={styles.form}>
             {step === 'email' ? (
               <>
@@ -315,6 +328,8 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
                   <View style={styles.otpHintSlot} accessibilityLiveRegion="polite">
                     {error ? (
                       <Text style={styles.otpErrorText}>{error}</Text>
+                    ) : message ? (
+                      <Text style={styles.otpNoticeText}>{message}</Text>
                     ) : (
                       <Text style={styles.otpHintPlaceholder}>{' '}</Text>
                     )}
@@ -414,22 +429,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '600',
   },
-  otpHintPlaceholder: {
-    fontSize: 1,
-    color: 'transparent',
-  },
-  messageContainer: {
-    marginBottom: spacing[4],
-    padding: spacing[3],
-    backgroundColor: colors.success.background,
-    borderRadius: borderRadius.xl,
-    borderWidth: 1,
-    borderColor: colors.success.light,
-  },
-  messageText: {
+  otpNoticeText: {
     ...textStyles.bodySmall,
     color: colors.success.main,
     textAlign: 'center',
+    fontWeight: '600',
+  },
+  otpHintPlaceholder: {
+    fontSize: 1,
+    color: 'transparent',
   },
   form: {
     width: '100%',

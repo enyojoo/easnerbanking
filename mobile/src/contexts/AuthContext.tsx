@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react'
 import * as Linking from 'expo-linking'
+import { makeRedirectUri } from 'expo-auth-session'
 import * as WebBrowser from 'expo-web-browser'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase, clearInvalidPersistedAuthSession } from '../lib/supabase'
@@ -25,7 +26,7 @@ import { clearMfaVerified } from '../lib/mfaStatusCache'
 import { warmAvatarCache } from '../lib/avatarCache'
 import Constants from 'expo-constants'
 
-// Completes the auth session on iOS when returning from SFSafariViewController.
+// Completes the auth session on web popup flows. Native deep links are handled below.
 WebBrowser.maybeCompleteAuthSession()
 
 function isProbablySupabaseSiteUrlFallbackRedirect(redirectTo: string | null | undefined): boolean {
@@ -184,6 +185,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const mfaGateSyncRef = useRef<Promise<'none' | 'pending' | 'missing_factor'> | null>(null)
   /** Avoid repeated payout-corridor hydration (and dev Metro re-bundling) on every profile refetch. */
   const payoutCorridorsBootstrappedForUserRef = useRef<string | null>(null)
+  const oauthConsumeInFlightRef = useRef(false)
 
   useEffect(() => {
     userProfileRef.current = userProfile
@@ -479,40 +481,40 @@ export function AuthProvider({ children }: AuthProviderProps) {
     [],
   )
 
-  useEffect(() => {
-    let mounted = true
-    let oauthConsumeInFlight = false
-
-    const consumeOAuthCallbackIfPresent = async (url: string) => {
-      if (oauthConsumeInFlight) return
-      const { code, accessToken, refreshToken, error, errorDescription } = parseAuthCallbackUrl(url)
-      if (error) {
-        console.warn('AuthContext: OAuth error:', error, errorDescription ?? '')
+  const consumeOAuthCallbackIfPresent = useCallback(async (url: string) => {
+    if (oauthConsumeInFlightRef.current) return
+    const { code, accessToken, refreshToken, error, errorDescription } = parseAuthCallbackUrl(url)
+    if (error) {
+      console.warn('AuthContext: OAuth error:', error, errorDescription ?? '')
+      return
+    }
+    if (!code && !accessToken) return
+    void WebBrowser.dismissBrowser().catch(() => undefined)
+    oauthConsumeInFlightRef.current = true
+    try {
+      if (code) {
+        const { error: exErr } = await supabase.auth.exchangeCodeForSession(code)
+        if (exErr) {
+          console.warn('AuthContext: exchangeCodeForSession failed:', exErr.message)
+        }
         return
       }
-      if (!code && !accessToken) return
-      oauthConsumeInFlight = true
-      try {
-        if (code) {
-          const { error: exErr } = await supabase.auth.exchangeCodeForSession(code)
-          if (exErr) {
-            console.warn('AuthContext: exchangeCodeForSession failed:', exErr.message)
-          }
-          return
+      if (accessToken) {
+        const { error: sErr } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken ?? '',
+        })
+        if (sErr) {
+          console.warn('AuthContext: setSession (OAuth fragment) failed:', sErr.message)
         }
-        if (accessToken) {
-          const { error: sErr } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken ?? '',
-          })
-          if (sErr) {
-            console.warn('AuthContext: setSession (OAuth fragment) failed:', sErr.message)
-          }
-        }
-      } finally {
-        oauthConsumeInFlight = false
       }
+    } finally {
+      oauthConsumeInFlightRef.current = false
     }
+  }, [])
+
+  useEffect(() => {
+    let mounted = true
 
     const linkSub = Linking.addEventListener('url', (event) => {
       void consumeOAuthCallbackIfPresent(event.url)
@@ -533,38 +535,33 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         if (mounted && session?.user) {
           hadSessionUser = true
-          /** Resolve MFA gate before `setUser` so navigation order is always Login → MFA → PIN → app. */
-          await syncMfaGateFromSession()
-          const {
-            data: { session: afterGate },
-          } = await supabase.auth.getSession()
-          if (!mounted || !afterGate?.user) return
-
-          const { first_name, last_name } = mapNameFromMetadata(afterGate.user.user_metadata)
+          const { first_name, last_name } = mapNameFromMetadata(session.user.user_metadata)
           const mappedUser: User = {
-            id: afterGate.user.id,
-            email: afterGate.user.email || '',
+            id: session.user.id,
+            email: session.user.email || '',
             full_name: [first_name, last_name].filter(Boolean).join(' ') || null,
             first_name,
             last_name,
-            phone: afterGate.user.phone ?? undefined,
+            phone: session.user.phone ?? undefined,
             status: 'active',
             base_currency: 'USD',
             enabled_extra_account_currencies: [],
-            created_at: afterGate.user.created_at,
-            updated_at: afterGate.user.updated_at || afterGate.user.created_at,
+            created_at: session.user.created_at,
+            updated_at: session.user.updated_at || session.user.created_at,
           }
           setUser(mappedUser)
           /** Do not await — blocks AppNavigator (PIN gate) on AsyncStorage; hydrate when ready. */
-          void readProfileSnapshot(afterGate.user.id).then((snap) => {
-            if (!mounted || !snap || snap.id !== afterGate.user.id) return
+          void readProfileSnapshot(session.user.id).then((snap) => {
+            if (!mounted || !snap || snap.id !== session.user.id) return
             setUser(snap.profile)
             setUserProfile(snap)
             warmAvatarCache(snap.profile.avatar_url)
           })
-          fetchUserProfile(afterGate.user.id, mappedUser, { force: true }).catch(error => {
+          fetchUserProfile(session.user.id, mappedUser, { force: true }).catch(error => {
             console.error('Initial profile fetch error:', error)
           })
+          /** Keep MFA sync out of the critical path so OAuth/session restore can leave Auth immediately. */
+          void syncMfaGateFromSession()
         }
       } catch (error) {
         console.error('Error getting initial session:', error)
@@ -609,39 +606,34 @@ export function AuthProvider({ children }: AuthProviderProps) {
       try {
         if (session?.user) {
           if (__DEV__) {
-            console.log('AuthContext: User session found, resolving MFA gate then profile')
+            console.log('AuthContext: User session found, hydrating user then syncing MFA gate')
           }
-          await syncMfaGateFromSession()
-          const {
-            data: { session: afterGate },
-          } = await supabase.auth.getSession()
-          if (!mounted || !afterGate?.user) return
-
-          const { first_name, last_name } = mapNameFromMetadata(afterGate.user.user_metadata)
+          const { first_name, last_name } = mapNameFromMetadata(session.user.user_metadata)
           const mappedUser: User = {
-            id: afterGate.user.id,
-            email: afterGate.user.email || '',
+            id: session.user.id,
+            email: session.user.email || '',
             full_name: [first_name, last_name].filter(Boolean).join(' ') || null,
             first_name,
             last_name,
-            phone: afterGate.user.phone ?? undefined,
+            phone: session.user.phone ?? undefined,
             status: 'active',
             base_currency: 'USD',
             enabled_extra_account_currencies: [],
-            created_at: afterGate.user.created_at,
-            updated_at: afterGate.user.updated_at || afterGate.user.created_at,
+            created_at: session.user.created_at,
+            updated_at: session.user.updated_at || session.user.created_at,
           }
           setUser(mappedUser)
           /** Do not await — same as cold start; login → PIN must not wait on snapshot I/O. */
-          void readProfileSnapshot(afterGate.user.id).then((snap) => {
-            if (!mounted || !snap || snap.id !== afterGate.user.id) return
+          void readProfileSnapshot(session.user.id).then((snap) => {
+            if (!mounted || !snap || snap.id !== session.user.id) return
             setUser(snap.profile)
             setUserProfile(snap)
             warmAvatarCache(snap.profile.avatar_url)
           })
+          void syncMfaGateFromSession()
           const profileForce =
             event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'PASSWORD_RECOVERY'
-          fetchUserProfile(afterGate.user.id, mappedUser, {
+          fetchUserProfile(session.user.id, mappedUser, {
             force: profileForce,
             sourceEvent: event,
           }).catch((error) => {
@@ -673,7 +665,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       linkSub.remove()
       subscription.unsubscribe()
     }
-  }, [syncMfaGateFromSession])
+  }, [consumeOAuthCallbackIfPresent, syncMfaGateFromSession])
 
   useEffect(() => {
     if (user?.id) {
@@ -777,11 +769,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const signInWithGoogle = useCallback(async (): Promise<{ error: Error | null }> => {
     try {
-      const redirectTo = Linking.createURL('auth/callback')
+      const redirectTo = makeRedirectUri({ scheme: 'easner', path: 'auth/callback' })
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo,
+          skipBrowserRedirect: true,
           // Always show Google account chooser (don’t auto-reuse the last signed-in Google session on device).
           queryParams: { prompt: 'select_account' },
         },
@@ -798,15 +791,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         const supabaseProjectUrl =
           (Constants.expoConfig?.extra as { supabaseUrl?: string } | undefined)?.supabaseUrl || ''
-
-        // If this URL does not EXACTLY match a Supabase "Redirect URL" allow-list entry, Supabase
-        // will fall back to the project's "Site URL" (often a Vercel business preview), and the
-        // in-app browser will appear to open the business website instead of `easner://...`.
-        console.warn('[google-oauth] supabase project:', supabaseProjectUrl)
-        console.warn('[google-oauth] expected app redirectTo (must be allow-listed in THIS Supabase project):', redirectTo)
-        if (redirectToInAuthUrl) {
-          console.warn('[google-oauth] redirect_to embedded in auth URL (decoded):', redirectToInAuthUrl)
-        }
 
         if (isProbablySupabaseSiteUrlFallbackRedirect(redirectToInAuthUrl)) {
           return {
@@ -829,21 +813,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       analytics.trackSignIn('google')
 
-      /**
-       * Match the same native in-app browser configuration as `useExternalLink` (Terms, Legal, etc).
-       *
-       * OAuth completion is handled by the `Linking` listener (`consumeOAuthCallbackIfPresent`) which
-       * exchanges the `code` for a session, then we wait briefly for the session to hydrate.
-       */
       await WebBrowser.openBrowserAsync(authUrl, {
         controlsColor: '#0F1110',
         enableBarCollapsing: true,
         showTitle: true,
       })
 
+      let session = await getSessionReliable()
+
       // User may return via deep link while the in-app browser is still animating closed; give GoTrue
       // a short window to persist + hydrate the session from SecureStore/AsyncStorage.
-      let session = await getSessionReliable()
       if (!session?.access_token) {
         const started = Date.now()
         while (Date.now() - started < 20_000) {
@@ -893,7 +872,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } catch (e) {
       return { error: e instanceof Error ? e : new Error('Unable to continue with Google.') }
     }
-  }, [])
+  }, [consumeOAuthCallbackIfPresent])
 
   const resendSignupOtp = useCallback(async (email: string): Promise<{ error: Error | null }> => {
     try {
@@ -1032,6 +1011,3 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
-
-
-

@@ -6,7 +6,6 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  Clipboard,
   Image,
   ActivityIndicator,
   Animated,
@@ -14,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
+import * as Clipboard from 'expo-clipboard'
 import * as DocumentPicker from 'expo-document-picker'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '../../contexts/AuthContext'
@@ -79,7 +79,7 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
 
   const handleCopy = async (text: string, key: string) => {
     try {
-      await Clipboard.setString(text)
+      await Clipboard.setStringAsync(text)
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       setCopiedStates(prev => ({ ...prev, [key]: true }))
       setTimeout(() => {

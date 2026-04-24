@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native'
+import Constants from 'expo-constants'
 import { StatusBar } from 'expo-status-bar'
 import { View, Text, StyleSheet, Animated, Platform } from 'react-native'
 import * as BackgroundTask from 'expo-background-task'
@@ -241,7 +242,12 @@ export default function App() {
         const status = await BackgroundTask.getStatusAsync()
         if (cancelled) return
         if (status === BackgroundTask.BackgroundTaskStatus.Restricted) {
-          console.warn('Background tasks unavailable (Restricted)')
+          const env = Constants.executionEnvironment
+          const why =
+            env === 'storeClient'
+              ? 'Background tasks unavailable in Expo Go; test on a dev or release build.'
+              : 'Background tasks unavailable (Restricted by current OS/device settings).'
+          console.info(why)
           return
         }
         const alreadyRegistered = await TaskManager.isTaskRegisteredAsync(

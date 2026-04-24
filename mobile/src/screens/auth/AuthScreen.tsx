@@ -28,6 +28,7 @@ import { authScreenStyles } from '../../theme/authScreen'
 import { AUTH_INITIAL_MODE_KEY, TERMS_URL } from '../../constants/auth'
 import { PinKeypad } from '../../components/pin'
 import { ActivityIndicator } from 'react-native'
+import { useOtpClipboardAutofill } from '../../hooks/useOtpClipboardAutofill'
 
 /**
  * Layout mirrors business auth pages:
@@ -55,6 +56,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
   const [signupStep, setSignupStep] = useState<SignupStep>('form')
   const [signupOtp, setSignupOtp] = useState('')
   const [signupOtpError, setSignupOtpError] = useState('')
+  const [signupOtpNotice, setSignupOtpNotice] = useState('')
   const [signupResendCooldown, setSignupResendCooldown] = useState(0)
 
   const mode = modeStack[modeStack.length - 1]!
@@ -95,6 +97,8 @@ export default function AuthScreen({ navigation }: NavigationProps) {
     setSignupStep('form')
     setSignupOtp('')
     setSignupOtpError('')
+    setSignupOtpNotice('')
+    setSignupResendCooldown(0)
   }
 
   const handleBack = useCallback(async () => {
@@ -107,6 +111,8 @@ export default function AuthScreen({ navigation }: NavigationProps) {
       setSignupStep('form')
       setSignupOtp('')
       setSignupOtpError('')
+      setSignupOtpNotice('')
+      setSignupResendCooldown(0)
       setModeStack((prev) => prev.slice(0, -1))
       return
     }
@@ -172,6 +178,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
       const otpToVerify = (opts?.otp ?? signupOtp).replace(/\D/g, '').slice(0, 6)
       setIsLoading(true)
       setSignupOtpError('')
+      setSignupOtpNotice('')
       try {
         const { error } = await verifySignupOtp(email, otpToVerify)
         if (error) {
@@ -210,6 +217,8 @@ export default function AuthScreen({ navigation }: NavigationProps) {
         } else if (needsEmailConfirmation) {
           setSignupStep('otp')
           setSignupOtp('')
+          setSignupOtpNotice('')
+          setSignupResendCooldown(60)
           // No modal: OTP screen copy + keypad flow is the guidance.
         } else {
           Alert.alert(
@@ -244,23 +253,38 @@ export default function AuthScreen({ navigation }: NavigationProps) {
   const signupOtpDigits = signupOtp.replace(/\D/g, '').slice(0, 6)
   const otpActiveIndex = Math.min(signupOtpDigits.length, 5)
 
+  const applySignupOtp = useCallback(
+    (nextValue: string) => {
+      const digits = nextValue.replace(/\D/g, '').slice(0, 6)
+      setSignupOtp(digits)
+      if (signupOtpError) setSignupOtpError('')
+      if (signupOtpNotice) setSignupOtpNotice('')
+      if (digits.length === 6) {
+        setTimeout(() => {
+          void handleSubmit({ otp: digits })
+        }, 80)
+      }
+    },
+    [handleSubmit, signupOtpError, signupOtpNotice],
+  )
+
+  useOtpClipboardAutofill({
+    enabled: isSignupOtp && !isLoading,
+    value: signupOtp,
+    onAutofill: applySignupOtp,
+  })
+
   const handleOtpDigit = (d: string) => {
     if (isLoading) return
     if (signupOtpDigits.length >= 6) return
-    const next = `${signupOtpDigits}${d}`.slice(0, 6)
-    setSignupOtp(next)
-    if (signupOtpError) setSignupOtpError('')
-    if (next.length === 6) {
-      setTimeout(() => {
-        void handleSubmit({ otp: next })
-      }, 80)
-    }
+    applySignupOtp(`${signupOtpDigits}${d}`)
   }
 
   const handleOtpBackspace = () => {
     if (isLoading) return
     if (signupOtpDigits.length === 0) return
     if (signupOtpError) setSignupOtpError('')
+    if (signupOtpNotice) setSignupOtpNotice('')
     setSignupOtp(signupOtpDigits.slice(0, -1))
   }
 
@@ -430,6 +454,8 @@ export default function AuthScreen({ navigation }: NavigationProps) {
                 <View style={styles.otpHintSlot} accessibilityLiveRegion="polite">
                   {signupOtpError ? (
                     <Text style={styles.otpErrorText}>{signupOtpError}</Text>
+                  ) : signupOtpNotice ? (
+                    <Text style={styles.otpNoticeText}>{signupOtpNotice}</Text>
                   ) : (
                     <Text style={styles.otpHintPlaceholder}>{' '}</Text>
                   )}
@@ -439,11 +465,14 @@ export default function AuthScreen({ navigation }: NavigationProps) {
                   onPress={async () => {
                     if (signupResendCooldown > 0 || isLoading) return
                     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                    setSignupOtpError('')
+                    setSignupOtpNotice('')
                     const { error } = await resendSignupOtp(email)
                     if (error) {
                       setSignupOtpError(error.message || 'Unable to resend code.')
                       return
                     }
+                    setSignupOtpNotice('New code sent to your email address.')
                     setSignupResendCooldown(60)
                   }}
                   disabled={signupResendCooldown > 0 || isLoading}
@@ -624,6 +653,12 @@ const styles = StyleSheet.create({
   otpErrorText: {
     ...authScreenStyles.forgotPasswordText,
     color: colors.error.dark,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  otpNoticeText: {
+    ...authScreenStyles.forgotPasswordText,
+    color: colors.success.dark,
     textAlign: 'center',
     fontWeight: '600',
   },

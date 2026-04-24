@@ -9,12 +9,12 @@ import {
   ActivityIndicator,
   RefreshControl,
   Linking,
-  Clipboard,
   Animated,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
+import * as Clipboard from 'expo-clipboard'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCurrenciesCatalog, usePaymentMethodsList } from '../../hooks/queries'
 import { NavigationProps } from '../../types'
@@ -247,7 +247,7 @@ export default function LegacyTransactionDetailsScreen({ navigation, route }: Na
 
   const handleCopy = async (text: string, key: string) => {
     try {
-      await Clipboard.setString(text)
+      await Clipboard.setStringAsync(text)
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       setCopiedStates(prev => ({ ...prev, [key]: true }))
       setTimeout(() => {

@@ -6,7 +6,6 @@ import {
   ScrollView,
   Pressable,
   Platform,
-  Clipboard,
   RefreshControl,
   Alert,
   Animated,
@@ -15,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
+import * as Clipboard from 'expo-clipboard'
 import { useQueryClient } from '@tanstack/react-query'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { ShimmerLoader } from '../../components/premium'
@@ -233,7 +233,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
   const handleCopy = async (text: string, key: string) => {
     try {
-      await Clipboard.setString(text)
+      await Clipboard.setStringAsync(text)
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       setCopiedStates(prev => ({ ...prev, [key]: true }))
       setTimeout(() => {

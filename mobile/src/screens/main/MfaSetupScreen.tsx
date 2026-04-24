@@ -9,7 +9,6 @@ import {
   Image,
   Alert,
   ActivityIndicator,
-  Clipboard,
   Animated,
   Platform,
 } from 'react-native'
@@ -17,6 +16,7 @@ import QRCode from 'react-native-qrcode-svg'
 import { SvgXml } from 'react-native-svg'
 import { useFocusEffect, useRoute } from '@react-navigation/native'
 import * as Haptics from 'expo-haptics'
+import * as Clipboard from 'expo-clipboard'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -443,7 +443,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
 
   const copySecret = async () => {
     if (!secret) return
-    await Clipboard.setString(secret)
+    await Clipboard.setStringAsync(secret)
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
     setSecretJustCopied(true)
     if (secretCopiedTimerRef.current) clearTimeout(secretCopiedTimerRef.current)

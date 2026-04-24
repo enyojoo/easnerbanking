@@ -6,7 +6,6 @@ import {
   StyleSheet,
   ScrollView,
   Pressable, Platform,
-  Clipboard,
   Alert,
   Image,
   Share,
@@ -14,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
+import * as Clipboard from 'expo-clipboard'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -782,7 +782,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
 
   const handleCopy = async (text: string, key: string) => {
     try {
-      await Clipboard.setString(text)
+      await Clipboard.setStringAsync(text)
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       setCopiedStates(prev => ({ ...prev, [key]: true }))
       setTimeout(() => {
