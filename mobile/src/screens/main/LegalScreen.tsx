@@ -1,12 +1,12 @@
 import React from 'react'
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native'
-import { ArrowLeft, ChevronRight, FileText, Newspaper } from 'lucide-react-native'
+import { ArrowLeft, ChevronRight } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import ExternalLinkModal from '../../components/ExternalLinkModal'
 import { useExternalLink } from '../../hooks/useExternalLink'
 import { NavigationProps } from '../../types'
-import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, spacing, borderRadius, fontFamily } from '../../theme'
+import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, spacing, fontFamily } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 
 export default function LegalScreen({ navigation }: NavigationProps) {
@@ -41,14 +41,9 @@ export default function LegalScreen({ navigation }: NavigationProps) {
                   privacyLink.openLink('https://www.easner.com/privacy', 'Privacy Policy')
                 }}
               >
-                <View style={styles.rowLeft}>
-                  <View style={styles.iconWrap}>
-                    <FileText size={18} color={colors.text.secondary} strokeWidth={2} />
-                  </View>
-                  <View>
-                    <Text style={styles.rowTitle}>Privacy Policy</Text>
-                    <Text style={styles.rowSubtitle}>How we collect, use, and protect your data</Text>
-                  </View>
+                <View style={styles.rowTextBlock}>
+                  <Text style={styles.rowTitle}>Privacy Policy</Text>
+                  <Text style={styles.rowSubtitle}>How we collect, use, and protect your data</Text>
                 </View>
                 <ChevronRight size={20} color={colors.neutral[400]} strokeWidth={2} />
               </Pressable>
@@ -61,14 +56,9 @@ export default function LegalScreen({ navigation }: NavigationProps) {
                   termsLink.openLink('https://www.easner.com/terms', 'Terms of Service')
                 }}
               >
-                <View style={styles.rowLeft}>
-                  <View style={styles.iconWrap}>
-                    <Newspaper size={18} color={colors.text.secondary} strokeWidth={2} />
-                  </View>
-                  <View>
-                    <Text style={styles.rowTitle}>Terms of Service</Text>
-                    <Text style={styles.rowSubtitle}>Your rights and responsibilities using Easner</Text>
-                  </View>
+                <View style={styles.rowTextBlock}>
+                  <Text style={styles.rowTitle}>Terms of Service</Text>
+                  <Text style={styles.rowSubtitle}>Your rights and responsibilities using Easner</Text>
                 </View>
                 <ChevronRight size={20} color={colors.neutral[400]} strokeWidth={2} />
               </Pressable>
@@ -139,22 +129,10 @@ const styles = StyleSheet.create({
   rowLast: {
     borderBottomWidth: 0,
   },
-  rowLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[3],
+  rowTextBlock: {
     flex: 1,
     minWidth: 0,
-  },
-  iconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: borderRadius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.background.primary,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
+    paddingRight: spacing[2],
   },
   rowTitle: {
     ...textStyles.bodyMedium,
