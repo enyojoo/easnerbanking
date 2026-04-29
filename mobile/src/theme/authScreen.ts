@@ -10,11 +10,23 @@ import { colors, textStyles, borderRadius, spacing } from './index'
 export const AUTH_FIELD_MIN_HEIGHT = 52
 
 export const authScreenStyles = StyleSheet.create({
+/** Hero title for sign-in / sign-up entry only (`LoginScreen`, `RegisterScreen`, `AuthScreen` form + login). */
   screenTitle: {
     ...textStyles.displaySmall,
     color: colors.text.primary,
     textAlign: 'center',
     marginBottom: spacing[5],
+    ...Platform.select({
+      android: { includeFontPadding: false },
+      default: {},
+    }),
+  },
+  /** Secondary auth steps (OTP, forgot password, reset, verify email). */
+  screenTitleCompact: {
+    ...textStyles.headlineMedium,
+    color: colors.text.primary,
+    textAlign: 'center',
+    marginBottom: spacing[4],
     ...Platform.select({
       android: { includeFontPadding: false },
       default: {},

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import { View, Text, StyleSheet, Pressable, Platform, ActivityIndicator, FlatList } from 'react-native'
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList } from 'react-native'
 import { ArrowLeft } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -67,13 +67,22 @@ export default function OpenCurrencyAccountScreen({ navigation }: NavigationProp
     <ScreenWrapper>
       <View style={styles.container}>
         <View style={styles.header}>
-          <Pressable android_ripple={ripple.neutral} onPress={() => navigation.goBack()} style={styles.backButton}>
-            <ArrowLeft size={22} color={colors.primary.main} strokeWidth={2} />
+          <Pressable
+            android_ripple={ripple.neutral}
+            onPress={() => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+              navigation.goBack()
+            }}
+            style={styles.backButton}
+          >
+            <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
           </Pressable>
-          <Text style={styles.title}>Open Currency Account</Text>
+          <View style={styles.headerContent}>
+            <Text style={styles.title}>Open Currency Account</Text>
+          </View>
         </View>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <Text style={[styles.error, styles.errorPad]}>{error}</Text> : null}
 
         {loading ? (
           <View style={styles.center}>
@@ -117,15 +126,26 @@ export default function OpenCurrencyAccountScreen({ navigation }: NavigationProp
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background.primary, padding: spacing[5] },
-  header: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing[4], gap: spacing[3] },
-  backButton: {
-    ...surfaceChromeCircleStyle(colors, 40),
+  container: { flex: 1, backgroundColor: colors.background.primary },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing[5],
+    paddingTop: spacing[4],
+    paddingBottom: spacing[4],
   },
-  title: { ...textStyles.headlineSmall, color: colors.text.primary, fontFamily: fontFamily.semibold },
-  error: { ...textStyles.bodySmall, color: colors.error.main, marginBottom: spacing[3] },
+  backButton: {
+    ...surfaceChromeCircleStyle(colors, 44),
+    marginRight: spacing[3],
+  },
+  headerContent: {
+    flex: 1,
+  },
+  title: { ...textStyles.headlineMedium, color: colors.text.primary },
+  error: { ...textStyles.bodySmall, color: colors.error.main },
+  errorPad: { paddingHorizontal: spacing[5], marginBottom: spacing[3] },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  list: { gap: spacing[3], paddingBottom: spacing[8] },
+  list: { gap: spacing[3], paddingBottom: spacing[8], paddingHorizontal: spacing[5] },
   item: {
     ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.lg }),
     padding: spacing[3],

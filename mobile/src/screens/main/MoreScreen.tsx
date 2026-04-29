@@ -19,7 +19,6 @@ import {
   LogOut,
   Shield,
   ShieldCheck,
-  User,
   Users,
 } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -87,7 +86,7 @@ function MoreContent({ navigation }: NavigationProps) {
   const { showError } = useToast()
   const palette = useThemeColors()
 
-  /** Main stack screens (ProfileEdit, Notifications, …) are siblings of `MainTabs`. Prefer parent `navigate` so taps work from the More tab. */
+  /** Main stack screens (Profile, Notifications, …) are siblings of `MainTabs`. Prefer parent `navigate` so taps work from the More tab. */
   const navigateFromMoreTab = useCallback(
     (routeName: string, params?: Record<string, unknown>) => {
       const parent = navigation.getParent?.()
@@ -391,11 +390,11 @@ function MoreContent({ navigation }: NavigationProps) {
                 android_ripple={ripple.neutral}
                 onPress={async () => {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                  navigation.navigate('ProfileEdit' as never)
+                  navigateFromMoreTab('Profile')
                 }}
                 style={styles.profileRow}
                 accessibilityRole="button"
-                accessibilityLabel="Edit your profile"
+                accessibilityLabel="Open your profile"
               >
                 <View style={styles.profileAvatar}>
                   {headerAvatarSource ? (
@@ -416,8 +415,8 @@ function MoreContent({ navigation }: NavigationProps) {
                     {email}
                   </Text>
                 </View>
-                <View style={styles.editPill}>
-                  <Text style={styles.editPillText}>Edit</Text>
+                <View style={styles.openPill}>
+                  <Text style={styles.openPillText}>Open</Text>
                 </View>
               </Pressable>
             </SectionCard>
@@ -457,15 +456,6 @@ function MoreContent({ navigation }: NavigationProps) {
             <View style={styles.sectionGroup}>
               <Text style={styles.sectionLabel}>ACCOUNT</Text>
               <SectionCard style={styles.sectionCard} flush>
-                {renderMenuItem(
-                  'Your Profile',
-                  'Name, email, and personal details',
-                  () => navigation.navigate('ProfileEdit' as never),
-                  User,
-                  undefined,
-                  false,
-                  false,
-                )}
                 <Pressable
                   android_ripple={ripple.neutral}
                   style={[styles.menuItem, styles.menuItemDivider]}
@@ -480,7 +470,7 @@ function MoreContent({ navigation }: NavigationProps) {
                     </View>
                     <View style={styles.menuItemTextWrap}>
                       <Text style={styles.menuItemText}>Account verification</Text>
-                      <Text style={styles.menuItemSubtitle}>Tier status and onboarding progress</Text>
+                      <Text style={styles.menuItemSubtitle}>Verify and check status</Text>
                     </View>
                   </View>
                   <View style={styles.menuItemRight}>
@@ -680,13 +670,13 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     marginTop: 2,
   },
-  editPill: {
+  openPill: {
     paddingHorizontal: spacing[3],
     paddingVertical: 6,
     borderRadius: borderRadius.full,
     backgroundColor: 'rgba(0, 122, 204, 0.10)',
   },
-  editPillText: {
+  openPillText: {
     ...textStyles.labelMedium,
     color: colors.primary.main,
     fontFamily: fontFamily.semibold,

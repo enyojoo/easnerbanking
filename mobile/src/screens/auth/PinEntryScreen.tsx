@@ -183,21 +183,19 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {/* Header - Help Icon */}
-        <View style={styles.header}>
-          <View style={styles.headerSpacer} />
-          <Pressable
-           android_ripple={ripple.neutral}
-            style={styles.headerButton}
-            onPress={handleForgotPin} >
-            <View style={styles.headerButtonCircle}>
-              <HelpCircle size={20} color={palette.text.primary} strokeWidth={2} />
-            </View>
-          </Pressable>
-        </View>
-
-        {/* Content */}
         <View style={styles.content}>
+          <View style={styles.helpRow}>
+            <Pressable
+              android_ripple={ripple.neutral}
+              style={styles.headerButton}
+              onPress={handleForgotPin}
+            >
+              <View style={styles.headerButtonCircle}>
+                <HelpCircle size={20} color={palette.text.primary} strokeWidth={2} />
+              </View>
+            </Pressable>
+          </View>
+
           <View style={styles.topBlock}>
             <View style={userAvatarStyles.pinEntryCircle}>
               {headerAvatarSource && !avatarLoadFailed ? (
@@ -322,16 +320,12 @@ const styles = StyleSheet.create({
   keyboardView: {
     flex: 1,
   },
-  header: {
+  helpRow: {
+    width: '100%',
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
-    paddingHorizontal: spacing[5],
-    paddingTop: spacing[2],
-    paddingBottom: spacing[1],
-  },
-  headerSpacer: {
-    flex: 1,
+    marginBottom: spacing[1],
   },
   headerButton: {
     padding: spacing[1],

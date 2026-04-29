@@ -313,16 +313,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[5],
     paddingTop: spacing[4],
     paddingBottom: spacing[4],
-    gap: spacing[3],
   },
   backButton: {
-    ...surfaceChromeCircleStyle(colors, 40),
+    ...surfaceChromeCircleStyle(colors, 44),
+    marginRight: spacing[3],
   },
   headerContent: {
     flex: 1,
   },
   title: {
-    ...textStyles.headlineLarge,
+    ...textStyles.headlineMedium,
     color: colors.text.primary,
     marginBottom: spacing[1],
   },

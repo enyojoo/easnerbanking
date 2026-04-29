@@ -157,7 +157,7 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
               </View>
             </Pressable>
           </View>
-            <Text style={authScreenStyles.screenTitle}>Validating reset link</Text>
+            <Text style={authScreenStyles.screenTitleCompact}>Validating reset link</Text>
             <Text style={authScreenStyles.subtitle}>
               Please wait while we validate your reset link…
             </Text>
@@ -201,7 +201,7 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
             </Pressable>
           </View>
 
-          <Text style={authScreenStyles.screenTitle}>Reset password</Text>
+          <Text style={authScreenStyles.screenTitleCompact}>Reset password</Text>
 
           <View style={styles.form}>
             <TextField

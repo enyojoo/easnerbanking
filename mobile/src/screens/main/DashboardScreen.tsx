@@ -18,7 +18,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   MessageCircle,
   ChevronDown,
-  ChevronRight,
   Plus,
   Eye,
   EyeOff,
@@ -39,7 +38,6 @@ import {
   shadows,
   surfaceChromeCircleStyle,
   userAvatarStyles,
-  motion,
   lineHeight,
   fontFamily,
 } from '../../theme'
@@ -54,7 +52,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useScope } from '../../query/scope'
 import { apiFetch } from '../../query/api-client'
 import { NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
-import { ShimmerLoader } from '../../components/premium'
+import { ListRowSkeleton } from '../../components/skeletons'
 import { SectionCard } from '../../components/ui'
 import { getTransactionStatusDisplay } from '../../utils/formatters'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
@@ -630,7 +628,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                 style={styles.headerAvatarButton}
                 onPress={async () => {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                  navigation.navigate('ProfileEdit' as any)
+                  navigation.navigate('Profile' as any)
                 }} >
                 {headerAvatarSource ? (
                   <Image
@@ -814,36 +812,33 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
           </View>
         </LinearGradient>
         
-        {/* Recent activity section */}
-        <SectionCard style={styles.transactionsSection} flush>
+        {/* Recent transactions: title row sits on canvas; list stays in SectionCard */}
+        <View style={styles.transactionsBlock}>
           {!loadingTransactions && recentTransactions.length > 0 && (
             <View style={styles.transactionsHeader}>
-              <Text style={styles.transactionsTitle}>Recent activity</Text>
+              <Text style={styles.transactionsTitle} numberOfLines={1}>
+                Recent Transactions
+              </Text>
               <Pressable
-               android_ripple={ripple.primaryTint}
+                android_ripple={ripple.neutral}
                 style={styles.viewAllButton}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                   navigation.navigate('Transactions' as never)
-                }} >
+                }}
+              >
                 <Text style={styles.viewAllText}>View all</Text>
-                <ChevronRight size={16} color={palette.primary.main} strokeWidth={2.25} />
               </Pressable>
             </View>
           )}
 
+          <SectionCard style={styles.transactionsSection} flush>
           {/* Transaction List */}
           {loadingTransactions ? (
             <View style={styles.skeletonContainer}>
-              {[1, 2, 3].map((i) => (
-                <ShimmerLoader
-                  key={i}
-                  width="100%"
-                  height={64}
-                  borderRadius={borderRadius.lg}
-                  style={{ marginHorizontal: spacing[4], marginBottom: spacing[2] }}
-                  durationMs={motion.skeletonPulseMs}
-                />
+              {[0, 1, 2].map((i) => (
+                <ListRowSkeleton key={i} variant="transaction" showDivider={i < 2} />
               ))}
             </View>
           ) : recentTransactions.length === 0 && hasAttemptedLoad ? (
@@ -925,6 +920,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
             </View>
           )}
         </SectionCard>
+        </View>
     </ScrollView>
     </View>
   )
@@ -1262,41 +1258,41 @@ function createDashboardStyles(c: Colors, scrollBottomPadding: number) {
   heroBtnPressed: {
     opacity: 0.9,
   },
-  transactionsSection: {
+  transactionsBlock: {
+    alignSelf: 'stretch',
     marginHorizontal: spacing[5],
     marginTop: spacing[2],
-    paddingTop: spacing[4],
+  },
+  transactionsSection: {
+    paddingTop: spacing[2],
     paddingBottom: spacing[2],
   },
   transactionsHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    width: '100%',
     marginBottom: spacing[3],
-    paddingHorizontal: spacing[4],
   },
   transactionsTitle: {
-    ...textStyles.titleLarge,
-    color: c.text.primary,
+    flex: 1,
+    minWidth: 0,
+    marginRight: spacing[2],
+    ...textStyles.titleMedium,
     fontFamily: fontFamily.semibold,
-    fontWeight: '700',
-    letterSpacing: -0.2,
+    fontWeight: '600',
+    color: c.text.primary,
+    letterSpacing: -0.1,
   },
   viewAllButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[1],
-    paddingVertical: 6,
-    paddingHorizontal: spacing[3],
-    borderRadius: borderRadius.full,
-    backgroundColor: 'rgba(0, 122, 204, 0.08)',
+    flexShrink: 0,
+    justifyContent: 'center',
   },
   viewAllText: {
     ...textStyles.labelMedium,
     color: c.primary.main,
     fontFamily: fontFamily.semibold,
     fontWeight: '600',
-    fontSize: 13,
   },
   transactionItem: {
     flexDirection: 'row',

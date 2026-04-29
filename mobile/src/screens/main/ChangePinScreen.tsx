@@ -13,7 +13,7 @@ import { ArrowLeft, HelpCircle } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { NavigationProps } from '../../types'
-import { colors, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, useThemeColors } from '../../theme'
+import { colors, surfaceChromeCircleStyle, textStyles, spacing, useThemeColors } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { useAuth } from '../../contexts/AuthContext'
 import { hasPin, setupPin, verifyPin, getLockoutState } from '../../lib/pinAuth'
@@ -260,7 +260,12 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
 
   if (!ready) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top + spacing[4] }]}>
+      <View
+        style={[
+          styles.container,
+          { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, spacing[3]) + spacing[2] },
+        ]}
+      >
         <View style={styles.loadingOnly}>
           <ActivityIndicator color={palette.primary.main} size="large" />
         </View>
@@ -271,72 +276,84 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
   const keypadDisabled = loading || verifyBusy || lockedOut
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + spacing[4] }]}>
+    <View
+      style={[
+        styles.container,
+        { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, spacing[3]) + spacing[2] },
+      ]}
+    >
       <KeyboardAvoidingView style={styles.keyboardView} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.header}>
           <Pressable
-           android_ripple={ripple.neutral}
-            style={styles.headerButton}
-            onPress={handleHeaderBack} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            android_ripple={ripple.neutral}
+            style={styles.backButton}
+            onPress={async () => {
+              await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+              handleHeaderBack()
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <View style={styles.headerButtonCircle}>
-              <ArrowLeft size={20} color={palette.primary.main} strokeWidth={2} />
-            </View>
+            <ArrowLeft size={24} color={palette.primary.main} strokeWidth={2} />
           </Pressable>
           <View style={styles.headerSpacer} />
           <Pressable
-           android_ripple={ripple.neutral}
-            style={styles.headerButton}
-            onPress={() => setHelpSheetOpen(true)} >
-            <View style={styles.headerButtonCircle}>
-              <HelpCircle size={20} color={palette.text.primary} strokeWidth={2} />
-            </View>
+            android_ripple={ripple.neutral}
+            style={styles.helpHeaderButton}
+            onPress={async () => {
+              await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+              setHelpSheetOpen(true)
+            }}
+          >
+            <HelpCircle size={24} color={palette.text.primary} strokeWidth={2} />
           </Pressable>
         </View>
 
         <View style={styles.content}>
-          <View style={styles.titleBlock}>
-            <Text style={styles.title}>{titleText}</Text>
-            <Text style={styles.subtitle}>{helpBody}</Text>
-          </View>
+          <View style={styles.topBlock}>
+            <View style={styles.titleBlock}>
+              <Text style={styles.title}>{titleText}</Text>
+            </View>
 
-          <View style={styles.pinDotsWrapper}>
-            {showPinAreaSpinner ? (
-              <View style={styles.pinDotsLoadingOnly}>
-                <ActivityIndicator size="small" color={palette.primary.main} />
-              </View>
-            ) : (
-              <Animated.View
-                style={[
-                  styles.pinDotsContainer,
-                  error ? styles.pinDotsContainerWithHint : null,
-                  { transform: [{ translateX: shakeAnim }] },
-                ]}
-              >
-                {currentPinDisplay.map((digit, index) => (
-                  <View
-                    key={index}
-                    style={[
-                      styles.pinDot,
-                      digit !== '' && styles.pinDotFilled,
-                      !!error && styles.pinDotError,
-                    ]}
-                  />
-                ))}
-              </Animated.View>
-            )}
-          </View>
-
-          {/* Same slot as PinEntryScreen hint: lock countdown OR incorrect PIN, never both */}
-          {lockedOut || error ? (
-            <View style={styles.hintSlot}>
-              {lockedOut ? (
-                <PinLockedHintText msRemaining={lockMsRemaining} prefixStyle={styles.hintSubtitle} />
+            <View style={styles.pinDotsWrapper}>
+              {showPinAreaSpinner ? (
+                <View style={styles.pinDotsLoadingOnly}>
+                  <ActivityIndicator size="small" color={palette.primary.main} />
+                </View>
               ) : (
-                <Text style={styles.verifyErrorText}>{error}</Text>
+                <Animated.View
+                  style={[
+                    styles.pinDotsContainer,
+                    { transform: [{ translateX: shakeAnim }] },
+                  ]}
+                >
+                  {currentPinDisplay.map((digit, index) => (
+                    <View
+                      key={index}
+                      style={[
+                        styles.pinDot,
+                        digit !== '' && styles.pinDotFilled,
+                        !!error && styles.pinDotError,
+                      ]}
+                    />
+                  ))}
+                </Animated.View>
               )}
             </View>
-          ) : null}
+
+            <View style={styles.hintSlot}>
+              {lockedOut ? (
+                <PinLockedHintText
+                  msRemaining={lockMsRemaining}
+                  prefixStyle={styles.verifyErrorText}
+                  digitsStyle={styles.verifyErrorText}
+                />
+              ) : error ? (
+                <Text style={styles.verifyErrorText}>{error}</Text>
+              ) : (
+                <Text style={styles.subtitle}>{helpBody}</Text>
+              )}
+            </View>
+          </View>
 
           <View style={styles.keypadContainer}>
             <PinKeypad
@@ -430,29 +447,33 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: spacing[5],
-    paddingTop: spacing[3],
-    paddingBottom: spacing[2],
+    paddingTop: spacing[4],
+    paddingBottom: spacing[4],
   },
   headerSpacer: {
     flex: 1,
   },
-  headerButton: {
-    padding: spacing[1],
+  backButton: {
+    ...surfaceChromeCircleStyle(colors, 44),
+    marginRight: spacing[3],
   },
-  headerButtonCircle: {
-    ...surfaceChromeCircleStyle(colors, 40),
+  helpHeaderButton: {
+    ...surfaceChromeCircleStyle(colors, 44),
   },
   content: {
     flex: 1,
     paddingHorizontal: spacing[5],
-    paddingTop: spacing[6],
-    justifyContent: 'space-between',
+    paddingTop: spacing[2],
+  },
+  topBlock: {
+    alignItems: 'center',
+    width: '100%',
   },
   titleBlock: {
     width: '100%',
     alignItems: 'center',
     paddingHorizontal: spacing[4],
-    gap: spacing[3],
+    marginBottom: spacing[4],
   },
   title: {
     ...textStyles.headlineLarge,
@@ -467,15 +488,11 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     width: '100%',
   },
-  pinDotsContainerWithHint: {
-    marginBottom: 0,
-  },
   pinDotsWrapper: {
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 56,
-    marginBottom: spacing[16],
   },
   pinDotsLoadingOnly: {
     minHeight: 56,
@@ -492,11 +509,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  hintSubtitle: {
-    ...textStyles.bodyMedium,
-    color: colors.text.secondary,
-    textAlign: 'center',
-  },
   verifyErrorText: {
     ...textStyles.bodyMedium,
     color: colors.error.dark,
@@ -507,7 +519,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: spacing[4],
+    gap: spacing[6],
     marginBottom: 0,
   },
   pinDot: {
@@ -527,6 +539,7 @@ const styles = StyleSheet.create({
   },
   keypadContainer: {
     width: '100%',
-    marginBottom: spacing[8],
+    marginTop: 'auto',
+    marginBottom: spacing[4],
   },
 })

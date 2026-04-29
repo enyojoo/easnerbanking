@@ -75,6 +75,7 @@ import {
 import { EasenetLookupPreview } from '../../components/EasenetLookupPreview'
 import { EasenetRecipientHydratedPreview } from '../../components/EasenetRecipientHydratedPreview'
 import { RecipientPayoutPreview } from '../../components/RecipientPayoutPreview'
+import { ListRowSkeleton } from '../../components/skeletons'
 import RecipientFormDropdownList from '../../components/recipients/RecipientFormDropdownList'
 import { isEasenetRecipientRecord, resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
@@ -1076,9 +1077,10 @@ function RecipientsContent({ navigation }: NavigationProps) {
             ]}
           >
             {recipientsLoading ? (
-              <View style={styles.emptyState}>
-                <ActivityIndicator size="small" color={colors.primary.main} />
-                <Text style={[styles.emptyText, { marginTop: spacing[3] }]}>Loading recipients…</Text>
+              <View>
+                {[0, 1, 2, 3, 4, 5].map((i) => (
+                  <ListRowSkeleton key={i} variant="recipient" showDivider={i < 5} />
+                ))}
               </View>
             ) : filteredRecipients.length > 0 ? (
               <FlashList

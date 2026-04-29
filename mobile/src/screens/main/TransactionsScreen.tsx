@@ -25,7 +25,8 @@ import {
 } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import ScreenWrapper from '../../components/ScreenWrapper'
-import { ShimmerLoader, PremiumModalSheet } from '../../components/premium'
+import { PremiumModalSheet } from '../../components/premium'
+import { GroupedListCardSkeleton } from '../../components/skeletons'
 import { FilterChip, SectionCard } from '../../components/ui'
 import { useCurrenciesCatalog, useTransactionsList } from '../../hooks/queries'
 import { NavigationProps, Transaction } from '../../types'
@@ -414,15 +415,7 @@ const TransactionItem = React.memo(function TransactionItem({
 function TransactionsSkeleton() {
   return (
     <View style={styles.skeletonContainer}>
-      {[1, 2, 3, 4, 5].map((i) => (
-        <ShimmerLoader 
-          key={i}
-          width="100%" 
-          height={72} 
-          borderRadius={borderRadius.md}
-          style={{ marginBottom: spacing[2] }}
-        />
-      ))}
+      <GroupedListCardSkeleton rowCount={5} variant="transaction" />
     </View>
   )
 }

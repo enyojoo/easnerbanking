@@ -32,7 +32,16 @@ import {
   type TotpFactorLike,
 } from '../../lib/auth-mfa'
 import { saveMfaVerified } from '../../lib/mfaStatusCache'
-import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, shadows } from '../../theme'
+import {
+  colors,
+  surfaceFrameStyle,
+  surfaceChromeCircleStyle,
+  textStyles,
+  borderRadius,
+  spacing,
+  motion,
+  shadows,
+} from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { NavigationProps } from '../../types'
@@ -300,7 +309,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
   }, [navigation])
 
   useEffect(() => {
-    const sub = navigation.addListener('beforeRemove', (e) => {
+    const sub = navigation.addListener('beforeRemove', (e: { preventDefault: () => void }) => {
       if (allowRemoveRef.current) return
       if (!autoStartEnroll) return
       e.preventDefault()
@@ -567,6 +576,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
                           title="Cancel"
                           variant="outline"
                           fullWidth
+                          style={styles.stackedOutlineButton}
                           onPress={() => {
                             setShowDisableOtp(false)
                             setDisableOtpCode('')
@@ -608,7 +618,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
                             value={totpQrValue}
                             size={MFA_QR_SIZE}
                             color={colors.text.primary}
-                            backgroundColor={colors.background.primary}
+                            backgroundColor={colors.semantic.card}
                           />
                         ) : enrollQrSvg ? (
                           <View style={styles.qrCanvas}>
@@ -646,8 +656,8 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
                             {secret}
                           </Text>
                           <Pressable
-                           android_ripple={ripple.neutral}
-                            style={styles.copySecretButton}
+                            android_ripple={ripple.neutral}
+                            style={[styles.copySecretButton, surfaceChromeCircleStyle(colors, 40), { marginLeft: spacing[2] }]}
                             onPress={() => void copySecret()}
                             accessibilityRole="button"
                             accessibilityLabel={secretJustCopied ? 'Copied' : 'Copy secret key'}
@@ -752,7 +762,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background.primary,
+    backgroundColor: colors.semantic.background,
   },
   scrollContainer: {
     flex: 1,
@@ -785,6 +795,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacing[5],
+    gap: spacing[4],
   },
   sectionCard: {
     ...surfaceFrameStyle(colors),
@@ -827,12 +838,12 @@ const styles = StyleSheet.create({
   qrContainer: {
     width: MFA_QR_CONTAINER,
     height: MFA_QR_CONTAINER,
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius['2xl'],
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background.primary,
+    backgroundColor: colors.semantic.card,
     padding: MFA_QR_PADDING,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.frame.border,
     ...shadows.sm,
   },
@@ -848,10 +859,10 @@ const styles = StyleSheet.create({
     height: MFA_QR_SIZE,
   },
   secretBox: {
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.frame.border,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.semantic.muted,
+    borderRadius: borderRadius.xl,
+    backgroundColor: colors.semantic.card,
     paddingLeft: spacing[3],
     paddingRight: spacing[1],
     paddingVertical: spacing[2],
@@ -871,12 +882,11 @@ const styles = StyleSheet.create({
     paddingRight: spacing[1],
   },
   copySecretButton: {
-    paddingVertical: 4,
-    paddingLeft: 6,
-    paddingRight: 2,
-    marginLeft: spacing[1],
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  stackedOutlineButton: {
+    marginTop: spacing[2],
   },
   otpAfterSecret: {
     marginTop: spacing[10],

@@ -28,7 +28,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
 import { useQueryClient } from '@tanstack/react-query'
 import ScreenWrapper from '../../components/ScreenWrapper'
-import { ShimmerLoader } from '../../components/premium'
+import { TransactionDetailsBodySkeleton } from '../../components/skeletons'
 import { SectionCard, StatusPill } from '../../components/ui'
 import { NavigationProps } from '../../types'
 import {
@@ -575,20 +575,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + spacing[5] }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Status Card Skeleton - Frame Only */}
-        <ShimmerLoader 
-          width="100%" 
-          height={180} 
-          borderRadius={borderRadius.xl}
-          style={{ marginBottom: spacing[4] }}
-        />
-
-        {/* Transaction Summary Skeleton - Frame Only */}
-        <ShimmerLoader 
-          width="100%" 
-          height={320} 
-          borderRadius={borderRadius.xl}
-        />
+        <TransactionDetailsBodySkeleton />
       </ScrollView>
     </View>
   )

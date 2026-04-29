@@ -13,7 +13,7 @@ import {
 import { ArrowLeft, Search } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import ScreenWrapper from '../../components/ScreenWrapper'
-import { ShimmerLoader } from '../../components/premium'
+import { PlainTwoColumnRowSkeleton } from '../../components/skeletons'
 import { NavigationProps } from '../../types'
 import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, fontFamily } from '../../theme'
 import { noahService } from '../../lib/noahService'
@@ -136,9 +136,9 @@ export default function TransactionCardScreen({ navigation }: NavigationProps) {
           keyboardShouldPersistTaps="handled"
         >
           {loading ? (
-            <View style={{ gap: spacing[2] }}>
-              {[1, 2, 3, 4].map((i) => (
-                <ShimmerLoader key={i} width="100%" height={64} borderRadius={borderRadius.md} />
+            <View style={{ gap: 0 }}>
+              {[0, 1, 2, 3].map((i) => (
+                <PlainTwoColumnRowSkeleton key={i} showDivider={i < 3} />
               ))}
             </View>
           ) : visible.length === 0 ? (

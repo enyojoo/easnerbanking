@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
     gap: spacing[2],
   },
   base: {
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.xl,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',

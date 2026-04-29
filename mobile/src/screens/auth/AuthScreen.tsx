@@ -21,7 +21,8 @@ import { useExternalLink } from '../../hooks/useExternalLink'
 import { useAuth } from '../../contexts/AuthContext'
 import { NavigationProps } from '../../types'
 import { analytics } from '../../lib/analytics'
-import { colors, borderRadius, spacing, surfaceChromeCircleStyle } from '../../theme'
+import { colors, spacing, surfaceChromeCircleStyle } from '../../theme'
+import { otpCodeBoxStyles } from '../../theme/otpCodeBoxVisual'
 import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
 import { AUTH_INITIAL_MODE_KEY, TERMS_URL } from '../../constants/auth'
@@ -325,7 +326,13 @@ export default function AuthScreen({ navigation }: NavigationProps) {
             </Pressable>
           </View>
 
-          <Text style={authScreenStyles.screenTitle}>
+          <Text
+            style={
+              isLogin || (!isLogin && signupStep === 'form')
+                ? authScreenStyles.screenTitle
+                : authScreenStyles.screenTitleCompact
+            }
+          >
             {isLogin ? 'Welcome back' : isSignupOtp ? 'Verify your email' : 'Open an account'}
           </Text>
 
@@ -427,9 +434,9 @@ export default function AuthScreen({ navigation }: NavigationProps) {
                 <Text style={styles.otpHint}>
                   Enter the 6-digit code we sent to {email || 'your email'}
                 </Text>
-                <View style={styles.otpBoxesRow} accessibilityLabel="One-time code">
+                <View style={[otpCodeBoxStyles.boxRow, styles.otpBoxesRowMargins]} accessibilityLabel="One-time code">
                   {isLoading ? (
-                    <View style={styles.otpBoxesLoadingOnly}>
+                    <View style={otpCodeBoxStyles.boxesLoadingOnly}>
                       <ActivityIndicator size="small" color={colors.primary.main} />
                     </View>
                   ) : (
@@ -437,13 +444,13 @@ export default function AuthScreen({ navigation }: NavigationProps) {
                       <View
                         key={i}
                         style={[
-                          styles.otpBox,
-                          otpActiveIndex === i ? styles.otpBoxActive : styles.otpBoxIdle,
+                          otpCodeBoxStyles.box,
+                          otpActiveIndex === i ? otpCodeBoxStyles.boxActive : otpCodeBoxStyles.boxIdle,
                         ]}
                         accessibilityElementsHidden
                         importantForAccessibility="no-hide-descendants"
                       >
-                        <Text style={styles.otpDigit}>{signupOtpDigits[i] ?? ''}</Text>
+                        <Text style={otpCodeBoxStyles.digit}>{signupOtpDigits[i] ?? ''}</Text>
                       </View>
                     ))
                   )}
@@ -588,38 +595,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing[4],
   },
-  otpBoxesRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing[2],
+  otpBoxesRowMargins: {
     marginBottom: spacing[6],
-  },
-  otpBoxesLoadingOnly: {
-    width: 50 * 6 + spacing[2] * 5,
-    height: 58,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  otpBox: {
-    width: 50,
-    height: 58,
-    borderRadius: borderRadius.full,
-    borderWidth: 2,
-    backgroundColor: colors.semantic.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  otpBoxIdle: {
-    borderColor: colors.semantic.input,
-  },
-  otpBoxActive: {
-    borderColor: colors.primary.main,
-  },
-  otpDigit: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: colors.semantic.foreground,
   },
   otpKeypad: {
     width: '100%',

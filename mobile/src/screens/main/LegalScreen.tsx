@@ -27,7 +27,9 @@ export default function LegalScreen({ navigation }: NavigationProps) {
           >
             <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
           </Pressable>
-          <Text style={styles.title}>Legal</Text>
+          <View style={styles.headerContent}>
+            <Text style={styles.title}>Legal</Text>
+          </View>
         </View>
 
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
@@ -91,16 +93,19 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[3],
     paddingHorizontal: spacing[5],
     paddingTop: spacing[4],
-    paddingBottom: spacing[2],
+    paddingBottom: spacing[4],
   },
   backButton: {
-    ...surfaceChromeCircleStyle(colors, 40),
+    ...surfaceChromeCircleStyle(colors, 44),
+    marginRight: spacing[3],
+  },
+  headerContent: {
+    flex: 1,
   },
   title: {
-    ...textStyles.headlineLarge,
+    ...textStyles.headlineMedium,
     color: colors.text.primary,
   },
   scrollView: {

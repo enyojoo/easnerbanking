@@ -13,8 +13,17 @@ import { ArrowLeft, Eye, EyeOff } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
+import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
 import { NavigationProps } from '../../types'
-import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion } from '../../theme'
+import {
+  colors,
+  surfaceFrameStyle,
+  surfaceChromeCircleStyle,
+  textStyles,
+  borderRadius,
+  spacing,
+  motion,
+} from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { useToast } from '../../components/ToastProvider'
@@ -121,8 +130,8 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
               }
             ]}
           >
-            {/* Password Form */}
             <View style={styles.sectionCard}>
+            <View style={styles.sectionInner}>
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>CURRENT PASSWORD</Text>
               <View style={styles.passwordInputContainer}>
@@ -141,9 +150,9 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
                   onPress={() => setShowCurrentPassword(!showCurrentPassword)}
                 >
                   {showCurrentPassword ? (
-                    <EyeOff size={20} color={colors.brand.slate} strokeWidth={2} />
+                    <EyeOff size={20} color={colors.text.tertiary} strokeWidth={2} />
                   ) : (
-                    <Eye size={20} color={colors.brand.slate} strokeWidth={2} />
+                    <Eye size={20} color={colors.text.tertiary} strokeWidth={2} />
                   )}
                 </Pressable>
               </View>
@@ -167,9 +176,9 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
                   onPress={() => setShowNewPassword(!showNewPassword)}
                 >
                   {showNewPassword ? (
-                    <EyeOff size={20} color={colors.brand.slate} strokeWidth={2} />
+                    <EyeOff size={20} color={colors.text.tertiary} strokeWidth={2} />
                   ) : (
-                    <Eye size={20} color={colors.brand.slate} strokeWidth={2} />
+                    <Eye size={20} color={colors.text.tertiary} strokeWidth={2} />
                   )}
                 </Pressable>
               </View>
@@ -193,27 +202,21 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
                   onPress={() => setShowConfirmPassword(!showConfirmPassword)}
                 >
                   {showConfirmPassword ? (
-                    <EyeOff size={20} color={colors.brand.slate} strokeWidth={2} />
+                    <EyeOff size={20} color={colors.text.tertiary} strokeWidth={2} />
                   ) : (
-                    <Eye size={20} color={colors.brand.slate} strokeWidth={2} />
+                    <Eye size={20} color={colors.text.tertiary} strokeWidth={2} />
                   )}
                 </Pressable>
               </View>
             </View>
 
-            <Pressable
-             android_ripple={ripple.neutral}
-              style={[
-                styles.submitButton,
-                (!isFormValid || loading) && styles.submitButtonDisabled,
-              ]}
+            <GlossyPrimaryButton
+              title={loading ? 'Updating…' : 'Update password'}
               onPress={handleSubmit}
               disabled={!isFormValid || loading}
-            >
-              <Text style={styles.submitButtonText}>
-                {loading ? 'Updating...' : 'Update Password'}
-              </Text>
-            </Pressable>
+              style={styles.submitCta}
+            />
+            </View>
             </View>
           </Animated.View>
         </ScrollView>
@@ -250,23 +253,20 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacing[5],
+    gap: spacing[4],
   },
   sectionCard: {
     ...surfaceFrameStyle(colors),
     marginBottom: spacing[4],
-    paddingTop: spacing[5],
-    paddingBottom: spacing[5],
+    paddingBottom: spacing[2],
   },
-  sectionTitle: {
-    ...textStyles.titleLarge,
-    color: colors.text.primary,
-    marginBottom: spacing[5],
+  sectionInner: {
     paddingHorizontal: spacing[5],
     paddingTop: spacing[5],
+    paddingBottom: spacing[3],
   },
   inputContainer: {
-    marginBottom: spacing[5],
-    paddingHorizontal: spacing[5],
+    marginBottom: spacing[4],
   },
   inputLabel: {
     ...textStyles.labelSmall,
@@ -277,48 +277,33 @@ const styles = StyleSheet.create({
   passwordInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.frame.border,
-    borderRadius: borderRadius.xl,
-    backgroundColor: colors.background.primary,
-    minHeight: 48,
+    borderRadius: borderRadius['2xl'],
+    backgroundColor: colors.semantic.card,
+    minHeight: 52,
   },
   passwordInput: {
     flex: 1,
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
-    ...textStyles.textInputMedium,
+    ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontSize: 13,
     textAlignVertical: 'center',
     ...Platform.select({
       android: {
         includeFontPadding: false,
       },
       ios: {
-        paddingVertical: 11,
+        paddingVertical: 12,
       },
     }),
   },
   eyeButton: {
     padding: spacing[3],
   },
-  submitButton: {
-    backgroundColor: colors.primary.main,
-    borderRadius: borderRadius.xl,
-    padding: spacing[4],
-    alignItems: 'center',
+  submitCta: {
     marginTop: spacing[2],
-    marginHorizontal: spacing[5],
-    marginBottom: spacing[5],
-  },
-  submitButtonDisabled: {
-    backgroundColor: colors.neutral[400],
-  },
-  submitButtonText: {
-    ...textStyles.bodyMedium,
-    color: colors.text.inverse,
-    fontWeight: '600',
   },
 })
 

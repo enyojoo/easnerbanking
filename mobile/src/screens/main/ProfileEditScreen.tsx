@@ -515,11 +515,11 @@ function ProfileEditContent({ navigation }: NavigationProps) {
   const renderProfileField = (label: string, value: string, onChangeText: (text: string) => void, disabled: boolean = false) => {
     const isEmailField = label.trim().toLowerCase() === 'email'
     const isNameField = label === 'Full Name'
+    const trimmed = (value || '').trim()
+    const readOnlyText = trimmed || 'Not set'
     return (
       <View style={styles.fieldContainer}>
-        <Text style={isEditing ? styles.fieldLabelEdit : styles.fieldLabel}>
-          {label}
-        </Text>
+        <Text style={styles.fieldLabelEdit}>{label}</Text>
         {isEditing ? (
           <TextInput
             style={[styles.fieldInput, disabled && styles.fieldInputReadOnly]}
@@ -535,9 +535,18 @@ function ProfileEditContent({ navigation }: NavigationProps) {
             keyboardType={isEmailField ? 'email-address' : 'default'}
           />
         ) : (
-          <Text style={[styles.fieldValue, disabled && { color: colors.text.tertiary }]}>
-            {value || 'Not set'}
-          </Text>
+          <View style={[styles.fieldInput, styles.fieldInputReadOnly, styles.fieldReadOnlyInner]}>
+            <Text
+              style={[
+                styles.fieldReadOnlyText,
+                styles.fieldReadOnlyTextView,
+                !trimmed && styles.fieldReadOnlyPlaceholder,
+              ]}
+              numberOfLines={isEmailField ? 4 : 3}
+            >
+              {readOnlyText}
+            </Text>
+          </View>
         )}
       </View>
     )
@@ -545,7 +554,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
 
   const renderDateOfBirthField = () => (
     <View style={styles.fieldContainer}>
-      <Text style={isEditing ? styles.fieldLabelEdit : styles.fieldLabel}>Date of Birth</Text>
+      <Text style={styles.fieldLabelEdit}>Date of Birth</Text>
       {isEditing ? (
         <>
           <Pressable
@@ -580,9 +589,20 @@ function ProfileEditContent({ navigation }: NavigationProps) {
           ) : null}
         </>
       ) : (
-        <Text style={styles.fieldValue}>
-          {formatDateOfBirth(profileData.dateOfBirth)}
-        </Text>
+        <View style={[styles.fieldInput, styles.fieldInputReadOnly, styles.fieldReadOnlyInner]}>
+          <Text
+            style={[
+              styles.fieldReadOnlyText,
+              styles.fieldReadOnlyTextView,
+              !profileData.dateOfBirth?.trim() && styles.fieldReadOnlyPlaceholder,
+            ]}
+            numberOfLines={2}
+          >
+            {profileData.dateOfBirth?.trim()
+              ? formatDateOfBirth(profileData.dateOfBirth)
+              : 'Not set'}
+          </Text>
+        </View>
       )}
     </View>
   )
@@ -592,13 +612,28 @@ function ProfileEditContent({ navigation }: NavigationProps) {
     const easetagTLen = easetagT.length
 
     if (!isEditing) {
+      const tag = (profileData.easetag || '').replace(/^@/, '').trim()
       return (
         <View style={styles.fieldContainer}>
-          <Text style={styles.fieldLabel}>Easetag</Text>
-          <Text style={styles.fieldValue}>
-            {profileData.easetag ? `@${profileData.easetag}` : 'Not set'}
-          </Text>
-          <Text style={[styles.fieldDescription, { color: colors.text.tertiary }]}>
+          <View style={styles.easetagLabelContainer}>
+            <Text style={[styles.fieldLabelEdit, styles.easetagFieldLabel]}>Easetag</Text>
+            <View style={styles.easetagStatusSlot} />
+          </View>
+          <View style={[styles.easetagInputContainer, styles.fieldInputReadOnly]}>
+            <Text style={styles.easetagPrefix}>@</Text>
+            <Text
+              style={[
+                styles.fieldReadOnlyText,
+                styles.fieldReadOnlyTextView,
+                styles.easetagReadOnlyValue,
+                !tag && styles.fieldReadOnlyPlaceholder,
+              ]}
+              numberOfLines={1}
+            >
+              {tag || 'Not set'}
+            </Text>
+          </View>
+          <Text style={[styles.easetagHelperText, { color: colors.text.tertiary }]}>
             People can send you money for free using your Easetag.
           </Text>
         </View>
@@ -780,14 +815,16 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                       )}
                     </View>
                   )}
-                  {isEditing && editProfileData.avatarUrl?.trim() ? (
-                    <Pressable
-                     android_ripple={ripple.neutral}
-                      onPress={() => setEditProfileData((p) => ({ ...p, avatarUrl: null }))}
-                      disabled={uploadingAvatar || loading} >
-                      <Text style={styles.avatarRemoveText}>Remove</Text>
-                    </Pressable>
-                  ) : null}
+                  <View style={styles.avatarRemoveSlot}>
+                    {isEditing && editProfileData.avatarUrl?.trim() ? (
+                      <Pressable
+                       android_ripple={ripple.neutral}
+                        onPress={() => setEditProfileData((p) => ({ ...p, avatarUrl: null }))}
+                        disabled={uploadingAvatar || loading} >
+                        <Text style={styles.avatarRemoveText}>Remove</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
                 </View>
                 <View style={styles.buttonContainer}>
                   {!isEditing ? (
@@ -823,49 +860,24 @@ function ProfileEditContent({ navigation }: NavigationProps) {
               </View>
 
               <View>
-
-                {isEditing ? (
-                  <>
-                    {renderProfileField(
-                      'Full Name',
-                      editProfileData.fullName,
-                      (text) => setEditProfileData(prev => ({ ...prev, fullName: text }))
-                    )}
-                    {renderProfileField(
-                      'Email',
-                      editProfileData.email,
-                      (text) => setEditProfileData(prev => ({ ...prev, email: text })),
-                      true // Email should not be editable
-                    )}
-                    {renderProfileField(
-                      'Phone Number',
-                      editProfileData.phone,
-                      (text) => setEditProfileData(prev => ({ ...prev, phone: text }))
-                    )}
-                    {renderDateOfBirthField()}
-                    {renderEasetagField()}
-                  </>
-                ) : (
-                  <>
-                    <View style={styles.fieldContainer}>
-                      <Text style={styles.fieldLabel}>Full Name</Text>
-                      <Text style={styles.fieldValue}>{profileData.fullName?.trim() || 'Not set'}</Text>
-                    </View>
-                    <View style={styles.fieldContainer}>
-                      <Text style={styles.fieldLabel}>Email Address</Text>
-                      <Text style={styles.fieldValue}>{profileData.email}</Text>
-                    </View>
-                    <View style={styles.fieldContainer}>
-                      <Text style={styles.fieldLabel}>Phone Number</Text>
-                      <Text style={styles.fieldValue}>{profileData.phone || 'Not set'}</Text>
-                    </View>
-                    <View style={styles.fieldContainer}>
-                      <Text style={styles.fieldLabel}>Date of Birth</Text>
-                      <Text style={styles.fieldValue}>{formatDateOfBirth(profileData.dateOfBirth)}</Text>
-                    </View>
-                    {renderEasetagField()}
-                  </>
+                {renderProfileField(
+                  'Full Name',
+                  isEditing ? editProfileData.fullName : profileData.fullName,
+                  (text) => setEditProfileData((prev) => ({ ...prev, fullName: text })),
                 )}
+                {renderProfileField(
+                  'Email',
+                  isEditing ? editProfileData.email : profileData.email,
+                  (text) => setEditProfileData((prev) => ({ ...prev, email: text })),
+                  true,
+                )}
+                {renderProfileField(
+                  'Phone Number',
+                  isEditing ? editProfileData.phone : profileData.phone,
+                  (text) => setEditProfileData((prev) => ({ ...prev, phone: text })),
+                )}
+                {renderDateOfBirthField()}
+                {renderEasetagField()}
               </View>
             </View>
 
@@ -963,14 +975,14 @@ const styles = StyleSheet.create({
     paddingBottom: spacing[4],
   },
   backButton: {
-    ...surfaceChromeCircleStyle(colors, 40),
+    ...surfaceChromeCircleStyle(colors, 44),
     marginRight: spacing[3],
   },
   headerContent: {
     flex: 1,
   },
   title: {
-    ...textStyles.headlineLarge,
+    ...textStyles.headlineMedium,
     color: colors.text.primary,
   },
   content: {
@@ -997,7 +1009,7 @@ const styles = StyleSheet.create({
   actionButton: {
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[2],
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.xl,
     backgroundColor: colors.primary.main,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1005,7 +1017,7 @@ const styles = StyleSheet.create({
     height: 32,
   },
   actionButtonSecondary: {
-    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.md }),
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[2],
     alignItems: 'center',
@@ -1066,16 +1078,15 @@ const styles = StyleSheet.create({
     color: colors.error.main,
     fontWeight: '500',
   },
+  /** Keeps avatar column height stable when “Remove” is hidden (view mode / no photo). */
+  avatarRemoveSlot: {
+    minHeight: 24,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
   /** Uniform space between every form group (same as phone → DOB and DOB → easetag) */
   fieldContainer: {
     marginBottom: spacing[3],
-  },
-  fieldLabel: {
-    ...textStyles.labelSmall,
-    color: colors.text.secondary,
-    marginBottom: spacing[0.5],
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   fieldLabelEdit: {
     ...textStyles.labelSmall,
@@ -1099,20 +1110,33 @@ const styles = StyleSheet.create({
       ios: { paddingVertical: 12 },
     }),
   },
-  /** Edit mode, non-editable (e.g. email): same frame as other inputs */
+  /** Edit: editable fields use canvas primary; read-only (email) matches view “muted” boxes */
   fieldInputReadOnly: {
     backgroundColor: colors.frame.background,
     color: colors.text.secondary,
   },
-  fieldValue: {
+  fieldReadOnlyInner: {
+    justifyContent: 'center',
+  },
+  fieldReadOnlyText: {
     ...textStyles.bodyLarge,
     color: colors.text.primary,
-    paddingVertical: spacing[1],
     fontWeight: '500',
+    ...Platform.select({
+      android: { includeFontPadding: false },
+      default: {},
+    }),
   },
-  fieldDescription: {
-    ...textStyles.bodySmall,
-    marginTop: spacing[1],
+  /** View mode: same typography as values on muted field (aligned with email read-only input) */
+  fieldReadOnlyTextView: {
+    color: colors.text.secondary,
+  },
+  fieldReadOnlyPlaceholder: {
+    color: colors.text.tertiary,
+  },
+  easetagReadOnlyValue: {
+    flex: 1,
+    minWidth: 0,
   },
   /** Same top margin as other field hints; separate token for Easetag edit copy */
   easetagHelperText: {

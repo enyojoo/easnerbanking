@@ -13,7 +13,7 @@ import { HelpCircle } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { NavigationProps } from '../../types'
-import { colors, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, useThemeColors } from '../../theme'
+import { colors, surfaceChromeCircleStyle, textStyles, spacing, useThemeColors } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import {
   setupPin,
@@ -169,51 +169,51 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {/* Header - Help Icon */}
-        <View style={styles.header}>
-          <View style={styles.headerSpacer} />
-          <Pressable
-           android_ripple={ripple.neutral}
-            style={styles.headerButton}
-            onPress={() => {
-              setHelpSheetOpen(true)
-            }} >
-            <View style={styles.headerButtonCircle}>
-              <HelpCircle size={20} color={palette.text.primary} strokeWidth={2} />
-            </View>
-          </Pressable>
-        </View>
-
-        {/* Content */}
         <View style={styles.content}>
-          <View style={styles.titleBlock}>
-            <Text style={styles.title}>
-              {step === 'pin' ? appPinStrings.setupTitle : appPinStrings.confirmTitle}
-            </Text>
-            <Text style={styles.subtitle}>
-              {step === 'pin' ? appPinStrings.setupSubtitle : appPinStrings.confirmSubtitle}
-            </Text>
+          <View style={styles.helpRow}>
+            <Pressable
+              android_ripple={ripple.neutral}
+              style={styles.headerButton}
+              onPress={() => setHelpSheetOpen(true)}
+            >
+              <View style={styles.headerButtonCircle}>
+                <HelpCircle size={20} color={palette.text.primary} strokeWidth={2} />
+              </View>
+            </Pressable>
           </View>
 
-          {/* PIN dots, or centered spinner while saving */}
-          <View style={styles.pinDotsWrapper}>
-            {showSaveSpinner ? (
-              <View style={styles.pinDotsLoadingOnly}>
-                <ActivityIndicator size="small" color={palette.primary.main} />
-              </View>
-            ) : (
-              <View style={styles.pinDotsContainer}>
-                {currentPin.map((digit, index) => (
-                  <View
-                    key={index}
-                    style={[
-                      styles.pinDot,
-                      digit !== '' && styles.pinDotFilled,
-                    ]}
-                  />
-                ))}
-              </View>
-            )}
+          <View style={styles.topBlock}>
+            <View style={styles.titleBlock}>
+              <Text style={styles.title}>
+                {step === 'pin' ? appPinStrings.setupTitle : appPinStrings.confirmTitle}
+              </Text>
+            </View>
+
+            <View style={styles.pinDotsWrapper}>
+              {showSaveSpinner ? (
+                <View style={styles.pinDotsLoadingOnly}>
+                  <ActivityIndicator size="small" color={palette.primary.main} />
+                </View>
+              ) : (
+                <View style={styles.pinDotsContainer}>
+                  {currentPin.map((digit, index) => (
+                    <View
+                      key={index}
+                      style={[
+                        styles.pinDot,
+                        digit !== '' && styles.pinDotFilled,
+                      ]}
+                    />
+                  ))}
+                </View>
+              )}
+            </View>
+
+            <View style={styles.hintSlot}>
+              <Text style={styles.subtitle}>
+                {step === 'pin' ? appPinStrings.setupSubtitle : appPinStrings.confirmSubtitle}
+              </Text>
+            </View>
           </View>
 
           <View style={styles.keypadContainer}>
@@ -225,7 +225,6 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
             />
           </View>
 
-          {/* Bottom Text */}
           {!isMandatory && (
             <Pressable
              android_ripple={ripple.neutral}
@@ -234,7 +233,8 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
                 setLogoutSheetOpen(true)
               }} >
               <Text style={styles.logoutText}>
-                Not your account? <Text style={styles.logoutLinkText}>Log out</Text>
+                {appPinStrings.lockNotYourAccount}{' '}
+                <Text style={styles.logoutLinkText}>{appPinStrings.lockLogOut}</Text>
               </Text>
             </Pressable>
           )}
@@ -306,16 +306,12 @@ const styles = StyleSheet.create({
   keyboardView: {
     flex: 1,
   },
-  header: {
+  helpRow: {
+    width: '100%',
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
-    paddingHorizontal: spacing[5],
-    paddingTop: spacing[2],
-    paddingBottom: spacing[1],
-  },
-  headerSpacer: {
-    flex: 1,
+    marginBottom: spacing[1],
   },
   headerButton: {
     padding: spacing[1],
@@ -327,14 +323,16 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: spacing[5],
     paddingTop: spacing[2],
-    justifyContent: 'space-between',
+  },
+  topBlock: {
+    alignItems: 'center',
+    width: '100%',
   },
   titleBlock: {
     width: '100%',
     alignItems: 'center',
     paddingHorizontal: spacing[4],
     marginBottom: spacing[4],
-    gap: spacing[3],
   },
   title: {
     ...textStyles.headlineLarge,
@@ -349,12 +347,20 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     width: '100%',
   },
+  hintSlot: {
+    width: '100%',
+    minHeight: 48,
+    marginTop: spacing[4],
+    marginBottom: spacing[4],
+    paddingHorizontal: spacing[4],
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   pinDotsWrapper: {
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 56,
-    marginBottom: spacing[6],
   },
   pinDotsLoadingOnly: {
     minHeight: 56,
@@ -366,7 +372,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: spacing[4],
+    gap: spacing[6],
+    marginBottom: 0,
   },
   pinDot: {
     width: 14,
@@ -382,6 +389,7 @@ const styles = StyleSheet.create({
   },
   keypadContainer: {
     width: '100%',
+    marginTop: 'auto',
     marginBottom: spacing[4],
   },
   logoutLink: {

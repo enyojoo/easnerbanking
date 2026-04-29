@@ -15,7 +15,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { getApiBaseUrl } from '../../lib/apiClient'
 import { NavigationProps } from '../../types'
 import { analytics } from '../../lib/analytics'
-import { colors, surfaceChromeCircleStyle, textStyles, borderRadius, spacing } from '../../theme'
+import { colors, surfaceChromeCircleStyle, textStyles, spacing } from '../../theme'
+import { otpCodeBoxStyles } from '../../theme/otpCodeBoxVisual'
 import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
 import { TextField } from '../../components/ui'
@@ -267,7 +268,7 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
             </Pressable>
           </View>
 
-          <Text style={authScreenStyles.screenTitle}>
+          <Text style={authScreenStyles.screenTitleCompact}>
             {step === 'email' ? 'Forgot password?' : 'Enter verification code'}
           </Text>
 
@@ -305,9 +306,9 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
                   <Text style={styles.subtitle}>
                     We've sent a 6-digit code to {email}
                   </Text>
-                  <View style={styles.otpBoxesRow} accessibilityLabel="One-time code">
+                  <View style={[otpCodeBoxStyles.boxRow, styles.otpBoxesRowMargins]} accessibilityLabel="One-time code">
                     {loading ? (
-                      <View style={styles.otpBoxesLoadingOnly}>
+                      <View style={otpCodeBoxStyles.boxesLoadingOnly}>
                         <ActivityIndicator size="small" color={colors.primary.main} />
                       </View>
                     ) : (
@@ -315,13 +316,13 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
                         <View
                           key={i}
                           style={[
-                            styles.otpBox,
-                            otpActiveIndex === i ? styles.otpBoxActive : styles.otpBoxIdle,
+                            otpCodeBoxStyles.box,
+                            otpActiveIndex === i ? otpCodeBoxStyles.boxActive : otpCodeBoxStyles.boxIdle,
                           ]}
                           accessibilityElementsHidden
                           importantForAccessibility="no-hide-descendants"
                         >
-                          <Text style={styles.otpDigit}>{otpDigits[i] ?? ''}</Text>
+                          <Text style={otpCodeBoxStyles.digit}>{otpDigits[i] ?? ''}</Text>
                         </View>
                       ))
                     )}
@@ -444,39 +445,9 @@ const styles = StyleSheet.create({
   otpSection: {
     marginBottom: spacing[5],
   },
-  otpBoxesRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing[2],
+  otpBoxesRowMargins: {
     marginTop: spacing[2],
     marginBottom: spacing[6],
-  },
-  otpBoxesLoadingOnly: {
-    width: 50 * 6 + spacing[2] * 5,
-    height: 58,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  otpBox: {
-    width: 50,
-    height: 58,
-    borderRadius: borderRadius.full,
-    borderWidth: 2,
-    backgroundColor: colors.semantic.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  otpBoxIdle: {
-    borderColor: colors.semantic.input,
-  },
-  otpBoxActive: {
-    borderColor: colors.primary.main,
-  },
-  otpDigit: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: colors.semantic.foreground,
   },
   otpKeypad: {
     width: '100%',

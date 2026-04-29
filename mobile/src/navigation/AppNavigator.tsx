@@ -535,10 +535,10 @@ function MainStack() {
           ...mainStackPreset(),
         }}
       />
-      <Stack.Screen 
-        name="ProfileEdit" 
+      <Stack.Screen
+        name="Profile"
         component={ProfileEditScreen}
-        options={{ 
+        options={{
           headerShown: false,
           ...mainStackPreset(),
         }}

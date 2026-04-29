@@ -1,203 +1,86 @@
 import React from 'react'
-import { View, StyleSheet } from 'react-native'
+import { View, StyleSheet, ScrollView } from 'react-native'
 import ScreenWrapper from './ScreenWrapper'
-import SkeletonLoader from './SkeletonLoader'
-import { colors } from '../theme'
+import ShimmerLoader, { ShimmerText } from './premium/ShimmerLoader'
+import { ListRowSkeleton } from './skeletons/ListRowSkeleton'
+import { colors, spacing, borderRadius, surfaceFrameStyle, shadows } from '../theme'
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.semantic.muted,
-  },
-  header: {
-    padding: 20,
-    backgroundColor: colors.background.primary,
-    marginBottom: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    marginBottom: 20,
-    gap: 12,
-  },
-  statCard: {
-    backgroundColor: colors.background.primary,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    shadowColor: colors.neutral.black,
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  totalSentCard: {
-    flex: 1.5,
-    padding: 20,
-  },
-  transactionsCard: {
-    flex: 1,
-    padding: 20,
-  },
-  statNumber: {
-    marginBottom: 8,
-  },
-  statLabel: {
-    marginTop: 4,
-  },
-  quickActions: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  actionButton: {
-    backgroundColor: colors.semantic.muted,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    flex: 1,
-    justifyContent: 'center',
-  },
-  section: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  transactionItem: {
-    backgroundColor: colors.background.primary,
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: colors.border.default,
-    shadowColor: colors.neutral.black,
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  transactionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  recipientSection: {
-    marginBottom: 16,
-  },
-  recipientLabel: {
-    marginBottom: 8,
-  },
-  recipientName: {
-    marginTop: 4,
-  },
-  amountSection: {
-    marginBottom: 16,
-  },
-  amountRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  transactionFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.semantic.muted,
-  },
-})
-
+/**
+ * Full-screen placeholder matching the redesigned home layout: top bar (avatar + support),
+ * gradient hero block, recent-activity SectionCard with row-shaped shimmers.
+ */
 const DashboardSkeleton: React.FC = () => {
   return (
     <ScreenWrapper>
-      <View style={styles.container}>
-        {/* Header Skeleton */}
-        <View style={styles.header}>
-          <SkeletonLoader width={200} height={32} borderRadius={8} />
-          <SkeletonLoader width={40} height={40} borderRadius={20} />
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.headerRow}>
+          <ShimmerLoader width={40} height={40} borderRadius={20} />
+          <View style={styles.headerSpacer} />
+          <ShimmerLoader width={40} height={40} borderRadius={20} />
         </View>
 
-        {/* Stats Cards Skeleton */}
-        <View style={styles.statsContainer}>
-          <View style={[styles.statCard, styles.totalSentCard]}>
-            <SkeletonLoader width="80%" height={48} borderRadius={8} style={styles.statNumber} />
-            <SkeletonLoader width="60%" height={20} borderRadius={4} style={styles.statLabel} />
+        <ShimmerLoader
+          width="100%"
+          height={200}
+          borderRadius={borderRadius['3xl']}
+          style={styles.heroShimmer}
+        />
+
+        <View style={styles.recentCard}>
+          <View style={styles.recentHeader}>
+            <ShimmerText width={120} height={18} />
+            <ShimmerLoader width={72} height={16} borderRadius={borderRadius.sm} />
           </View>
-          <View style={[styles.statCard, styles.transactionsCard]}>
-            <SkeletonLoader width="60%" height={48} borderRadius={8} style={styles.statNumber} />
-            <SkeletonLoader width="70%" height={20} borderRadius={4} style={styles.statLabel} />
-          </View>
-        </View>
-
-        {/* Quick Actions Skeleton */}
-        <View style={styles.quickActions}>
-          <View style={styles.actionButton}>
-            <SkeletonLoader width="80%" height={20} borderRadius={4} />
-          </View>
-          <View style={styles.actionButton}>
-            <SkeletonLoader width="80%" height={20} borderRadius={4} />
-          </View>
-        </View>
-
-        {/* Recent Transactions Skeleton */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <SkeletonLoader width={150} height={24} borderRadius={4} />
-            <SkeletonLoader width={60} height={20} borderRadius={4} />
-          </View>
-
-          {[1, 2, 3].map((index) => (
-            <View key={index} style={styles.transactionItem}>
-              <View style={styles.transactionHeader}>
-                <SkeletonLoader width="60%" height={16} borderRadius={4} />
-                <SkeletonLoader width={80} height={24} borderRadius={12} />
-              </View>
-
-              <View style={styles.recipientSection}>
-                <SkeletonLoader width={20} height={12} borderRadius={4} style={styles.recipientLabel} />
-                <SkeletonLoader width="70%" height={20} borderRadius={4} style={styles.recipientName} />
-              </View>
-
-              <View style={styles.amountSection}>
-                <View style={styles.amountRow}>
-                  <SkeletonLoader width={80} height={12} borderRadius={4} />
-                  <SkeletonLoader width={100} height={16} borderRadius={4} />
-                </View>
-                <View style={styles.amountRow}>
-                  <SkeletonLoader width={100} height={12} borderRadius={4} />
-                  <SkeletonLoader width={100} height={16} borderRadius={4} />
-                </View>
-              </View>
-
-              <View style={styles.transactionFooter}>
-                <SkeletonLoader width={120} height={12} borderRadius={4} />
-                <SkeletonLoader width={20} height={16} borderRadius={4} />
-              </View>
-            </View>
+          {[0, 1, 2].map((i) => (
+            <ListRowSkeleton key={i} variant="transaction" showDivider={i < 2} />
           ))}
         </View>
-      </View>
+      </ScrollView>
     </ScreenWrapper>
   )
 }
+
+const styles = StyleSheet.create({
+  scroll: {
+    flex: 1,
+    backgroundColor: colors.semantic.background,
+  },
+  scrollContent: {
+    paddingBottom: spacing[8],
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing[5],
+    paddingTop: spacing[2],
+    paddingBottom: spacing[2],
+  },
+  headerSpacer: {
+    flex: 1,
+  },
+  heroShimmer: {
+    marginHorizontal: spacing[5],
+    marginBottom: spacing[4],
+    ...shadows.xs,
+  },
+  recentCard: {
+    marginHorizontal: spacing[5],
+    ...surfaceFrameStyle(colors, { shadow: 'xs', radius: borderRadius['2xl'] }),
+    overflow: 'hidden',
+    paddingTop: spacing[2],
+  },
+  recentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    marginBottom: spacing[1],
+  },
+})
 
 export default DashboardSkeleton

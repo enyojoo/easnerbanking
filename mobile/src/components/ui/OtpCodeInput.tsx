@@ -9,7 +9,8 @@ import {
   TextStyle,
   ViewStyle,
 } from 'react-native'
-import { colors, spacing, textStyles, borderRadius } from '../../theme'
+import { colors, spacing, textStyles } from '../../theme'
+import { otpCodeBoxStyles, OTP_CODE_BOX_H } from '../../theme/otpCodeBoxVisual'
 
 export interface OtpCodeInputProps {
   /** Defaults to `otp-code` */
@@ -28,10 +29,6 @@ export interface OtpCodeInputProps {
   /** Optional extra spacing between label and OTP boxes. */
   labelStyle?: StyleProp<TextStyle>
 }
-
-const BOX_W = 44
-const BOX_H = 48
-const GAP = 8
 
 /**
  * Single invisible input over digit boxes — same pattern as web `OtpCodeInput` / PIN boxes.
@@ -67,19 +64,19 @@ export function OtpCodeInput({
         </Text>
       ) : null}
       <View style={styles.inputStack} accessibilityLabel={label ? undefined : 'One-time code'}>
-        <View style={styles.boxRow}>
+        <View style={otpCodeBoxStyles.boxRow}>
           {Array.from({ length }, (_, i) => (
             <View
               key={i}
               style={[
-                styles.box,
-                activeIndex === i ? styles.boxActive : styles.boxIdle,
+                otpCodeBoxStyles.box,
+                activeIndex === i ? otpCodeBoxStyles.boxActive : otpCodeBoxStyles.boxIdle,
               ]}
               accessibilityElementsHidden
               importantForAccessibility="no-hide-descendants"
             >
               <Text
-                style={styles.digit}
+                style={otpCodeBoxStyles.digit}
                 maxFontSizeMultiplier={1.4}
                 {...Platform.select({
                   ios: { fontVariant: ['tabular-nums'] as const },
@@ -119,7 +116,7 @@ const styles = StyleSheet.create({
   },
   label: {
     ...textStyles.labelLarge,
-    color: colors.semantic.foreground,
+    color: colors.text.secondary,
     marginBottom: spacing[2],
   },
   labelCentered: {
@@ -128,38 +125,8 @@ const styles = StyleSheet.create({
   inputStack: {
     position: 'relative',
     alignSelf: 'center',
-    minHeight: BOX_H,
+    minHeight: OTP_CODE_BOX_H,
     justifyContent: 'center',
-  },
-  boxRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: GAP,
-  },
-  box: {
-    width: BOX_W,
-    height: BOX_H,
-    borderRadius: borderRadius.full,
-    borderWidth: 2,
-    borderStyle: 'solid',
-    backgroundColor: colors.semantic.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  boxIdle: {
-    borderColor: colors.semantic.input,
-  },
-  boxActive: {
-    borderColor: colors.primary.main,
-  },
-  digit: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: colors.semantic.foreground,
-    lineHeight: 24,
-    textAlign: 'center',
-    minWidth: 12,
-    ...(Platform.OS === 'android' ? { includeFontPadding: false } : {}),
   },
   hiddenInput: {
     ...StyleSheet.absoluteFillObject,

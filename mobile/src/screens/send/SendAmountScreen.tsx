@@ -511,16 +511,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     balanceDebitCents > 0 &&
     currentBalanceCents < balanceDebitCents
 
-  const displayBalanceAfterSend =
-    selectedPaymentMethod === 'balance'
-      ? currentBalance - (balanceDebitEstimate > 0 ? balanceDebitEstimate : 0)
-      : currentBalance
-
-  const formattedBalanceAfterSend = displayBalanceAfterSend.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-
   const toggleAmountDirection = () => {
     if (!recipient) return
     if (amountEntryMode === 'receive') {
@@ -889,7 +879,12 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               <View style={styles.balanceSection}>
                 <Pressable
                  android_ripple={ripple.neutral}
-                  style={styles.balanceSelector}
+                  style={[
+                    styles.balanceSelector,
+                    selectedPaymentMethod === 'balance' &&
+                      hasInsufficientBalance &&
+                      styles.balanceSelectorInsufficient,
+                  ]}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                     setShowCurrencyPicker(true)
@@ -918,21 +913,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                     ) : null}
               </View>
                   {selectedPaymentMethod === 'balance' ? (
-                    <View style={styles.balanceSelectorTextCol}>
-                      <Text style={styles.balanceSelectorTitleLine} numberOfLines={1}>
-                        {selectedBalanceCurrency} Balance
-                      </Text>
-                      <Text
-                        style={[
-                          styles.balanceSelectorAmountLine,
-                          displayBalanceAfterSend < -1e-6 && { color: colors.semantic.destructive },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {getCurrencySymbol(selectedBalanceCurrency)}
-                        {formattedBalanceAfterSend}
-                      </Text>
-                    </View>
+                    <Text style={styles.balanceSelectorText} numberOfLines={1}>
+                      {selectedBalanceCurrency} Balance
+                    </Text>
                   ) : (
                     <Text style={styles.balanceSelectorText} numberOfLines={1}>
                       {selectedPaymentMethod === 'linkBank'
@@ -2010,6 +1993,11 @@ const styles = StyleSheet.create({
     minHeight: 48,
     justifyContent: 'center',
   },
+  /** Balance-only: when debit exceeds available, ring the selector in destructive red. */
+  balanceSelectorInsufficient: {
+    borderWidth: 1.5,
+    borderColor: colors.error.main,
+  },
   flagContainer: {
     ...surfaceChromeCircleStyle(colors, 24, { shadow: 'none' }),
     overflow: 'hidden',
@@ -2018,28 +2006,11 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
   },
-  balanceSelectorTextCol: {
-    flex: 1,
-    minWidth: 0,
-    justifyContent: 'center',
-  },
-  balanceSelectorTitleLine: {
-    fontSize: 14,
-    color: colors.text.primary,
-    fontFamily: fontFamily.medium,
-  },
   balanceSelectorText: {
     flex: 1,
     fontSize: 14,
     color: colors.text.primary,
     fontFamily: fontFamily.medium,
-  },
-  balanceSelectorAmountLine: {
-    fontSize: 12,
-    color: colors.text.secondary,
-    fontFamily: fontFamily.medium,
-    marginTop: 2,
-    fontVariant: ['tabular-nums'],
   },
   balanceText: {
     ...textStyles.bodyMedium,
