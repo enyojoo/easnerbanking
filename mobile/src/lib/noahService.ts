@@ -795,8 +795,20 @@ export const noahService = {
   },
 
   async getTurnkeyDepositAddresses(): Promise<{
-    USD: { address: string; stablecoin: string; chain: string; memo: string }
-    EUR: { address: string; stablecoin: string; chain: string; memo: string }
+    USD: {
+      address: string
+      ownerAddress: string
+      stablecoin: string
+      chain: string
+      memo: string
+    }
+    EUR: {
+      address: string
+      ownerAddress: string
+      stablecoin: string
+      chain: string
+      memo: string
+    }
   }> {
     const session = await requireAuthSession()
     await this.ensureTurnkeySubOrg().catch(() => undefined)
@@ -805,6 +817,7 @@ export const noahService = {
     const timeoutId = setTimeout(() => controller.abort(), 8000)
     const empty = (stablecoin: string) => ({
       address: '',
+      ownerAddress: '',
       stablecoin,
       chain: 'Solana',
       memo: '',
@@ -829,6 +842,7 @@ export const noahService = {
         const o = row as Record<string, unknown>
         return {
           address: typeof o.address === 'string' ? o.address : '',
+          ownerAddress: typeof o.ownerAddress === 'string' ? o.ownerAddress : '',
           stablecoin: typeof o.stablecoin === 'string' ? o.stablecoin : stablecoin,
           chain: typeof o.chain === 'string' ? o.chain : 'Solana',
           memo: typeof o.memo === 'string' ? o.memo : '',

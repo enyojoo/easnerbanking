@@ -43,7 +43,7 @@ export function useTransactionsList(filters: TxFilters = {}) {
       } satisfies TransactionsPage
     },
     getNextPageParam: (last) => last.nextCursor,
-    staleTime: 30_000,
+    staleTime: 60_000,
     gcTime: 30 * 60_000,
     meta: { safePersist: true, webPersist: "reduced", freshness: "operational" },
   })

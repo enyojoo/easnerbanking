@@ -1,27 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { Connection, PublicKey } from "@solana/web3.js"
-import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
-import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
-
-const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
-const EURC_MINT = "HzwqbKZw8HxMN6bF2yFZNrht3c2iXXzpKcFu7uBEDKtr"
+import { deriveStablecoinAssociatedTokenAddress } from "@/lib/solana/ata"
+import { ingestTurnkeySolanaTxForOwnerVault } from "@/lib/turnkey/ingest-solana-ledger-tx"
 
 function getRpcUrl(): string {
   return (process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com").trim()
-}
-
-function atomicToMajor(amount: bigint, decimals: number): number {
-  const divisor = 10 ** Math.max(0, Math.min(9, decimals))
-  return Number(amount) / divisor
-}
-
-function parseAtomic(raw: string | undefined): bigint {
-  if (!raw || !/^-?\d+$/.test(raw)) return 0n
-  try {
-    return BigInt(raw)
-  } catch {
-    return 0n
-  }
 }
 
 function errorMessage(e: unknown): string {
@@ -45,6 +28,26 @@ function extractOwnerContext(
   return { userId: ownerRef, businessId: null }
 }
 
+function mergeSignatureLists(
+  lists: { signature: string; blockTime?: number | null }[][],
+): { signature: string; blockTime: number | null }[] {
+  const map = new Map<string, number | null>()
+  for (const list of lists) {
+    for (const x of list) {
+      const prev = map.get(x.signature)
+      const bt = x.blockTime ?? prev ?? null
+      map.set(x.signature, bt)
+    }
+  }
+  return [...map.entries()]
+    .map(([signature, blockTime]) => ({ signature, blockTime }))
+    .sort((a, b) => {
+      const ta = a.blockTime ?? 0
+      const tb = b.blockTime ?? 0
+      return tb - ta
+    })
+}
+
 export async function backfillTurnkeyOnchainTransactions(
   admin: SupabaseClient,
   input?: { signaturesPerAddress?: number; walletOwnerId?: string },
@@ -60,7 +63,7 @@ export async function backfillTurnkeyOnchainTransactions(
 
   let accQuery = admin
     .from("wallet_accounts")
-    .select("wallet_owner_id,address,asset,chain")
+    .select("wallet_owner_id,address,asset,chain,associated_token_account_address")
     .eq("status", "active")
     .eq("chain", "solana")
     .in("asset", ["USDC", "EURC"])
@@ -84,9 +87,10 @@ export async function backfillTurnkeyOnchainTransactions(
   for (const row of rows) {
     const walletAddress = String(row.address || "").trim()
     const walletOwnerId = String(row.wallet_owner_id || "").trim()
-    if (!walletAddress || !walletOwnerId) {
+    const asset = String(row.asset || "").trim()
+    if (!walletAddress || !walletOwnerId || (asset !== "USDC" && asset !== "EURC")) {
       skipped += 1
-      bump("missing_wallet_address_or_owner")
+      bump("missing_wallet_address_or_owner_or_asset")
       continue
     }
 
@@ -123,101 +127,61 @@ export async function backfillTurnkeyOnchainTransactions(
       continue
     }
 
-    let pubkey: PublicKey
+    let ownerPk: PublicKey
     try {
-      pubkey = new PublicKey(walletAddress)
+      ownerPk = new PublicKey(walletAddress)
     } catch {
       skipped += 1
       bump("invalid_wallet_address")
       continue
     }
 
-    let sigs: { signature: string; blockTime: number | null }[] = []
-    try {
-      sigs = await connection.getSignaturesForAddress(pubkey, { limit })
-    } catch (e) {
-      skipped += 1
-      const msg = errorMessage(e)
-      bump(`rpc_get_signatures_failed:${msg.slice(0, 80)}`)
-      continue
+    const ataStored = String(row.associated_token_account_address || "").trim()
+    const ata =
+      ataStored ||
+      deriveStablecoinAssociatedTokenAddress(walletAddress, asset) ||
+      ""
+    let ataPk: PublicKey | null = null
+    if (ata) {
+      try {
+        ataPk = new PublicKey(ata)
+      } catch {
+        ataPk = null
+      }
     }
+
+    const sigLists: { signature: string; blockTime?: number | null | undefined }[][] = []
+    try {
+      sigLists.push(await connection.getSignaturesForAddress(ownerPk, { limit }))
+    } catch (e) {
+      const msg = errorMessage(e)
+      bump(`rpc_get_signatures_owner:${msg.slice(0, 80)}`)
+    }
+    if (ataPk) {
+      try {
+        sigLists.push(await connection.getSignaturesForAddress(ataPk, { limit }))
+      } catch (e) {
+        const msg = errorMessage(e)
+        bump(`rpc_get_signatures_ata:${msg.slice(0, 80)}`)
+      }
+    }
+
+    const sigs = mergeSignatureLists(sigLists)
     signaturesScanned += sigs.length
 
     for (const sig of sigs) {
-      let tx: Awaited<ReturnType<Connection["getParsedTransaction"]>> | null = null
-      try {
-        tx = await connection.getParsedTransaction(sig.signature, {
-          maxSupportedTransactionVersion: 0,
-        })
-      } catch {
-        continue
-      }
-      if (!tx?.meta) continue
-
-      const pre = tx.meta.preTokenBalances || []
-      const post = tx.meta.postTokenBalances || []
-      const mints = [USDC_MINT, EURC_MINT]
-
-      for (const mint of mints) {
-        const preRow = pre.find(
-          (b) => (b.owner || "").toLowerCase() === walletAddress.toLowerCase() && b.mint === mint,
-        )
-        const postRow = post.find(
-          (b) => (b.owner || "").toLowerCase() === walletAddress.toLowerCase() && b.mint === mint,
-        )
-        const preAmt = parseAtomic(preRow?.uiTokenAmount?.amount)
-        const postAmt = parseAtomic(postRow?.uiTokenAmount?.amount)
-        const decimals = Number(postRow?.uiTokenAmount?.decimals ?? preRow?.uiTokenAmount?.decimals ?? 6)
-        const delta = postAmt - preAmt
-        if (delta === 0n) continue
-
-        const direction = delta > 0n ? "in" : "out"
-        const absAtomic = delta > 0n ? delta : -delta
-        const amount = atomicToMajor(absAtomic, decimals)
-        if (!Number.isFinite(amount) || amount <= 0) continue
-
-        const asset = mint === EURC_MINT ? "EURC" : "USDC"
-        const currency = mint === EURC_MINT ? "EUR" : "USD"
-        const occurredAt = sig.blockTime ? new Date(sig.blockTime * 1000).toISOString() : new Date().toISOString()
-
-        try {
-          const upsert = await upsertLedgerTransaction(admin, {
-            userId: ctx.userId,
-            businessId: ctx.businessId,
-            provider: "turnkey",
-            providerTransactionId: `${sig.signature}:${walletAddress}:${asset}`,
-            providerEventId: sig.signature,
-            status: "settled",
-            amount,
-            amountMinor: absAtomic.toString(),
-            currency,
-            direction,
-            payload: { signature: sig.signature, mint, source: "solana_rpc_backfill" },
-            metadata: { source: "turnkey_onchain_backfill" },
-            txHash: sig.signature,
-            walletAddress,
-            asset,
-            chain: "solana",
-            occurredAt,
-            settledAt: occurredAt,
-            baseCurrency: currency,
-          })
-          upserts += 1
-          // Apply the same delta to the DB snapshot exactly once per transaction id.
-          if (upsert.inserted || upsert.becameSettled) {
-            const signed = direction === "in" ? amount : -amount
-            await applyWalletBalanceDelta(admin, {
-              businessId: ctx.businessId ? ctx.businessId : null,
-              userId: ctx.businessId ? null : ctx.userId,
-              currency,
-              delta: signed,
-            })
-          }
-        } catch (e) {
-          skipped += 1
-          const msg = errorMessage(e)
-          bump(`ledger_upsert_failed:${msg.slice(0, 80)}`)
-        }
+      const res = await ingestTurnkeySolanaTxForOwnerVault(admin, {
+        ownerAddress: walletAddress,
+        asset,
+        ctx: { userId: ctx.userId, businessId: ctx.businessId },
+        signature: sig.signature,
+        blockTime: sig.blockTime,
+        connection,
+      })
+      if (res.kind === "applied") upserts += res.upserts
+      if (res.kind === "error") {
+        skipped += 1
+        bump(res.reason)
       }
     }
   }

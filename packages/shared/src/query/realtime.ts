@@ -137,6 +137,12 @@ function defaultFilter(scope: Scope): string | undefined {
   return `user_id=eq.${scope.userId}`
 }
 
+/** Realtime filter for `public.transactions` — must match RLS scoping to avoid refetch storms. */
+function transactionsTableFilter(scope: Scope): string {
+  if (scope.kind === "business") return `business_id=eq.${scope.orgId}`
+  return `user_id=eq.${scope.userId}`
+}
+
 /**
  * Subscribes one multiplexed channel per scope. Returns a cleanup fn.
  * Safe to call repeatedly; callers should keep one subscription active
@@ -216,13 +222,15 @@ export function attachRealtime({
   )
 
   // --- transactions: posted / updated ----------------------------------------
+  const txFilter = transactionsTableFilter(scope)
   channel.on(
     "postgres_changes",
-    // IMPORTANT: ledger rows are scoped by `business_id`/`user_id`, while
-    // the client scope currently tracks entity separately. Avoid column
-    // filter mismatches by subscribing to all transaction events and
-    // relying on RLS + narrow query invalidation for correctness.
-    { event: "INSERT", schema: "public", table: "transactions" },
+    {
+      event: "INSERT",
+      schema: "public",
+      table: "transactions",
+      filter: txFilter,
+    },
     () => {
       health.lastEventAt = Date.now()
       emit()
@@ -245,7 +253,12 @@ export function attachRealtime({
 
   channel.on(
     "postgres_changes",
-    { event: "UPDATE", schema: "public", table: "transactions" },
+    {
+      event: "UPDATE",
+      schema: "public",
+      table: "transactions",
+      filter: txFilter,
+    },
     () => {
       health.lastEventAt = Date.now()
       emit()

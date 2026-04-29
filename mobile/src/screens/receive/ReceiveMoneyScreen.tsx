@@ -45,7 +45,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const [activeTab, setActiveTab] = useState<TabType>('bank')
   const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>({})
   const [virtualAccount, setVirtualAccount] = useState<any>(null)
-  /** Turnkey Solana USDC / EURC receive address for the selected currency. */
+  /** Turnkey Solana USDC / EURC deposit address (ATA) for the selected currency. */
   const [turnkeyDepositAddress, setTurnkeyDepositAddress] = useState<string | null>(null)
   const [turnkeyDepositMemo, setTurnkeyDepositMemo] = useState<string | null>(null)
   const [loading, setLoading] = useState(false) // Start as false, will be set to true only if we need to fetch
@@ -1283,7 +1283,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                           'stablecoinAddress',
                         )
                       )}
-                      
+
                       {/* Memo */}
                       {stablecoinData.memo && (
                         <>

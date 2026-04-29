@@ -4,6 +4,7 @@ import { useEffect, useMemo } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { pollingIntervalFor, qk, scopeKey } from "@easner/shared"
 import { apiFetch } from "@/lib/query/api-client"
+import { useDocumentVisibility } from "@/lib/query/use-document-visibility"
 import { useScope } from "@/lib/query/scope"
 import { useRealtimeHealth } from "@/lib/query/realtime-health-context"
 
@@ -19,8 +20,8 @@ export interface OnChainBalances {
 }
 
 export interface DepositAddresses {
-  USD?: { address?: string }
-  EUR?: { address?: string }
+  USD?: { address?: string; ownerAddress?: string }
+  EUR?: { address?: string; ownerAddress?: string }
 }
 
 export interface AvailableCurrencies {
@@ -42,6 +43,7 @@ export function useWalletBalances() {
   const { scope } = useScope()
   const qc = useQueryClient()
   const realtimeHealth = useRealtimeHealth()
+  const tabVisible = useDocumentVisibility()
   const storageKey = useMemo(
     () => (scope ? `${WALLET_LIST_CACHE_KEY_PREFIX}${scopeKey(scope)}` : null),
     [scope],
@@ -83,7 +85,7 @@ export function useWalletBalances() {
     gcTime: 10 * 60_000,
     // Fallback poll only; disabled when realtime is healthy (handled by
     // the realtime bridge invalidating `qk.wallets.list` on balance events).
-    refetchInterval: pollingIntervalFor("critical", realtimeHealth),
+    refetchInterval: tabVisible ? pollingIntervalFor("critical", realtimeHealth) : false,
     refetchIntervalInBackground: false,
     meta: { safePersist: false, webPersist: "reduced", freshness: "critical" },
     initialData: () => {

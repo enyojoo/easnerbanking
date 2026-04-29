@@ -1,4 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { AppState, type AppStateStatus } from 'react-native'
+import { useEffect, useState } from 'react'
 import { pollingIntervalFor, qk } from '@easner/shared'
 import { apiFetch } from '../../query/api-client'
 import { useScope } from '../../query/scope'
@@ -27,6 +29,12 @@ export function useWalletBalances() {
   const { scope } = useScope()
   const qc = useQueryClient()
   const realtimeHealth = useRealtimeHealth()
+  const [appState, setAppState] = useState<AppStateStatus>(AppState.currentState)
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', setAppState)
+    return () => sub.remove()
+  }, [])
+  const inForeground = appState === 'active'
   const queryKey = scope ? qk.wallets.list(scope) : (['wallets', 'disabled'] as const)
   return useQuery({
     queryKey,
@@ -60,7 +68,7 @@ export function useWalletBalances() {
     // Fallback polling when realtime is unhealthy. The realtime bridge
     // pokes `qk.wallets.list` on balance events so this rarely actually
     // fires when the channel is happy.
-    refetchInterval: pollingIntervalFor('critical', realtimeHealth),
+    refetchInterval: inForeground ? pollingIntervalFor('critical', realtimeHealth) : false,
     refetchIntervalInBackground: false,
     // Balances are sensitive — NEVER persist to disk.
     meta: { safePersist: false, freshness: 'critical' },

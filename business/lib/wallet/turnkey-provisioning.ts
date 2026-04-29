@@ -6,6 +6,7 @@ import {
   isTurnkeyConfigured,
   isTurnkeyWalletAutoprovisionEnabled,
 } from "@/lib/turnkey/config"
+import { deriveStablecoinAssociatedTokenAddress } from "@/lib/solana/ata"
 import { DEFAULT_INDIVIDUAL_VAULTS } from "@/lib/wallet/vault-spec"
 import { enqueueVaultProvisioningJobs, upsertWalletOwnerFromNoah } from "@/lib/wallet/turnkey-wallet-db"
 
@@ -125,6 +126,12 @@ export async function processNextWalletProvisioningJob(opts?: {
       throw new Error("Turnkey createWallet returned no walletId/address")
     }
 
+    const assetStr = String(job.asset || "")
+    const associatedTokenAccountAddress =
+      job.chain === "solana" && (assetStr === "USDC" || assetStr === "EURC")
+        ? deriveStablecoinAssociatedTokenAddress(address, assetStr)
+        : null
+
     await admin.from("wallet_accounts").upsert(
       {
         wallet_owner_id: owner.id,
@@ -134,6 +141,7 @@ export async function processNextWalletProvisioningJob(opts?: {
         asset: job.asset,
         ledger_currency: job.ledger_currency,
         address,
+        associated_token_account_address: associatedTokenAccountAddress,
         status: "active",
         is_primary: true,
         activated_at: now,

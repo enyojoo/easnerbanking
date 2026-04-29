@@ -128,23 +128,54 @@ export async function applyTurnkeyWebhookSideEffects(
     })(),
   ])
   const addressCandidates = [...new Set<string>([...toCandidates, ...fromCandidates, ...genericCandidates])]
+    .map((a) => String(a).trim())
+    .filter(Boolean)
   if (addressCandidates.length === 0) return false
 
-  const { data: walletAccounts } = await admin
-    .from("wallet_accounts")
-    .select("wallet_owner_id, address, asset, chain")
-    .eq("status", "active")
-    .in("address", addressCandidates)
-    .limit(5)
-  if (!walletAccounts?.length) return false
+  const select =
+    "wallet_owner_id, address, asset, chain, associated_token_account_address" as const
+  type WalletAccountMatchRow = {
+    wallet_owner_id: string
+    address: string
+    asset: string
+    chain: string
+    associated_token_account_address: string | null
+  }
+  const [{ data: byOwner }, { data: byAta }] = await Promise.all([
+    admin.from("wallet_accounts").select(select).eq("status", "active").in("address", addressCandidates).limit(10),
+    admin
+      .from("wallet_accounts")
+      .select(select)
+      .eq("status", "active")
+      .in("associated_token_account_address", addressCandidates)
+      .limit(10),
+  ])
+
+  const merged = new Map<string, WalletAccountMatchRow>()
+  for (const row of [...(byOwner ?? []), ...(byAta ?? [])]) {
+    const r = row as WalletAccountMatchRow
+    const key = `${String(r.wallet_owner_id)}:${String(r.address)}:${String(r.asset)}`
+    merged.set(key, r)
+  }
+  const walletAccounts = [...merged.values()]
+  if (!walletAccounts.length) return false
 
   const walletAccount =
-    walletAccounts.find((row) => toCandidates.has(String(row.address || ""))) ||
-    walletAccounts.find((row) => fromCandidates.has(String(row.address || ""))) ||
+    walletAccounts.find((row) => {
+      const o = String(row.address || "").trim()
+      const a = String(row.associated_token_account_address || "").trim()
+      return toCandidates.has(o) || (a && toCandidates.has(a))
+    }) ||
+    walletAccounts.find((row) => {
+      const o = String(row.address || "").trim()
+      const a = String(row.associated_token_account_address || "").trim()
+      return fromCandidates.has(o) || (a && fromCandidates.has(a))
+    }) ||
     walletAccounts[0]
   if (!walletAccount?.wallet_owner_id) return false
   const walletAddress = String(walletAccount.address || "").trim()
   if (!walletAddress) return false
+  const tokenAccountAddress = String(walletAccount.associated_token_account_address || "").trim()
 
   const { data: owner } = await admin
     .from("wallet_owners")
@@ -178,8 +209,20 @@ export async function applyTurnkeyWebhookSideEffects(
     pickFirstString(event, ["fromAddress", "sourceAddress", "senderAddress"]) ||
     pickNestedString(event, ["fromAddress", "sourceAddress", "senderAddress"])
   if (!direction) {
-    if (toCandidates.has(walletAddress) || (maybeToAddress && maybeToAddress === walletAddress)) direction = "in"
-    else if (fromCandidates.has(walletAddress) || (maybeFromAddress && maybeFromAddress === walletAddress)) direction = "out"
+    if (
+      toCandidates.has(walletAddress) ||
+      (tokenAccountAddress && toCandidates.has(tokenAccountAddress)) ||
+      (maybeToAddress && maybeToAddress === walletAddress) ||
+      (maybeToAddress && tokenAccountAddress && maybeToAddress === tokenAccountAddress)
+    )
+      direction = "in"
+    else if (
+      fromCandidates.has(walletAddress) ||
+      (tokenAccountAddress && fromCandidates.has(tokenAccountAddress)) ||
+      (maybeFromAddress && maybeFromAddress === walletAddress) ||
+      (maybeFromAddress && tokenAccountAddress && maybeFromAddress === tokenAccountAddress)
+    )
+      direction = "out"
   }
   if (!direction) return false
 

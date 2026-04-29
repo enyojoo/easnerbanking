@@ -18,6 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   MessageCircle,
   ChevronDown,
+  ChevronRight,
   Plus,
   Eye,
   EyeOff,
@@ -61,10 +62,13 @@ import { noahService } from '../../lib/noahService'
 import { useTransactionsList } from '../../hooks/queries'
 import { isEasnerProductReceiveTitle, isEasnerProductSendTitle, markRecentMoneyActivity, qk } from '@easner/shared'
 import { avatarImageSource, normalizeAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
+import { buildGroupedActivityItems } from '../../lib/transactionListGrouping'
 
 const DASHBOARD_SELECTED_CURRENCY_KEY_PREFIX = 'easner_dashboard_selected_currency_'
 const DASHBOARD_RECENT_TX_CACHE_KEY_PREFIX = 'easner_dashboard_recent_tx_'
 const DASHBOARD_RECENT_TX_CACHE_TTL_MS = 60 * 60 * 1000
+/** Recent activity rows on Home; keep in sync with cache slices and skeleton count. */
+const DASHBOARD_RECENT_TX_LIMIT = 4
 
 // Transaction interface for dashboard
 interface DashboardTransaction {
@@ -86,16 +90,14 @@ interface DashboardTransaction {
 export default function DashboardScreen({ navigation }: NavigationProps) {
   const palette = useThemeColors()
   const insets = useSafeAreaInsets()
-  /** Tab bar is docked (not overlaying); only end-of-scroll breathing room. */
-  const scrollBottomPadding = spacing[8]
-  const styles = useMemo(() => createDashboardStyles(palette, scrollBottomPadding), [palette, scrollBottomPadding])
+  const styles = useMemo(() => createDashboardStyles(palette, spacing[8]), [palette])
   const heroBalanceFontSize = scaledFontSize(56)
   const heroBalanceLineHeight =
     Math.round(heroBalanceFontSize * lineHeight.tight) + (Platform.OS === 'android' ? 6 : 4)
   const { user, userProfile, refreshUserProfile, loading: authLoading } = useAuth()
   const { scope } = useScope()
   const qc = useQueryClient()
-  const txQuery = useTransactionsList({}, 5)
+  const txQuery = useTransactionsList({}, DASHBOARD_RECENT_TX_LIMIT)
   const { balances, hasResolvedBalance, refreshBalances } = useBalance()
   const [selectedCurrency, setSelectedCurrency] = useState<'USD' | 'EUR' | 'GBP'>('USD')
   const [balanceVisible, setBalanceVisible] = useState(true)
@@ -204,7 +206,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
 
   const queryRecent = useMemo<DashboardTransaction[]>(() => {
     const firstPage = txQuery.data?.pages?.[0]?.transactions ?? []
-    return (firstPage as DashboardTransaction[]).slice(0, 5)
+    return (firstPage as DashboardTransaction[]).slice(0, DASHBOARD_RECENT_TX_LIMIT)
   }, [txQuery.data])
   const [cachedRecentTransactions, setCachedRecentTransactions] = useState<DashboardTransaction[]>([])
   const recentTransactions = queryRecent.length > 0 ? queryRecent : cachedRecentTransactions
@@ -212,6 +214,9 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const loadingTransactions = txQuery.isPending && !hasAnyTransactionData
   const hasAttemptedLoad = txQuery.isFetched || recentTransactions.length > 0
   const lastStableBalanceTextRef = useRef<Record<string, string>>({})
+  /** Recent list + "All" row: reduce scroll end padding so the card sits closer to the tab bar. */
+  const dashboardRecentListWithAllRow =
+    !loadingTransactions && recentTransactions.length > 0
 
   useEffect(() => {
     const uid = userProfile?.id || user?.id
@@ -227,7 +232,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
         const rows = Array.isArray(parsed?.rows) ? parsed?.rows : []
         if (!Number.isFinite(at) || Date.now() - at > DASHBOARD_RECENT_TX_CACHE_TTL_MS) return
         if (mounted && rows.length > 0) {
-          setCachedRecentTransactions(rows.slice(0, 5))
+          setCachedRecentTransactions(rows.slice(0, DASHBOARD_RECENT_TX_LIMIT))
         }
       } catch {
         // Ignore malformed/expired cache.
@@ -246,7 +251,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     const key = `${DASHBOARD_RECENT_TX_CACHE_KEY_PREFIX}${uid}`
     const payload = JSON.stringify({
       at: Date.now(),
-      rows: queryRecent.slice(0, 5),
+      rows: queryRecent.slice(0, DASHBOARD_RECENT_TX_LIMIT),
     })
     AsyncStorage.setItem(key, payload).catch(() => {
       // Ignore storage write failures.
@@ -492,6 +497,34 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     return 'outbox'
   }
 
+  const dashboardTxSegments = useMemo(() => {
+    const items = buildGroupedActivityItems(recentTransactions)
+    type Seg =
+      | { kind: 'header'; key: string; label: string; isFirst: boolean }
+      | { kind: 'row'; key: string; transaction: DashboardTransaction; isLast: boolean }
+    const out: Seg[] = []
+    let firstHeader = true
+    let rowIndex = 0
+    const total = recentTransactions.length
+    for (const it of items) {
+      if (it.kind === 'header') {
+        out.push({ kind: 'header', key: it.key, label: it.label, isFirst: firstHeader })
+        firstHeader = false
+      } else {
+        for (const tx of it.rows) {
+          out.push({
+            kind: 'row',
+            key: `r-${tx.id || tx.transaction_id}-${rowIndex}`,
+            transaction: tx,
+            isLast: rowIndex === total - 1,
+          })
+          rowIndex++
+        }
+      }
+    }
+    return out
+  }, [recentTransactions])
+
   function formatBalanceDisplay(amount: number, currency: 'USD' | 'EUR' | 'GBP'): string {
     const currencySymbol =
       currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : currency
@@ -683,7 +716,10 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
       {/* Balance hero + quick actions */}
       <ScrollView 
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          dashboardRecentListWithAllRow ? styles.scrollContentTabBarTight : null,
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl 
@@ -812,33 +848,40 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
           </View>
         </LinearGradient>
         
-        {/* Recent transactions: title row sits on canvas; list stays in SectionCard */}
         <View style={styles.transactionsBlock}>
+          <SectionCard style={styles.transactionsSection} flush>
           {!loadingTransactions && recentTransactions.length > 0 && (
             <View style={styles.transactionsHeader}>
               <Text style={styles.transactionsTitle} numberOfLines={1}>
                 Recent Transactions
               </Text>
               <Pressable
-                android_ripple={ripple.neutral}
-                style={styles.viewAllButton}
+                android_ripple={ripple.primaryTint}
+                style={({ pressed }) => [styles.viewAllButton, pressed && styles.viewAllButtonPressed]}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                   navigation.navigate('Transactions' as never)
                 }}
+                accessibilityRole="button"
+                accessibilityLabel="All transactions"
               >
-                <Text style={styles.viewAllText}>View all</Text>
+                <View style={styles.viewAllInner}>
+                  <Text style={styles.viewAllText}>All</Text>
+                  <ChevronRight size={16} color={palette.primary.main} strokeWidth={2.25} />
+                </View>
               </Pressable>
             </View>
           )}
-
-          <SectionCard style={styles.transactionsSection} flush>
           {/* Transaction List */}
           {loadingTransactions ? (
             <View style={styles.skeletonContainer}>
-              {[0, 1, 2].map((i) => (
-                <ListRowSkeleton key={i} variant="transaction" showDivider={i < 2} />
+              {Array.from({ length: DASHBOARD_RECENT_TX_LIMIT }, (_, i) => (
+                <ListRowSkeleton
+                  key={i}
+                  variant="transaction"
+                  showDivider={i < DASHBOARD_RECENT_TX_LIMIT - 1}
+                />
               ))}
             </View>
           ) : recentTransactions.length === 0 && hasAttemptedLoad ? (
@@ -853,18 +896,28 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
             </View>
           ) : (
             <View>
-              {recentTransactions.map((transaction, index) => {
+              {dashboardTxSegments.map((seg) => {
+                if (seg.kind === 'header') {
+                  return (
+                    <Text
+                      key={seg.key}
+                      style={[styles.txDateHeader, seg.isFirst ? styles.txDateHeaderFirst : null]}
+                    >
+                      {seg.label}
+                    </Text>
+                  )
+                }
+                const transaction = seg.transaction
                 const isReceived = transaction.type === 'receive'
                 const iconType = getTransactionIconType(transaction)
-                const isLast = index === recentTransactions.length - 1
                 const statusDisplay = getTransactionStatusDisplay(transaction.status)
                 return (
                   <Pressable
-                   android_ripple={ripple.neutral}
-                    key={transaction.id || transaction.transaction_id}
+                    android_ripple={ripple.neutral}
+                    key={seg.key}
                     style={({ pressed }) => [
                       styles.transactionItem,
-                      !isLast && styles.transactionItemDivider,
+                      !seg.isLast && styles.transactionItemDivider,
                       pressed && styles.transactionItemPressed,
                     ]}
                     onPress={() => {
@@ -875,7 +928,8 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                         fromScreen: 'Dashboard',
                         initialTransaction: transaction,
                       } as never)
-                    }} >
+                    }}
+                  >
                     {getTransactionIcon(iconType, isReceived)}
                     <View style={styles.transactionDetails}>
                       <Text style={styles.transactionName} numberOfLines={1}>
@@ -1016,6 +1070,10 @@ function createDashboardStyles(c: Colors, scrollBottomPadding: number) {
     paddingTop: spacing[3],
     flexGrow: 1,
     paddingBottom: scrollBottomPadding,
+  },
+  /** When Home shows recent transactions + All, pull content closer to the docked tab bar. */
+  scrollContentTabBarTight: {
+    paddingBottom: spacing[4],
   },
   /** Sky-blue gradient hero — primary identity card. */
   heroCard: {
@@ -1272,6 +1330,8 @@ function createDashboardStyles(c: Colors, scrollBottomPadding: number) {
     justifyContent: 'space-between',
     alignItems: 'center',
     width: '100%',
+    paddingTop: spacing[3],
+    paddingHorizontal: spacing[4],
     marginBottom: spacing[3],
   },
   transactionsTitle: {
@@ -1287,12 +1347,46 @@ function createDashboardStyles(c: Colors, scrollBottomPadding: number) {
   viewAllButton: {
     flexShrink: 0,
     justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: spacing[3],
+    borderRadius: borderRadius.full,
+    backgroundColor: 'rgba(0, 122, 204, 0.08)',
+  },
+  viewAllInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[1],
+  },
+  viewAllButtonPressed: {
+    opacity: 0.9,
   },
   viewAllText: {
     ...textStyles.labelMedium,
     color: c.primary.main,
     fontFamily: fontFamily.semibold,
     fontWeight: '600',
+    fontSize: 13,
+    lineHeight: 16,
+    textAlignVertical: 'center',
+    ...Platform.select({
+      android: { includeFontPadding: false },
+      default: {},
+    }),
+  },
+  txDateHeader: {
+    fontSize: 11,
+    fontFamily: fontFamily.semibold,
+    fontWeight: '600',
+    color: c.text.secondary,
+    letterSpacing: 0.6,
+    paddingHorizontal: spacing[4],
+    paddingTop: spacing[4],
+    paddingBottom: spacing[2],
+  },
+  txDateHeaderFirst: {
+    paddingTop: spacing[2],
   },
   transactionItem: {
     flexDirection: 'row',
