@@ -68,9 +68,8 @@ export async function POST(request: Request) {
   try {
     const run = backfillTurnkeyOnchainTransactions(admin, {
       walletOwnerId,
-      // Keep this cheap; this endpoint is triggered by clients and can be called often.
-      // Increase only for one-off manual repairs.
-      signaturesPerAddress: 40,
+      signaturesPerAddress: 25,
+      throttleMsBetweenIngests: 120,
     })
     inFlightByOwner.set(walletOwnerId, run)
     const result = await run

@@ -48,9 +48,61 @@ function mergeSignatureLists(
     })
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms))
+}
+
+type LedgerOwnerCtx = { userId: string; businessId: string | null }
+
+async function resolveLedgerOwnerContext(
+  admin: SupabaseClient,
+  walletOwnerId: string,
+  cache: Map<string, LedgerOwnerCtx | null>,
+): Promise<LedgerOwnerCtx | null> {
+  if (cache.has(walletOwnerId)) return cache.get(walletOwnerId) ?? null
+
+  const { data: owner } = await admin
+    .from("wallet_owners")
+    .select("owner_type,owner_ref")
+    .eq("id", walletOwnerId)
+    .maybeSingle()
+  if (!owner?.owner_type || !owner?.owner_ref) {
+    cache.set(walletOwnerId, null)
+    return null
+  }
+
+  let firstBusinessUserId: string | null = null
+  if (owner.owner_type === "business") {
+    const { data: orgOwner } = await admin
+      .from("users")
+      .select("id")
+      .eq("easner_business_id", String(owner.owner_ref))
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    firstBusinessUserId = orgOwner?.id ? String(orgOwner.id) : null
+  }
+  const ctx = extractOwnerContext(
+    String(owner.owner_type),
+    String(owner.owner_ref),
+    firstBusinessUserId,
+  )
+  if (!ctx.userId) {
+    cache.set(walletOwnerId, null)
+    return null
+  }
+  cache.set(walletOwnerId, ctx)
+  return ctx
+}
+
 export async function backfillTurnkeyOnchainTransactions(
   admin: SupabaseClient,
-  input?: { signaturesPerAddress?: number; walletOwnerId?: string },
+  input?: {
+    signaturesPerAddress?: number
+    walletOwnerId?: string
+    /** Pause between each signature ingest to avoid Supabase / Solana RPC 429 bursts (default 85ms). */
+    throttleMsBetweenIngests?: number
+  },
 ): Promise<{
   addressesScanned: number
   signaturesScanned: number
@@ -59,7 +111,13 @@ export async function backfillTurnkeyOnchainTransactions(
   skipReasons: Record<string, number>
 }> {
   const limit = Math.max(1, Math.min(200, Math.floor(input?.signaturesPerAddress ?? 120)))
+  const throttleMs = Math.max(
+    0,
+    Math.min(750, Math.floor(input?.throttleMsBetweenIngests ?? 85)),
+  )
   const connection = new Connection(getRpcUrl(), "confirmed")
+
+  const ownerCtxCache = new Map<string, LedgerOwnerCtx | null>()
 
   let accQuery = admin
     .from("wallet_accounts")
@@ -94,36 +152,10 @@ export async function backfillTurnkeyOnchainTransactions(
       continue
     }
 
-    const { data: owner } = await admin
-      .from("wallet_owners")
-      .select("owner_type,owner_ref")
-      .eq("id", walletOwnerId)
-      .maybeSingle()
-    if (!owner?.owner_type || !owner?.owner_ref) {
+    const ctx = await resolveLedgerOwnerContext(admin, walletOwnerId, ownerCtxCache)
+    if (!ctx) {
       skipped += 1
-      bump("missing_wallet_owner_record")
-      continue
-    }
-
-    let firstBusinessUserId: string | null = null
-    if (owner.owner_type === "business") {
-      const { data: orgOwner } = await admin
-        .from("users")
-        .select("id")
-        .eq("easner_business_id", String(owner.owner_ref))
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle()
-      firstBusinessUserId = orgOwner?.id ? String(orgOwner.id) : null
-    }
-    const ctx = extractOwnerContext(
-      String(owner.owner_type),
-      String(owner.owner_ref),
-      firstBusinessUserId,
-    )
-    if (!ctx.userId) {
-      skipped += 1
-      bump("missing_user_context")
+      bump("missing_wallet_owner_record_or_user_context")
       continue
     }
 
@@ -169,7 +201,10 @@ export async function backfillTurnkeyOnchainTransactions(
     const sigs = mergeSignatureLists(sigLists)
     signaturesScanned += sigs.length
 
+    let firstSig = true
     for (const sig of sigs) {
+      if (!firstSig && throttleMs > 0) await sleep(throttleMs)
+      firstSig = false
       const res = await ingestTurnkeySolanaTxForOwnerVault(admin, {
         ownerAddress: walletAddress,
         asset,

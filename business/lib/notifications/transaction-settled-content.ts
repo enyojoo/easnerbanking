@@ -65,9 +65,9 @@ export function buildTransactionSettledPushContent(input: TransactionSettledCont
 
   if (easetag) {
     if (direction === "out") {
-      return { title: "Money sent", body: `Sent ${amountText} to @${easetag}` }
+      return { title: "Easetag Transfer", body: `Sent ${amountText} to @${easetag}` }
     }
-    return { title: "Money received", body: `Received ${amountText} from @${easetag}` }
+    return { title: "Easetag Deposit", body: `Received ${amountText} from @${easetag}` }
   }
 
   if (isCard) {
@@ -89,23 +89,23 @@ export function buildTransactionSettledPushContent(input: TransactionSettledCont
   })
 
   if (category === "Stablecoin Deposit") {
-    return { title: "Stablecoin deposit received", body: `Received ${amountText} via address` }
+    return { title: "Stablecoin Deposit", body: `Received ${amountText} via address` }
   }
   if (category === "Stablecoin Transfer") {
-    return { title: "Stablecoin sent", body: `Sent ${amountText} to wallet address` }
+    return { title: "Stablecoin Transfer", body: `Sent ${amountText} to wallet address` }
   }
 
   if (direction === "in") {
     const from = deriveEasnerInboundRemitterDisplayName({ metadata: meta, payload: input.payload ?? null })
     return {
-      title: "Bank deposit received",
+      title: "Bank Deposit",
       body: from ? `Received ${amountText} from ${from}` : `Received ${amountText}`,
     }
   }
 
   const to = deriveOutboundCounterpartyName({ metadata: meta, payload: input.payload ?? null })
   return {
-    title: "Transfer complete",
+    title: "Bank Transfer",
     body: to ? `Sent ${amountText} to ${to}` : `Sent ${amountText}`,
   }
 }

@@ -24,7 +24,10 @@ export async function POST(request: Request) {
     const ataFill = await fillMissingAssociatedTokenAddresses(admin)
     const [activities, onchain] = await Promise.all([
       backfillTurnkeyHistoricalTransactions(admin),
-      backfillTurnkeyOnchainTransactions(admin),
+      backfillTurnkeyOnchainTransactions(admin, {
+        // Batch repair: moderate pacing so we do not trip Supabase / RPC limits.
+        throttleMsBetweenIngests: 40,
+      }),
     ])
     return NextResponse.json({ ok: true, result: { ataFill, activities, onchain } })
   } catch (e) {
