@@ -12,3 +12,12 @@ export type { OtpCodeInputProps } from './OtpCodeInput'
 
 export { Surface } from './Surface'
 export type { SurfaceProps } from './Surface'
+
+export { SectionCard } from './SectionCard'
+export type { SectionCardProps } from './SectionCard'
+
+export { StatusPill } from './StatusPill'
+export type { StatusPillProps, StatusPillTone, StatusPillSize } from './StatusPill'
+
+export { FilterChip } from './FilterChip'
+export type { FilterChipProps } from './FilterChip'

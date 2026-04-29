@@ -1,8 +1,7 @@
 import React, { useRef } from 'react'
 import { View, Pressable, StyleSheet, Text, Animated, Platform, type ViewStyle, type StyleProp } from 'react-native'
-import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
-import { borderRadius, shadows, spacing, textStyles, useThemeColors } from '../../theme'
+import { borderRadius, spacing, textStyles, useThemeColors } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 
 type GlossyPrimaryButtonProps = {
@@ -51,18 +50,13 @@ export default function GlossyPrimaryButton({
           }}
           style={({ pressed }) => [
             styles.touchable,
+            { backgroundColor: palette.primary.main },
+            borderColor ? { borderColor, borderWidth: 1 } : null,
             pressed && Platform.OS === 'ios' && styles.pressed,
             disabled && styles.disabled,
           ]}
         >
-          <LinearGradient
-            colors={[palette.primary.dark, palette.primary.main]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[styles.gradient, borderColor ? { borderColor } : null]}
-          >
-            <Text style={[styles.title, { color: palette.neutral.white }]}>{title}</Text>
-          </LinearGradient>
+          <Text style={[styles.title, { color: '#FFFFFF' }]}>{title}</Text>
         </Pressable>
       </Animated.View>
     </View>
@@ -83,23 +77,17 @@ const styles = StyleSheet.create({
   touchable: {
     flex: 1,
     borderRadius: borderRadius.full,
-    overflow: 'hidden',
-  },
-  gradient: {
-    flex: 1,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing[6],
+    paddingHorizontal: spacing[5],
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'transparent',
-    ...shadows.sm,
   },
   title: {
-    ...textStyles.titleLarge,
-    fontWeight: '700',
+    ...textStyles.titleMedium,
+    fontWeight: '600',
+    fontSize: 15,
+    letterSpacing: -0.1,
   },
-  pressed: { opacity: 0.94 },
+  pressed: { opacity: 0.92 },
   disabled: { opacity: 0.5 },
 })
 

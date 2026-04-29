@@ -8,13 +8,14 @@ import {
   TextInput,
   Keyboard,
   Platform,
+  Pressable,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { ArrowLeft, Search } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { ShimmerLoader } from '../../components/premium'
 import { NavigationProps } from '../../types'
-import { colors, textStyles, borderRadius, spacing } from '../../theme'
+import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, fontFamily } from '../../theme'
 import { noahService } from '../../lib/noahService'
 
 type Row = {
@@ -98,16 +99,16 @@ export default function TransactionCardScreen({ navigation }: NavigationProps) {
     <ScreenWrapper>
       <View style={styles.container}>
         <View style={styles.header}>
-          <Ionicons
-            name="arrow-back"
-            size={24}
-            color={colors.text.primary}
+          <Pressable
             onPress={async () => {
               await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
               navigation.goBack()
             }}
             accessibilityRole="button"
-          />
+            hitSlop={12}
+          >
+            <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
+          </Pressable>
           <View style={{ flex: 1, marginLeft: spacing[3] }}>
             <Text style={styles.title}>Card transactions</Text>
             <Text style={styles.sub}>Spend tied to Easner cards (when available)</Text>
@@ -115,7 +116,7 @@ export default function TransactionCardScreen({ navigation }: NavigationProps) {
         </View>
 
         <View style={styles.searchWrap}>
-          <Ionicons name="search" size={18} color={colors.primary.main} />
+          <Search size={18} color={colors.primary.main} strokeWidth={2} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search"
@@ -194,16 +195,13 @@ const styles = StyleSheet.create({
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.frame.background,
-    borderRadius: borderRadius.xl,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
     paddingHorizontal: spacing[4],
     ...Platform.select({
       ios: { paddingVertical: spacing[3] },
       android: { paddingVertical: spacing[2], minHeight: 44 },
     }),
     gap: spacing[2],
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
     marginBottom: spacing[4],
   },
   searchInput: {
@@ -234,7 +232,7 @@ const styles = StyleSheet.create({
   rowName: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: fontFamily.medium,
   },
   rowMeta: {
     ...textStyles.bodySmall,
@@ -244,7 +242,7 @@ const styles = StyleSheet.create({
   rowAmt: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   empty: {
     paddingVertical: spacing[8],

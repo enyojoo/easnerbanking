@@ -7,7 +7,7 @@ import {
   Platform,
   Modal,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { Lock } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { colors, textStyles, borderRadius, spacing } from '../theme'
 import { ripple } from '../lib/androidRipple'
@@ -42,7 +42,7 @@ export default function PinSetupPrompt({ visible, onSetup, onDismiss }: PinSetup
       <View style={styles.overlay}>
         <View style={styles.container}>
           <View style={styles.iconContainer}>
-            <Ionicons name="lock-closed" size={48} color={colors.primary.main} />
+            <Lock size={48} color={colors.primary.main} strokeWidth={2} />
           </View>
 
           <Text style={styles.title}>Secure Your Account</Text>

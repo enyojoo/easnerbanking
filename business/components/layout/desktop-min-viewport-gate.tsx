@@ -47,7 +47,7 @@ export function DesktopMinViewportGate({ product, children }: DesktopMinViewport
             </p>
             <h1
               id="easner-viewport-gate-title"
-              className="font-serif text-balance text-2xl font-semibold tracking-tight text-foreground sm:text-3xl"
+              className="font-sans text-balance text-2xl font-semibold tracking-tight text-foreground sm:text-3xl"
             >
               {copy.title}
             </h1>

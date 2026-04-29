@@ -5,22 +5,31 @@ import {
   Pressable, Platform,
   StyleSheet,
   ScrollView,
-  Alert,
   ActivityIndicator,
   Animated,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import {
+  ArrowLeft,
+  ArrowRight,
+  User,
+  CreditCard,
+  Receipt,
+  Zap,
+  ShieldCheck,
+  CircleCheck,
+} from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '../../contexts/AuthContext'
+import { useToast } from '../../components/ToastProvider'
 import { useQueryClient } from '@tanstack/react-query'
 import { useScope } from '../../query/scope'
 import { invalidateTransactionsFeed } from '../../query/refresh-user-feeds'
 import { NavigationProps } from '../../types'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { analytics } from '../../lib/analytics'
-import { colors, shadows, textStyles, borderRadius, spacing, motion } from '../../theme'
+import { colors, shadows, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { generateTransactionId } from '../../lib/transactionId'
@@ -29,6 +38,7 @@ import { PinChallengeModal } from '../../components/pin'
 
 export default function ConfirmationScreen({ navigation, route }: NavigationProps) {
   const { userProfile, user } = useAuth()
+  const { showSuccess, showError } = useToast()
   const qc = useQueryClient()
   const { scope } = useScope()
   const insets = useSafeAreaInsets()
@@ -60,7 +70,7 @@ export default function ConfirmationScreen({ navigation, route }: NavigationProp
 
   const requestConfirmTransfer = async () => {
     if (!userProfile) {
-      Alert.alert('Error', 'User not authenticated')
+      showError('User not authenticated')
       return
     }
     if (user?.id && (await hasPin(user.id))) {
@@ -72,7 +82,7 @@ export default function ConfirmationScreen({ navigation, route }: NavigationProp
 
   const handleConfirmTransaction = async () => {
     if (!userProfile) {
-      Alert.alert('Error', 'User not authenticated')
+      showError('User not authenticated')
       return
     }
 
@@ -97,28 +107,16 @@ export default function ConfirmationScreen({ navigation, route }: NavigationProp
       await new Promise(resolve => setTimeout(resolve, 2000))
 
       const transactionId = generateTransactionId()
-      
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-      
-      Alert.alert(
-        'Transaction Created',
-        `Your transaction has been created successfully!\n\nTransaction ID: ${transactionId}`,
-        [
-          {
-            text: 'View Details',
-            onPress: () => {
-              if (scope && user?.id) void invalidateTransactionsFeed(qc, scope, user.id)
-              navigation.navigate('LegacyTransactionDetails', { 
-                transactionId,
-                fromScreen: 'SendFlow'
-              })
-            }
-          }
-        ]
-      )
+      if (scope && user?.id) void invalidateTransactionsFeed(qc, scope, user.id)
+      showSuccess(`Transaction ${transactionId} created`, 3500)
+      navigation.navigate('LegacyTransactionDetails', {
+        transactionId,
+        fromScreen: 'SendFlow',
+      })
     } catch (error) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
-      Alert.alert('Error', 'Failed to create transaction. Please try again.')
+      showError('Failed to create transaction. Please try again.')
     } finally {
       setIsProcessing(false)
     }
@@ -167,7 +165,7 @@ export default function ConfirmationScreen({ navigation, route }: NavigationProp
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+          <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
         </Pressable>
         <View style={styles.headerContent}>
           <Text style={styles.title}>Confirm Transfer</Text>
@@ -209,7 +207,7 @@ export default function ConfirmationScreen({ navigation, route }: NavigationProp
       </View>
                 <View style={styles.arrowContainer}>
                   <View style={styles.arrowCircle}>
-                    <Ionicons name="arrow-forward" size={20} color={colors.primary.main} />
+                    <ArrowRight size={20} color={colors.primary.main} strokeWidth={2} />
           </View>
         </View>
                 <View style={[styles.summaryItem, { alignItems: 'flex-end' }]}>
@@ -234,7 +232,7 @@ export default function ConfirmationScreen({ navigation, route }: NavigationProp
           <View style={styles.detailsCard}>
             <View style={styles.cardHeader}>
               <View style={styles.cardIconContainer}>
-                <Ionicons name="person" size={18} color={colors.primary.main} />
+                <User size={18} color={colors.primary.main} strokeWidth={2} />
               </View>
               <Text style={styles.cardTitle}>Recipient</Text>
             </View>
@@ -260,7 +258,7 @@ export default function ConfirmationScreen({ navigation, route }: NavigationProp
           <View style={styles.detailsCard}>
             <View style={styles.cardHeader}>
               <View style={styles.cardIconContainer}>
-                <Ionicons name="card" size={18} color={colors.primary.main} />
+                <CreditCard size={18} color={colors.primary.main} strokeWidth={2} />
         </View>
               <Text style={styles.cardTitle}>Payment Method</Text>
         </View>
@@ -287,7 +285,7 @@ export default function ConfirmationScreen({ navigation, route }: NavigationProp
           <View style={styles.detailsCard}>
             <View style={styles.cardHeader}>
               <View style={styles.cardIconContainer}>
-                <Ionicons name="receipt" size={18} color={colors.primary.main} />
+                <Receipt size={18} color={colors.primary.main} strokeWidth={2} />
               </View>
               <Text style={styles.cardTitle}>Transaction Info</Text>
             </View>
@@ -311,7 +309,7 @@ export default function ConfirmationScreen({ navigation, route }: NavigationProp
         <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Estimated Delivery</Text>
               <View style={styles.deliveryBadge}>
-                <Ionicons name="flash" size={12} color={colors.success.main} />
+                <Zap size={12} color={colors.success.main} strokeWidth={2.5} />
                 <Text style={styles.deliveryText}>1-3 business days</Text>
               </View>
         </View>
@@ -319,7 +317,7 @@ export default function ConfirmationScreen({ navigation, route }: NavigationProp
 
           {/* Terms Notice */}
       <View style={styles.termsContainer}>
-            <Ionicons name="shield-checkmark" size={20} color={colors.primary.main} />
+            <ShieldCheck size={20} color={colors.primary.main} strokeWidth={2} />
         <Text style={styles.termsText}>
           By confirming this transfer, you agree to our Terms of Service and Privacy Policy. 
               This transaction is secured with bank-level encryption.
@@ -356,7 +354,7 @@ export default function ConfirmationScreen({ navigation, route }: NavigationProp
                 <ActivityIndicator color={colors.text.inverse} size="small" />
           ) : (
                 <>
-                  <Ionicons name="checkmark-circle" size={20} color={colors.text.inverse} />
+                  <CircleCheck size={20} color={colors.text.inverse} strokeWidth={2} />
                   <Text style={styles.confirmButtonText}>Confirm</Text>
                 </>
           )}
@@ -393,14 +391,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing[4],
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+    ...surfaceChromeCircleStyle(colors, 44),
     marginRight: spacing[3],
   },
   headerContent: {
@@ -542,7 +533,7 @@ const styles = StyleSheet.create({
   recipientAccount: {
     ...textStyles.bodySmall,
     color: colors.text.tertiary,
-    fontFamily: 'monospace',
+    fontFamily: fontFamily.mono,
     marginTop: 2,
   },
   detailRow: {

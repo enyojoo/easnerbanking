@@ -9,13 +9,13 @@ import {
   StyleSheet,
   TextInput,
   ActivityIndicator,
-  Alert,
 } from 'react-native'
 import * as Sharing from 'expo-sharing'
-import { Ionicons } from '@expo/vector-icons'
+import { X } from 'lucide-react-native'
 import { noahService } from '../lib/noahService'
-import { colors, spacing, borderRadius, textStyles } from '../theme'
+import { colors, spacing, borderRadius, textStyles, fontFamily } from '../theme'
 import { ripple } from '../lib/androidRipple'
+import { useToast } from './ToastProvider'
 
 const ISO_RE = /^\d{4}-\d{2}-\d{2}$/
 
@@ -38,14 +38,15 @@ export function StatementPdfModal({ visible, onClose, accountCurrency }: Props) 
   const [fromStr, setFromStr] = useState(() => defaultFrom())
   const [toStr, setToStr] = useState(() => new Date().toISOString().slice(0, 10))
   const [loading, setLoading] = useState(false)
+  const { showError, showWarning, showSuccess } = useToast()
 
   const download = async () => {
     if (!ISO_RE.test(fromStr) || !ISO_RE.test(toStr)) {
-      Alert.alert('Invalid dates', 'Use YYYY-MM-DD format.')
+      showWarning('Use YYYY-MM-DD format for both dates.')
       return
     }
     if (fromStr > toStr) {
-      Alert.alert('Invalid range', 'From must be before to.')
+      showWarning('From date must be before to date.')
       return
     }
     setLoading(true)
@@ -63,11 +64,11 @@ export function StatementPdfModal({ visible, onClose, accountCurrency }: Props) 
           UTI: 'com.adobe.pdf',
         })
       } else {
-        Alert.alert('Saved', `Statement saved to:\n${uri}`)
+        showSuccess(`Statement saved to:\n${uri}`)
       }
       onClose()
     } catch (e: unknown) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Could not generate statement')
+      showError(e instanceof Error ? e.message : 'Could not generate statement')
     } finally {
       setLoading(false)
     }
@@ -89,7 +90,7 @@ export function StatementPdfModal({ visible, onClose, accountCurrency }: Props) 
               android_ripple={ripple.neutral}
               style={({ pressed }) => pressed && Platform.OS === 'ios' && styles.iconHitPressedIOS}
             >
-              <Ionicons name="close" size={22} color={colors.text.primary} />
+              <X size={22} color={colors.text.primary} strokeWidth={2} />
             </Pressable>
           </View>
           <Text style={styles.hint}>Export a PDF of your account statement for the selected period.</Text>
@@ -129,7 +130,7 @@ export function StatementPdfModal({ visible, onClose, accountCurrency }: Props) 
             android_ripple={ripple.primaryTint}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={colors.neutral.white} />
             ) : (
               <Text style={styles.primaryText}>Download PDF</Text>
             )}
@@ -177,7 +178,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing[4],
   },
   accountStrong: {
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     color: colors.text.primary,
   },
   label: {
@@ -209,7 +210,7 @@ const styles = StyleSheet.create({
     opacity: 0.92,
   },
   primaryText: {
-    color: '#fff',
+    color: colors.neutral.white,
     fontSize: 16,
     fontWeight: '600',
   },

@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
+import { FlashList } from '@shopify/flash-list'
 import {
   View,
   Text,
   Pressable,
   StyleSheet,
-  FlatList,
-  Alert,
   TextInput,
   RefreshControl,
   Modal,
@@ -19,16 +18,28 @@ import {
   Keyboard,
   InteractionManager,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { ScrollView as GestureHandlerScrollView } from 'react-native-gesture-handler'
 import { CameraView, useCameraPermissions } from 'expo-camera'
-import { Plus, Search } from 'lucide-react-native'
+import {
+  Plus,
+  Search,
+  Pencil,
+  Hourglass,
+  Trash2,
+  ArrowLeft,
+  CircleX,
+  Users,
+  X,
+  Check,
+  ScanLine,
+  ChevronUp,
+  ChevronDown,
+} from 'lucide-react-native'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import KeyboardSafeContainer from '../../components/KeyboardSafeContainer'
-import ConfirmationDialog from '../../components/ConfirmationDialog'
 import { useToast } from '../../components/ToastProvider'
+import { EasnerAlertSheet } from '../../components/premium'
 import { useQueryClient } from '@tanstack/react-query'
 import { NavigationProps, Recipient } from '../../types'
 import { useRecipientsList, useCurrenciesCatalog } from '../../hooks/queries'
@@ -41,7 +52,7 @@ import { useFocusRefresh } from '../../hooks/useFocusRefresh'
 import { getAccountTypeConfigFromCurrency, formatFieldValue } from '../../lib/currencyAccountTypes'
 import { validateRequired, validateAccountNumber, validateIBAN } from '../../utils/validators'
 import { formatIBAN, formatSortCode, formatRoutingNumber, formatAccountNumber } from '../../utils/formatters'
-import { colors, shadows, textStyles, borderRadius, spacing, motion } from '../../theme'
+import { colors, shadows, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { getAllCountryCurrencies, searchCountryCurrencies, CountryCurrency } from '../../lib/countryCurrencyMapping'
@@ -64,31 +75,15 @@ import {
 import { EasenetLookupPreview } from '../../components/EasenetLookupPreview'
 import { EasenetRecipientHydratedPreview } from '../../components/EasenetRecipientHydratedPreview'
 import { RecipientPayoutPreview } from '../../components/RecipientPayoutPreview'
+import RecipientFormDropdownList from '../../components/recipients/RecipientFormDropdownList'
 import { isEasenetRecipientRecord, resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { CountryFlag } from '../../components/flags/CountryFlag'
 import { getCountryCodeForCurrency } from '@easner/shared'
 
-/**
- * Dropdown panels live inside the add/edit recipient modal `ScrollView`. On Android, nested
- * `FlatList` inside a parent `ScrollView` often steals gestures and does not scroll the list.
- * Use a bounded `ScrollView` for options instead.
- */
-function RecipientFormDropdownList({ children }: { children: React.ReactNode }) {
-  return (
-    <GestureHandlerScrollView
-      style={styles.currencyDropdownList}
-      nestedScrollEnabled
-      keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator
-    >
-      {children}
-    </GestureHandlerScrollView>
-  )
-}
-
 function RecipientsContent({ navigation }: NavigationProps) {
   const { user, userProfile } = useAuth()
+  const { showSuccess, showError, showWarning } = useToast()
   const qc = useQueryClient()
   const { scope } = useScope()
   const recipientsQuery = useRecipientsList()
@@ -437,7 +432,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
         setError('')
         resetForm()
         setShowBankAccountForm(false)
-        Alert.alert('Success', 'Recipient added successfully')
+        showSuccess('Recipient added successfully')
         return
       }
 
@@ -485,7 +480,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
       // Reset form and close modal
       resetForm()
       setShowBankAccountForm(false)
-      Alert.alert('Success', 'Recipient added successfully')
+      showSuccess('Recipient added successfully')
     } catch (error) {
       console.error('Error adding recipient:', error)
       setError('Failed to add recipient')
@@ -681,7 +676,6 @@ function RecipientsContent({ navigation }: NavigationProps) {
     }
   }
 
-  const { showSuccess, showError } = useToast()
   const [deleteConfirmation, setDeleteConfirmation] = useState<Recipient | null>(null)
 
   const handleDeleteRecipient = (recipient: Recipient) => {
@@ -736,7 +730,9 @@ function RecipientsContent({ navigation }: NavigationProps) {
   const handleScanPress = async () => {
     const perm = cameraPermission?.granted ? cameraPermission : await requestCameraPermission()
     if (!perm?.granted) {
-      Alert.alert('Camera permission needed', 'Please enable camera permission to scan wallet address QR codes.')
+      showWarning(
+        'Camera permission needed. Enable camera access in Settings to scan wallet QR codes.',
+      )
       return
     }
     setShowScanModal(true)
@@ -908,12 +904,13 @@ function RecipientsContent({ navigation }: NavigationProps) {
     return { isValid: true }
   }
 
-  const renderRecipient = ({ item }: { item: Recipient }) => {
+  const renderRecipient = ({ item, index }: { item: Recipient; index: number }) => {
     const isEasenet = isEasenetRecipientRecord(item)
+    const isLast = index === filteredRecipients.length - 1
     return (
       <Pressable
        android_ripple={ripple.neutral}
-        style={styles.recipientItem} onPress={async () => {
+        style={[styles.recipientItem, !isLast && styles.recipientItemDivider]} onPress={async () => {
           await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
           handleEditRecipient(item)
         }}
@@ -931,7 +928,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                     handleEditRecipient(item)
                   }}
                   disabled={isSubmitting} >
-                  <Ionicons name="pencil-outline" size={18} color={colors.text.primary} />
+                  <Pencil size={18} color={colors.text.primary} strokeWidth={2} />
                 </Pressable>
                 <Pressable
                  android_ripple={ripple.neutral}
@@ -942,9 +939,9 @@ function RecipientsContent({ navigation }: NavigationProps) {
                   }}
                   disabled={deletingId === item.id} >
                   {deletingId === item.id ? (
-                    <Ionicons name="hourglass-outline" size={18} color={colors.error.main} />
+                    <Hourglass size={18} color={colors.error.main} strokeWidth={2} />
                   ) : (
-                    <Ionicons name="trash-outline" size={18} color={colors.error.main} />
+                    <Trash2 size={18} color={colors.error.main} strokeWidth={2} />
                   )}
                 </Pressable>
               </View>
@@ -962,7 +959,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                     handleEditRecipient(item)
                   }}
                   disabled={isSubmitting} >
-                  <Ionicons name="pencil-outline" size={18} color={colors.text.primary} />
+                  <Pencil size={18} color={colors.text.primary} strokeWidth={2} />
                 </Pressable>
                 <Pressable
                  android_ripple={ripple.neutral}
@@ -973,9 +970,9 @@ function RecipientsContent({ navigation }: NavigationProps) {
                   }}
                   disabled={deletingId === item.id} >
                   {deletingId === item.id ? (
-                    <Ionicons name="hourglass-outline" size={18} color={colors.error.main} />
+                    <Hourglass size={18} color={colors.error.main} strokeWidth={2} />
                   ) : (
-                    <Ionicons name="trash-outline" size={18} color={colors.error.main} />
+                    <Trash2 size={18} color={colors.error.main} strokeWidth={2} />
                   )}
                 </Pressable>
               </View>
@@ -1012,7 +1009,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
               navigation.goBack()
             }}
             style={styles.backButton} >
-            <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+            <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
           </Pressable>
           <View style={styles.headerContent}>
         <Text style={styles.title}>Recipients</Text>
@@ -1056,7 +1053,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
               />
               {searchTerm.length > 0 && (
                 <Pressable android_ripple={ripple.neutral} onPress={() => setSearchTerm('')}>
-                  <Ionicons name="close-circle" size={18} color={colors.primary.main} />
+                  <CircleX size={18} color={colors.primary.main} strokeWidth={2} />
                 </Pressable>
               )}
             </View>
@@ -1066,7 +1063,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
           {/* Recipients List - No Grouping */}
           <Animated.View
             style={[
-              styles.recipientsContainer,
+              styles.recipientsTray,
               {
                 opacity: contentAnim,
                 transform: [{
@@ -1084,27 +1081,20 @@ function RecipientsContent({ navigation }: NavigationProps) {
                 <Text style={[styles.emptyText, { marginTop: spacing[3] }]}>Loading recipients…</Text>
               </View>
             ) : filteredRecipients.length > 0 ? (
-              <FlatList
+              <FlashList
                 data={filteredRecipients}
                 renderItem={renderRecipient}
                 keyExtractor={(item) => item.id}
                 keyboardShouldPersistTaps="handled"
                 scrollEnabled={false}
                 showsVerticalScrollIndicator={false}
+                estimatedItemSize={112}
                 removeClippedSubviews={true}
-                maxToRenderPerBatch={10}
-                updateCellsBatchingPeriod={50}
-                initialNumToRender={10}
-                windowSize={10}
-                getItemLayout={(data, index) => ({
-                  length: 100, // Approximate item height
-                  offset: 100 * index,
-                  index,
-                })}
+                drawDistance={400}
               />
             ) : (
               <View style={styles.emptyState}>
-                <Ionicons name="people-outline" size={48} color={colors.text.secondary} />
+                <Users size={48} color={colors.text.secondary} strokeWidth={1.5} />
                 <Text style={styles.emptyText}>{searchTerm.trim() ? 'No matches' : 'No recipients found'}</Text>
                 <Text style={styles.emptySubtext}>
                   {searchTerm.trim() ? 'Try another search' : 'Add a new recipient to get started'}
@@ -1164,7 +1154,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                 }}
                 style={styles.closeButton}
               >
-                <Ionicons name="close" size={24} color={colors.text.secondary} />
+                <X size={24} color={colors.text.secondary} strokeWidth={2} />
               </Pressable>
             </View>
 
@@ -1338,7 +1328,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                 }}
                 style={styles.closeButton}
               >
-                <Ionicons name="close" size={24} color={colors.text.secondary} />
+                <X size={24} color={colors.text.secondary} strokeWidth={2} />
               </Pressable>
             </View>
 
@@ -1379,11 +1369,11 @@ function RecipientsContent({ navigation }: NavigationProps) {
                     <Text style={styles.currencySelectorText}>
                       {selectedCatalogEntry ? `${newRecipient.currency} - ${selectedCatalogEntry.countryName}` : 'Select currency'}
                     </Text>
-                    <Ionicons 
-                      name={showCountryDropdown ? "chevron-up" : "chevron-down"} 
-                      size={16} 
-                      color="#6F756F" 
-                    />
+                    {showCountryDropdown ? (
+                      <ChevronUp size={16} color={colors.brand.slate} strokeWidth={2} />
+                    ) : (
+                      <ChevronDown size={16} color={colors.brand.slate} strokeWidth={2} />
+                    )}
                   </View>
                 </Pressable>
                 
@@ -1395,7 +1385,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                     },
                     <>
                     <View style={styles.currencyDropdownSearch}>
-                      <Ionicons name="search" size={18} color={colors.neutral[400]} />
+                      <Search size={18} color={colors.neutral[400]} strokeWidth={2} />
                       <TextInput
                         style={styles.currencyDropdownSearchInput}
                         placeholder="Search currencies..."
@@ -1449,7 +1439,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                               <Text style={styles.currencyName}>{item.countryName}</Text>
                             </View>
                             {isSelected ? (
-                              <Ionicons name="checkmark" size={18} color={colors.primary.main} />
+                              <Check size={18} color={colors.primary.main} strokeWidth={2.5} />
                             ) : null}
                           </Pressable>
                         )
@@ -1514,7 +1504,11 @@ function RecipientsContent({ navigation }: NavigationProps) {
                         <Text style={styles.currencySelectorText}>
                           {newRecipient.provider || 'Select provider'}
                         </Text>
-                        <Ionicons name={showProviderDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6F756F" />
+                        {showProviderDropdown ? (
+                          <ChevronUp size={16} color={colors.brand.slate} strokeWidth={2} />
+                        ) : (
+                          <ChevronDown size={16} color={colors.brand.slate} strokeWidth={2} />
+                        )}
                       </View>
                     </Pressable>
                     {showProviderDropdown &&
@@ -1525,7 +1519,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                         },
                         <>
                         <View style={styles.currencyDropdownSearch}>
-                          <Ionicons name="search" size={18} color={colors.neutral[400]} />
+                          <Search size={18} color={colors.neutral[400]} strokeWidth={2} />
                           <TextInput
                             style={styles.currencyDropdownSearchInput}
                             placeholder="Search providers..."
@@ -1554,7 +1548,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                                 <Text style={styles.currencyCode}>{provider}</Text>
                               </View>
                               {newRecipient.provider === provider ? (
-                                <Ionicons name="checkmark" size={18} color={colors.primary.main} />
+                                <Check size={18} color={colors.primary.main} strokeWidth={2.5} />
                               ) : null}
                             </Pressable>
                           ))}
@@ -1605,7 +1599,11 @@ function RecipientsContent({ navigation }: NavigationProps) {
                         <Text style={styles.currencySelectorText}>
                           {newRecipient.currency || 'Select asset'}
                         </Text>
-                        <Ionicons name={showWalletAssetDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6F756F" />
+                        {showWalletAssetDropdown ? (
+                          <ChevronUp size={16} color={colors.brand.slate} strokeWidth={2} />
+                        ) : (
+                          <ChevronDown size={16} color={colors.brand.slate} strokeWidth={2} />
+                        )}
                       </View>
                     </Pressable>
                     {showWalletAssetDropdown &&
@@ -1616,7 +1614,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                         },
                         <>
                         <View style={styles.currencyDropdownSearch}>
-                          <Ionicons name="search" size={18} color={colors.neutral[400]} />
+                          <Search size={18} color={colors.neutral[400]} strokeWidth={2} />
                           <TextInput
                             style={styles.currencyDropdownSearchInput}
                             placeholder="Search asset..."
@@ -1653,7 +1651,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                                 <Text style={styles.currencyCode}>{asset}</Text>
                               </View>
                               {newRecipient.currency === asset ? (
-                                <Ionicons name="checkmark" size={18} color={colors.primary.main} />
+                                <Check size={18} color={colors.primary.main} strokeWidth={2.5} />
                               ) : null}
                             </Pressable>
                           ))}
@@ -1677,7 +1675,11 @@ function RecipientsContent({ navigation }: NavigationProps) {
                         <Text style={styles.currencySelectorText}>
                           {newRecipient.network || 'Select network'}
                         </Text>
-                        <Ionicons name={showWalletNetworkDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6F756F" />
+                        {showWalletNetworkDropdown ? (
+                          <ChevronUp size={16} color={colors.brand.slate} strokeWidth={2} />
+                        ) : (
+                          <ChevronDown size={16} color={colors.brand.slate} strokeWidth={2} />
+                        )}
                       </View>
                     </Pressable>
                     {showWalletNetworkDropdown &&
@@ -1688,7 +1690,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                         },
                         <>
                         <View style={styles.currencyDropdownSearch}>
-                          <Ionicons name="search" size={18} color={colors.neutral[400]} />
+                          <Search size={18} color={colors.neutral[400]} strokeWidth={2} />
                           <TextInput
                             style={styles.currencyDropdownSearchInput}
                             placeholder="Search network..."
@@ -1720,7 +1722,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                                 <Text style={styles.currencyCode}>{network}</Text>
                               </View>
                               {newRecipient.network === network ? (
-                                <Ionicons name="checkmark" size={18} color={colors.primary.main} />
+                                <Check size={18} color={colors.primary.main} strokeWidth={2.5} />
                               ) : null}
                             </Pressable>
                           ))}
@@ -1738,7 +1740,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                       editable={!isSubmitting}
                     />
                     <Pressable android_ripple={ripple.neutral} style={styles.walletScanIconButton} onPress={handleScanPress} >
-                      <Ionicons name="scan-outline" size={18} color={colors.primary.main} />
+                      <ScanLine size={18} color={colors.primary.main} strokeWidth={2} />
                     </Pressable>
                   </View>
                   <TextInput
@@ -2156,7 +2158,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                   <View style={styles.scanHeaderRow}>
                     <Text style={styles.scanTitle}>Scan wallet address</Text>
                     <Pressable android_ripple={ripple.neutral} style={styles.scanCloseButton} onPress={() => setShowScanModal(false)}>
-                      <Ionicons name="close" size={22} color={colors.text.inverse} />
+                      <X size={22} color={colors.text.inverse} strokeWidth={2} />
                     </Pressable>
                   </View>
                   <View style={styles.scanCenterGroup}>
@@ -2170,16 +2172,21 @@ function RecipientsContent({ navigation }: NavigationProps) {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Delete Confirmation Dialog */}
-      <ConfirmationDialog
+      <EasnerAlertSheet
         visible={deleteConfirmation !== null}
+        onDismiss={() => {
+          if (!deletingId) setDeleteConfirmation(null)
+        }}
         title="Delete Recipient"
-        message={`Are you sure you want to delete ${deleteConfirmation?.full_name}? This action cannot be undone.`}
-        confirmText="Delete"
-        cancelText="Cancel"
-        type="danger"
-        onConfirm={confirmDelete}
-        onCancel={() => setDeleteConfirmation(null)}
+        message={`Are you sure you want to delete ${deleteConfirmation?.full_name ?? 'this recipient'}? This action cannot be undone.`}
+        primaryLabel="Delete"
+        onPrimary={() => void confirmDelete()}
+        secondaryLabel="Cancel"
+        onSecondary={() => {
+          if (!deletingId) setDeleteConfirmation(null)
+        }}
+        primaryDestructive
+        primaryLoading={Boolean(deletingId)}
       />
       </KeyboardSafeContainer>
     </ScreenWrapper>
@@ -2199,14 +2206,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing[4],
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+    ...surfaceChromeCircleStyle(colors, 44),
     marginRight: spacing[3],
   },
   headerContent: {
@@ -2227,16 +2227,13 @@ const styles = StyleSheet.create({
   searchWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.frame.background,
-    borderRadius: borderRadius.xl,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
     paddingHorizontal: spacing[4],
     ...Platform.select({
       ios: { paddingVertical: spacing[3] },
       android: { paddingVertical: spacing[2], minHeight: 44 },
     }),
     gap: spacing[2],
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
   },
   searchInput: {
     flex: 1,
@@ -2258,7 +2255,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.primary,
     paddingHorizontal: spacing[5],
     paddingTop: spacing[4],
-    borderTopWidth: 0.5,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.frame.border,
     ...shadows.md,
   },
@@ -2272,21 +2269,27 @@ const styles = StyleSheet.create({
   addRecipientButtonText: {
     ...textStyles.bodyLarge,
     color: colors.text.inverse,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
-  recipientsContainer: {
-    paddingHorizontal: spacing[5],
+  /** White SectionCard frame — flat rows with hairline dividers (More-screen parity). */
+  recipientsTray: {
+    ...surfaceFrameStyle(colors),
+    marginHorizontal: spacing[5],
+    marginBottom: spacing[4],
+    overflow: 'hidden',
   },
   scrollView: {
     flex: 1,
   },
   recipientItem: {
-    backgroundColor: '#F9F9F9',
-    borderRadius: borderRadius.xl,
-    padding: spacing[4],
-    marginBottom: spacing[3],
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[5],
+    minHeight: 80,
+    justifyContent: 'center',
+  },
+  recipientItemDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border.light,
   },
   recipientRow: {
     flexDirection: 'row',
@@ -2314,7 +2317,7 @@ const styles = StyleSheet.create({
   recipientAvatarText: {
     ...textStyles.titleMedium,
     color: colors.primary.main,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     fontWeight: '700',
   },
   avatarFlagBadge: {
@@ -2333,15 +2336,8 @@ const styles = StyleSheet.create({
     borderColor: colors.background.primary,
   },
   flagContainer: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    ...surfaceChromeCircleStyle(colors, 20, { shadow: 'none' }),
     overflow: 'hidden',
-    backgroundColor: '#F9F9F9',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
   },
   easnerMarkBadgeImage: {
     width: 20,
@@ -2360,26 +2356,26 @@ const styles = StyleSheet.create({
   recipientName: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     marginBottom: spacing[1],
     minWidth: 0,
   },
   recipientBank: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
     marginBottom: 0,
   },
   recipientAccount: {
     ...textStyles.bodySmall,
     color: colors.text.tertiary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
     marginTop: 2,
   },
   recipientCurrency: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
     marginTop: 2,
   },
   recipientActions: {
@@ -2422,7 +2418,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: borderRadius['3xl'],
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: colors.neutral.black,
         shadowOffset: { width: 0, height: -4 },
         shadowOpacity: 0.15,
         shadowRadius: 12,
@@ -2445,7 +2441,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   closeButton: {
     width: 40,
@@ -2485,7 +2481,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     marginBottom: spacing[2],
     backgroundColor: colors.frame.background,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
     fontSize: 13,
     minHeight: 48,
     lineHeight: 18,
@@ -2521,7 +2517,7 @@ const styles = StyleSheet.create({
     marginTop: -spacing[2],
     marginBottom: spacing[2],
     marginLeft: spacing[1],
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
   },
   modalButtons: {
     flexDirection: 'row',
@@ -2535,9 +2531,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cancelButton: {
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.lg }),
   },
   saveButton: {
     backgroundColor: colors.primary.main,
@@ -2545,12 +2539,12 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   saveButtonText: {
     ...textStyles.bodyMedium,
     color: colors.text.inverse,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   // Currency Selector Styles
   currencySelectorWrapper: {
@@ -2561,11 +2555,8 @@ const styles = StyleSheet.create({
     zIndex: 4000,
   },
   currencySelector: {
-    borderWidth: 1,
-    borderColor: colors.frame.border,
-    borderRadius: borderRadius.lg,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.lg }),
     padding: spacing[3],
-    backgroundColor: colors.frame.background,
   },
   currencySelectorContent: {
     flexDirection: 'row',
@@ -2576,7 +2567,7 @@ const styles = StyleSheet.create({
     ...textStyles.bodyMedium,
     color: colors.text.primary,
     marginLeft: spacing[2],
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
   },
   currencyDropdown: {
     position: 'absolute',
@@ -2593,7 +2584,7 @@ const styles = StyleSheet.create({
     zIndex: 5000,
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: colors.neutral.black,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.15,
         shadowRadius: 12,
@@ -2639,12 +2630,6 @@ const styles = StyleSheet.create({
         includeFontPadding: false,
         textAlignVertical: 'center',
       },
-    }),
-  },
-  currencyDropdownList: {
-    maxHeight: 220,
-    ...Platform.select({
-      android: { flexGrow: 0 },
     }),
   },
   currencyDropdownItem: {
@@ -2705,13 +2690,13 @@ const styles = StyleSheet.create({
     ...textStyles.bodyMedium,
     fontWeight: '600',
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   currencyName: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
     marginTop: spacing[0],
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
   },
   currencySymbol: {
     ...textStyles.bodyMedium,
@@ -2773,7 +2758,7 @@ const styles = StyleSheet.create({
   scanTitle: {
     ...textStyles.bodyLarge,
     color: colors.text.inverse,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   scanCloseButton: {
     width: 36,
@@ -2830,11 +2815,8 @@ const styles = StyleSheet.create({
   recipientTypeOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.frame.background,
-    borderRadius: borderRadius.xl,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
     padding: spacing[4],
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
     gap: spacing[3],
   },
   recipientTypeIcon: {
@@ -2851,13 +2833,13 @@ const styles = StyleSheet.create({
   recipientTypeTitle: {
     ...textStyles.titleMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     marginBottom: spacing[1],
   },
   recipientTypeSubtitle: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
   },
   countryCurrencyModal: {
     borderTopLeftRadius: borderRadius['3xl'],
@@ -2880,21 +2862,18 @@ const styles = StyleSheet.create({
   countrySearchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.frame.background,
-    borderRadius: borderRadius.xl,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
     marginHorizontal: spacing[5],
     marginBottom: spacing[3],
     gap: spacing[2],
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
   },
   countrySearchInput: {
     flex: 1,
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
   },
   countryList: {
     flex: 1,
@@ -2917,13 +2896,13 @@ const styles = StyleSheet.create({
   countryName: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: fontFamily.medium,
     marginBottom: spacing[1],
   },
   countryCurrency: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
   },
   countryDisplay: {
     marginBottom: spacing[4],
@@ -2932,22 +2911,19 @@ const styles = StyleSheet.create({
     ...textStyles.labelMedium,
     color: colors.text.secondary,
     marginBottom: spacing[2],
-    fontFamily: 'Outfit-Medium',
+    fontFamily: fontFamily.medium,
   },
   countryDisplayValue: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.frame.background,
-    borderRadius: borderRadius.xl,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
     padding: spacing[4],
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
   },
   countryDisplayText: {
     ...textStyles.bodyMedium,
     color: colors.primary.main,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   transferTypeContainer: {
     marginBottom: spacing[2],
@@ -2976,11 +2952,11 @@ const styles = StyleSheet.create({
   transferTypeOptionText: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: fontFamily.medium,
   },
   transferTypeOptionTextSelected: {
     color: colors.primary.main,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
 })
 

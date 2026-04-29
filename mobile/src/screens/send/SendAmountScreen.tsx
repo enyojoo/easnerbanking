@@ -15,28 +15,30 @@ import {
   Keyboard,
   useWindowDimensions,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { MessageSquareText, ChevronDown, User, Coins, RotateCcw, ArrowLeft, ArrowUpDown, Link, Delete, X, ChevronRight } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { MessageSquareText, ChevronDown, User, Coins, RotateCcw } from 'lucide-react-native'
 import Svg, { Path } from 'react-native-svg'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import {
   colors,
   shadows,
+  surfaceFrameStyle,
+  surfaceChromeCircleStyle,
   textStyles,
   borderRadius,
   spacing,
   motion,
   computeKeypadCellSize,
   getContentWidth,
+  fontFamily,
 } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { supabase } from '../../lib/supabase'
-import { Alert } from 'react-native'
+import { useToast } from '../../components/ToastProvider'
 import { useQueryClient } from '@tanstack/react-query'
 import { useExchangeRatesList } from '../../hooks/queries'
 import { useScope } from '../../query/scope'
@@ -97,7 +99,7 @@ function normalizePayoutMethodForPricing(methodCode: string | undefined | null):
 }
 
 // Landmark/Bank Icon Component
-function LandmarkIcon({ size = 24, color = '#000' }: { size?: number; color?: string }) {
+function LandmarkIcon({ size = 24, color = colors.text.primary }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <Path d="M10 18v-7"/>
@@ -131,6 +133,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   })
   const insets = useSafeAreaInsets()
   const { user, userProfile, refreshUserProfile } = useAuth()
+  const { showError, showInfo } = useToast()
   const noahKycStatus =
     userProfile?.noah_kyc_status ??
     (userProfile as { noah_kyc_status?: string; profile?: { noah_kyc_status?: string } })?.profile?.noah_kyc_status
@@ -534,8 +537,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const tier1Ok = isTier1Complete(userProfile)
   const tier2Ok = TIER2_COMPLETE_PLACEHOLDER
   const showVerificationNotice = !tier1Ok
-  const keypadToCtaGap = showVerificationNotice ? spacing[5] : spacing[1]
-  const ctaTopPadding = showVerificationNotice ? spacing[4] : spacing[2]
+  const keypadToCtaGap = showVerificationNotice ? spacing[2] : spacing[1]
+  const ctaTopPadding = showVerificationNotice ? spacing[2] : spacing[2]
   const verificationBlocksSend =
     receiveAmount > 0 &&
     (selectedPaymentMethod === 'balance' ||
@@ -670,7 +673,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 }}
                 style={styles.backButton}
               >
-                <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+                <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
               </Pressable>
               <View style={styles.headerContent}>
               <Text style={styles.title}>Send Money</Text>
@@ -760,11 +763,11 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                     marginHorizontal: spacing[4],
                     marginBottom: spacing[3],
                     padding: spacing[3],
-                    backgroundColor: '#fff7ed',
+                    backgroundColor: colors.warning.background,
                     borderRadius: borderRadius.md,
                   }}
                 >
-                  <Text style={{ color: '#9a3412', fontSize: 14, lineHeight: 20 }}>
+                  <Text style={{ color: colors.warning.dark, fontSize: 14, lineHeight: 20 }}>
                     This recipient&apos;s payout corridor is temporarily unavailable. Choose another recipient or try again
                     later.
                   </Text>
@@ -846,7 +849,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                          android_ripple={ripple.neutral}
                           onPress={toggleAmountDirection} style={styles.exchangeToggleTouchArea}
                         >
-                          <Ionicons name="swap-vertical" size={13} color={colors.primary.main} />
+                          <ArrowUpDown size={13} color={colors.primary.main} strokeWidth={2.5} />
                           <Text style={styles.exchangeInfoText}>
                             {amountEntryMode === 'receive'
                               ? `Sending: ${formatCurrency(sendingAmount, sendCurrency)}`
@@ -895,7 +898,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                     {selectedPaymentMethod === 'balance' ? (
                       <CurrencyFlag currency={selectedBalanceCurrency} size={24} style={styles.flagImage} />
                     ) : selectedPaymentMethod === 'linkBank' ? (
-                      <Ionicons name="link" size={20} color={colors.text.primary} />
+                      <Link size={20} color={colors.text.primary} strokeWidth={2} />
                     ) : selectedPaymentMethod === 'virtualBank' ? (
                       <LandmarkIcon size={20} color={colors.text.primary} />
                     ) : selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency ? (
@@ -1028,10 +1031,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       onPress={() => handleKeypadPress('backspace')}
                       onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} disabled={!sendAmount || sendAmount === '0'}
                     >
-                      <Ionicons 
-                        name="backspace" 
-                        size={24} 
-                        color={(!sendAmount || sendAmount === '0') ? colors.text.secondary : colors.text.primary} 
+                      <Delete
+                        size={24}
+                        color={(!sendAmount || sendAmount === '0') ? colors.text.secondary : colors.text.primary}
+                        strokeWidth={2}
                       />
                 </Pressable>
               </View>
@@ -1091,7 +1094,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               if (sendCurrency !== receiveCurrency) {
                 // Validate exchangeRates before using
                 if (!exchangeRates || !Array.isArray(exchangeRates) || exchangeRates.length === 0) {
-                  Alert.alert('Error', 'Exchange rates not available. Please try again later.')
+                  showError('Exchange rates not available. Please try again later.')
                   return
                 }
                 
@@ -1107,7 +1110,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   calculatedTotalAmount = orderAmounts.totalAmount
                 } catch (error) {
                   console.error('Error calculating order amounts:', error)
-                  Alert.alert('Error', 'Failed to calculate exchange rate. Please try again.')
+                  showError('Failed to calculate exchange rate. Please try again.')
                   return
                 }
               } else {
@@ -1159,7 +1162,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   })
                   
                   if (!walletsResponse.ok) {
-                    Alert.alert('Error', 'Failed to fetch wallet. Please try again.')
+                    showError('Failed to fetch wallet. Please try again.')
                     return
                   }
                   
@@ -1167,13 +1170,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   const wallet = walletsData.wallets?.[0] // Get first wallet (Solana)
                   
                   if (!wallet) {
-                    Alert.alert('Error', 'No wallet found. Please set up your account first.')
+                    showError('No wallet found. Please set up your account first.')
                     return
                   }
 
                   const sourceWalletId = String(wallet.sourceWalletId || wallet.walletId || '')
                   if (!sourceWalletId) {
-                    Alert.alert('Error', 'No source wallet id from Noah.')
+                    showError('No source wallet id from Noah.')
                     return
                   }
 
@@ -1217,10 +1220,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   } else if (isMobile) {
                     const phone = (recipient.phone_number || recipient.account_number || '').replace(/\s/g, '')
                     if (!phone) {
-                      Alert.alert(
-                        'Recipient not ready',
-                        'Mobile money needs a phone number on the recipient.',
-                      )
+                      showError('Mobile money needs a phone number on the recipient.')
                       return
                     }
                     const fiatAmount = receiveAmountValue.toFixed(2)
@@ -1275,10 +1275,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       !recipient.state?.trim() ||
                       !recipient.postal_code?.trim()
                     ) {
-                      Alert.alert(
-                        'Address required',
-                        'US bank payouts need street, city, state, and postal code on the recipient.',
-                      )
+                      showError('US bank payouts need street, city, state, and postal code on the recipient.')
                       return
                     }
                     const fiatAmount = receiveAmountValue.toFixed(2)
@@ -1310,8 +1307,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       cryptoCurrency: prep.cryptoCurrency,
                     })
                   } else {
-                    Alert.alert(
-                      'Recipient not ready',
+                    showError(
                       'Noah balance send needs: Easetag, saved payout id, mobile money with country, EUR IBAN, or US ACH with full address.',
                     )
                     return
@@ -1330,21 +1326,21 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                           ].join('\n')
                         : ''
                     if (validation.reasonCode) {
-                      Alert.alert(
-                        'Quote repriced',
+                      showInfo(
                         summaryLines
-                          ? `Pricing was revalidated due to: ${repricingReasonLabel(validation.reasonCode)}\n\n${summaryLines}`
-                          : `Pricing was revalidated due to: ${repricingReasonLabel(validation.reasonCode)}`
+                          ? `Pricing was revalidated (${repricingReasonLabel(validation.reasonCode)}).\n\n${summaryLines}`
+                          : `Pricing was revalidated: ${repricingReasonLabel(validation.reasonCode)}`,
+                        5500,
                       )
                     } else if (pricingQuoteExpiry) {
-                      Alert.alert(
-                        'Quote applied',
+                      showInfo(
                         summaryLines
-                          ? `Final fee and total are locked for this transfer.\nQuote expires: ${new Date(pricingQuoteExpiry).toLocaleTimeString()}\n\n${summaryLines}`
-                          : `Final fee and total are locked for this transfer.\nQuote expires: ${new Date(pricingQuoteExpiry).toLocaleTimeString()}`
+                          ? `Quote locked. Expires ${new Date(pricingQuoteExpiry).toLocaleTimeString()}.\n\n${summaryLines}`
+                          : `Quote locked. Expires ${new Date(pricingQuoteExpiry).toLocaleTimeString()}.`,
+                        5500,
                       )
                     } else if (summaryLines) {
-                      Alert.alert('Quote applied', summaryLines)
+                      showInfo(summaryLines, 5000)
                     }
                   }
                   
@@ -1412,7 +1408,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                     // Balance will be refreshed automatically, but we could add revert logic here if needed
                   }
                   await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
-                  Alert.alert('Error', error.message || 'Failed to create transfer. Please try again.')
+                  showError(error.message || 'Failed to create transfer. Please try again.')
                 }
               } else if (selectedPaymentMethod === 'linkBank') {
                 // Generate Transaction ID (same format as web app)
@@ -1535,7 +1531,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   }}
                   style={styles.closeButton}
                 >
-                  <Ionicons name="close" size={24} color={colors.text.secondary} />
+                  <X size={24} color={colors.text.secondary} strokeWidth={2} />
                 </Pressable>
       </View>
       
@@ -1631,7 +1627,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                         <View style={styles.currencyItemInfo}>
                           <Text style={styles.currencyItemCode}>{currency.name}</Text>
                         </View>
-                        <Ionicons name="chevron-forward" size={20} color={colors.text.secondary} />
+                        <ChevronRight size={20} color={colors.text.secondary} strokeWidth={2} />
                       </Pressable>
                     ))
                   ) : (
@@ -1646,7 +1642,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                           setSelectedOtherPaymentMethod(null)
                         }}
                       >
-                        <Ionicons name="arrow-back" size={20} color={colors.text.primary} />
+                        <ArrowLeft size={20} color={colors.primary.main} strokeWidth={2} />
                         <View style={styles.currencyItemInfo}>
                           <Text style={styles.currencyItemCode}>
                             {otherCurrencies.find(c => c.code === selectedOtherCurrency)?.name}
@@ -1740,14 +1736,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing[4],
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+    ...surfaceChromeCircleStyle(colors, 44),
     marginRight: spacing[3],
   },
   headerContent: {
@@ -1778,37 +1767,26 @@ const styles = StyleSheet.create({
   selectRecipientBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9F9F9',
-    borderRadius: 24,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: 24 }),
     height: 52,
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
     marginBottom: 25,
     gap: spacing[3],
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
   },
   selectRecipientIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F9F9F9',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
+    ...surfaceChromeCircleStyle(colors, 40, { shadow: 'none' }),
   },
   selectRecipientText: {
     ...textStyles.bodyMedium,
     color: colors.text.secondary,
-    fontFamily: 'Geist-Medium',
+    fontFamily: fontFamily.medium,
   },
   // Recipient Bar (when recipient is selected)
   recipientBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9F9F9',
-    borderRadius: 24,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: 24 }),
     height: 56,
     width: '85%',
     alignSelf: 'center',
@@ -1816,13 +1794,11 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
     marginBottom: 25,
     gap: spacing[3],
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
   },
   recipientLabel: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Geist-Medium',
+    fontFamily: fontFamily.medium,
   },
   recipientAvatarCircleWrap: {
     position: 'relative',
@@ -1836,7 +1812,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'hidden',
     borderWidth: 0.5,
-    borderColor: '#E2E2E2',
+    borderColor: colors.frame.border,
   },
   easenetMarkBadgeSmall: {
     position: 'absolute',
@@ -1868,7 +1844,7 @@ const styles = StyleSheet.create({
   recipientAvatarInitials: {
     ...textStyles.titleSmall,
     color: colors.primary.main,
-    fontFamily: 'Geist-SemiBold',
+    fontFamily: fontFamily.semibold,
     fontWeight: '700',
   },
   recipientInfo: {
@@ -1879,14 +1855,14 @@ const styles = StyleSheet.create({
   recipientName: {
     ...textStyles.bodyLarge,
     color: colors.text.primary,
-    fontFamily: 'Geist-SemiBold',
+    fontFamily: fontFamily.semibold,
     lineHeight: 18,
     marginBottom: 0,
   },
   recipientDetails: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
-    fontFamily: 'Geist-Regular',
+    fontFamily: fontFamily.regular,
     lineHeight: 16,
   },
   changeRecipientIcon: {
@@ -1922,8 +1898,8 @@ const styles = StyleSheet.create({
   currencyPrefix: {
     fontSize: 50,
     fontWeight: '900',
-    color: '#000000',
-    fontFamily: 'Geist-Black',
+    color: colors.text.primary,
+    fontFamily: fontFamily.black,
     marginRight: 2,
     includeFontPadding: false,
     paddingVertical: 0,
@@ -1950,8 +1926,8 @@ const styles = StyleSheet.create({
     // Base fontSize - will be overridden by inline style for dynamic sizing
     fontSize: 50,
     fontWeight: '900',
-    color: '#000000',
-    fontFamily: 'Geist-Black',
+    color: colors.text.primary,
+    fontFamily: fontFamily.black,
     textAlign: 'left',
     paddingLeft: 0,
     paddingRight: 0,
@@ -2014,7 +1990,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '500',
     color: colors.primary.main,
-    fontFamily: 'Geist-Medium',
+    fontFamily: fontFamily.medium,
     textAlign: 'center',
   },
   balanceSection: {
@@ -2025,28 +2001,18 @@ const styles = StyleSheet.create({
   balanceSelector: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9F9F9',
-    borderRadius: 100,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: 100 }),
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[2],
     marginBottom: spacing[2],
     gap: spacing[2],
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
     minWidth: 180,
     minHeight: 48,
     justifyContent: 'center',
   },
   flagContainer: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    ...surfaceChromeCircleStyle(colors, 24, { shadow: 'none' }),
     overflow: 'hidden',
-    backgroundColor: '#F9F9F9',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
   },
   flagImage: {
     width: 24,
@@ -2060,25 +2026,25 @@ const styles = StyleSheet.create({
   balanceSelectorTitleLine: {
     fontSize: 14,
     color: colors.text.primary,
-    fontFamily: 'Geist-Medium',
+    fontFamily: fontFamily.medium,
   },
   balanceSelectorText: {
     flex: 1,
     fontSize: 14,
     color: colors.text.primary,
-    fontFamily: 'Geist-Medium',
+    fontFamily: fontFamily.medium,
   },
   balanceSelectorAmountLine: {
     fontSize: 12,
     color: colors.text.secondary,
-    fontFamily: 'Geist-Medium',
+    fontFamily: fontFamily.medium,
     marginTop: 2,
     fontVariant: ['tabular-nums'],
   },
   balanceText: {
     ...textStyles.bodyMedium,
     color: colors.primary.main,
-    fontFamily: 'Geist-Medium',
+    fontFamily: fontFamily.medium,
   },
   noteKeypadWrapper: {
     width: '100%',
@@ -2087,8 +2053,7 @@ const styles = StyleSheet.create({
   noteContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9F9F9',
-    borderRadius: borderRadius.xl,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
     paddingHorizontal: spacing[4],
     ...Platform.select({
       android: {
@@ -2100,15 +2065,13 @@ const styles = StyleSheet.create({
       },
     }),
     gap: spacing[2],
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
     marginBottom: 20,
   },
   noteInput: {
     flex: 1,
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Geist-Regular',
+    fontFamily: fontFamily.regular,
     fontSize: 13,
     lineHeight: 18,
     textAlignVertical: 'center',
@@ -2138,18 +2101,15 @@ const styles = StyleSheet.create({
   keypadButton: {
     width: 113,
     height: 50,
-    borderRadius: 20,
-    backgroundColor: '#F9F9F9',
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: 20 }),
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
   },
   keypadButtonText: {
     fontSize: 28,
     lineHeight: 34,
     color: colors.text.primary,
-    fontFamily: 'Geist-SemiBold',
+    fontFamily: fontFamily.semibold,
     fontWeight: '600',
   },
   bottomContainer: {
@@ -2163,20 +2123,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexWrap: 'wrap',
     gap: spacing[1],
-    paddingVertical: spacing[1],
-    marginBottom: spacing[2],
+    paddingVertical: 0,
+    marginBottom: spacing[1],
     alignSelf: 'center',
     maxWidth: '100%',
   },
   verifyInlineText: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
-    fontFamily: 'Geist-Regular',
+    fontFamily: fontFamily.regular,
   },
   verifyInlineLink: {
     ...textStyles.bodySmall,
     color: colors.primary.main,
-    fontFamily: 'Geist-SemiBold',
+    fontFamily: fontFamily.semibold,
     textDecorationLine: 'underline',
   },
   sendButton: {
@@ -2195,7 +2155,7 @@ const styles = StyleSheet.create({
   sendButtonText: {
     ...textStyles.titleLarge,
     color: colors.text.inverse,
-    fontFamily: 'Geist-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   // Modal Styles
   modalOverlay: {
@@ -2210,7 +2170,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing[2],
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: colors.neutral.black,
         shadowOffset: { width: 0, height: -4 },
         shadowOpacity: 0.25,
         shadowRadius: 12,
@@ -2233,7 +2193,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: colors.text.primary,
-    fontFamily: 'Geist-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   closeButton: {
     width: 40,
@@ -2250,7 +2210,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: colors.text.secondary,
-    fontFamily: 'Geist-SemiBold',
+    fontFamily: fontFamily.semibold,
     marginBottom: spacing[2],
     marginTop: spacing[2],
     paddingHorizontal: spacing[5],
@@ -2285,14 +2245,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: colors.text.primary,
-    fontFamily: 'Geist-SemiBold',
+    fontFamily: fontFamily.semibold,
     marginBottom: 2,
   },
   currencyItemBalance: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.text.primary,
-    fontFamily: 'Geist-SemiBold',
+    fontFamily: fontFamily.semibold,
     marginTop: 2,
   },
   checkbox: {
@@ -2321,13 +2281,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.primary,
   },
   flagContainerSmall: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    ...surfaceChromeCircleStyle(colors, 24, { shadow: 'none' }),
     overflow: 'hidden',
-    backgroundColor: '#F9F9F9',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   flagImageSmall: {
     width: 24,

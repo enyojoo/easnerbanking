@@ -1,9 +1,10 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { View, Text, Pressable, Platform, StyleSheet, ViewStyle } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { ArrowLeft } from 'lucide-react-native'
 import { useNavigation } from '@react-navigation/native'
 import * as Haptics from 'expo-haptics'
-import { colors, shadows, textStyles, spacing } from '../theme'
+import { textStyles, spacing, fontFamily, useThemeColors } from '../theme'
+import type { Colors } from '../theme/colors'
 import { ripple } from '../lib/androidRipple'
 
 interface InternalHeaderProps {
@@ -26,6 +27,8 @@ export default function InternalHeader({
   style,
 }: InternalHeaderProps) {
   const navigation = useNavigation()
+  const palette = useThemeColors()
+  const styles = useMemo(() => createStyles(palette), [palette])
 
   const handleBack = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -48,14 +51,14 @@ export default function InternalHeader({
         accessibilityLabel="Go back"
         accessibilityRole="button"
       >
-        <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+        <ArrowLeft size={20} color={palette.primary.main} strokeWidth={2.25} />
       </Pressable>
       <View style={styles.headerContent}>
-        <Text style={styles.title} accessibilityRole="header">
+        <Text style={styles.title} accessibilityRole="header" numberOfLines={1}>
           {title}
         </Text>
         {subtitle && (
-          <Text style={styles.subtitle} accessibilityRole="text">
+          <Text style={styles.subtitle} accessibilityRole="text" numberOfLines={1}>
             {subtitle}
           </Text>
         )}
@@ -80,49 +83,56 @@ export default function InternalHeader({
   )
 }
 
-const styles = StyleSheet.create({
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing[5],
-    paddingTop: spacing[4],
-    paddingBottom: spacing[4],
-    gap: spacing[3],
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.neutral.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...shadows.sm,
-  },
-  headerContent: {
-    flex: 1,
-  },
-  title: {
-    ...textStyles.headlineLarge,
-    color: colors.text.primary,
-    marginBottom: spacing[1],
-  },
-  subtitle: {
-    ...textStyles.bodyMedium,
-    color: colors.text.secondary,
-  },
-  rightAction: {
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-  },
-  rightActionText: {
-    ...textStyles.labelMedium,
-    color: colors.primary.main,
-    fontFamily: 'Outfit-SemiBold',
-  },
-  hitPressedIOS: {
-    opacity: 0.7,
-  },
-})
+function createStyles(c: Colors) {
+  return StyleSheet.create({
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: spacing[5],
+      paddingTop: spacing[4],
+      paddingBottom: spacing[3],
+      gap: spacing[3],
+    },
+    backButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: c.semantic.card,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: c.border.default,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    headerContent: {
+      flex: 1,
+    },
+    title: {
+      ...textStyles.headlineMedium,
+      color: c.text.primary,
+      fontFamily: fontFamily.semibold,
+      fontWeight: '700',
+      letterSpacing: -0.2,
+    },
+    subtitle: {
+      ...textStyles.bodySmall,
+      color: c.text.secondary,
+      marginTop: 2,
+    },
+    rightAction: {
+      paddingHorizontal: spacing[3],
+      paddingVertical: spacing[2],
+    },
+    rightActionText: {
+      ...textStyles.labelMedium,
+      color: c.primary.main,
+      fontFamily: fontFamily.semibold,
+      fontWeight: '600',
+    },
+    hitPressedIOS: {
+      opacity: 0.7,
+    },
+  })
+}
 
 
 

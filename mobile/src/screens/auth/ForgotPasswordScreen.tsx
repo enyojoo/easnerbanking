@@ -4,25 +4,25 @@ import {
   Text,
   Pressable,
   StyleSheet,
-  Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { ArrowLeft, HelpCircle } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { getApiBaseUrl } from '../../lib/apiClient'
 import { NavigationProps } from '../../types'
 import { analytics } from '../../lib/analytics'
-import { colors, textStyles, borderRadius, spacing } from '../../theme'
+import { colors, surfaceChromeCircleStyle, textStyles, borderRadius, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
 import { TextField } from '../../components/ui'
 import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
 import { PinKeypad } from '../../components/pin'
 import { useOtpClipboardAutofill } from '../../hooks/useOtpClipboardAutofill'
+import { useToast } from '../../components/ToastProvider'
 
 export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
   const [step, setStep] = useState<'email' | 'otp'>('email')
@@ -33,6 +33,7 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
   const [error, setError] = useState('')
   const [resendCooldown, setResendCooldown] = useState(0)
   const insets = useSafeAreaInsets()
+  const { showInfo } = useToast()
 
   // Track screen view
   useEffect(() => {
@@ -54,7 +55,7 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
 
   const handleHelp = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    Alert.alert('Help', 'Need assistance? Contact support at support@easner.com')
+    showInfo('Need assistance? Contact support at support@easner.com')
   }
 
   const handleEmailSubmit = async () => {
@@ -253,7 +254,7 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
              android_ripple={ripple.neutral}
               style={styles.backButton}
               onPress={handleBack} >
-              <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+              <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
             </Pressable>
             <View style={styles.headerSpacer} />
             <Pressable
@@ -261,7 +262,7 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
               style={styles.headerButton}
               onPress={handleHelp} >
               <View style={styles.headerButtonCircle}>
-                <Ionicons name="help-circle-outline" size={20} color={colors.text.primary} />
+                <HelpCircle size={20} color={colors.text.primary} strokeWidth={2} />
               </View>
             </Pressable>
           </View>
@@ -384,14 +385,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing[6],
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+    ...surfaceChromeCircleStyle(colors, 44),
     marginRight: spacing[3],
   },
   headerButton: {
@@ -401,14 +395,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerButtonCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+    ...surfaceChromeCircleStyle(colors, 40),
   },
   subtitle: {
     ...textStyles.bodySmall,

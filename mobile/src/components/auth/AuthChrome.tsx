@@ -1,6 +1,6 @@
 import React from 'react'
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import FontAwesome from '@expo/vector-icons/FontAwesome'
 import * as Haptics from 'expo-haptics'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
@@ -39,7 +39,7 @@ export function GoogleOutlineButton({ label, onPress, disabled }: GoogleButtonPr
       disabled={disabled}
       android_ripple={ripple.neutral}
     >
-      <Ionicons name="logo-google" size={20} color={colors.text.primary} />
+      <FontAwesome name="google" size={20} color={colors.text.primary} />
       <Text style={styles.googleBtnText}>{label}</Text>
     </Pressable>
   )

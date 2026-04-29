@@ -10,9 +10,17 @@ import {
   ActivityIndicator,
   Animated,
   Modal,
-  Alert,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import type { LucideIcon } from 'lucide-react-native'
+import {
+  ArrowLeft,
+  ChevronRight,
+  CircleAlert,
+  CreditCard,
+  Globe,
+  Info,
+  Map,
+} from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { WebView } from 'react-native-webview'
@@ -32,16 +40,20 @@ import { supabase } from '../../lib/supabase'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   colors,
+  surfaceFrameStyle,
+  surfaceChromeCircleStyle,
   textStyles,
   borderRadius,
   spacing,
   fontSize,
   lineHeight as lineHeightScale,
   motion,
+  fontFamily,
 } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { CONSUMER_TIER_LADDER } from '../../lib/compliance-tier-ladder-copy'
 import { isTier1Complete } from '../../lib/compliance'
+import { useToast } from '../../components/ToastProvider'
 
 /**
  * Consumer Noah flow: hosted KYC is enough; do not fetch standalone Noah TOS links
@@ -49,11 +61,24 @@ import { isTier1Complete } from '../../lib/compliance'
  */
 const SKIP_NOAH_STANDALONE_TOS = true
 
-const TIER_ICONS = {
-  1: 'globe-outline',
-  2: 'map-outline',
-  3: 'card-outline',
-} as const
+const TIER_ICONS: Record<1 | 2 | 3, LucideIcon> = {
+  1: Globe,
+  2: Map,
+  3: CreditCard,
+}
+
+function TierGlyph({
+  tier,
+  size,
+  color,
+}: {
+  tier: 1 | 2 | 3
+  size: number
+  color: string
+}) {
+  const Icon = TIER_ICONS[tier]
+  return <Icon size={size} color={color} strokeWidth={2} />
+}
 
 function tierTitleDisplay(title: string) {
   return title.replace(/\b\w/g, (c) => c.toUpperCase())
@@ -62,6 +87,7 @@ function tierTitleDisplay(title: string) {
 function AccountVerificationContent({ navigation }: NavigationProps) {
   const { userProfile, refreshUserProfile } = useAuth()
   const insets = useSafeAreaInsets()
+  const { showInfo, showError, showSuccess, showWarning } = useToast()
 
   // TOS state
   const [tosLink, setTosLink] = useState<string | null>(null)
@@ -607,7 +633,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     // FIRST: Check if TOS is already signed - if so, don't try to create a new link
     if (tosSigned || userProfile.noah_signed_agreement_id) {
       console.log('[TOS-OPEN] TOS already signed, skipping link generation')
-      Alert.alert('Terms Accepted', 'You have already accepted the partner terms of service.')
+      showInfo('You have already accepted the partner terms of service.')
       return
     }
     
@@ -631,7 +657,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
           setTosSigned(true)
           setTosSignedAgreementId(userData.noah_signed_agreement_id)
           setLoadingTos(false)
-          Alert.alert('Terms Accepted', 'You have already accepted the partner terms of service.')
+          showInfo('You have already accepted the partner terms of service.')
           return
         }
         
@@ -646,7 +672,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
               console.log('[TOS-OPEN] Customer already accepted TOS')
               setTosSigned(true)
               setLoadingTos(false)
-              Alert.alert('Terms Accepted', 'You have already accepted the partner terms of service.')
+              showInfo('You have already accepted the partner terms of service.')
               return
             }
             
@@ -675,10 +701,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
         setTosLinkId(linkId)
         
         if (!link) {
-          Alert.alert(
-            'TOS Link Not Available',
-            'Unable to load Terms of Service. Please try again or contact support.'
-          )
+          showError('Unable to load Terms of Service. Please try again or contact support.')
           setLoadingTos(false)
           return
         }
@@ -699,7 +722,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                 console.log('[TOS-OPEN] Customer already has TOS accepted (checked after 401 error)')
                 setTosSigned(true)
                 setLoadingTos(false)
-                Alert.alert('Terms Accepted', 'You have already accepted the partner terms of service.')
+                showInfo('You have already accepted the partner terms of service.')
                 return
               }
             } catch (customerCheckError: any) {
@@ -721,7 +744,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
             setTosSigned(true)
               setTosSignedAgreementId(finalCheck.noah_signed_agreement_id)
             setLoadingTos(false)
-              Alert.alert('Terms Accepted', 'You have already accepted the partner terms of service.')
+              showInfo('You have already accepted the partner terms of service.')
             return
           }
           } catch (dbError: any) {
@@ -731,14 +754,12 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
           // If we still can't confirm TOS is accepted, show error
           const errorMessage = tosLinkError.message || 'Failed to load terms of service'
           if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
-            Alert.alert(
-              'TOS Link Unavailable',
-              'Unable to create Terms of Service link. This may be because:\n\n• TOS is already accepted\n• A temporary API permission issue\n\nIf TOS is already accepted, you can ignore this error.'
+            showWarning(
+              'Unable to create Terms of Service link. This may be because TOS is already accepted or there is a temporary API permission issue.',
             )
           } else {
-            Alert.alert(
-              'Error Loading TOS',
-              `Unable to load Terms of Service: ${errorMessage}\n\nIf TOS is already accepted, you can ignore this error.`
+            showError(
+              `Unable to load Terms of Service: ${errorMessage}. If TOS is already accepted, you can ignore this.`,
             )
           }
           setLoadingTos(false)
@@ -748,10 +769,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
         // We have tosLink and tosLinkId - just open the modal
         // Don't check database here - state is managed by loadTOSStatus
         if (!tosLink) {
-          Alert.alert(
-            'TOS Link Not Available',
-            'Terms of Service link is not available. Please try again or contact support.'
-          )
+          showError('Terms of Service link is not available. Please try again or contact support.')
           setLoadingTos(false)
           return
         }
@@ -760,10 +778,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     } catch (error: any) {
       console.error('Error opening TOS:', error)
       const errorMessage = error.message || 'Failed to load terms of service'
-      Alert.alert(
-        'Error Loading TOS',
-        `${errorMessage}\n\nPlease try again or contact support if the issue persists.`
-      )
+      showError(`${errorMessage}\n\nPlease try again or contact support if the issue persists.`)
       // Don't update state on error - let loadTOSStatus handle state management
     } finally {
       setLoadingTos(false)
@@ -789,7 +804,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
 
   const handleOpenKYC = async () => {
     if (!userProfile?.email) {
-      Alert.alert('Missing Information', 'Please complete your profile information before starting KYC verification.')
+      showWarning('Please complete your profile information before starting KYC verification.')
       return
     }
     
@@ -940,10 +955,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
       }
       
       if (!response.kyc_link) {
-        Alert.alert(
-          'KYC Link Not Available',
-          'Unable to load KYC verification. Please try again or contact support.'
-        )
+        showError('Unable to load KYC verification. Please try again or contact support.')
         setLoadingKyc(false)
         return
       }
@@ -951,9 +963,8 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
       await externalLink.openLink(buildKycIframeUrl(response.kyc_link), 'Verification for global banking')
     } catch (error: any) {
       console.error('Error opening KYC:', error)
-      Alert.alert(
-        'Error Loading KYC',
-        `${error.message || 'Failed to load KYC verification'}\n\nPlease try again or contact support if the issue persists.`
+      showError(
+        `${error.message || 'Failed to load KYC verification'}\n\nPlease try again or contact support if the issue persists.`,
       )
     } finally {
       setLoadingKyc(false)
@@ -1007,9 +1018,9 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
         needsEUR: true,
       })
       
-      Alert.alert(
-        'Success',
-        'Account setup in progress. You will receive USD and EUR account details once your verification is approved.'
+      showSuccess(
+        'Account setup in progress. You will receive USD and EUR account details once your verification is approved.',
+        4500,
       )
       
       if (refreshUserProfile) {
@@ -1018,10 +1029,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     } catch (error: any) {
       console.error('Error creating Noah customer:', error)
       setCustomerError(error.message || 'Failed to create Easner account')
-      Alert.alert(
-        'Account Setup Error',
-        error.message || 'Failed to create your Easner account. Please try again later.'
-      )
+      showError(error.message || 'Failed to create your Easner account. Please try again later.')
     } finally {
       setCreatingCustomer(false)
     }
@@ -1122,7 +1130,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
               ]}
               android_ripple={{ color: 'rgba(0, 0, 0, 0.12)', borderless: false }}
             >
-              <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+              <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
             </Pressable>
             <View style={styles.headerContent}>
               <Text style={styles.title}>Account verification</Text>
@@ -1149,7 +1157,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                 <View style={styles.infoBox}>
                   {noahKycRejected ? (
                     <>
-                      <Ionicons name="alert-circle-outline" size={20} color={colors.error.main} />
+                      <CircleAlert size={20} color={colors.error.main} strokeWidth={2} />
                       <Text style={[styles.infoText, { color: colors.error.main }]}>
                         {userProfile?.noah_kyc_rejection_reasons 
                           ? (Array.isArray(userProfile.noah_kyc_rejection_reasons) && userProfile.noah_kyc_rejection_reasons.length > 0
@@ -1184,14 +1192,14 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                     </>
                   ) : noahKycInReview ? (
                     <>
-                      <Ionicons name="information-circle-outline" size={20} color={colors.warning.main} />
+                      <Info size={20} color={colors.warning.main} strokeWidth={2} />
                       <Text style={[styles.infoText, { color: colors.warning.main }]}>
                         Your verification is under review. We will email you when there is an update.
                       </Text>
                     </>
                   ) : (
                     <>
-                      <Ionicons name="information-circle-outline" size={20} color={colors.primary.main} />
+                      <Info size={20} color={colors.primary.main} strokeWidth={2} />
                       <Text style={styles.infoText}>
                         Complete identity verification below to unlock bank accounts, cards, stablecoin and other banking features
                       </Text>
@@ -1208,7 +1216,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                   <View style={styles.cardContent}>
                     <View style={styles.cardLeft}>
                       <View style={styles.iconContainer}>
-                        <Ionicons name={TIER_ICONS[1]} size={24} color={colors.primary.main} />
+                        <TierGlyph tier={1} size={24} color={colors.primary.main} />
                       </View>
                       <Text style={styles.cardTitle}>
                         {tierTitleDisplay(CONSUMER_TIER_LADDER.tiers[0].title)}
@@ -1250,7 +1258,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                     <View style={styles.cardContent}>
                       <View style={styles.cardLeft}>
                         <View style={styles.iconContainer}>
-                          <Ionicons name={TIER_ICONS[1]} size={24} color={colors.primary.main} />
+                          <TierGlyph tier={1} size={24} color={colors.primary.main} />
                         </View>
                         <Text style={styles.cardTitle}>
                           {tierTitleDisplay(CONSUMER_TIER_LADDER.tiers[0].title)}
@@ -1282,7 +1290,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                     {!loadingKyc ? (
                       <View style={styles.startBadge}>
                         <Text style={styles.startBadgeText}>Start</Text>
-                        <Ionicons name="chevron-forward" size={12} color="#FFFFFF" />
+                        <ChevronRight size={12} color={colors.neutral.white} strokeWidth={2} />
                       </View>
                     ) : null}
                   </View>
@@ -1294,11 +1302,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                   <View style={styles.cardContent}>
                     <View style={styles.cardLeft}>
                       <View style={styles.iconContainer}>
-                        <Ionicons
-                          name={TIER_ICONS[tier.tier]}
-                          size={24}
-                          color={colors.text.secondary}
-                        />
+                        <TierGlyph tier={tier.tier as 1 | 2 | 3} size={24} color={colors.text.secondary} />
                       </View>
                       <Text style={styles.cardTitle}>{tierTitleDisplay(tier.title)}</Text>
                       <Text style={styles.cardDescription}>{tier.description}</Text>
@@ -1432,31 +1436,19 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                                 customerId: updateResult.customerId
                               })
                               
-                              // Show success message
-                              Alert.alert(
-                                'Terms Accepted',
-                                'Your Terms of Service have been accepted successfully. You can now create your accounts.',
-                                [{ 
-                                  text: 'OK',
-                                  onPress: () => {
-                                    setShowTosModal(false)
-                                  }
-                                }]
+                              showSuccess(
+                                'Your Terms of Service have been accepted. You can now create your accounts.',
+                                4000,
                               )
+                              setShowTosModal(false)
                               return
                             } catch (updateError: any) {
                               console.error(`[TOS-WEBVIEW] ⚠️ Error updating customer TOS (customer exists):`, updateError.message)
-                              // Non-critical error - TOS is already stored, just show warning
-                              Alert.alert(
-                                'Terms Accepted',
-                                'Your Terms of Service have been accepted. There was an issue updating your Easner account, but this will be resolved when your account is set up.',
-                                [{ 
-                                  text: 'OK',
-                                  onPress: () => {
-                                    setShowTosModal(false)
-                                  }
-                                }]
+                              showWarning(
+                                'Terms accepted. There was an issue updating your Easner account; this will resolve when your account is set up.',
+                                5000,
                               )
+                              setShowTosModal(false)
                               return
                             }
                           } else {
@@ -1464,17 +1456,11 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                             // The admin will create the customer via "Send to Noah" button
                             console.log(`[TOS-WEBVIEW] ℹ️ Customer doesn't exist yet. TOS signed_agreement_id stored. Admin will create customer via "Send to Noah".`)
                             
-                            // Show success message
-                            Alert.alert(
-                              'Terms Accepted',
-                              'Your Terms of Service have been accepted successfully. Your account will be set up after your identity verification is approved.',
-                              [{ 
-                                text: 'OK',
-                                onPress: () => {
-                                  setShowTosModal(false)
-                                }
-                              }]
+                            showSuccess(
+                              'Terms accepted. Your account will finish setup after identity verification is approved.',
+                              4500,
                             )
+                            setShowTosModal(false)
                             return
                           }
                         } else {
@@ -1598,17 +1584,8 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                             setCurrentKycFlow('tos')
                             kycProcessedRef.current = false // Reset for TOS flow
                           } else {
-                            // Both flows completed
-                            Alert.alert(
-                              'Verification Complete',
-                              'Your KYC verification has been completed successfully.',
-                              [{ 
-                                text: 'OK',
-                                onPress: () => {
-                                  handleKycModalClose()
-                                }
-                              }]
-                            )
+                            showSuccess('KYC verification completed.', 3500)
+                            handleKycModalClose()
                           }
                         }
                         
@@ -1627,17 +1604,8 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                               .eq('id', userProfile.id)
                           }
                           
-                          // Both flows completed
-                          Alert.alert(
-                            'Verification Complete',
-                            'Your KYC and Terms of Service have been completed successfully.',
-                            [{ 
-                              text: 'OK',
-                              onPress: () => {
-                                handleKycModalClose()
-                              }
-                            }]
-                          )
+                          showSuccess('KYC and Terms of Service completed.', 4000)
+                          handleKycModalClose()
                         }
                       } catch (error: any) {
                         console.error('[KYC-WEBVIEW] Error processing message:', error)
@@ -1689,16 +1657,8 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                               .eq('id', userProfile.id)
                           }
                           
-                          Alert.alert(
-                            'Verification Complete',
-                            'Your KYC and Terms of Service have been completed successfully.',
-                            [{ 
-                              text: 'OK',
-                              onPress: () => {
-                                handleKycModalClose()
-                              }
-                            }]
-                          )
+                          showSuccess('KYC and Terms of Service completed.', 4000)
+                          handleKycModalClose()
                         }
                       } catch (error: any) {
                         console.error('[KYC-TOS-WEBVIEW] Error processing message:', error)
@@ -1752,25 +1712,8 @@ const styles = StyleSheet.create({
     paddingBottom: spacing[4],
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+    ...surfaceChromeCircleStyle(colors, 44),
     marginRight: spacing[3],
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.06,
-        shadowRadius: 3,
-      },
-      android: { elevation: 2 },
-      default: {},
-    }),
   },
   backButtonPressed: {
     opacity: 0.7,
@@ -1794,23 +1737,10 @@ const styles = StyleSheet.create({
     padding: spacing[5],
   },
   infoCard: {
-    backgroundColor: '#F9F9F9',
-    borderRadius: 24,
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
+    ...surfaceFrameStyle(colors),
     marginBottom: spacing[4],
     paddingHorizontal: spacing[5],
     paddingVertical: spacing[4],
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-      },
-      android: { elevation: 2 },
-      default: {},
-    }),
   },
   infoBox: {
     flexDirection: 'row',
@@ -1833,22 +1763,9 @@ const styles = StyleSheet.create({
     gap: spacing[4],
   },
   card: {
-    backgroundColor: '#F9F9F9',
-    borderRadius: 24,
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
+    ...surfaceFrameStyle(colors),
     marginBottom: spacing[3],
     position: 'relative',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-      },
-      android: { elevation: 3 },
-      default: {},
-    }),
   },
   cardInteractive: Platform.select({
     android: { overflow: 'hidden' },
@@ -1881,7 +1798,7 @@ const styles = StyleSheet.create({
   },
   tierPillText: {
     fontSize: 11,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: fontFamily.medium,
     color: colors.text.secondary,
     ...Platform.select({
       android: { lineHeight: 16, includeFontPadding: false },
@@ -1918,7 +1835,7 @@ const styles = StyleSheet.create({
   },
   comingLaterPillText: {
     fontSize: 11,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: fontFamily.medium,
     color: colors.text.secondary,
     ...Platform.select({
       android: { lineHeight: 16, includeFontPadding: false },
@@ -1957,7 +1874,7 @@ const styles = StyleSheet.create({
   startBadgeText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: colors.neutral.white,
     ...Platform.select({
       android: { lineHeight: 16, includeFontPadding: false },
       default: {},

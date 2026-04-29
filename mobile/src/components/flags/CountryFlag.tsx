@@ -1,6 +1,7 @@
 import React from 'react'
-import { Image, ImageSourcePropType, StyleSheet, Text, View } from 'react-native'
-import { colors } from '../../theme'
+import { ImageSourcePropType, StyleSheet, Text, View } from 'react-native'
+import { Image } from 'expo-image'
+import { colors, surfaceFrameStyle } from '../../theme'
 
 const countryToFlagAsset: Record<string, ImageSourcePropType> = {
   US: require('../../../assets/flags/us.png'),
@@ -39,9 +40,7 @@ export function CountryFlag({ code, size = 20, style }: CountryFlagProps) {
 
 const styles = StyleSheet.create({
   fallback: {
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: 4 }),
     alignItems: 'center',
     justifyContent: 'center',
   },

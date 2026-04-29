@@ -23,7 +23,7 @@ import {
 import { ripple } from '../../lib/androidRipple'
 import * as Haptics from 'expo-haptics'
 import { LinearGradient } from 'expo-linear-gradient'
-import { shadows, textStyles, borderRadius, useThemeColors } from '../../theme'
+import { textStyles, borderRadius, useThemeColors } from '../../theme'
 
 interface HapticButtonProps {
   children?: React.ReactNode
@@ -117,15 +117,16 @@ export default function HapticButton({
   const variantStyles: Record<string, ViewStyle> = {
     primary: {
       backgroundColor: colors.primary.main,
-      ...shadows.sm,
     },
     secondary: {
-      backgroundColor: colors.neutral[100],
+      backgroundColor: colors.semantic.muted,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border.default,
     },
     outline: {
-      backgroundColor: 'transparent',
-      borderWidth: 1.5,
-      borderColor: colors.primary.main,
+      backgroundColor: colors.semantic.card,
+      borderWidth: 1,
+      borderColor: colors.border.default,
     },
     ghost: {
       backgroundColor: 'transparent',
@@ -134,7 +135,7 @@ export default function HapticButton({
 
   const textVariantStyles: Record<string, TextStyle> = {
     primary: {
-      color: colors.text.inverse,
+      color: '#FFFFFF',
     },
     secondary: {
       color: colors.text.primary,
@@ -189,9 +190,8 @@ export default function HapticButton({
     style,
   ]
 
-  // Use gradient for primary variant if no custom gradient provided
-  const useGradient = variant === 'primary' && !disabled
-  const gradientColors = gradient || colors.primary.gradient
+  /** Opt-in gradient (e.g. on hero contexts) when caller provides explicit colors. */
+  const useGradient = !disabled && Boolean(gradient)
 
   return (
     <Animated.View style={[{ transform: [{ scale: scaleAnim }] }, fullWidth && styles.fullWidth]}>
@@ -203,16 +203,16 @@ export default function HapticButton({
         android_ripple={ripple.primaryTint}
         style={({ pressed }) => [
           Platform.OS === 'android' && {
-            borderRadius: borderRadius.lg,
+            borderRadius: borderRadius.full,
             overflow: 'hidden' as const,
           },
           fullWidth && { alignSelf: 'stretch' as const },
           pressed && Platform.OS === 'ios' && !disabled && !loading && styles.pressedIOS,
         ]}
       >
-        {useGradient ? (
+        {useGradient && gradient ? (
           <LinearGradient
-            colors={gradientColors}
+            colors={gradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={[buttonStyle, { backgroundColor: undefined }]}
@@ -229,7 +229,7 @@ export default function HapticButton({
 
 const styles = StyleSheet.create({
   button: {
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',

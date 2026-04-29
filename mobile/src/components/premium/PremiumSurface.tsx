@@ -24,9 +24,9 @@ export default function PremiumSurface({
         styles.base,
         {
           backgroundColor: palette.semantic.card,
-          borderColor: palette.border.light,
+          borderColor: palette.border.default,
         },
-        elevated ? shadows.md : shadows.sm,
+        elevated ? shadows.sm : shadows.xs,
         padded && styles.padded,
         style,
       ]}
@@ -38,7 +38,7 @@ export default function PremiumSurface({
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: borderRadius['4xl'],
+    borderRadius: borderRadius['2xl'],
     borderWidth: StyleSheet.hairlineWidth,
   },
   padded: {

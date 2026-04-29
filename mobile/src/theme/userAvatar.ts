@@ -1,5 +1,7 @@
 import { StyleSheet } from 'react-native'
 import { colors } from './colors'
+import { fontFamily } from './typography'
+import { surfaceChromeCircleStyle } from './surfaceFrame'
 
 /** Shared size for profile placeholder circles (dashboard header, etc.) */
 export const USER_AVATAR_SIZE = 40
@@ -12,14 +14,7 @@ export const PIN_ENTRY_AVATAR_SIZE = 64
 
 export const userAvatarStyles = StyleSheet.create({
   circle: {
-    width: USER_AVATAR_SIZE,
-    height: USER_AVATAR_SIZE,
-    borderRadius: USER_AVATAR_SIZE / 2,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    alignItems: 'center',
-    justifyContent: 'center',
+    ...surfaceChromeCircleStyle(colors, USER_AVATAR_SIZE, { shadow: 'none' }),
     overflow: 'hidden',
   },
   image: {
@@ -30,24 +25,17 @@ export const userAvatarStyles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: colors.primary.main,
-    fontFamily: 'Geist-Bold',
+    fontFamily: fontFamily.bold,
   },
   pinEntryCircle: {
-    width: PIN_ENTRY_AVATAR_SIZE,
-    height: PIN_ENTRY_AVATAR_SIZE,
-    borderRadius: PIN_ENTRY_AVATAR_SIZE / 2,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
+    ...surfaceChromeCircleStyle(colors, PIN_ENTRY_AVATAR_SIZE, { shadow: 'none' }),
     marginBottom: 16,
+    overflow: 'hidden',
   },
   pinEntryInitials: {
     fontSize: 24,
     fontWeight: '700',
     color: colors.primary.main,
-    fontFamily: 'Geist-Bold',
+    fontFamily: fontFamily.bold,
   },
 })

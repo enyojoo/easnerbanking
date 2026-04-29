@@ -1,7 +1,7 @@
 import React from 'react'
 import { View, Text, Pressable, Platform, StyleSheet, ViewStyle } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
-import { colors, textStyles, spacing, borderRadius } from '../theme'
+import { CircleAlert, RefreshCw } from 'lucide-react-native'
+import { colors, textStyles, spacing, borderRadius, fontFamily } from '../theme'
 import { ripple } from '../lib/androidRipple'
 
 interface ErrorStateProps {
@@ -22,7 +22,7 @@ export default function ErrorState({
   return (
     <View style={[styles.container, style]}>
       <View style={styles.iconContainer}>
-        <Ionicons name="alert-circle" size={48} color={colors.error.main} />
+        <CircleAlert size={48} color={colors.error.main} strokeWidth={2} />
       </View>
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.message}>{message}</Text>
@@ -36,7 +36,7 @@ export default function ErrorState({
           onPress={onRetry}
           android_ripple={ripple.primaryTint}
         >
-          <Ionicons name="refresh" size={20} color={colors.primary.main} />
+          <RefreshCw size={20} color={colors.primary.main} strokeWidth={2} />
           <Text style={styles.retryText}>{retryLabel}</Text>
         </Pressable>
       )}
@@ -62,14 +62,14 @@ const styles = StyleSheet.create({
   title: {
     ...textStyles.titleLarge,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     marginBottom: spacing[2],
     textAlign: 'center',
   },
   message: {
     ...textStyles.bodyMedium,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
     textAlign: 'center',
     marginBottom: spacing[4],
   },
@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
   retryText: {
     ...textStyles.labelMedium,
     color: colors.primary.main,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
 })
 

@@ -2,6 +2,7 @@ import React, { useEffect, useReducer } from 'react'
 import { Text, StyleSheet, View, TextStyle, ViewStyle } from 'react-native'
 import { UX } from '@easner/shared'
 import { useThemeColors } from '../../contexts/ThemePaletteContext'
+import { fontFamily } from '../../theme'
 
 /**
  * Mobile twin of the web `RefreshedAt` label.
@@ -58,5 +59,5 @@ export function RefreshedAt({ dataUpdatedAt, isFetching, style, textStyle }: Pro
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   dot: { width: 6, height: 6, borderRadius: 3, opacity: 0.8 },
-  text: { fontFamily: 'Inter_500Medium', fontSize: 11 },
+  text: { fontFamily: fontFamily.medium, fontSize: 11 },
 })

@@ -9,7 +9,7 @@ import {
   Animated,
   Platform,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { ArrowLeft, ChevronRight } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -17,7 +17,7 @@ import ExternalLinkModal from '../../components/ExternalLinkModal'
 import { useExternalLink } from '../../hooks/useExternalLink'
 import { NavigationProps } from '../../types'
 import { analytics } from '../../lib/analytics'
-import { colors, shadows, textStyles, borderRadius, spacing, motion } from '../../theme'
+import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 
@@ -108,7 +108,7 @@ export default function SupportScreen({ navigation }: NavigationProps) {
         <Text style={styles.contactTitle}>{title}</Text>
         {subtitle ? <Text style={styles.contactSubtitle}>{subtitle}</Text> : null}
       </View>
-      <Ionicons name="chevron-forward" size={20} color={colors.neutral[400]} />
+      <ChevronRight size={20} color={colors.neutral[400]} strokeWidth={2} />
     </Pressable>
   )
 
@@ -142,7 +142,7 @@ export default function SupportScreen({ navigation }: NavigationProps) {
                 navigation.goBack()
               }}
               style={styles.backButton} >
-              <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+              <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
         </Pressable>
             <View style={styles.headerContent}>
               <Text style={styles.title}>Support</Text>
@@ -218,14 +218,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing[4],
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+    ...surfaceChromeCircleStyle(colors, 44),
     marginRight: spacing[3],
   },
   headerContent: {
@@ -240,10 +233,7 @@ const styles = StyleSheet.create({
     gap: spacing[4],
   },
   sectionCard: {
-    backgroundColor: '#F9F9F9',
-    borderRadius: 24,
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
+    ...surfaceFrameStyle(colors),
     marginBottom: spacing[4],
     paddingBottom: spacing[2],
   },
@@ -260,7 +250,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[4],
     paddingHorizontal: spacing[5],
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E2E2',
+    borderBottomColor: colors.frame.border,
   },
   contactButtonLast: {
     borderBottomWidth: 0,
@@ -288,12 +278,12 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#374151',
+    color: colors.text.secondary,
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderColor: colors.border.default,
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -306,7 +296,7 @@ const styles = StyleSheet.create({
         includeFontPadding: false,
       },
     }),
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.background.primary,
   },
   textArea: {
     height: 100,
@@ -319,22 +309,22 @@ const styles = StyleSheet.create({
     }),
   },
   sendButton: {
-    backgroundColor: '#007ACC',
+    backgroundColor: colors.primary.main,
     borderRadius: 8,
     padding: 16,
     alignItems: 'center',
   },
   sendButtonDisabled: {
-    backgroundColor: '#9ca3af',
+    backgroundColor: colors.text.tertiary,
   },
   sendButtonText: {
-    color: '#ffffff',
+    color: colors.neutral.white,
     fontSize: 16,
     fontWeight: '600',
   },
   faqItem: {
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E2E2',
+    borderBottomColor: colors.frame.border,
     paddingHorizontal: spacing[5],
   },
   faqItemLast: {
@@ -348,7 +338,7 @@ const styles = StyleSheet.create({
   },
   faqQuestion: {
     ...textStyles.bodyMedium,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: fontFamily.medium,
     color: colors.text.primary,
     flex: 1,
     paddingRight: spacing[4],
@@ -373,35 +363,35 @@ const styles = StyleSheet.create({
   hoursText: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
   },
   timezoneText: {
     fontSize: 12,
-    color: '#9ca3af',
+    color: colors.text.tertiary,
     fontStyle: 'italic',
   },
   emergencyContainer: {
-    backgroundColor: '#fef2f2',
+    backgroundColor: colors.error.background,
     padding: 16,
     borderRadius: 8,
     borderLeftWidth: 4,
-    borderLeftColor: '#7A2E2E',
+    borderLeftColor: colors.error.main,
   },
   emergencyText: {
     fontSize: 14,
-    color: '#dc2626',
+    color: colors.error.light,
     marginBottom: 12,
     lineHeight: 20,
   },
   emergencyButton: {
-    backgroundColor: '#7A2E2E',
+    backgroundColor: colors.error.main,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 6,
     alignSelf: 'flex-start',
   },
   emergencyButtonText: {
-    color: '#ffffff',
+    color: colors.neutral.white,
     fontSize: 16,
     fontWeight: '600',
   },

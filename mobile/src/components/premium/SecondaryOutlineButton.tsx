@@ -23,13 +23,13 @@ export default function SecondaryOutlineButton({
         style={({ pressed }) => [
           styles.pressable,
           {
-            backgroundColor: palette.background.primary,
-            borderColor: palette.frame.border,
+            backgroundColor: palette.semantic.card,
+            borderColor: palette.border.default,
           },
-          pressed && styles.pressed,
+          pressed && [styles.pressed, { backgroundColor: palette.semantic.muted }],
         ]}
       >
-        <Text style={[styles.title, { color: palette.text.primary }]}>{title}</Text>
+        <Text style={[styles.title, { color: palette.primary.main }]}>{title}</Text>
       </Pressable>
     </View>
   )
@@ -51,8 +51,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[6],
   },
   title: {
-    ...textStyles.titleLarge,
+    ...textStyles.titleMedium,
     fontWeight: '600',
+    fontSize: 15,
+    letterSpacing: -0.1,
   },
   pressed: {
     opacity: 0.9,

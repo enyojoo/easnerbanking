@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { View, TextInput, Pressable, Platform, StyleSheet } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { Eye, EyeOff } from 'lucide-react-native'
 import { colors } from '../theme'
 import { ripple } from '../lib/androidRipple'
 import { authScreenStyles } from '../theme/authScreen'
@@ -48,11 +48,11 @@ export default function PasswordInput({
         onPress={() => setShowPassword(!showPassword)}
         android_ripple={ripple.neutral}
       >
-        <Ionicons
-          name={showPassword ? 'eye-off' : 'eye'}
-          size={20}
-          color={colors.text.secondary}
-        />
+        {showPassword ? (
+          <EyeOff size={20} color={colors.text.secondary} strokeWidth={2} />
+        ) : (
+          <Eye size={20} color={colors.text.secondary} strokeWidth={2} />
+        )}
       </Pressable>
     </View>
   )

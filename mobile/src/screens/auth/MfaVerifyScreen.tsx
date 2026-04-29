@@ -6,35 +6,37 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  Alert,
 } from 'react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { OtpCodeInput } from '../../components/ui'
 import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
+import { EasnerAlertSheet } from '../../components/premium'
 import { useAuth } from '../../contexts/AuthContext'
 import { colors, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
+import { useToast } from '../../components/ToastProvider'
 
 export default function MfaVerifyScreen() {
   const insets = useSafeAreaInsets()
   const { verifyMfa, cancelMfaSignIn } = useAuth()
+  const { showError, showWarning } = useToast()
   const [code, setCode] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  void useRef
+  const [cancelSheetVisible, setCancelSheetVisible] = useState(false)
 
   const handleSubmit = async () => {
     const digits = code.replace(/\D/g, '')
     if (digits.length !== 6) {
-      Alert.alert('Two-factor authentication', 'Enter the 6-digit code from your authenticator app.')
+      showWarning('Enter the 6-digit code from your authenticator app.')
       return
     }
     setSubmitting(true)
     try {
       const { error } = await verifyMfa(digits)
       if (error) {
-        Alert.alert('Two-factor authentication', error.message)
+        showError(error.message)
       }
     } finally {
       setSubmitting(false)
@@ -43,16 +45,7 @@ export default function MfaVerifyScreen() {
 
   const handleBack = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    Alert.alert('Cancel sign-in?', 'You will need your email and password to sign in again.', [
-      { text: 'Stay', style: 'cancel' },
-      {
-        text: 'Sign out',
-        style: 'destructive',
-        onPress: () => {
-          void cancelMfaSignIn()
-        },
-      },
-    ])
+    setCancelSheetVisible(true)
   }
 
   return (
@@ -102,6 +95,20 @@ export default function MfaVerifyScreen() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+
+      <EasnerAlertSheet
+        visible={cancelSheetVisible}
+        onDismiss={() => setCancelSheetVisible(false)}
+        title="Cancel sign-in?"
+        message="You will need your email and password to sign in again."
+        primaryLabel="Sign out"
+        onPrimary={() => {
+          setCancelSheetVisible(false)
+          void cancelMfaSignIn()
+        }}
+        secondaryLabel="Stay"
+        onSecondary={() => setCancelSheetVisible(false)}
+      />
     </View>
   )
 }

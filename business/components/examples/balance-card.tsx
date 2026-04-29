@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils'
  *
  * Design intent: private-bank, editorial, tactile.
  *   - Ivory surface in light, carbon in dark.
- *   - Amount rendered in Playfair Display (serif) with tabular figures.
+ *   - Hero amount in Geist sans with tabular figures (design-system §3).
  *   - Delta renders in emerald for positive, graphite for flat/negative.
  *   - No bright fintech colors, no rainbow gradients.
  */
@@ -93,7 +93,7 @@ export function BalanceCard({
       </div>
 
       <div className="px-8">
-        <div className="font-serif text-[44px] leading-[52px] font-medium tracking-tight text-foreground tabular-nums">
+        <div className="font-sans text-[44px] leading-[52px] font-medium tracking-tight text-foreground tabular-nums">
           {hidden ? MASK : formatted}
         </div>
       </div>

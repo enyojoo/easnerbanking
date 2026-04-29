@@ -9,7 +9,7 @@ import {
   AccessibilityRole,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import { Ionicons } from '@expo/vector-icons'
+import { MoreHorizontal } from 'lucide-react-native'
 import {
   borderRadius,
   spacing,
@@ -96,11 +96,7 @@ export function PremiumWalletCard({
                 },
               ]}
             >
-              <Ionicons
-                name="ellipsis-horizontal"
-                size={18}
-                color={palette.text.inverse}
-              />
+              <MoreHorizontal size={18} color={palette.text.inverse} strokeWidth={2} />
             </Pressable>
           ) : null}
         </View>
@@ -111,7 +107,7 @@ export function PremiumWalletCard({
           </Text>
           <Text
             style={[
-              textStyles.displaySerifLg,
+              textStyles.displayHeroLg,
               styles.balance,
               { color: palette.text.inverse },
             ]}

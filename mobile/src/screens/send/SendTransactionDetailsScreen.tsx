@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   Pressable, Platform,
-  Alert,
   ActivityIndicator,
   RefreshControl,
   Linking,
@@ -15,22 +14,39 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
-import * as Clipboard from 'expo-clipboard'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCurrenciesCatalog, usePaymentMethodsList } from '../../hooks/queries'
 import { NavigationProps } from '../../types'
 import { transactionService, TransactionData } from '../../lib/transactionService'
 import { supabase } from '../../lib/supabase'
-import { Ionicons } from '@expo/vector-icons'
+import type { LucideIcon } from 'lucide-react-native'
+import {
+  AlertCircle,
+  Check,
+  CircleCheck,
+  CircleHelp,
+  CircleX,
+  Clock,
+  Copy,
+  FileText,
+  ExternalLink,
+  ReceiptText,
+  RefreshCw,
+  User,
+} from 'lucide-react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { analytics } from '../../lib/analytics'
 import { TransactionTimeline } from '../../components/TransactionTimeline'
-import { colors, shadows, textStyles, borderRadius, spacing, motion } from '../../theme'
+import { colors, shadows, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
+import { useToast } from '../../components/ToastProvider'
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
 
 export default function SendTransactionDetailsScreen({ navigation, route }: NavigationProps) {
   const { userProfile } = useAuth()
+  const { showError } = useToast()
+  const copyToClipboard = useCopyToClipboard()
   const { data: currencies = [] } = useCurrenciesCatalog()
   const paymentMethods = usePaymentMethodsList().data ?? []
   const insets = useSafeAreaInsets()
@@ -234,18 +250,22 @@ export default function SendTransactionDetailsScreen({ navigation, route }: Navi
     }
   }
 
-  const getStatusInfo = (status: string) => {
+  const getStatusInfo = (status: string): {
+    color: string
+    Icon: LucideIcon
+    label: string
+  } => {
     switch (status) {
       case 'pending':
-        return { color: colors.status.pending, icon: 'time-outline' as const, label: 'Pending' }
+        return { color: colors.status.pending, Icon: Clock, label: 'Pending' }
       case 'processing':
-        return { color: colors.status.processing, icon: 'sync-outline' as const, label: 'Processing' }
+        return { color: colors.status.processing, Icon: RefreshCw, label: 'Processing' }
       case 'completed':
-        return { color: colors.status.completed, icon: 'checkmark-circle' as const, label: 'Completed' }
+        return { color: colors.status.completed, Icon: CircleCheck, label: 'Completed' }
       case 'failed':
-        return { color: colors.status.failed, icon: 'close-circle' as const, label: 'Failed' }
+        return { color: colors.status.failed, Icon: CircleX, label: 'Failed' }
       default:
-        return { color: colors.neutral[500], icon: 'help-circle-outline' as const, label: 'Unknown' }
+        return { color: colors.neutral[500], Icon: CircleHelp, label: 'Unknown' }
     }
   }
 
@@ -273,7 +293,7 @@ export default function SendTransactionDetailsScreen({ navigation, route }: Navi
       try {
         await Linking.openURL(transaction.receipt_url)
       } catch (error) {
-        Alert.alert('Error', 'Could not open receipt')
+        showError('Could not open receipt')
       }
     }
   }
@@ -289,16 +309,13 @@ export default function SendTransactionDetailsScreen({ navigation, route }: Navi
   }
 
   const handleCopy = async (text: string, key: string) => {
-    try {
-      await Clipboard.setStringAsync(text)
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-      setCopiedStates(prev => ({ ...prev, [key]: true }))
-      setTimeout(() => {
-        setCopiedStates(prev => ({ ...prev, [key]: false }))
-      }, 2000)
-    } catch (error) {
-      Alert.alert('Error', 'Failed to copy to clipboard')
-    }
+    const ok = await copyToClipboard(text)
+    if (!ok) return
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+    setCopiedStates((prev) => ({ ...prev, [key]: true }))
+    setTimeout(() => {
+      setCopiedStates((prev) => ({ ...prev, [key]: false }))
+    }, 2000)
   }
 
   if (loading) {
@@ -317,7 +334,7 @@ export default function SendTransactionDetailsScreen({ navigation, route }: Navi
       <View style={[styles.container, { paddingTop: insets.top + spacing[4] }]}>
         <View style={styles.errorContainer}>
           <View style={styles.errorIconContainer}>
-            <Ionicons name="alert-circle" size={48} color={colors.error.main} />
+            <AlertCircle size={48} color={colors.error.main} strokeWidth={2} />
           </View>
           <Text style={styles.errorTitle}>Something went wrong</Text>
           <Text style={styles.errorText}>{error || 'Transaction not found'}</Text>
@@ -340,6 +357,7 @@ export default function SendTransactionDetailsScreen({ navigation, route }: Navi
   }
 
   const statusInfo = getStatusInfo(transaction.status)
+  const StatusBadgeIcon = statusInfo.Icon
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing[4] }]}>
@@ -378,7 +396,7 @@ export default function SendTransactionDetailsScreen({ navigation, route }: Navi
             </Text>
             
             <View style={styles.statusBadge}>
-              <Ionicons name={statusInfo.icon} size={16} color={colors.text.inverse} />
+              <StatusBadgeIcon size={16} color={colors.text.inverse} strokeWidth={2} />
               <Text style={styles.statusBadgeText}>{statusInfo.label}</Text>
             </View>
 
@@ -412,11 +430,11 @@ export default function SendTransactionDetailsScreen({ navigation, route }: Navi
               >
                 <Text style={styles.transactionIdValue}>{transaction.transaction_id}</Text>
                 <View style={[styles.copyIcon, copiedStates.transactionId && styles.copyIconSuccess]}>
-                  <Ionicons 
-                    name={copiedStates.transactionId ? "checkmark" : "copy-outline"} 
-                    size={14} 
-                    color={copiedStates.transactionId ? colors.success.main : colors.primary.main} 
-                  />
+                  {copiedStates.transactionId ? (
+                    <Check size={14} color={colors.success.main} strokeWidth={2.5} />
+                  ) : (
+                    <Copy size={14} color={colors.primary.main} strokeWidth={2} />
+                  )}
                 </View>
               </Pressable>
             </View>
@@ -433,7 +451,7 @@ export default function SendTransactionDetailsScreen({ navigation, route }: Navi
           {(transaction.status === 'failed' || transaction.status === 'cancelled') && (
             <View style={styles.failedCard}>
               <View style={styles.failedIconContainer}>
-                <Ionicons name="close-circle" size={32} color={colors.error.main} />
+                <CircleX size={32} color={colors.error.main} strokeWidth={2} />
               </View>
               <Text style={styles.failedTitle}>
                 {transaction.status === 'failed' ? 'Transaction Failed' : 'Transaction Cancelled'}
@@ -454,14 +472,14 @@ export default function SendTransactionDetailsScreen({ navigation, route }: Navi
             <View style={styles.card}>
               <View style={styles.receiptRow}>
                 <View style={styles.receiptIconContainer}>
-                  <Ionicons name="document-text" size={20} color={colors.success.main} />
+                  <FileText size={20} color={colors.success.main} strokeWidth={2} />
                 </View>
                 <View style={styles.receiptInfo}>
                   <Text style={styles.receiptTitle}>Payment Receipt</Text>
                   <Text style={styles.receiptFilename}>{transaction.receipt_filename}</Text>
                 </View>
                 <Pressable android_ripple={ripple.neutral} style={styles.receiptButton} onPress={handleViewReceipt}>
-                  <Ionicons name="open-outline" size={16} color={colors.primary.main} />
+                  <ExternalLink size={16} color={colors.primary.main} strokeWidth={2} />
                   <Text style={styles.receiptButtonText}>View</Text>
                 </Pressable>
               </View>
@@ -472,7 +490,7 @@ export default function SendTransactionDetailsScreen({ navigation, route }: Navi
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.cardIconContainer}>
-                <Ionicons name="receipt-outline" size={18} color={colors.primary.main} />
+                <ReceiptText size={18} color={colors.primary.main} strokeWidth={2} />
               </View>
               <Text style={styles.cardTitle}>Transaction Summary</Text>
             </View>
@@ -520,7 +538,7 @@ export default function SendTransactionDetailsScreen({ navigation, route }: Navi
             <View style={styles.card}>
               <View style={styles.cardHeader}>
                 <View style={styles.cardIconContainer}>
-                  <Ionicons name="person-outline" size={18} color={colors.primary.main} />
+                  <User size={18} color={colors.primary.main} strokeWidth={2} />
                 </View>
                 <Text style={styles.cardTitle}>Recipient</Text>
               </View>
@@ -669,7 +687,7 @@ const styles = StyleSheet.create({
   timerText: {
     ...textStyles.bodySmall,
     color: 'rgba(255,255,255,0.8)',
-    fontFamily: 'monospace',
+    fontFamily: fontFamily.mono,
   },
   card: {
     backgroundColor: colors.neutral.white,
@@ -695,7 +713,7 @@ const styles = StyleSheet.create({
   transactionIdValue: {
     ...textStyles.titleSmall,
     color: colors.text.primary,
-    fontFamily: 'monospace',
+    fontFamily: fontFamily.mono,
   },
   copyIcon: {
     width: 28,
@@ -867,7 +885,7 @@ const styles = StyleSheet.create({
   recipientAccount: {
     ...textStyles.bodySmall,
     color: colors.text.tertiary,
-    fontFamily: 'monospace',
+    fontFamily: fontFamily.mono,
     marginTop: 2,
   },
   bottomContainer: {

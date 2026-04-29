@@ -3,12 +3,11 @@ import { View, Platform, AppState, AppStateStatus, StyleSheet, ActivityIndicator
 import { createStackNavigator } from '@react-navigation/stack'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { useNavigation } from '@react-navigation/native'
-import { BlurView } from 'expo-blur'
-import { House, CreditCard, ChartSpline, Grip } from 'lucide-react-native'
+import { House, CreditCard, Activity as ActivityIcon, Grip } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useAuth } from '../contexts/AuthContext'
-import { useThemeColors, spacing, layout } from '../theme'
+import { useThemeColors, spacing, layout, fontFamily } from '../theme'
 import {
   isPinSetup,
   dismissPinPrompt,
@@ -166,61 +165,15 @@ function MainTabs() {
 
   const activeColor = palette.primary.main
   const inactiveColor = palette.text.secondary
-  const tabBarStyles = React.useMemo(
-    () =>
-      StyleSheet.create({
-        tabBarGlassRoot: {
-          ...StyleSheet.absoluteFillObject,
-          overflow: 'hidden',
-        },
-        tabBarTint: {
-          ...StyleSheet.absoluteFillObject,
-          backgroundColor: palette.glass.surface,
-        },
-        tabBarTopHairline: {
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          height: StyleSheet.hairlineWidth,
-          backgroundColor: palette.glass.border,
-        },
-        activeIconContainer: {
-          width: 40,
-          height: 40,
-          borderRadius: 20,
-          backgroundColor: palette.glass.highlight,
-          justifyContent: 'center',
-          alignItems: 'center',
-          borderWidth: StyleSheet.hairlineWidth,
-          borderColor: palette.glass.border,
-        },
-      }),
-    [palette.glass.border, palette.glass.highlight, palette.glass.surface],
-  )
-
-  const tabBarBackground = React.useCallback(
-    () => (
-      <View style={tabBarStyles.tabBarGlassRoot}>
-        <BlurView
-          style={StyleSheet.absoluteFill}
-          intensity={Platform.OS === 'ios' ? 72 : 48}
-          tint="light"
-        />
-        <View style={tabBarStyles.tabBarTint} pointerEvents="none" />
-        <View style={tabBarStyles.tabBarTopHairline} pointerEvents="none" />
-      </View>
-    ),
-    [tabBarStyles],
-  )
 
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: Platform.OS === 'android' ? palette.glass.background : 'transparent',
-          borderTopWidth: 0,
+          backgroundColor: palette.semantic.card,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: palette.border.default,
           elevation: 0,
           shadowOpacity: 0,
           shadowOffset: { width: 0, height: 0 },
@@ -232,13 +185,12 @@ function MainTabs() {
           margin: 0,
           position: 'relative',
         },
-        tabBarBackground,
         tabBarShowLabel: true,
         tabBarActiveTintColor: activeColor,
         tabBarInactiveTintColor: inactiveColor,
         tabBarLabelStyle: {
-          fontSize: 10,
-          fontFamily: 'Geist-Medium',
+          fontSize: 11,
+          fontFamily: fontFamily.medium,
           fontWeight: '500',
           marginTop: 2,
         },
@@ -259,13 +211,11 @@ function MainTabs() {
         options={{
           tabBarLabel: 'Home',
           tabBarIcon: ({ focused }) => (
-            <View style={focused ? tabBarStyles.activeIconContainer : null}>
-              <House
-                size={22}
-                color={focused ? activeColor : inactiveColor}
-                strokeWidth={focused ? 2.25 : 1.75}
-              />
-            </View>
+            <House
+              size={22}
+              color={focused ? activeColor : inactiveColor}
+              strokeWidth={focused ? 2.25 : 1.75}
+            />
           ),
         }}
       />
@@ -275,13 +225,11 @@ function MainTabs() {
         options={{
           tabBarLabel: 'Cards',
           tabBarIcon: ({ focused }) => (
-            <View style={focused ? tabBarStyles.activeIconContainer : null}>
-              <CreditCard
-                size={22}
-                color={focused ? activeColor : inactiveColor}
-                strokeWidth={focused ? 2.25 : 1.75}
-              />
-            </View>
+            <CreditCard
+              size={22}
+              color={focused ? activeColor : inactiveColor}
+              strokeWidth={focused ? 2.25 : 1.75}
+            />
           ),
         }}
       />
@@ -291,13 +239,11 @@ function MainTabs() {
         options={{
           tabBarLabel: 'Transactions',
           tabBarIcon: ({ focused }) => (
-            <View style={focused ? tabBarStyles.activeIconContainer : null}>
-              <ChartSpline
-                size={22}
-                color={focused ? activeColor : inactiveColor}
-                strokeWidth={focused ? 2.25 : 1.75}
-              />
-            </View>
+            <ActivityIcon
+              size={22}
+              color={focused ? activeColor : inactiveColor}
+              strokeWidth={focused ? 2.25 : 1.75}
+            />
           ),
         }}
       />
@@ -307,13 +253,11 @@ function MainTabs() {
         options={{
           tabBarLabel: 'More',
           tabBarIcon: ({ focused }) => (
-            <View style={focused ? tabBarStyles.activeIconContainer : null}>
-              <Grip
-                size={22}
-                color={focused ? activeColor : inactiveColor}
-                strokeWidth={focused ? 2.25 : 1.75}
-              />
-            </View>
+            <Grip
+              size={22}
+              color={focused ? activeColor : inactiveColor}
+              strokeWidth={focused ? 2.25 : 1.75}
+            />
           ),
         }}
       />

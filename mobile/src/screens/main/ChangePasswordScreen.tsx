@@ -6,21 +6,22 @@ import {
   ScrollView,
   Pressable,
   TextInput,
-  Alert,
   Animated,
   Platform,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { ArrowLeft, Eye, EyeOff } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
-import { colors, shadows, textStyles, borderRadius, spacing, motion } from '../../theme'
+import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
+import { useToast } from '../../components/ToastProvider'
 
 export default function ChangePasswordScreen({ navigation }: NavigationProps) {
   const insets = useSafeAreaInsets()
+  const { showError, showInfo } = useToast()
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -38,30 +39,30 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
 
   const handleSubmit = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields')
+      showError('Please fill in all fields')
       return
     }
 
     if (newPassword !== confirmPassword) {
-      Alert.alert('Error', 'New passwords do not match')
+      showError('New passwords do not match')
       return
     }
 
     if (newPassword.length < 8) {
-      Alert.alert('Error', 'Password must be at least 8 characters')
+      showError('Password must be at least 8 characters')
       return
     }
 
     setLoading(true)
     try {
       // TODO: Implement password change API call
-      Alert.alert('Info', 'Password change functionality will be implemented')
+      showInfo('Password change functionality will be implemented')
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
     } catch (error) {
       console.error('Error changing password:', error)
-      Alert.alert('Error', 'Failed to change password')
+      showError('Failed to change password')
     } finally {
       setLoading(false)
     }
@@ -99,7 +100,7 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
                 navigation.goBack()
               }}
               style={styles.backButton} >
-              <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+              <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
             </Pressable>
             <View style={styles.headerContent}>
               <Text style={styles.title}>Change Password</Text>
@@ -130,7 +131,7 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
                   value={currentPassword}
                   onChangeText={setCurrentPassword}
                   placeholder="Enter current password"
-                  placeholderTextColor="#9ca3af"
+                  placeholderTextColor={colors.text.tertiary}
                   secureTextEntry={!showCurrentPassword}
                   editable={!loading}
                 />
@@ -139,11 +140,11 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
                   style={styles.eyeButton}
                   onPress={() => setShowCurrentPassword(!showCurrentPassword)}
                 >
-                  <Ionicons
-                    name={showCurrentPassword ? 'eye-off-outline' : 'eye-outline'}
-                    size={20}
-                    color="#6F756F"
-                  />
+                  {showCurrentPassword ? (
+                    <EyeOff size={20} color={colors.brand.slate} strokeWidth={2} />
+                  ) : (
+                    <Eye size={20} color={colors.brand.slate} strokeWidth={2} />
+                  )}
                 </Pressable>
               </View>
             </View>
@@ -156,7 +157,7 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
                   value={newPassword}
                   onChangeText={setNewPassword}
                   placeholder="Enter new password"
-                  placeholderTextColor="#9ca3af"
+                  placeholderTextColor={colors.text.tertiary}
                   secureTextEntry={!showNewPassword}
                   editable={!loading}
                 />
@@ -165,11 +166,11 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
                   style={styles.eyeButton}
                   onPress={() => setShowNewPassword(!showNewPassword)}
                 >
-                  <Ionicons
-                    name={showNewPassword ? 'eye-off-outline' : 'eye-outline'}
-                    size={20}
-                    color="#6F756F"
-                  />
+                  {showNewPassword ? (
+                    <EyeOff size={20} color={colors.brand.slate} strokeWidth={2} />
+                  ) : (
+                    <Eye size={20} color={colors.brand.slate} strokeWidth={2} />
+                  )}
                 </Pressable>
               </View>
             </View>
@@ -182,7 +183,7 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
                   placeholder="Confirm new password"
-                  placeholderTextColor="#9ca3af"
+                  placeholderTextColor={colors.text.tertiary}
                   secureTextEntry={!showConfirmPassword}
                   editable={!loading}
                 />
@@ -191,11 +192,11 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
                   style={styles.eyeButton}
                   onPress={() => setShowConfirmPassword(!showConfirmPassword)}
                 >
-                  <Ionicons
-                    name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
-                    size={20}
-                    color="#6F756F"
-                  />
+                  {showConfirmPassword ? (
+                    <EyeOff size={20} color={colors.brand.slate} strokeWidth={2} />
+                  ) : (
+                    <Eye size={20} color={colors.brand.slate} strokeWidth={2} />
+                  )}
                 </Pressable>
               </View>
             </View>
@@ -237,14 +238,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing[4],
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+    ...surfaceChromeCircleStyle(colors, 44),
     marginRight: spacing[3],
   },
   headerContent: {
@@ -258,10 +252,7 @@ const styles = StyleSheet.create({
     padding: spacing[5],
   },
   sectionCard: {
-    backgroundColor: '#F9F9F9',
-    borderRadius: 24,
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
+    ...surfaceFrameStyle(colors),
     marginBottom: spacing[4],
     paddingTop: spacing[5],
     paddingBottom: spacing[5],
@@ -287,7 +278,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 0.5,
-    borderColor: '#E2E2E2',
+    borderColor: colors.frame.border,
     borderRadius: borderRadius.xl,
     backgroundColor: colors.background.primary,
     minHeight: 48,

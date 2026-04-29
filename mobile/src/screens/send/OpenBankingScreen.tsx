@@ -7,13 +7,13 @@ import {
   ActivityIndicator,
   Animated,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { ArrowLeft, Link as LinkIcon } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
-import { colors, shadows, textStyles, borderRadius, spacing, motion } from '../../theme'
+import { colors, shadows, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 
@@ -76,7 +76,7 @@ export default function OpenBankingScreen({ navigation, route }: NavigationProps
             onPress={() => navigation.goBack()}
             style={styles.backButton}
           >
-            <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+            <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
           </Pressable>
           <View style={styles.headerContent}>
             <Text style={styles.title}>
@@ -102,7 +102,7 @@ export default function OpenBankingScreen({ navigation, route }: NavigationProps
         >
           <View style={styles.infoContainer}>
             <View style={styles.iconContainer}>
-              <Ionicons name="link" size={48} color={colors.primary.main} />
+              <LinkIcon size={48} color={colors.primary.main} strokeWidth={2} />
             </View>
             <Text style={styles.infoTitle}>
               {isSBP ? 'Connect via Faster Payments System' : 'Connect Your Bank'}
@@ -157,14 +157,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing[4],
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+    ...surfaceChromeCircleStyle(colors, 44),
     marginRight: spacing[3],
   },
   headerContent: {
@@ -196,14 +189,14 @@ const styles = StyleSheet.create({
   infoTitle: {
     ...textStyles.headlineSmall,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     marginBottom: spacing[2],
     textAlign: 'center',
   },
   infoText: {
     ...textStyles.bodyLarge,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
     textAlign: 'center',
     lineHeight: 24,
   },
@@ -214,7 +207,7 @@ const styles = StyleSheet.create({
   loadingText: {
     ...textStyles.bodyMedium,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
     marginTop: spacing[3],
   },
   connectButton: {
@@ -231,7 +224,7 @@ const styles = StyleSheet.create({
   connectButtonText: {
     ...textStyles.titleLarge,
     color: colors.text.inverse,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
 })
 

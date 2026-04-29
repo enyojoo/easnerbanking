@@ -1,44 +1,40 @@
 /**
  * Easner Design System — Mobile colors
  *
- * Graphite + Ivory + Easner blue primary; emerald for success. No neon greens,
- * no purple gradients, no glassmorphism. Paired with dark mode support.
+ * Graphite + ivory + Easner blue primary; emerald for success. No neon greens,
+ * no purple gradients. Frosted blur uses tokenized `glass` roles for system
+ * chrome (tab bar, sheets)—not full-screen decorative glassmorphism. Customer
+ * app is light-only; optional dark keys exist for shared typings only.
  *
  * Structural shape is preserved for backwards-compat with existing
- * screens (`colors.primary.main`, `colors.semantic.background`, ...),
- * but every raw hex value has been re-authored.
+ * screens (`colors.primary.main`, `colors.semantic.background`, ...).
  *
- * Tokens are mirrored from `@easner/shared` design-system tokens where
- * possible and converted to flat hex for React Native StyleSheet.
+ * Raw brand hex comes from `@easner/shared` `easnerBrand` (single source of truth).
  */
 
-/** Core neutrals: blue-gray (~210°) so dark surfaces don’t read green vs emerald success. */
+import { easnerBrand } from '@easner/shared'
+
+/** Core neutrals — identical values to `easnerBrand` in packages/shared (RN flat hex). */
 const brand = {
-  graphite: '#0F1110',
-  carbon: '#171a1c',
-  ink: '#1b1f22',
-  ivory: '#FAFAFA',
-  cloud: '#FFFFFF',
-  mist: '#F1F2F4',
-  stone: '#E4E6EB',
-  slate: '#6F7580',
-  primary: '#007ACC',
-  /** Hover / mid ramp — pairs with primary */
-  primaryHover: '#0062A3',
-  /** Pressed / deep end of ramp */
-  primaryDeep: '#005A9E',
-  /** Executive / institutional emphasis */
-  navy: '#0A2540',
-  /** Sparse selection / info surfaces */
-  tintBlue: '#EAF5FD',
-  /** Dark canvas primary accent */
-  darkAccent: '#3AA6F8',
-  /** Darker than darkAccent for pressed / gradients on dark */
-  darkPrimaryHover: '#2B8FDC',
-  emerald: '#0F8A5F',
-  emeraldDeep: '#0A6E4C',
-  amber: '#A8792A',
-  oxblood: '#7A2E2E',
+  graphite: easnerBrand.graphite,
+  carbon: easnerBrand.carbon,
+  ink: easnerBrand.ink,
+  ivory: easnerBrand.ivory,
+  cloud: easnerBrand.cloud,
+  mist: easnerBrand.mist,
+  stone: easnerBrand.stone,
+  slate: easnerBrand.slate,
+  primary: easnerBrand.primary,
+  primaryHover: easnerBrand.primaryHover,
+  primaryDeep: easnerBrand.primaryDeep,
+  navy: easnerBrand.navy,
+  tintBlue: easnerBrand.tintBlue,
+  darkAccent: easnerBrand.darkAccent,
+  darkPrimaryHover: easnerBrand.darkPrimaryHover,
+  emerald: easnerBrand.emerald,
+  emeraldDeep: easnerBrand.emeraldDeep,
+  amber: easnerBrand.amber,
+  oxblood: easnerBrand.oxblood,
 } as const
 
 type ColorPalette = {
@@ -48,6 +44,8 @@ type ColorPalette = {
     dark: string
     gradient: readonly [string, string]
     gradientDark: readonly [string, string]
+    /** Sky-blue hero gradient reserved for hero cards / promo banners (#007ACC -> #0EA5E9). */
+    heroGradient: readonly [string, string]
   }
   accent: { positive: string }
   success: {
@@ -151,34 +149,35 @@ export const lightColors: ColorPalette = {
     dark: brand.primaryHover,
     gradient: [brand.primaryDeep, brand.primary] as const,
     gradientDark: [brand.primaryHover, '#3399D6'] as const,
+    heroGradient: ['#007ACC', '#0EA5E9'] as const,
   },
 
   accent: {
-    positive: brand.emerald,
+    positive: '#16A34A',
   },
 
   success: {
-    main: brand.emerald,
-    light: '#1FA877',
-    dark: brand.emeraldDeep,
-    gradient: [brand.emerald, '#1FA877'] as const,
-    background: 'rgba(15, 138, 95, 0.08)',
+    main: '#16A34A',
+    light: '#22C55E',
+    dark: '#15803D',
+    gradient: ['#16A34A', '#22C55E'] as const,
+    background: 'rgba(22, 163, 74, 0.10)',
   },
 
   warning: {
-    main: brand.amber,
-    light: '#C49542',
-    dark: '#8A6221',
-    gradient: [brand.amber, '#C49542'] as const,
-    background: 'rgba(168, 121, 42, 0.10)',
+    main: '#D97706',
+    light: '#F59E0B',
+    dark: '#B45309',
+    gradient: ['#D97706', '#F59E0B'] as const,
+    background: 'rgba(217, 119, 6, 0.10)',
   },
 
   error: {
-    main: brand.oxblood,
-    light: '#9C4747',
-    dark: '#5F2424',
-    gradient: [brand.oxblood, '#9C4747'] as const,
-    background: 'rgba(122, 46, 46, 0.08)',
+    main: '#DC2626',
+    light: '#EF4444',
+    dark: '#B91C1C',
+    gradient: ['#DC2626', '#EF4444'] as const,
+    background: 'rgba(220, 38, 38, 0.10)',
   },
 
   neutral: {
@@ -197,25 +196,26 @@ export const lightColors: ColorPalette = {
   },
 
   background: {
-    primary: '#FFFFFF',
-    secondary: '#FAFAFA',
-    tertiary: '#F4F5F7',
+    primary: '#F4F5F7',
+    secondary: '#FFFFFF',
+    tertiary: '#FFFFFF',
     dark: brand.graphite,
   },
 
   text: {
-    primary: '#0F1110',
-    secondary: '#666E7A',
-    tertiary: '#8E96A3',
-    inverse: brand.ivory,
+    primary: '#0F172A',
+    secondary: '#6B7280',
+    tertiary: '#9CA3AF',
+    inverse: '#FFFFFF',
     link: brand.primary,
   },
 
   cardGradients: {
-    premium: [brand.graphite, brand.carbon] as const,
-    blue: [brand.graphite, brand.ink] as const,
+    /** Sky-blue identity hero (matches `primary.heroGradient`). */
+    premium: ['#007ACC', '#0EA5E9'] as const,
+    blue: ['#007ACC', '#0EA5E9'] as const,
     purple: [brand.carbon, brand.ink] as const,
-    green: [brand.emeraldDeep, brand.emerald] as const,
+    green: ['#16A34A', '#22C55E'] as const,
     gold: [brand.ink, brand.graphite] as const,
   },
 
@@ -228,36 +228,38 @@ export const lightColors: ColorPalette = {
   },
 
   status: {
-    pending: brand.amber,
+    pending: '#D97706',
     processing: brand.slate,
-    completed: brand.emerald,
-    failed: brand.oxblood,
+    completed: '#16A34A',
+    failed: '#DC2626',
     cancelled: brand.slate,
   },
 
   border: {
-    light: '#EEF0F3',
-    default: '#E2E5EA',
+    /** Canonical hairline used for dividers, section frames, and inputs. */
+    light: '#E5E7EB',
+    default: '#E5E7EB',
+    /** Slightly darker — reserved for switch tracks and other edge cases. */
     dark: '#D3D8E0',
   },
 
-  /** Raised panels / chips / list shells — subtle fill vs `background.primary` canvas (More section parity). */
+  /** Raised plates on the gray canvas — crisp white with hairline border. */
   frame: {
-    background: '#F9F9F9',
-    border: '#E2E2E2',
+    background: '#FFFFFF',
+    border: '#E5E7EB',
   },
 
   semantic: {
-    background: '#FFFFFF',
-    foreground: '#0F1110',
+    background: '#F4F5F7',
+    foreground: '#0F172A',
     card: '#FFFFFF',
-    cardForeground: '#0F1110',
+    cardForeground: '#0F172A',
     muted: '#F4F5F7',
-    mutedForeground: '#666E7A',
-    border: '#E2E5EA',
-    input: '#E2E5EA',
-    destructive: brand.oxblood,
-    destructiveForeground: brand.ivory,
+    mutedForeground: '#6B7280',
+    border: '#E5E7EB',
+    input: '#E5E7EB',
+    destructive: '#DC2626',
+    destructiveForeground: '#FFFFFF',
     ring: brand.primary,
   },
 
@@ -271,6 +273,7 @@ export const darkColors: ColorPalette = {
     dark: brand.darkPrimaryHover,
     gradient: [brand.darkPrimaryHover, brand.darkAccent] as const,
     gradientDark: [brand.darkPrimaryHover, '#6BB8F0'] as const,
+    heroGradient: [brand.darkPrimaryHover, brand.darkAccent] as const,
   },
 
   accent: {
@@ -343,6 +346,8 @@ export const darkColors: ColorPalette = {
     background: 'rgba(23, 26, 28, 0.85)',
     border: 'rgba(246, 243, 235, 0.06)',
     backgroundDark: 'rgba(18, 20, 23, 0.9)',
+    surface: 'rgba(30, 33, 36, 0.82)',
+    highlight: 'rgba(40, 44, 48, 0.92)',
   },
 
   status: {

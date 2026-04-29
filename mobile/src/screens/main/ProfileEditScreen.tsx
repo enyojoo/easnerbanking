@@ -6,7 +6,6 @@ import {
   ScrollView,
   Pressable,
   TextInput,
-  Alert,
   Modal,
   FlatList,
   Animated,
@@ -16,7 +15,7 @@ import {
   Image,
 } from 'react-native'
 import DateTimePicker from '@react-native-community/datetimepicker'
-import { Ionicons } from '@expo/vector-icons'
+import { ArrowLeft, Calendar, Camera, CircleCheck, CircleX } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -30,7 +29,7 @@ import {
   UserProfileData,
   UserStats,
 } from '../../lib/userService'
-import { colors, shadows, textStyles, borderRadius, spacing, userAvatarStyles, PROFILE_EDIT_AVATAR_SIZE, motion } from '../../theme'
+import { colors, shadows, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, userAvatarStyles, PROFILE_EDIT_AVATAR_SIZE, motion, fontFamily } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { supabase } from '../../lib/supabase'
@@ -39,6 +38,8 @@ import * as ImagePicker from 'expo-image-picker'
 import { uploadProfileAvatar, PROFILE_AVATAR_MAX_BYTES } from '../../lib/profileAvatarUpload'
 import { getApiBaseUrl } from '../../lib/apiClient'
 import { avatarImageSource, bustAvatarUrl, normalizeAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { EasnerAlertSheet } from '../../components/premium'
 
 const ACCOUNT_DELETED_FLAG_KEY = '@easner_account_deleted'
 
@@ -47,7 +48,9 @@ function ProfileEditContent({ navigation }: NavigationProps) {
   const insets = useSafeAreaInsets()
   const [isEditing, setIsEditing] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [noticeSheet, setNoticeSheet] = useState<{ title: string; message: string } | null>(null)
   const [profileData, setProfileData] = useState({
     fullName: '',
     email: '',
@@ -137,7 +140,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
     if (!user) return
 
     if (!editProfileData.fullName?.trim()) {
-      Alert.alert('Error', 'Please enter your full name')
+      setNoticeSheet({ title: 'Error', message: 'Please enter your full name' })
       return
     }
 
@@ -162,12 +165,13 @@ function ProfileEditContent({ navigation }: NavigationProps) {
           easetagSaved = true
         } catch (easetagErr) {
           console.error('Easetag update failed after profile save:', easetagErr)
-          Alert.alert(
-            'Easetag not updated',
-            easetagErr instanceof Error
-              ? `${easetagErr.message}\n\nYour other profile changes were saved.`
-              : 'Your other profile changes were saved, but the Easetag could not be updated.',
-          )
+          setNoticeSheet({
+            title: 'Easetag not updated',
+            message:
+              easetagErr instanceof Error
+                ? `${easetagErr.message}\n\nYour other profile changes were saved.`
+                : 'Your other profile changes were saved, but the Easetag could not be updated.',
+          })
         }
       }
 
@@ -209,13 +213,13 @@ function ProfileEditContent({ navigation }: NavigationProps) {
       setShowDatePicker(false)
       setEasetagAvailable(null)
       setEasetagValidationError(null)
-      Alert.alert('Success', 'Profile updated successfully')
+      setNoticeSheet({ title: 'Success', message: 'Profile updated successfully' })
     } catch (error) {
       console.error('Error updating profile:', error)
-      Alert.alert(
-        'Error',
-        error instanceof Error ? error.message : 'Failed to update profile'
-      )
+      setNoticeSheet({
+        title: 'Error',
+        message: error instanceof Error ? error.message : 'Failed to update profile',
+      })
     } finally {
       setLoading(false)
     }
@@ -243,7 +247,10 @@ function ProfileEditContent({ navigation }: NavigationProps) {
   const handlePickProfilePhoto = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
     if (!perm.granted) {
-      Alert.alert('Permission needed', 'Allow photo library access to set a profile photo.')
+      setNoticeSheet({
+        title: 'Permission needed',
+        message: 'Allow photo library access to set a profile photo.',
+      })
       return
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -255,7 +262,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
     if (result.canceled || !result.assets[0]) return
     const asset = result.assets[0]
     if (asset.fileSize != null && asset.fileSize > PROFILE_AVATAR_MAX_BYTES) {
-      Alert.alert('File too large', 'Photo must be 2MB or smaller.')
+      setNoticeSheet({ title: 'File too large', message: 'Photo must be 2MB or smaller.' })
       return
     }
     setUploadingAvatar(true)
@@ -266,7 +273,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
         mimeType: asset.mimeType ?? undefined,
       })
       if ('error' in up) {
-        Alert.alert('Upload failed', up.error)
+        setNoticeSheet({ title: 'Upload failed', message: up.error })
         return
       }
       const bustedUrl = bustAvatarUrl(up.url)
@@ -456,12 +463,16 @@ function ProfileEditContent({ navigation }: NavigationProps) {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     try {
       if (!user?.id) return
-      setLoading(true)
+      setDeleteLoading(true)
       const {
         data: { session },
       } = await supabase.auth.getSession()
       if (!session?.access_token) {
-        Alert.alert('Delete account', 'Your session expired. Please sign in again.')
+        setShowDeleteDialog(false)
+        setNoticeSheet({
+          title: 'Delete account',
+          message: 'Your session expired. Please sign in again.',
+        })
         return
       }
       const apiUrl = getApiBaseUrl()
@@ -480,7 +491,8 @@ function ProfileEditContent({ navigation }: NavigationProps) {
         } catch {
           // ignore
         }
-        Alert.alert('Delete account', msg)
+        setShowDeleteDialog(false)
+        setNoticeSheet({ title: 'Delete account', message: msg })
         return
       }
 
@@ -490,9 +502,13 @@ function ProfileEditContent({ navigation }: NavigationProps) {
       // Ensure local state is cleared and user exits to Auth stack.
       await signOut()
     } catch (e) {
-      Alert.alert('Delete account', e instanceof Error ? e.message : 'Unable to delete account.')
+      setShowDeleteDialog(false)
+      setNoticeSheet({
+        title: 'Delete account',
+        message: e instanceof Error ? e.message : 'Unable to delete account.',
+      })
     } finally {
-      setLoading(false)
+      setDeleteLoading(false)
     }
   }
 
@@ -550,7 +566,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                 ? formatDateOfBirth(editProfileData.dateOfBirth)
                 : 'Select date of birth'}
             </Text>
-            <Ionicons name="calendar-outline" size={18} color={colors.text.secondary} />
+            <Calendar size={18} color={colors.text.secondary} strokeWidth={2} />
           </Pressable>
           {Platform.OS === 'android' && showDatePicker ? (
             <DateTimePicker
@@ -610,14 +626,14 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                   </Text>
                 ) : easetagAvailable === true ? (
                   <>
-                    <Ionicons name="checkmark-circle" size={14} color={colors.success.main} />
+                    <CircleCheck size={14} color={colors.success.main} strokeWidth={2} />
                     <Text style={[styles.easetagStatusTextInline, { color: colors.success.main }]}>
                       Available
                     </Text>
                   </>
                 ) : easetagAvailable === false ? (
                   <>
-                    <Ionicons name="close-circle" size={14} color={colors.error.main} />
+                    <CircleX size={14} color={colors.error.main} strokeWidth={2} />
                     <Text style={[styles.easetagStatusTextInline, { color: colors.error.main }]}>
                       Taken
                     </Text>
@@ -687,7 +703,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                 navigation.goBack()
               }}
               style={styles.backButton} >
-              <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+              <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
             </Pressable>
             <View style={styles.headerContent}>
               <Text style={styles.title}>Your Profile</Text>
@@ -734,14 +750,14 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                           <>
                             <Image source={editAvatarSource} style={userAvatarStyles.image} />
                             <View style={styles.avatarEditPhotoOverlay} pointerEvents="none">
-                              <Ionicons name="camera" size={22} color={colors.text.inverse} />
+                              <Camera size={22} color={colors.text.inverse} strokeWidth={2} />
                             </View>
                           </>
                         ) : (
                           <>
                             <Text style={userAvatarStyles.initials}>{profilePhotoInitials()}</Text>
                             <View style={styles.avatarEditPhotoOverlay} pointerEvents="none">
-                              <Ionicons name="camera" size={22} color={colors.text.inverse} />
+                              <Camera size={22} color={colors.text.inverse} strokeWidth={2} />
                             </View>
                           </>
                         )}
@@ -869,41 +885,29 @@ function ProfileEditContent({ navigation }: NavigationProps) {
         </ScrollView>
       </KeyboardSafeContainer>
 
-      {/* Delete Account Confirmation Modal */}
-      <Modal
+      <EasnerAlertSheet
         visible={showDeleteDialog}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowDeleteDialog(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Delete Account</Text>
-            <Text style={styles.modalDescription}>
-              Are you sure you want to delete your account? This action cannot be undone and all your data will be permanently deleted.
-            </Text>
-            <View style={styles.modalButtons}>
-              <Pressable
-               android_ripple={ripple.neutral}
-                style={[styles.modalButton, styles.modalButtonCancel]}
-                onPress={async () => {
-                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                  setShowDeleteDialog(false)
-                }}
-              >
-                <Text style={styles.modalButtonTextCancel}>Cancel</Text>
-              </Pressable>
-              <Pressable
-               android_ripple={ripple.neutral}
-                style={[styles.modalButton, styles.modalButtonConfirm]}
-                onPress={handleDeleteAccount}
-              >
-                <Text style={styles.modalButtonTextConfirm}>Delete Account</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        onDismiss={() => {
+          if (!deleteLoading) setShowDeleteDialog(false)
+        }}
+        title="Delete Account"
+        message="Are you sure you want to delete your account? This action cannot be undone and all your data will be permanently deleted."
+        primaryLabel="Delete Account"
+        onPrimary={() => void handleDeleteAccount()}
+        onSecondary={() => setShowDeleteDialog(false)}
+        primaryDestructive
+        primaryLoading={deleteLoading}
+      />
+
+      <EasnerAlertSheet
+        visible={noticeSheet !== null}
+        onDismiss={() => setNoticeSheet(null)}
+        title={noticeSheet?.title ?? ''}
+        message={noticeSheet?.message ?? ''}
+        primaryLabel="OK"
+        onPrimary={() => setNoticeSheet(null)}
+        singleAction
+      />
 
       {Platform.OS === 'ios' ? (
         <Modal
@@ -959,14 +963,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing[4],
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+    ...surfaceChromeCircleStyle(colors, 40),
     marginRight: spacing[3],
   },
   headerContent: {
@@ -1008,12 +1005,9 @@ const styles = StyleSheet.create({
     height: 32,
   },
   actionButtonSecondary: {
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.md }),
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[2],
-    borderRadius: borderRadius.md,
-    backgroundColor: '#F9F9F9',
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 75,
@@ -1033,10 +1027,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   profileCard: {
-    backgroundColor: '#F9F9F9',
-    borderRadius: 24,
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
+    ...surfaceFrameStyle(colors),
     padding: spacing[4],
     marginBottom: spacing[3],
   },
@@ -1095,7 +1086,7 @@ const styles = StyleSheet.create({
   },
   fieldInput: {
     borderWidth: 0.5,
-    borderColor: '#E2E2E2',
+    borderColor: colors.frame.border,
     borderRadius: borderRadius.xl,
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[3],
@@ -1181,7 +1172,7 @@ const styles = StyleSheet.create({
     maxHeight: 48,
     marginTop: spacing[1],
     borderWidth: 0.5,
-    borderColor: '#E2E2E2',
+    borderColor: colors.frame.border,
     borderRadius: borderRadius.xl,
     backgroundColor: colors.background.primary,
     overflow: 'hidden',
@@ -1213,7 +1204,7 @@ const styles = StyleSheet.create({
   dateInputText: {
     ...textStyles.bodyLarge,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
     flex: 1,
   },
   dateModalOverlay: {
@@ -1236,7 +1227,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[5],
     paddingBottom: spacing[4],
     borderBottomWidth: 0.5,
-    borderBottomColor: '#E2E2E2',
+    borderBottomColor: colors.frame.border,
     width: '100%',
   },
   datePickerWrapper: {
@@ -1275,73 +1266,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   deleteButton: {
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
-    borderRadius: borderRadius.xl,
-    backgroundColor: '#F9F9F9',
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
   },
   deleteButtonText: {
     ...textStyles.labelMedium,
     color: colors.error.main,
     fontWeight: '500',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing[5],
-  },
-  modalContent: {
-    backgroundColor: colors.background.primary,
-    borderRadius: borderRadius['3xl'],
-    padding: spacing[6],
-    width: '100%',
-    maxWidth: 400,
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
-  },
-  modalTitle: {
-    ...textStyles.titleLarge,
-    color: colors.text.primary,
-    marginBottom: spacing[2],
-  },
-  modalDescription: {
-    ...textStyles.bodyMedium,
-    color: colors.text.secondary,
-    marginBottom: spacing[5],
-    lineHeight: 22,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: spacing[3],
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: spacing[3],
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalButtonCancel: {
-    backgroundColor: '#F9F9F9',
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
-  },
-  modalButtonConfirm: {
-    backgroundColor: colors.error.main,
-  },
-  modalButtonTextCancel: {
-    ...textStyles.labelMedium,
-    color: colors.text.primary,
-    fontWeight: '600',
-  },
-  modalButtonTextConfirm: {
-    ...textStyles.labelMedium,
-    color: colors.text.inverse,
-    fontWeight: '600',
   },
 })
 

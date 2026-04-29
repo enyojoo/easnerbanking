@@ -5,12 +5,23 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Pressable, Platform,
-  Alert,
-  Modal,
-  ActivityIndicator,
+  Pressable,
+  Image,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import type { LucideIcon } from 'lucide-react-native'
+import {
+  Bell,
+  ChevronRight,
+  FileText,
+  HelpCircle,
+  Key,
+  Lock,
+  LogOut,
+  Shield,
+  ShieldCheck,
+  User,
+  Users,
+} from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -18,9 +29,21 @@ import { useAuth } from '../../contexts/AuthContext'
 import { NavigationProps, KYCSubmission } from '../../types'
 import { kycService } from '../../lib/kycService'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
+import {
+  colors,
+  textStyles,
+  borderRadius,
+  spacing,
+  fontFamily,
+  userAvatarStyles,
+} from '../../theme'
 import { useThemeColors } from '../../contexts/ThemePaletteContext'
 import { ripple } from '../../lib/androidRipple'
+import { EasnerAlertSheet } from '../../components/premium'
+import { SectionCard } from '../../components/ui'
+import { initialsFromFullName } from '../../lib/userProfileHelpers'
+import { avatarImageSource, normalizeAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
+import { useToast } from '../../components/ToastProvider'
 import { supabase } from '../../lib/supabase'
 import {
   getVerifiedTotpFactorId,
@@ -41,7 +64,7 @@ import {
   TIER3_COMPLETE_PLACEHOLDER,
 } from '../../lib/compliance'
 
-type TierBadge = { label: string; sub?: string; tone: 'green' | 'yellow' }
+type TierBadge = { label: string; tone: 'green' | 'yellow' }
 
 function tierBadgeForProfile(
   userProfile: Parameters<typeof isTier1Complete>[0],
@@ -50,23 +73,18 @@ function tierBadgeForProfile(
   const tier1 = isTier1Complete(userProfile)
   const tier2 = TIER2_COMPLETE_PLACEHOLDER
   const tier3 = TIER3_COMPLETE_PLACEHOLDER
-  if (tier1 && tier2 && tier3) {
-    return { label: 'Tier 3', sub: 'Verified', tone: 'green' }
-  }
-  if (tier1 && tier2) {
-    return { label: 'Tier 2', sub: 'Verified', tone: 'green' }
-  }
-  if (tier1) {
-    return { label: 'Tier 1', sub: 'Verified', tone: 'green' }
+  if (tier1 || tier2 || tier3) {
+    return { label: 'Verified', tone: 'green' }
   }
   if (verificationStatus === 'in_review') {
-    return { label: 'Tier 1', sub: 'In review', tone: 'yellow' }
+    return { label: 'In review', tone: 'yellow' }
   }
-  return { label: 'Tier 1', sub: 'Unverified', tone: 'yellow' }
+  return { label: 'Unverified', tone: 'yellow' }
 }
 
 function MoreContent({ navigation }: NavigationProps) {
   const { user, userProfile, refreshUserProfile, signOut } = useAuth()
+  const { showError } = useToast()
   const palette = useThemeColors()
 
   /** Main stack screens (ProfileEdit, Notifications, …) are siblings of `MainTabs`. Prefer parent `navigate` so taps work from the More tab. */
@@ -262,7 +280,7 @@ function MoreContent({ navigation }: NavigationProps) {
       await signOut()
     } catch (error) {
       console.error('Error signing out:', error)
-      Alert.alert('Error', 'Failed to sign out')
+      showError('Failed to sign out')
     } finally {
       setIsLoggingOut(false)
       setShowLogoutDialog(false)
@@ -281,21 +299,25 @@ function MoreContent({ navigation }: NavigationProps) {
     title: string,
     subtitle: string,
     onPress: () => void,
-    iconName: React.ComponentProps<typeof Ionicons>['name'],
+    IconComponent: LucideIcon,
     rightComponent?: React.ReactNode,
     isDestructive: boolean = false,
-    isLast: boolean = false
+    isLast: boolean = false,
   ) => (
     <Pressable
      android_ripple={ripple.neutral}
-      style={[styles.menuItem, isLast && styles.menuItemLast]}
+      style={[styles.menuItem, !isLast && styles.menuItemDivider]}
       onPress={async () => {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
         onPress()
       }} >
       <View style={styles.menuItemLeft}>
         <View style={styles.menuItemIconWrap}>
-          <Ionicons name={iconName} size={18} color={colors.text.secondary} />
+          <IconComponent
+            size={18}
+            color={isDestructive ? colors.error.main : colors.primary.main}
+            strokeWidth={2}
+          />
         </View>
         <View style={styles.menuItemTextWrap}>
           <Text style={[styles.menuItemText, isDestructive && styles.destructiveText]}>
@@ -306,15 +328,50 @@ function MoreContent({ navigation }: NavigationProps) {
       </View>
       <View style={styles.menuItemRight}>
         {rightComponent}
-        <Ionicons name="chevron-forward" size={20} color={colors.neutral[400]} />
+        <ChevronRight size={18} color={colors.text.tertiary} strokeWidth={2} />
       </View>
     </Pressable>
   )
 
+  // Profile card data
+  const fullName =
+    userProfile?.profile?.full_name ||
+    [userProfile?.profile?.first_name, userProfile?.profile?.last_name].filter(Boolean).join(' ') ||
+    user?.full_name ||
+    [user?.first_name, user?.last_name].filter(Boolean).join(' ') ||
+    'Your account'
+  const email = userProfile?.profile?.email || user?.email || ''
+  const headerAvatarUrl = normalizeAvatarUrl(userProfile?.profile?.avatar_url)
+  const headerAvatarSource = avatarImageSource(userProfile?.profile?.avatar_url)
+  useEffect(() => {
+    warmAvatarCache(headerAvatarUrl)
+  }, [headerAvatarUrl])
+
+  // Conditional gradient banner — verify identity OR set up MFA when applicable.
+  const showVerifyBanner = !isTier1Complete(userProfile) && verificationStatus !== 'in_review'
+  const showMfaBanner = !showVerifyBanner && mfaStatusLine === 'Off'
+  const banner = showVerifyBanner
+    ? {
+        title: 'Verify your identity',
+        subtitle: 'Higher limits, full banking access',
+        cta: 'Begin',
+        Icon: ShieldCheck,
+        onPress: () => navigateFromMoreTab('AccountVerification'),
+      }
+    : showMfaBanner
+      ? {
+          title: 'Turn on two-factor auth',
+          subtitle: 'Extra protection for sign in',
+          cta: 'Enable',
+          Icon: Shield,
+          onPress: handleMfaRowPress,
+        }
+      : null
+
   return (
     <ScreenWrapper>
       <View style={styles.container}>
-        {/* Premium Header - Matching Card/Transaction */}
+        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>More</Text>
         </View>
@@ -328,200 +385,237 @@ function MoreContent({ navigation }: NavigationProps) {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.content}>
-          {/* Account Section */}
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Account</Text>
-            <View style={styles.sectionContent}>
-              {renderMenuItem(
-                'Your Profile',
-                'Name, email, and personal details',
-                () => navigation.navigate('ProfileEdit' as never),
-                'person-outline',
-                undefined,
-                false,
-                false
-              )}
+            {/* Profile card */}
+            <SectionCard style={styles.profileCard}>
               <Pressable
-               android_ripple={ripple.neutral}
-                style={styles.menuItem}
+                android_ripple={ripple.neutral}
                 onPress={async () => {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                  navigateFromMoreTab('AccountVerification')
-                }} >
-                <View style={styles.menuItemLeft}>
-                  <View style={styles.menuItemIconWrap}>
-                    <Ionicons name="shield-checkmark-outline" size={18} color={colors.text.secondary} />
-                  </View>
-                  <View style={styles.menuItemTextWrap}>
-                    <Text style={styles.menuItemText}>Account verification</Text>
-                    <Text style={styles.menuItemSubtitle}>Tier status and onboarding progress</Text>
-                  </View>
-                </View>
-                <View style={styles.menuItemRight}>
-                  {tierBadge.tone === 'green' ? (
-                    <View style={[styles.badgeGreen, tierBadge.sub && styles.badgeGreenTall]}>
-                      <Text style={styles.badgeTextGreen}>{tierBadge.label}</Text>
-                      {tierBadge.sub ? (
-                        <Text style={styles.badgeTextGreenSub}>{tierBadge.sub}</Text>
-                      ) : null}
-                    </View>
+                  navigation.navigate('ProfileEdit' as never)
+                }}
+                style={styles.profileRow}
+                accessibilityRole="button"
+                accessibilityLabel="Edit your profile"
+              >
+                <View style={styles.profileAvatar}>
+                  {headerAvatarSource ? (
+                    <Image
+                      source={headerAvatarSource}
+                      style={userAvatarStyles.image}
+                      resizeMode="cover"
+                    />
                   ) : (
-                    <View style={[styles.badgeYellow, tierBadge.sub && styles.badgeYellowTall]}>
-                      <Text style={styles.badgeTextYellow}>{tierBadge.label}</Text>
-                      {tierBadge.sub ? (
-                        <Text style={styles.badgeTextYellowSub}>{tierBadge.sub}</Text>
-                      ) : null}
-                    </View>
+                    <Text style={userAvatarStyles.initials}>{initialsFromFullName(fullName)}</Text>
                   )}
-                  <Ionicons name="chevron-forward" size={20} color={colors.neutral[400]} />
+                </View>
+                <View style={styles.profileInfo}>
+                  <Text style={styles.profileName} numberOfLines={1}>
+                    {fullName}
+                  </Text>
+                  <Text style={styles.profileSubtitle} numberOfLines={1}>
+                    {email}
+                  </Text>
+                </View>
+                <View style={styles.editPill}>
+                  <Text style={styles.editPillText}>Edit</Text>
                 </View>
               </Pressable>
-              {renderMenuItem(
-                'Notifications',
-                'Alerts, pushes, and communication settings',
-                () => navigation.navigate('Notifications' as never),
-                'notifications-outline',
-                undefined,
-                false,
-                false
-              )}
-              {renderMenuItem(
-                'Recipients',
-                'Saved people and payout destinations',
-                () => navigateFromMoreTab('Recipients'),
-                'people-outline',
-                undefined,
-                false,
-                true
-              )}
+            </SectionCard>
+
+            {/* Conditional gradient banner */}
+            {banner ? (
+              <Pressable
+                android_ripple={ripple.heroOnDark}
+                onPress={async () => {
+                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  banner.onPress()
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`${banner.title}. ${banner.cta}.`}
+              >
+                <LinearGradient
+                  colors={palette.primary.heroGradient as unknown as readonly [string, string]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.promoBanner}
+                >
+                  <View style={styles.promoIconWrap}>
+                    <banner.Icon size={20} color="#FFFFFF" strokeWidth={2.25} />
+                  </View>
+                  <View style={styles.promoTextWrap}>
+                    <Text style={styles.promoTitle}>{banner.title}</Text>
+                    <Text style={styles.promoSubtitle}>{banner.subtitle}</Text>
+                  </View>
+                  <View style={styles.promoCta}>
+                    <Text style={styles.promoCtaText}>{banner.cta}</Text>
+                  </View>
+                </LinearGradient>
+              </Pressable>
+            ) : null}
+
+            {/* Account Section */}
+            <View style={styles.sectionGroup}>
+              <Text style={styles.sectionLabel}>ACCOUNT</Text>
+              <SectionCard style={styles.sectionCard} flush>
+                {renderMenuItem(
+                  'Your Profile',
+                  'Name, email, and personal details',
+                  () => navigation.navigate('ProfileEdit' as never),
+                  User,
+                  undefined,
+                  false,
+                  false,
+                )}
+                <Pressable
+                  android_ripple={ripple.neutral}
+                  style={[styles.menuItem, styles.menuItemDivider]}
+                  onPress={async () => {
+                    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                    navigateFromMoreTab('AccountVerification')
+                  }}
+                >
+                  <View style={styles.menuItemLeft}>
+                    <View style={styles.menuItemIconWrap}>
+                      <ShieldCheck size={18} color={colors.primary.main} strokeWidth={2} />
+                    </View>
+                    <View style={styles.menuItemTextWrap}>
+                      <Text style={styles.menuItemText}>Account verification</Text>
+                      <Text style={styles.menuItemSubtitle}>Tier status and onboarding progress</Text>
+                    </View>
+                  </View>
+                  <View style={styles.menuItemRight}>
+                    {tierBadge.tone === 'green' ? (
+                      <View style={styles.badgeGreen}>
+                        <Text style={styles.badgeTextGreen}>{tierBadge.label}</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.badgeYellow}>
+                        <Text style={styles.badgeTextYellow}>{tierBadge.label}</Text>
+                      </View>
+                    )}
+                    <ChevronRight size={18} color={colors.text.tertiary} strokeWidth={2} />
+                  </View>
+                </Pressable>
+                {renderMenuItem(
+                  'Notifications',
+                  'Alerts, pushes, and communication settings',
+                  () => navigation.navigate('Notifications' as never),
+                  Bell,
+                  undefined,
+                  false,
+                  false,
+                )}
+                {renderMenuItem(
+                  'Recipients',
+                  'Saved people and payout destinations',
+                  () => navigateFromMoreTab('Recipients'),
+                  Users,
+                  undefined,
+                  false,
+                  true,
+                )}
+              </SectionCard>
             </View>
-          </View>
 
-          {/* Security */}
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Security</Text>
-            <View style={styles.sectionContent}>
-              {renderMenuItem(
-                'Change PIN',
-                'Update your app unlock PIN',
-                () => navigateFromMoreTab('ChangePin'),
-                'key-outline',
-                undefined,
-                false,
-                false
-              )}
-              {renderMenuItem(
-                'Change password',
-                'Reset your login password securely',
-                () => navigateFromMoreTab('ChangePassword'),
-                'lock-closed-outline',
-                undefined,
-                false,
-                false
-              )}
-              {renderMenuItem(
-                'Two-Factor Authentication',
-                'Manage authenticator app protection',
-                handleMfaRowPress,
-                'shield-outline',
-                <View style={mfaStatusLine === 'On' ? styles.badgeGreen : styles.badgeMuted}>
-                  <Text
-                    style={mfaStatusLine === 'On' ? styles.badgeTextGreen : styles.badgeTextMuted}
-                  >
-                    {mfaStatusLine === 'On' ? 'On' : 'Off'}
-                  </Text>
-                </View>,
-                false,
-                true
-              )}
+            {/* Security */}
+            <View style={styles.sectionGroup}>
+              <Text style={styles.sectionLabel}>SECURITY</Text>
+              <SectionCard style={styles.sectionCard} flush>
+                {renderMenuItem(
+                  'Change PIN',
+                  'Update your app unlock PIN',
+                  () => navigateFromMoreTab('ChangePin'),
+                  Key,
+                  undefined,
+                  false,
+                  false,
+                )}
+                {renderMenuItem(
+                  'Change password',
+                  'Reset your login password securely',
+                  () => navigateFromMoreTab('ChangePassword'),
+                  Lock,
+                  undefined,
+                  false,
+                  false,
+                )}
+                {renderMenuItem(
+                  'Two-Factor Authentication',
+                  'Manage authenticator app protection',
+                  handleMfaRowPress,
+                  Shield,
+                  <View style={mfaStatusLine === 'On' ? styles.badgeGreen : styles.badgeMuted}>
+                    <Text
+                      style={mfaStatusLine === 'On' ? styles.badgeTextGreen : styles.badgeTextMuted}
+                    >
+                      {mfaStatusLine === 'On' ? 'On' : 'Off'}
+                    </Text>
+                  </View>,
+                  false,
+                  true,
+                )}
+              </SectionCard>
             </View>
-          </View>
 
-          {/* App Section */}
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>App</Text>
-            <View style={styles.sectionContent}>
-              {renderMenuItem(
-                'Support',
-                'Get help and contact our team',
-                () => navigateFromMoreTab('Support'),
-                'help-circle-outline',
-                undefined,
-                false,
-                false
-              )}
-              {renderMenuItem(
-                'Legal',
-                'Privacy policy and terms of service',
-                () => navigateFromMoreTab('Legal'),
-                'document-text-outline',
-                undefined,
-                false,
-                true
-              )}
+            {/* App Section */}
+            <View style={styles.sectionGroup}>
+              <Text style={styles.sectionLabel}>APP</Text>
+              <SectionCard style={styles.sectionCard} flush>
+                {renderMenuItem(
+                  'Support',
+                  'Get help and contact our team',
+                  () => navigateFromMoreTab('Support'),
+                  HelpCircle,
+                  undefined,
+                  false,
+                  false,
+                )}
+                {renderMenuItem(
+                  'Legal',
+                  'Privacy policy and terms of service',
+                  () => navigateFromMoreTab('Legal'),
+                  FileText,
+                  undefined,
+                  false,
+                  true,
+                )}
+              </SectionCard>
             </View>
-          </View>
 
-          {/* Sign Out Button */}
-          <View style={styles.signOutContainer}>
-            <Pressable
-             android_ripple={ripple.neutral}
-              style={styles.signOutButton}
-              onPress={async () => {
-                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                setShowLogoutDialog(true)
-              }} >
-              <Ionicons name="log-out-outline" size={20} color={colors.error.main} />
-              <Text style={styles.signOutText}>Logout</Text>
-            </Pressable>
-          </View>
+            {/* Sign Out Button */}
+            <View style={styles.signOutContainer}>
+              <Pressable
+                android_ripple={ripple.destructiveTint}
+                style={styles.signOutButton}
+                onPress={async () => {
+                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  setShowLogoutDialog(true)
+                }}
+              >
+                <LogOut size={18} color={colors.error.main} strokeWidth={2.25} />
+                <Text style={styles.signOutText}>Sign out</Text>
+              </Pressable>
+            </View>
 
-          {/* App Version */}
-          <View style={styles.versionContainer}>
-            <Text style={styles.versionText}>Version 1.0.0</Text>
-          </View>
+            {/* App Version */}
+            <View style={styles.versionContainer}>
+              <Text style={styles.versionText}>Easner · v1.0.0</Text>
+            </View>
           </View>
         </ScrollView>
       </View>
 
-      {/* Logout Confirmation Dialog */}
-      <Modal
+      <EasnerAlertSheet
         visible={showLogoutDialog}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowLogoutDialog(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Logout</Text>
-            <Text style={styles.modalDescription}>
-              Are you sure you want to logout? You'll need to sign in again to access your account.
-            </Text>
-            <View style={styles.modalButtons}>
-              <Pressable
-               android_ripple={ripple.neutral}
-                style={[styles.modalButton, styles.modalButtonCancel]}
-                onPress={() => setShowLogoutDialog(false)}
-                disabled={isLoggingOut}
-              >
-                <Text style={styles.modalButtonTextCancel}>Cancel</Text>
-              </Pressable>
-              <Pressable
-               android_ripple={ripple.neutral}
-                style={[styles.modalButton, styles.modalButtonConfirm]}
-                onPress={handleSignOut}
-                disabled={isLoggingOut}
-              >
-                {isLoggingOut ? (
-                  <ActivityIndicator color="#ffffff" />
-                ) : (
-                  <Text style={styles.modalButtonTextConfirm}>Logout</Text>
-                )}
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        onDismiss={() => setShowLogoutDialog(false)}
+        title="Logout"
+        message="Are you sure you want to logout? You'll need to sign in again to access your account."
+        primaryLabel="Logout"
+        onPrimary={handleSignOut}
+        secondaryLabel="Cancel"
+        onSecondary={() => setShowLogoutDialog(false)}
+        primaryLoading={isLoggingOut}
+      />
 
     </ScreenWrapper>
   )
@@ -530,7 +624,7 @@ function MoreContent({ navigation }: NavigationProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background.primary,
+    backgroundColor: colors.semantic.background,
   },
   scrollContainer: {
     flex: 1,
@@ -543,62 +637,133 @@ const styles = StyleSheet.create({
   title: {
     ...textStyles.headlineLarge,
     color: colors.text.primary,
+    fontFamily: fontFamily.semibold,
+    fontWeight: '700',
+    letterSpacing: -0.3,
   },
   content: {
-    padding: spacing[5],
+    paddingHorizontal: spacing[5],
+    paddingTop: spacing[2],
     gap: spacing[4],
   },
-  sectionCard: {
-    backgroundColor: colors.frame.background,
-    borderRadius: 24,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    marginBottom: spacing[4],
-    paddingBottom: spacing[2],
+  /** Profile card (white SectionCard) at the top. */
+  profileCard: {
+    paddingVertical: spacing[4],
+    paddingHorizontal: spacing[4],
   },
-  sectionTitle: {
-    ...textStyles.titleLarge,
-    color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
-    paddingHorizontal: spacing[5],
-    paddingTop: spacing[5],
-    paddingBottom: spacing[3],
-  },
-  sectionContent: {
-    paddingHorizontal: spacing[5],
-    paddingBottom: spacing[2],
-  },
-  appearanceBlock: {
-    marginHorizontal: -spacing[5],
-    paddingHorizontal: spacing[5],
-    paddingBottom: spacing[3],
-    marginBottom: spacing[1],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  appearanceChips: {
+  profileRow: {
     flexDirection: 'row',
-    gap: spacing[2],
+    alignItems: 'center',
+    gap: spacing[3],
   },
-  appearanceChip: {
+  profileAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: colors.semantic.muted,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileInfo: {
     flex: 1,
+    minWidth: 0,
+  },
+  profileName: {
+    ...textStyles.bodyLarge,
+    color: colors.text.primary,
+    fontFamily: fontFamily.semibold,
+    fontWeight: '600',
+  },
+  profileSubtitle: {
+    ...textStyles.bodySmall,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  editPill: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: 6,
+    borderRadius: borderRadius.full,
+    backgroundColor: 'rgba(0, 122, 204, 0.10)',
+  },
+  editPillText: {
+    ...textStyles.labelMedium,
+    color: colors.primary.main,
+    fontFamily: fontFamily.semibold,
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  /** Conditional gradient banner. */
+  promoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    borderRadius: borderRadius['2xl'],
+    paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
-    paddingHorizontal: spacing[2],
-    borderRadius: borderRadius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+  },
+  promoIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 44,
+  },
+  promoTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  promoTitle: {
+    ...textStyles.bodyMedium,
+    color: '#FFFFFF',
+    fontFamily: fontFamily.semibold,
+    fontWeight: '700',
+  },
+  promoSubtitle: {
+    ...textStyles.bodySmall,
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: 1,
+  },
+  promoCta: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: 6,
+    borderRadius: borderRadius.full,
+    backgroundColor: '#FFFFFF',
+  },
+  promoCtaText: {
+    ...textStyles.labelMedium,
+    color: colors.primary.main,
+    fontFamily: fontFamily.semibold,
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  /** Section group: small uppercase label + SectionCard with rows inside. */
+  sectionGroup: {
+    gap: spacing[2],
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontFamily: fontFamily.semibold,
+    fontWeight: '600',
+    color: colors.text.secondary,
+    letterSpacing: 0.6,
+    paddingLeft: spacing[2],
+  },
+  sectionCard: {
+    paddingHorizontal: 0,
   },
   menuItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: spacing[4],
-    borderBottomWidth: 1,
-    borderBottomColor: colors.frame.border,
+    paddingHorizontal: spacing[4],
+    minHeight: 64,
   },
-  menuItemLast: {
-    borderBottomWidth: 0,
+  menuItemDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border.light,
   },
   menuItemDisabled: {
     opacity: 0.5,
@@ -606,7 +771,8 @@ const styles = StyleSheet.create({
   menuItemText: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: fontFamily.semibold,
+    fontWeight: '600',
   },
   menuItemTextWrap: {
     flex: 1,
@@ -624,15 +790,14 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
+  /** Tinted-blue circular leading icon. */
   menuItemIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background.primary,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
+    backgroundColor: 'rgba(0, 122, 204, 0.10)',
   },
   menuItemTextDisabled: {
     opacity: 0.6,
@@ -648,54 +813,32 @@ const styles = StyleSheet.create({
   badgeGreen: {
     backgroundColor: colors.success.background,
     paddingHorizontal: spacing[2],
-    paddingVertical: spacing[1],
-    borderRadius: borderRadius.sm,
-  },
-  badgeGreenTall: {
-    paddingVertical: spacing[1] + 1,
-    alignItems: 'flex-end',
+    paddingVertical: 4,
+    borderRadius: borderRadius.full,
   },
   badgeTextGreen: {
     ...textStyles.labelSmall,
     color: colors.success.dark,
     fontWeight: '600',
   },
-  badgeTextGreenSub: {
-    ...textStyles.bodySmall,
-    color: colors.success.dark,
-    fontWeight: '500',
-    marginTop: 1,
-    fontSize: 10,
-    lineHeight: 12,
-  },
   badgeYellow: {
     backgroundColor: colors.warning.background,
     paddingHorizontal: spacing[2],
-    paddingVertical: spacing[1],
-    borderRadius: borderRadius.sm,
-  },
-  badgeYellowTall: {
-    paddingVertical: spacing[1] + 1,
-    alignItems: 'flex-end',
+    paddingVertical: 4,
+    borderRadius: borderRadius.full,
   },
   badgeTextYellow: {
     ...textStyles.labelSmall,
     color: colors.warning.dark,
     fontWeight: '600',
   },
-  badgeTextYellowSub: {
-    ...textStyles.bodySmall,
-    color: colors.warning.dark,
-    fontWeight: '500',
-    marginTop: 1,
-    fontSize: 10,
-    lineHeight: 12,
-  },
   badgeMuted: {
-    backgroundColor: colors.neutral[100],
+    backgroundColor: colors.semantic.muted,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border.default,
     paddingHorizontal: spacing[2],
-    paddingVertical: spacing[1],
-    borderRadius: borderRadius.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.full,
   },
   badgeTextMuted: {
     ...textStyles.labelSmall,
@@ -703,24 +846,25 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   signOutContainer: {
-    paddingTop: spacing[3],
+    paddingTop: spacing[2],
     alignItems: 'center',
   },
   signOutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[2],
-    paddingHorizontal: spacing[4],
+    paddingHorizontal: spacing[5],
     paddingVertical: spacing[3],
-    borderRadius: borderRadius.xl,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
+    backgroundColor: colors.semantic.card,
+    borderRadius: borderRadius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border.default,
   },
   signOutText: {
     ...textStyles.bodyMedium,
     color: colors.error.main,
-    fontWeight: '500',
+    fontFamily: fontFamily.semibold,
+    fontWeight: '600',
   },
   versionContainer: {
     alignItems: 'center',
@@ -730,100 +874,6 @@ const styles = StyleSheet.create({
   versionText: {
     ...textStyles.bodySmall,
     color: colors.text.tertiary,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing[5],
-  },
-  modalContent: {
-    backgroundColor: colors.background.primary,
-    borderRadius: borderRadius['3xl'],
-    padding: spacing[6],
-    width: '100%',
-    maxWidth: 400,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-  },
-  modalTitle: {
-    ...textStyles.titleLarge,
-    color: colors.text.primary,
-    marginBottom: spacing[2],
-  },
-  modalDescription: {
-    ...textStyles.bodyMedium,
-    color: colors.text.secondary,
-    marginBottom: spacing[6],
-    lineHeight: 20,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: spacing[3],
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: spacing[3],
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalButtonCancel: {
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-  },
-  modalButtonConfirm: {
-    backgroundColor: colors.error.main,
-  },
-  modalButtonTextCancel: {
-    ...textStyles.bodyMedium,
-    fontWeight: '500',
-    color: colors.text.primary,
-  },
-  modalButtonTextConfirm: {
-    ...textStyles.bodyMedium,
-    fontWeight: '500',
-    color: colors.text.inverse,
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: colors.background.primary,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing[5],
-    paddingTop: spacing[4],
-    paddingBottom: spacing[3],
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.light,
-  },
-  modalCloseButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  webView: {
-    flex: 1,
-  },
-  loadingContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.background.primary,
-    zIndex: 1,
   },
 })
 

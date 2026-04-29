@@ -4,23 +4,23 @@ import {
   Text,
   Pressable,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { ArrowLeft, Eye, EyeOff, HelpCircle } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../../lib/supabase'
 import { getApiBaseUrl } from '../../lib/apiClient'
 import { NavigationProps } from '../../types'
 import { analytics } from '../../lib/analytics'
-import { colors, borderRadius, spacing } from '../../theme'
+import { colors, borderRadius, spacing, surfaceChromeCircleStyle } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
 import { TextField } from '../../components/ui'
 import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
+import { useToast } from '../../components/ToastProvider'
 
 export default function ResetPasswordScreen({ navigation, route }: NavigationProps) {
   const [password, setPassword] = useState('')
@@ -30,6 +30,7 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false)
   const [isValidSession, setIsValidSession] = useState(false)
   const insets = useSafeAreaInsets()
+  const { showError, showInfo, showSuccess } = useToast()
 
   // Track screen view
   useEffect(() => {
@@ -42,14 +43,13 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
     if (email && resetToken) {
       setIsValidSession(true)
     } else {
-      Alert.alert('Error', 'Invalid or expired reset link', [
-        { text: 'OK', onPress: () => {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'Auth' }],
-          })
-        }}
-      ])
+      showError('Invalid or expired reset link')
+      setTimeout(() => {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Auth' }],
+        })
+      }, 400)
     }
   }, [route.params])
 
@@ -60,22 +60,22 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
 
   const handleHelp = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    Alert.alert('Help', 'Need assistance? Contact support at support@easner.com')
+    showInfo('Need assistance? Contact support at support@easner.com')
   }
 
   const validateForm = () => {
     if (!password || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields')
+      showError('Please fill in all fields')
       return false
     }
 
     if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match')
+      showError('Passwords do not match')
       return false
     }
 
     if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters long')
+      showError('Password must be at least 6 characters long')
       return false
     }
 
@@ -90,7 +90,7 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
       const { email, resetToken } = route.params || {}
       
       if (!email || !resetToken) {
-        Alert.alert('Error', 'Invalid reset session')
+        showError('Invalid reset session')
         return
       }
 
@@ -110,22 +110,19 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
       const data = await response.json()
 
       if (response.ok) {
-        Alert.alert(
-          'Password Updated',
-          'Your password has been successfully updated',
-          [{ text: 'OK', onPress: () => {
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'Auth' }],
-            })
-          }}]
-        )
+        showSuccess('Your password has been successfully updated')
+        setTimeout(() => {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Auth' }],
+          })
+        }, 500)
       } else {
-        Alert.alert('Error', data.error || 'Failed to reset password')
+        showError(data.error || 'Failed to reset password')
       }
     } catch (error) {
       console.error('Password reset error:', error)
-      Alert.alert('Error', 'Network error. Please check your connection and try again.')
+      showError('Network error. Please check your connection and try again.')
     } finally {
       setLoading(false)
     }
@@ -148,7 +145,7 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
              android_ripple={ripple.neutral}
               style={styles.backButton}
               onPress={handleBack} >
-              <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+              <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
             </Pressable>
             <View style={styles.headerSpacer} />
             <Pressable
@@ -156,7 +153,7 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
               style={styles.headerButton}
               onPress={handleHelp} >
               <View style={styles.headerButtonCircle}>
-                <Ionicons name="help-circle-outline" size={20} color={colors.text.primary} />
+                <HelpCircle size={20} color={colors.text.primary} strokeWidth={2} />
               </View>
             </Pressable>
           </View>
@@ -191,7 +188,7 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
              android_ripple={ripple.neutral}
               style={styles.backButton}
               onPress={handleBack} >
-              <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+              <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
             </Pressable>
             <View style={styles.headerSpacer} />
             <Pressable
@@ -199,7 +196,7 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
               style={styles.headerButton}
               onPress={handleHelp} >
               <View style={styles.headerButtonCircle}>
-                <Ionicons name="help-circle-outline" size={20} color={colors.text.primary} />
+                <HelpCircle size={20} color={colors.text.primary} strokeWidth={2} />
               </View>
             </Pressable>
           </View>
@@ -223,11 +220,11 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
                   style={styles.eyeButton}
                   onPress={() => setPasswordVisible(!passwordVisible)} >
                   <View style={styles.eyeButtonCircle}>
-                    <Ionicons
-                      name={passwordVisible ? 'eye-off' : 'eye'}
-                      size={18}
-                      color={colors.semantic.mutedForeground}
-                    />
+                    {passwordVisible ? (
+                      <EyeOff size={18} color={colors.semantic.mutedForeground} strokeWidth={2} />
+                    ) : (
+                      <Eye size={18} color={colors.semantic.mutedForeground} strokeWidth={2} />
+                    )}
                   </View>
                 </Pressable>
               }
@@ -249,11 +246,11 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
                   style={styles.eyeButton}
                   onPress={() => setConfirmPasswordVisible(!confirmPasswordVisible)} >
                   <View style={styles.eyeButtonCircle}>
-                    <Ionicons
-                      name={confirmPasswordVisible ? 'eye-off' : 'eye'}
-                      size={18}
-                      color={colors.semantic.mutedForeground}
-                    />
+                    {confirmPasswordVisible ? (
+                      <EyeOff size={18} color={colors.semantic.mutedForeground} strokeWidth={2} />
+                    ) : (
+                      <Eye size={18} color={colors.semantic.mutedForeground} strokeWidth={2} />
+                    )}
                   </View>
                 </Pressable>
               }
@@ -299,14 +296,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing[6],
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+    ...surfaceChromeCircleStyle(colors, 44),
     marginRight: spacing[3],
   },
   headerButton: {
@@ -316,14 +306,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerButtonCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+    ...surfaceChromeCircleStyle(colors, 40),
   },
   form: {
     width: '100%',

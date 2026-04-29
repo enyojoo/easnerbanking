@@ -7,7 +7,7 @@ import {
   ScrollView,
   RefreshControl,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { ArrowLeft } from 'lucide-react-native'
 import { 
   ArrowDownLeft,
   ArrowUpRight,
@@ -20,7 +20,7 @@ import {
 import * as Haptics from 'expo-haptics'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
-import { colors, shadows, textStyles, borderRadius, spacing } from '../../theme'
+import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, fontFamily } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { useNotifications } from '../../contexts/NotificationsContext'
 
@@ -243,7 +243,7 @@ export default function InAppNotificationsScreen({ navigation }: NavigationProps
               navigation.goBack()
             }}
             style={styles.backButton} >
-            <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+            <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
           </Pressable>
           <View style={styles.headerContent}>
             <Text style={styles.title}>Notifications</Text>
@@ -316,14 +316,7 @@ const styles = StyleSheet.create({
     gap: spacing[3],
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+    ...surfaceChromeCircleStyle(colors, 40),
   },
   headerContent: {
     flex: 1,
@@ -344,7 +337,7 @@ const styles = StyleSheet.create({
   markAllText: {
     ...textStyles.labelMedium,
     color: colors.primary.main,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   scrollView: {
     flex: 1,
@@ -361,10 +354,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     padding: spacing[4],
     marginBottom: spacing[3],
-    backgroundColor: colors.frame.background,
-    borderRadius: 24,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: 24 }),
   },
   notificationItemUnread: {
     backgroundColor: `${colors.primary.main}08`,
@@ -390,11 +380,11 @@ const styles = StyleSheet.create({
   notificationTitle: {
     ...textStyles.bodyLarge,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     flex: 1,
   },
   notificationTitleUnread: {
-    fontFamily: 'Outfit-Bold',
+    fontFamily: fontFamily.bold,
   },
   unreadDot: {
     width: 8,
@@ -405,13 +395,13 @@ const styles = StyleSheet.create({
   notificationMessage: {
     ...textStyles.bodyMedium,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
     marginBottom: spacing[1],
   },
   notificationTime: {
     ...textStyles.bodySmall,
     color: colors.text.tertiary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
   },
   emptyState: {
     alignItems: 'center',
@@ -430,13 +420,13 @@ const styles = StyleSheet.create({
   emptyTitle: {
     ...textStyles.titleLarge,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     marginBottom: spacing[2],
   },
   emptyText: {
     ...textStyles.bodyMedium,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
     textAlign: 'center',
   },
 })

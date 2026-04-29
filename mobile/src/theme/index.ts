@@ -9,6 +9,17 @@ export type { Colors } from './colors'
 export { resolveSurfaceTokens } from './surfaces'
 export type { SurfaceTokens } from './surfaces'
 
+export {
+  SURFACE_FRAME_RADIUS_DEFAULT,
+  surfaceFrameStyle,
+  surfaceChromeCircleStyle,
+} from './surfaceFrame'
+export type {
+  SurfaceFrameShadow,
+  SurfaceFrameOptions,
+  SurfaceChromeCircleOptions,
+} from './surfaceFrame'
+
 export { resolveThemeColors } from './resolveThemeColors'
 export { layout } from './layout'
 export {

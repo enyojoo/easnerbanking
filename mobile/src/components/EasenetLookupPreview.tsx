@@ -4,7 +4,7 @@ import { View, Text, StyleSheet } from 'react-native'
 import { Image } from 'expo-image'
 import { EasenetSubtitleRow } from '../lib/easenetRecipientUi'
 import { EASNER_MARK_URL } from '../lib/easnerBrand'
-import { colors, spacing, borderRadius, textStyles } from '../theme'
+import { colors, spacing, borderRadius, textStyles, fontFamily, surfaceFrameStyle } from '../theme'
 
 export type EasenetLookupProfile = {
   fullName: string
@@ -88,10 +88,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: spacing[3],
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.frame.border,
-    backgroundColor: colors.frame.background,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.lg }),
     marginBottom: spacing[3],
   },
   wrapRow: {
@@ -140,7 +137,7 @@ const styles = StyleSheet.create({
   avatarInitials: {
     ...textStyles.titleSmall,
     color: colors.primary.main,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   markBadge: {
     position: 'absolute',
@@ -169,12 +166,12 @@ const styles = StyleSheet.create({
   name: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   tagLine: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
     marginTop: 2,
   },
 })

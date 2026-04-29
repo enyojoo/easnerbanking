@@ -7,7 +7,6 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Image,
-  Alert,
   ActivityIndicator,
   Animated,
   Platform,
@@ -18,7 +17,7 @@ import { useFocusEffect, useRoute } from '@react-navigation/native'
 import * as Haptics from 'expo-haptics'
 import * as Clipboard from 'expo-clipboard'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Ionicons } from '@expo/vector-icons'
+import { ArrowLeft, CircleCheck, Copy } from 'lucide-react-native'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import SkeletonLoader from '../../components/SkeletonLoader'
 import { Button, OtpCodeInput } from '../../components/ui'
@@ -33,11 +32,12 @@ import {
   type TotpFactorLike,
 } from '../../lib/auth-mfa'
 import { saveMfaVerified } from '../../lib/mfaStatusCache'
-import { colors, textStyles, borderRadius, spacing, motion, shadows } from '../../theme'
+import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, shadows } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { NavigationProps } from '../../types'
 import { useAuth } from '../../contexts/AuthContext'
+import { EasnerAlertSheet } from '../../components/premium'
 
 function svgXmlFromQrDataUrl(qrDataUrl: string | null): string | null {
   if (!qrDataUrl || !qrDataUrl.startsWith('data:image/svg')) return null
@@ -115,6 +115,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
   const [showDisableOtp, setShowDisableOtp] = useState(false)
   const [disableOtpCode, setDisableOtpCode] = useState('')
   const [secretJustCopied, setSecretJustCopied] = useState(false)
+  const [disableMfaSheetVisible, setDisableMfaSheetVisible] = useState(false)
 
   /** Skip fade-in when jumping straight to QR — avoids hiding content for `motion.screenEnterMs` while enroll loads. */
   const headerAnim = useRef(new Animated.Value(autoStartEnroll ? 1 : 0)).current
@@ -323,18 +324,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
   const confirmTurnOff = () => {
     setShowDisableOtp(false)
     setDisableOtpCode('')
-    Alert.alert(
-      'Disable two-factor authentication?',
-      'You will only need your password to sign in. You can turn 2FA back on anytime.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Yes, disable',
-          style: 'destructive',
-          onPress: () => void turnOffMfa(),
-        },
-      ],
-    )
+    setDisableMfaSheetVisible(true)
   }
 
   const turnOffMfa = async () => {
@@ -515,7 +505,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
              android_ripple={ripple.neutral}
               onPress={() => void handleHeaderBack()}
               style={styles.backButton} >
-              <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+              <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
             </Pressable>
             <View style={styles.headerContent}>
               <Text style={styles.title}>{MFA_COPY.title}</Text>
@@ -663,11 +653,11 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
                             accessibilityLabel={secretJustCopied ? 'Copied' : 'Copy secret key'}
                             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                           >
-                            <Ionicons
-                              name={secretJustCopied ? 'checkmark-circle' : 'copy-outline'}
-                              size={18}
-                              color={secretJustCopied ? colors.success.main : colors.primary.main}
-                            />
+                            {secretJustCopied ? (
+                              <CircleCheck size={18} color={colors.success.main} strokeWidth={2} />
+                            ) : (
+                              <Copy size={18} color={colors.primary.main} strokeWidth={2} />
+                            )}
                           </Pressable>
                         </View>
                       ) : (
@@ -740,6 +730,21 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
           </ScrollView>
         </KeyboardAvoidingView>
       </View>
+
+      <EasnerAlertSheet
+        visible={disableMfaSheetVisible}
+        onDismiss={() => setDisableMfaSheetVisible(false)}
+        title="Disable two-factor authentication?"
+        message="You will only need your password to sign in. You can turn 2FA back on anytime."
+        primaryLabel="Yes, disable"
+        onPrimary={() => {
+          setDisableMfaSheetVisible(false)
+          void turnOffMfa()
+        }}
+        secondaryLabel="Cancel"
+        onSecondary={() => setDisableMfaSheetVisible(false)}
+        primaryLoading={turnOffSubmitting}
+      />
     </ScreenWrapper>
   )
 }
@@ -763,14 +768,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing[4],
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+    ...surfaceChromeCircleStyle(colors, 44),
     marginRight: spacing[3],
   },
   headerContent: {
@@ -789,10 +787,7 @@ const styles = StyleSheet.create({
     padding: spacing[5],
   },
   sectionCard: {
-    backgroundColor: '#F9F9F9',
-    borderRadius: 24,
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
+    ...surfaceFrameStyle(colors),
     marginBottom: spacing[4],
     paddingTop: spacing[5],
     paddingBottom: spacing[5],
@@ -854,7 +849,7 @@ const styles = StyleSheet.create({
   },
   secretBox: {
     borderWidth: 0.5,
-    borderColor: '#E2E2E2',
+    borderColor: colors.frame.border,
     borderRadius: borderRadius.lg,
     backgroundColor: colors.semantic.muted,
     paddingLeft: spacing[3],

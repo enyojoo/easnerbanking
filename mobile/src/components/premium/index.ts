@@ -13,6 +13,8 @@ export { default as GlossyPrimaryButton } from './GlossyPrimaryButton'
 export { default as SecondaryOutlineButton } from './SecondaryOutlineButton'
 export { default as PremiumTextField } from './PremiumTextField'
 export { default as PremiumModalSheet } from './PremiumModalSheet'
+export { default as EasnerAlertSheet } from './EasnerAlertSheet'
+export { default as FrostedChromeBackground } from './FrostedChromeBackground'
 export { 
   default as ShimmerLoader,
   ShimmerCard,

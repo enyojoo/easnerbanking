@@ -162,7 +162,8 @@
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --font-serif: var(--font-playfair), "Cormorant Garamond", ui-serif, serif;
+  /* Alias serif slot to sans — Easner Business is sans-only (docs/design-system §3). */
+  --font-serif: var(--font-geist-sans);
 
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -253,7 +254,7 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* Serif display — used only for hero/balance/editorial moments */
+  /* Display helpers — same stack as sans; tighter tracking for hero figures */
   .font-serif,
   .font-display {
     font-family: var(--font-serif);

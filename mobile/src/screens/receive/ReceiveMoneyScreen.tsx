@@ -6,20 +6,29 @@ import {
   StyleSheet,
   ScrollView,
   Pressable, Platform,
-  Alert,
   Image,
   Share,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import {
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  Copy,
+  Share2,
+  ShieldCheck,
+} from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
-import * as Clipboard from 'expo-clipboard'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
-import { colors, shadows, textStyles, borderRadius, spacing, fontSize } from '../../theme'
+import { colors, shadows, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, fontSize, fontFamily } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
+import { useToast } from '../../components/ToastProvider'
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
+import { EasnerAlertSheet } from '../../components/premium'
 import { getApiBaseUrl } from '../../lib/apiClient'
 import { noahService } from '../../lib/noahService'
 import { supabase } from '../../lib/supabase'
@@ -31,6 +40,8 @@ type TabType = 'bank' | 'stablecoin'
 export default function ReceiveMoneyScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
   const { user, userProfile, refreshUserProfile } = useAuth()
+  const { showSuccess, showError } = useToast()
+  const copyToClipboard = useCopyToClipboard()
   const [activeTab, setActiveTab] = useState<TabType>('bank')
   const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>({})
   const [virtualAccount, setVirtualAccount] = useState<any>(null)
@@ -40,6 +51,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const [loading, setLoading] = useState(false) // Start as false, will be set to true only if we need to fetch
   const [creatingAccounts, setCreatingAccounts] = useState(false)
   const [accountCreationError, setAccountCreationError] = useState<string | null>(null)
+  const [tosTermsSheetMessage, setTosTermsSheetMessage] = useState<string | null>(null)
   
   // Get currency from route params or default to USD (only USD/EUR supported)
   const currency = ((route.params as any)?.currency || 'USD') as 'USD' | 'EUR'
@@ -781,16 +793,13 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   }
 
   const handleCopy = async (text: string, key: string) => {
-    try {
-      await Clipboard.setStringAsync(text)
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-      setCopiedStates(prev => ({ ...prev, [key]: true }))
-      setTimeout(() => {
-        setCopiedStates(prev => ({ ...prev, [key]: false }))
-      }, 2000)
-    } catch (error) {
-      Alert.alert('Error', 'Failed to copy to clipboard')
-    }
+    const ok = await copyToClipboard(text)
+    if (!ok) return
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+    setCopiedStates((prev) => ({ ...prev, [key]: true }))
+    setTimeout(() => {
+      setCopiedStates((prev) => ({ ...prev, [key]: false }))
+    }, 2000)
   }
 
   const handleShare = async () => {
@@ -973,58 +982,41 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
         console.warn('Account creation completed with some errors:', result.errors)
       }
 
-      // Show success message
-      Alert.alert(
-        'Accounts Created',
-        `Wallet: ${result.walletCreated ? 'Created ✓' : 'Already exists'}\n` +
-        `USD Account: ${result.usdAccountCreated ? 'Created ✓' : result.usdAccountId ? 'Already exists' : 'Failed'}\n` +
-        `EUR Account: ${result.eurAccountCreated ? 'Created ✓' : result.eurAccountId ? 'Already exists' : 'Failed'}`,
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              // Refresh account data
-              const fetchAccountData = async () => {
-                try {
-                  setLoading(true)
-                  const currencyLower = currency.toLowerCase() as 'usd' | 'eur'
-                  
-                  // Refresh virtual account
-                  try {
-                    const account = await noahService.getVirtualAccount(currencyLower)
-                    setVirtualAccount(account)
-                    if (account?.hasAccount) {
-                      setHasAccountInDb(true)
-                    }
-                  } catch (error) {
-                    console.error('Error refreshing virtual account:', error)
-                  }
-
-                  try {
-                    const dep = await noahService.getTurnkeyDepositAddresses()
-                    const row = currency === 'USD' ? dep.USD : dep.EUR
-                    if (row?.address) {
-                      setTurnkeyDepositAddress(row.address)
-                      setTurnkeyDepositMemo(row.memo ? row.memo : null)
-                      setHasTurnkeyDepositCached(true)
-                    }
-                  } catch (error) {
-                    console.error('Error refreshing Turnkey deposit address:', error)
-                  }
-                } finally {
-                  setLoading(false)
-                }
-              }
-              // Only fetch if data is not already loaded
-              if (!dataLoadedRef.current) {
-                fetchAccountData(false)
-              } else {
-                // Data already loaded, skip
-              }
-            }
-          }
-        ]
+      // Toast + refresh (no blocking OK alert)
+      showSuccess(
+        `Wallet ${result.walletCreated ? 'created' : 'ready'} · USD ${result.usdAccountCreated ? 'created' : result.usdAccountId ? 'exists' : 'pending'} · EUR ${result.eurAccountCreated ? 'created' : result.eurAccountId ? 'exists' : 'pending'}`,
+        4500,
       )
+      if (!dataLoadedRef.current) {
+        void (async () => {
+          try {
+            setLoading(true)
+            const currencyLower = currency.toLowerCase() as 'usd' | 'eur'
+            try {
+              const account = await noahService.getVirtualAccount(currencyLower)
+              setVirtualAccount(account)
+              if (account?.hasAccount) {
+                setHasAccountInDb(true)
+              }
+            } catch (error) {
+              console.error('Error refreshing virtual account:', error)
+            }
+            try {
+              const dep = await noahService.getTurnkeyDepositAddresses()
+              const row = currency === 'USD' ? dep.USD : dep.EUR
+              if (row?.address) {
+                setTurnkeyDepositAddress(row.address)
+                setTurnkeyDepositMemo(row.memo ? row.memo : null)
+                setHasTurnkeyDepositCached(true)
+              }
+            } catch (error) {
+              console.error('Error refreshing Turnkey deposit address:', error)
+            }
+          } finally {
+            setLoading(false)
+          }
+        })()
+      }
     } catch (error: any) {
       console.error('Error creating accounts:', error)
       const errorMessage = error.message || 'Failed to create accounts'
@@ -1032,30 +1024,9 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
       
       // If error mentions TOS, provide helpful message with retry option
       if (errorMessage.toLowerCase().includes('tos') || errorMessage.toLowerCase().includes('terms of service')) {
-        Alert.alert(
-          'Terms of Service Required',
-          errorMessage,
-          [
-            {
-              text: 'Go to Verification',
-              onPress: () => {
-                navigation.navigate('AccountVerification' as any)
-              }
-            },
-            {
-              text: 'Retry',
-              onPress: () => {
-                // Wait 5 seconds then retry
-                setTimeout(() => {
-                  handleCreateAccounts()
-                }, 5000)
-              }
-            },
-            { text: 'OK', style: 'cancel' }
-          ]
-        )
+        setTosTermsSheetMessage(errorMessage)
       } else {
-        Alert.alert('Error', errorMessage)
+        showError(errorMessage)
       }
     } finally {
       setCreatingAccounts(false)
@@ -1072,9 +1043,9 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
         <Text style={styles.fieldValue}>{value}</Text>
         <View style={styles.copyButton}>
           {copiedStates[key] ? (
-            <Ionicons name="checkmark" size={18} color={colors.primary.main} />
+            <Check size={18} color={colors.primary.main} strokeWidth={2.5} />
           ) : (
-            <Ionicons name="copy-outline" size={18} color={colors.text.secondary} />
+            <Copy size={18} color={colors.text.secondary} strokeWidth={2} />
           )}
         </View>
       </Pressable>
@@ -1092,7 +1063,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
               onPress={() => navigation.goBack()}
               style={styles.backButton}
             >
-              <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+              <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
             </Pressable>
             <View style={styles.headerContent}>
               <Text style={styles.title}>Receive Money</Text>
@@ -1195,7 +1166,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                      android_ripple={ripple.neutral}
                       style={styles.shareButton}
                       onPress={handleShare} >
-                      <Ionicons name="share-outline" size={20} color={colors.primary.main} />
+                      <Share2 size={20} color={colors.primary.main} strokeWidth={2} />
                       <Text style={styles.shareButtonText}>Share Account Details</Text>
                     </Pressable>
 
@@ -1230,7 +1201,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                   */
                   <View style={styles.kycNoticeContainer}>
                     <View style={styles.kycNoticeIconContainer}>
-                      <Ionicons name="shield-checkmark-outline" size={32} color={colors.primary.main} />
+                      <ShieldCheck size={32} color={colors.primary.main} strokeWidth={2} />
                     </View>
                     <Text style={styles.kycNoticeTitle}>
                       {kycStatus === 'approved' 
@@ -1259,7 +1230,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                         navigation.navigate('AccountVerification' as any)
                       }} >
                       <Text style={styles.kycNoticeButtonText}>Complete Verification</Text>
-                      <Ionicons name="arrow-forward" size={18} color={colors.text.inverse} />
+                      <ArrowRight size={18} color={colors.text.inverse} strokeWidth={2} />
                     </Pressable>
                     )}
                     {accountCreationError && (
@@ -1318,7 +1289,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                         <>
                           {renderCopyableField('Memo (Required)', stablecoinData.memo, 'memo')}
                           <View style={styles.memoWarningContainer}>
-                            <Ionicons name="warning-outline" size={16} color={colors.warning.main} />
+                            <AlertTriangle size={16} color={colors.warning.main} strokeWidth={2} />
                             <Text style={styles.memoWarning}>
                               Include this memo when sending to this address on {stablecoinData.network}
                             </Text>
@@ -1332,7 +1303,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                      android_ripple={ripple.neutral}
                       style={styles.shareButton}
                       onPress={handleShare} >
-                      <Ionicons name="share-outline" size={20} color={colors.primary.main} />
+                      <Share2 size={20} color={colors.primary.main} strokeWidth={2} />
                       <Text style={styles.shareButtonText}>
                         Share {currency.toLowerCase() === 'usd' ? 'USDC' : 'EURC'} Details
                       </Text>
@@ -1365,7 +1336,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                   */
                   <View style={styles.kycNoticeContainer}>
                     <View style={styles.kycNoticeIconContainer}>
-                      <Ionicons name="shield-checkmark-outline" size={32} color={colors.primary.main} />
+                      <ShieldCheck size={32} color={colors.primary.main} strokeWidth={2} />
                     </View>
                     <Text style={styles.kycNoticeTitle}>
                       {kycStatus === 'approved' 
@@ -1394,7 +1365,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                         navigation.navigate('AccountVerification' as any)
                       }} >
                       <Text style={styles.kycNoticeButtonText}>Complete Verification</Text>
-                      <Ionicons name="arrow-forward" size={18} color={colors.text.inverse} />
+                      <ArrowRight size={18} color={colors.text.inverse} strokeWidth={2} />
                     </Pressable>
                     )}
                     {accountCreationError && (
@@ -1407,6 +1378,23 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
           </View>
         </ScrollView>
       </View>
+
+      <EasnerAlertSheet
+        visible={tosTermsSheetMessage !== null}
+        onDismiss={() => setTosTermsSheetMessage(null)}
+        title="Terms of Service Required"
+        message={tosTermsSheetMessage ?? ''}
+        primaryLabel="Go to Verification"
+        onPrimary={() => {
+          setTosTermsSheetMessage(null)
+          navigation.navigate('AccountVerification' as never)
+        }}
+        secondaryLabel="Retry in 5s"
+        onSecondary={() => {
+          setTosTermsSheetMessage(null)
+          setTimeout(() => handleCreateAccounts(), 5000)
+        }}
+      />
     </ScreenWrapper>
   )
 }
@@ -1426,14 +1414,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+    ...surfaceChromeCircleStyle(colors, 44),
     marginRight: spacing[3],
   },
   headerContent: {
@@ -1460,7 +1441,7 @@ const styles = StyleSheet.create({
   currencyText: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Geist-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   tabsContainer: {
     flexDirection: 'row',
@@ -1472,10 +1453,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: spacing[3],
     alignItems: 'center',
-    borderRadius: borderRadius.xl,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
   },
   tabActive: {
     backgroundColor: colors.primary.main,
@@ -1484,11 +1462,11 @@ const styles = StyleSheet.create({
   tabText: {
     ...textStyles.bodyMedium,
     color: colors.text.secondary,
-    fontFamily: 'Geist-Medium',
+    fontFamily: fontFamily.medium,
   },
   tabTextActive: {
     color: colors.text.inverse,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   scrollView: {
     flex: 1,
@@ -1503,7 +1481,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...textStyles.titleMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     marginBottom: spacing[3],
   },
   fieldContainer: {
@@ -1512,24 +1490,21 @@ const styles = StyleSheet.create({
   fieldLabel: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
-    fontFamily: 'Geist-Regular',
+    fontFamily: fontFamily.regular,
     marginBottom: spacing[1],
   },
   fieldValueContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.frame.background,
-    borderRadius: borderRadius.xl,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[2],
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
   },
   fieldValue: {
     flex: 1,
     ...textStyles.bodyLarge,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: fontFamily.medium,
     fontVariant: ['tabular-nums'],
   },
   copyButton: {
@@ -1555,7 +1530,7 @@ const styles = StyleSheet.create({
   shareButtonText: {
     ...textStyles.bodyMedium,
     color: colors.primary.main,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     marginLeft: spacing[2],
   },
   instructionsContainer: {
@@ -1569,13 +1544,13 @@ const styles = StyleSheet.create({
   instructionsTitle: {
     ...textStyles.titleMedium,
     color: colors.primary.main,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     marginBottom: spacing[2],
   },
   instructionsText: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
     lineHeight: 22,
   },
   networkValueContainer: {
@@ -1587,7 +1562,7 @@ const styles = StyleSheet.create({
   networkTicker: {
     ...textStyles.bodyLarge,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     fontVariant: ['tabular-nums'],
   },
   networkNameContainer: {
@@ -1597,7 +1572,7 @@ const styles = StyleSheet.create({
   networkName: {
     ...textStyles.bodyLarge,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
   },
   memoWarningContainer: {
     flexDirection: 'row',
@@ -1611,7 +1586,7 @@ const styles = StyleSheet.create({
   memoWarning: {
     ...textStyles.bodySmall,
     color: colors.warning.dark,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
     flex: 1,
   },
   supportedStablecoinsContainer: {
@@ -1623,7 +1598,7 @@ const styles = StyleSheet.create({
   supportedStablecoinsLabel: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
     marginBottom: spacing[2],
   },
   stablecoinChips: {
@@ -1642,7 +1617,7 @@ const styles = StyleSheet.create({
   stablecoinChipText: {
     ...textStyles.bodySmall,
     color: colors.primary.main,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   qrSection: {
     alignItems: 'center',
@@ -1699,14 +1674,14 @@ const styles = StyleSheet.create({
   kycNoticeTitle: {
     ...textStyles.titleLarge,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     textAlign: 'center',
     marginBottom: spacing[2],
   },
   kycNoticeText: {
     ...textStyles.bodyMedium,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: spacing[4],
@@ -1735,7 +1710,7 @@ const styles = StyleSheet.create({
   errorText: {
     ...textStyles.bodySmall,
     color: colors.error.main,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
     marginTop: spacing[2],
     textAlign: 'center',
   },

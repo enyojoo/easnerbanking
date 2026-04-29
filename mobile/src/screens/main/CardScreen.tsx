@@ -17,7 +17,7 @@ import { Plus, Snowflake, Settings, Eye } from 'lucide-react-native'
 import Svg, { Circle, Defs, Path, Pattern, Rect } from 'react-native-svg'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
-import { colors, textStyles, borderRadius, spacing, motion } from '../../theme'
+import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { EASNER_CARD_ICON_URL } from '../../lib/easnerBrand'
@@ -339,14 +339,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
+    ...surfaceChromeCircleStyle(colors, 40),
     flexShrink: 0,
   },
   carouselContainer: {
@@ -369,7 +362,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: colors.neutral.black,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.2,
         shadowRadius: 12,
@@ -410,7 +403,7 @@ const styles = StyleSheet.create({
     height: 40,
     width: 40,
     opacity: 0.9,
-    tintColor: '#FFFFFF',
+    tintColor: colors.neutral.white,
   },
   formBadge: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
@@ -424,16 +417,16 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.9)',
     textTransform: 'lowercase',
     letterSpacing: 0.5,
-    fontFamily: 'Geist-Medium',
+    fontFamily: fontFamily.medium,
   },
   panBlock: {
     paddingVertical: spacing[4],
   },
   panText: {
-    fontFamily: 'DMMono-Regular',
+    fontFamily: fontFamily.mono,
     fontSize: 14,
     letterSpacing: 3.2,
-    color: '#FFFFFF',
+    color: colors.neutral.white,
   },
   cardBottomMeta: {
     flexDirection: 'row',
@@ -453,14 +446,14 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.6)',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: fontFamily.medium,
     marginBottom: 4,
   },
   metaValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#FFFFFF',
-    fontFamily: 'Geist-SemiBold',
+    color: colors.neutral.white,
+    fontFamily: fontFamily.semibold,
     letterSpacing: 0.6,
   },
   comingSoonWrap: {
@@ -484,9 +477,9 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     fontWeight: '500',
-    color: '#FFFFFF',
+    color: colors.neutral.white,
     textAlign: 'center',
-    fontFamily: 'Outfit-Medium',
+    fontFamily: fontFamily.medium,
   },
   actionButtons: {
     flexDirection: 'row',
@@ -502,14 +495,7 @@ const styles = StyleSheet.create({
     gap: spacing[2],
   },
   actionIconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: colors.frame.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
+    ...surfaceChromeCircleStyle(colors, 60),
   },
   actionIconDisabled: {
     opacity: 0.55,
@@ -518,7 +504,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: colors.text.tertiary,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: fontFamily.medium,
   },
   section: {
     marginTop: spacing[4],
@@ -527,14 +513,11 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...textStyles.headlineSmall,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     marginBottom: spacing[3],
   },
   emptyBox: {
-    backgroundColor: colors.frame.background,
-    borderRadius: 24,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
+    ...surfaceFrameStyle(colors, { shadow: 'none' }),
     padding: spacing[5],
   },
   emptyText: {

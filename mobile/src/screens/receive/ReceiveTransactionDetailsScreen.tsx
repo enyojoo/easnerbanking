@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   View,
   Text,
@@ -12,7 +12,9 @@ import { ripple } from '../../lib/androidRipple'
 import { NavigationProps } from '../../types'
 import { useAuth } from '../../contexts/AuthContext'
 import { apiGet } from '../../lib/apiClient'
-import { Ionicons } from '@expo/vector-icons'
+import { useThemeColors, fontFamily } from '../../theme'
+import type { Colors } from '../../theme'
+import { CircleCheck, Clock } from 'lucide-react-native'
 
 interface ReceiveTransaction {
   id: string
@@ -39,7 +41,183 @@ interface ReceiveTransaction {
   }
 }
 
+function createReceiveTransactionDetailsStyles(palette: Colors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: palette.semantic.muted,
+    },
+    centerContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    header: {
+      backgroundColor: palette.background.primary,
+      padding: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: palette.border.default,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    headerTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: palette.text.primary,
+      flex: 1,
+    },
+    statusBadge: {
+      paddingHorizontal: 12,
+      paddingVertical: 4,
+      borderRadius: 12,
+    },
+    statusText: {
+      fontSize: 10,
+      fontWeight: '600',
+    },
+    section: {
+      backgroundColor: palette.background.primary,
+      marginTop: 12,
+      padding: 16,
+    },
+    sectionTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: palette.text.primary,
+      marginBottom: 16,
+    },
+    infoRow: {
+      marginBottom: 16,
+    },
+    infoLabel: {
+      fontSize: 12,
+      color: palette.brand.slate,
+      textTransform: 'uppercase',
+      marginBottom: 4,
+    },
+    infoValue: {
+      fontSize: 14,
+      color: palette.text.primary,
+      fontFamily: fontFamily.mono,
+    },
+    infoSubtext: {
+      fontSize: 12,
+      color: palette.brand.slate,
+      marginTop: 2,
+    },
+    amountCard: {
+      backgroundColor: palette.semantic.muted,
+      padding: 16,
+      borderRadius: 8,
+      marginBottom: 12,
+    },
+    fiatCard: {
+      backgroundColor: palette.success.background,
+    },
+    amountLabel: {
+      fontSize: 12,
+      color: palette.brand.slate,
+      textTransform: 'uppercase',
+      marginBottom: 8,
+    },
+    amountValue: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: palette.text.primary,
+    },
+    fiatAmount: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: palette.success.main,
+    },
+    timelineItem: {
+      flexDirection: 'row',
+      marginBottom: 24,
+      position: 'relative',
+    },
+    timelineIcon: {
+      marginRight: 16,
+    },
+    timelineContent: {
+      flex: 1,
+    },
+    timelineTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: palette.text.primary,
+      marginBottom: 4,
+    },
+    timelineTitleInactive: {
+      color: palette.text.tertiary,
+    },
+    timelineTime: {
+      fontSize: 12,
+      color: palette.brand.slate,
+    },
+    timelineLine: {
+      position: 'absolute',
+      left: 11,
+      top: 24,
+      width: 2,
+      height: 24,
+      backgroundColor: palette.border.default,
+    },
+    timelineLineActive: {
+      backgroundColor: palette.success.main,
+    },
+    errorText: {
+      fontSize: 16,
+      color: palette.error.main,
+      marginBottom: 16,
+    },
+    backButton: {
+      backgroundColor: palette.primary.main,
+      paddingHorizontal: 24,
+      paddingVertical: 12,
+      borderRadius: 8,
+    },
+    backButtonText: {
+      color: palette.neutral.white,
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    bottomActions: {
+      flexDirection: 'row',
+      padding: 20,
+      gap: 12,
+      backgroundColor: palette.background.primary,
+      marginTop: 12,
+    },
+    bottomButton: {
+      flex: 1,
+      paddingVertical: 14,
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+    secondaryButton: {
+      backgroundColor: palette.semantic.muted,
+    },
+    secondaryButtonText: {
+      color: palette.text.secondary,
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    primaryButton: {
+      backgroundColor: palette.primary.main,
+    },
+    primaryButtonText: {
+      color: palette.neutral.white,
+      fontSize: 16,
+      fontWeight: '600',
+    },
+  })
+}
+
 function ReceiveTransactionDetailsContent({ navigation, route }: NavigationProps) {
+  const palette = useThemeColors()
+  const styles = useMemo(() => createReceiveTransactionDetailsStyles(palette), [palette])
   const { userProfile } = useAuth()
   const transactionId = route?.params?.transactionId as string
   const initialTransaction = (route?.params as any)?.initialTransaction as ReceiveTransaction | null | undefined
@@ -82,23 +260,26 @@ function ReceiveTransactionDetailsContent({ navigation, route }: NavigationProps
     }
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'deposited':
-        return '#0F8A5F'
-      case 'converted':
-      case 'converting':
-        return '#A8792A'
-      case 'confirmed':
-        return '#0F8A5F'
-      case 'pending':
-        return '#6F756F'
-      case 'failed':
-        return '#7A2E2E'
-      default:
-        return '#6F756F'
-    }
-  }
+  const getStatusColor = useCallback(
+    (status: string) => {
+      switch (status) {
+        case 'deposited':
+          return palette.success.main
+        case 'converted':
+        case 'converting':
+          return palette.warning.main
+        case 'confirmed':
+          return palette.success.main
+        case 'pending':
+          return palette.brand.slate
+        case 'failed':
+          return palette.error.main
+        default:
+          return palette.brand.slate
+      }
+    },
+    [palette],
+  )
 
   const getStages = () => {
     if (!transaction) return []
@@ -135,7 +316,7 @@ function ReceiveTransactionDetailsContent({ navigation, route }: NavigationProps
     return (
       <ScreenWrapper>
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#007ACC" />
+          <ActivityIndicator size="large" color={palette.primary.main} />
         </View>
       </ScreenWrapper>
     )
@@ -229,9 +410,9 @@ function ReceiveTransactionDetailsContent({ navigation, route }: NavigationProps
             <View key={stage.id} style={styles.timelineItem}>
               <View style={styles.timelineIcon}>
                 {stage.completed ? (
-                  <Ionicons name="checkmark-circle" size={24} color="#0F8A5F" />
+                  <CircleCheck size={24} color={palette.success.main} strokeWidth={2} />
                 ) : (
-                  <Ionicons name="time-outline" size={24} color="#d1d5db" />
+                  <Clock size={24} color={palette.text.tertiary} strokeWidth={2} />
                 )}
               </View>
               <View style={styles.timelineContent}>
@@ -299,178 +480,6 @@ function ReceiveTransactionDetailsContent({ navigation, route }: NavigationProps
     </ScreenWrapper>
   )
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f9fafb',
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  header: {
-    backgroundColor: '#ffffff',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-    flex: 1,
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusText: {
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  section: {
-    backgroundColor: '#ffffff',
-    marginTop: 12,
-    padding: 16,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 16,
-  },
-  infoRow: {
-    marginBottom: 16,
-  },
-  infoLabel: {
-    fontSize: 12,
-    color: '#6F756F',
-    textTransform: 'uppercase',
-    marginBottom: 4,
-  },
-  infoValue: {
-    fontSize: 14,
-    color: '#111827',
-    fontFamily: 'monospace',
-  },
-  infoSubtext: {
-    fontSize: 12,
-    color: '#6F756F',
-    marginTop: 2,
-  },
-  amountCard: {
-    backgroundColor: '#f9fafb',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  fiatCard: {
-    backgroundColor: '#ecfdf5',
-  },
-  amountLabel: {
-    fontSize: 12,
-    color: '#6F756F',
-    textTransform: 'uppercase',
-    marginBottom: 8,
-  },
-  amountValue: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  fiatAmount: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#0F8A5F',
-  },
-  timelineItem: {
-    flexDirection: 'row',
-    marginBottom: 24,
-    position: 'relative',
-  },
-  timelineIcon: {
-    marginRight: 16,
-  },
-  timelineContent: {
-    flex: 1,
-  },
-  timelineTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  timelineTitleInactive: {
-    color: '#9ca3af',
-  },
-  timelineTime: {
-    fontSize: 12,
-    color: '#6F756F',
-  },
-  timelineLine: {
-    position: 'absolute',
-    left: 11,
-    top: 24,
-    width: 2,
-    height: 24,
-    backgroundColor: '#e5e7eb',
-  },
-  timelineLineActive: {
-    backgroundColor: '#0F8A5F',
-  },
-  errorText: {
-    fontSize: 16,
-    color: '#7A2E2E',
-    marginBottom: 16,
-  },
-  backButton: {
-    backgroundColor: '#007ACC',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  backButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  bottomActions: {
-    flexDirection: 'row',
-    padding: 20,
-    gap: 12,
-    backgroundColor: '#ffffff',
-    marginTop: 12,
-  },
-  bottomButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  secondaryButton: {
-    backgroundColor: '#f3f4f6',
-  },
-  secondaryButtonText: {
-    color: '#374151',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  primaryButton: {
-    backgroundColor: '#007ACC',
-  },
-  primaryButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-})
 
 export default function ReceiveTransactionDetailsScreen({ navigation, route }: NavigationProps) {
   return <ReceiveTransactionDetailsContent navigation={navigation} route={route} />

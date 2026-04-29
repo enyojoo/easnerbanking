@@ -24,6 +24,12 @@ export const fontFamily = {
   serifMedium: 'Geist-Medium',
   serifSemibold: 'Geist-SemiBold',
   serifBold: 'Geist-Bold',
+  /** IBANs, refs, PAN fragments — system monospace (no bundled DM Mono). */
+  mono: Platform.select({
+    ios: 'Menlo',
+    android: 'monospace',
+    default: 'monospace',
+  }) as string,
 }
 
 export const fontWeight = {
@@ -82,9 +88,9 @@ export const letterSpacing = {
 
 export const textStyles: Record<string, TextStyle> = {
   // ---------------------------------------------------------------
-  // Legacy serif tokens map to Geist for compatibility
+  // Hero display (Geist — naming aligns with design-system §3.3)
   // ---------------------------------------------------------------
-  displaySerifXl: {
+  displayHeroXl: {
     fontFamily: fontFamily.serifBold,
     fontSize: fontSize['6xl'],
     fontWeight: fontWeight.bold,
@@ -93,7 +99,7 @@ export const textStyles: Record<string, TextStyle> = {
     fontVariant: ['tabular-nums'],
     ...Platform.select({ android: { includeFontPadding: false }, default: {} }),
   },
-  displaySerifLg: {
+  displayHeroLg: {
     fontFamily: fontFamily.serifSemibold,
     fontSize: fontSize['4xl'],
     fontWeight: fontWeight.semibold,
@@ -101,7 +107,7 @@ export const textStyles: Record<string, TextStyle> = {
     letterSpacing: letterSpacing.tight,
     fontVariant: ['tabular-nums'],
   },
-  displaySerifMd: {
+  displayHeroMd: {
     fontFamily: fontFamily.serifSemibold,
     fontSize: fontSize['3xl'],
     fontWeight: fontWeight.semibold,

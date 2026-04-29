@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react'
 import { View, StyleSheet, Animated } from 'react-native'
+import { colors } from '../theme'
 
 interface SkeletonLoaderProps {
   width?: number | string
@@ -38,7 +39,7 @@ const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({
 
   const backgroundColor = animatedValue.interpolate({
     inputRange: [0, 1],
-    outputRange: ['#f3f4f6', '#e5e7eb'],
+    outputRange: [colors.semantic.muted, colors.border.default],
   })
 
   return (
@@ -59,7 +60,7 @@ const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({
 
 const styles = StyleSheet.create({
   skeleton: {
-    backgroundColor: '#f3f4f6',
+    backgroundColor: colors.semantic.muted,
   },
 })
 

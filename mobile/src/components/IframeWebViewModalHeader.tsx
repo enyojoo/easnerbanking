@@ -1,6 +1,6 @@
 import React from 'react'
 import { View, Text, Pressable, Platform, StyleSheet, type TextStyle } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { X } from 'lucide-react-native'
 import { borderRadius, textStyles, spacing, useThemeColors } from '../theme'
 import { ripple } from '../lib/androidRipple'
 
@@ -21,7 +21,7 @@ export function IframeWebViewModalHeader({ onClose, title, children }: IframeWeb
   const left =
     children ??
     (title ? (
-      <Text style={styles.titleText} numberOfLines={2}>
+      <Text style={[styles.titleText, { color: colors.text.primary }]} numberOfLines={2}>
         {title}
       </Text>
     ) : null)
@@ -41,7 +41,7 @@ export function IframeWebViewModalHeader({ onClose, title, children }: IframeWeb
         accessibilityLabel="Close"
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
-        <Ionicons name="close" size={20} color={colors.text.primary} />
+        <X size={20} color={colors.text.primary} strokeWidth={2} />
       </Pressable>
     </View>
   )
@@ -77,7 +77,6 @@ const styles = StyleSheet.create({
   },
   titleText: {
     ...textStyles.titleMedium,
-    color: '#0F1110',
     fontWeight: '700',
     textAlign: 'left',
   },

@@ -51,6 +51,8 @@ function AppContent() {
 
   const [splashFinished, setSplashFinished] = useState(false)
   const [navReady, setNavReady] = useState(false)
+  /** Leaf route name — used so status bar stays light on dark chrome (e.g. onboarding) after splash hides. */
+  const [activeRouteName, setActiveRouteName] = useState('')
   const appFadeAnim = useRef(new Animated.Value(0)).current
 
   // Expose navigation ref globally for logout navigation
@@ -105,11 +107,13 @@ function AppContent() {
         const currentRoute = navigationRef.current?.getCurrentRoute()
         const currentRouteName = getActiveRouteName(currentRoute)
         routeNameRef.current = currentRouteName
+        setActiveRouteName(currentRouteName)
         analytics.trackNavigationScreenView(currentRouteName)
       }}
       onStateChange={() => {
         const currentRoute = navigationRef.current?.getCurrentRoute()
         const currentRouteName = getActiveRouteName(currentRoute)
+        setActiveRouteName(currentRouteName)
         if (routeNameRef.current !== currentRouteName) {
           routeNameRef.current = currentRouteName
           analytics.trackNavigationScreenView(currentRouteName)
@@ -146,9 +150,11 @@ function AppContent() {
       }}
     >
       <StatusBar
-        // While the native splash is still visible, force a white status bar
-        // so it contrasts with the blue splash background on iOS.
-        style={splashFinished ? 'dark' : 'light'}
+        // Native splash (#007ACC): light icons. Main chrome is light: dark icons.
+        // Onboarding keeps light icons on dark background after splash is dismissed.
+        style={
+          !splashFinished || activeRouteName === 'Onboarding' ? 'light' : 'dark'
+        }
         backgroundColor={Platform.OS === 'android' ? palette.background.primary : undefined}
       />
       <AppNavigator />

@@ -4,14 +4,13 @@ import {
   Text,
   Pressable,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   Animated,
   Keyboard,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { Check } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '../../contexts/AuthContext'
@@ -23,6 +22,7 @@ import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
 import { TextField } from '../../components/ui'
+import { useToast } from '../../components/ToastProvider'
 
 export default function LoginScreen({ navigation }: NavigationProps) {
   const themeColors = useThemeColors()
@@ -31,6 +31,7 @@ export default function LoginScreen({ navigation }: NavigationProps) {
   const [rememberMe, setRememberMe] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const { signIn } = useAuth()
+  const { showError } = useToast()
   const insets = useSafeAreaInsets()
 
   // Animation refs
@@ -47,7 +48,7 @@ export default function LoginScreen({ navigation }: NavigationProps) {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields')
+      showError('Please fill in all fields')
       return
     }
 
@@ -56,13 +57,13 @@ export default function LoginScreen({ navigation }: NavigationProps) {
       const { error } = await signIn(email, password, rememberMe)
       
       if (error) {
-        Alert.alert('Login Failed', error.message || 'Invalid credentials')
+        showError(error.message || 'Invalid credentials')
       } else {
         // No need to navigate - the AppNavigator will automatically show MainStack
         // when user state changes to authenticated
       }
     } catch (error) {
-      Alert.alert('Login Failed', 'An unexpected error occurred')
+      showError('An unexpected error occurred')
     } finally {
       setIsLoading(false)
     }
@@ -157,7 +158,7 @@ export default function LoginScreen({ navigation }: NavigationProps) {
                     ]}
                   >
                     {rememberMe && (
-                      <Ionicons name="checkmark" size={16} color={themeColors.text.inverse} />
+                      <Check size={16} color={themeColors.text.inverse} strokeWidth={2.5} />
                     )}
                   </View>
                   <Text style={authScreenStyles.rememberMeText}>Remember me</Text>

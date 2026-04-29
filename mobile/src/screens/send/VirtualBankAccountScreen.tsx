@@ -5,22 +5,29 @@ import {
   StyleSheet,
   ScrollView,
   Pressable, Platform,
-  Alert,
   Animated,
   Image,
   ActivityIndicator,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import {
+  ArrowLeft,
+  Check,
+  CircleX,
+  CloudUpload,
+  Copy,
+  FileText,
+} from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
-import * as Clipboard from 'expo-clipboard'
 import * as DocumentPicker from 'expo-document-picker'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
-import { colors, shadows, textStyles, borderRadius, spacing, motion } from '../../theme'
+import { colors, shadows, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
+import { useToast } from '../../components/ToastProvider'
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
 
 interface MockRecipient {
   id: string
@@ -32,6 +39,8 @@ interface MockRecipient {
 
 export default function VirtualBankAccountScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
+  const { showError } = useToast()
+  const copyToClipboard = useCopyToClipboard()
   const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>({})
   const [paymentConfirmed, setPaymentConfirmed] = useState(false)
   const [uploadedFile, setUploadedFile] = useState<any>(null)
@@ -134,16 +143,13 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
   }
 
   const handleCopy = async (text: string, key: string) => {
-    try {
-      await Clipboard.setStringAsync(text)
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-      setCopiedStates(prev => ({ ...prev, [key]: true }))
-      setTimeout(() => {
-        setCopiedStates(prev => ({ ...prev, [key]: false }))
-      }, 2000)
-    } catch (error) {
-      Alert.alert('Error', 'Failed to copy to clipboard')
-    }
+    const ok = await copyToClipboard(text)
+    if (!ok) return
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+    setCopiedStates((prev) => ({ ...prev, [key]: true }))
+    setTimeout(() => {
+      setCopiedStates((prev) => ({ ...prev, [key]: false }))
+    }, 2000)
   }
 
   const handleUploadReceipt = async () => {
@@ -162,7 +168,7 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
       }
     } catch (error) {
       setUploadError('Failed to upload receipt. Please try again.')
-      Alert.alert('Error', 'Failed to upload receipt. Please try again.')
+      showError('Failed to upload receipt. Please try again.')
     } finally {
       setIsUploading(false)
     }
@@ -207,9 +213,9 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
         <Text style={styles.fieldValue}>{value}</Text>
         <View style={styles.copyButton}>
           {copiedStates[key] ? (
-            <Ionicons name="checkmark" size={18} color={colors.primary.main} />
+            <Check size={18} color={colors.primary.main} strokeWidth={2.5} />
           ) : (
-            <Ionicons name="copy-outline" size={18} color={colors.text.secondary} />
+            <Copy size={18} color={colors.text.secondary} strokeWidth={2} />
           )}
         </View>
       </Pressable>
@@ -239,7 +245,7 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
             onPress={() => navigation.goBack()}
             style={styles.backButton}
           >
-            <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+            <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
           </Pressable>
           <View style={styles.headerContent}>
             <Text style={styles.title}>Bank Transfer</Text>
@@ -300,12 +306,11 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
                   style={styles.summaryValueRow}
                   onPress={() => handleCopy(transactionId || '', 'transactionId')} >
                   <Text style={styles.summaryValue}>{transactionId || 'N/A'}</Text>
-                  <Ionicons 
-                    name={copiedStates.transactionId ? "checkmark" : "copy-outline"} 
-                    size={16} 
-                    color={copiedStates.transactionId ? colors.success.main : colors.text.secondary} 
-                    style={{ marginLeft: 8 }}
-                  />
+                  {copiedStates.transactionId ? (
+                    <Check size={16} color={colors.success.main} strokeWidth={2.5} style={{ marginLeft: 8 }} />
+                  ) : (
+                    <Copy size={16} color={colors.text.secondary} strokeWidth={2} style={{ marginLeft: 8 }} />
+                  )}
                 </Pressable>
               </View>
             </View>
@@ -360,7 +365,7 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
                       />
                     ) : (
                       <View style={styles.receiptPreviewIcon}>
-                        <Ionicons name="document-text" size={32} color={colors.primary.main} />
+                        <FileText size={32} color={colors.primary.main} strokeWidth={2} />
                       </View>
                     )}
                     <View style={styles.receiptPreviewInfo}>
@@ -377,7 +382,7 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
                      android_ripple={ripple.neutral}
                       style={styles.receiptRemoveButton}
                       onPress={handleRemoveReceipt} >
-                      <Ionicons name="close-circle" size={24} color={colors.error.main} />
+                      <CircleX size={24} color={colors.error.main} strokeWidth={2} />
                     </Pressable>
                   </View>
                 </View>
@@ -391,7 +396,7 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
                     <ActivityIndicator size="small" color={colors.primary.main} />
                   ) : (
                     <>
-                      <Ionicons name="cloud-upload-outline" size={24} color={colors.primary.main} />
+                      <CloudUpload size={24} color={colors.primary.main} strokeWidth={2} />
                       <Text style={styles.receiptUploadButtonText}>Upload Receipt</Text>
                     </>
                   )}
@@ -444,14 +449,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing[4],
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+    ...surfaceChromeCircleStyle(colors, 44),
     marginRight: spacing[3],
   },
   headerContent: {
@@ -470,17 +468,14 @@ const styles = StyleSheet.create({
     paddingTop: spacing[2],
   },
   summaryContainer: {
-    backgroundColor: '#F9F9F9',
-    borderRadius: borderRadius.xl,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
     padding: spacing[4],
     marginBottom: spacing[5],
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
   },
   summaryTitle: {
     ...textStyles.titleMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     marginBottom: spacing[3],
   },
   summaryRow: {
@@ -491,12 +486,12 @@ const styles = StyleSheet.create({
   summaryLabel: {
     ...textStyles.bodyMedium,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
   },
   summaryValue: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   summaryValueRow: {
     flexDirection: 'row',
@@ -508,7 +503,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...textStyles.titleMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     marginBottom: spacing[2],
   },
   fieldContainer: {
@@ -517,24 +512,21 @@ const styles = StyleSheet.create({
   fieldLabel: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
     marginBottom: spacing[0.5],
   },
   fieldValueContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9F9F9',
-    borderRadius: borderRadius.xl,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[2],
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
   },
   fieldValue: {
     flex: 1,
     ...textStyles.bodyLarge,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: fontFamily.medium,
     fontVariant: ['tabular-nums'],
   },
   copyButton: {
@@ -556,13 +548,13 @@ const styles = StyleSheet.create({
   instructionsTitle: {
     ...textStyles.titleMedium,
     color: colors.primary.main,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     marginBottom: spacing[2],
   },
   instructionsText: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
     lineHeight: 22,
   },
   bottomContainer: {
@@ -582,7 +574,7 @@ const styles = StyleSheet.create({
   confirmButtonText: {
     ...textStyles.titleLarge,
     color: colors.text.inverse,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   receiptSection: {
     marginBottom: spacing[5],
@@ -590,15 +582,14 @@ const styles = StyleSheet.create({
   receiptSectionTitle: {
     ...textStyles.titleMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     marginBottom: spacing[3],
   },
   receiptUploadButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F9F9F9',
-    borderRadius: borderRadius.xl,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
     paddingVertical: spacing[4],
     paddingHorizontal: spacing[4],
     borderWidth: 1.5,
@@ -609,7 +600,7 @@ const styles = StyleSheet.create({
   receiptUploadButtonText: {
     ...textStyles.bodyLarge,
     color: colors.primary.main,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   receiptPreviewContainer: {
     marginTop: spacing[2],
@@ -617,11 +608,8 @@ const styles = StyleSheet.create({
   receiptPreview: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9F9F9',
-    borderRadius: borderRadius.xl,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
     padding: spacing[3],
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
     gap: spacing[3],
   },
   receiptPreviewImage: {
@@ -643,13 +631,13 @@ const styles = StyleSheet.create({
   receiptPreviewName: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: fontFamily.medium,
     marginBottom: spacing[0.5],
   },
   receiptPreviewSize: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
   },
   receiptRemoveButton: {
     padding: spacing[1],
@@ -657,7 +645,7 @@ const styles = StyleSheet.create({
   receiptError: {
     ...textStyles.bodySmall,
     color: colors.error.main,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
     marginTop: spacing[2],
   },
 })

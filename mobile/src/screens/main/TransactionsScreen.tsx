@@ -4,7 +4,6 @@ import {
   Text,
   Pressable,
   StyleSheet,
-  FlatList,
   RefreshControl,
   TextInput,
   Animated,
@@ -14,14 +13,20 @@ import {
   useWindowDimensions,
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { Ionicons } from '@expo/vector-icons'
-import { ArrowDownLeft, ArrowUpRight, Monitor, Search } from 'lucide-react-native'
+import DateTimePicker from '@react-native-community/datetimepicker'
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  Calendar as CalendarIcon,
+  CreditCard,
+  Search,
+  CircleX,
+  Receipt,
+} from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import ScreenWrapper from '../../components/ScreenWrapper'
-import { ShimmerLoader } from '../../components/premium'
-import FrameContainer from '../../components/FrameContainer'
-import EmptyState from '../../components/EmptyState'
-import ErrorState from '../../components/ErrorState'
+import { ShimmerLoader, PremiumModalSheet } from '../../components/premium'
+import { FilterChip, SectionCard } from '../../components/ui'
 import { useCurrenciesCatalog, useTransactionsList } from '../../hooks/queries'
 import { NavigationProps, Transaction } from '../../types'
 import { analytics } from '../../lib/analytics'
@@ -33,15 +38,15 @@ import { apiFetch } from '../../query/api-client'
 import { NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
 import {
   colors,
-  shadows,
   textStyles,
   borderRadius,
   spacing,
+  shadows,
   motion,
   shouldPlayDecorativeMotionEnter,
   isRegularWidth,
-  getContentWidth,
   scaledFontSize,
+  fontFamily,
 } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
@@ -105,6 +110,108 @@ function transactionDetailLookupId(row: Pick<CombinedTransaction, 'ledger_row_id
   return String(row.transaction_id || row.id || '')
 }
 
+type ActivityFilter = 'all' | 'in' | 'out' | 'card'
+
+const ACTIVITY_FILTERS: ReadonlyArray<{ id: ActivityFilter; label: string }> = [
+  { id: 'all', label: 'All' },
+  { id: 'in', label: 'Money in' },
+  { id: 'out', label: 'Money out' },
+  { id: 'card', label: 'Card' },
+]
+
+function isCardTransaction(tx: CombinedTransaction): boolean {
+  const txType = String(tx.transaction_type || tx.type || '').toLowerCase()
+  if (txType === 'card_funding' || txType === 'card') return true
+  if (String(tx.destination_type || '').toLowerCase() === 'card') return true
+  if (String(tx.source_type || '').toLowerCase() === 'card') return true
+  const kind = String((tx.metadata as any)?.kind || '').toLowerCase()
+  if (kind === 'card' || kind === 'card_funding') return true
+  return false
+}
+
+function matchesActivityFilter(tx: CombinedTransaction, filter: ActivityFilter): boolean {
+  if (filter === 'all') return true
+  const txType = tx.transaction_type || tx.type
+  if (filter === 'in') return txType === 'receive'
+  if (filter === 'out') return txType === 'send'
+  if (filter === 'card') return isCardTransaction(tx)
+  return true
+}
+
+function statusToneTextStyle(tone: string) {
+  switch (tone) {
+    case 'completed':
+      return { color: colors.success.main }
+    case 'pending':
+    case 'processing':
+      return { color: colors.warning.main }
+    case 'failed':
+      return { color: colors.error.main }
+    default:
+      return { color: colors.text.secondary }
+  }
+}
+
+function startOfDay(d: Date): Date {
+  const next = new Date(d)
+  next.setHours(0, 0, 0, 0)
+  return next
+}
+
+function endOfDay(d: Date): Date {
+  const next = new Date(d)
+  next.setHours(23, 59, 59, 999)
+  return next
+}
+
+function formatRangeLabel(from: Date | null, to: Date | null): string {
+  const fmt = (d: Date) =>
+    `${d.toLocaleString('en-US', { month: 'short' })} ${d.getDate()}, ${d.getFullYear()}`
+  if (from && to) return `${fmt(from)} – ${fmt(to)}`
+  if (from) return `From ${fmt(from)}`
+  if (to) return `Until ${fmt(to)}`
+  return ''
+}
+
+function dayKeyFromDate(d: Date): string {
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+}
+
+function formatDayHeader(d: Date): string {
+  const today = new Date()
+  const yesterday = new Date()
+  yesterday.setDate(today.getDate() - 1)
+  if (dayKeyFromDate(d) === dayKeyFromDate(today)) return 'Today'
+  if (dayKeyFromDate(d) === dayKeyFromDate(yesterday)) return 'Yesterday'
+  const month = d.toLocaleString('en-US', { month: 'short' })
+  return `${month} ${d.getDate()}, ${d.getFullYear()}`.toUpperCase()
+}
+
+type ActivityListItem =
+  | { kind: 'header'; key: string; label: string }
+  | { kind: 'group'; key: string; rows: CombinedTransaction[] }
+
+function buildGroupedActivityItems(rows: CombinedTransaction[]): ActivityListItem[] {
+  if (rows.length === 0) return []
+  const items: ActivityListItem[] = []
+  const groupedRows: Array<{ rows: CombinedTransaction[]; key: string; label: string }> = []
+  for (const tx of rows) {
+    const date = new Date(tx.noah_created_at || tx.created_at)
+    const key = dayKeyFromDate(date)
+    const last = groupedRows[groupedRows.length - 1]
+    if (last && last.key === key) {
+      last.rows.push(tx)
+    } else {
+      groupedRows.push({ key, label: formatDayHeader(date), rows: [tx] })
+    }
+  }
+  for (const group of groupedRows) {
+    items.push({ kind: 'header', key: `h-${group.key}`, label: group.label })
+    items.push({ kind: 'group', key: `g-${group.key}`, rows: group.rows })
+  }
+  return items
+}
+
 // Helper function to get transaction name (defined outside component so it can be used in TransactionItem)
 function getTransactionName(item: CombinedTransaction, transactionType: string): string {
   if (transactionType === 'card_funding') {
@@ -156,7 +263,7 @@ function getTransactionName(item: CombinedTransaction, transactionType: string):
 }
 
 // Animated Transaction Item Component
-function TransactionItem({ 
+const TransactionItem = React.memo(function TransactionItem({ 
   item, 
   index, 
   isLast,
@@ -217,34 +324,33 @@ function TransactionItem({
   // TransactionDetails when Noah id is present, else LegacyTransactionDetails for legacy sends.
   const transactionType = item.transaction_type || item.type || 'send'
   const statusDisplay = getTransactionStatusDisplay(item.status)
-  const statusColor = statusDisplay?.color || colors.neutral[500]
 
   const getTransactionIcon = () => {
     const iconColor = colors.primary.main
-    
+
     switch (transactionType) {
       case 'send':
         return (
           <View style={styles.transactionIconBox}>
-            <ArrowUpRight size={16} color={iconColor} strokeWidth={2.5} />
+            <ArrowUpRight size={18} color={iconColor} strokeWidth={2.5} />
           </View>
         )
       case 'receive':
         return (
           <View style={styles.transactionIconBox}>
-            <ArrowDownLeft size={16} color={iconColor} strokeWidth={2.5} />
+            <ArrowDownLeft size={18} color={iconColor} strokeWidth={2.5} />
           </View>
         )
       case 'card_funding':
         return (
           <View style={styles.transactionIconBox}>
-            <Monitor size={16} color={iconColor} strokeWidth={2.5} />
+            <CreditCard size={18} color={iconColor} strokeWidth={2.5} />
           </View>
         )
       default:
         return (
           <View style={styles.transactionIconBox}>
-            <ArrowUpRight size={16} color={iconColor} strokeWidth={2.5} />
+            <ArrowUpRight size={18} color={iconColor} strokeWidth={2.5} />
           </View>
         )
     }
@@ -262,7 +368,11 @@ function TransactionItem({
     >
       <Pressable
        android_ripple={ripple.neutral}
-        style={[styles.transactionItem, isLast && styles.transactionItemLast]}
+        style={({ pressed }) => [
+          styles.transactionItem,
+          !isLast && styles.transactionItemDivider,
+          pressed && styles.transactionItemPressed,
+        ]}
         onPress={async () => {
           await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
           onPress()
@@ -271,10 +381,10 @@ function TransactionItem({
         onPressOut={handlePressOut} >
         {getTransactionIcon()}
         <View style={styles.transactionDetails}>
-          <Text style={styles.transactionName}>
+          <Text style={styles.transactionName} numberOfLines={1}>
             {getTransactionName(item, transactionType)}
           </Text>
-          <Text style={styles.transactionDate}>
+          <Text style={styles.transactionDate} numberOfLines={1}>
             {formatDate(item.noah_created_at || item.created_at)}
           </Text>
         </View>
@@ -282,7 +392,7 @@ function TransactionItem({
           <Text
             style={[
               styles.transactionAmount,
-              transactionType === 'receive' && styles.transactionAmountReceived
+              transactionType === 'receive' && styles.transactionAmountReceived,
             ]}
           >
             {formatAmount(
@@ -292,12 +402,7 @@ function TransactionItem({
             )}
           </Text>
           {statusDisplay ? (
-            <Text
-              style={[
-                styles.transactionStatus,
-                { color: statusColor }
-              ]}
-            >
+            <Text style={[styles.transactionStatusText, statusToneTextStyle(statusDisplay.tone)]}>
               {statusDisplay.label}
             </Text>
           ) : null}
@@ -305,9 +410,7 @@ function TransactionItem({
       </Pressable>
     </Animated.View>
   )
-}
-
-// Loading Skeleton - Frame Only
+})
 function TransactionsSkeleton() {
   return (
     <View style={styles.skeletonContainer}>
@@ -327,7 +430,6 @@ function TransactionsSkeleton() {
 function TransactionsContent({ navigation }: NavigationProps) {
   const { width: windowWidth } = useWindowDimensions()
   const regularWidth = isRegularWidth(windowWidth)
-  const contentWidth = getContentWidth(windowWidth, spacing[5])
   const splitConfig = useMemo(() => {
     if (windowWidth >= 1024) {
       return {
@@ -376,7 +478,16 @@ function TransactionsContent({ navigation }: NavigationProps) {
   
   const [refreshing, setRefreshing] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  const [activeFilter, setActiveFilter] = useState<ActivityFilter>('all')
   const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null)
+  const [dateRange, setDateRange] = useState<{ from: Date | null; to: Date | null }>({
+    from: null,
+    to: null,
+  })
+  const [dateSheetOpen, setDateSheetOpen] = useState(false)
+  const [draftFrom, setDraftFrom] = useState<Date | null>(null)
+  const [draftTo, setDraftTo] = useState<Date | null>(null)
+  const [draftPickerOpen, setDraftPickerOpen] = useState<null | 'from' | 'to'>(null)
   const lastChainLedgerSyncRef = useRef(0)
   const chainLedgerSyncInFlightRef = useRef<Promise<boolean> | null>(null)
   
@@ -559,22 +670,89 @@ function TransactionsContent({ navigation }: NavigationProps) {
     return `${month} ${day}, ${year} • ${displayHours}:${minutes} ${ampm}`
   }
 
-  const filteredTransactions = transactions.filter(transaction => {
-    if (!transaction) return false
-    if (!searchTerm.trim()) return true
-    
-    const searchLower = searchTerm.toLowerCase()
-    const txType = transaction.transaction_type || transaction.type
-    const matchesSearch =
-      (transaction.transaction_id || transaction.id)?.toLowerCase().includes(searchLower) ||
-      transaction.name?.toLowerCase().includes(searchLower) ||
-      (txType === 'send' &&
-        transaction.recipient?.full_name?.toLowerCase().includes(searchLower)) ||
-      (txType === 'receive' &&
-        (transaction.receipt_destination_tx_hash?.toLowerCase().includes(searchLower) ||
-         transaction.crypto_wallet?.wallet_address?.toLowerCase().includes(searchLower)))
-    return matchesSearch
-  })
+  const dateRangeBounds = useMemo(() => {
+    if (!dateRange.from && !dateRange.to) return null
+    const fromMs = dateRange.from ? startOfDay(dateRange.from).getTime() : Number.NEGATIVE_INFINITY
+    const toMs = dateRange.to ? endOfDay(dateRange.to).getTime() : Number.POSITIVE_INFINITY
+    return { fromMs, toMs }
+  }, [dateRange.from, dateRange.to])
+
+  const transactionsInRange = useMemo(() => {
+    if (!dateRangeBounds) return transactions
+    return transactions.filter((tx) => {
+      if (!tx) return false
+      const dateStr = tx.noah_created_at || tx.created_at
+      if (!dateStr) return false
+      const ms = new Date(dateStr).getTime()
+      return ms >= dateRangeBounds.fromMs && ms <= dateRangeBounds.toMs
+    })
+  }, [transactions, dateRangeBounds])
+
+  const filteredTransactions = useMemo(() => {
+    const searchLower = searchTerm.trim().toLowerCase()
+    return transactionsInRange.filter((transaction) => {
+      if (!transaction) return false
+      if (!matchesActivityFilter(transaction, activeFilter)) return false
+      if (!searchLower) return true
+      const txType = transaction.transaction_type || transaction.type
+      return (
+        (transaction.transaction_id || transaction.id)?.toLowerCase().includes(searchLower) ||
+        transaction.name?.toLowerCase().includes(searchLower) ||
+        (txType === 'send' &&
+          transaction.recipient?.full_name?.toLowerCase().includes(searchLower)) ||
+        (txType === 'receive' &&
+          (transaction.receipt_destination_tx_hash?.toLowerCase().includes(searchLower) ||
+           transaction.crypto_wallet?.wallet_address?.toLowerCase().includes(searchLower)))
+      )
+    })
+  }, [transactionsInRange, searchTerm, activeFilter])
+
+  const summaryTotals = useMemo(() => {
+    const now = new Date()
+    const useRange = !!dateRangeBounds
+    const fromMs = useRange ? dateRangeBounds!.fromMs : Number.NEGATIVE_INFINITY
+    const toMs = useRange ? dateRangeBounds!.toMs : Number.POSITIVE_INFINITY
+    let inAmount = 0
+    let outAmount = 0
+    let inCurrency: string | null = null
+    let outCurrency: string | null = null
+    for (const tx of transactions) {
+      if (!tx) continue
+      const dateStr = tx.noah_created_at || tx.created_at
+      if (!dateStr) continue
+      const d = new Date(dateStr)
+      if (useRange) {
+        const ms = d.getTime()
+        if (ms < fromMs || ms > toMs) continue
+      } else {
+        if (d.getFullYear() !== now.getFullYear() || d.getMonth() !== now.getMonth()) continue
+      }
+      const txType = tx.transaction_type || tx.type
+      const amt = Math.abs(
+        Number(tx.amount ?? tx.send_amount ?? tx.crypto_amount ?? tx.fiat_amount ?? 0) || 0,
+      )
+      const cur =
+        tx.currency || tx.send_currency || tx.crypto_currency || tx.fiat_currency || 'USD'
+      if (txType === 'receive') {
+        inAmount += amt
+        if (!inCurrency) inCurrency = cur
+      } else if (txType === 'send' || txType === 'card_funding') {
+        outAmount += amt
+        if (!outCurrency) outCurrency = cur
+      }
+    }
+    return {
+      inAmount,
+      outAmount,
+      inCurrency: inCurrency || 'USD',
+      outCurrency: outCurrency || inCurrency || 'USD',
+    }
+  }, [transactions, dateRangeBounds])
+
+  const groupedItems = useMemo(
+    () => buildGroupedActivityItems(filteredTransactions),
+    [filteredTransactions],
+  )
 
   useEffect(() => {
     if (!regularWidth) return
@@ -617,34 +795,58 @@ function TransactionsContent({ navigation }: NavigationProps) {
           ]}
         >
           <View style={styles.headerContent}>
-            <View>
+            <View style={styles.headerTitleWrap}>
               <Text style={styles.title}>Transactions</Text>
             </View>
+            <Pressable
+              android_ripple={ripple.neutral}
+              onPress={async () => {
+                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                setDraftFrom(dateRange.from)
+                setDraftTo(dateRange.to)
+                setDateSheetOpen(true)
+              }}
+              style={({ pressed }) => [
+                styles.headerIconButton,
+                dateRange.from || dateRange.to ? styles.headerIconButtonActive : null,
+                pressed ? { opacity: 0.85 } : null,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Filter by date range"
+            >
+              <CalendarIcon
+                size={22}
+                color={dateRange.from || dateRange.to ? colors.text.inverse : colors.primary.main}
+                strokeWidth={2}
+              />
+            </Pressable>
           </View>
         </Animated.View>
 
-      {/* Search bar — match RecipientsScreen */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchWrapper}>
-          <Search size={18} color={colors.primary.main} strokeWidth={2} />
-          <TextInput
-            style={styles.searchInput}
-            value={searchTerm}
-            onChangeText={setSearchTerm}
-            placeholder="Search by name or ID..."
-            placeholderTextColor={colors.text.secondary}
-            returnKeyType="done"
-            onSubmitEditing={() => Keyboard.dismiss()}
-          />
-          {searchTerm.length > 0 ? (
-            <Pressable android_ripple={ripple.neutral} onPress={() => setSearchTerm('')}>
-              <Ionicons name="close-circle" size={18} color={colors.primary.main} />
-            </Pressable>
-          ) : null}
-        </View>
-      </View>
+        {dateRange.from || dateRange.to ? (
+          <View style={styles.rangeChipRow}>
+            <View style={styles.rangeChip}>
+              <CalendarIcon size={14} color={colors.primary.main} strokeWidth={2} />
+              <Text style={styles.rangeChipText} numberOfLines={1}>
+                {formatRangeLabel(dateRange.from, dateRange.to)}
+              </Text>
+              <Pressable
+                android_ripple={ripple.neutral}
+                onPress={async () => {
+                  await Haptics.selectionAsync().catch(() => {})
+                  setDateRange({ from: null, to: null })
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Clear date range"
+                hitSlop={8}
+              >
+                <CircleX size={16} color={colors.text.tertiary} strokeWidth={2} />
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
 
-      {/* Transactions List */}
+      {/* Single scroll surface: summary + search + filters + list */}
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
@@ -660,11 +862,61 @@ function TransactionsContent({ navigation }: NavigationProps) {
           />
         }
       >
+        {/* Money in / Money out summary (current month) */}
+        <View style={styles.summaryRow}>
+          <SectionCard style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>MONEY IN</Text>
+            <Text style={[styles.summaryValue, styles.summaryValueIn]} numberOfLines={1}>
+              {`+${formatAmount(summaryTotals.inAmount, summaryTotals.inCurrency, true).replace(/^\+/, '')}`}
+            </Text>
+          </SectionCard>
+          <SectionCard style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>MONEY OUT</Text>
+            <Text style={styles.summaryValue} numberOfLines={1}>
+              {summaryTotals.outAmount > 0
+                ? `-${formatAmount(summaryTotals.outAmount, summaryTotals.outCurrency, false).replace(/^\-/, '')}`
+                : formatAmount(0, summaryTotals.outCurrency, false)}
+            </Text>
+          </SectionCard>
+        </View>
+
+        {/* Search bar */}
+        <View style={styles.searchContainer}>
+          <View style={styles.searchWrapper}>
+            <Search size={18} color={colors.primary.main} strokeWidth={2} />
+            <TextInput
+              style={styles.searchInput}
+              value={searchTerm}
+              onChangeText={setSearchTerm}
+              placeholder="Search transactions"
+              placeholderTextColor={colors.text.secondary}
+              returnKeyType="done"
+              onSubmitEditing={() => Keyboard.dismiss()}
+            />
+            {searchTerm.length > 0 ? (
+              <Pressable android_ripple={ripple.neutral} onPress={() => setSearchTerm('')}>
+                <CircleX size={18} color={colors.text.secondary} strokeWidth={2} />
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+
+        {/* Filter chips */}
+        <View style={styles.filterRow}>
+          {ACTIVITY_FILTERS.map((f) => (
+            <FilterChip
+              key={f.id}
+              label={f.label}
+              selected={activeFilter === f.id}
+              onPress={() => setActiveFilter(f.id)}
+            />
+          ))}
+        </View>
         <View
           style={
             regularWidth
               ? [styles.transactionsSplitContainer, { maxWidth: splitConfig.maxWidth }]
-              : [styles.transactionsContainer, { maxWidth: contentWidth, alignSelf: 'center', width: '100%' }]
+              : styles.transactionsContainer
           }
         >
           {loading ? (
@@ -672,14 +924,14 @@ function TransactionsContent({ navigation }: NavigationProps) {
           ) : filteredTransactions.length === 0 ? (
             <View style={styles.emptyStateContainer}>
               <View style={styles.emptyIconContainer}>
-                <Ionicons name="receipt-outline" size={40} color={colors.neutral[400]} />
+                <Receipt size={36} color={colors.text.tertiary} strokeWidth={1.5} />
               </View>
               <Text style={styles.emptyStateTitle}>
-                {searchTerm ? 'No transactions found' : 'No transactions yet'}
+                {searchTerm || activeFilter !== 'all' ? 'No transactions found' : 'No transactions yet'}
               </Text>
               <Text style={styles.emptyStateText}>
-                {searchTerm 
-                  ? 'Try adjusting your search terms or clear the search to see all transactions' 
+                {searchTerm || activeFilter !== 'all'
+                  ? 'Try adjusting your search or filter to see more transactions'
                   : 'Your recent transactions will appear here once you send, receive or spend money'}
               </Text>
             </View>
@@ -690,32 +942,53 @@ function TransactionsContent({ navigation }: NavigationProps) {
                   regularWidth ? [styles.regularWidthListPane, { flex: splitConfig.listFlex }] : undefined
                 }
               >
-                {filteredTransactions.map((item, index) => {
-                  const isLast = index === filteredTransactions.length - 1
-                  const detailScreen = 'TransactionDetails'
-
+                {groupedItems.map((item, index) => {
+                  if (item.kind === 'header') {
+                    return (
+                      <Text
+                        key={item.key}
+                        style={[
+                          styles.dateHeader,
+                          index === 0 ? styles.dateHeaderFirst : null,
+                        ]}
+                      >
+                        {item.label}
+                      </Text>
+                    )
+                  }
                   return (
-                    <TransactionItem
-                      key={item.ledger_row_id || item.id || item.transaction_id || `tx-${item.created_at}`}
-                      item={item}
-                      index={index}
-                      isLast={isLast}
-                      skipRowEntranceAnim={skipRowEntranceAnim}
-                      onPress={() => {
-                        const lookupId = transactionDetailLookupId(item)
-                        if (regularWidth) {
-                          setSelectedTransactionId(lookupId)
-                          return
-                        }
-                        navigation.navigate(detailScreen as never, {
-                          transactionId: lookupId,
-                          fromScreen: 'Transactions',
-                          initialTransaction: item,
-                        } as never)
-                      }}
-                      formatAmount={formatAmount}
-                      formatDate={formatDate}
-                    />
+                    <View key={item.key} style={styles.groupCard}>
+                      {item.rows.map((tx, rowIdx) => {
+                        const isLast = rowIdx === item.rows.length - 1
+                        return (
+                          <View
+                            key={`${item.key}-${rowIdx}`}
+                            style={!isLast ? styles.groupRowDivider : null}
+                          >
+                            <TransactionItem
+                              item={tx}
+                              index={rowIdx}
+                              isLast={isLast}
+                              skipRowEntranceAnim={skipRowEntranceAnim}
+                              onPress={() => {
+                                const lookupId = transactionDetailLookupId(tx)
+                                if (regularWidth) {
+                                  setSelectedTransactionId(lookupId)
+                                  return
+                                }
+                                navigation.navigate('TransactionDetails' as never, {
+                                  transactionId: lookupId,
+                                  fromScreen: 'Transactions',
+                                  initialTransaction: tx,
+                                } as never)
+                              }}
+                              formatAmount={formatAmount}
+                              formatDate={formatDate}
+                            />
+                          </View>
+                        )
+                      })}
+                    </View>
                   )
                 })}
               </View>
@@ -793,6 +1066,126 @@ function TransactionsContent({ navigation }: NavigationProps) {
         </View>
       </ScrollView>
       </View>
+
+      <PremiumModalSheet
+        visible={dateSheetOpen}
+        onRequestClose={() => {
+          setDraftPickerOpen(null)
+          setDateSheetOpen(false)
+        }}
+      >
+        <View style={styles.dateSheetContent}>
+          <Text style={styles.dateSheetTitle}>Filter by date</Text>
+          <Text style={styles.dateSheetSubtitle}>
+            Pick a start and end date to scope transactions and totals.
+          </Text>
+
+          <View style={styles.dateRow}>
+            <Pressable
+              android_ripple={ripple.neutral}
+              style={[
+                styles.dateField,
+                draftPickerOpen === 'from' ? styles.dateFieldActive : null,
+              ]}
+              onPress={() => setDraftPickerOpen(draftPickerOpen === 'from' ? null : 'from')}
+              accessibilityRole="button"
+              accessibilityLabel="Choose start date"
+            >
+              <Text style={styles.dateFieldLabel}>From</Text>
+              <Text style={styles.dateFieldValue}>
+                {draftFrom
+                  ? `${draftFrom.toLocaleString('en-US', { month: 'short' })} ${draftFrom.getDate()}, ${draftFrom.getFullYear()}`
+                  : 'Any'}
+              </Text>
+            </Pressable>
+            <Pressable
+              android_ripple={ripple.neutral}
+              style={[
+                styles.dateField,
+                draftPickerOpen === 'to' ? styles.dateFieldActive : null,
+              ]}
+              onPress={() => setDraftPickerOpen(draftPickerOpen === 'to' ? null : 'to')}
+              accessibilityRole="button"
+              accessibilityLabel="Choose end date"
+            >
+              <Text style={styles.dateFieldLabel}>To</Text>
+              <Text style={styles.dateFieldValue}>
+                {draftTo
+                  ? `${draftTo.toLocaleString('en-US', { month: 'short' })} ${draftTo.getDate()}, ${draftTo.getFullYear()}`
+                  : 'Any'}
+              </Text>
+            </Pressable>
+          </View>
+
+          {draftPickerOpen ? (
+            <View style={styles.dateInlinePicker}>
+              <DateTimePicker
+                value={
+                  draftPickerOpen === 'from'
+                    ? draftFrom || new Date()
+                    : draftTo || draftFrom || new Date()
+                }
+                mode="date"
+                display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                maximumDate={
+                  draftPickerOpen === 'from' && draftTo ? draftTo : new Date()
+                }
+                minimumDate={
+                  draftPickerOpen === 'to' && draftFrom ? draftFrom : undefined
+                }
+                onChange={(event, picked) => {
+                  if (Platform.OS !== 'ios') setDraftPickerOpen(null)
+                  if (event.type === 'dismissed' || !picked) return
+                  if (draftPickerOpen === 'from') {
+                    setDraftFrom(picked)
+                    if (draftTo && picked.getTime() > draftTo.getTime()) {
+                      setDraftTo(picked)
+                    }
+                  } else {
+                    setDraftTo(picked)
+                    if (draftFrom && picked.getTime() < draftFrom.getTime()) {
+                      setDraftFrom(picked)
+                    }
+                  }
+                }}
+              />
+            </View>
+          ) : null}
+
+          <View style={styles.dateActionsRow}>
+            <Pressable
+              android_ripple={ripple.neutral}
+              style={[styles.dateActionBtn, styles.dateActionBtnSecondary]}
+              onPress={async () => {
+                await Haptics.selectionAsync().catch(() => {})
+                setDraftFrom(null)
+                setDraftTo(null)
+                setDateRange({ from: null, to: null })
+                setDraftPickerOpen(null)
+                setDateSheetOpen(false)
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Clear date range"
+            >
+              <Text style={styles.dateActionBtnSecondaryText}>Clear</Text>
+            </Pressable>
+            <Pressable
+              android_ripple={ripple.heroOnDark}
+              style={[styles.dateActionBtn, styles.dateActionBtnPrimary]}
+              onPress={async () => {
+                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                setDateRange({ from: draftFrom, to: draftTo })
+                setDraftPickerOpen(null)
+                setDateSheetOpen(false)
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Apply date range"
+            >
+              <Text style={styles.dateActionBtnPrimaryText}>Apply</Text>
+            </Pressable>
+          </View>
+        </View>
+      </PremiumModalSheet>
     </ScreenWrapper>
   )
 }
@@ -800,7 +1193,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background.primary,
+    backgroundColor: colors.semantic.background,
   },
   scrollView: {
     flex: 1,
@@ -811,33 +1204,189 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: spacing[5],
     paddingTop: spacing[4],
-    paddingBottom: spacing[2],
+    paddingBottom: spacing[3],
   },
   headerContent: {
-    alignItems: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing[3],
+  },
+  headerTitleWrap: {
+    flex: 1,
   },
   title: {
     ...textStyles.headlineLarge,
     color: colors.text.primary,
+    fontFamily: fontFamily.semibold,
+    fontWeight: '700',
+    letterSpacing: -0.3,
   },
-  // Search — aligned with RecipientsScreen
-  searchContainer: {
+  headerIconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.semantic.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border.default,
+    flexShrink: 0,
+  },
+  headerIconButtonActive: {
+    backgroundColor: colors.primary.main,
+    borderColor: colors.primary.main,
+  },
+  rangeChipRow: {
+    paddingHorizontal: spacing[5],
+    paddingTop: spacing[1],
+    paddingBottom: spacing[2],
+  },
+  rangeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: spacing[2],
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: borderRadius.full,
+    backgroundColor: 'rgba(0, 122, 204, 0.10)',
+  },
+  rangeChipText: {
+    ...textStyles.bodySmall,
+    color: colors.primary.main,
+    fontFamily: fontFamily.semibold,
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  dateSheetContent: {
+    paddingTop: spacing[2],
+    paddingBottom: spacing[2],
+    gap: spacing[3],
+  },
+  dateSheetTitle: {
+    ...textStyles.headlineMedium,
+    color: colors.text.primary,
+    fontFamily: fontFamily.semibold,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  dateSheetSubtitle: {
+    ...textStyles.bodySmall,
+    color: colors.text.secondary,
+  },
+  dateRow: {
+    flexDirection: 'row',
+    gap: spacing[3],
+  },
+  dateField: {
+    flex: 1,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[3],
+    borderRadius: borderRadius['2xl'],
+    backgroundColor: colors.semantic.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border.default,
+    gap: 2,
+  },
+  dateFieldActive: {
+    borderColor: colors.primary.main,
+  },
+  dateFieldLabel: {
+    fontSize: 11,
+    fontFamily: fontFamily.semibold,
+    fontWeight: '600',
+    color: colors.text.secondary,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  dateFieldValue: {
+    ...textStyles.bodyMedium,
+    color: colors.text.primary,
+    fontFamily: fontFamily.semibold,
+    fontWeight: '600',
+  },
+  dateInlinePicker: {
+    paddingHorizontal: 0,
+  },
+  dateActionsRow: {
+    flexDirection: 'row',
+    gap: spacing[3],
+  },
+  dateActionBtn: {
+    flex: 1,
+    paddingVertical: spacing[3],
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dateActionBtnSecondary: {
+    backgroundColor: colors.semantic.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border.default,
+  },
+  dateActionBtnSecondaryText: {
+    ...textStyles.bodyMedium,
+    color: colors.primary.main,
+    fontFamily: fontFamily.semibold,
+    fontWeight: '600',
+  },
+  dateActionBtnPrimary: {
+    backgroundColor: colors.primary.main,
+  },
+  dateActionBtnPrimaryText: {
+    ...textStyles.bodyMedium,
+    color: colors.text.inverse,
+    fontFamily: fontFamily.semibold,
+    fontWeight: '600',
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    gap: spacing[3],
     paddingHorizontal: spacing[5],
     marginBottom: spacing[4],
+  },
+  summaryCard: {
+    flex: 1,
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[4],
+  },
+  summaryLabel: {
+    fontSize: 11,
+    fontFamily: fontFamily.semibold,
+    fontWeight: '600',
+    color: colors.text.secondary,
+    letterSpacing: 0.6,
+    marginBottom: 4,
+  },
+  summaryValue: {
+    fontSize: 22,
+    fontFamily: fontFamily.semibold,
+    fontWeight: '700',
+    color: colors.text.primary,
+    letterSpacing: -0.2,
+  },
+  summaryValueIn: {
+    color: colors.primary.main,
+  },
+  // Search
+  searchContainer: {
+    paddingHorizontal: spacing[5],
+    marginBottom: spacing[3],
   },
   searchWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.frame.background,
-    borderRadius: borderRadius.xl,
+    backgroundColor: colors.semantic.card,
+    borderRadius: borderRadius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border.default,
     paddingHorizontal: spacing[4],
     ...Platform.select({
       ios: { paddingVertical: spacing[3] },
       android: { paddingVertical: spacing[2], minHeight: 44 },
     }),
     gap: spacing[2],
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
   },
   searchInput: {
     flex: 1,
@@ -851,22 +1400,24 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  
+  filterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    paddingHorizontal: spacing[5],
+    gap: spacing[2],
+    paddingBottom: spacing[2],
+  },
+
   // Transactions List
   transactionsContainer: {
-    marginHorizontal: spacing[5],
-    marginTop: spacing[3],
-    backgroundColor: colors.frame.background,
-    borderRadius: borderRadius['3xl'],
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
     paddingHorizontal: spacing[5],
-    paddingTop: spacing[5],
-    paddingBottom: spacing[8],
+    paddingTop: 0,
+    paddingBottom: spacing[6],
   },
   transactionsSplitContainer: {
     marginHorizontal: spacing[5],
-    marginTop: spacing[3],
+    marginTop: spacing[1],
     alignSelf: 'center',
     width: '100%',
   },
@@ -876,20 +1427,13 @@ const styles = StyleSheet.create({
   },
   regularWidthListPane: {
     flex: 1.2,
-    backgroundColor: colors.frame.background,
-    borderRadius: borderRadius['3xl'],
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    paddingHorizontal: spacing[5],
-    paddingTop: spacing[5],
-    paddingBottom: spacing[8],
   },
   regularWidthDetailPane: {
     flex: 0.8,
-    backgroundColor: colors.frame.background,
-    borderRadius: borderRadius['3xl'],
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
+    backgroundColor: colors.semantic.card,
+    borderRadius: borderRadius['2xl'],
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border.default,
     padding: spacing[5],
     alignSelf: 'flex-start',
   },
@@ -924,63 +1468,101 @@ const styles = StyleSheet.create({
   regularWidthDetailButtonText: {
     ...textStyles.labelLarge,
     color: colors.text.inverse,
-    fontFamily: 'Geist-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   skeletonContainer: {
     paddingHorizontal: 0,
+    paddingTop: spacing[2],
+  },
+  dateHeader: {
+    fontSize: 11,
+    fontFamily: fontFamily.semibold,
+    fontWeight: '600',
+    color: colors.text.secondary,
+    letterSpacing: 0.6,
+    paddingHorizontal: spacing[2],
+    paddingTop: spacing[4],
+    paddingBottom: spacing[2],
+  },
+  dateHeaderFirst: {
+    paddingTop: spacing[2],
+  },
+  /** White card chrome that wraps each row; corners adjust based on group position. */
+  groupCard: {
+    backgroundColor: colors.semantic.card,
+    borderRadius: borderRadius['2xl'],
+    overflow: 'hidden',
+    marginBottom: spacing[1],
+    ...shadows.xs,
+  },
+  groupRowDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border.default,
   },
   transactionItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: spacing[4],
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.default,
+    paddingHorizontal: spacing[4],
+    minHeight: 64,
+  },
+  transactionItemDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border.light,
+  },
+  transactionItemPressed: {
+    backgroundColor: colors.semantic.muted,
+    opacity: 0.85,
   },
   transactionItemLast: {
-    borderBottomWidth: 0,
+    marginBottom: 0,
   },
+  /** Tinted-blue circular icon — primary @ ~10% alpha fill. */
   transactionIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing[3],
-    backgroundColor: '#FFFFFF',
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
+    backgroundColor: 'rgba(0, 122, 204, 0.10)',
   },
   transactionDetails: {
     flex: 1,
   },
   transactionAmountContainer: {
     alignItems: 'flex-end',
-    gap: spacing[0.5],
+    gap: 4,
+    marginLeft: spacing[2],
   },
   transactionName: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Geist-Medium',
-    marginBottom: spacing[1],
+    fontFamily: fontFamily.semibold,
+    fontWeight: '600',
+    marginBottom: 2,
   },
   transactionDate: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
-    fontFamily: 'Geist-Regular',
+    fontFamily: fontFamily.regular,
   },
   transactionAmount: {
     ...textStyles.bodyLarge,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
+    fontWeight: '600',
   },
   transactionAmountReceived: {
     color: colors.primary.main,
   },
-  transactionStatus: {
-    ...textStyles.bodySmall,
-    fontFamily: 'Outfit-Regular',
+  transactionStatusText: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontFamily: fontFamily.semibold,
+    fontWeight: '600',
   },
-  
+
   // Empty State
   emptyStateContainer: {
     alignItems: 'center',
@@ -993,7 +1575,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: colors.neutral[100],
+    backgroundColor: colors.semantic.muted,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing[4],
@@ -1001,14 +1583,14 @@ const styles = StyleSheet.create({
   emptyStateTitle: {
     ...textStyles.titleLarge,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     marginBottom: spacing[2],
   },
   emptyStateText: {
     ...textStyles.bodyMedium,
     color: colors.text.secondary,
     textAlign: 'center',
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
   },
 })
 

@@ -1,7 +1,7 @@
 import React from 'react'
 import { View, Text, Pressable, Platform, StyleSheet } from 'react-native'
 import { ArrowDownLeft, ArrowUpRight, Monitor, Apple } from 'lucide-react-native'
-import { colors, textStyles, spacing } from '../theme'
+import { colors, textStyles, spacing, fontFamily } from '../theme'
 import { ripple } from '../lib/androidRipple'
 
 interface TransactionCardProps {
@@ -102,18 +102,18 @@ const styles = StyleSheet.create({
   transactionName: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: fontFamily.medium,
     marginBottom: spacing[1],
   },
   transactionDate: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
   },
   transactionAmount: {
     ...textStyles.bodyLarge,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   transactionAmountReceived: {
     color: colors.primary.main,

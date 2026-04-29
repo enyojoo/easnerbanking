@@ -1,19 +1,14 @@
 import React, { useCallback, useMemo } from 'react'
-import { FlatList, FlatListProps, ListRenderItem, RefreshControl, ViewStyle } from 'react-native'
+import { RefreshControl, ViewStyle } from 'react-native'
+import type { ListRenderItem } from '@shopify/flash-list'
+import { FlashList } from '@shopify/flash-list'
 import type { InfiniteData, InfiniteQueryObserverResult } from '@tanstack/react-query'
 import type { MobileTransactionRow } from '../../hooks/queries/use-transactions'
 import { useThemeColors } from '../../contexts/ThemePaletteContext'
 
 /**
- * Mobile ledger list primitive, designed for instant scroll performance
- * over long transaction histories.
- *
- * Uses React Native's `FlatList` with tuned windowing constants. It's a
- * drop-in swap for `@shopify/flash-list` when that's installed — the
- * render item signature matches. Callers own row rendering.
- *
- * Wire `query.fetchNextPage` to `onEndReached` and pull-to-refresh to
- * `query.refetch` for the full SWR loop.
+ * Mobile ledger list primitive for long transaction histories.
+ * Uses `@shopify/flash-list` for windowed recycling.
  */
 
 type InfinitePages = InfiniteData<{
@@ -28,9 +23,9 @@ type Props = {
   onRefresh?: () => void | Promise<unknown>
   isRefreshing?: boolean
   estimatedItemSize?: number
-  ListHeaderComponent?: FlatListProps<MobileTransactionRow>['ListHeaderComponent']
-  ListEmptyComponent?: FlatListProps<MobileTransactionRow>['ListEmptyComponent']
-  ListFooterComponent?: FlatListProps<MobileTransactionRow>['ListFooterComponent']
+  ListHeaderComponent?: React.ComponentType | React.ReactElement | null
+  ListEmptyComponent?: React.ComponentType | React.ReactElement | null
+  ListFooterComponent?: React.ComponentType | React.ReactElement | null
   style?: ViewStyle
   contentContainerStyle?: ViewStyle
 }
@@ -61,22 +56,14 @@ export function TransactionsList({
   )
 
   return (
-    <FlatList
+    <FlashList
       data={flat}
       renderItem={renderItem}
       keyExtractor={keyExtractor}
+      estimatedItemSize={estimatedItemSize}
       onEndReached={onEndReached}
       onEndReachedThreshold={0.4}
-      removeClippedSubviews
-      initialNumToRender={12}
-      windowSize={9}
-      maxToRenderPerBatch={10}
-      updateCellsBatchingPeriod={32}
-      getItemLayout={(_, index) => ({
-        length: estimatedItemSize,
-        offset: estimatedItemSize * index,
-        index,
-      })}
+      drawDistance={800}
       ListHeaderComponent={ListHeaderComponent}
       ListEmptyComponent={ListEmptyComponent}
       ListFooterComponent={ListFooterComponent}

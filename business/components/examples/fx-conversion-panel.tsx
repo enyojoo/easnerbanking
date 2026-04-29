@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
  *
  * Composition:
  *   - Two amount fields separated by a swap affordance.
- *   - Editorial display of "You get" total in serif.
+ *   - Large sans display for "You receive" total (tabular).
  *   - Emerald primary action; everything else monochrome.
  */
 export interface FxConversionPanelProps {
@@ -94,7 +94,7 @@ export function FxConversionPanel({
           </span>
           <div className="flex items-center gap-3">
             <div className="flex h-12 w-full items-center rounded-2xl border border-border/60 bg-muted/40 px-4">
-              <span className="font-serif text-2xl font-medium tracking-tight text-foreground tabular-nums">
+              <span className="font-sans text-2xl font-medium tracking-tight text-foreground tabular-nums">
                 {toAmount || '0.00'}
               </span>
             </div>

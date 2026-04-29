@@ -1,10 +1,11 @@
 import React from 'react'
 import { View, Text, StyleSheet, ViewStyle } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
-import { colors, textStyles, spacing, borderRadius } from '../theme'
+import { FileText } from 'lucide-react-native'
+import type { LucideIcon } from 'lucide-react-native'
+import { colors, textStyles, spacing, borderRadius, fontFamily } from '../theme'
 
 interface EmptyStateProps {
-  icon?: keyof typeof Ionicons.glyphMap
+  icon?: LucideIcon
   title: string
   message: string
   action?: {
@@ -15,7 +16,7 @@ interface EmptyStateProps {
 }
 
 export default function EmptyState({
-  icon = 'document-outline',
+  icon: Icon = FileText,
   title,
   message,
   action,
@@ -24,7 +25,7 @@ export default function EmptyState({
   return (
     <View style={[styles.container, style]}>
       <View style={styles.iconContainer}>
-        <Ionicons name={icon} size={48} color={colors.neutral[400]} />
+        <Icon size={48} color={colors.neutral[400]} strokeWidth={1.5} />
       </View>
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.message}>{message}</Text>
@@ -57,14 +58,14 @@ const styles = StyleSheet.create({
   title: {
     ...textStyles.titleLarge,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     marginBottom: spacing[2],
     textAlign: 'center',
   },
   message: {
     ...textStyles.bodyMedium,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
     textAlign: 'center',
     marginBottom: spacing[4],
   },
@@ -74,28 +75,6 @@ const styles = StyleSheet.create({
   actionText: {
     ...textStyles.labelMedium,
     color: colors.primary.main,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
 })
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

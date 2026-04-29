@@ -1,7 +1,8 @@
 import React from 'react'
 import { View, Text, StyleSheet, ViewStyle } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { Clock } from 'lucide-react-native'
 import { useThemeColors } from '../../contexts/ThemePaletteContext'
+import { fontFamily } from '../../theme'
 
 /**
  * Subtle "pending" pill for optimistic ledger rows.
@@ -28,7 +29,7 @@ export function PendingBadge({
         style,
       ]}
     >
-      <Ionicons name="time-outline" size={10} color={colors.text.tertiary} />
+      <Clock size={10} color={colors.text.tertiary} strokeWidth={2} />
       <Text style={[styles.label, { color: colors.text.tertiary }]}>{label}</Text>
     </View>
   )
@@ -45,7 +46,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   label: {
-    fontFamily: 'Inter_500Medium',
+    fontFamily: fontFamily.medium,
     fontSize: 10,
     letterSpacing: 0.6,
     textTransform: 'uppercase',

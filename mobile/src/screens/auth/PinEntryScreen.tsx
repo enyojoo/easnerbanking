@@ -5,17 +5,16 @@ import {
   Image,
   StyleSheet,
   Pressable,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Animated,
   ActivityIndicator,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { HelpCircle } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { NavigationProps } from '../../types'
-import { colors, textStyles, borderRadius, spacing, userAvatarStyles, useThemeColors } from '../../theme'
+import { colors, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, userAvatarStyles, useThemeColors } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { verifyPin, getPinLockTimeRemaining, updateSessionActivity, setAppLocked } from '../../lib/pinAuth'
 import { emitAppLocked } from '../../lib/app-lock-bus'
@@ -24,6 +23,7 @@ import { appPinStrings } from '../../constants/app-pin-en'
 import { displayFirstNameFromFullName, initialsFromFullName } from '../../lib/userProfileHelpers'
 import { useDeferredLoading } from '../../hooks/useDeferredLoading'
 import { PinKeypad, PinLockedHintText } from '../../components/pin'
+import { EasnerAlertSheet } from '../../components/premium'
 import { avatarImageSource, normalizeAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
 
 export default function PinEntryScreen({ navigation: navigationProp }: NavigationProps) {
@@ -35,6 +35,8 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
   const [locked, setLocked] = useState(false)
   const [lockedUntil, setLockedUntil] = useState<number | null>(null)
   const [avatarLoadFailed, setAvatarLoadFailed] = useState(false)
+  const [forgotSheetVisible, setForgotSheetVisible] = useState(false)
+  const [logoutSheetVisible, setLogoutSheetVisible] = useState(false)
   const shakeAnim = useRef(new Animated.Value(0)).current
   const insets = useSafeAreaInsets()
 
@@ -154,15 +156,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
   }
 
   const handleForgotPin = () => {
-    Alert.alert(appPinStrings.forgotPinTitle, appPinStrings.forgotPinBody, [
-      { text: appPinStrings.dialogCancel, style: 'cancel' },
-      {
-        text: appPinStrings.forgotPinSignIn,
-        onPress: async () => {
-          await signOut()
-        },
-      },
-    ])
+    setForgotSheetVisible(true)
   }
 
   const getUserName = () => {
@@ -197,7 +191,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
             style={styles.headerButton}
             onPress={handleForgotPin} >
             <View style={styles.headerButtonCircle}>
-              <Ionicons name="help-circle-outline" size={20} color={palette.text.primary} />
+              <HelpCircle size={20} color={palette.text.primary} strokeWidth={2} />
             </View>
           </Pressable>
         </View>
@@ -276,16 +270,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
            android_ripple={ripple.neutral}
             style={[styles.logoutLink, { paddingBottom: spacing[4] }]}
             onPress={() => {
-              Alert.alert(appPinStrings.logOutTitle, appPinStrings.logOutBody, [
-                { text: appPinStrings.dialogCancel, style: 'cancel' },
-                {
-                  text: appPinStrings.lockLogOut,
-                  style: 'destructive',
-                  onPress: async () => {
-                    await signOut()
-                  },
-                },
-              ])
+              setLogoutSheetVisible(true)
             }} >
             <Text style={styles.logoutText}>
               {appPinStrings.lockNotYourAccount}{' '}
@@ -294,6 +279,37 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+
+      <EasnerAlertSheet
+        visible={forgotSheetVisible}
+        onDismiss={() => setForgotSheetVisible(false)}
+        title={appPinStrings.forgotPinTitle}
+        message={appPinStrings.forgotPinBody}
+        primaryLabel={appPinStrings.forgotPinSignIn}
+        onPrimary={() => {
+          void (async () => {
+            setForgotSheetVisible(false)
+            await signOut()
+          })()
+        }}
+        secondaryLabel={appPinStrings.dialogCancel}
+        onSecondary={() => setForgotSheetVisible(false)}
+      />
+      <EasnerAlertSheet
+        visible={logoutSheetVisible}
+        onDismiss={() => setLogoutSheetVisible(false)}
+        title={appPinStrings.logOutTitle}
+        message={appPinStrings.logOutBody}
+        primaryLabel={appPinStrings.lockLogOut}
+        onPrimary={() => {
+          void (async () => {
+            setLogoutSheetVisible(false)
+            await signOut()
+          })()
+        }}
+        secondaryLabel={appPinStrings.dialogCancel}
+        onSecondary={() => setLogoutSheetVisible(false)}
+      />
     </View>
   )
 }
@@ -321,14 +337,7 @@ const styles = StyleSheet.create({
     padding: spacing[1],
   },
   headerButtonCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+    ...surfaceChromeCircleStyle(colors, 40),
   },
   content: {
     flex: 1,

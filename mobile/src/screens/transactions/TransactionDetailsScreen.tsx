@@ -7,20 +7,40 @@ import {
   Pressable,
   Platform,
   RefreshControl,
-  Alert,
   Animated,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import type { LucideIcon } from 'lucide-react-native'
+import {
+  AlertCircle,
+  ArrowDownLeft,
+  ArrowLeft,
+  ArrowUpRight,
+  Check,
+  CircleAlert,
+  CircleCheck,
+  CircleHelp,
+  CircleX,
+  Clock,
+  Copy,
+  HelpCircle,
+} from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
-import * as Clipboard from 'expo-clipboard'
 import { useQueryClient } from '@tanstack/react-query'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { ShimmerLoader } from '../../components/premium'
+import { SectionCard, StatusPill } from '../../components/ui'
 import { NavigationProps } from '../../types'
-import { colors, textStyles, borderRadius, spacing, shadows, motion } from '../../theme'
+import {
+  colors,
+  textStyles,
+  borderRadius,
+  spacing,
+  motion,
+  fontFamily,
+} from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
 import { ripple } from '../../lib/androidRipple'
 import { useTransactionDetail, useCurrenciesCatalog } from '../../hooks/queries'
 import { isEasnerProductReceiveTitle, isEasnerProductSendTitle, qk } from '@easner/shared'
@@ -60,6 +80,24 @@ interface LedgerTransaction {
   sender_display_name?: string
 }
 
+type StatusInfo = {
+  color: string
+  Icon: LucideIcon
+  label: string
+  gradient: readonly [string, string]
+}
+
+function statusInfoToneFromInfo(info: StatusInfo) {
+  const label = info.label.toLowerCase()
+  if (label.includes('completed')) return 'completed' as const
+  if (label.includes('processing') || label.includes('pending')) return 'pending' as const
+  if (label.includes('failed') || label.includes('refunded') || label.includes('returned'))
+    return 'failed' as const
+  if (label.includes('cancel')) return 'cancelled' as const
+  if (label.includes('review')) return 'pending' as const
+  return 'neutral' as const
+}
+
 function mergeTransactionSnapshots(
   primary: LedgerTransaction | null | undefined,
   fallback: LedgerTransaction | null | undefined,
@@ -89,6 +127,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   const { scope } = useScope()
   const detailQuery = useTransactionDetail(transactionId)
   const { data: currencies = [] } = useCurrenciesCatalog()
+  const copyToClipboard = useCopyToClipboard()
   const cachedListSnapshot = useMemo<LedgerTransaction | null>(() => {
     if (!scope || !transactionId) return null
     const listState = qc.getQueryState(qk.transactions.list(scope, {}))
@@ -248,16 +287,13 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   }
 
   const handleCopy = async (text: string, key: string) => {
-    try {
-      await Clipboard.setStringAsync(text)
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-      setCopiedStates(prev => ({ ...prev, [key]: true }))
-      setTimeout(() => {
-        setCopiedStates(prev => ({ ...prev, [key]: false }))
-      }, 2000)
-    } catch (error) {
-      Alert.alert('Error', 'Failed to copy to clipboard')
-    }
+    const ok = await copyToClipboard(text)
+    if (!ok) return
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+    setCopiedStates((prev) => ({ ...prev, [key]: true }))
+    setTimeout(() => {
+      setCopiedStates((prev) => ({ ...prev, [key]: false }))
+    }, 2000)
   }
 
   const formatAmount = (amount: number, currency: string, isReceived: boolean) => {
@@ -371,13 +407,6 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   }
 
   /** First summary row: fixed category from API when present, else legacy heuristic. */
-  const getSummaryTransactionProductLine = (): string => {
-    if (!transaction) return ''
-    const p = typeof transaction.transaction_product === 'string' ? transaction.transaction_product.trim() : ''
-    if (p) return p
-    return getTransactionTypeDisplay()
-  }
-
   const getMetadataString = (key: string): string | undefined => {
     const value = transaction?.metadata?.[key]
     if (typeof value !== 'string') return undefined
@@ -385,45 +414,55 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
     return trimmed || undefined
   }
 
-  const getStatusInfo = (status: string) => {
+  const getStatusInfo = (status: string): {
+    color: string
+    Icon: LucideIcon
+    label: string
+    gradient: readonly [string, string]
+  } => {
     const statusLower = status.toLowerCase()
     if (statusLower.includes('processed') || statusLower.includes('completed')) {
-      return { 
-        color: colors.success.main, 
-        icon: 'checkmark-circle' as const, 
+      return {
+        color: colors.success.main,
+        Icon: CircleCheck,
         label: 'Completed',
-        gradient: colors.success.gradient
+        gradient: colors.success.gradient,
       }
     }
-    if (statusLower.includes('pending') || statusLower.includes('awaiting') || statusLower.includes('scheduled') || statusLower.includes('received')) {
-      return { 
-        color: colors.warning.main, 
-        icon: 'time-outline' as const, 
+    if (
+      statusLower.includes('pending') ||
+      statusLower.includes('awaiting') ||
+      statusLower.includes('scheduled') ||
+      statusLower.includes('received')
+    ) {
+      return {
+        color: colors.warning.main,
+        Icon: Clock,
         label: 'Processing',
-        gradient: colors.primary.gradient
+        gradient: colors.primary.gradient,
       }
     }
     if (statusLower.includes('failed') || statusLower.includes('returned') || statusLower.includes('refunded')) {
-      return { 
-        color: colors.error.main, 
-        icon: 'close-circle' as const, 
+      return {
+        color: colors.error.main,
+        Icon: CircleX,
         label: statusLower.includes('refunded') ? 'Refunded' : 'Failed',
-        gradient: colors.error.gradient || colors.primary.gradient
+        gradient: colors.error.gradient || colors.primary.gradient,
       }
     }
     if (statusLower.includes('review')) {
-      return { 
-        color: colors.warning.main, 
-        icon: 'alert-circle-outline' as const, 
+      return {
+        color: colors.warning.main,
+        Icon: CircleAlert,
         label: 'In Review',
-        gradient: colors.primary.gradient
+        gradient: colors.primary.gradient,
       }
     }
-    return { 
-      color: colors.text.secondary, 
-      icon: 'help-circle-outline' as const, 
+    return {
+      color: colors.text.secondary,
+      Icon: CircleHelp,
       label: status.replace(/_/g, ' '),
-      gradient: colors.primary.gradient
+      gradient: colors.primary.gradient,
     }
   }
 
@@ -484,11 +523,11 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
             {value}
           </Text>
           <View style={[styles.copyIcon, isCopied && styles.copyIconSuccess]}>
-            <Ionicons 
-              name={isCopied ? "checkmark" : "copy-outline"} 
-              size={14} 
-              color={isCopied ? colors.success.main : colors.primary.main} 
-            />
+            {isCopied ? (
+              <Check size={14} color={colors.success.main} strokeWidth={2.5} />
+            ) : (
+              <Copy size={14} color={colors.primary.main} strokeWidth={2} />
+            )}
           </View>
         </Pressable>
       </View>
@@ -525,7 +564,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
             navigation.goBack()
           }}
           style={styles.backButton} >
-          <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+          <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
         </Pressable>
         <View style={styles.headerContent}>
         </View>
@@ -594,7 +633,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                 navigation.goBack()
               }}
               style={styles.backButton} >
-              <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+              <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
             </Pressable>
         <View style={styles.headerContent}>
         </View>
@@ -602,7 +641,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
           
           <View style={styles.errorContainer}>
             <View style={styles.errorIconContainer}>
-              <Ionicons name="alert-circle" size={48} color={colors.error.main} />
+              <AlertCircle size={48} color={colors.error.main} strokeWidth={2} />
             </View>
             <Text style={styles.errorTitle}>Something went wrong</Text>
             <Text style={styles.errorText}>{error || 'Transaction not found'}</Text>
@@ -646,25 +685,25 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
               navigation.goBack()
             }}
             style={styles.backButton} >
-            <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+            <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
           </Pressable>
           <View style={styles.headerContent}>
-            <Text style={styles.title}>Transaction Details</Text>
+            <Text style={styles.title}>Transaction</Text>
           </View>
         </Animated.View>
-        
-        <ScrollView 
-          style={styles.scrollView} 
+
+        <ScrollView
+          style={styles.scrollView}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary.main} />
           }
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + spacing[5] }]}
           showsVerticalScrollIndicator={false}
         >
-          {/* Status Header Card */}
-          <Animated.View 
+          {/* Hero — white SectionCard with 64px tinted icon, title, amount, status pill. */}
+          <Animated.View
             style={[
-              styles.statusCard,
+              styles.heroAnimated,
               {
                 opacity: headerAnim,
                 transform: [{
@@ -676,22 +715,34 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
               }
             ]}
           >
-            <LinearGradient
-              colors={statusInfo.gradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.statusGradient}
-            >
-              <Text style={styles.statusLabel}>{isReceived ? 'Received' : 'Sent'}</Text>
-              <Text style={styles.amountText}>
+            <SectionCard style={styles.heroCard}>
+              <View style={styles.heroIcon}>
+                {isReceived ? (
+                  <ArrowDownLeft size={28} color={colors.primary.main} strokeWidth={2.25} />
+                ) : (
+                  <ArrowUpRight size={28} color={colors.primary.main} strokeWidth={2.25} />
+                )}
+              </View>
+              <Text style={styles.heroTitle} numberOfLines={2}>
+                {getTransactionTypeDisplay()}
+              </Text>
+              <Text
+                style={[
+                  styles.heroAmount,
+                  isReceived ? styles.heroAmountIn : styles.heroAmountOut,
+                ]}
+                numberOfLines={1}
+              >
                 {formatAmount(transaction.amount, transaction.currency, isReceived)}
               </Text>
-              
-              <View style={styles.statusBadge}>
-                <Ionicons name={statusInfo.icon} size={12} color={colors.text.inverse} />
-                <Text style={styles.statusBadgeText}>{statusInfo.label}</Text>
-              </View>
-            </LinearGradient>
+              <StatusPill
+                label={statusInfo.label}
+                tone={statusInfoToneFromInfo(statusInfo)}
+                size="md"
+                showIcon={true}
+                style={styles.heroStatus}
+              />
+            </SectionCard>
           </Animated.View>
 
           <Animated.View
@@ -709,7 +760,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
             {isFailed && (
               <View style={styles.failedCard}>
                 <View style={styles.failedIconContainer}>
-                  <Ionicons name="close-circle" size={32} color={colors.error.main} />
+                  <CircleX size={32} color={colors.error.main} strokeWidth={2} />
                 </View>
                 <Text style={styles.failedTitle}>
                   {transaction.status.toLowerCase().includes('refunded') 
@@ -739,22 +790,9 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
               </View>
             )}
 
-            {/* Transaction Summary */}
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View style={styles.cardIconContainer}>
-                  <Ionicons name="receipt-outline" size={18} color={colors.primary.main} />
-                </View>
-                <Text style={styles.cardTitle}>Summary</Text>
-              </View>
-              
+            {/* Transaction Summary — rows render from existing transaction metadata only. */}
+            <SectionCard style={styles.card}>
               <View style={styles.summaryRows}>
-                {/* Match business transaction dialog: product label + monospace ID */}
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Transaction</Text>
-                  <Text style={styles.summaryValue}>{getSummaryTransactionProductLine()}</Text>
-                </View>
-
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Transaction ID</Text>
                   <Pressable
@@ -766,11 +804,11 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                       {transaction.transaction_id}
                     </Text>
                     <View style={[styles.copyIcon, copiedStates.transactionId && styles.copyIconSuccess]}>
-                      <Ionicons
-                        name={copiedStates.transactionId ? 'checkmark' : 'copy-outline'}
-                        size={14}
-                        color={copiedStates.transactionId ? colors.success.main : colors.primary.main}
-                      />
+                      {copiedStates.transactionId ? (
+                        <Check size={14} color={colors.success.main} strokeWidth={2.5} />
+                      ) : (
+                        <Copy size={14} color={colors.primary.main} strokeWidth={2} />
+                      )}
                     </View>
                   </Pressable>
                 </View>
@@ -875,22 +913,43 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                   </>
                 )}
               </View>
-            </View>
+            </SectionCard>
           </Animated.View>
         </ScrollView>
 
-        {/* Bottom Actions */}
-        {transaction.transaction_type === 'send' && (
+        {/* Bottom Actions — Send Again for sends; Get help only for receives. */}
+        {transaction.transaction_type === 'send' ? (
           <View style={[styles.bottomContainer, { paddingBottom: Math.max(insets.bottom + spacing[4], spacing[6]) }]}>
-            <Pressable android_ripple={ripple.neutral} style={styles.primaryButton} onPress={handleSendAgain}>
-              <LinearGradient
-                colors={colors.primary.gradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.primaryButtonGradient}
-              >
-                <Text style={styles.primaryButtonText}>Send Again</Text>
-              </LinearGradient>
+            <Pressable
+              android_ripple={ripple.primaryTint}
+              style={({ pressed }) => [
+                styles.primaryButton,
+                pressed && styles.primaryButtonPressed,
+              ]}
+              onPress={handleSendAgain}
+              accessibilityRole="button"
+              accessibilityLabel="Send again"
+            >
+              <Text style={styles.primaryButtonText}>Send Again</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={[styles.bottomContainer, { paddingBottom: Math.max(insets.bottom + spacing[4], spacing[6]) }]}>
+            <Pressable
+              android_ripple={ripple.neutral}
+              style={({ pressed }) => [
+                styles.outlineButton,
+                pressed && styles.outlineButtonPressed,
+              ]}
+              onPress={async () => {
+                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                navigation.navigate('Support' as never)
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Get help"
+            >
+              <HelpCircle size={18} color={colors.primary.main} strokeWidth={2.25} />
+              <Text style={styles.outlineButtonText}>Get help</Text>
             </Pressable>
           </View>
         )}
@@ -902,7 +961,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background.primary,
+    backgroundColor: colors.semantic.background,
   },
   scrollView: {
     flex: 1,
@@ -915,15 +974,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing[5],
     paddingTop: spacing[4],
-    paddingBottom: spacing[4],
+    paddingBottom: spacing[2],
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.semantic.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border.default,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing[3],
@@ -934,7 +993,9 @@ const styles = StyleSheet.create({
   title: {
     ...textStyles.headlineMedium,
     color: colors.text.primary,
-    marginBottom: 2,
+    fontFamily: fontFamily.semibold,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
   errorContainer: {
     flex: 1,
@@ -973,67 +1034,51 @@ const styles = StyleSheet.create({
     ...textStyles.titleSmall,
     color: colors.text.inverse,
   },
-  statusCard: {
-    borderRadius: borderRadius.xl,
-    overflow: 'hidden',
+  /** White hero — 64px tinted-blue icon, title, amount, status pill, all centered. */
+  heroAnimated: {
     marginTop: spacing[3],
-    marginBottom: spacing[4],
-    ...shadows.md,
-  },
-  statusGradient: {
-    padding: spacing[5],
-    alignItems: 'center',
-  },
-  statusLabel: {
-    ...textStyles.labelMedium,
-    color: 'rgba(255,255,255,0.7)',
-    marginBottom: spacing[2],
-  },
-  amountText: {
-    ...textStyles.displayLarge,
-    color: colors.text.inverse,
-    fontWeight: '700',
     marginBottom: spacing[3],
   },
-  statusBadge: {
-    flexDirection: 'row',
+  heroCard: {
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: spacing[2],
-    paddingVertical: spacing[1],
-    borderRadius: borderRadius.full,
-    gap: spacing[1],
+    paddingVertical: spacing[6],
+    paddingHorizontal: spacing[5],
   },
-  statusBadgeText: {
-    ...textStyles.labelSmall,
-    color: colors.text.inverse,
-    fontWeight: '600',
-  },
-  card: {
-    backgroundColor: colors.frame.background,
-    borderRadius: borderRadius.xl,
-    padding: spacing[4],
-    marginBottom: spacing[3],
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing[4],
-    gap: spacing[2],
-  },
-  cardIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.primary.main + '15',
+  heroIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(0, 122, 204, 0.10)',
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: spacing[3],
   },
-  cardTitle: {
+  heroTitle: {
     ...textStyles.titleMedium,
+    color: colors.text.secondary,
+    fontFamily: fontFamily.medium,
+    textAlign: 'center',
+    marginBottom: spacing[1],
+  },
+  heroAmount: {
+    ...textStyles.displayLarge,
+    fontFamily: fontFamily.semibold,
+    fontWeight: '700',
+    letterSpacing: -0.6,
+    textAlign: 'center',
+    marginBottom: spacing[3],
+  },
+  heroAmountIn: {
+    color: colors.success.main,
+  },
+  heroAmountOut: {
     color: colors.text.primary,
+  },
+  heroStatus: {
+    alignSelf: 'center',
+  },
+  card: {
+    marginBottom: spacing[3],
   },
   transactionIdRow: {
     flexDirection: 'row',
@@ -1052,7 +1097,7 @@ const styles = StyleSheet.create({
   transactionIdValue: {
     ...textStyles.titleSmall,
     color: colors.text.primary,
-    fontFamily: 'monospace',
+    fontFamily: fontFamily.mono,
   },
   copyIcon: {
     width: 28,
@@ -1111,7 +1156,7 @@ const styles = StyleSheet.create({
   failedDetailValue: {
     ...textStyles.titleSmall,
     color: colors.error.main,
-    fontFamily: 'monospace',
+    fontFamily: fontFamily.mono,
   },
   summaryRows: {
     gap: spacing[3],
@@ -1133,7 +1178,7 @@ const styles = StyleSheet.create({
     marginLeft: spacing[2],
   },
   summaryMonoValue: {
-    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
+    fontFamily: fontFamily.mono,
     fontSize: 13,
     fontWeight: '500',
   },
@@ -1147,30 +1192,57 @@ const styles = StyleSheet.create({
   metadataText: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
-    fontFamily: 'monospace',
-    backgroundColor: colors.frame.background,
-    padding: spacing[3],
+    fontFamily: fontFamily.mono,
+    backgroundColor: colors.semantic.muted,
     borderRadius: borderRadius.md,
+    padding: spacing[3],
   },
   bottomContainer: {
     paddingHorizontal: spacing[5],
     paddingTop: spacing[4],
-    backgroundColor: colors.background.primary,
-    borderTopWidth: 0.5,
-    borderTopColor: colors.frame.border,
+    backgroundColor: colors.semantic.background,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border.default,
   },
   primaryButton: {
     width: '100%',
-    borderRadius: borderRadius.xl,
-    overflow: 'hidden',
-  },
-  primaryButtonGradient: {
-    paddingVertical: spacing[4],
+    height: 52,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.primary.main,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButtonPressed: {
+    opacity: 0.9,
   },
   primaryButtonText: {
     ...textStyles.titleMedium,
     color: colors.text.inverse,
+    fontFamily: fontFamily.semibold,
     fontWeight: '600',
+    fontSize: 15,
+  },
+  outlineButton: {
+    width: '100%',
+    height: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.semantic.card,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  outlineButtonPressed: {
+    opacity: 0.85,
+    backgroundColor: colors.semantic.muted,
+  },
+  outlineButtonText: {
+    ...textStyles.titleMedium,
+    color: colors.primary.main,
+    fontFamily: fontFamily.semibold,
+    fontWeight: '600',
+    fontSize: 15,
   },
 })

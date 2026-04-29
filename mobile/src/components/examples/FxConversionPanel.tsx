@@ -9,7 +9,7 @@ import {
   StyleProp,
   AccessibilityRole,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { ArrowUpDown } from 'lucide-react-native'
 import {
   borderRadius,
   spacing,
@@ -147,11 +147,7 @@ export function FxConversionPanel({
             },
           ]}
         >
-          <Ionicons
-            name="swap-vertical"
-            size={18}
-            color={palette.text.primary}
-          />
+          <ArrowUpDown size={18} color={palette.text.primary} strokeWidth={2} />
         </Pressable>
       </View>
 
@@ -171,7 +167,7 @@ export function FxConversionPanel({
           >
             <Text
               style={[
-                textStyles.displaySerifMd,
+                textStyles.displayHeroMd,
                 styles.receiveAmount,
                 { color: palette.text.primary },
               ]}

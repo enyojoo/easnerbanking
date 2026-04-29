@@ -4,13 +4,12 @@ import {
   Text,
   Pressable,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   BackHandler,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { ArrowLeft, Eye, EyeOff, HelpCircle } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -22,13 +21,14 @@ import { useExternalLink } from '../../hooks/useExternalLink'
 import { useAuth } from '../../contexts/AuthContext'
 import { NavigationProps } from '../../types'
 import { analytics } from '../../lib/analytics'
-import { colors, borderRadius, spacing } from '../../theme'
+import { colors, borderRadius, spacing, surfaceChromeCircleStyle } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
 import { AUTH_INITIAL_MODE_KEY, TERMS_URL } from '../../constants/auth'
 import { PinKeypad } from '../../components/pin'
 import { ActivityIndicator } from 'react-native'
 import { useOtpClipboardAutofill } from '../../hooks/useOtpClipboardAutofill'
+import { useToast } from '../../components/ToastProvider'
 
 /**
  * Layout mirrors business auth pages:
@@ -53,6 +53,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
   const [passwordVisible, setPasswordVisible] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const { signIn, signInWithGoogle, resendSignupOtp, signUp, verifySignupOtp } = useAuth()
+  const { showError, showInfo, showSuccess } = useToast()
   const [signupStep, setSignupStep] = useState<SignupStep>('form')
   const [signupOtp, setSignupOtp] = useState('')
   const [signupOtpError, setSignupOtpError] = useState('')
@@ -146,28 +147,28 @@ export default function AuthScreen({ navigation }: NavigationProps) {
 
   const handleHelp = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    Alert.alert('Help', 'Need assistance? Contact support at support@easner.com')
+    showInfo('Need assistance? Contact support at support@easner.com')
   }
 
   const validateForm = () => {
     if (mode === 'login') {
       if (!email || !password) {
-        Alert.alert('Error', 'Please fill in all fields')
+        showError('Please fill in all fields')
         return false
       }
       return true
     }
     if (!fullName?.trim() || !email || !password) {
-      Alert.alert('Error', 'Please fill in all fields')
+      showError('Please fill in all fields')
       return false
     }
     if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters long')
+      showError('Password must be at least 6 characters long')
       return false
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(email)) {
-      Alert.alert('Error', 'Please enter a valid email address')
+      showError('Please enter a valid email address')
       return false
     }
     return true
@@ -201,9 +202,9 @@ export default function AuthScreen({ navigation }: NavigationProps) {
         if (error) {
           const msg = error.message || ''
           if (msg.toLowerCase().includes('email not confirmed')) {
-            Alert.alert('Sign in', 'Please confirm your email before signing in.')
+            showError('Please confirm your email before signing in.')
           } else {
-            Alert.alert('Sign in', 'Invalid credentials')
+            showError('Invalid credentials')
           }
         }
       } else {
@@ -213,7 +214,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
           fullName.trim()
         )
         if (signUpError) {
-          Alert.alert('Create account', signUpError.message || 'Something went wrong.')
+          showError(signUpError.message || 'Something went wrong.')
         } else if (needsEmailConfirmation) {
           setSignupStep('otp')
           setSignupOtp('')
@@ -221,15 +222,11 @@ export default function AuthScreen({ navigation }: NavigationProps) {
           setSignupResendCooldown(60)
           // No modal: OTP screen copy + keypad flow is the guidance.
         } else {
-          Alert.alert(
-            'Account ready',
-            'You are signed in. Continue in the app.',
-            [{ text: 'OK' }]
-          )
+          showSuccess('You are signed in. Continue in the app.')
         }
       }
     } catch {
-      Alert.alert('Error', 'An unexpected error occurred')
+      showError('An unexpected error occurred')
     } finally {
       setIsLoading(false)
     }
@@ -241,7 +238,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
     try {
       const { error } = await signInWithGoogle()
       if (error) {
-        Alert.alert('Google sign-in', error.message || 'Unable to continue with Google.')
+        showError(error.message || 'Unable to continue with Google.')
       }
     } finally {
       setIsLoading(false)
@@ -316,14 +313,14 @@ export default function AuthScreen({ navigation }: NavigationProps) {
           <View style={styles.topBar}>
             {showBackButton ? (
               <Pressable android_ripple={ripple.neutral} style={styles.backButton} onPress={handleBack} >
-                <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+                <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
               </Pressable>
             ) : (
               <View style={styles.backPlaceholder} />
             )}
             <Pressable android_ripple={ripple.neutral} style={styles.headerButton} onPress={handleHelp} >
               <View style={styles.headerButtonCircle}>
-                <Ionicons name="help-circle-outline" size={20} color={colors.text.primary} />
+                <HelpCircle size={20} color={colors.text.primary} strokeWidth={2} />
               </View>
             </Pressable>
           </View>
@@ -401,11 +398,11 @@ export default function AuthScreen({ navigation }: NavigationProps) {
                       style={styles.eyeButton}
                       onPress={() => setPasswordVisible(!passwordVisible)} >
                       <View style={styles.eyeButtonCircle}>
-                        <Ionicons
-                          name={passwordVisible ? 'eye-off' : 'eye'}
-                          size={18}
-                          color={colors.semantic.mutedForeground}
-                        />
+                        {passwordVisible ? (
+                          <EyeOff size={18} color={colors.semantic.mutedForeground} strokeWidth={2} />
+                        ) : (
+                          <Eye size={18} color={colors.semantic.mutedForeground} strokeWidth={2} />
+                        )}
                       </View>
                     </Pressable>
                   }
@@ -569,27 +566,13 @@ const styles = StyleSheet.create({
     height: 44,
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+    ...surfaceChromeCircleStyle(colors, 44),
   },
   headerButton: {
     padding: spacing[1],
   },
   headerButtonCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+    ...surfaceChromeCircleStyle(colors, 40),
   },
   form: {
     width: '100%',

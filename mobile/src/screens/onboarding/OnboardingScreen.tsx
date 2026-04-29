@@ -10,7 +10,6 @@ import {
   NativeScrollEvent,
   NativeSyntheticEvent,
   useWindowDimensions,
-  Alert,
 } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -21,6 +20,7 @@ import { NavigationProps } from '../../types'
 import { colors, textStyles, borderRadius, spacing, fontSize, fontFamily, lineHeight } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { AUTH_INITIAL_MODE_KEY } from '../../constants/auth'
+import { useToast } from '../../components/ToastProvider'
 
 // Onboarding images
 const ONBOARDING_DATA = [
@@ -49,6 +49,7 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const scrollViewRef = useRef<ScrollView>(null)
   const insets = useSafeAreaInsets()
+  const { showInfo } = useToast()
 
   useEffect(() => {
     let cancelled = false
@@ -58,10 +59,9 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
         if (cancelled) return
         if (flag === '1') {
           await AsyncStorage.removeItem(ACCOUNT_DELETED_FLAG_KEY).catch(() => undefined)
-          Alert.alert(
-            'Account deleted',
-            "We're sorry to see you go, come back again.\n\nIf you have any questions, email us: support@easner.com",
-            [{ text: 'OK' }],
+          showInfo(
+            "Account deleted. We're sorry to see you go — come back again.\n\nQuestions? support@easner.com",
+            6000,
           )
         }
       } catch {

@@ -6,7 +6,7 @@ import {
   ViewStyle,
   StyleProp,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { TrendingUp, TrendingDown, Minus } from 'lucide-react-native'
 import {
   borderRadius,
   spacing,
@@ -70,17 +70,13 @@ export function TreasuryStatCard({
         </Text>
         {direction ? (
           <View style={[styles.deltaPill, { backgroundColor: deltaBg }]}>
-            <Ionicons
-              name={
-                direction === 'up'
-                  ? 'trending-up'
-                  : direction === 'down'
-                    ? 'trending-down'
-                    : 'remove'
-              }
-              size={12}
-              color={deltaFg}
-            />
+            {direction === 'up' ? (
+              <TrendingUp size={12} color={deltaFg} strokeWidth={2.5} />
+            ) : direction === 'down' ? (
+              <TrendingDown size={12} color={deltaFg} strokeWidth={2.5} />
+            ) : (
+              <Minus size={12} color={deltaFg} strokeWidth={2.5} />
+            )}
             <Text style={[styles.deltaText, { color: deltaFg }]}>
               {(deltaPct ?? 0) > 0 ? '+' : ''}
               {(deltaPct ?? 0).toFixed(2)}%

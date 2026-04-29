@@ -7,10 +7,9 @@ import {
   Pressable, Platform,
   Switch,
   Animated,
-  Alert,
 } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
-import { Ionicons } from '@expo/vector-icons'
+import { ArrowLeft } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { CommunicationPreferences } from '@easner/shared'
@@ -20,15 +19,17 @@ import ScreenWrapper from '../../components/ScreenWrapper'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCommunicationPreferences } from '../../hooks/queries'
 import { NavigationProps } from '../../types'
-import { colors, textStyles, spacing, motion } from '../../theme'
+import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, spacing, motion, fontFamily } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { apiPatch, apiPost } from '../../lib/apiClient'
 import { pushNotificationService } from '../../lib/pushNotificationService'
+import { useToast } from '../../components/ToastProvider'
 
 export default function NotificationsScreen({ navigation }: NavigationProps) {
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
+  const { showWarning } = useToast()
   const qc = useQueryClient()
   const commQuery = useCommunicationPreferences()
   const communicationPreferences =
@@ -98,8 +99,7 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
       try {
         const token = await pushNotificationService.registerForPushNotifications()
         if (!token) {
-          Alert.alert(
-            'Push notifications',
+          showWarning(
             'Push was not enabled. Use a physical device and allow notifications in Settings if you previously denied them.',
           )
           return
@@ -146,9 +146,9 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
           await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
           onValueChange(v)
         }}
-        trackColor={{ false: '#d1d5db', true: colors.primary.main }}
-        thumbColor="#ffffff"
-        ios_backgroundColor="#d1d5db"
+        trackColor={{ false: colors.border.dark, true: colors.primary.main }}
+        thumbColor={colors.neutral.white}
+        ios_backgroundColor={colors.border.dark}
       />
     </View>
   )
@@ -184,7 +184,7 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
                 navigation.goBack()
               }}
               style={styles.backButton} >
-              <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+              <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
             </Pressable>
             <View style={styles.headerContent}>
               <Text style={styles.title}>Notifications</Text>
@@ -279,14 +279,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing[4],
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+    ...surfaceChromeCircleStyle(colors, 44),
     marginRight: spacing[3],
   },
   headerContent: {
@@ -306,10 +299,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   sectionCard: {
-    backgroundColor: '#F9F9F9',
-    borderRadius: 24,
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
+    ...surfaceFrameStyle(colors),
     marginBottom: spacing[4],
     paddingBottom: spacing[2],
   },
@@ -332,7 +322,7 @@ const styles = StyleSheet.create({
   },
   toggleItemBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E2E2',
+    borderBottomColor: colors.frame.border,
   },
   toggleInfo: {
     flex: 1,
@@ -341,7 +331,7 @@ const styles = StyleSheet.create({
   toggleTitle: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Geist-Medium',
+    fontFamily: fontFamily.medium,
     marginBottom: spacing[1],
   },
   toggleDescription: {

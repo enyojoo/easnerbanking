@@ -1,6 +1,7 @@
 /* Easner Design System — Office admin
  * Mirrors business/app/globals.css. Single source of truth:
  * packages/shared/src/design/tokens.ts
+ * Typography: sans-first (docs/design-system.md §3); no separate display serif stack.
  */
 
 @import "tailwindcss";
@@ -149,7 +150,8 @@
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --font-serif: var(--font-playfair), "Cormorant Garamond", ui-serif, serif;
+  /* Alias serif slot to sans — Easner Office follows the same sans-first contract (§3). */
+  --font-serif: var(--font-geist-sans);
 
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -239,6 +241,7 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* Display helpers — same stack as sans; tighter tracking for hero figures */
   .font-serif,
   .font-display {
     font-family: var(--font-serif);

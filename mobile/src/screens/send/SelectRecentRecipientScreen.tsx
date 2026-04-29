@@ -4,7 +4,6 @@ import {
   Text,
   Pressable,
   StyleSheet,
-  FlatList,
   Animated,
   Image,
   ScrollView,
@@ -14,15 +13,28 @@ import {
   Dimensions,
   KeyboardAvoidingView,
   Keyboard,
-  Alert,
   ActivityIndicator,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { FlashList } from '@shopify/flash-list'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { ScrollView as GestureHandlerScrollView } from 'react-native-gesture-handler'
 import { CameraView, useCameraPermissions } from 'expo-camera'
-import { Wallet, Building2, Smartphone, AtSign, Search } from 'lucide-react-native'
+import {
+  ArrowLeft,
+  AtSign,
+  Building2,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  CircleX,
+  ScanLine,
+  Search,
+  Smartphone,
+  Users,
+  Wallet,
+  X,
+} from 'lucide-react-native'
 import {
   fetchEasenetPublicProfileCached,
   primeEasenetPublicProfileCache,
@@ -39,7 +51,7 @@ import {
 } from '../../lib/recentSendRecipients'
 import { buildDraftEasenetRecipient, isDraftEasenetRecipient } from '../../lib/draftEasenetRecipient'
 import { NavigationProps, Recipient } from '../../types'
-import { colors, shadows, textStyles, borderRadius, spacing, motion } from '../../theme'
+import { colors, shadows, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -63,12 +75,11 @@ import {
 import { getAllowedCountriesCached } from '../../lib/jurisdictionCountryPolicy'
 import { getNetworkIconUrl, getTokenIconUrl } from '../../lib/cryptoIcons'
 import { loadRecipientsListCache, saveRecipientsListCache } from '../../lib/recipientsListCache'
-import { ShimmerLoader } from '../../components/premium'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { CountryFlag } from '../../components/flags/CountryFlag'
-import { getCountryCodeForCurrency } from '@easner/shared'
+import RecipientFormDropdownList from '../../components/recipients/RecipientFormDropdownList'
+import { useToast } from '../../components/ToastProvider'
 
-// Helper function to get initials from name
 const getInitials = (name: string): string => {
   const parts = name.trim().split(' ')
   if (parts.length === 1) {
@@ -77,27 +88,10 @@ const getInitials = (name: string): string => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
-/**
- * Dropdown panels live inside the add-recipient modal `ScrollView`. On Android, nested
- * `FlatList` inside a parent `ScrollView` often steals gestures and does not scroll the list.
- * Use a bounded `ScrollView` for options instead (with parent form scroll paused while open).
- */
-function RecipientFormDropdownList({ children }: { children: React.ReactNode }) {
-  return (
-    <GestureHandlerScrollView
-      style={styles.currencyDropdownList}
-      nestedScrollEnabled
-      keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator
-    >
-      {children}
-    </GestureHandlerScrollView>
-  )
-}
-
 export default function SelectRecentRecipientScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
   const { user, userProfile } = useAuth()
+  const { showError, showWarning } = useToast()
   const preferredBalanceCurrency = String((route.params as any)?.preferredBalanceCurrency || '').toUpperCase()
   const routePaymentMethod = (route.params as any)?.selectedPaymentMethod as
     | 'balance'
@@ -463,7 +457,9 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   const handleScanPress = async () => {
     const perm = cameraPermission?.granted ? cameraPermission : await requestCameraPermission()
     if (!perm?.granted) {
-      Alert.alert('Camera permission needed', 'Please enable camera permission to scan wallet address QR codes.')
+      showWarning(
+        'Camera permission needed. Enable camera access in Settings to scan wallet QR codes.',
+      )
       return
     }
     setShowScanModal(true)
@@ -504,12 +500,12 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
 
   const handleAddRecipient = async () => {
     if (!userProfile?.id) {
-      Alert.alert('Error', 'User not authenticated')
+      showError('User not authenticated')
       return
     }
 
     if (!isFormValid()) {
-      Alert.alert('Error', 'Please fill in all required fields')
+      showError('Please fill in all required fields')
       return
     }
 
@@ -519,7 +515,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
 
       if (selectedRecipientType === 'easenet') {
         if (!easenetProfile) {
-          Alert.alert('Error', 'Enter a valid Easetag and wait for the profile to load')
+          showError('Enter a valid Easetag and wait for the profile to load')
           return
         }
         const tag = easenetProfile.easetag
@@ -605,7 +601,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     } catch (error) {
       console.error('Error adding recipient:', error)
       setError('Failed to add recipient')
-      Alert.alert('Error', 'Failed to add recipient')
+      showError('Failed to add recipient')
     } finally {
       setIsSubmitting(false)
     }
@@ -661,14 +657,15 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     return <View style={styles.currencyDropdown}>{content}</View>
   }
 
-  const renderRecipient = ({ item }: { item: Recipient }) => {
+  const renderRecipient = ({ item, index }: { item: Recipient; index: number }) => {
     const isDraftEasenet = isDraftEasenetRecipient(item.id)
     const showRecentBadge = recentIds.has(item.id) && !isDraftEasenet
     const isEasenet = isEasenetRecipientRecord(item)
+    const isLast = index === sendHubFlatListData.length - 1
     return (
       <Pressable
        android_ripple={ripple.neutral}
-        style={styles.recipientItem}
+        style={[styles.recipientItem, !isLast && styles.recipientItemDivider]}
         onPress={() => handleSelectRecipient(item)} >
         <View style={styles.recipientRow}>
           {isEasenet ? (
@@ -692,7 +689,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                   </>
                 }
               />
-              <Ionicons name="chevron-forward" size={20} color={colors.text.secondary} />
+              <ChevronRight size={20} color={colors.text.secondary} strokeWidth={2} />
             </>
           ) : (
             <>
@@ -715,7 +712,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                   </>
                 }
               />
-              <Ionicons name="chevron-forward" size={20} color={colors.text.secondary} />
+              <ChevronRight size={20} color={colors.text.secondary} strokeWidth={2} />
             </>
           )}
         </View>
@@ -748,7 +745,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
           }}
           style={styles.backButton}
         >
-          <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+          <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
         </Pressable>
         <View style={styles.headerContent}>
           <Text style={styles.title}>Send Money</Text>
@@ -789,7 +786,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
           ) : null}
           {searchTerm.length > 0 && !(searchTerm.trim().startsWith('@') && hubSearchLoading) ? (
             <Pressable android_ripple={ripple.neutral} onPress={() => setSearchTerm('')}>
-              <Ionicons name="close-circle" size={18} color={colors.primary.main} />
+              <CircleX size={18} color={colors.primary.main} strokeWidth={2} />
             </Pressable>
           ) : null}
         </View>
@@ -800,64 +797,82 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     </>
   )
 
-  const listEmpty = (
-    <Animated.View
-      style={[
-        styles.emptyState,
-        {
-          opacity: contentAnim,
-          transform: [
-            {
-              translateY: contentAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [motion.screenEnterTranslateY, 0],
-              }),
-            },
-          ],
-        },
-      ]}
-    >
-      <View style={styles.emptyIconContainer}>
-        <Ionicons name="people-outline" size={48} color={colors.text.secondary} />
-      </View>
-      <Text style={styles.emptyTitle}>{searchTerm.trim() ? 'No matches' : 'No recipients yet'}</Text>
-      <Text style={styles.emptyText}>
-        {searchTerm.trim() ? 'Try another search' : 'Add a recipient to send money'}
-      </Text>
-    </Animated.View>
-  )
-
   const screenBody = (
     <>
       <View style={styles.container}>
-        {recipientsLoading && recipients.length === 0 ? (
-          <View style={[styles.scrollContent, { paddingTop: spacing[4] }]}>
-            {[1, 2, 3, 4].map((i) => (
-              <ShimmerLoader
-                key={i}
-                width="100%"
-                height={88}
-                borderRadius={borderRadius.xl}
-                style={{ marginBottom: spacing[3] }}
-              />
-            ))}
-          </View>
-        ) : (
-          <FlatList
-            data={sendHubFlatListData}
-            renderItem={renderRecipient}
-            keyExtractor={(item) => item.id}
-            ListHeaderComponent={listHeader}
-            ListEmptyComponent={listEmpty}
-            contentContainerStyle={[
-              styles.scrollContent,
-              { paddingBottom: insets.bottom + 100, flexGrow: 1 },
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={{
+            flexGrow: 1,
+            paddingBottom: insets.bottom + 100,
+          }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {listHeader}
+          <Animated.View
+            style={[
+              styles.recipientsTray,
+              {
+                opacity: contentAnim,
+                transform: [
+                  {
+                    translateY: contentAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [motion.screenEnterTranslateY, 0],
+                    }),
+                  },
+                ],
+              },
             ]}
-            style={styles.scrollView}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          />
-        )}
+          >
+            {recipientsLoading && recipients.length === 0 ? (
+              <View style={styles.emptyState}>
+                <ActivityIndicator size="small" color={colors.primary.main} />
+                <Text style={[styles.emptyText, { marginTop: spacing[3] }]}>Loading recipients…</Text>
+              </View>
+            ) : sendHubFlatListData.length > 0 ? (
+              <FlashList
+                data={sendHubFlatListData}
+                renderItem={renderRecipient}
+                keyExtractor={(item) => item.id}
+                keyboardShouldPersistTaps="handled"
+                scrollEnabled={false}
+                showsVerticalScrollIndicator={false}
+                estimatedItemSize={112}
+                removeClippedSubviews
+                drawDistance={400}
+              />
+            ) : (
+              <Animated.View
+                style={[
+                  styles.emptyState,
+                  {
+                    opacity: contentAnim,
+                    transform: [
+                      {
+                        translateY: contentAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [motion.screenEnterTranslateY, 0],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              >
+                <Users size={48} color={colors.text.secondary} strokeWidth={1.5} />
+                <Text style={styles.emptyText}>
+                  {searchTerm.trim() ? 'No matches' : 'No recipients found'}
+                </Text>
+                <Text style={styles.emptySubtext}>
+                  {searchTerm.trim()
+                    ? 'Try another search'
+                    : 'Add a new recipient to get started'}
+                </Text>
+              </Animated.View>
+            )}
+          </Animated.View>
+        </ScrollView>
 
         {/* Add a recipient Button - Fixed at bottom */}
         <View style={[styles.bottomButtonContainer, { paddingBottom: insets.bottom + spacing[4] }]}>
@@ -905,7 +920,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                 }}
                 style={styles.closeButton}
               >
-                <Ionicons name="close" size={24} color={colors.text.secondary} />
+                <X size={24} color={colors.text.secondary} strokeWidth={2} />
               </Pressable>
             </View>
 
@@ -1070,7 +1085,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                 }}
                 style={styles.closeButton}
               >
-                <Ionicons name="close" size={24} color={colors.text.secondary} />
+                <X size={24} color={colors.text.secondary} strokeWidth={2} />
               </Pressable>
             </View>
 
@@ -1149,11 +1164,11 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                   <Text style={styles.currencySelectorText}>
                     {selectedCatalogEntry ? `${newRecipient.currency} - ${selectedCatalogEntry.countryName}` : 'Select currency'}
                   </Text>
-                  <Ionicons 
-                    name={showCurrencyDropdown ? "chevron-up" : "chevron-down"} 
-                    size={16} 
-                    color="#6F756F" 
-                  />
+                  {showCurrencyDropdown ? (
+                    <ChevronUp size={16} color={colors.brand.slate} strokeWidth={2} />
+                  ) : (
+                    <ChevronDown size={16} color={colors.brand.slate} strokeWidth={2} />
+                  )}
                 </View>
               </Pressable>
               
@@ -1165,7 +1180,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                   },
                   <>
                   <View style={styles.currencyDropdownSearch}>
-                    <Ionicons name="search" size={18} color={colors.neutral[400]} />
+                    <Search size={18} color={colors.neutral[400]} strokeWidth={2} />
                     <TextInput
                       style={styles.currencyDropdownSearchInput}
                       placeholder="Search currencies..."
@@ -1211,7 +1226,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                             <Text style={styles.currencyName}>{item.countryName}</Text>
                           </View>
                           {isSelected ? (
-                            <Ionicons name="checkmark" size={18} color={colors.primary.main} />
+                            <Check size={18} color={colors.primary.main} strokeWidth={2.5} />
                           ) : null}
                         </Pressable>
                       )
@@ -1239,7 +1254,11 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                         <Text style={styles.currencySelectorText}>
                           {newRecipient.provider || 'Select provider'}
                         </Text>
-                        <Ionicons name={showProviderDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6F756F" />
+                        {showProviderDropdown ? (
+                          <ChevronUp size={16} color={colors.brand.slate} strokeWidth={2} />
+                        ) : (
+                          <ChevronDown size={16} color={colors.brand.slate} strokeWidth={2} />
+                        )}
                       </View>
                     </Pressable>
                     {showProviderDropdown &&
@@ -1250,7 +1269,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                         },
                         <>
                         <View style={styles.currencyDropdownSearch}>
-                          <Ionicons name="search" size={18} color={colors.neutral[400]} />
+                          <Search size={18} color={colors.neutral[400]} strokeWidth={2} />
                           <TextInput
                             style={styles.currencyDropdownSearchInput}
                             placeholder="Search providers..."
@@ -1287,7 +1306,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                                   <Text style={styles.currencyCode}>{provider}</Text>
                                 </View>
                                 {newRecipient.provider === provider ? (
-                                  <Ionicons name="checkmark" size={18} color={colors.primary.main} />
+                                  <Check size={18} color={colors.primary.main} strokeWidth={2.5} />
                                 ) : null}
                               </Pressable>
                             ))}
@@ -1339,7 +1358,11 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                         <Text style={styles.currencySelectorText}>
                           {newRecipient.currency || 'Select asset'}
                         </Text>
-                        <Ionicons name={showWalletAssetDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6F756F" />
+                        {showWalletAssetDropdown ? (
+                          <ChevronUp size={16} color={colors.brand.slate} strokeWidth={2} />
+                        ) : (
+                          <ChevronDown size={16} color={colors.brand.slate} strokeWidth={2} />
+                        )}
                       </View>
                     </Pressable>
                     {showWalletAssetDropdown &&
@@ -1350,7 +1373,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                         },
                         <>
                         <View style={styles.currencyDropdownSearch}>
-                          <Ionicons name="search" size={18} color={colors.neutral[400]} />
+                          <Search size={18} color={colors.neutral[400]} strokeWidth={2} />
                           <TextInput
                             style={styles.currencyDropdownSearchInput}
                             placeholder="Search asset..."
@@ -1391,7 +1414,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                                   <Text style={styles.currencyCode}>{asset}</Text>
                                 </View>
                                 {newRecipient.currency === asset ? (
-                                  <Ionicons name="checkmark" size={18} color={colors.primary.main} />
+                                  <Check size={18} color={colors.primary.main} strokeWidth={2.5} />
                                 ) : null}
                               </Pressable>
                             ))}
@@ -1415,7 +1438,11 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                         <Text style={styles.currencySelectorText}>
                           {newRecipient.network || 'Select network'}
                         </Text>
-                        <Ionicons name={showWalletNetworkDropdown ? "chevron-up" : "chevron-down"} size={16} color="#6F756F" />
+                        {showWalletNetworkDropdown ? (
+                          <ChevronUp size={16} color={colors.brand.slate} strokeWidth={2} />
+                        ) : (
+                          <ChevronDown size={16} color={colors.brand.slate} strokeWidth={2} />
+                        )}
                       </View>
                     </Pressable>
                     {showWalletNetworkDropdown &&
@@ -1426,7 +1453,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                         },
                         <>
                         <View style={styles.currencyDropdownSearch}>
-                          <Ionicons name="search" size={18} color={colors.neutral[400]} />
+                          <Search size={18} color={colors.neutral[400]} strokeWidth={2} />
                           <TextInput
                             style={styles.currencyDropdownSearchInput}
                             placeholder="Search network..."
@@ -1462,7 +1489,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                                   <Text style={styles.currencyCode}>{network}</Text>
                                 </View>
                                 {newRecipient.network === network ? (
-                                  <Ionicons name="checkmark" size={18} color={colors.primary.main} />
+                                  <Check size={18} color={colors.primary.main} strokeWidth={2.5} />
                                 ) : null}
                               </Pressable>
                             ))}
@@ -1480,7 +1507,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                       editable={!isSubmitting}
                     />
                     <Pressable android_ripple={ripple.neutral} style={styles.walletScanIconButton} onPress={handleScanPress} >
-                      <Ionicons name="scan-outline" size={18} color={colors.primary.main} />
+                  <ScanLine size={18} color={colors.primary.main} strokeWidth={2} />
                     </Pressable>
                   </View>
                   <TextInput
@@ -1819,7 +1846,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                   <View style={styles.scanHeaderRow}>
                     <Text style={styles.scanTitle}>Scan wallet address</Text>
                     <Pressable android_ripple={ripple.neutral} style={styles.scanCloseButton} onPress={() => setShowScanModal(false)}>
-                      <Ionicons name="close" size={22} color={colors.text.inverse} />
+                      <X size={22} color={colors.text.inverse} strokeWidth={2} />
                     </Pressable>
                   </View>
                   <View style={styles.scanCenterGroup}>
@@ -1856,23 +1883,16 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingTop: 0,
-    paddingHorizontal: spacing[5],
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: spacing[5],
     paddingTop: spacing[4],
     paddingBottom: spacing[4],
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+    ...surfaceChromeCircleStyle(colors, 44),
     marginRight: spacing[3],
   },
   headerContent: {
@@ -1884,21 +1904,19 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   searchContainer: {
+    paddingHorizontal: spacing[5],
     marginBottom: spacing[4],
   },
   searchWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.frame.background,
-    borderRadius: borderRadius.xl,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
     paddingHorizontal: spacing[4],
     ...Platform.select({
       ios: { paddingVertical: spacing[3] },
       android: { paddingVertical: spacing[2], minHeight: 44 },
     }),
     gap: spacing[2],
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
   },
   searchInput: {
     flex: 1,
@@ -1922,7 +1940,7 @@ const styles = StyleSheet.create({
   searchErrorText: {
     ...textStyles.bodySmall,
     color: colors.error.main,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
     marginTop: spacing[2],
     paddingHorizontal: spacing[1],
   },
@@ -1933,30 +1951,27 @@ const styles = StyleSheet.create({
   selectRecipientBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9F9F9',
-    borderRadius: 24,
+    ...surfaceFrameStyle(colors),
     height: 52,
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
-    marginBottom: 25,
+    marginBottom: spacing[4],
     gap: spacing[3],
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
   },
   selectRecipientIcon: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F9F9F9',
+    backgroundColor: colors.semantic.card,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.frame.border,
   },
   selectRecipientText: {
     ...textStyles.bodyMedium,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: fontFamily.medium,
   },
   sectionTitleContainer: {
     paddingHorizontal: spacing[5],
@@ -1966,18 +1981,24 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: fontFamily.medium,
   },
-  recipientsContainer: {
-    paddingHorizontal: spacing[5],
+  /** White SectionCard frame — flat rows with hairline dividers (More-screen parity). */
+  recipientsTray: {
+    ...surfaceFrameStyle(colors),
+    marginHorizontal: spacing[5],
+    marginBottom: spacing[4],
+    overflow: 'hidden',
   },
   recipientItem: {
-    backgroundColor: '#F9F9F9',
-    borderRadius: borderRadius.xl,
-    padding: spacing[4],
-    marginBottom: spacing[3],
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[5],
+    minHeight: 80,
+    justifyContent: 'center',
+  },
+  recipientItemDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border.light,
   },
   recipientRow: {
     flexDirection: 'row',
@@ -2005,7 +2026,7 @@ const styles = StyleSheet.create({
   recipientAvatarText: {
     ...textStyles.titleMedium,
     color: colors.primary.main,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     fontWeight: '700',
   },
   avatarFlagBadge: {
@@ -2024,15 +2045,8 @@ const styles = StyleSheet.create({
     borderColor: colors.background.primary,
   },
   flagContainer: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    ...surfaceChromeCircleStyle(colors, 20, { shadow: 'none' }),
     overflow: 'hidden',
-    backgroundColor: '#F9F9F9',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
   },
   flagImage: {
     width: 20,
@@ -2061,7 +2075,7 @@ const styles = StyleSheet.create({
   recipientName: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     flexShrink: 1,
     minWidth: 0,
   },
@@ -2073,7 +2087,7 @@ const styles = StyleSheet.create({
   },
   recentBadgeText: {
     ...textStyles.bodySmall,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     color: colors.primary.main,
     fontSize: 11,
   },
@@ -2085,52 +2099,39 @@ const styles = StyleSheet.create({
   },
   newRecipientBadgeText: {
     ...textStyles.bodySmall,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     color: colors.text.secondary,
     fontSize: 11,
   },
   recipientBank: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
     marginBottom: spacing[0],
   },
   recipientAccount: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
   },
   recipientCurrency: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
   },
   emptyState: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: spacing[10],
-  },
-  emptyIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.frame.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing[4],
-  },
-  emptyTitle: {
-    ...textStyles.titleMedium,
-    color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
-    marginBottom: spacing[2],
-    textAlign: 'center',
+    gap: spacing[2],
   },
   emptyText: {
     ...textStyles.bodyMedium,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    textAlign: 'center',
+  },
+  emptySubtext: {
+    ...textStyles.bodySmall,
+    color: colors.text.secondary,
     textAlign: 'center',
   },
   bottomButtonContainer: {
@@ -2141,7 +2142,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.primary,
     paddingHorizontal: spacing[5],
     paddingTop: spacing[4],
-    borderTopWidth: 0.5,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.frame.border,
     ...Platform.select({
       ios: shadows.md,
@@ -2164,7 +2165,7 @@ const styles = StyleSheet.create({
   addRecipientButtonText: {
     ...textStyles.bodyLarge,
     color: colors.text.inverse,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   // Modal styles
   modalOverlay: {
@@ -2178,7 +2179,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: borderRadius['3xl'],
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: colors.neutral.black,
         shadowOffset: { width: 0, height: -4 },
         shadowOpacity: 0.15,
         shadowRadius: 12,
@@ -2201,7 +2202,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   closeButton: {
     width: 40,
@@ -2233,15 +2234,15 @@ const styles = StyleSheet.create({
   },
   modalInput: {
     borderWidth: 1,
-    borderColor: '#E2E2E2',
+    borderColor: colors.frame.border,
     borderRadius: borderRadius.lg,
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
     ...textStyles.bodyMedium,
     color: colors.text.primary,
     marginBottom: spacing[4],
-    backgroundColor: '#F9F9F9',
-    fontFamily: 'Outfit-Regular',
+    backgroundColor: colors.frame.background,
+    fontFamily: fontFamily.regular,
     fontSize: 13,
     minHeight: 48,
     lineHeight: 18,
@@ -2264,9 +2265,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cancelButton: {
-    backgroundColor: '#F9F9F9',
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.lg }),
   },
   saveButton: {
     backgroundColor: colors.primary.main,
@@ -2274,12 +2273,12 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   saveButtonText: {
     ...textStyles.bodyMedium,
     color: colors.text.inverse,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   disabledButton: {
     opacity: 0.6,
@@ -2334,7 +2333,7 @@ const styles = StyleSheet.create({
   scanTitle: {
     ...textStyles.bodyLarge,
     color: colors.text.inverse,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   scanCloseButton: {
     width: 36,
@@ -2366,11 +2365,8 @@ const styles = StyleSheet.create({
     zIndex: 4000,
   },
   currencySelector: {
-    borderWidth: 1,
-    borderColor: '#E2E2E2',
-    borderRadius: borderRadius.lg,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.lg }),
     padding: spacing[3],
-    backgroundColor: '#F9F9F9',
   },
   currencySelectorContent: {
     flexDirection: 'row',
@@ -2381,7 +2377,7 @@ const styles = StyleSheet.create({
     ...textStyles.bodyMedium,
     color: colors.text.primary,
     marginLeft: spacing[2],
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
   },
   currencyDropdown: {
     position: 'absolute',
@@ -2390,7 +2386,7 @@ const styles = StyleSheet.create({
     right: 0,
     marginTop: spacing[1],
     borderWidth: 1,
-    borderColor: '#E2E2E2',
+    borderColor: colors.frame.border,
     borderRadius: borderRadius.lg,
     backgroundColor: colors.background.primary,
     maxHeight: 260,
@@ -2398,7 +2394,7 @@ const styles = StyleSheet.create({
     zIndex: 5000,
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: colors.neutral.black,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.15,
         shadowRadius: 12,
@@ -2419,7 +2415,7 @@ const styles = StyleSheet.create({
   },
   androidDropdownCard: {
     borderWidth: 1,
-    borderColor: '#E2E2E2',
+    borderColor: colors.frame.border,
     borderRadius: borderRadius.lg,
     backgroundColor: colors.background.primary,
     overflow: 'hidden',
@@ -2444,12 +2440,6 @@ const styles = StyleSheet.create({
         includeFontPadding: false,
         textAlignVertical: 'center',
       },
-    }),
-  },
-  currencyDropdownList: {
-    maxHeight: 220,
-    ...Platform.select({
-      android: { flexGrow: 0 },
     }),
   },
   currencyDropdownItem: {
@@ -2481,18 +2471,18 @@ const styles = StyleSheet.create({
     ...textStyles.bodyMedium,
     fontWeight: '600',
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   currencyName: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
     marginTop: spacing[0],
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
   },
   currencySymbol: {
     ...textStyles.bodyMedium,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
   },
   recipientTypeModal: {
     borderTopLeftRadius: borderRadius['3xl'],
@@ -2506,11 +2496,8 @@ const styles = StyleSheet.create({
   recipientTypeOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.frame.background,
-    borderRadius: borderRadius.xl,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
     padding: spacing[4],
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
     gap: spacing[3],
   },
   recipientTypeIcon: {
@@ -2527,13 +2514,13 @@ const styles = StyleSheet.create({
   recipientTypeTitle: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     marginBottom: spacing[1],
   },
   recipientTypeSubtitle: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
   },
   transferTypeContainer: {
     marginBottom: spacing[2],
@@ -2562,11 +2549,11 @@ const styles = StyleSheet.create({
   transferTypeOptionText: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: fontFamily.medium,
   },
   transferTypeOptionTextSelected: {
     color: colors.primary.main,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   errorContainer: {
     backgroundColor: colors.error.background,
@@ -2582,12 +2569,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   infoBox: {
-    backgroundColor: '#F9F9F9',
-    borderRadius: borderRadius.md,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.md }),
     padding: spacing[3],
     marginBottom: spacing[4],
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
   },
   infoText: {
     ...textStyles.bodySmall,

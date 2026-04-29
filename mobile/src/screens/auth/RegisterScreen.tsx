@@ -4,14 +4,13 @@ import {
   Text,
   Pressable,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   Animated,
   Keyboard,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { Eye, EyeOff } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -28,6 +27,7 @@ import { authScreenStyles } from '../../theme/authScreen'
 import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
 import { TERMS_URL } from '../../constants/auth'
 import { TextField } from '../../components/ui'
+import { useToast } from '../../components/ToastProvider'
 
 export default function RegisterScreen({ navigation }: NavigationProps) {
   const [formData, setFormData] = useState({
@@ -38,6 +38,7 @@ export default function RegisterScreen({ navigation }: NavigationProps) {
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const { signUp } = useAuth()
+  const { showError, showInfo, showSuccess } = useToast()
   const insets = useSafeAreaInsets()
   const termsLink = useExternalLink()
 
@@ -63,18 +64,18 @@ export default function RegisterScreen({ navigation }: NavigationProps) {
 
   const validateForm = () => {
     if (!formData.fullName?.trim() || !formData.email || !formData.password) {
-      Alert.alert('Error', 'Please fill in all required fields')
+      showError('Please fill in all required fields')
       return false
     }
 
     if (formData.password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters long')
+      showError('Password must be at least 6 characters long')
       return false
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(formData.email)) {
-      Alert.alert('Error', 'Please enter a valid email address')
+      showError('Please enter a valid email address')
       return false
     }
 
@@ -83,7 +84,7 @@ export default function RegisterScreen({ navigation }: NavigationProps) {
 
   const handleGoogleSignUp = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    Alert.alert('Coming soon', 'Google sign-up will be available in a future update.')
+    showInfo('Google sign-up will be available in a future update.')
   }
 
   const handleRegister = async () => {
@@ -98,30 +99,22 @@ export default function RegisterScreen({ navigation }: NavigationProps) {
 
     if (signUpError) {
       setLoading(false)
-      Alert.alert('Registration Failed', signUpError.message || 'An error occurred during registration')
+      showError(signUpError.message || 'An error occurred during registration')
       return
     }
 
     setLoading(false)
 
     if (needsEmailConfirmation) {
-      Alert.alert(
-        'Registration Successful',
-        'Please check your email to verify your account. After verification, you can sign in to start sending money.',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'Login' }],
-              })
-            },
-          },
-        ]
-      )
+      showSuccess('Check your email to verify your account.', 4000)
+      setTimeout(() => {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Login' }],
+        })
+      }, 500)
     } else {
-      Alert.alert('Account ready', 'You are signed in. Continue in the app.', [{ text: 'OK' }])
+      showSuccess('You are signed in. Continue in the app.')
     }
   }
 
@@ -226,11 +219,11 @@ export default function RegisterScreen({ navigation }: NavigationProps) {
                       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                       setShowPassword(!showPassword)
                     }} >
-                    <Ionicons
-                      name={showPassword ? 'eye-off' : 'eye'}
-                      size={20}
-                      color={colors.semantic.mutedForeground}
-                    />
+                    {showPassword ? (
+                      <EyeOff size={20} color={colors.semantic.mutedForeground} strokeWidth={2} />
+                    ) : (
+                      <Eye size={20} color={colors.semantic.mutedForeground} strokeWidth={2} />
+                    )}
                   </Pressable>
                 }
               />

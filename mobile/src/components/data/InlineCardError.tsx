@@ -1,7 +1,8 @@
 import React from 'react'
 import { View, Text, Pressable, StyleSheet, ViewStyle } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { CircleAlert, RefreshCw } from 'lucide-react-native'
 import { useThemeColors } from '../../contexts/ThemePaletteContext'
+import { fontFamily } from '../../theme'
 
 /**
  * Inline error banner for a data-backed card/screen section.
@@ -40,12 +41,7 @@ export function InlineCardError({
         style,
       ]}
     >
-      <Ionicons
-        name="alert-circle"
-        size={16}
-        color={colors.warning.main}
-        style={styles.icon}
-      />
+      <CircleAlert size={16} color={colors.warning.main} strokeWidth={2} style={styles.icon} />
       <View style={styles.body}>
         <Text style={[styles.title, { color: colors.warning.main }]}>{title}</Text>
         {message ? (
@@ -64,12 +60,7 @@ export function InlineCardError({
             { opacity: isRetrying ? 0.5 : pressed ? 0.7 : 1 },
           ]}
         >
-          <Ionicons
-            name="refresh"
-            size={14}
-            color={colors.warning.main}
-            style={[isRetrying && styles.spin]}
-          />
+          <RefreshCw size={14} color={colors.warning.main} strokeWidth={2} style={[isRetrying && styles.spin]} />
           <Text style={[styles.actionLabel, { color: colors.warning.main }]}>Retry</Text>
         </Pressable>
       ) : null}
@@ -89,8 +80,8 @@ const styles = StyleSheet.create({
   },
   icon: { marginTop: 2 },
   body: { flex: 1, gap: 2 },
-  title: { fontFamily: 'Inter_600SemiBold', fontSize: 13 },
-  message: { fontFamily: 'Inter_400Regular', fontSize: 12, opacity: 0.85 },
+  title: { fontFamily: fontFamily.semibold, fontSize: 13 },
+  message: { fontFamily: fontFamily.regular, fontSize: 12, opacity: 0.85 },
   action: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -98,6 +89,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 4,
   },
-  actionLabel: { fontFamily: 'Inter_500Medium', fontSize: 12 },
+  actionLabel: { fontFamily: fontFamily.medium, fontSize: 12 },
   spin: { opacity: 0.8 },
 })

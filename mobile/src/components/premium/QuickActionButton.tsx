@@ -18,27 +18,28 @@ import {
   ViewStyle,
   Animated,
 } from 'react-native'
-import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
-import { Ionicons } from '@expo/vector-icons'
-import { colors, shadows, textStyles, borderRadius } from '../../theme'
+import type { LucideIcon } from 'lucide-react-native'
+import { colors, textStyles, borderRadius, fontFamily } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 
 interface QuickActionButtonProps {
-  icon: keyof typeof Ionicons.glyphMap
+  icon: LucideIcon
   label: string
   onPress: () => void
-  gradient?: readonly [string, string, ...string[]]
+  /** Optional override for the icon foreground color — defaults to brand primary. */
   iconColor?: string
+  /** Optional override for the icon-circle background — defaults to ~10% primary tint. */
+  iconBackground?: string
   style?: ViewStyle
 }
 
 export default function QuickActionButton({
-  icon,
+  icon: Icon,
   label,
   onPress,
-  gradient = colors.primary.gradient,
-  iconColor = colors.text.inverse,
+  iconColor = colors.primary.main,
+  iconBackground = 'rgba(0, 122, 204, 0.10)',
   style,
 }: QuickActionButtonProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current
@@ -79,14 +80,9 @@ export default function QuickActionButton({
           pressed && Platform.OS === 'ios' && styles.touchablePressedIOS,
         ]}
       >
-        <LinearGradient
-          colors={gradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.iconContainer}
-        >
-          <Ionicons name={icon} size={26} color={iconColor} />
-        </LinearGradient>
+        <View style={[styles.iconContainer, { backgroundColor: iconBackground }]}>
+          <Icon size={22} color={iconColor} strokeWidth={2.25} />
+        </View>
         <Text style={styles.label}>{label}</Text>
       </Pressable>
     </Animated.View>
@@ -101,24 +97,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   touchableClip: {
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius.full,
     overflow: 'hidden',
   },
   touchablePressedIOS: {
-    opacity: 0.92,
+    opacity: 0.9,
   },
+  /** Tinted-blue circular icon well — 48px circle with primary @ ~10% alpha fill. */
   iconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: borderRadius.xl,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadows.md,
     marginBottom: 8,
   },
   label: {
-    ...textStyles.labelLarge,
-    color: colors.text.secondary,
+    ...textStyles.labelMedium,
+    color: colors.text.primary,
+    fontFamily: fontFamily.medium,
+    fontSize: 13,
     textAlign: 'center',
   },
 })

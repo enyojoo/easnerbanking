@@ -12,16 +12,11 @@ import { lightColors } from '../theme/colors'
 import type { Colors } from '../theme/colors'
 
 /**
- * Theme mode supported by the app.
- * - `system` follows the OS color scheme via `useColorScheme()` +
- *   `Appearance` API. New installs default to `light`; users can pick
- *   `dark` or `system` and persist via AsyncStorage.
- * - `light` / `dark` override the OS and persist via AsyncStorage.
+ * Theme mode — the app currently ships **light** only. Dark/system preferences are reserved for a future release.
  */
-export type ThemeMode = 'system' | 'light' | 'dark'
+export type ThemeMode = 'light'
 
 const STORAGE_KEY = '@easner/theme-mode'
-const ALLOWED_MODES: ReadonlyArray<ThemeMode> = ['light']
 
 type ThemePaletteContextValue = {
   colors: Colors
@@ -47,8 +42,8 @@ export function ThemePaletteProvider({ children }: { children: ReactNode }) {
     AsyncStorage.getItem(STORAGE_KEY)
       .then((stored) => {
         if (cancelled) return
-        if (stored && (ALLOWED_MODES as ReadonlyArray<string>).includes(stored)) {
-          setModeState(stored as ThemeMode)
+        if (stored === 'light') {
+          setModeState('light')
         }
       })
       .catch(() => {

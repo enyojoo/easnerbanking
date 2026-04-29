@@ -506,15 +506,6 @@ export default function SendPage() {
                               minimumFractionDigits: 2,
                               maximumFractionDigits: 2,
                             })}
-                            {!sufficient && receiveAmount > 0 && (
-                              <span className="block mt-0.5">
-                                Short by {getCurrencySymbol(acc.currency)}
-                                {(sendAmount - acc.availableBalance).toLocaleString("en-US", {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2,
-                                })}
-                              </span>
-                            )}
                           </p>
                         </div>
                         {isSelected && <Check className="h-5 w-5 text-primary shrink-0" />}

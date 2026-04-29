@@ -5,15 +5,24 @@ import {
   Pressable, Platform,
   StyleSheet,
   ScrollView,
-  Alert,
   Image,
   ActivityIndicator,
   Animated,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import {
+  ArrowLeft,
+  Check,
+  Copy,
+  CircleAlert,
+  Building2,
+  QrCode,
+  TriangleAlert,
+  X,
+  CloudUpload,
+  CircleCheck,
+} from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
-import * as Clipboard from 'expo-clipboard'
 import * as DocumentPicker from 'expo-document-picker'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '../../contexts/AuthContext'
@@ -28,12 +37,16 @@ import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { analytics } from '../../lib/analytics'
 import { transactionService } from '../../lib/transactionService'
 import { getAccountTypeConfigFromCurrency, formatFieldValue } from '../../lib/currencyAccountTypes'
-import { colors, shadows, textStyles, borderRadius, spacing, motion } from '../../theme'
+import { colors, shadows, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
+import { useToast } from '../../components/ToastProvider'
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
 
 export default function PaymentMethodScreen({ navigation, route }: NavigationProps) {
   const { userProfile } = useAuth()
+  const { showError } = useToast()
+  const copyToClipboard = useCopyToClipboard()
   const qc = useQueryClient()
   const { scope } = useScope()
   const paymentMethods = usePaymentMethodsList().data ?? []
@@ -78,16 +91,13 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
   }
 
   const handleCopy = async (text: string, key: string) => {
-    try {
-      await Clipboard.setStringAsync(text)
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-      setCopiedStates(prev => ({ ...prev, [key]: true }))
-      setTimeout(() => {
-        setCopiedStates(prev => ({ ...prev, [key]: false }))
-      }, 2000)
-    } catch (error) {
-      Alert.alert('Error', 'Failed to copy to clipboard')
-    }
+    const ok = await copyToClipboard(text)
+    if (!ok) return
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+    setCopiedStates((prev) => ({ ...prev, [key]: true }))
+    setTimeout(() => {
+      setCopiedStates((prev) => ({ ...prev, [key]: false }))
+    }, 2000)
   }
 
   const handleUploadReceipt = async () => {
@@ -113,13 +123,13 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
 
   const handleContinue = async () => {
     if (!userProfile?.id || !recipient?.id) {
-      Alert.alert('Error', 'User or recipient information missing')
+      showError('User or recipient information missing')
       return
     }
 
     const defaultMethod = getDefaultPaymentMethod(sendCurrency)
     if (!defaultMethod) {
-      Alert.alert('Error', 'No payment method available for this currency')
+      showError('No payment method available for this currency')
       return
     }
 
@@ -161,7 +171,7 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
     } catch (error: any) {
       console.error('Error creating transaction:', error)
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
-      Alert.alert('Error', error.message || 'Failed to create transaction. Please try again.')
+      showError(error.message || 'Failed to create transaction. Please try again.')
     } finally {
       setIsCreatingTransaction(false)
     }
@@ -184,11 +194,11 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
         onPress={() => handleCopy(value, key)} >
         <Text style={styles.fieldValue}>{value}</Text>
         <View style={[styles.copyIcon, copiedStates[key] && styles.copyIconSuccess]}>
-          <Ionicons 
-            name={copiedStates[key] ? "checkmark" : "copy-outline"} 
-            size={14} 
-            color={copiedStates[key] ? colors.success.main : colors.primary.main} 
-          />
+          {copiedStates[key] ? (
+            <Check size={14} color={colors.success.main} strokeWidth={2.5} />
+          ) : (
+            <Copy size={14} color={colors.primary.main} strokeWidth={2} />
+          )}
         </View>
       </Pressable>
     </View>
@@ -216,7 +226,7 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+          <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
         </Pressable>
         <View style={styles.headerContent}>
             <Text style={styles.title}>Make Payment</Text>
@@ -282,12 +292,13 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
                       style={styles.transactionIdRow}
                       onPress={() => handleCopy(transactionId, "transactionIdSummary")} >
                       <Text style={styles.summaryAmount}>{transactionId}</Text>
-                      <Ionicons 
-                        name={copiedStates.transactionIdSummary ? "checkmark" : "copy-outline"} 
-                        size={18} 
-                        color={copiedStates.transactionIdSummary ? colors.success.main : 'rgba(255,255,255,0.7)'} 
-                        style={{ marginLeft: 8 }}
-                      />
+                      <View style={{ marginLeft: 8 }}>
+                        {copiedStates.transactionIdSummary ? (
+                          <Check size={18} color={colors.success.main} strokeWidth={2.5} />
+                        ) : (
+                          <Copy size={18} color="rgba(255,255,255,0.7)" strokeWidth={2} />
+                        )}
+                      </View>
                     </Pressable>
                   </View>
                 </View>
@@ -298,7 +309,7 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
           {/* Payment Method Details */}
           {paymentMethodsForCurrency.length === 0 ? (
             <View style={styles.errorCard}>
-              <Ionicons name="alert-circle" size={48} color={colors.error.main} />
+              <CircleAlert size={48} color={colors.error.main} strokeWidth={2} />
               <Text style={styles.errorTitle}>No Payment Methods</Text>
               <Text style={styles.errorText}>No payment methods configured for {sendCurrency}</Text>
             </View>
@@ -315,7 +326,7 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
                   <View style={styles.detailsCard}>
                     <View style={styles.cardHeader}>
                       <View style={styles.cardIconContainer}>
-                        <Ionicons name="business" size={18} color={colors.primary.main} />
+                        <Building2 size={18} color={colors.primary.main} strokeWidth={2} />
                       </View>
                       <Text style={styles.cardTitle}>{defaultMethod.name}</Text>
                     </View>
@@ -382,7 +393,7 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
                 <View style={styles.detailsCard}>
                   <View style={styles.cardHeader}>
                     <View style={styles.cardIconContainer}>
-                      <Ionicons name="qr-code" size={18} color={colors.primary.main} />
+                      <QrCode size={18} color={colors.primary.main} strokeWidth={2} />
                     </View>
                     <Text style={styles.cardTitle}>{defaultMethod.name}</Text>
                   </View>
@@ -396,7 +407,7 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
                         />
                       ) : (
                       <View style={styles.qrPlaceholder}>
-                        <Ionicons name="qr-code" size={64} color={colors.neutral[400]} />
+                        <QrCode size={64} color={colors.neutral[400]} strokeWidth={1.5} />
                         </View>
                       )}
                     </View>
@@ -409,7 +420,7 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
               {/* Important Instructions */}
                 <View style={styles.instructionsCard}>
                 <View style={styles.instructionsHeader}>
-                  <Ionicons name="warning" size={20} color={colors.warning.dark} />
+                  <TriangleAlert size={20} color={colors.warning.dark} strokeWidth={2} />
                   <Text style={styles.instructionsTitle}>Important</Text>
                 </View>
                 
@@ -440,11 +451,11 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
                         onPress={() => handleCopy(transactionId, "transactionId")}
                       >
                         <Text style={styles.transactionIdText}>{transactionId}</Text>
-                        <Ionicons 
-                          name={copiedStates.transactionId ? "checkmark" : "copy-outline"} 
-                          size={12} 
-                          color={colors.primary.main} 
-                        />
+                        {copiedStates.transactionId ? (
+                          <Check size={12} color={colors.primary.main} strokeWidth={2.5} />
+                        ) : (
+                          <Copy size={12} color={colors.primary.main} strokeWidth={2} />
+                        )}
                       </Pressable>
                     </View>
                   </View>
@@ -477,10 +488,10 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
           
           {uploadError && (
                   <View style={styles.uploadError}>
-                    <Ionicons name="alert-circle" size={16} color={colors.error.main} />
+                    <CircleAlert size={16} color={colors.error.main} strokeWidth={2} />
                     <Text style={styles.uploadErrorText}>{uploadError}</Text>
                     <Pressable android_ripple={ripple.neutral} onPress={() => setUploadError(null)}>
-                      <Ionicons name="close" size={16} color={colors.error.main} />
+                      <X size={16} color={colors.error.main} strokeWidth={2} />
               </Pressable>
             </View>
           )}
@@ -490,11 +501,11 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
                   style={[styles.uploadButton, uploadedFile && styles.uploadButtonSuccess]}
             onPress={handleUploadReceipt}
             disabled={isUploading} >
-              <Ionicons 
-                    name={uploadedFile ? "checkmark-circle" : "cloud-upload-outline"} 
-                    size={28} 
-                    color={uploadedFile ? colors.success.main : colors.neutral[500]} 
-              />
+              {uploadedFile ? (
+                <CircleCheck size={28} color={colors.success.main} strokeWidth={2} />
+              ) : (
+                <CloudUpload size={28} color={colors.neutral[500]} strokeWidth={2} />
+              )}
                   <Text style={[styles.uploadButtonText, uploadedFile && styles.uploadButtonTextSuccess]}>
                     {uploadedFile ? 'Receipt Uploaded' : isUploading ? 'Uploading...' : 'Tap to upload'}
               </Text>
@@ -526,7 +537,7 @@ export default function PaymentMethodScreen({ navigation, route }: NavigationPro
               <ActivityIndicator color={colors.text.inverse} size="small" />
             ) : (
               <>
-                <Ionicons name="checkmark-circle" size={20} color={colors.text.inverse} />
+                <CircleCheck size={20} color={colors.text.inverse} strokeWidth={2} />
                 <Text style={styles.confirmButtonText}>I've Made the Payment</Text>
               </>
             )}
@@ -550,14 +561,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing[4],
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+    ...surfaceChromeCircleStyle(colors, 44),
     marginRight: spacing[3],
   },
   headerContent: {

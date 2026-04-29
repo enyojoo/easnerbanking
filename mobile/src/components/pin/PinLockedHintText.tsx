@@ -1,6 +1,7 @@
 import React from 'react'
 import { View, Text, StyleSheet, Platform, type StyleProp, type TextStyle } from 'react-native'
 import { formatLockCountdown } from '../../lib/pinLockCountdown'
+import { fontFamily } from '../../theme'
 
 /** Width reserved for `00:00` so tick updates don’t shift the surrounding sentence. */
 const COUNTDOWN_SLOT_WIDTH = 54
@@ -39,7 +40,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   digits: {
-    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace' }),
+    fontFamily: fontFamily.mono,
     ...Platform.select({
       ios: { fontVariant: ['tabular-nums'] as TextStyle['fontVariant'] },
       default: {},

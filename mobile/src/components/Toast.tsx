@@ -1,7 +1,13 @@
 import React, { useEffect, useRef } from 'react'
 import { View, Text, StyleSheet, Animated, Pressable, Platform } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
-import { colors, textStyles, borderRadius, spacing, shadows } from '../theme'
+import {
+  CircleCheck,
+  CircleX,
+  TriangleAlert,
+  Info,
+  X,
+} from 'lucide-react-native'
+import { colors, textStyles, borderRadius, spacing, shadows, fontFamily } from '../theme'
 import { ripple } from '../lib/androidRipple'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
@@ -69,19 +75,6 @@ export default function Toast({
     })
   }
 
-  const getIcon = () => {
-    switch (type) {
-      case 'success':
-        return 'checkmark-circle'
-      case 'error':
-        return 'close-circle'
-      case 'warning':
-        return 'warning'
-      default:
-        return 'information-circle'
-    }
-  }
-
   const getColor = () => {
     switch (type) {
       case 'success':
@@ -95,6 +88,16 @@ export default function Toast({
     }
   }
 
+  const iconColor = getColor()
+  const TypeIcon =
+    type === 'success'
+      ? CircleCheck
+      : type === 'error'
+        ? CircleX
+        : type === 'warning'
+          ? TriangleAlert
+          : Info
+
   return (
     <Animated.View
       style={[
@@ -107,7 +110,7 @@ export default function Toast({
       ]}
     >
       <View style={[styles.toast, { borderLeftColor: getColor() }]}>
-        <Ionicons name={getIcon()} size={20} color={getColor()} />
+        <TypeIcon size={20} color={iconColor} strokeWidth={2} />
         <Text style={styles.message} numberOfLines={2}>
           {message}
         </Text>
@@ -137,7 +140,7 @@ export default function Toast({
           android_ripple={ripple.neutral}
           accessibilityLabel="Close"
         >
-          <Ionicons name="close" size={18} color={colors.text.secondary} />
+          <X size={18} color={colors.text.secondary} strokeWidth={2} />
         </Pressable>
       </View>
     </Animated.View>
@@ -172,7 +175,7 @@ const styles = StyleSheet.create({
   },
   actionText: {
     ...textStyles.labelMedium,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   closeButton: {
     padding: spacing[1],

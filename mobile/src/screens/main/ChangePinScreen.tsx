@@ -4,23 +4,24 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
   Animated,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { ArrowLeft, HelpCircle } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { NavigationProps } from '../../types'
-import { colors, textStyles, borderRadius, spacing, useThemeColors } from '../../theme'
+import { colors, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, useThemeColors } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { useAuth } from '../../contexts/AuthContext'
 import { hasPin, setupPin, verifyPin, getLockoutState } from '../../lib/pinAuth'
 import { appPinStrings } from '../../constants/app-pin-en'
 import { PinKeypad, PinLockedHintText } from '../../components/pin'
 import { useDeferredLoading } from '../../hooks/useDeferredLoading'
+import { EasnerAlertSheet } from '../../components/premium'
+import { useToast } from '../../components/ToastProvider'
 
 type Step = 'verify' | 'pin' | 'confirm'
 
@@ -30,6 +31,7 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
   const palette = useThemeColors()
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
+  const { showError, showSuccess } = useToast()
   const [ready, setReady] = useState(false)
   const [step, setStep] = useState<Step>('verify')
   const [verifyDigits, setVerifyDigits] = useState<string[]>(empty4())
@@ -43,6 +45,12 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
   const newPinRef = useRef('')
   const verifyTryRef = useRef('')
   const shakeAnim = useRef(new Animated.Value(0)).current
+
+  const [noPinSheetOpen, setNoPinSheetOpen] = useState(false)
+  const [mismatchSheetOpen, setMismatchSheetOpen] = useState(false)
+  const [setupFailSheetOpen, setSetupFailSheetOpen] = useState(false)
+  const [setupFailMessage, setSetupFailMessage] = useState('')
+  const [helpSheetOpen, setHelpSheetOpen] = useState(false)
 
   const userId = user?.id
 
@@ -58,13 +66,7 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
     void (async () => {
       const h = await hasPin(userId)
       if (!h) {
-        Alert.alert(appPinStrings.errorTitle, appPinStrings.changePinNoPinMessage, [
-          { text: appPinStrings.dialogCancel, style: 'cancel', onPress: () => navigation.goBack() },
-          {
-            text: appPinStrings.setupTitle,
-            onPress: () => navigation.replace('PinSetup' as never, { mandatory: false } as never),
-          },
-        ])
+        setNoPinSheetOpen(true)
         return
       }
       setReady(true)
@@ -127,21 +129,11 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
   const handleConfirmNewPin = async (confirmStr: string) => {
     const pinStr = newPinRef.current || pin.join('')
     if (pinStr.length !== 4 || confirmStr.length !== 4) {
-      Alert.alert(appPinStrings.errorTitle, appPinStrings.completePinPrompt)
+      showError(appPinStrings.completePinPrompt)
       return
     }
     if (pinStr !== confirmStr) {
-      Alert.alert(appPinStrings.errorTitle, appPinStrings.mismatch, [
-        {
-          text: 'OK',
-          onPress: () => {
-            setStep('pin')
-            setPin(empty4())
-            setConfirmPin(empty4())
-            newPinRef.current = ''
-          },
-        },
-      ])
+      setMismatchSheetOpen(true)
       return
     }
     setLoading(true)
@@ -149,22 +141,12 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
     setLoading(false)
     if (res.success) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-      Alert.alert(appPinStrings.changePinTitle, appPinStrings.changePinSuccessBody, [
-        { text: appPinStrings.dialogConfirm, onPress: () => navigation.goBack() },
-      ])
+      showSuccess(appPinStrings.changePinSuccessBody)
+      setTimeout(() => navigation.goBack(), 450)
       return
     }
-    Alert.alert(appPinStrings.errorTitle, res.error || appPinStrings.setupFailed, [
-      {
-        text: 'OK',
-        onPress: () => {
-          setStep('pin')
-          setPin(empty4())
-          setConfirmPin(empty4())
-          newPinRef.current = ''
-        },
-      },
-    ])
+    setSetupFailMessage(res.error || appPinStrings.setupFailed)
+    setSetupFailSheetOpen(true)
   }
 
   const handleNumberPress = (num: string) => {
@@ -298,16 +280,16 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
             onPress={handleHeaderBack} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <View style={styles.headerButtonCircle}>
-              <Ionicons name="arrow-back" size={20} color={palette.text.primary} />
+              <ArrowLeft size={20} color={palette.primary.main} strokeWidth={2} />
             </View>
           </Pressable>
           <View style={styles.headerSpacer} />
           <Pressable
            android_ripple={ripple.neutral}
             style={styles.headerButton}
-            onPress={() => Alert.alert(helpTitle, helpBody)} >
+            onPress={() => setHelpSheetOpen(true)} >
             <View style={styles.headerButtonCircle}>
-              <Ionicons name="help-circle-outline" size={20} color={palette.text.primary} />
+              <HelpCircle size={20} color={palette.text.primary} strokeWidth={2} />
             </View>
           </Pressable>
         </View>
@@ -368,6 +350,64 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
         </View>
       </KeyboardAvoidingView>
 
+      <EasnerAlertSheet
+        visible={noPinSheetOpen}
+        onDismiss={() => {
+          setNoPinSheetOpen(false)
+          navigation.goBack()
+        }}
+        title={appPinStrings.errorTitle}
+        message={appPinStrings.changePinNoPinMessage}
+        primaryLabel={appPinStrings.setupTitle}
+        onPrimary={() => {
+          setNoPinSheetOpen(false)
+          navigation.replace('PinSetup' as never, { mandatory: false } as never)
+        }}
+        secondaryLabel={appPinStrings.dialogCancel}
+        onSecondary={() => {
+          setNoPinSheetOpen(false)
+          navigation.goBack()
+        }}
+      />
+      <EasnerAlertSheet
+        visible={mismatchSheetOpen}
+        onDismiss={() => setMismatchSheetOpen(false)}
+        title={appPinStrings.errorTitle}
+        message={appPinStrings.mismatch}
+        primaryLabel="OK"
+        onPrimary={() => {
+          setMismatchSheetOpen(false)
+          setStep('pin')
+          setPin(empty4())
+          setConfirmPin(empty4())
+          newPinRef.current = ''
+        }}
+        singleAction
+      />
+      <EasnerAlertSheet
+        visible={setupFailSheetOpen}
+        onDismiss={() => setSetupFailSheetOpen(false)}
+        title={appPinStrings.errorTitle}
+        message={setupFailMessage || appPinStrings.setupFailed}
+        primaryLabel="OK"
+        onPrimary={() => {
+          setSetupFailSheetOpen(false)
+          setStep('pin')
+          setPin(empty4())
+          setConfirmPin(empty4())
+          newPinRef.current = ''
+        }}
+        singleAction
+      />
+      <EasnerAlertSheet
+        visible={helpSheetOpen}
+        onDismiss={() => setHelpSheetOpen(false)}
+        title={helpTitle}
+        message={helpBody}
+        primaryLabel={appPinStrings.dialogConfirm}
+        onPrimary={() => setHelpSheetOpen(false)}
+        singleAction
+      />
     </View>
   )
 }
@@ -400,14 +440,7 @@ const styles = StyleSheet.create({
     padding: spacing[1],
   },
   headerButtonCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+    ...surfaceChromeCircleStyle(colors, 40),
   },
   content: {
     flex: 1,

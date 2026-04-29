@@ -7,18 +7,16 @@ import {
   Pressable, Platform,
   TextInput,
   Animated,
+  Keyboard,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
-import { LinearGradient } from 'expo-linear-gradient'
-import * as Haptics from 'expo-haptics'
-import * as Clipboard from 'expo-clipboard'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Alert } from 'react-native'
+import * as Haptics from 'expo-haptics'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
-import { colors, shadows, textStyles, borderRadius, spacing, motion } from '../../theme'
+import { colors, shadows, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
 
 interface MockRecipient {
   id: string
@@ -30,6 +28,7 @@ interface MockRecipient {
 
 export default function MobileMoneyScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
+  const copyToClipboard = useCopyToClipboard()
   const [phoneNumber, setPhoneNumber] = useState('')
   const [paymentConfirmed, setPaymentConfirmed] = useState(false)
   const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>({})
@@ -90,16 +89,13 @@ export default function MobileMoneyScreen({ navigation, route }: NavigationProps
   }
 
   const handleCopy = async (text: string, key: string) => {
-    try {
-      await Clipboard.setStringAsync(text)
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-      setCopiedStates(prev => ({ ...prev, [key]: true }))
-      setTimeout(() => {
-        setCopiedStates(prev => ({ ...prev, [key]: false }))
-      }, 2000)
-    } catch (error) {
-      Alert.alert('Error', 'Failed to copy to clipboard')
-    }
+    const ok = await copyToClipboard(text)
+    if (!ok) return
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+    setCopiedStates((prev) => ({ ...prev, [key]: true }))
+    setTimeout(() => {
+      setCopiedStates((prev) => ({ ...prev, [key]: false }))
+    }, 2000)
   }
 
   const handleConfirmPayment = () => {
@@ -149,7 +145,7 @@ export default function MobileMoneyScreen({ navigation, route }: NavigationProps
             onPress={() => navigation.goBack()}
             style={styles.backButton}
           >
-            <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+            <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
           </Pressable>
           <View style={styles.headerContent}>
             <Text style={styles.title}>Mobile Money Payment</Text>
@@ -204,12 +200,11 @@ export default function MobileMoneyScreen({ navigation, route }: NavigationProps
                   style={styles.summaryValueRow}
                   onPress={() => handleCopy(transactionId || '', 'transactionId')} >
                   <Text style={styles.summaryValue}>{transactionId || 'N/A'}</Text>
-                  <Ionicons 
-                    name={copiedStates.transactionId ? "checkmark" : "copy-outline"} 
-                    size={16} 
-                    color={copiedStates.transactionId ? colors.success.main : colors.text.secondary} 
-                    style={{ marginLeft: 8 }}
-                  />
+                  {copiedStates.transactionId ? (
+                    <Check size={16} color={colors.success.main} strokeWidth={2.5} style={{ marginLeft: 8 }} />
+                  ) : (
+                    <Copy size={16} color={colors.text.secondary} strokeWidth={2} style={{ marginLeft: 8 }} />
+                  )}
                 </Pressable>
               </View>
             </View>
@@ -229,7 +224,7 @@ export default function MobileMoneyScreen({ navigation, route }: NavigationProps
               <Text style={styles.sectionLabel}>PHONE NUMBER</Text>
               <View style={styles.phoneInputContainer}>
                 <View style={styles.phoneIconContainer}>
-                  <Ionicons name="phone-portrait" size={24} color={colors.primary.main} />
+                  <Smartphone size={24} color={colors.primary.main} strokeWidth={2} />
                 </View>
                 <TextInput
                   style={styles.phoneInput}
@@ -302,14 +297,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing[4],
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+    ...surfaceChromeCircleStyle(colors, 44),
     marginRight: spacing[3],
   },
   headerContent: {
@@ -328,17 +316,14 @@ const styles = StyleSheet.create({
     paddingTop: spacing[2],
   },
   summaryContainer: {
-    backgroundColor: '#F9F9F9',
-    borderRadius: borderRadius.xl,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
     padding: spacing[4],
     marginBottom: spacing[5],
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
   },
   summaryTitle: {
     ...textStyles.titleMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     marginBottom: spacing[3],
   },
   summaryRow: {
@@ -349,12 +334,12 @@ const styles = StyleSheet.create({
   summaryLabel: {
     ...textStyles.bodyMedium,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
   },
   summaryValue: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   summaryValueRow: {
     flexDirection: 'row',
@@ -366,33 +351,27 @@ const styles = StyleSheet.create({
   sectionLabel: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
     textTransform: 'uppercase',
     marginBottom: spacing[2],
     letterSpacing: 0.5,
   },
   networkDisplay: {
-    backgroundColor: '#F9F9F9',
-    borderRadius: borderRadius.xl,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
   },
   networkDisplayText: {
     ...textStyles.bodyLarge,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: fontFamily.medium,
   },
   phoneInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9F9F9',
-    borderRadius: borderRadius.xl,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[2],
-    borderWidth: 0.5,
-    borderColor: '#E2E2E2',
   },
   phoneIconContainer: {
     marginRight: spacing[3],
@@ -401,7 +380,7 @@ const styles = StyleSheet.create({
     flex: 1,
     ...textStyles.bodyLarge,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: fontFamily.medium,
     paddingVertical: spacing[2],
   },
   instructionsContainer: {
@@ -415,13 +394,13 @@ const styles = StyleSheet.create({
   instructionsTitle: {
     ...textStyles.titleMedium,
     color: colors.primary.main,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     marginBottom: spacing[2],
   },
   instructionsText: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: fontFamily.regular,
     lineHeight: 22,
   },
   bottomContainer: {
@@ -444,6 +423,6 @@ const styles = StyleSheet.create({
   payButtonText: {
     ...textStyles.titleLarge,
     color: colors.text.inverse,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
 })

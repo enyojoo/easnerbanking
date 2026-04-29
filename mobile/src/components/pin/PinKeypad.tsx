@@ -1,6 +1,6 @@
 import React from 'react'
 import { View, Text, Pressable, Platform, StyleSheet, useWindowDimensions } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { Delete } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import {
   borderRadius,
@@ -57,7 +57,8 @@ export function PinKeypad({
                 width: keypadSizing.buttonWidth,
                 height: keypadSizing.buttonWidth,
                 borderRadius: Math.max(borderRadius.xl, Math.floor(keypadSizing.buttonWidth * 0.28)),
-                backgroundColor: palette.semantic.muted,
+                backgroundColor: palette.frame.background,
+                borderColor: palette.frame.border,
               },
               pressed && Platform.OS === 'ios' && styles.keypadPressedIOS,
             ]}
@@ -81,7 +82,8 @@ export function PinKeypad({
               width: keypadSizing.buttonWidth,
               height: keypadSizing.buttonWidth,
               borderRadius: Math.max(borderRadius.xl, Math.floor(keypadSizing.buttonWidth * 0.28)),
-              backgroundColor: palette.semantic.muted,
+              backgroundColor: palette.frame.background,
+              borderColor: palette.frame.border,
             },
             pressed && Platform.OS === 'ios' && styles.keypadPressedIOS,
           ]}
@@ -99,7 +101,8 @@ export function PinKeypad({
               width: keypadSizing.buttonWidth,
               height: keypadSizing.buttonWidth,
               borderRadius: Math.max(borderRadius.xl, Math.floor(keypadSizing.buttonWidth * 0.28)),
-              backgroundColor: palette.semantic.muted,
+              backgroundColor: palette.frame.background,
+              borderColor: palette.frame.border,
             },
             pressed && Platform.OS === 'ios' && styles.keypadPressedIOS,
           ]}
@@ -108,12 +111,12 @@ export function PinKeypad({
           disabled={disabled || filledCount === 0}
           android_ripple={ripple.neutral}
         >
-          <Ionicons
-            name="backspace"
+          <Delete
             size={24}
             color={
               filledCount === 0 ? palette.text.secondary : backspaceActiveColor || palette.text.primary
             }
+            strokeWidth={2}
           />
         </Pressable>
       </View>
@@ -137,19 +140,10 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: borderRadius['2xl'],
+    borderWidth: StyleSheet.hairlineWidth,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-      },
-      android: { elevation: 2 },
-      default: {},
-    }),
   },
   keypadPressedIOS: {
     opacity: 0.6,

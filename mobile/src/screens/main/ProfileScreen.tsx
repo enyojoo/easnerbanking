@@ -6,7 +6,6 @@ import {
   Pressable,
   ScrollView,
   TextInput,
-  Alert,
   Modal,
   FlatList,
   Keyboard,
@@ -14,7 +13,8 @@ import {
   Platform,
   Image,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import * as Haptics from 'expo-haptics'
+import { ChevronDown, CircleCheck, CircleX, Mail, Pencil, X } from 'lucide-react-native'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import KeyboardSafeContainer from '../../components/KeyboardSafeContainer'
 import { ripple } from '../../lib/androidRipple'
@@ -37,8 +37,423 @@ import { supabase } from '../../lib/supabase'
 import { userAvatarStyles } from '../../theme'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import { avatarImageSource, normalizeAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
+import { useThemeColors, fontFamily } from '../../theme'
+import type { Colors } from '../../theme'
+import { EasnerAlertSheet } from '../../components/premium'
+
+function createProfileStyles(palette: Colors) {
+  return StyleSheet.create({
+    scrollContainer: {
+      flex: 1,
+      backgroundColor: palette.semantic.muted,
+    },
+    header: {
+      padding: 24,
+      backgroundColor: palette.background.primary,
+    },
+    headerTopRow: {
+      flexDirection: 'row',
+      marginBottom: 12,
+    },
+    headerAvatar: {
+      ...userAvatarStyles.circle,
+    },
+    pageTitle: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: palette.text.primary,
+      marginBottom: 4,
+    },
+    pageSubtitle: {
+      fontSize: 16,
+      color: palette.brand.slate,
+    },
+    contentContainer: {
+      padding: 24,
+      gap: 24,
+    },
+    section: {
+      backgroundColor: palette.background.primary,
+      borderRadius: 8,
+      padding: 20,
+    },
+    sectionHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    sectionTitleContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: palette.text.primary,
+    },
+    editButtonContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderRadius: 20,
+      backgroundColor: palette.primary.main,
+      shadowColor: palette.neutral.black,
+      shadowOffset: {
+        width: 0,
+        height: 2,
+      },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    editButton: {
+      fontSize: 14,
+      color: palette.neutral.white,
+      fontWeight: '600',
+      fontFamily: fontFamily.semibold,
+    },
+    editActions: {
+      flexDirection: 'row',
+      gap: 12,
+      justifyContent: 'flex-end',
+    },
+    cancelButton: {
+      fontSize: 14,
+      color: palette.brand.slate,
+      fontWeight: '500',
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 8,
+      backgroundColor: palette.semantic.muted,
+      borderWidth: 1,
+      borderColor: palette.border.default,
+      textAlign: 'center',
+    },
+    saveButton: {
+      fontSize: 14,
+      color: palette.neutral.white,
+      fontWeight: '600',
+      paddingHorizontal: 20,
+      paddingVertical: 10,
+      backgroundColor: palette.primary.main,
+      borderRadius: 8,
+      textAlign: 'center',
+    },
+    disabledButton: {
+      color: palette.text.tertiary,
+      backgroundColor: palette.semantic.muted,
+    },
+    profileContent: {
+      gap: 8,
+    },
+    fieldRow: {
+      flexDirection: 'row',
+      gap: 16,
+    },
+    fieldContainer: {
+      marginBottom: 3,
+    },
+    fieldLabel: {
+      fontSize: 12,
+      fontWeight: '400',
+      color: palette.brand.slate,
+      marginBottom: 0,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    fieldLabelEdit: {
+      fontSize: 12,
+      fontWeight: '400',
+      color: palette.brand.slate,
+      marginBottom: 4,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    fieldInput: {
+      borderWidth: 1,
+      borderColor: palette.border.default,
+      borderRadius: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 12,
+      minHeight: 48,
+      fontSize: 16,
+      backgroundColor: palette.background.primary,
+      ...Platform.select({
+        android: { includeFontPadding: false, textAlignVertical: 'center' },
+        ios: { paddingVertical: 12 },
+      }),
+    },
+    fieldValue: {
+      fontSize: 16,
+      color: palette.text.primary,
+      paddingVertical: 8,
+      fontWeight: '500',
+    },
+    currencySelector: {
+      borderWidth: 1,
+      borderColor: palette.border.default,
+      borderRadius: 6,
+      padding: 12,
+      backgroundColor: palette.background.primary,
+    },
+    currencySelectorContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    currencyFlag: {
+      fontSize: 16,
+    },
+    currencySelectorText: {
+      flex: 1,
+      fontSize: 16,
+      color: palette.text.primary,
+    },
+    currencyDisplay: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 12,
+    },
+    currencyText: {
+      fontSize: 16,
+      color: palette.text.primary,
+      fontWeight: '600',
+    },
+    currencyDescription: {
+      fontSize: 12,
+      color: palette.brand.slate,
+      marginTop: 2,
+    },
+    easetagLabelContainer: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: 4,
+      gap: 8,
+    },
+    easetagStatusSlot: {
+      width: 132,
+      minHeight: 36,
+      alignItems: 'flex-end',
+    },
+    easetagStatusContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      flexWrap: 'wrap',
+      justifyContent: 'flex-end',
+      maxWidth: '100%',
+    },
+    easetagStatusTextInline: {
+      fontSize: 11,
+      fontWeight: '500',
+    },
+    easetagInputContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: palette.border.default,
+      borderRadius: 6,
+      backgroundColor: palette.background.primary,
+      overflow: 'hidden',
+    },
+    easetagPrefix: {
+      fontSize: 16,
+      color: palette.brand.slate,
+      paddingLeft: 12,
+      paddingRight: 4,
+      fontWeight: '500',
+    },
+    easetagInput: {
+      flex: 1,
+      paddingVertical: 12,
+      paddingRight: 12,
+      minHeight: 48,
+      fontSize: 16,
+      color: palette.text.primary,
+      ...Platform.select({
+        android: { includeFontPadding: false, textAlignVertical: 'center' },
+        ios: { paddingVertical: 12 },
+      }),
+    },
+    easetagSpinnerSlot: {
+      width: 36,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingRight: 12,
+    },
+    easetagAvailableText: {
+      color: palette.success.main,
+    },
+    easetagUnavailableText: {
+      color: palette.error.main,
+    },
+    fieldDescription: {
+      fontSize: 12,
+      color: palette.brand.slate,
+      marginTop: 2,
+    },
+    statusContent: {
+      gap: 12,
+    },
+    statusItem: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 2,
+    },
+    statusLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    statusLabel: {
+      fontSize: 14,
+      color: palette.text.secondary,
+    },
+    statusBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 12,
+    },
+    verifiedBadge: {
+      backgroundColor: palette.success.background,
+    },
+    pendingBadge: {
+      backgroundColor: palette.warning.background,
+    },
+    statusBadgeText: {
+      fontSize: 12,
+      fontWeight: '500',
+    },
+    verifiedText: {
+      color: palette.success.dark,
+    },
+    pendingText: {
+      color: palette.warning.dark,
+    },
+    statusDivider: {
+      height: 1,
+      backgroundColor: palette.border.default,
+    },
+    statusStats: {
+      gap: 12,
+    },
+    statusStatItem: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    statusStatLabel: {
+      fontSize: 14,
+      color: palette.brand.slate,
+    },
+    statusStatValue: {
+      fontSize: 14,
+      color: palette.text.primary,
+      fontWeight: '500',
+    },
+    menuButton: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: palette.border.default,
+    },
+    menuButtonText: {
+      fontSize: 16,
+      color: palette.text.primary,
+    },
+    destructiveText: {
+      color: palette.error.main,
+    },
+    menuButtonArrow: {
+      fontSize: 20,
+      color: palette.text.tertiary,
+    },
+    versionContainer: {
+      alignItems: 'center',
+      paddingVertical: 20,
+    },
+    versionText: {
+      fontSize: 14,
+      color: palette.text.tertiary,
+    },
+    currencyModalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'flex-end',
+    },
+    currencyModalContent: {
+      backgroundColor: palette.background.primary,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      maxHeight: '70%',
+    },
+    currencyModalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 20,
+      borderBottomWidth: 1,
+      borderBottomColor: palette.border.default,
+    },
+    currencyModalTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: palette.text.primary,
+    },
+    currencyCloseButton: {
+      padding: 4,
+    },
+    currencyItem: {
+      padding: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: palette.border.default,
+    },
+    currencyInfo: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    currencyDetails: {
+      flex: 1,
+    },
+    currencyCode: {
+      fontSize: 16,
+      fontWeight: '500',
+      color: palette.text.primary,
+    },
+    currencyName: {
+      fontSize: 14,
+      color: palette.brand.slate,
+      marginTop: 2,
+    },
+    currencySymbol: {
+      fontSize: 16,
+      color: palette.brand.slate,
+    },
+    disabledHint: {
+      fontSize: 12,
+      color: palette.brand.slate,
+      fontStyle: 'italic',
+    },
+    fieldValueDisabled: {
+      color: palette.text.tertiary,
+    },
+  })
+}
 
 function ProfileContent({ navigation }: NavigationProps) {
+  const palette = useThemeColors()
+  const styles = useMemo(() => createProfileStyles(palette), [palette])
   const { user, userProfile, signOut, refreshUserProfile, applyPersonalSettingsFromServer } = useAuth()
   const txQuery = useTransactionsList({}, 20)
   const { data: currencies = [] } = useCurrenciesCatalog()
@@ -51,6 +466,9 @@ function ProfileContent({ navigation }: NavigationProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [loading, setLoading] = useState(false)
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false)
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [profileNotice, setProfileNotice] = useState<{ title: string; message: string } | null>(null)
   const [userStats, setUserStats] = useState<UserStats>({
     totalTransactions: 0,
     totalSent: 0,
@@ -243,7 +661,7 @@ function ProfileContent({ navigation }: NavigationProps) {
     if (!user) return
 
     if (!editProfileData.fullName?.trim()) {
-      Alert.alert('Error', 'Please enter your full name')
+      setProfileNotice({ title: 'Error', message: 'Please enter your full name' })
       return
     }
 
@@ -288,13 +706,13 @@ function ProfileContent({ navigation }: NavigationProps) {
       setIsEditing(false)
       setEasetagAvailable(null)
       setEasetagValidationError(null)
-      Alert.alert('Success', 'Profile updated successfully')
+      setProfileNotice({ title: 'Success', message: 'Profile updated successfully' })
     } catch (error) {
       console.error('Error updating profile:', error)
-      Alert.alert(
-        'Error',
-        error instanceof Error ? error.message : 'Failed to update profile'
-      )
+      setProfileNotice({
+        title: 'Error',
+        message: error instanceof Error ? error.message : 'Failed to update profile',
+      })
     } finally {
       setLoading(false)
     }
@@ -312,15 +730,22 @@ function ProfileContent({ navigation }: NavigationProps) {
     }
   }
 
-  const handleSignOut = async () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Sign Out', style: 'destructive', onPress: signOut }
-      ]
-    )
+  const handleSignOutPress = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    setShowLogoutDialog(true)
+  }
+
+  const performSignOut = async () => {
+    setIsLoggingOut(true)
+    try {
+      await signOut()
+    } catch (error) {
+      console.error('Error signing out:', error)
+      setProfileNotice({ title: 'Error', message: 'Failed to sign out' })
+    } finally {
+      setIsLoggingOut(false)
+      setShowLogoutDialog(false)
+    }
   }
 
   const handleSupport = () => {
@@ -380,7 +805,7 @@ function ProfileContent({ navigation }: NavigationProps) {
               style={styles.currencyCloseButton}
               onPress={() => setShowCurrencyPicker(false)}
             >
-              <Ionicons name="close" size={24} color="#6F756F" />
+              <X size={24} color={palette.brand.slate} strokeWidth={2} />
             </Pressable>
           </View>
           <FlatList
@@ -452,23 +877,23 @@ function ProfileContent({ navigation }: NavigationProps) {
             {easetagTLen > 0 ? (
               <View style={styles.easetagStatusContainer}>
                 {easetagTLen < 4 ? (
-                  <Text style={[styles.easetagStatusTextInline, { color: '#6F756F' }]}>Min 4 characters</Text>
+                  <Text style={[styles.easetagStatusTextInline, { color: palette.brand.slate }]}>Min 4 characters</Text>
                 ) : checkingEasetag ? (
-                  <Text style={[styles.easetagStatusTextInline, { color: '#6F756F' }]}>Checking…</Text>
+                  <Text style={[styles.easetagStatusTextInline, { color: palette.brand.slate }]}>Checking…</Text>
                 ) : easetagValidationError ? (
                   <Text style={[styles.easetagStatusTextInline, styles.easetagUnavailableText]} numberOfLines={2}>
                     {easetagValidationError}
                   </Text>
                 ) : easetagAvailable === true ? (
                   <>
-                    <Ionicons name="checkmark-circle" size={16} color="#0F8A5F" />
+                    <CircleCheck size={16} color={palette.success.main} strokeWidth={2} />
                     <Text style={[styles.easetagStatusTextInline, styles.easetagAvailableText]}>
                       Available
                     </Text>
                   </>
                 ) : easetagAvailable === false ? (
                   <>
-                    <Ionicons name="close-circle" size={16} color="#7A2E2E" />
+                    <CircleX size={16} color={palette.error.main} strokeWidth={2} />
                     <Text style={[styles.easetagStatusTextInline, styles.easetagUnavailableText]}>
                       Taken
                     </Text>
@@ -488,7 +913,7 @@ function ProfileContent({ navigation }: NavigationProps) {
               value={editProfileData.easetag}
               onChangeText={handleEasetagChange}
               placeholder="youreasetag"
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor={palette.text.tertiary}
               autoCapitalize="none"
               autoCorrect={false}
               returnKeyType="done"
@@ -496,7 +921,7 @@ function ProfileContent({ navigation }: NavigationProps) {
               maxLength={20}
             />
             <View style={styles.easetagSpinnerSlot}>
-              {checkingEasetag ? <ActivityIndicator size="small" color="#6F756F" /> : null}
+              {checkingEasetag ? <ActivityIndicator size="small" color={palette.brand.slate} /> : null}
             </View>
           </View>
           <Text style={styles.fieldDescription}>
@@ -531,7 +956,7 @@ function ProfileContent({ navigation }: NavigationProps) {
             <Text style={styles.currencySelectorText}>
               {editProfileData.baseCurrency} - {currencies.find(c => c.code === editProfileData.baseCurrency)?.name || 'Select Currency'}
             </Text>
-            <Ionicons name="chevron-down" size={16} color="#6F756F" />
+            <ChevronDown size={16} color={palette.brand.slate} strokeWidth={2} />
           </View>
         </Pressable>
       ) : (
@@ -589,7 +1014,7 @@ function ProfileContent({ navigation }: NavigationProps) {
               <Text style={styles.sectionTitle}>Profile</Text>
           {!isEditing ? (
                 <Pressable android_ripple={ripple.neutral} onPress={handleEditProfile} style={styles.editButtonContainer} >
-                  <Ionicons name="pencil-outline" size={18} color="#ffffff" />
+                  <Pencil size={18} color={palette.neutral.white} strokeWidth={2} />
               <Text style={styles.editButton}>Edit</Text>
             </Pressable>
           ) : (
@@ -672,7 +1097,7 @@ function ProfileContent({ navigation }: NavigationProps) {
             <View style={styles.statusContent}>
               <View style={styles.statusItem}>
                 <View style={styles.statusLeft}>
-                  <Ionicons name="mail-outline" size={16} color="#007ACC" />
+                  <Mail size={16} color={palette.primary.main} strokeWidth={2} />
                   <Text style={styles.statusLabel}>Email</Text>
                 </View>
                 <View style={[styles.statusBadge, userProfile?.email_confirmed_at ? styles.verifiedBadge : styles.pendingBadge]}>
@@ -710,7 +1135,7 @@ function ProfileContent({ navigation }: NavigationProps) {
 
       {/* Sign Out */}
       <View style={styles.section}>
-        {renderMenuButton('Sign Out', handleSignOut, true)}
+        {renderMenuButton('Sign Out', handleSignOutPress, true)}
       </View>
 
       {/* App Version */}
@@ -734,419 +1159,34 @@ function ProfileContent({ navigation }: NavigationProps) {
         title={termsLink.title}
         onClose={termsLink.closeLink}
       />
+
+      <EasnerAlertSheet
+        visible={showLogoutDialog}
+        onDismiss={() => {
+          if (!isLoggingOut) setShowLogoutDialog(false)
+        }}
+        title="Sign Out"
+        message="Are you sure you want to sign out?"
+        primaryLabel="Sign Out"
+        onPrimary={() => void performSignOut()}
+        secondaryLabel="Cancel"
+        onSecondary={() => setShowLogoutDialog(false)}
+        primaryLoading={isLoggingOut}
+      />
+
+      <EasnerAlertSheet
+        visible={profileNotice !== null}
+        onDismiss={() => setProfileNotice(null)}
+        title={profileNotice?.title ?? ''}
+        message={profileNotice?.message ?? ''}
+        primaryLabel="OK"
+        onPrimary={() => setProfileNotice(null)}
+        singleAction
+      />
       </KeyboardSafeContainer>
     </ScreenWrapper>
   )
 }
-
-const styles = StyleSheet.create({
-  scrollContainer: {
-    flex: 1,
-    backgroundColor: '#f9fafb',
-  },
-  header: {
-    padding: 24,
-    backgroundColor: '#ffffff',
-  },
-  headerTopRow: {
-    flexDirection: 'row',
-    marginBottom: 12,
-  },
-  headerAvatar: {
-    ...userAvatarStyles.circle,
-  },
-  pageTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  pageSubtitle: {
-    fontSize: 16,
-    color: '#6F756F',
-  },
-  contentContainer: {
-    padding: 24,
-    gap: 24,
-  },
-  section: {
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    padding: 20,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  sectionTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  editButtonContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 20,
-    backgroundColor: '#007ACC',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  editButton: {
-    fontSize: 14,
-    color: '#ffffff',
-    fontWeight: '600',
-    fontFamily: 'Outfit-SemiBold',
-  },
-  editActions: {
-    flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'flex-end',
-  },
-  cancelButton: {
-    fontSize: 14,
-    color: '#6F756F',
-    fontWeight: '500',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: '#f9fafb',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    textAlign: 'center',
-  },
-  saveButton: {
-    fontSize: 14,
-    color: '#ffffff',
-    fontWeight: '600',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    backgroundColor: '#007ACC',
-    borderRadius: 8,
-    textAlign: 'center',
-  },
-  disabledButton: {
-    color: '#9ca3af',
-    backgroundColor: '#f3f4f6',
-  },
-  profileContent: {
-    gap: 8,
-  },
-  fieldRow: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  fieldContainer: {
-    marginBottom: 3,
-  },
-  fieldLabel: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: '#6F756F',
-    marginBottom: 0,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  fieldLabelEdit: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: '#6F756F',
-    marginBottom: 4,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  fieldInput: {
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    minHeight: 48,
-    fontSize: 16,
-    backgroundColor: '#ffffff',
-    ...Platform.select({
-      android: { includeFontPadding: false, textAlignVertical: 'center' },
-      ios: { paddingVertical: 12 },
-    }),
-  },
-  fieldValue: {
-    fontSize: 16,
-    color: '#111827',
-    paddingVertical: 8,
-    fontWeight: '500',
-  },
-  currencySelector: {
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 6,
-    padding: 12,
-    backgroundColor: '#ffffff',
-  },
-  currencySelectorContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  currencyFlag: {
-    fontSize: 16,
-  },
-  currencySelectorText: {
-    flex: 1,
-    fontSize: 16,
-    color: '#111827',
-  },
-  currencyDisplay: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 12,
-  },
-  currencyText: {
-    fontSize: 16,
-    color: '#111827',
-    fontWeight: '600',
-  },
-  currencyDescription: {
-    fontSize: 12,
-    color: '#6F756F',
-    marginTop: 2,
-  },
-  easetagLabelContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 4,
-    gap: 8,
-  },
-  easetagStatusSlot: {
-    width: 132,
-    minHeight: 36,
-    alignItems: 'flex-end',
-  },
-  easetagStatusContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    flexWrap: 'wrap',
-    justifyContent: 'flex-end',
-    maxWidth: '100%',
-  },
-  easetagStatusTextInline: {
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  easetagInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 6,
-    backgroundColor: '#ffffff',
-    overflow: 'hidden',
-  },
-  easetagPrefix: {
-    fontSize: 16,
-    color: '#6F756F',
-    paddingLeft: 12,
-    paddingRight: 4,
-    fontWeight: '500',
-  },
-  easetagInput: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingRight: 12,
-    minHeight: 48,
-    fontSize: 16,
-    color: '#111827',
-    ...Platform.select({
-      android: { includeFontPadding: false, textAlignVertical: 'center' },
-      ios: { paddingVertical: 12 },
-    }),
-  },
-  easetagSpinnerSlot: {
-    width: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingRight: 12,
-  },
-  easetagAvailableText: {
-    color: '#0F8A5F',
-  },
-  easetagUnavailableText: {
-    color: '#7A2E2E',
-  },
-  fieldDescription: {
-    fontSize: 12,
-    color: '#6F756F',
-    marginTop: 2,
-  },
-  statusContent: {
-    gap: 12,
-  },
-  statusItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 2,
-  },
-  statusLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  statusLabel: {
-    fontSize: 14,
-    color: '#374151',
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  verifiedBadge: {
-    backgroundColor: '#dcfce7',
-  },
-  pendingBadge: {
-    backgroundColor: '#fef3c7',
-  },
-  statusBadgeText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  verifiedText: {
-    color: '#166534',
-  },
-  pendingText: {
-    color: '#92400e',
-  },
-  statusDivider: {
-    height: 1,
-    backgroundColor: '#e5e7eb',
-  },
-  statusStats: {
-    gap: 12,
-  },
-  statusStatItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  statusStatLabel: {
-    fontSize: 14,
-    color: '#6F756F',
-  },
-  statusStatValue: {
-    fontSize: 14,
-    color: '#111827',
-    fontWeight: '500',
-  },
-  menuButton: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-  },
-  menuButtonText: {
-    fontSize: 16,
-    color: '#111827',
-  },
-  destructiveText: {
-    color: '#7A2E2E',
-  },
-  menuButtonArrow: {
-    fontSize: 20,
-    color: '#9ca3af',
-  },
-  versionContainer: {
-    alignItems: 'center',
-    paddingVertical: 20,
-  },
-  versionText: {
-    fontSize: 14,
-    color: '#9ca3af',
-  },
-  // Currency Picker Modal Styles
-  currencyModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  currencyModalContent: {
-    backgroundColor: '#ffffff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '70%',
-  },
-  currencyModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  currencyModalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  currencyCloseButton: {
-    padding: 4,
-  },
-  currencyItem: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-  },
-  currencyInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  currencyDetails: {
-    flex: 1,
-  },
-  currencyCode: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#111827',
-  },
-  currencyName: {
-    fontSize: 14,
-    color: '#6F756F',
-    marginTop: 2,
-  },
-  currencySymbol: {
-    fontSize: 16,
-    color: '#6F756F',
-  },
-  disabledHint: {
-    fontSize: 12,
-    color: '#6F756F',
-    fontStyle: 'italic',
-  },
-  fieldValueDisabled: {
-    color: '#9ca3af',
-  },
-})
 
 // Export ProfileScreen directly (authentication handled at navigator level)
 export default function ProfileScreen(props: NavigationProps) {

@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { View, Text, StyleSheet, Pressable, Platform, ActivityIndicator, FlatList } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { ArrowLeft } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { apiGet, apiPost } from '../../lib/apiClient'
-import { colors, textStyles, spacing, borderRadius } from '../../theme'
+import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, spacing, borderRadius, fontFamily } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 
 type Offer = {
@@ -68,7 +68,7 @@ export default function OpenCurrencyAccountScreen({ navigation }: NavigationProp
       <View style={styles.container}>
         <View style={styles.header}>
           <Pressable android_ripple={ripple.neutral} onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
+            <ArrowLeft size={22} color={colors.primary.main} strokeWidth={2} />
           </Pressable>
           <Text style={styles.title}>Open Currency Account</Text>
         </View>
@@ -120,31 +120,21 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background.primary, padding: spacing[5] },
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing[4], gap: spacing[3] },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    alignItems: 'center',
-    justifyContent: 'center',
+    ...surfaceChromeCircleStyle(colors, 40),
   },
-  title: { ...textStyles.headlineSmall, color: colors.text.primary, fontFamily: 'Outfit-SemiBold' },
+  title: { ...textStyles.headlineSmall, color: colors.text.primary, fontFamily: fontFamily.semibold },
   error: { ...textStyles.bodySmall, color: colors.error.main, marginBottom: spacing[3] },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list: { gap: spacing[3], paddingBottom: spacing[8] },
   item: {
-    backgroundColor: colors.frame.background,
-    borderRadius: borderRadius.lg,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.lg }),
     padding: spacing[3],
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[2],
   },
   itemTextWrap: { flex: 1 },
-  itemTitle: { ...textStyles.bodyMedium, color: colors.text.primary, fontFamily: 'Outfit-SemiBold' },
+  itemTitle: { ...textStyles.bodyMedium, color: colors.text.primary, fontFamily: fontFamily.semibold },
   itemSubtitle: { ...textStyles.bodySmall, color: colors.text.secondary },
   addBtn: {
     minWidth: 64,
@@ -156,6 +146,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[3],
   },
   addBtnDisabled: { opacity: 0.5 },
-  addBtnText: { ...textStyles.bodySmall, color: colors.text.inverse, fontFamily: 'Outfit-SemiBold' },
+  addBtnText: { ...textStyles.bodySmall, color: colors.text.inverse, fontFamily: fontFamily.semibold },
 })
 

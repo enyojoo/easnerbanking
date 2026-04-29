@@ -8,7 +8,14 @@ import {
   StyleProp,
   AccessibilityRole,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import {
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  Eye,
+  EyeOff,
+  ArrowRight,
+} from 'lucide-react-native'
 import {
   borderRadius,
   spacing,
@@ -21,7 +28,7 @@ import {
  * BalanceCard — hero balance moment on mobile.
  *
  * Design intent: private-bank, editorial, tactile. Mirrors the web
- * `BalanceCard` (ivory in light, carbon in dark, serif tabular amount,
+ * `BalanceCard` (ivory in light, carbon in dark, sans tabular amount,
  * emerald-only positive delta, no bright red).
  */
 export interface BalanceCardProps {
@@ -108,17 +115,13 @@ export function BalanceCard({
                 { backgroundColor: deltaBackground },
               ]}
             >
-              <Ionicons
-                name={
-                  deltaTone === 'positive'
-                    ? 'trending-up'
-                    : deltaTone === 'negative'
-                      ? 'trending-down'
-                      : 'remove'
-                }
-                size={12}
-                color={deltaTextColor}
-              />
+              {deltaTone === 'positive' ? (
+                <TrendingUp size={12} color={deltaTextColor} strokeWidth={2.5} />
+              ) : deltaTone === 'negative' ? (
+                <TrendingDown size={12} color={deltaTextColor} strokeWidth={2.5} />
+              ) : (
+                <Minus size={12} color={deltaTextColor} strokeWidth={2.5} />
+              )}
               <Text
                 style={[
                   styles.deltaText,
@@ -147,11 +150,11 @@ export function BalanceCard({
             ]}
             hitSlop={8}
           >
-            <Ionicons
-              name={hidden ? 'eye-outline' : 'eye-off-outline'}
-              size={20}
-              color={palette.text.secondary}
-            />
+            {hidden ? (
+              <Eye size={20} color={palette.text.secondary} strokeWidth={2} />
+            ) : (
+              <EyeOff size={20} color={palette.text.secondary} strokeWidth={2} />
+            )}
           </Pressable>
         ) : null}
       </View>
@@ -202,11 +205,7 @@ export function BalanceCard({
             >
               {primaryAction.label}
             </Text>
-            <Ionicons
-              name="arrow-forward"
-              size={16}
-              color={palette.text.inverse}
-            />
+            <ArrowRight size={16} color={palette.text.inverse} strokeWidth={2} />
           </Pressable>
         </View>
       ) : null}

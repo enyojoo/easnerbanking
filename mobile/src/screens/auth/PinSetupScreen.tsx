@@ -5,16 +5,15 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { HelpCircle } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { NavigationProps } from '../../types'
-import { colors, textStyles, borderRadius, spacing, useThemeColors } from '../../theme'
+import { colors, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, useThemeColors } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import {
   setupPin,
@@ -27,14 +26,22 @@ import { emitAppLocked } from '../../lib/app-lock-bus'
 import { useAuth } from '../../contexts/AuthContext'
 import { appPinStrings } from '../../constants/app-pin-en'
 import { PinKeypad } from '../../components/pin'
+import { EasnerAlertSheet } from '../../components/premium'
+import { useToast } from '../../components/ToastProvider'
 
 export default function PinSetupScreen({ navigation, route }: NavigationProps) {
   const palette = useThemeColors()
   const { user, signOut } = useAuth()
+  const { showError } = useToast()
   const [pin, setPin] = useState<string[]>(['', '', '', ''])
   const [confirmPin, setConfirmPin] = useState<string[]>(['', '', '', ''])
   const [step, setStep] = useState<'pin' | 'confirm'>('pin')
   const [loading, setLoading] = useState(false)
+  const [mismatchSheetOpen, setMismatchSheetOpen] = useState(false)
+  const [setupFailSheetOpen, setSetupFailSheetOpen] = useState(false)
+  const [setupFailMessage, setSetupFailMessage] = useState('')
+  const [helpSheetOpen, setHelpSheetOpen] = useState(false)
+  const [logoutSheetOpen, setLogoutSheetOpen] = useState(false)
   const insets = useSafeAreaInsets()
   const isMandatory = route?.params?.mandatory || false
 
@@ -94,22 +101,12 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
     const confirmPinStringFinal = confirmPinString || confirmPin.join('')
 
     if (pinString.length !== 4 || confirmPinStringFinal.length !== 4) {
-      Alert.alert(appPinStrings.errorTitle, appPinStrings.completePinPrompt)
+      showError(appPinStrings.completePinPrompt)
       return
     }
 
     if (pinString !== confirmPinStringFinal) {
-      Alert.alert(appPinStrings.errorTitle, appPinStrings.mismatch, [
-        {
-          text: 'OK',
-          onPress: () => {
-            // Reset to first step - Create PIN
-            setStep('pin')
-            setPin(['', '', '', ''])
-            setConfirmPin(['', '', '', ''])
-          },
-        },
-      ])
+      setMismatchSheetOpen(true)
       return
     }
 
@@ -136,18 +133,8 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
         navigation.goBack()
       }
     } else {
-      Alert.alert(appPinStrings.errorTitle, result.error || appPinStrings.setupFailed, [
-        {
-          text: 'OK',
-          onPress: () => {
-            // Reset to first step on error
-            setStep('pin')
-            setPin(['', '', '', ''])
-            setConfirmPin(['', '', '', ''])
-            setLoading(false)
-          },
-        },
-      ])
+      setSetupFailMessage(result.error || appPinStrings.setupFailed)
+      setSetupFailSheetOpen(true)
     }
   }
 
@@ -189,13 +176,10 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
            android_ripple={ripple.neutral}
             style={styles.headerButton}
             onPress={() => {
-              Alert.alert(
-                step === 'pin' ? appPinStrings.setupTitle : appPinStrings.confirmTitle,
-                step === 'pin' ? appPinStrings.setupSubtitle : appPinStrings.confirmSubtitle,
-              )
+              setHelpSheetOpen(true)
             }} >
             <View style={styles.headerButtonCircle}>
-              <Ionicons name="help-circle-outline" size={20} color={palette.text.primary} />
+              <HelpCircle size={20} color={palette.text.primary} strokeWidth={2} />
             </View>
           </Pressable>
         </View>
@@ -247,21 +231,7 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
              android_ripple={ripple.neutral}
               style={[styles.logoutLink, { paddingBottom: spacing[4] }]}
               onPress={() => {
-                Alert.alert(
-                  'Log Out',
-                  'Are you sure you want to log out?',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Log Out',
-                      style: 'destructive',
-                      onPress: async () => {
-                        // Call signOut to properly clear session and navigate
-                        await signOut()
-                      },
-                    },
-                  ]
-                )
+                setLogoutSheetOpen(true)
               }} >
               <Text style={styles.logoutText}>
                 Not your account? <Text style={styles.logoutLinkText}>Log out</Text>
@@ -271,6 +241,59 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
         </View>
       </KeyboardAvoidingView>
 
+      <EasnerAlertSheet
+        visible={mismatchSheetOpen}
+        onDismiss={() => setMismatchSheetOpen(false)}
+        title={appPinStrings.errorTitle}
+        message={appPinStrings.mismatch}
+        primaryLabel="OK"
+        onPrimary={() => {
+          setMismatchSheetOpen(false)
+          setStep('pin')
+          setPin(['', '', '', ''])
+          setConfirmPin(['', '', '', ''])
+        }}
+        singleAction
+      />
+      <EasnerAlertSheet
+        visible={setupFailSheetOpen}
+        onDismiss={() => setSetupFailSheetOpen(false)}
+        title={appPinStrings.errorTitle}
+        message={setupFailMessage || appPinStrings.setupFailed}
+        primaryLabel="OK"
+        onPrimary={() => {
+          setSetupFailSheetOpen(false)
+          setStep('pin')
+          setPin(['', '', '', ''])
+          setConfirmPin(['', '', '', ''])
+          setLoading(false)
+        }}
+        singleAction
+      />
+      <EasnerAlertSheet
+        visible={helpSheetOpen}
+        onDismiss={() => setHelpSheetOpen(false)}
+        title={step === 'pin' ? appPinStrings.setupTitle : appPinStrings.confirmTitle}
+        message={step === 'pin' ? appPinStrings.setupSubtitle : appPinStrings.confirmSubtitle}
+        primaryLabel="OK"
+        onPrimary={() => setHelpSheetOpen(false)}
+        singleAction
+      />
+      <EasnerAlertSheet
+        visible={logoutSheetOpen}
+        onDismiss={() => setLogoutSheetOpen(false)}
+        title="Log Out"
+        message="Are you sure you want to log out?"
+        primaryLabel="Log Out"
+        onPrimary={() => {
+          void (async () => {
+            setLogoutSheetOpen(false)
+            await signOut()
+          })()
+        }}
+        secondaryLabel="Cancel"
+        onSecondary={() => setLogoutSheetOpen(false)}
+      />
     </View>
   )
 }
@@ -298,14 +321,7 @@ const styles = StyleSheet.create({
     padding: spacing[1],
   },
   headerButtonCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.frame.background,
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+    ...surfaceChromeCircleStyle(colors, 40),
   },
   content: {
     flex: 1,

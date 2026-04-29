@@ -1,9 +1,31 @@
 import React from 'react'
 import { View, Text, StyleSheet } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { ArrowUp, RefreshCw, CircleCheck } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { TransactionData } from '../lib/transactionService'
 import { colors, textStyles, borderRadius, spacing } from '../theme'
+
+function StageGlyph({
+  glyph,
+  size,
+  color,
+}: {
+  glyph: string
+  size: number
+  color: string
+}) {
+  const p = { size, color, strokeWidth: 2 as const }
+  switch (glyph) {
+    case 'arrow-up':
+      return <ArrowUp {...p} />
+    case 'sync':
+      return <RefreshCw {...p} />
+    case 'checkmark-circle':
+      return <CircleCheck {...p} />
+    default:
+      return <ArrowUp {...p} />
+  }
+}
 
 interface TimelineStage {
   id: string
@@ -86,19 +108,11 @@ export function TransactionTimeline({ transaction }: TransactionTimelineProps) {
                 colors={colors.success.gradient}
                 style={styles.iconCircle}
             >
-              <Ionicons
-                name={stage.icon as any}
-                  size={18}
-                  color={colors.text.inverse}
-                />
+              <StageGlyph glyph={stage.icon} size={18} color={colors.text.inverse} />
               </LinearGradient>
             ) : (
               <View style={styles.iconCirclePending}>
-                <Ionicons
-                  name={stage.icon as any}
-                  size={18}
-                  color={colors.neutral[400]}
-              />
+                <StageGlyph glyph={stage.icon} size={18} color={colors.neutral[400]} />
             </View>
             )}
             {/* Connecting Line */}

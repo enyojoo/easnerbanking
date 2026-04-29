@@ -2,6 +2,8 @@
  * Formatters for various input types
  */
 
+import { easnerBrand } from '@easner/shared'
+
 /**
  * Format phone number as user types
  */
@@ -93,32 +95,51 @@ export function formatCurrency(
   return showSymbol ? `${symbol}${formatted}` : formatted
 }
 
+export type TransactionStatusTone =
+  | 'completed'
+  | 'pending'
+  | 'processing'
+  | 'failed'
+  | 'cancelled'
+  | 'neutral'
+
+export type TransactionStatusDisplay = {
+  label: string
+  color: string
+  tone: TransactionStatusTone
+}
+
 /**
- * Map Bridge API transaction status to user-friendly label and color
- * Matches logic used in TransactionDetailsScreen (ledger)
+ * Map Bridge API transaction status to user-friendly label, legacy raw color (kept
+ * for backwards-compat call sites), and a `tone` that the new `StatusPill` primitive
+ * consumes directly.
  */
-export function getTransactionStatusDisplay(status: string): { label: string; color: string } | null {
+export function getTransactionStatusDisplay(status: string): TransactionStatusDisplay | null {
   if (!status) return null
   const statusLower = status.toLowerCase()
   if (statusLower.includes('processed') || statusLower.includes('completed')) {
-    return { label: 'Completed', color: '#0F8A5F' }
+    return { label: 'Completed', color: easnerBrand.emerald, tone: 'completed' }
   }
   if (statusLower.includes('pending') || statusLower.includes('awaiting') || statusLower.includes('scheduled') || statusLower.includes('received') || statusLower.includes('submitted')) {
-    return { label: 'Processing', color: '#6F756F' }
+    return { label: 'Processing', color: easnerBrand.slate, tone: 'processing' }
   }
   if (statusLower.includes('failed') || statusLower.includes('returned')) {
-    return { label: 'Failed', color: '#7A2E2E' }
+    return { label: 'Failed', color: easnerBrand.oxblood, tone: 'failed' }
   }
   if (statusLower.includes('refunded')) {
-    return { label: 'Refunded', color: '#7A2E2E' }
+    return { label: 'Refunded', color: easnerBrand.oxblood, tone: 'failed' }
   }
   if (statusLower.includes('review')) {
-    return { label: 'In Review', color: '#A8792A' }
+    return { label: 'In Review', color: easnerBrand.amber, tone: 'pending' }
   }
   if (statusLower.includes('cancelled')) {
-    return { label: 'Cancelled', color: '#6F756F' }
+    return { label: 'Cancelled', color: easnerBrand.slate, tone: 'cancelled' }
   }
-  return { label: status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), color: '#6F756F' }
+  return {
+    label: status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+    color: easnerBrand.slate,
+    tone: 'neutral',
+  }
 }
 
 /**

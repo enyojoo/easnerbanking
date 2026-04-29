@@ -8,7 +8,7 @@ import {
   StyleProp,
   AccessibilityRole,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import { ArrowDown, ArrowUp } from 'lucide-react-native'
 import {
   borderRadius,
   spacing,
@@ -110,11 +110,11 @@ export function TransactionRow({
             },
           ]}
         >
-          <Ionicons
-            name={isCredit ? 'arrow-down' : 'arrow-up'}
-            size={16}
-            color={iconColor}
-          />
+          {isCredit ? (
+            <ArrowDown size={16} color={iconColor} strokeWidth={2.5} />
+          ) : (
+            <ArrowUp size={16} color={iconColor} strokeWidth={2.5} />
+          )}
         </View>
         <View style={styles.textBlock}>
           <Text

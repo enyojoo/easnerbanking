@@ -8,8 +8,8 @@ import {
   Modal,
   Animated,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
-import { colors, textStyles, borderRadius, spacing, shadows } from '../theme'
+import { CircleAlert, TriangleAlert, Info } from 'lucide-react-native'
+import { colors, textStyles, borderRadius, spacing, shadows, fontFamily } from '../theme'
 import { ripple } from '../lib/androidRipple'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
@@ -69,17 +69,6 @@ export default function ConfirmationDialog({
     }
   }, [visible])
 
-  const getIcon = () => {
-    switch (type) {
-      case 'danger':
-        return 'alert-circle'
-      case 'warning':
-        return 'warning'
-      default:
-        return 'information-circle'
-    }
-  }
-
   const getIconColor = () => {
     switch (type) {
       case 'danger':
@@ -101,6 +90,10 @@ export default function ConfirmationDialog({
         return colors.primary.main
     }
   }
+
+  const iconTint = getIconColor()
+  const DialogIcon =
+    type === 'danger' ? CircleAlert : type === 'warning' ? TriangleAlert : Info
 
   return (
     <Modal
@@ -129,7 +122,7 @@ export default function ConfirmationDialog({
           ]}
         >
           <View style={styles.iconContainer}>
-            <Ionicons name={getIcon()} size={48} color={getIconColor()} />
+            <DialogIcon size={48} color={iconTint} strokeWidth={2} />
           </View>
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
@@ -191,7 +184,7 @@ const styles = StyleSheet.create({
   title: {
     ...textStyles.headlineMedium,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
     marginBottom: spacing[2],
     textAlign: 'center',
   },
@@ -228,12 +221,12 @@ const styles = StyleSheet.create({
   cancelText: {
     ...textStyles.bodyLarge,
     color: colors.text.primary,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
   confirmText: {
     ...textStyles.bodyLarge,
     color: colors.text.inverse,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: fontFamily.semibold,
   },
 })
 
