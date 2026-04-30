@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { Platform } from 'react-native'
 import type { CommunicationPreferences } from '@easner/shared'
 import { useAuth } from '../contexts/AuthContext'
 import { apiGet, apiPost } from '../lib/apiClient'
@@ -29,9 +30,12 @@ export function PushNotificationBootstrap() {
         if (!prefs || cancelled) return
 
         if (prefs.channels.push) {
-          const token = await pushNotificationService.registerForPushNotifications()
-          if (token && !cancelled) {
-            await apiPost('/api/settings/push-token', { expoPushToken: token })
+          const reg = await pushNotificationService.registerForPushNotifications()
+          if (reg.ok && !cancelled) {
+            await apiPost('/api/settings/push-token', {
+              expoPushToken: reg.token,
+              platform: Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : undefined,
+            })
           }
         } else {
           await pushNotificationService.clearLocalPushToken()

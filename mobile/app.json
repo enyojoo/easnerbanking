@@ -45,6 +45,7 @@
       "edgeToEdgeEnabled": true,
       "package": "com.easner.mobile",
       "permissions": [
+        "android.permission.POST_NOTIFICATIONS",
         "android.permission.RECORD_AUDIO"
       ],
       "intentFilters": [
@@ -73,6 +74,12 @@
       }
     },
     "plugins": [
+      [
+        "expo-notifications",
+        {
+          "sounds": []
+        }
+      ],
       "expo-system-ui",
       "expo-secure-store",
       "expo-image-picker",

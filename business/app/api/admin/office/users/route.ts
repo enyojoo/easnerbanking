@@ -62,22 +62,32 @@ export async function GET(request: Request) {
     }
   }
 
-  const users = (rows ?? []).map((row) => {
-    const r = row as UserRow & {
-      communication_preferences?: unknown
-      expo_push_token?: string | null
+  const userIds = (rows ?? []).map((r) => String((r as { id: string }).id))
+  const countByUser = new Map<string, number>()
+  if (userIds.length) {
+    const { data: devRows, error: devErr } = await admin
+      .from("user_push_devices")
+      .select("user_id")
+      .in("user_id", userIds)
+    if (!devErr && devRows) {
+      for (const d of devRows) {
+        const uid = String((d as { user_id: string }).user_id)
+        countByUser.set(uid, (countByUser.get(uid) ?? 0) + 1)
+      }
     }
+  }
+
+  const users = (rows ?? []).map((row) => {
+    const r = row as UserRow & { communication_preferences?: unknown }
     const org = r.easner_business_id ? orgKybByBusinessId.get(r.easner_business_id) : undefined
-    const token = r.expo_push_token
-    const hasExpoPushToken = typeof token === "string" && token.length > 0
-    const { expo_push_token: _omitToken, communication_preferences: commRaw, ...rest } = row as Record<
-      string,
-      unknown
-    >
+    const n = countByUser.get(r.id) ?? 0
+    const hasExpoPushToken = n > 0
+    const { communication_preferences: commRaw, ...rest } = row as Record<string, unknown>
     return {
       ...rest,
       communicationPreferences: parseCommunicationPreferences(commRaw),
       hasExpoPushToken,
+      pushDeviceCount: n,
       email_confirmed_at: authById.get(r.id) ?? null,
       ...(org
         ? {

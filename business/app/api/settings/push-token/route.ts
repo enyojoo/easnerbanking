@@ -2,16 +2,16 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 
 /**
- * Register or clear the Expo push token for the authenticated user (mobile).
- * Does not return the stored token.
+ * Register or clear Expo push tokens for the authenticated user (mobile).
+ * Canonical storage: `public.user_push_devices` (one row per device token).
  */
 export async function POST(request: Request) {
   const user = await getUserFromApiRequest(request)
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  let body: { expoPushToken?: string | null } = {}
+  let body: { expoPushToken?: string | null; platform?: string | null } = {}
   try {
-    body = (await request.json()) as { expoPushToken?: string | null }
+    body = (await request.json()) as { expoPushToken?: string | null; platform?: string | null }
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
   }
@@ -24,43 +24,53 @@ export async function POST(request: Request) {
         ? raw.trim() || null
         : null
 
+  const platformRaw = body.platform
+  const platform =
+    platformRaw === "ios" || platformRaw === "android" || platformRaw === "web" ? platformRaw : null
+
   const admin = createSupabaseAdmin()
   const now = new Date().toISOString()
-  const prefUpsert = await admin
-    .from("user_preferences")
-    .upsert(
-      {
-        user_id: user.id,
-        expo_push_token: token,
-        expo_push_token_updated_at: token ? now : null,
-        updated_at: now,
-      },
-      { onConflict: "user_id" },
-    )
 
-  if (prefUpsert.error) {
-    if (prefUpsert.error.code === "42P01" || prefUpsert.error.code === "42703") {
+  if (token === null) {
+    const del = await admin.from("user_push_devices").delete().eq("user_id", user.id)
+    if (del.error && del.error.code !== "42P01") {
+      console.warn("push-token delete user_push_devices:", del.error)
+      return NextResponse.json({ error: del.error.message }, { status: 500 })
+    }
+
+    return NextResponse.json({ ok: true, hasExpoPushToken: false, deviceCount: 0 })
+  }
+
+  const upsertDevice = await admin.from("user_push_devices").upsert(
+    {
+      user_id: user.id,
+      expo_push_token: token,
+      platform,
+      last_seen_at: now,
+      updated_at: now,
+    },
+    { onConflict: "user_id,expo_push_token" },
+  )
+
+  if (upsertDevice.error) {
+    if (upsertDevice.error.code === "42P01" || upsertDevice.error.code === "42703") {
       return NextResponse.json(
-        { error: "user_preferences push-token columns missing — apply latest Supabase migrations." },
+        { error: "user_push_devices missing — apply latest Supabase migrations." },
         { status: 503 },
       )
     }
-    console.error("push-token POST user_preferences:", prefUpsert.error)
-    return NextResponse.json({ error: prefUpsert.error.message }, { status: 500 })
+    console.error("push-token upsert user_push_devices:", upsertDevice.error)
+    return NextResponse.json({ error: upsertDevice.error.message }, { status: 500 })
   }
 
-  // Compatibility: keep legacy users columns in sync when present.
-  const legacyUp = await admin
-    .from("users")
-    .update({
-      expo_push_token: token,
-      expo_push_token_updated_at: token ? now : null,
-      updated_at: now,
-    })
-    .eq("id", user.id)
-  if (legacyUp.error && legacyUp.error.code !== "42703") {
-    console.warn("push-token POST legacy users update (non-fatal):", legacyUp.error)
-  }
+  const { count } = await admin
+    .from("user_push_devices")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
 
-  return NextResponse.json({ ok: true, hasExpoPushToken: Boolean(token) })
+  return NextResponse.json({
+    ok: true,
+    hasExpoPushToken: true,
+    deviceCount: typeof count === "number" ? count : undefined,
+  })
 }

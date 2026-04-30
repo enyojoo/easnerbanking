@@ -1,4 +1,5 @@
 import * as Device from 'expo-device'
+import Constants from 'expo-constants'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import type {
   Notification,
@@ -39,26 +40,55 @@ export interface PushNotificationData {
   }
 }
 
+/** Result of attempting to obtain an Expo push token (for server `user_push_devices`). */
+export type RegisterPushResult =
+  | { ok: true; token: string }
+  | {
+      ok: false
+      reason: 'expo_go' | 'simulator' | 'permission_denied' | 'error'
+      detail?: string
+    }
+
+function getExpoProjectId(): string | undefined {
+  const extra = Constants.expoConfig?.extra
+  const eas =
+    extra && typeof extra === 'object' && 'eas' in extra
+      ? (extra as { eas?: { projectId?: string } }).eas
+      : undefined
+  const fromExtra = typeof eas?.projectId === 'string' ? eas.projectId.trim() : ''
+  const fromEasConfig =
+    typeof Constants.easConfig?.projectId === 'string' ? Constants.easConfig.projectId.trim() : ''
+  const id = fromExtra || fromEasConfig
+  return id.length > 0 ? id : undefined
+}
+
 class PushNotificationService {
   private expoPushToken: string | null = null
 
   /**
-   * Register for push notifications and get the Expo push token
+   * Register for push notifications and get the Expo push token for the backend.
+   * Remote push requires a physical device; emulators and Expo Go cannot supply a real token.
    */
-  async registerForPushNotifications(): Promise<string | null> {
+  async registerForPushNotifications(): Promise<RegisterPushResult> {
     const Notifications = getNotifications()
-    if (!Notifications) return null
+    if (!Notifications) {
+      return { ok: false, reason: 'expo_go', detail: 'Use a dev build for remote push.' }
+    }
 
     try {
       if (!Device.isDevice) {
         console.log('Must use physical device for Push Notifications')
-        return null
+        return {
+          ok: false,
+          reason: 'simulator',
+          detail: 'Push tokens are not available on simulators/emulators.',
+        }
       }
 
       const storedToken = await AsyncStorage.getItem('expoPushToken')
       if (storedToken) {
         this.expoPushToken = storedToken
-        return storedToken
+        return { ok: true, token: storedToken }
       }
 
       const { status: existingStatus } = await Notifications.getPermissionsAsync()
@@ -71,19 +101,29 @@ class PushNotificationService {
 
       if (finalStatus !== 'granted') {
         console.log('Failed to get push token for push notification!')
-        return null
+        return {
+          ok: false,
+          reason: 'permission_denied',
+          detail: 'Allow notifications for this app in system Settings.',
+        }
       }
 
-      const token = (await Notifications.getExpoPushTokenAsync()).data
+      const projectId = getExpoProjectId()
+      const token = (
+        projectId
+          ? await Notifications.getExpoPushTokenAsync({ projectId })
+          : await Notifications.getExpoPushTokenAsync()
+      ).data
       this.expoPushToken = token
 
       await AsyncStorage.setItem('expoPushToken', token)
 
       console.log('Expo push token:', token)
-      return token
+      return { ok: true, token }
     } catch (error) {
       console.error('Error registering for push notifications:', error)
-      return null
+      const msg = error instanceof Error ? error.message : String(error)
+      return { ok: false, reason: 'error', detail: msg }
     }
   }
 

@@ -91,20 +91,31 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
   const handlePushToggle = async (wantPush: boolean) => {
     if (!prefs) return
     if (wantPush) {
+      const previousPrefs = prefs
       const optimistic: CommunicationPreferences = {
         ...prefs,
         channels: { ...prefs.channels, push: true },
       }
       await commitCommunicationPreferences(optimistic)
       try {
-        const token = await pushNotificationService.registerForPushNotifications()
-        if (!token) {
-          showWarning(
-            'Push was not enabled. Use a physical device and allow notifications in Settings if you previously denied them.',
-          )
+        const reg = await pushNotificationService.registerForPushNotifications()
+        if (!reg.ok) {
+          const msg =
+            reg.reason === 'simulator'
+              ? 'Push needs a physical phone. Simulators and emulators cannot register an Expo push token.'
+              : reg.reason === 'expo_go'
+                ? 'Remote push is not available in Expo Go. Install a development or production build.'
+                : reg.reason === 'permission_denied'
+                  ? 'Notifications are off for this app. Turn them on in system Settings, then try again.'
+                  : `Push could not be enabled${reg.detail ? `: ${reg.detail}` : ''}.`
+          showWarning(msg)
+          await commitCommunicationPreferences(previousPrefs)
           return
         }
-        await apiPost('/api/settings/push-token', { expoPushToken: token })
+        await apiPost('/api/settings/push-token', {
+          expoPushToken: reg.token,
+          platform: Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : undefined,
+        })
         await patchPrefs({
           ...optimistic,
           channels: { ...optimistic.channels, push: true },
