@@ -428,7 +428,8 @@ function TransactionsContent({ navigation }: NavigationProps) {
   const { scope } = useScope()
   const qc = useQueryClient()
   const currencies = useCurrencies()
-  const txQuery = useTransactionsList({}, 100)
+  /** Match `/api/transactions` max page size so one fetch loads full history when ≤200 rows. */
+  const txQuery = useTransactionsList({}, 200)
   
   const [refreshing, setRefreshing] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
@@ -661,26 +662,16 @@ function TransactionsContent({ navigation }: NavigationProps) {
     })
   }, [transactionsInRange, searchTerm, activeFilter])
 
+  /** Same basis as the list: date range + search + All / Money in / Money out / Card (business sums credits+debits from its filtered set). */
   const summaryTotals = useMemo(() => {
-    const now = new Date()
-    const useRange = !!dateRangeBounds
-    const fromMs = useRange ? dateRangeBounds!.fromMs : Number.NEGATIVE_INFINITY
-    const toMs = useRange ? dateRangeBounds!.toMs : Number.POSITIVE_INFINITY
     let inAmount = 0
     let outAmount = 0
     let inCurrency: string | null = null
     let outCurrency: string | null = null
-    for (const tx of transactions) {
+    for (const tx of filteredTransactions) {
       if (!tx) continue
       const dateStr = tx.noah_created_at || tx.created_at
       if (!dateStr) continue
-      const d = new Date(dateStr)
-      if (useRange) {
-        const ms = d.getTime()
-        if (ms < fromMs || ms > toMs) continue
-      } else {
-        if (d.getFullYear() !== now.getFullYear() || d.getMonth() !== now.getMonth()) continue
-      }
       const txType = tx.transaction_type || tx.type
       const amt = Math.abs(
         Number(tx.amount ?? tx.send_amount ?? tx.crypto_amount ?? tx.fiat_amount ?? 0) || 0,
@@ -701,7 +692,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
       inCurrency: inCurrency || 'USD',
       outCurrency: outCurrency || inCurrency || 'USD',
     }
-  }, [transactions, dateRangeBounds])
+  }, [filteredTransactions])
 
   const groupedItems = useMemo(
     () => buildGroupedActivityItems(filteredTransactions),
@@ -816,7 +807,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
           />
         }
       >
-        {/* Money in / Money out summary (current month) */}
+        {/* Money in / Money out — totals match filtered list (search + chips + date range), same idea as business */}
         <View style={styles.summaryRow}>
           <SectionCard style={styles.summaryCard}>
             <Text style={styles.summaryLabel}>MONEY IN</Text>

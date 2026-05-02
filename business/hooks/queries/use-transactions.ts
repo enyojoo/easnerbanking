@@ -83,7 +83,7 @@ export function useTransactionsList(filters: TxFilters = {}) {
         query: {
           ...filters,
           cursor: pageParam ?? undefined,
-          limit: 50,
+          limit: 200,
         },
         headers: { ...LEDGER_BUSINESS_HEADERS },
       })
