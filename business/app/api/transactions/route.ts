@@ -32,8 +32,6 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
     easnerTransactionId: row.easner_transaction_id != null ? String(row.easner_transaction_id) : null,
     metadata: meta,
     providerTransactionId: providerTxId,
-    occurredAt: row.occurred_at != null ? String(row.occurred_at) : null,
-    createdAt: row.created_at != null ? String(row.created_at) : null,
     fallbackId: row.id != null ? String(row.id) : null,
   })
   const ledgerId = row.id != null ? String(row.id) : ""

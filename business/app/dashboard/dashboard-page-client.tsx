@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
+import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { DateRangeFilter, type TimePeriod } from "@/components/date-range-filter"
 import { cn, formatCurrency } from "@/lib/utils"
 import { withReturnTo } from "@/lib/invoice-navigation"
@@ -259,7 +260,7 @@ export function DashboardPageClient() {
                       className="flex min-w-0 items-center gap-3 p-4 transition-colors hover:bg-muted/50 cursor-pointer"
                     >
                       <Link
-                        href={`/transactions/${encodeURIComponent(txn.id)}`}
+                        href={transactionWebDetailPath(txn.id)}
                         className="flex min-w-0 flex-1 items-center gap-3"
                       >
                         <div

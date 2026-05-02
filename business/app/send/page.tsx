@@ -36,6 +36,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { generateTransactionId } from "@/lib/transaction-id"
+import { fetchReserveEasnerTransactionId } from "@/lib/reserve-easner-transaction-id"
+import { isEasetagLedgerP2PEnabled } from "@/lib/ledger/easetag-transfer"
 import { CurrencyFlag } from "@/components/flags"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import {
@@ -266,8 +268,22 @@ export default function SendPage() {
     return "Select method"
   }
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (!canContinue || !recipient) return
+
+    let transactionId = generateTransactionId()
+    if (recipient.payeeEasetag?.trim() && isEasetagLedgerP2PEnabled()) {
+      const reserved = await fetchReserveEasnerTransactionId()
+      if (!reserved.ok) {
+        window.alert(
+          reserved.error === "reserve_failed" || reserved.error === "Unauthorized"
+            ? "Could not reserve transaction reference. Sign in and try again."
+            : `Could not reserve transaction reference: ${reserved.error}`,
+        )
+        return
+      }
+      transactionId = reserved.easner_transaction_id
+    }
 
     const state: SendFlowState = {
       recipient: coerceBeneficiaryEasenetDisplay(recipient),
@@ -280,7 +296,7 @@ export default function SendPage() {
       otherCurrency: otherCurrency ?? undefined,
       otherPaymentMethod: otherPaymentMethod ?? undefined,
       note: note.trim(),
-      transactionId: generateTransactionId(),
+      transactionId,
     }
     persistSendFlowState(state)
 

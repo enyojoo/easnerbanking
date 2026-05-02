@@ -5,14 +5,17 @@ import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { TransactionDetailsPanel } from "@/components/transaction-details-panel"
 import { useTransactionDetail } from "@/hooks/queries/use-transactions"
+import { normalizeEasnerTransactionIdForLookup } from "@/lib/easner-transaction-id"
 import { ArrowLeft, Loader2 } from "lucide-react"
 
 export default function TransactionDetailByEtidPage() {
   const params = useParams()
   const raw = params.etid
-  const etid = typeof raw === "string" ? decodeURIComponent(raw.trim()) : ""
+  const decoded = typeof raw === "string" ? decodeURIComponent(raw.trim()) : ""
+  /** URL uses `etid55613389`; API + React Query key use canonical `ETID55613389`. */
+  const lookupId = normalizeEasnerTransactionIdForLookup(decoded) ?? decoded
   const router = useRouter()
-  const { data, isLoading, isError, error } = useTransactionDetail(etid || null)
+  const { data, isLoading, isError, error } = useTransactionDetail(lookupId || null)
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">

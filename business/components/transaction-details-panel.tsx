@@ -11,6 +11,7 @@ import { Copy, Check, Download, FileText, Activity } from "lucide-react"
 import { downloadTransactionReceiptPdf } from "@/lib/use-transaction-receipt-pdf"
 import { currentLocationPath, withReturnTo } from "@/lib/invoice-navigation"
 import { Card, CardContent } from "@/components/ui/card"
+import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 
 export interface TransactionDetailsPanelProps {
   transaction: Transaction | null
@@ -64,7 +65,7 @@ export function TransactionDetailsPanel({
     }
   }
 
-  const etidForLink = encodeURIComponent(transaction.id)
+  const etidForLink = transactionWebDetailPath(transaction.id)
 
   return (
     <Card className="border-border shadow-sm">
@@ -225,7 +226,7 @@ export function TransactionDetailsPanel({
             (transaction.transferId || transaction.id.startsWith("ETID")) &&
             (transaction.status === "pending" || transaction.status === "processing") && (
               <Button variant="outline" className="w-full gap-2 bg-transparent" asChild>
-                <Link href={`/transactions/${etidForLink}`}>
+                <Link href={etidForLink}>
                   <Activity className="h-4 w-4" />
                   Track status
                 </Link>

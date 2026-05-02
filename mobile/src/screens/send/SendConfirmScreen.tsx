@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { View, Text, Pressable, StyleSheet, ScrollView, Animated, ActivityIndicator } from 'react-native'
+import Constants from 'expo-constants'
 import { ArrowLeft } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
@@ -20,6 +21,8 @@ import { useConfirmWithPin } from '../../hooks/useConfirmWithPin'
 import { hasPin } from '../../lib/pinAuth'
 import { analytics } from '../../lib/analytics'
 import type { PricingQuote } from '../../lib/noahService'
+import { noahService } from '../../lib/noahService'
+import { resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
 import { executeBalanceSend } from '../../hooks/executeBalanceSend'
 import { invalidateTransactionsFeed } from '../../query/refresh-user-feeds'
 
@@ -76,9 +79,37 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   const pricingQuoteExpiry = params.pricingQuoteExpiry
   const pricingQuoteResult = params.pricingQuoteResult
 
+  const easetagUi = recipient ? resolveRecipientEasetagForUi(recipient) : ''
+  const useLedger =
+    Constants.expoConfig?.extra?.easetagLedgerP2pEnabled === true ||
+    process.env.EXPO_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true' ||
+    process.env.NEXT_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true'
+  const needReserve = Boolean(useLedger && easetagUi)
+
+  const [reservedDebitEtid, setReservedDebitEtid] = useState<string | null>(null)
+  const [reserveError, setReserveError] = useState<string | null>(null)
+
+  const canSendEasetagLedger = !needReserve || Boolean(reservedDebitEtid)
+
   useEffect(() => {
     analytics.trackScreenView('SendConfirm')
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    setReservedDebitEtid(null)
+    setReserveError(null)
+    if (!recipient || !needReserve) return
+    void (async () => {
+      const r = await noahService.reserveEasnerTransactionId()
+      if (cancelled) return
+      if (r.ok) setReservedDebitEtid(r.easner_transaction_id)
+      else setReserveError(r.error)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [recipient, needReserve])
 
   const runSend = async () => {
     if (!recipient) {
@@ -96,6 +127,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           pricingQuoteId,
           pricingQuoteExpiry,
           pricingQuoteResult,
+          ...(reservedDebitEtid?.trim() ? { reservedDebitEtid: reservedDebitEtid.trim() } : {}),
         },
         {
           userId: user?.id,
@@ -199,7 +231,16 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
               <Row label="Fees" value={fmtMoney(calculatedFeeAmount, selectedBalanceCurrency)} />
               <Row label="Total debited" value={`${fmtMoney(calculatedTotalAmount, selectedBalanceCurrency)} ${selectedBalanceCurrency}`} bold />
               <Row label="Recipient gets" value={`${fmtMoney(receiveAmountValue, receiveCurrency)} ${receiveCurrency}`} />
-              <Row label="To" value={recipient.full_name} last />
+              <Row label="To" value={recipient.full_name} last={!needReserve && !pricingQuoteExpiry} />
+              {needReserve ? (
+                reservedDebitEtid ? (
+                  <Row label="Transaction reference" value={reservedDebitEtid} last={!pricingQuoteExpiry} />
+                ) : reserveError ? (
+                  <Text style={styles.reserveError}>Could not reserve reference ({reserveError}). Try again later.</Text>
+                ) : (
+                  <Text style={styles.quoteHint}>Reserving transaction reference…</Text>
+                )
+              ) : null}
               {pricingQuoteExpiry ? (
                 <Text style={styles.quoteHint}>Quote expires {new Date(pricingQuoteExpiry).toLocaleTimeString()}</Text>
               ) : null}
@@ -209,12 +250,16 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
 
         <Pressable
           android_ripple={ripple.neutral}
-          style={[styles.cta, busy && styles.ctaDisabled]}
+          style={[styles.cta, (busy || !canSendEasetagLedger || reserveError) && styles.ctaDisabled]}
           onPress={() => void onConfirmPress()}
-          disabled={busy}
+          disabled={busy || !canSendEasetagLedger || Boolean(reserveError)}
         >
           <LinearGradient
-            colors={busy ? [colors.neutral[400], colors.neutral[400]] : colors.primary.gradient}
+            colors={
+              busy || !canSendEasetagLedger || reserveError
+                ? [colors.neutral[400], colors.neutral[400]]
+                : colors.primary.gradient
+            }
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.ctaGradient}
@@ -317,6 +362,11 @@ const styles = StyleSheet.create({
   quoteHint: {
     ...textStyles.caption,
     color: colors.text.tertiary,
+    marginTop: spacing[2],
+  },
+  reserveError: {
+    ...textStyles.caption,
+    color: colors.error.main,
     marginTop: spacing[2],
   },
   cta: {

@@ -17,6 +17,7 @@ import { generateTransactionId } from "@/lib/transaction-id"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { dataCache, CACHE_KEYS, requestBusinessAccountsRefresh } from "@/lib/cache"
 import { isEasetagLedgerP2PEnabled } from "@/lib/ledger/easetag-transfer"
+import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { ArrowLeft, User, Copy, Check, Loader2 } from "lucide-react"
 
 const SEND_FLOW_STATE_KEY = "send_flow_state"
@@ -126,7 +127,7 @@ export default function SendConfirmPage() {
   const finishSend = (transactionId: string) => {
     if (!state) return
     sessionStorage.removeItem(SEND_FLOW_STATE_KEY)
-    router.push(`/transactions/${encodeURIComponent(transactionId)}`)
+    router.push(transactionWebDetailPath(transactionId))
   }
 
   const handleAuthorizeSuccess = async () => {
@@ -139,11 +140,18 @@ export default function SendConfirmPage() {
         const tag = state.recipient.payeeEasetag!.trim().replace(/^@+/, "")
         const ledger = isEasetagLedgerP2PEnabled()
         const path = ledger ? "/api/wallets/easetag-transfer" : "/api/noah/transfers/w2w"
+        const reserved =
+          ledger &&
+          typeof state.transactionId === "string" &&
+          /^ETID\d{8}$/i.test(state.transactionId.trim())
+            ? state.transactionId.trim().toUpperCase()
+            : ""
         const body = ledger
           ? {
               destination_easetag: tag,
               amount: state.sendAmount,
               currency: state.sendCurrency.toUpperCase(),
+              ...(reserved ? { reserved_debit_etid: reserved } : {}),
             }
           : {
               destinationEasetag: tag,

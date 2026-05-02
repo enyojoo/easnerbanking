@@ -25,6 +25,7 @@ import { useFxRates } from "@/hooks/queries"
 import { formatTransactionRowDateTime, transactionStatusRowPresentation } from "@/lib/transaction-row-present"
 import { useTurnkeyLedgerRepair } from "@/hooks/use-turnkey-ledger-repair"
 import Link from "next/link"
+import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 
 function exportToCsv(
   transactions: {
@@ -97,7 +98,7 @@ export default function TransactionsPage() {
     const qs = next.toString()
     router.replace(qs ? `/transactions?${qs}` : "/transactions", { scroll: false })
     if (match) {
-      router.push(`/transactions/${encodeURIComponent(match.id)}`)
+      router.push(transactionWebDetailPath(match.id))
     }
   }, [listLoading, rows, searchParams, router])
 
@@ -266,7 +267,7 @@ export default function TransactionsPage() {
                   return (
                     <Link
                       key={txn.id}
-                      href={`/transactions/${encodeURIComponent(txn.id)}`}
+                      href={transactionWebDetailPath(txn.id)}
                       className="flex min-w-0 items-center gap-3 p-4 transition-colors hover:bg-muted/50 cursor-pointer"
                     >
                       <div

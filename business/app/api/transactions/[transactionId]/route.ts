@@ -2,7 +2,11 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { mapNoahTransactionToMobileDetail } from "@/lib/noah/map-transactions"
 import { resolveLedgerListScope } from "@/lib/transactions-ledger-scope"
-import { displayEasnerTransactionId } from "@/lib/easner-transaction-id"
+import {
+  displayEasnerTransactionId,
+  looksLikeUuidParam,
+  normalizeEasnerTransactionIdForLookup,
+} from "@/lib/easner-transaction-id"
 import { mapRowToBusinessTransaction } from "@/lib/transactions/map-row-to-business"
 import {
   deriveEasnerInboundRemitterDisplayName,
@@ -31,8 +35,6 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
     easnerTransactionId: row.easner_transaction_id != null ? String(row.easner_transaction_id) : null,
     metadata: meta,
     providerTransactionId: providerTxId,
-    occurredAt: row.occurred_at != null ? String(row.occurred_at) : null,
-    createdAt: row.created_at != null ? String(row.created_at) : null,
     fallbackId: row.id != null ? String(row.id) : null,
   })
   const ledgerId = row.id != null ? String(row.id) : ""
@@ -72,8 +74,6 @@ function mapLedgerRowToMobileDetail(row: Record<string, unknown>): Record<string
     easnerTransactionId: row.easner_transaction_id != null ? String(row.easner_transaction_id) : null,
     metadata: meta,
     providerTransactionId: providerTxId,
-    occurredAt: row.occurred_at != null ? String(row.occurred_at) : null,
-    createdAt: row.created_at != null ? String(row.created_at) : null,
     fallbackId: row.id != null ? String(row.id) : null,
   })
   const dirRaw = String(row.direction ?? "").toLowerCase()
@@ -81,13 +81,21 @@ function mapLedgerRowToMobileDetail(row: Record<string, unknown>): Record<string
   const provider = String(row.provider ?? "noah").toLowerCase()
   const created =
     row.occurred_at != null ? String(row.occurred_at) : row.created_at != null ? String(row.created_at) : new Date().toISOString()
+  const isEasetagP2p = String(meta?.source ?? "").toLowerCase() === "easetag_p2p"
   const sourceType =
-    provider === "turnkey" ? "liquidation_address"
-    : String(meta?.source_type ?? meta?.collection_channel ?? "virtual_account")
+    isEasetagP2p
+      ? "easetag_p2p"
+      : provider === "turnkey"
+        ? "liquidation_address"
+        : String(meta?.source_type ?? meta?.collection_channel ?? "virtual_account")
   const sourcePaymentRail =
-    String(meta?.payment_rail ?? meta?.source_payment_rail ?? row.chain ?? "ach").toLowerCase()
+    isEasetagP2p
+      ? "easetag"
+      : String(meta?.payment_rail ?? meta?.source_payment_rail ?? row.chain ?? "ach").toLowerCase()
   const destinationPaymentRail =
-    String(meta?.destination_payment_rail ?? (dirRaw === "in" ? "bank" : provider === "turnkey" ? "crypto" : "bank")).toLowerCase()
+    isEasetagP2p
+      ? "easetag"
+      : String(meta?.destination_payment_rail ?? (dirRaw === "in" ? "bank" : provider === "turnkey" ? "crypto" : "bank")).toLowerCase()
   const recipientName =
     String(meta?.counterparty_name ?? (meta?.recipient_name as string | undefined) ?? "").trim() || undefined
   const reference =
@@ -138,10 +146,14 @@ export async function GET(request: Request, routeCtx: Props) {
   const userId = user.id
 
   const { transactionId: rawId } = await routeCtx.params
-  const transactionId = rawId?.trim()
-  if (!transactionId) {
+  const transactionIdRaw = rawId?.trim()
+  if (!transactionIdRaw) {
     return NextResponse.json({ error: "Missing transaction id" }, { status: 400 })
   }
+
+  /** Accept `/transactions/etid55613389` (URL) and `ETID55613389` (display); DB stores uppercase ETID + 8 digits. */
+  const normalizedEtid = normalizeEasnerTransactionIdForLookup(transactionIdRaw)
+  const transactionId = normalizedEtid ?? transactionIdRaw
 
   const scopeRes = await resolveLedgerListScope(request, userId)
   if (!scopeRes.ok) return scopeRes.response
@@ -167,12 +179,6 @@ export async function GET(request: Request, routeCtx: Props) {
     return NextResponse.json({ error: error.message }, { status: 400 })
   }
   if (!row) {
-    ;({ data: row, error } = await fetchOne({ column: "id", value: transactionId }))
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
-    }
-  }
-  if (!row) {
     ;({ data: row, error } = await fetchOne({ column: "easner_transaction_id", value: transactionId }))
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 })
@@ -188,6 +194,12 @@ export async function GET(request: Request, routeCtx: Props) {
       q = q.eq("user_id", userId).is("business_id", null)
     }
     ;({ data: row, error } = await q.maybeSingle())
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+  }
+  if (!row && looksLikeUuidParam(transactionId)) {
+    ;({ data: row, error } = await fetchOne({ column: "id", value: transactionId }))
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }

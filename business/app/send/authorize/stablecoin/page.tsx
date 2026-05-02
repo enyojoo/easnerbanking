@@ -9,6 +9,7 @@ import type { StablecoinAccount } from "@/lib/finance-types"
 import { getStablecoinPaymentInstructions } from "@/lib/payment-instructions"
 import { generateTransactionId } from "@/lib/transaction-id"
 import { fetchWithSession } from "@/lib/fetch-with-session"
+import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { ArrowLeft, Copy, Check } from "lucide-react"
 import { QRCodeSVG } from "qrcode.react"
 
@@ -105,7 +106,7 @@ export default function StablecoinAuthorizePage() {
     setPaymentConfirmed(true)
     const transactionId = state?.transactionId ?? generateTransactionId()
     sessionStorage.removeItem(SEND_FLOW_STATE_KEY)
-    router.push(`/transactions/${encodeURIComponent(transactionId)}`)
+    router.push(transactionWebDetailPath(transactionId))
   }
 
   const stablecoinType =

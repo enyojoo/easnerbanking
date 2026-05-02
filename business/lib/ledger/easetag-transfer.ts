@@ -20,6 +20,8 @@ export type ExecuteEasetagTransferInput = {
   payeeUserId: string
   payeeBusinessId: string | null
   payeeEasetag: string
+  /** From POST `/api/transactions/reserve-etid`; must match persisted debit ETID. */
+  reservedDebitEtid?: string | null
 }
 
 export type ExecuteEasetagTransferResult =
@@ -43,19 +45,25 @@ export async function executeEasetagTransfer(
   if (!Number.isFinite(input.amount) || input.amount <= 0) return { ok: false, error: "invalid_amount" }
 
   const transferGroupId = deterministicTransferGroupUuid(key)
+  const payload: Record<string, unknown> = {
+    p_idempotency_key: key,
+    p_amount: input.amount,
+    p_currency: input.currency,
+    p_sender_user_id: input.senderUserId,
+    p_sender_business_id: input.senderBusinessId,
+    p_payee_user_id: input.payeeUserId,
+    p_payee_business_id: input.payeeBusinessId,
+    p_payee_easetag: input.payeeEasetag,
+    p_transfer_group_id: transferGroupId,
+  }
+  const reserved = String(input.reservedDebitEtid ?? "").trim()
+  if (reserved) {
+    payload.p_reserved_debit_etid = reserved
+  }
+
   const { data, error } = await (admin as SupabaseClient & { rpc: (a: string, b: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }> }).rpc(
     "transfer_easetag_p2p",
-    {
-      p_idempotency_key: key,
-      p_amount: input.amount,
-      p_currency: input.currency,
-      p_sender_user_id: input.senderUserId,
-      p_sender_business_id: input.senderBusinessId,
-      p_payee_user_id: input.payeeUserId,
-      p_payee_business_id: input.payeeBusinessId,
-      p_payee_easetag: input.payeeEasetag,
-      p_transfer_group_id: transferGroupId,
-    },
+    payload,
   )
 
   if (error) {

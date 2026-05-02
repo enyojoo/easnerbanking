@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react"
 import Link from "next/link"
+import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { getDateRange, filterTransactions, type TransactionWithSource } from "@/lib/transactions"
 import { useTransactionsCached } from "@/hooks/use-transactions-cached"
 import { Button } from "@/components/ui/button"
@@ -140,7 +141,7 @@ export default function CardsPage() {
                   return (
                     <Link
                       key={transaction.id}
-                      href={`/transactions/${encodeURIComponent(transaction.id)}`}
+                      href={transactionWebDetailPath(transaction.id)}
                       className="flex items-center justify-between p-4 hover:bg-muted/50 cursor-pointer transition-colors"
                     >
                       <div className="flex items-center gap-3">

@@ -129,6 +129,9 @@ export function toEasnerTransactionProductCategory(input: {
   const provider = input.provider.toLowerCase()
   const direction = input.direction
   const meta = input.metadata
+  if (provider === "easner_internal" && String(meta?.source ?? "").toLowerCase() === "easetag_p2p") {
+    return direction === "in" ? "Easetag Received" : "Easetag Send"
+  }
   const collectionChannel = String(meta?.collection_channel ?? "").toLowerCase()
   const isStablecoin =
     provider === "turnkey" ||
@@ -155,6 +158,16 @@ export function toEasnerTransactionPrimaryLabel(input: {
   const provider = input.provider.toLowerCase()
   const direction = input.direction
   const meta = input.metadata
+  if (provider === "easner_internal" && String(meta?.source ?? "").toLowerCase() === "easetag_p2p") {
+    if (direction === "in") {
+      const senderTag =
+        typeof meta?.sender_easetag === "string" ? meta.sender_easetag.trim().replace(/^@+/, "") : ""
+      return senderTag ? `Received from @${senderTag}` : "Easetag Received"
+    }
+    const payeeTag =
+      typeof meta?.payee_easetag === "string" ? meta.payee_easetag.trim().replace(/^@+/, "") : ""
+    return payeeTag ? `Sent to @${payeeTag}` : "Easetag Send"
+  }
   const collectionChannel = String(meta?.collection_channel ?? "").toLowerCase()
   const isStablecoin =
     provider === "turnkey" ||

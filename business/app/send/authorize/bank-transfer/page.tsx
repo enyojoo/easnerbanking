@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { getCurrencySymbol } from "@/lib/utils"
 import { generateTransactionId } from "@/lib/transaction-id"
+import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { ArrowLeft, Copy, Check, Landmark } from "lucide-react"
 
 const SEND_FLOW_STATE_KEY = "send_flow_state"
@@ -114,7 +115,7 @@ export default function BankTransferPage() {
     setPaymentConfirmed(true)
     const transactionId = state?.transactionId ?? generateTransactionId()
     sessionStorage.removeItem(SEND_FLOW_STATE_KEY)
-    router.push(`/transactions/${encodeURIComponent(transactionId)}`)
+    router.push(transactionWebDetailPath(transactionId))
   }
 
   if (!state) {

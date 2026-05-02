@@ -56,18 +56,25 @@ export function buildTransactionSettledPushContent(input: TransactionSettledCont
     .toLowerCase()
   const isCard = paymentRail === "card"
 
-  const easetag =
+  const outboundEasetag =
     typeof meta?.destinationEasetag === "string" && meta.destinationEasetag.trim()
       ? meta.destinationEasetag.trim().replace(/^@+/, "")
-      : typeof meta?.sourceEasetag === "string" && meta.sourceEasetag.trim()
-        ? meta.sourceEasetag.trim().replace(/^@+/, "")
+      : typeof meta?.payee_easetag === "string" && meta.payee_easetag.trim()
+        ? meta.payee_easetag.trim().replace(/^@+/, "")
         : null
 
-  if (easetag) {
-    if (direction === "out") {
-      return { title: "Easetag Transfer", body: `Sent ${amountText} to @${easetag}` }
-    }
-    return { title: "Easetag Deposit", body: `Received ${amountText} from @${easetag}` }
+  const inboundEasetag =
+    typeof meta?.sourceEasetag === "string" && meta.sourceEasetag.trim()
+      ? meta.sourceEasetag.trim().replace(/^@+/, "")
+      : typeof meta?.sender_easetag === "string" && meta.sender_easetag.trim()
+        ? meta.sender_easetag.trim().replace(/^@+/, "")
+        : null
+
+  if (direction === "out" && outboundEasetag) {
+    return { title: "Easetag Transfer", body: `Sent ${amountText} to @${outboundEasetag}` }
+  }
+  if (direction === "in" && inboundEasetag) {
+    return { title: "Easetag Deposit", body: `Received ${amountText} from @${inboundEasetag}` }
   }
 
   if (isCard) {
@@ -93,6 +100,23 @@ export function buildTransactionSettledPushContent(input: TransactionSettledCont
   }
   if (category === "Stablecoin Transfer") {
     return { title: "Stablecoin Transfer", body: `Sent ${amountText} to wallet address` }
+  }
+
+  if (category === "Easetag Received") {
+    return {
+      title: "Easetag Deposit",
+      body: inboundEasetag
+        ? `Received ${amountText} from @${inboundEasetag}`
+        : `Received ${amountText}`,
+    }
+  }
+  if (category === "Easetag Send") {
+    return {
+      title: "Easetag Transfer",
+      body: outboundEasetag
+        ? `Sent ${amountText} to @${outboundEasetag}`
+        : `Sent ${amountText}`,
+    }
   }
 
   if (direction === "in") {

@@ -7,6 +7,7 @@ import { normalizeEasetag } from "@/lib/easetag-validation"
 import { isUndefinedEasetagColumnError } from "@/lib/easetag-global"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { executeEasetagTransfer, isEasetagLedgerP2PEnabled } from "@/lib/ledger/easetag-transfer"
+import { notifyEasetagTransferSettled } from "@/lib/ledger/easetag-transfer-notify"
 
 export const runtime = "nodejs"
 
@@ -15,6 +16,7 @@ type Body = {
   destinationEasetag?: string
   amount?: string | number
   currency?: string
+  reserved_debit_etid?: string
 }
 
 /**
@@ -99,6 +101,9 @@ export async function POST(request: Request) {
     idemHeader ||
     `easetag:${senderBusinessId || senderUserId}:${payeeBusinessId || payeeUserId}:${currencyRaw}:${amount}:${cleanTag}`
 
+  const reservedDebit =
+    typeof body?.reserved_debit_etid === "string" ? body.reserved_debit_etid.trim() : ""
+
   const result = await executeEasetagTransfer(admin, {
     idempotencyKey,
     amount,
@@ -108,6 +113,7 @@ export async function POST(request: Request) {
     payeeUserId: payeeUserId!,
     payeeBusinessId: payeeBusinessId ?? null,
     payeeEasetag: payeeEasetagResolved,
+    reservedDebitEtid: reservedDebit || undefined,
   })
 
   if (!result.ok) {
@@ -115,6 +121,12 @@ export async function POST(request: Request) {
       result.error === "insufficient_balance" || result.error === "sender_balance_row_missing" ? 400 : 400
     return NextResponse.json({ ok: false, error: result.error }, { status })
   }
+
+  await notifyEasetagTransferSettled(admin, {
+    idempotent: result.idempotent,
+    debitProviderTransactionId: result.debitProviderTransactionId,
+    creditProviderTransactionId: result.creditProviderTransactionId,
+  }).catch((e) => console.warn("easetag transfer notify:", e))
 
   return NextResponse.json({
     ok: true,
