@@ -16,7 +16,7 @@ export default function TransactionDetailByEtidPage() {
   const lookupId = normalizeEasnerTransactionIdForLookup(decoded) ?? decoded
   const idForQuery = lookupId.trim() || null
   const router = useRouter()
-  const { data, isError, error, isFetching, isPlaceholderData } = useTransactionDetail(idForQuery)
+  const { data, isError, error } = useTransactionDetail(idForQuery)
 
   if (!decoded.trim() || !idForQuery) {
     return (
@@ -47,13 +47,6 @@ export default function TransactionDetailByEtidPage() {
           <h1 className="text-2xl font-semibold text-foreground">Transaction</h1>
         </div>
       </div>
-
-      {isFetching && isPlaceholderData ?
-        <p className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-          Updating details…
-        </p>
-      : null}
 
       {showLoading ?
         <div className="flex justify-center py-16">
