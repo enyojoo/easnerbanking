@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
  * Compatibility shim over the TanStack Query `useWalletBalances` hook.
  *
  * The BalanceContext surface is kept intact — existing screens still call
- * `useBalance()` and receive `{ balances, refreshBalances, updateBalanceOptimistically }`
+ * `useBalance()` and receive `{ balances, hasResolvedBalance, hasAuthoritativeBalance, refreshBalances, ... }`
  * — but the data now lives in the shared Query cache. Realtime balance events
  * flow through `useSupabaseRealtimeScope` (mounted once in `QueryProvider`)
  * and surgically update `qk.wallets.list(scope)`, so this context no longer
@@ -32,7 +32,10 @@ interface Balances {
 
 interface BalanceContextType {
   balances: Balances
+  /** True once we have query data or a disk snapshot read completed (legacy UX flag). */
   hasResolvedBalance: boolean
+  /** True when the latest wallet query returned an authoritative on-chain/DB balance (`source !== 'none'`). */
+  hasAuthoritativeBalance: boolean
   refreshBalances: (force?: boolean) => Promise<void>
   updateBalanceOptimistically: (
     currency: 'USD' | 'EUR',
@@ -63,7 +66,7 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
   const query = useWalletBalances()
   const lastKnownBalancesRef = useRef<Balances>(EMPTY_BALANCES)
   const [hydratedFromDisk, setHydratedFromDisk] = useState(false)
-  const isAuthoritativeBalanceRead = query.data?.source !== 'none'
+  const isAuthoritativeBalanceRead = Boolean(query.data && query.data.source !== 'none')
 
   // Hydrate last-known authoritative snapshot for instant cold-start UX.
   useEffect(() => {
@@ -160,8 +163,14 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
   )
 
   const value = useMemo<BalanceContextType>(
-    () => ({ balances, hasResolvedBalance, refreshBalances, updateBalanceOptimistically }),
-    [balances, hasResolvedBalance, refreshBalances, updateBalanceOptimistically],
+    () => ({
+      balances,
+      hasResolvedBalance,
+      hasAuthoritativeBalance: isAuthoritativeBalanceRead,
+      refreshBalances,
+      updateBalanceOptimistically,
+    }),
+    [balances, hasResolvedBalance, isAuthoritativeBalanceRead, refreshBalances, updateBalanceOptimistically],
   )
 
   return <BalanceContext.Provider value={value}>{children}</BalanceContext.Provider>

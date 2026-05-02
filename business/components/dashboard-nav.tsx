@@ -44,9 +44,12 @@ export function DashboardNav() {
     name: businessName,
     logoUrl: businessLogoUrl,
     isLoading: businessProfileLoading,
+    hasData: businessProfileHasData,
     tier1Complete,
     tier1VerificationStatus,
   } = useBusinessProfile()
+
+  const showBusinessHeaderSkeleton = businessProfileLoading || !businessProfileHasData
 
   const hasBusinessLogo = Boolean(businessLogoUrl?.trim())
   const normalizedBusinessLogoUrl = normalizeBusinessLogoUrl(businessLogoUrl)
@@ -118,7 +121,7 @@ export function DashboardNav() {
             <Building2 className="h-[18px] w-[18px] text-primary stroke-[1.5]" />
           )}
         </div>
-        {businessProfileLoading ? (
+        {showBusinessHeaderSkeleton ? (
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
             <div className="h-3.5 w-28 animate-pulse rounded bg-muted" />
             <div className="h-3 w-14 animate-pulse rounded bg-muted" />

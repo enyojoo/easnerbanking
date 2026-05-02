@@ -24,7 +24,7 @@ import { useBusinessProfile } from "@/lib/use-business-profile"
 import { useFxRates } from "@/hooks/queries"
 import { formatTransactionRowDateTime, transactionStatusRowPresentation } from "@/lib/transaction-row-present"
 import { useTurnkeyLedgerRepair } from "@/hooks/use-turnkey-ledger-repair"
-import Link from "next/link"
+import { TransactionDetailPrefetchLink } from "@/components/transactions/transaction-detail-prefetch-link"
 import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 
 function exportToCsv(
@@ -215,7 +215,13 @@ export default function TransactionsPage() {
               <SelectItem value="failed">Failed</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" className="h-8 gap-2 shrink-0" onClick={handleExport}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-2 shrink-0"
+            onClick={handleExport}
+            disabled={listLoading}
+          >
             <Download className="h-4 w-4" />
             Export
           </Button>
@@ -224,32 +230,51 @@ export default function TransactionsPage() {
 
       <Card>
         <CardContent className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="text-center">
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <TrendingUp className="h-5 w-5 text-primary" />
-                <p className="text-sm text-muted-foreground">Money in</p>
+          {listLoading ? (
+            <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+              <div className="space-y-2 text-center">
+                <div className="mx-auto h-4 w-24 animate-pulse rounded bg-muted" />
+                <div className="mx-auto h-9 w-40 max-w-full animate-pulse rounded bg-muted" />
               </div>
-              <p className="text-3xl font-semibold tracking-tight tabular-nums text-primary">
-                +{formatCurrency(totalCredit, summaryCurrency)}
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <TrendingDown className="h-5 w-5 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">Money out</p>
+              <div className="space-y-2 text-center">
+                <div className="mx-auto h-4 w-24 animate-pulse rounded bg-muted" />
+                <div className="mx-auto h-9 w-40 max-w-full animate-pulse rounded bg-muted" />
               </div>
-              <p className="text-3xl font-semibold tracking-tight tabular-nums text-foreground">
-                -{formatCurrency(totalDebit, summaryCurrency)}
-              </p>
             </div>
-          </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+              <div className="text-center">
+                <div className="mb-2 flex items-center justify-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-primary" />
+                  <p className="text-sm text-muted-foreground">Money in</p>
+                </div>
+                <p className="text-3xl font-semibold tracking-tight tabular-nums text-primary">
+                  +{formatCurrency(totalCredit, summaryCurrency)}
+                </p>
+              </div>
+              <div className="text-center">
+                <div className="mb-2 flex items-center justify-center gap-2">
+                  <TrendingDown className="h-5 w-5 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">Money out</p>
+                </div>
+                <p className="text-3xl font-semibold tracking-tight tabular-nums text-foreground">
+                  -{formatCurrency(totalDebit, summaryCurrency)}
+                </p>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
       <Card>
         <CardContent className="p-0">
-          {filteredTransactions.length === 0 ?
+          {listLoading ? (
+            <div className="space-y-3 p-4">
+              <div className="h-16 animate-pulse rounded-md bg-muted" />
+              <div className="h-16 animate-pulse rounded-md bg-muted" />
+              <div className="h-16 animate-pulse rounded-md bg-muted" />
+            </div>
+          ) : filteredTransactions.length === 0 ?
             <div className="py-12 text-center">
               <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center mx-auto mb-4">
                 <DollarSign className="h-6 w-6 text-muted-foreground" />
@@ -265,9 +290,10 @@ export default function TransactionsPage() {
                   const cur = txn.displayCurrency || "USD"
                   const statusRow = transactionStatusRowPresentation(txn.status)
                   return (
-                    <Link
+                    <TransactionDetailPrefetchLink
                       key={txn.id}
                       href={transactionWebDetailPath(txn.id)}
+                      txId={txn.id}
                       className="flex min-w-0 items-center gap-3 p-4 transition-colors hover:bg-muted/50 cursor-pointer"
                     >
                       <div
@@ -294,7 +320,7 @@ export default function TransactionsPage() {
                         </p>
                         <p className={`text-xs font-medium ${statusRow.className}`}>{statusRow.label}</p>
                       </div>
-                    </Link>
+                    </TransactionDetailPrefetchLink>
                   )
                 })}
               </div>
@@ -312,7 +338,7 @@ export default function TransactionsPage() {
       </Card>
 
       <div className="text-sm text-muted-foreground">
-        {filteredTransactions.length} result{filteredTransactions.length !== 1 ? "s" : ""}
+        {listLoading ? "—" : `${filteredTransactions.length} result${filteredTransactions.length !== 1 ? "s" : ""}`}
       </div>
     </div>
   )

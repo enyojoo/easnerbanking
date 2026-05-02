@@ -27,10 +27,12 @@ export function DashboardShell({ children, mainClassName = "", constrained = fal
     name: businessName,
     ownerName,
     isLoading: profileLoading,
+    hasData: profileHasData,
     tier1Complete,
   } = useBusinessProfile()
   const { avatarUrl: profileImageUrl } = usePersonalProfileAvatar()
-  const showTier1Banner = !profileLoading && !tier1Complete
+  const showProfileChromeSkeleton = profileLoading || !profileHasData
+  const showTier1Banner = profileHasData && !profileLoading && !tier1Complete
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -95,7 +97,7 @@ export function DashboardShell({ children, mainClassName = "", constrained = fal
         <DashboardNav />
         <div className="ml-64 flex min-h-screen flex-col">
           <header className="fixed top-0 left-64 right-0 z-30 flex h-16 min-h-16 items-center justify-end gap-4 border-b border-border/60 bg-background/80 px-8 backdrop-blur-md supports-[backdrop-filter]:bg-background/70">
-          {profileLoading ? (
+          {showProfileChromeSkeleton ? (
             <div className="flex items-center gap-2">
               <div className="h-8 w-8 animate-pulse rounded-full bg-muted" />
               <div className="h-4 w-24 animate-pulse rounded bg-muted" />

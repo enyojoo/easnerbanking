@@ -5,7 +5,14 @@ export type {
   AvailableCurrencies,
 } from "./use-wallets"
 
-export { useTransactionsList, useTransactionDetail, useTransactionsFirstPageKey } from "./use-transactions"
+export {
+  useTransactionsList,
+  useTransactionDetail,
+  useTransactionsFirstPageKey,
+  fetchBusinessTransactionDetail,
+  getTransactionDetailPrefetchOptions,
+  findTransactionInCachedLists,
+} from "./use-transactions"
 export type { TransactionsPage } from "./use-transactions"
 
 export { useApprovalsQueue } from "./use-approvals"

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import Link from "next/link"
+import { TransactionDetailPrefetchLink } from "@/components/transactions/transaction-detail-prefetch-link"
 import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { getDateRange, filterTransactions, type TransactionWithSource } from "@/lib/transactions"
 import { useTransactionsCached } from "@/hooks/use-transactions-cached"
@@ -139,9 +139,10 @@ export default function CardsPage() {
               : filteredTransactions.map((transaction) => {
                   const cur = transaction.displayCurrency || "USD"
                   return (
-                    <Link
+                    <TransactionDetailPrefetchLink
                       key={transaction.id}
                       href={transactionWebDetailPath(transaction.id)}
+                      txId={transaction.id}
                       className="flex items-center justify-between p-4 hover:bg-muted/50 cursor-pointer transition-colors"
                     >
                       <div className="flex items-center gap-3">
@@ -173,7 +174,7 @@ export default function CardsPage() {
                         {transaction.direction === "credit" ? "+" : "-"}
                         {formatCurrency(Math.abs(transaction.amount), cur)}
                       </p>
-                    </Link>
+                    </TransactionDetailPrefetchLink>
                   )
                 })
               }

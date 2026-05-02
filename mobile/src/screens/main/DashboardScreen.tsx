@@ -98,7 +98,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const { scope } = useScope()
   const qc = useQueryClient()
   const txQuery = useTransactionsList({}, DASHBOARD_RECENT_TX_LIMIT)
-  const { balances, hasResolvedBalance, refreshBalances } = useBalance()
+  const { balances, hasResolvedBalance, hasAuthoritativeBalance, refreshBalances } = useBalance()
   const [selectedCurrency, setSelectedCurrency] = useState<'USD' | 'EUR' | 'GBP'>('USD')
   const [balanceVisible, setBalanceVisible] = useState(true)
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false)
@@ -333,7 +333,10 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const balanceRaw = (balances as Record<string, string | undefined>)[selectedCurrency]
   const hasBalanceForSelectedCurrency = typeof balanceRaw === 'string' && balanceRaw.trim().length > 0
   const balance = hasBalanceForSelectedCurrency ? parseFloat(balanceRaw as string) : 0
-  const canRenderNumericBalance = hasResolvedBalance && hasBalanceForSelectedCurrency
+  const canRenderNumericBalance =
+    hasResolvedBalance &&
+    hasBalanceForSelectedCurrency &&
+    (hasAuthoritativeBalance || Math.abs(balance) > 1e-9)
   const resolvedBalanceText = canRenderNumericBalance
     ? formatBalanceDisplay(balance, selectedCurrency)
     : null

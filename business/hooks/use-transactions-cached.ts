@@ -3,6 +3,8 @@
 import { useMemo } from "react"
 import type { TransactionWithSource } from "@/lib/transactions"
 import { useTransactionsList } from "@/hooks/queries/use-transactions"
+import { useScope } from "@/lib/query/scope"
+import { useIsPostUnlockResumeActive } from "@/lib/post-unlock-resume-context"
 
 /**
  * Compat shim over `useTransactionsList`.
@@ -15,15 +17,25 @@ import { useTransactionsList } from "@/hooks/queries/use-transactions"
  */
 
 export function useTransactionsCached() {
+  const { scope } = useScope()
+  const postUnlockResume = useIsPostUnlockResumeActive()
   const query = useTransactionsList()
   const flattened = useMemo<TransactionWithSource[]>(() => {
     const pages = query.data?.pages ?? []
     return pages.flatMap((p) => p.transactions ?? [])
   }, [query.data])
 
+  const empty = flattened.length === 0
+  const loading =
+    Boolean(scope) &&
+    empty &&
+    (query.isPending ||
+      query.isLoading ||
+      (Boolean(postUnlockResume) && query.isFetching))
+
   return {
     data: flattened,
-    loading: query.isPending && flattened.length === 0,
+    loading,
     error: query.error instanceof Error ? query.error.message : null,
     refetch: () => query.refetch(),
     isRefetching: query.isFetching,

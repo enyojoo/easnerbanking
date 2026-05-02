@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { useAuth } from "@/lib/auth-context"
+import { PostUnlockResumeProvider } from "@/lib/post-unlock-resume-context"
 import { registerAppLockListener } from "@/lib/app-lock-bus"
 import {
   hasPin,
@@ -17,9 +18,12 @@ import { PinUnlockScreen } from "./pin-unlock-screen"
  * Gates the authenticated shell: mandatory PIN setup (when Web Crypto available), then soft-lock UI.
  * PIN is device-local; not Supabase MFA.
  */
+const POST_UNLOCK_RESUME_MS = 3_500
+
 export function AppLockProvider({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth()
   const [bump, setBump] = useState(0)
+  const [resume, setResume] = useState({ version: 0, until: 0 })
 
   useEffect(() => {
     return registerAppLockListener(() => setBump((n) => n + 1))
@@ -30,7 +34,8 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
     setAppLocked(user.id, false)
     resetSessionActivity()
     setBump((n) => n + 1)
-  }, [user?.id])
+    setResume((r) => ({ version: r.version + 1, until: Date.now() + POST_UNLOCK_RESUME_MS }))
+  }, [user])
 
   const onSetupComplete = useCallback(() => {
     resetSessionActivity()
@@ -45,24 +50,38 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
   void bump
 
   if (!isLoginPinModuleAvailable()) {
-    return <>{children}</>
+    return (
+      <PostUnlockResumeProvider resumeUntil={resume.until} resumeVersion={resume.version}>
+        {children}
+      </PostUnlockResumeProvider>
+    )
   }
 
   if (!hasPin(uid)) {
-    return <PinSetupScreen userId={uid} onComplete={onSetupComplete} />
+    return (
+      <PostUnlockResumeProvider resumeUntil={resume.until} resumeVersion={resume.version}>
+        <PinSetupScreen userId={uid} onComplete={onSetupComplete} />
+      </PostUnlockResumeProvider>
+    )
   }
 
   if (isAppLocked(uid)) {
     return (
-      <PinUnlockScreen
-        user={user}
-        onUnlocked={onUnlocked}
-        onLogout={() => {
-          void logout()
-        }}
-      />
+      <PostUnlockResumeProvider resumeUntil={resume.until} resumeVersion={resume.version}>
+        <PinUnlockScreen
+          user={user}
+          onUnlocked={onUnlocked}
+          onLogout={() => {
+            void logout()
+          }}
+        />
+      </PostUnlockResumeProvider>
     )
   }
 
-  return <>{children}</>
+  return (
+    <PostUnlockResumeProvider resumeUntil={resume.until} resumeVersion={resume.version}>
+      {children}
+    </PostUnlockResumeProvider>
+  )
 }

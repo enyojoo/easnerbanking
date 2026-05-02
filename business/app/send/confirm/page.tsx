@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { Card, CardContent } from "@/components/ui/card"
@@ -18,6 +19,8 @@ import { fetchWithSession } from "@/lib/fetch-with-session"
 import { dataCache, CACHE_KEYS, requestBusinessAccountsRefresh } from "@/lib/cache"
 import { isEasetagLedgerP2PEnabled } from "@/lib/ledger/easetag-transfer"
 import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
+import { refetchBusinessMoneyQueries } from "@/lib/query/refresh-after-money-move"
+import { useScope } from "@/lib/query/scope"
 import { ArrowLeft, User, Copy, Check, Loader2 } from "lucide-react"
 
 const SEND_FLOW_STATE_KEY = "send_flow_state"
@@ -70,6 +73,8 @@ function getProcessingTime(method: string): string {
 
 export default function SendConfirmPage() {
   const router = useRouter()
+  const qc = useQueryClient()
+  const { scope } = useScope()
   const { user } = useAuth()
   const { tier1Complete, isLoading: profileLoading, businessId } = useBusinessProfile()
   const { accountRows: sourceAccounts } = useBusinessAccountRows()
@@ -124,9 +129,10 @@ export default function SendConfirmPage() {
     }
   }, [profileLoading, tier1Complete, state, router])
 
-  const finishSend = (transactionId: string) => {
+  const finishSend = async (transactionId: string) => {
     if (!state) return
     sessionStorage.removeItem(SEND_FLOW_STATE_KEY)
+    await refetchBusinessMoneyQueries(qc, scope)
     router.push(transactionWebDetailPath(transactionId))
   }
 
@@ -205,7 +211,7 @@ export default function SendConfirmPage() {
           dataCache.invalidate(CACHE_KEYS.TRANSACTIONS_LIST(user.id))
         }
         requestBusinessAccountsRefresh()
-        finishSend(id)
+        await finishSend(id)
       } catch (e) {
         setAuthorizeError(e instanceof Error ? e.message : "Transfer failed")
       } finally {
@@ -215,7 +221,7 @@ export default function SendConfirmPage() {
     }
 
     const transactionId = state.transactionId ?? generateTransactionId()
-    finishSend(transactionId)
+    void finishSend(transactionId)
   }
 
   const onAuthorizeClick = () => {

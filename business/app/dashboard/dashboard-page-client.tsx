@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
+import { TransactionDetailPrefetchLink } from "@/components/transactions/transaction-detail-prefetch-link"
 import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { DateRangeFilter, type TimePeriod } from "@/components/date-range-filter"
 import { cn, formatCurrency } from "@/lib/utils"
@@ -259,8 +260,9 @@ export function DashboardPageClient() {
                       key={txn.id}
                       className="flex min-w-0 items-center gap-3 p-4 transition-colors hover:bg-muted/50 cursor-pointer"
                     >
-                      <Link
+                      <TransactionDetailPrefetchLink
                         href={transactionWebDetailPath(txn.id)}
+                        txId={txn.id}
                         className="flex min-w-0 flex-1 items-center gap-3"
                       >
                         <div
@@ -287,7 +289,7 @@ export function DashboardPageClient() {
                           </p>
                           <p className={`text-xs font-medium ${statusRow.className}`}>{statusRow.label}</p>
                         </div>
-                      </Link>
+                      </TransactionDetailPrefetchLink>
                     </div>
                   )
                 })}

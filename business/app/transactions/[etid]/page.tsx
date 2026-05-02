@@ -14,8 +14,28 @@ export default function TransactionDetailByEtidPage() {
   const decoded = typeof raw === "string" ? decodeURIComponent(raw.trim()) : ""
   /** URL uses `etid55613389`; API + React Query key use canonical `ETID55613389`. */
   const lookupId = normalizeEasnerTransactionIdForLookup(decoded) ?? decoded
+  const idForQuery = lookupId.trim() || null
   const router = useRouter()
-  const { data, isLoading, isError, error } = useTransactionDetail(lookupId || null)
+  const { data, isError, error, isFetching, isPlaceholderData } = useTransactionDetail(idForQuery)
+
+  if (!decoded.trim() || !idForQuery) {
+    return (
+      <div className="mx-auto max-w-2xl space-y-6">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" type="button" onClick={() => router.back()} aria-label="Back">
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <h1 className="text-2xl font-semibold text-foreground">Transaction</h1>
+        </div>
+        <p className="text-sm text-muted-foreground">This transaction link is invalid or incomplete.</p>
+        <Button variant="outline" asChild className="w-full sm:w-auto">
+          <Link href="/transactions">Back to all transactions</Link>
+        </Button>
+      </div>
+    )
+  }
+
+  const showLoading = !data && !isError
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -28,15 +48,22 @@ export default function TransactionDetailByEtidPage() {
         </div>
       </div>
 
-      {isLoading ? (
+      {isFetching && isPlaceholderData ?
+        <p className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+          Updating details…
+        </p>
+      : null}
+
+      {showLoading ?
         <div className="flex justify-center py-16">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-label="Loading" />
         </div>
-      ) : isError ? (
+      : isError ?
         <p className="text-sm text-destructive">
           {error instanceof Error ? error.message : "Could not load transaction"}
         </p>
-      ) : (
+      : (
         <TransactionDetailsPanel transaction={data ?? null} omitTrackStatus />
       )}
 
