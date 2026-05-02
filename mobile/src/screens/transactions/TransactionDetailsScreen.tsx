@@ -646,6 +646,13 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   const isFailed = transaction.status.toLowerCase().includes('failed') || 
                    transaction.status.toLowerCase().includes('returned') ||
                    transaction.status.toLowerCase().includes('refunded')
+  const isEasetagP2p = transaction.source_type === 'easetag_p2p'
+
+  const easetagWhenTs =
+    transaction.completed_at ||
+    transaction.updated_at ||
+    transaction.noah_created_at ||
+    transaction.created_at
 
   return (
     <ScreenWrapper>
@@ -770,7 +777,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                     <Text style={styles.failedDetailValue}>{transaction.transaction_id}</Text>
                   </View>
                   <View style={styles.failedDetailRow}>
-                    <Text style={styles.failedDetailLabel}>Date</Text>
+                    <Text style={styles.failedDetailLabel}>When</Text>
                     <Text style={styles.failedDetailValue}>{formatTimestamp(transaction.updated_at)}</Text>
                   </View>
                 </View>
@@ -800,15 +807,30 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                   </Pressable>
                 </View>
 
-                {transaction.sender_display_name ? (
+                {isEasetagP2p ? (
+                  <>
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>Scheme</Text>
+                      <Text style={styles.summaryValue}>Easetag</Text>
+                    </View>
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>When</Text>
+                      <Text style={styles.summaryValue}>{formatTimestamp(easetagWhenTs)}</Text>
+                    </View>
+                  </>
+                ) : null}
+
+                {!isEasetagP2p && transaction.sender_display_name ? (
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Sender</Text>
                     <Text style={styles.summaryValue}>{transaction.sender_display_name}</Text>
                   </View>
                 ) : null}
 
-                {/* For ACH/Wire deposits (virtual account) */}
-                {transaction.transaction_type === 'receive' && transaction.source_type === 'virtual_account' && (
+                {/* For ACH/Wire deposits (virtual account) — not Easetag */}
+                {!isEasetagP2p &&
+                  transaction.transaction_type === 'receive' &&
+                  transaction.source_type === 'virtual_account' && (
                   <>
                     {/* Scheme */}
                     {transaction.source_payment_rail && (
@@ -840,8 +862,8 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                   </>
                 )}
 
-                {/* For Stablecoin deposits (liquidation address) */}
-                {transaction.transaction_type === 'receive' && transaction.source_type === 'liquidation_address' && (
+                {/* Stablecoin deposits */}
+                {!isEasetagP2p && transaction.transaction_type === 'receive' && transaction.source_type === 'liquidation_address' && (
                   <>
                     {/* Scheme - always show "USDC on SOL" or "EURC on SOL" */}
                     <View style={styles.summaryRow}>
@@ -862,8 +884,8 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                   </>
                 )}
 
-                {/* For send transactions - show existing fields */}
-                {transaction.transaction_type === 'send' && (
+                {/* Send flows (non–Easetag P2P) */}
+                {!isEasetagP2p && transaction.transaction_type === 'send' && (
                   <>
                     {transaction.final_amount && transaction.final_amount !== transaction.amount && (
                       <View style={styles.summaryRow}>
@@ -891,7 +913,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                     )}
 
                     <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Created</Text>
+                      <Text style={styles.summaryLabel}>When</Text>
                       <Text style={styles.summaryValue}>
                         {formatTimestamp(transaction.noah_created_at || transaction.created_at)}
                       </Text>

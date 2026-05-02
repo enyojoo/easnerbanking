@@ -84,6 +84,8 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
   const counterpartyName =
     counterpartyNameRaw && counterpartyNameRaw !== description ? counterpartyNameRaw : undefined
 
+  const isEasetagP2p = String(meta?.source ?? "").toLowerCase() === "easetag_p2p"
+
   const hasStablecoinSignals =
     paymentRail != null ||
     row.chain != null ||
@@ -102,6 +104,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     direction,
     source: "account" as const,
     reference: easnerId,
+    paymentScheme: isEasetagP2p ? "Easetag" : undefined,
     transferId: providerTxId,
     baseCurrency: row.base_currency != null ? String(row.base_currency) : undefined,
     baseAmount: typeof row.base_amount === "number" ? row.base_amount : Number(row.base_amount) || undefined,

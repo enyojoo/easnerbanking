@@ -15,14 +15,12 @@ import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 
 export interface TransactionDetailsPanelProps {
   transaction: Transaction | null
-  hideType?: boolean
   /** When true, omit "Track status" (e.g. already on full-page `/transactions/[etid]`). */
   omitTrackStatus?: boolean
 }
 
 export function TransactionDetailsPanel({
   transaction,
-  hideType = false,
   omitTrackStatus = false,
 }: TransactionDetailsPanelProps) {
   const pathname = usePathname()
@@ -96,7 +94,7 @@ export function TransactionDetailsPanel({
 
         <div className="space-y-3">
           <div className="flex justify-between text-sm gap-4">
-            <span className="text-muted-foreground shrink-0">Transaction</span>
+            <span className="text-muted-foreground shrink-0">What</span>
             <span className="font-medium text-right">{transaction.description}</span>
           </div>
 
@@ -120,34 +118,25 @@ export function TransactionDetailsPanel({
             </div>
           </div>
 
-          {!isStablecoin && transaction.reference && (
+          {transaction.paymentScheme ? (
             <div className="flex justify-between text-sm gap-4">
-              <span className="text-muted-foreground shrink-0">Reference</span>
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="font-mono text-xs truncate">{transaction.reference}</span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 shrink-0"
-                  type="button"
-                  onClick={() => handleCopy(transaction.reference!, "reference")}
-                >
-                  {copiedKey === "reference" ? (
-                    <Check className="h-3 w-3 text-primary" />
-                  ) : (
-                    <Copy className="h-3 w-3" />
-                  )}
-                </Button>
-              </div>
+              <span className="text-muted-foreground shrink-0">Scheme</span>
+              <span className="font-medium text-right">{transaction.paymentScheme}</span>
             </div>
-          )}
+          ) : null}
 
-          {!hideType && !isStablecoin && (
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Type</span>
-              <span className="font-medium">{transaction.type.toUpperCase()}</span>
-            </div>
-          )}
+          <div className="flex justify-between text-sm gap-4">
+            <span className="text-muted-foreground shrink-0">When</span>
+            <span className="font-medium text-right">
+              {new Date(transaction.date).toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+          </div>
 
           {isCard && cardLast4 ? (
             <div className="flex justify-between text-sm">
@@ -174,19 +163,6 @@ export function TransactionDetailsPanel({
               <span className="font-medium text-right">{transaction.counterpartyName}</span>
             </div>
           ) : null}
-
-          <div className="flex justify-between text-sm gap-4">
-            <span className="text-muted-foreground shrink-0">Date</span>
-            <span className="font-medium text-right">
-              {new Date(transaction.date).toLocaleDateString("en-US", {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </span>
-          </div>
 
           {transaction.fee !== undefined && transaction.fee > 0 && (
             <div className="flex justify-between text-sm">

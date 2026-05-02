@@ -25,7 +25,6 @@ export default function TransactionDetailByEtidPage() {
         </Button>
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Transaction</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Details and status</p>
         </div>
       </div>
 

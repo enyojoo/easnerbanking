@@ -67,6 +67,8 @@ export interface Transaction {
   asset?: string
   chain?: string
   settledAt?: string
+  /** Detail row label — e.g. Easetag P2P shows "Easetag". */
+  paymentScheme?: string
 }
 
 export interface StablecoinAccount {
