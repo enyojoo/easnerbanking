@@ -11,7 +11,9 @@ import {
 import type { LucideIcon } from 'lucide-react-native'
 import {
   Bell,
+  Check,
   ChevronRight,
+  Copy,
   FileText,
   HelpCircle,
   Key,
@@ -43,6 +45,7 @@ import { SectionCard } from '../../components/ui'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import { avatarImageSource, normalizeAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
 import { useToast } from '../../components/ToastProvider'
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
 import { supabase } from '../../lib/supabase'
 import {
   getVerifiedTotpFactorId,
@@ -84,6 +87,7 @@ function tierBadgeForProfile(
 function MoreContent({ navigation }: NavigationProps) {
   const { user, userProfile, refreshUserProfile, signOut } = useAuth()
   const { showError } = useToast()
+  const copyToClipboard = useCopyToClipboard()
   const palette = useThemeColors()
 
   /** Main stack screens (Profile, Notifications, …) are siblings of `MainTabs`. Prefer parent `navigate` so taps work from the More tab. */
@@ -339,7 +343,35 @@ function MoreContent({ navigation }: NavigationProps) {
     user?.full_name ||
     [user?.first_name, user?.last_name].filter(Boolean).join(' ') ||
     'Your account'
-  const email = userProfile?.profile?.email || user?.email || ''
+  const [easetagJustCopied, setEasetagJustCopied] = useState(false)
+  const easetagCopyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (easetagCopyResetRef.current) clearTimeout(easetagCopyResetRef.current)
+    }
+  }, [])
+  const easetagRaw = (userProfile?.profile?.easetag ?? '').trim().toLowerCase()
+  const profileEmail = (userProfile?.profile?.email ?? user?.email ?? '').trim()
+
+  const handleEasetagCopy = useCallback(
+    async (e?: { stopPropagation?: () => void }) => {
+      e?.stopPropagation?.()
+      if (!easetagRaw) return
+      const text = `@${easetagRaw}`
+      const ok = await copyToClipboard(text)
+      if (!ok) return
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      if (easetagCopyResetRef.current) clearTimeout(easetagCopyResetRef.current)
+      setEasetagJustCopied(true)
+      easetagCopyResetRef.current = setTimeout(() => {
+        setEasetagJustCopied(false)
+        easetagCopyResetRef.current = null
+      }, 2000)
+    },
+    [copyToClipboard, easetagRaw],
+  )
+
   const headerAvatarUrl = normalizeAvatarUrl(userProfile?.profile?.avatar_url)
   const headerAvatarSource = avatarImageSource(userProfile?.profile?.avatar_url)
   useEffect(() => {
@@ -411,9 +443,39 @@ function MoreContent({ navigation }: NavigationProps) {
                   <Text style={styles.profileName} numberOfLines={1}>
                     {fullName}
                   </Text>
-                  <Text style={styles.profileSubtitle} numberOfLines={1}>
-                    {email}
-                  </Text>
+                  <View style={styles.profileMetaLine}>
+                    {easetagRaw ? (
+                      <View style={styles.profileSubtitleRow}>
+                        <Text
+                          style={[styles.profileSubtitlePrimary, styles.profileMetaTextShrink]}
+                          numberOfLines={1}
+                        >
+                          {`Easetag: @${easetagRaw}`}
+                        </Text>
+                        <Pressable
+                          android_ripple={ripple.neutral}
+                          accessibilityRole="button"
+                          accessibilityLabel={easetagJustCopied ? 'Copied' : 'Copy Easetag'}
+                          hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }}
+                          onPress={(ev) => void handleEasetagCopy(ev)}
+                          style={[styles.profileCopyIconBtn, styles.profileCopyLeadingGap]}
+                        >
+                          {easetagJustCopied ? (
+                            <Check size={11} color={colors.primary.main} strokeWidth={2.5} />
+                          ) : (
+                            <Copy size={11} color={colors.primary.main} strokeWidth={2} />
+                          )}
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <Text
+                        style={[styles.profileSubtitlePrimary, styles.profileMetaTextFull]}
+                        numberOfLines={1}
+                      >
+                        {profileEmail}
+                      </Text>
+                    )}
+                  </View>
                 </View>
                 <View style={styles.openPill}>
                   <Text style={styles.openPillText}>Open</Text>
@@ -658,6 +720,8 @@ const styles = StyleSheet.create({
   profileInfo: {
     flex: 1,
     minWidth: 0,
+    gap: 0,
+    justifyContent: 'center',
   },
   profileName: {
     ...textStyles.bodyLarge,
@@ -665,10 +729,41 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.semibold,
     fontWeight: '600',
   },
-  profileSubtitle: {
+  profileMetaLine: {
+    marginTop: 0,
+    maxWidth: '100%',
+    alignSelf: 'stretch',
+  },
+  profileSubtitlePrimary: {
     ...textStyles.bodySmall,
-    color: colors.text.secondary,
-    marginTop: 2,
+    color: colors.primary.main,
+    fontFamily: fontFamily.medium,
+  },
+  profileMetaTextShrink: {
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  profileCopyLeadingGap: {
+    marginLeft: 2,
+  },
+  profileMetaTextFull: {
+    flex: 1,
+    minWidth: 0,
+  },
+  profileSubtitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    maxWidth: '100%',
+    minWidth: 0,
+    alignSelf: 'flex-start',
+  },
+  profileCopyIconBtn: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
   },
   openPill: {
     paddingHorizontal: spacing[3],
