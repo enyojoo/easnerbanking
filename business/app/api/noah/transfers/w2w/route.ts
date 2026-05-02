@@ -10,7 +10,8 @@ import { pickTxAmountAndCurrency } from "@/lib/noah/map-transactions"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 
 /**
- * Wallet-to-wallet (Easetag P2P): resolve payee Easetag → Noah wallet id, then POST Noah internal transfer.
+ * Wallet-to-wallet (Easetag P2P) via **Noah** internal transfer (legacy).
+ * Prefer `/api/wallets/easetag-transfer` + `EASETAG_LEDGER_P2P_ENABLED` for instant ledger P2P.
  * Path defaults to `/transactions/transfer`; override with `NOAH_WALLET_TRANSFER_PATH` per your Noah program contract.
  */
 export async function POST(request: Request) {

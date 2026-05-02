@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
+import { enqueueLiquiditySweepJob } from "@/lib/liquidity/sweep-jobs"
+import { resolvePooledSolanaSourceAddress, ledgerCurrencyForStablecoinAsset } from "@/lib/liquidity/platform-pool"
 
 type TurnkeyEvent = Record<string, unknown>
 
@@ -133,8 +135,9 @@ export async function applyTurnkeyWebhookSideEffects(
   if (addressCandidates.length === 0) return false
 
   const select =
-    "wallet_owner_id, address, asset, chain, associated_token_account_address" as const
+    "id, wallet_owner_id, address, asset, chain, associated_token_account_address" as const
   type WalletAccountMatchRow = {
+    id: string
     wallet_owner_id: string
     address: string
     asset: string
@@ -154,7 +157,7 @@ export async function applyTurnkeyWebhookSideEffects(
   const merged = new Map<string, WalletAccountMatchRow>()
   for (const row of [...(byOwner ?? []), ...(byAta ?? [])]) {
     const r = row as WalletAccountMatchRow
-    const key = `${String(r.wallet_owner_id)}:${String(r.address)}:${String(r.asset)}`
+    const key = `${String(r.wallet_owner_id)}:${String(r.id)}:${String(r.address)}:${String(r.asset)}`
     merged.set(key, r)
   }
   const walletAccounts = [...merged.values()]
@@ -303,6 +306,21 @@ export async function applyTurnkeyWebhookSideEffects(
       currency,
       delta: signed,
     })
+
+    if (direction === "in" && amount > 0 && walletAccount.id) {
+      const lc = ledgerCurrencyForStablecoinAsset(asset)
+      const poolAddr = lc ? await resolvePooledSolanaSourceAddress(admin, { ledgerCurrency: lc }) : null
+      const userAddr = String(walletAddress || "").trim()
+      if (poolAddr && userAddr && poolAddr.trim() !== userAddr.trim()) {
+        const idem = `sweep:${providerTransactionId}:${String(walletAccount.id)}`
+        await enqueueLiquiditySweepJob(admin, {
+          walletAccountId: String(walletAccount.id),
+          asset,
+          amount,
+          idempotencyKey: idem,
+        }).catch((e) => console.warn("enqueueLiquiditySweepJob (non-fatal):", e))
+      }
+    }
   }
   return true
 }

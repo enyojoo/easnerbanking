@@ -52,7 +52,7 @@ export interface Recipient {
   city?: string
   state?: string
   postal_code?: string
-  /** Easetag (@handle) for wallet-to-wallet (Noah internal transfer). */
+  /** Easetag (@handle): P2P via Easner internal ledger when enabled; legacy Noah w2w otherwise. */
   payee_easetag?: string
   /** Snapshot of payee `users.avatar_url` at save time (Easetag / P2P recipients). */
   payee_avatar_url?: string

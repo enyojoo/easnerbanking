@@ -16,6 +16,7 @@ import { EasenetRecipientProfileRowHydrated } from "@/components/easenet-recipie
 import { generateTransactionId } from "@/lib/transaction-id"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { dataCache, CACHE_KEYS, requestBusinessAccountsRefresh } from "@/lib/cache"
+import { isEasetagLedgerP2PEnabled } from "@/lib/ledger/easetag-transfer"
 import { ArrowLeft, User, Copy, Check, Loader2 } from "lucide-react"
 
 const SEND_FLOW_STATE_KEY = "send_flow_state"
@@ -138,20 +139,35 @@ export default function SendConfirmPage() {
       setIsAuthorizing(true)
       try {
         const tag = state.recipient.payeeEasetag!.trim().replace(/^@+/, "")
-        const res = await fetchWithSession("/api/noah/transfers/w2w", {
+        const ledger = isEasetagLedgerP2PEnabled()
+        const path = ledger ? "/api/wallets/easetag-transfer" : "/api/noah/transfers/w2w"
+        const body = ledger
+          ? {
+              destination_easetag: tag,
+              amount: state.sendAmount,
+              currency: state.sendCurrency.toUpperCase(),
+            }
+          : {
+              destinationEasetag: tag,
+              amount: state.sendAmount,
+              currency: state.sendCurrency.toLowerCase(),
+            }
+        const headers: Record<string, string> = { "Content-Type": "application/json" }
+        if (ledger) {
+          headers["Idempotency-Key"] = `biz-send-${Date.now()}-${Math.random().toString(36).slice(2)}`
+        }
+        const res = await fetchWithSession(path, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            destinationEasetag: tag,
-            amount: state.sendAmount,
-            currency: state.sendCurrency.toLowerCase(),
-          }),
+          headers,
+          body: JSON.stringify(body),
         })
         const data = (await res.json().catch(() => ({}))) as {
           ok?: boolean
           error?: string
           hint?: string
           transaction?: Record<string, unknown>
+          debit_provider_transaction_id?: string
+          transfer_group_id?: string
         }
         if (!res.ok || !data.ok) {
           const err = typeof data.error === "string" ? data.error : "Wallet transfer failed"
@@ -160,7 +176,14 @@ export default function SendConfirmPage() {
           return
         }
         const tx = data.transaction
-        const id = String(tx?.ID ?? tx?.id ?? state.transactionId ?? generateTransactionId())
+        const id = ledger
+          ? String(
+              data.debit_provider_transaction_id ??
+                data.transfer_group_id ??
+                state.transactionId ??
+                generateTransactionId(),
+            )
+          : String(tx?.ID ?? tx?.id ?? state.transactionId ?? generateTransactionId())
         if (user?.id) {
           dataCache.invalidate(CACHE_KEYS.TRANSACTIONS_LIST(user.id))
         }

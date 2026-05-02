@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth, requireNoahEnv } from "@/app/api/noah/_helpers"
+import { requireAuth } from "@/app/api/noah/_helpers"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { reconcileTurnkeySendStatus } from "@/lib/turnkey/send"
@@ -7,8 +7,6 @@ import { reconcileTurnkeySendStatus } from "@/lib/turnkey/send"
 type Props = { params: Promise<{ providerTransactionId: string }> }
 
 export async function GET(request: Request, routeCtx: Props) {
-  const mis = requireNoahEnv()
-  if (mis) return mis
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
   const accountCtx = await resolveNoahAccountContext(request, auth.user.id)

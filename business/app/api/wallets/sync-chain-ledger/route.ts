@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { requireAuth, requireNoahEnv } from "@/app/api/noah/_helpers"
+import { requireAuth } from "@/app/api/noah/_helpers"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
 import { resolveWalletOwnerIdForEasnerContext } from "@/lib/wallet/resolve-wallet-owner"
@@ -21,8 +21,6 @@ const inFlightByOwner = new Map<string, Promise<unknown>>()
  * so dashboard / transactions lists stay aligned with `wallet_balances`.
  */
 export async function POST(request: Request) {
-  const mis = requireNoahEnv()
-  if (mis) return mis
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
   const { user } = auth

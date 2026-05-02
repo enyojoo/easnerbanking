@@ -70,6 +70,9 @@ module.exports = ({ config }) => {
       supabaseUrl,
       supabasePublishableKey,
       apiUrl,
+      easetagLedgerP2pEnabled:
+        process.env.EXPO_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true' ||
+        process.env.NEXT_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true',
     },
   }
 

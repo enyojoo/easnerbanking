@@ -19,6 +19,7 @@ import {
   startOnchainDepositToPaymentWorkflow,
 } from "@/lib/terminal/automated-payout-workflow"
 import { resolveTurnkeyAddressForNoahPair } from "@/lib/wallet/resolve-wallet-owner"
+import { ledgerCurrencyForStablecoinAsset, resolvePooledSolanaSourceAddress } from "@/lib/liquidity/platform-pool"
 
 export async function GET(request: Request) {
   const user = await getUserFromApiRequest(request)
@@ -182,6 +183,13 @@ export async function POST(request: Request) {
   let sourceAddress = String(body?.source_address || "").trim()
   if (!sourceAddress) {
     sourceAddress = (process.env.NOAH_TERMINAL_SOURCE_ADDRESS || "").trim()
+  }
+  if (!sourceAddress) {
+    const lc = ledgerCurrencyForStablecoinAsset(String(cryptoCurrency || "").trim().toUpperCase())
+    if (lc) {
+      const pooled = await resolvePooledSolanaSourceAddress(admin, { ledgerCurrency: lc })
+      if (pooled?.trim()) sourceAddress = pooled.trim()
+    }
   }
   if (!sourceAddress) {
     const resolved = await resolveTurnkeyAddressForNoahPair(admin, acc.ctx, cryptoCurrency, network)

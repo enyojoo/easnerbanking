@@ -17,6 +17,7 @@ import {
 } from "@/lib/terminal/automated-payout-workflow"
 import { isNewPaymentIntentsPaused } from "@/lib/ops/safe-mode"
 import { assertBusinessTransferAllowed } from "@/lib/business/high-value-policy"
+import { ledgerCurrencyForStablecoinAsset, resolvePooledSolanaSourceAddress } from "@/lib/liquidity/platform-pool"
 
 export async function createOnRampPaymentIntent(input: {
   admin: SupabaseClient
@@ -151,6 +152,12 @@ export async function createOffRampPaymentIntent(input: {
   }
 
   let sourceAddress = (input.sourceAddress || "").trim()
+  if (!sourceAddress) {
+    const lc = ledgerCurrencyForStablecoinAsset(input.cryptoCurrency.trim().toUpperCase())
+    if (lc) {
+      sourceAddress = (await resolvePooledSolanaSourceAddress(input.admin, { ledgerCurrency: lc }))?.trim() || ""
+    }
+  }
   if (!sourceAddress) {
     sourceAddress =
       (await resolveTurnkeyAddressForNoahPair(

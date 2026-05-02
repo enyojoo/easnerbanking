@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth, requireNoahEnv } from "@/app/api/noah/_helpers"
+import { requireAuth } from "@/app/api/noah/_helpers"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { createTurnkeySend } from "@/lib/turnkey/send"
@@ -14,8 +14,6 @@ type Body = {
 }
 
 export async function POST(request: Request) {
-  const mis = requireNoahEnv()
-  if (mis) return mis
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
 

@@ -2,6 +2,7 @@
 // Noah REST API: https://docs.noah.com/
 
 import * as FileSystem from 'expo-file-system/legacy'
+import Constants from 'expo-constants'
 import type { Session } from '@supabase/supabase-js'
 import { getApiBaseUrl, NOAH_SCOPE_INDIVIDUAL_HEADERS } from './apiClient'
 import { getSessionReliable } from './authSession'
@@ -990,6 +991,39 @@ export const noahService = {
     cryptoCurrency?: string
   }): Promise<NoahTransfer> {
     const session = await requireAuthSession()
+    const useLedger =
+      Constants.expoConfig?.extra?.easetagLedgerP2pEnabled === true ||
+      process.env.EXPO_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true' ||
+      process.env.NEXT_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true'
+
+    if (useLedger) {
+      const response = await fetch(`${apiUrl()}/api/wallets/easetag-transfer`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+          'Idempotency-Key': `mobile-easetag-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        },
+        body: JSON.stringify({
+          destination_easetag: input.destinationEasetag.replace(/^@/, '').trim(),
+          amount: input.amount,
+          currency: String(input.currency || "usd").toUpperCase(),
+        }),
+      })
+      const data = (await response.json().catch(() => ({}))) as Record<string, unknown>
+      if (!response.ok || !data.ok) {
+        throw new Error(typeof data.error === 'string' ? data.error : 'Wallet transfer failed')
+      }
+      const id = String(data.debit_provider_transaction_id ?? data.transfer_group_id ?? '')
+      return {
+        id,
+        amount: input.amount,
+        currency: input.currency,
+        status: 'settled',
+        transaction_id: id,
+      }
+    }
+
     const response = await fetch(`${apiUrl()}/api/noah/transfers/w2w`, {
       method: 'POST',
       headers: {
