@@ -283,8 +283,7 @@ const TransactionItem = React.memo(function TransactionItem({
     }).start()
   }
 
-  // Noah-backed rows use `transaction_type`; older `transactions` rows use `type`. Detail uses
-  // TransactionDetails when Noah id is present, else LegacyTransactionDetails for legacy sends.
+  // Noah-backed rows use `transaction_type`; older `transactions` rows use `type`.
   const transactionType = item.transaction_type || item.type || 'send'
   const statusDisplay = getTransactionStatusDisplay(item.status)
 

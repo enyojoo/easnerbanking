@@ -108,16 +108,9 @@ export default function MobileMoneyScreen({ navigation, route }: NavigationProps
     // This would trigger the mobile money payment flow
     
     setTimeout(() => {
-      navigation.navigate('SendTransactionDetails' as never, {
+      navigation.replace('TransactionDetails' as never, {
         transactionId,
-        sendAmount,
-        receiveAmount,
-        sendCurrency,
-        receiveCurrency,
-        recipient: recipient as MockRecipient,
-        paymentMethod: paymentMethod || 'mpesa',
-        network: networkName,
-        phoneNumber: phoneNumber.replace(/\s/g, ''),
+        fromScreen: 'SendFlow',
       } as never)
     }, 500)
   }

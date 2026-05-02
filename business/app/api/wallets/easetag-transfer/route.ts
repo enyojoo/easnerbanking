@@ -122,5 +122,6 @@ export async function POST(request: Request) {
     transfer_group_id: result.transferGroupId,
     debit_provider_transaction_id: result.debitProviderTransactionId,
     credit_provider_transaction_id: result.creditProviderTransactionId,
+    easner_transaction_id: result.easnerTransactionId,
   })
 }

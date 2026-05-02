@@ -2,7 +2,7 @@
 
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { qk, type TxFilters, type Scope } from "@easner/shared"
-import { apiFetch } from "@/lib/query/api-client"
+import { apiFetch, ApiError } from "@/lib/query/api-client"
 import type { TransactionWithSource } from "@/lib/transactions"
 import { useScope } from "@/lib/query/scope"
 
@@ -58,7 +58,13 @@ export function useTransactionDetail(txId: string | null) {
   return useQuery({
     queryKey: scope && txId ? qk.transactions.detail(scope, txId) : ["transactions", "detail", "disabled"],
     enabled: Boolean(scope) && Boolean(txId),
-    queryFn: () => apiFetch<TransactionWithSource>(`/api/transactions/${txId}`),
+    queryFn: async () => {
+      const body = await apiFetch<{ businessTransaction?: TransactionWithSource; transaction?: unknown }>(
+        `/api/transactions/${txId}`,
+      )
+      if (body.businessTransaction) return body.businessTransaction
+      throw new ApiError("Missing business transaction payload", 502, null, body)
+    },
     staleTime: 30_000,
     gcTime: 10 * 60_000,
     meta: { safePersist: false, webPersist: "none", freshness: "operational" },

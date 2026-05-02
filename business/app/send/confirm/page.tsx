@@ -126,9 +126,7 @@ export default function SendConfirmPage() {
   const finishSend = (transactionId: string) => {
     if (!state) return
     sessionStorage.removeItem(SEND_FLOW_STATE_KEY)
-    router.push(
-      `/send/status?id=${transactionId}&amount=${state.amount}&currency=${state.receiveCurrency}&recipient=${encodeURIComponent(state.recipient.name)}`,
-    )
+    router.push(`/transactions/${encodeURIComponent(transactionId)}`)
   }
 
   const handleAuthorizeSuccess = async () => {
@@ -168,6 +166,7 @@ export default function SendConfirmPage() {
           transaction?: Record<string, unknown>
           debit_provider_transaction_id?: string
           transfer_group_id?: string
+          easner_transaction_id?: string
         }
         if (!res.ok || !data.ok) {
           const err = typeof data.error === "string" ? data.error : "Wallet transfer failed"
@@ -178,12 +177,19 @@ export default function SendConfirmPage() {
         const tx = data.transaction
         const id = ledger
           ? String(
-              data.debit_provider_transaction_id ??
+              data.easner_transaction_id ??
+                data.debit_provider_transaction_id ??
                 data.transfer_group_id ??
                 state.transactionId ??
                 generateTransactionId(),
             )
-          : String(tx?.ID ?? tx?.id ?? state.transactionId ?? generateTransactionId())
+          : String(
+              data.easner_transaction_id ??
+                tx?.ID ??
+                tx?.id ??
+                state.transactionId ??
+                generateTransactionId(),
+            )
         if (user?.id) {
           dataCache.invalidate(CACHE_KEYS.TRANSACTIONS_LIST(user.id))
         }

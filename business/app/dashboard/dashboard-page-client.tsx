@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import dynamic from "next/dynamic"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import {
   ArrowDownLeft,
@@ -30,18 +29,12 @@ import {
 import { useFxRates } from "@/hooks/queries"
 import { useTurnkeyLedgerRepair } from "@/hooks/use-turnkey-ledger-repair"
 
-const TransactionDetailsDialog = dynamic(
-  () => import("@/components/transaction-details-dialog").then((mod) => mod.TransactionDetailsDialog),
-)
-
 export function DashboardPageClient() {
   const { data: rows } = useTransactionsCached()
   const { balances, baseCurrency, hasAuthoritativeBalances } = useBusinessAccountRows()
   const { data: fxRates = [] } = useFxRates()
   useTurnkeyLedgerRepair()
 
-  const [selectedTransaction, setSelectedTransaction] = useState<TransactionWithSource | null>(null)
-  const [transactionDetailsOpen, setTransactionDetailsOpen] = useState(false)
   const [timePeriod, setTimePeriod] = useState<TimePeriod>("all")
   const [customDateRange, setCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
     from: undefined,
@@ -266,14 +259,8 @@ export function DashboardPageClient() {
                       className="flex min-w-0 items-center gap-3 p-4 transition-colors hover:bg-muted/50 cursor-pointer"
                     >
                       <Link
-                        href={`/transactions?txnId=${encodeURIComponent(txn.id)}`}
+                        href={`/transactions/${encodeURIComponent(txn.id)}`}
                         className="flex min-w-0 flex-1 items-center gap-3"
-                        onClick={(e) => {
-                          if (e.metaKey || e.ctrlKey) return
-                          e.preventDefault()
-                          setSelectedTransaction(txn)
-                          setTransactionDetailsOpen(true)
-                        }}
                       >
                         <div
                           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-background ${
@@ -308,12 +295,6 @@ export function DashboardPageClient() {
           </CardContent>
         </Card>
       </div>
-
-      <TransactionDetailsDialog
-        open={transactionDetailsOpen}
-        onOpenChange={setTransactionDetailsOpen}
-        transaction={selectedTransaction}
-      />
     </div>
   )
 }

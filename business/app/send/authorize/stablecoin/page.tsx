@@ -105,9 +105,7 @@ export default function StablecoinAuthorizePage() {
     setPaymentConfirmed(true)
     const transactionId = state?.transactionId ?? generateTransactionId()
     sessionStorage.removeItem(SEND_FLOW_STATE_KEY)
-    router.push(
-      `/send/status?id=${transactionId}&amount=${state?.amount ?? 0}&currency=${state?.receiveCurrency ?? "USD"}&recipient=${encodeURIComponent(state?.recipient?.name ?? "")}&method=stablecoin`
-    )
+    router.push(`/transactions/${encodeURIComponent(transactionId)}`)
   }
 
   const stablecoinType =

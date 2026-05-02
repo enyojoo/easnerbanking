@@ -71,13 +71,15 @@ export interface NoahWalletBalances {
   balanceCaip2?: string
 }
 
-interface NoahTransfer {
+export interface NoahTransfer {
   id: string
   amount: string
   currency: string
   status: string
   /** Present when the backend returns a ledger/transaction id alongside the transfer id */
   transaction_id?: string
+  /** Canonical Easner transaction id when the ledger row includes ETID */
+  easner_transaction_id?: string
 }
 
 /** Aligns with business/lib/pricing/provider-costs PricingTotals when PRICING_PROVIDER_DECOMPOSED=true */
@@ -1014,13 +1016,17 @@ export const noahService = {
       if (!response.ok || !data.ok) {
         throw new Error(typeof data.error === 'string' ? data.error : 'Wallet transfer failed')
       }
-      const id = String(data.debit_provider_transaction_id ?? data.transfer_group_id ?? '')
+      const etid =
+        typeof data.easner_transaction_id === 'string' ? data.easner_transaction_id.trim() : ''
+      const legacyId = String(data.debit_provider_transaction_id ?? data.transfer_group_id ?? '')
+      const detailId = etid || legacyId
       return {
-        id,
+        id: detailId,
         amount: input.amount,
         currency: input.currency,
         status: 'settled',
-        transaction_id: id,
+        transaction_id: detailId,
+        ...(etid ? { easner_transaction_id: etid } : {}),
       }
     }
 
@@ -1041,15 +1047,18 @@ export const noahService = {
     if (!response.ok || !data.ok) {
       throw new Error(typeof data.error === 'string' ? data.error : 'Wallet transfer failed')
     }
+    const etid = typeof data.easner_transaction_id === 'string' ? data.easner_transaction_id.trim() : ''
     const tx = data.transaction as Record<string, unknown> | undefined
     const id = String(tx?.ID ?? tx?.id ?? '')
     const status = String(tx?.Status ?? tx?.status ?? 'pending').toLowerCase()
+    const detailId = etid || id
     return {
-      id,
+      id: detailId,
       amount: input.amount,
       currency: input.currency,
       status,
-      transaction_id: id,
+      transaction_id: detailId,
+      ...(etid ? { easner_transaction_id: etid } : {}),
     }
   },
 
@@ -1081,7 +1090,20 @@ export const noahService = {
       throw new Error(error.error || 'Failed to create transfer')
     }
 
-    return await response.json()
+    const raw = (await response.json()) as NoahTransfer & {
+      easner_transaction_id?: string
+      transaction_id?: string
+    }
+    const tid = String(raw.transaction_id ?? raw.id ?? '')
+    const etid =
+      typeof raw.easner_transaction_id === 'string' ? raw.easner_transaction_id.trim() : ''
+    const detailId = etid || tid
+    return {
+      ...raw,
+      id: detailId,
+      transaction_id: detailId,
+      ...(etid ? { easner_transaction_id: etid } : {}),
+    }
   },
 
   /**

@@ -58,9 +58,7 @@ export default function OpenBankingPage() {
     setLoading(false)
     const transactionId = state?.transactionId ?? generateTransactionId()
     sessionStorage.removeItem(SEND_FLOW_STATE_KEY)
-    router.push(
-      `/send/status?id=${transactionId}&amount=${state?.amount ?? 0}&currency=${state?.receiveCurrency ?? "USD"}&recipient=${encodeURIComponent(state?.recipient?.name ?? "")}&method=open-banking`
-    )
+    router.push(`/transactions/${encodeURIComponent(transactionId)}`)
   }
 
   if (!state) {

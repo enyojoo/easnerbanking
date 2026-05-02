@@ -5,7 +5,7 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { normalizeEasetag } from "@/lib/easetag-validation"
 import { isUndefinedEasetagColumnError } from "@/lib/easetag-global"
 import { getNoahWalletTransferPath } from "@/lib/noah/config"
-import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
+import { resolveBusinessOrgOwnerUserId, resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { pickTxAmountAndCurrency } from "@/lib/noah/map-transactions"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 
@@ -37,8 +37,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "destinationEasetag and positive amount required." }, { status: 400 })
   }
 
-  const ctx = await resolveNoahContextAsync(user.id, request)
-  if (!ctx.ok) return ctx.response
+  const noahCtx = await resolveNoahContextAsync(user.id, request)
+  if (!noahCtx.ok) return noahCtx.response
 
   const cleanTag = normalizeEasetag(tag)
   const admin = createSupabaseAdmin()
@@ -104,11 +104,11 @@ export async function POST(request: Request) {
   }
 
   let sourceWalletId: string | undefined
-  if (ctx.scope === "business" && ctx.businessId) {
+  if (noahCtx.scope === "business" && noahCtx.businessId) {
     const { data: senderBiz } = await admin
       .from("businesses")
       .select("noah_wallet_id")
-      .eq("id", ctx.businessId)
+      .eq("id", noahCtx.businessId)
       .maybeSingle()
     sourceWalletId = senderBiz?.noah_wallet_id as string | undefined
   } else {
@@ -121,7 +121,7 @@ export async function POST(request: Request) {
 
   const path = getNoahWalletTransferPath()
   const pascalBody: Record<string, unknown> = {
-    CustomerID: ctx.noahCustomerId,
+    CustomerID: noahCtx.noahCustomerId,
     SourceWalletID: sourceWalletId,
     DestinationWalletID: payeeWalletId,
     Amount: amount.toFixed(8),
@@ -129,7 +129,7 @@ export async function POST(request: Request) {
     CryptoCurrency: cryptoCurrency,
   }
   const camelBody: Record<string, unknown> = {
-    customerId: ctx.noahCustomerId,
+    customerId: noahCtx.noahCustomerId,
     sourceWalletId,
     destinationWalletId: payeeWalletId,
     amount: amount.toFixed(8),
@@ -138,6 +138,13 @@ export async function POST(request: Request) {
   }
 
   let lastErr = "Wallet transfer failed."
+  const ledgerBusinessId = noahCtx.businessId
+  let ledgerUserId = user.id
+  if (noahCtx.scope === "business" && noahCtx.businessId) {
+    const owner = await resolveBusinessOrgOwnerUserId(admin, noahCtx.businessId)
+    if (owner) ledgerUserId = owner
+  }
+
   for (const json of [pascalBody, camelBody]) {
     try {
       const tx = await noahFetch<Record<string, unknown>>({
@@ -147,11 +154,12 @@ export async function POST(request: Request) {
       })
       const admin = createSupabaseAdmin()
       const txId = String(tx.ID ?? tx.id ?? "").trim()
+      let easnerTransactionId: string | undefined
       if (txId) {
         const { amount: txAmount, currency: txCurrency } = pickTxAmountAndCurrency(tx)
         await upsertLedgerTransaction(admin, {
-          userId: ctx.subjectUserId,
-          businessId: ctx.subjectBusinessId,
+          userId: ledgerUserId,
+          businessId: ledgerBusinessId,
           provider: "noah",
           providerTransactionId: txId,
           status: String(tx.Status ?? "pending").toLowerCase(),
@@ -168,8 +176,23 @@ export async function POST(request: Request) {
               : null,
           baseCurrency: txCurrency || currency.toUpperCase(),
         })
+        const { data: ledgerRow } = await admin
+          .from("transactions")
+          .select("easner_transaction_id")
+          .eq("provider", "noah")
+          .eq("provider_transaction_id", txId)
+          .maybeSingle()
+        const etid = ledgerRow && typeof (ledgerRow as { easner_transaction_id?: string }).easner_transaction_id === "string"
+          ? String((ledgerRow as { easner_transaction_id: string }).easner_transaction_id).trim()
+          : ""
+        if (etid) easnerTransactionId = etid
       }
-      return NextResponse.json({ ok: true, path, transaction: tx })
+      return NextResponse.json({
+        ok: true,
+        path,
+        transaction: tx,
+        ...(easnerTransactionId ? { easner_transaction_id: easnerTransactionId } : {}),
+      })
     } catch (e) {
       lastErr = e instanceof Error ? e.message : String(e)
     }

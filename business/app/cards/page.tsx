@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
+import Link from "next/link"
 import { getDateRange, filterTransactions, type TransactionWithSource } from "@/lib/transactions"
 import { useTransactionsCached } from "@/hooks/use-transactions-cached"
 import { Button } from "@/components/ui/button"
@@ -8,7 +9,6 @@ import { Plus, Eye, Settings, Snowflake, ArrowUpRight, ArrowDownLeft, AlertCircl
 import { CardCarousel } from "@/components/card-carousel"
 import { CardSettingsDialog } from "@/components/card-settings-dialog"
 import { CardDetailsDialog } from "@/components/card-details-dialog"
-import { TransactionDetailsDialog } from "@/components/transaction-details-dialog"
 import { DateRangeFilter, type TimePeriod } from "@/components/date-range-filter"
 import { formatCurrency } from "@/lib/utils"
 import type { Card } from "@/lib/finance-types"
@@ -19,8 +19,6 @@ export default function CardsPage() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [frozenCardIds, setFrozenCardIds] = useState<Set<string>>(new Set())
-  const [selectedTransaction, setSelectedTransaction] = useState<TransactionWithSource | null>(null)
-  const [transactionDetailsOpen, setTransactionDetailsOpen] = useState(false)
   const [timePeriod, setTimePeriod] = useState<TimePeriod>("all")
   const [customDateRange, setCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
     from: undefined,
@@ -140,12 +138,9 @@ export default function CardsPage() {
               : filteredTransactions.map((transaction) => {
                   const cur = transaction.displayCurrency || "USD"
                   return (
-                    <div
+                    <Link
                       key={transaction.id}
-                      onClick={() => {
-                        setSelectedTransaction(transaction)
-                        setTransactionDetailsOpen(true)
-                      }}
+                      href={`/transactions/${encodeURIComponent(transaction.id)}`}
                       className="flex items-center justify-between p-4 hover:bg-muted/50 cursor-pointer transition-colors"
                     >
                       <div className="flex items-center gap-3">
@@ -177,7 +172,7 @@ export default function CardsPage() {
                         {transaction.direction === "credit" ? "+" : "-"}
                         {formatCurrency(Math.abs(transaction.amount), cur)}
                       </p>
-                    </div>
+                    </Link>
                   )
                 })
               }
@@ -197,13 +192,6 @@ export default function CardsPage() {
           />
         </>
       : null}
-
-      <TransactionDetailsDialog
-        open={transactionDetailsOpen}
-        onOpenChange={setTransactionDetailsOpen}
-        transaction={selectedTransaction}
-        hideType={true}
-      />
     </div>
   )
 }

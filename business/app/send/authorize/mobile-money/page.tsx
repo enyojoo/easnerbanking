@@ -64,9 +64,7 @@ export default function MobileMoneyPage() {
     setPaymentConfirmed(true)
     const transactionId = state?.transactionId ?? generateTransactionId()
     sessionStorage.removeItem(SEND_FLOW_STATE_KEY)
-    router.push(
-      `/send/status?id=${transactionId}&amount=${state?.amount ?? 0}&currency=${state?.receiveCurrency ?? "USD"}&recipient=${encodeURIComponent(state?.recipient?.name ?? "")}&method=mobile-money`
-    )
+    router.push(`/transactions/${encodeURIComponent(transactionId)}`)
   }
 
   if (!state) {

@@ -23,7 +23,15 @@ export type ExecuteEasetagTransferInput = {
 }
 
 export type ExecuteEasetagTransferResult =
-  | { ok: true; idempotent: boolean; transferGroupId: string; debitProviderTransactionId: string; creditProviderTransactionId: string }
+  | {
+      ok: true
+      idempotent: boolean
+      transferGroupId: string
+      debitProviderTransactionId: string
+      creditProviderTransactionId: string
+      /** Sender-facing ETID for `/transactions/[etid]` */
+      easnerTransactionId: string
+    }
   | { ok: false; error: string }
 
 export async function executeEasetagTransfer(
@@ -59,12 +67,16 @@ export async function executeEasetagTransfer(
     return { ok: false, error: String(row.error || "transfer_failed") }
   }
 
+  const debitId = String(row.debit_provider_transaction_id || "")
+  const etid = String(row.easner_transaction_id || "").trim()
+
   return {
     ok: true,
     idempotent: Boolean(row.idempotent),
     transferGroupId: String(row.transfer_group_id || transferGroupId),
-    debitProviderTransactionId: String(row.debit_provider_transaction_id || ""),
+    debitProviderTransactionId: debitId,
     creditProviderTransactionId: String(row.credit_provider_transaction_id || ""),
+    easnerTransactionId: etid || debitId,
   }
 }
 

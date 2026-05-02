@@ -1,10 +1,8 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import dynamic from "next/dynamic"
 import { useSearchParams, useRouter } from "next/navigation"
-import { getDateRange } from "@/lib/transactions"
-import type { TransactionWithSource } from "@/lib/transactions"
+import { getDateRange, type TransactionWithSource } from "@/lib/transactions"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -26,10 +24,7 @@ import { useBusinessProfile } from "@/lib/use-business-profile"
 import { useFxRates } from "@/hooks/queries"
 import { formatTransactionRowDateTime, transactionStatusRowPresentation } from "@/lib/transaction-row-present"
 import { useTurnkeyLedgerRepair } from "@/hooks/use-turnkey-ledger-repair"
-
-const TransactionDetailsDialog = dynamic(
-  () => import("@/components/transaction-details-dialog").then((mod) => mod.TransactionDetailsDialog),
-)
+import Link from "next/link"
 
 function exportToCsv(
   transactions: {
@@ -76,8 +71,6 @@ export default function TransactionsPage() {
   const router = useRouter()
   const [statusFilter, setStatusFilter] = useState("all")
   const [searchTerm, setSearchTerm] = useState("")
-  const [selectedTransaction, setSelectedTransaction] = useState<TransactionWithSource | null>(null)
-  const [transactionDetailsOpen, setTransactionDetailsOpen] = useState(false)
   const [timePeriod, setTimePeriod] = useState<TimePeriod>("all")
   const [customDateRange, setCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
     from: undefined,
@@ -104,8 +97,7 @@ export default function TransactionsPage() {
     const qs = next.toString()
     router.replace(qs ? `/transactions?${qs}` : "/transactions", { scroll: false })
     if (match) {
-      setSelectedTransaction(match)
-      setTransactionDetailsOpen(true)
+      router.push(`/transactions/${encodeURIComponent(match.id)}`)
     }
   }, [listLoading, rows, searchParams, router])
 
@@ -272,12 +264,9 @@ export default function TransactionsPage() {
                   const cur = txn.displayCurrency || "USD"
                   const statusRow = transactionStatusRowPresentation(txn.status)
                   return (
-                    <div
+                    <Link
                       key={txn.id}
-                      onClick={() => {
-                        setSelectedTransaction(txn)
-                        setTransactionDetailsOpen(true)
-                      }}
+                      href={`/transactions/${encodeURIComponent(txn.id)}`}
                       className="flex min-w-0 items-center gap-3 p-4 transition-colors hover:bg-muted/50 cursor-pointer"
                     >
                       <div
@@ -304,7 +293,7 @@ export default function TransactionsPage() {
                         </p>
                         <p className={`text-xs font-medium ${statusRow.className}`}>{statusRow.label}</p>
                       </div>
-                    </div>
+                    </Link>
                   )
                 })}
               </div>
@@ -324,12 +313,6 @@ export default function TransactionsPage() {
       <div className="text-sm text-muted-foreground">
         {filteredTransactions.length} result{filteredTransactions.length !== 1 ? "s" : ""}
       </div>
-
-      <TransactionDetailsDialog
-        open={transactionDetailsOpen}
-        onOpenChange={setTransactionDetailsOpen}
-        transaction={selectedTransaction}
-      />
     </div>
   )
 }

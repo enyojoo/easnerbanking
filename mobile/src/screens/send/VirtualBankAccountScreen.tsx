@@ -191,14 +191,9 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
     
     // Navigate to transaction tracking
     setTimeout(() => {
-      navigation.navigate('SendTransactionDetails' as never, {
+      navigation.replace('TransactionDetails' as never, {
         transactionId: transactionId,
-        sendAmount,
-        sendCurrency,
-        receiveCurrency,
-        recipient: recipient as MockRecipient,
-        paymentMethod: 'virtualBank',
-        receiptFile: uploadedFile,
+        fromScreen: 'SendFlow',
       } as never)
     }, 500)
   }

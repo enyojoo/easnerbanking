@@ -41,14 +41,9 @@ export default function OpenBankingScreen({ navigation, route }: NavigationProps
     setTimeout(() => {
       setLoading(false)
       // After successful connection, navigate to transaction tracking
-      navigation.navigate('SendTransactionDetails' as never, {
+      navigation.replace('TransactionDetails' as never, {
         transactionId: transactionId,
-        sendAmount,
-        receiveAmount,
-        sendCurrency,
-        receiveCurrency,
-        recipient,
-        paymentMethod: paymentMethod || 'linkBank',
+        fromScreen: 'SendFlow',
       } as never)
     }, 2000)
   }

@@ -3,6 +3,7 @@ import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin
 import { mapNoahTransactionToMobileDetail } from "@/lib/noah/map-transactions"
 import { resolveLedgerListScope } from "@/lib/transactions-ledger-scope"
 import { displayEasnerTransactionId } from "@/lib/easner-transaction-id"
+import { mapRowToBusinessTransaction } from "@/lib/transactions/map-row-to-business"
 import {
   deriveEasnerInboundRemitterDisplayName,
   toEasnerTransactionPrimaryLabel,
@@ -203,6 +204,11 @@ export async function GET(request: Request, routeCtx: Props) {
     transaction = mapNoahTransactionToMobileDetail(payload)
   } else {
     transaction = mapLedgerRowToMobileDetail(rec)
+  }
+
+  if (scope === "business") {
+    const businessTransaction = mapRowToBusinessTransaction(rec)
+    return NextResponse.json({ transaction, businessTransaction })
   }
 
   return NextResponse.json({ transaction })

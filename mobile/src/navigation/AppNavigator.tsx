@@ -57,15 +57,13 @@ import LegalScreen from '../screens/main/LegalScreen'
 
 // Transaction Screens
 import TransactionDetailsScreen from '../screens/transactions/TransactionDetailsScreen'
-import LegacyTransactionDetailsScreen from '../screens/transactions/LegacyTransactionDetailsScreen'
 
 // Send Money Flow Screens
 import SendAmountScreen from '../screens/send/SendAmountScreen'
 import SelectRecentRecipientScreen from '../screens/send/SelectRecentRecipientScreen'
 import SelectRecipientScreen from '../screens/send/SelectRecipientScreen'
-import PaymentMethodScreen from '../screens/send/PaymentMethodScreen'
-import ConfirmationScreen from '../screens/send/ConfirmationScreen'
-import SendTransactionDetailsScreen from '../screens/send/SendTransactionDetailsScreen'
+import SendConfirmScreen from '../screens/send/SendConfirmScreen'
+import StablecoinScreen from '../screens/send/StablecoinScreen'
 import OpenBankingScreen from '../screens/send/OpenBankingScreen'
 import VirtualBankAccountScreen from '../screens/send/VirtualBankAccountScreen'
 import MobileMoneyScreen from '../screens/send/MobileMoneyScreen'
@@ -399,28 +397,19 @@ function MainStack() {
         }}
       />
       <Stack.Screen 
-        name="PaymentMethod" 
-        component={PaymentMethodScreen}
+        name="SendConfirm" 
+        component={SendConfirmScreen}
         options={{ 
           headerShown: false,
           ...sendFlowStandardPreset(),
         }}
       />
       <Stack.Screen 
-        name="Confirmation" 
-        component={ConfirmationScreen}
+        name="Stablecoin" 
+        component={StablecoinScreen}
         options={{ 
           headerShown: false,
           ...sendFlowStandardPreset(),
-        }}
-      />
-      <Stack.Screen 
-        name="SendTransactionDetails" 
-        component={SendTransactionDetailsScreen}
-        options={{ 
-          headerShown: false,
-          ...sendFlowStandardPreset(),
-          gestureEnabled: false, // Disable all gestures - only allow navigation via buttons
         }}
       />
       <Stack.Screen 
@@ -466,14 +455,6 @@ function MainStack() {
       <Stack.Screen 
         name="TransactionDetails" 
         component={TransactionDetailsScreen}
-        options={{ 
-          headerShown: false,
-          ...mainStackPreset(),
-        }}
-      />
-      <Stack.Screen 
-        name="LegacyTransactionDetails" 
-        component={LegacyTransactionDetailsScreen}
         options={{ 
           headerShown: false,
           ...mainStackPreset(),
