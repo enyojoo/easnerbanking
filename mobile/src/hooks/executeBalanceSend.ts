@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics'
 import type { QueryClient } from '@tanstack/react-query'
 import type { Scope } from '@easner/shared'
-import { getApiBaseUrl } from '../lib/apiClient'
+import { getApiBaseUrl, getNoahScopeHeaders } from '../lib/apiClient'
 import { supabase } from '../lib/supabase'
 import { noahService, type NoahTransfer, type PricingQuote } from '../lib/noahService'
 import type { Recipient, User } from '../types'
@@ -106,9 +106,14 @@ export async function executeBalanceSend(
     pricingQuoteResult,
   } = input
 
+  const {
+    data: { session: walletSession },
+  } = await supabase.auth.getSession()
+  const scopeHeaders = await getNoahScopeHeaders()
   const walletsResponse = await fetch(`${getApiBaseUrl()}/api/noah/wallets`, {
     headers: {
-      Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+      Authorization: `Bearer ${walletSession?.access_token}`,
+      ...scopeHeaders,
     },
   })
 

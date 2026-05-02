@@ -4,7 +4,7 @@
 import * as FileSystem from 'expo-file-system/legacy'
 import Constants from 'expo-constants'
 import type { Session } from '@supabase/supabase-js'
-import { getApiBaseUrl, NOAH_SCOPE_INDIVIDUAL_HEADERS } from './apiClient'
+import { getApiBaseUrl, getNoahScopeHeaders } from './apiClient'
 import { getSessionReliable } from './authSession'
 
 async function requireAuthSession(): Promise<Session> {
@@ -674,6 +674,7 @@ export const noahService = {
    */
   async getWalletBalances(): Promise<NoahWalletBalances> {
     const session = await requireAuthSession()
+    const scopeHeaders = await getNoahScopeHeaders()
 
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 8000)
@@ -685,7 +686,7 @@ export const noahService = {
       console.log('[NoahService] Fetching on-chain wallet balances (Turnkey)...')
       const tkRes = await fetch(`${apiUrl()}/api/wallets/on-chain-balances`, {
         method: 'GET',
-        headers: { ...authHeaders, ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
+        headers: { ...authHeaders, ...scopeHeaders },
         signal: controller.signal,
       })
       clearTimeout(timeoutId)
@@ -764,6 +765,7 @@ export const noahService = {
     error?: string
   }> {
     const session = await requireAuthSession()
+    const scopeHeaders = await getNoahScopeHeaders()
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 15000)
     try {
@@ -772,7 +774,7 @@ export const noahService = {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
-          ...NOAH_SCOPE_INDIVIDUAL_HEADERS,
+          ...scopeHeaders,
         },
         signal: controller.signal,
       })
@@ -816,6 +818,7 @@ export const noahService = {
     const session = await requireAuthSession()
     await this.ensureTurnkeySubOrg().catch(() => undefined)
 
+    const scopeHeaders = await getNoahScopeHeaders()
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 8000)
     const empty = (stablecoin: string) => ({
@@ -830,7 +833,7 @@ export const noahService = {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${session.access_token}`,
-          ...NOAH_SCOPE_INDIVIDUAL_HEADERS,
+          ...scopeHeaders,
         },
         signal: controller.signal,
       })
@@ -885,6 +888,7 @@ export const noahService = {
     error?: string
   }> {
     const session = await requireAuthSession()
+    const scopeHeaders = await getNoahScopeHeaders()
     const currency = (input.currency || 'USD').toUpperCase()
     const countryCode =
       (input.countryCode || (currency === 'EUR' ? 'DE' : 'US')).toUpperCase()
@@ -912,6 +916,7 @@ export const noahService = {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
+        ...scopeHeaders,
       },
       body: JSON.stringify(body),
     })
@@ -951,11 +956,13 @@ export const noahService = {
     error?: string
   }> {
     const session = await requireAuthSession()
+    const scopeHeaders = await getNoahScopeHeaders()
     const response = await fetch(`${apiUrl()}/api/noah/payouts/prepare-mobile`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
+        ...scopeHeaders,
       },
       body: JSON.stringify({
         fiatAmount: input.fiatAmount,
@@ -993,6 +1000,7 @@ export const noahService = {
     cryptoCurrency?: string
   }): Promise<NoahTransfer> {
     const session = await requireAuthSession()
+    const scopeHeaders = await getNoahScopeHeaders()
     const useLedger =
       Constants.expoConfig?.extra?.easetagLedgerP2pEnabled === true ||
       process.env.EXPO_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true' ||
@@ -1004,6 +1012,7 @@ export const noahService = {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
+          ...scopeHeaders,
           'Idempotency-Key': `mobile-easetag-${Date.now()}-${Math.random().toString(36).slice(2)}`,
         },
         body: JSON.stringify({
@@ -1035,6 +1044,7 @@ export const noahService = {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
+        ...scopeHeaders,
       },
       body: JSON.stringify({
         destinationEasetag: input.destinationEasetag.replace(/^@/, '').trim(),
@@ -1075,12 +1085,14 @@ export const noahService = {
     cryptoCurrency?: string
   }): Promise<NoahTransfer> {
     const session = await requireAuthSession()
+    const scopeHeaders = await getNoahScopeHeaders()
 
     const response = await fetch(`${apiUrl()}/api/noah/transfers`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session.access_token}`,
+        ...scopeHeaders,
       },
       body: JSON.stringify(transferData),
     })

@@ -70,7 +70,7 @@ function getProcessingTime(method: string): string {
 export default function SendConfirmPage() {
   const router = useRouter()
   const { user } = useAuth()
-  const { tier1Complete, isLoading: profileLoading } = useBusinessProfile()
+  const { tier1Complete, isLoading: profileLoading, businessId } = useBusinessProfile()
   const { accountRows: sourceAccounts } = useBusinessAccountRows()
   const [state, setState] = useState<SendFlowState | null>(null)
   const [showPinDialog, setShowPinDialog] = useState(false)
@@ -151,6 +151,9 @@ export default function SendConfirmPage() {
               currency: state.sendCurrency.toLowerCase(),
             }
         const headers: Record<string, string> = { "Content-Type": "application/json" }
+        if (businessId) {
+          headers["X-Easner-Noah-Scope"] = "business"
+        }
         if (ledger) {
           headers["Idempotency-Key"] = `biz-send-${Date.now()}-${Math.random().toString(36).slice(2)}`
         }

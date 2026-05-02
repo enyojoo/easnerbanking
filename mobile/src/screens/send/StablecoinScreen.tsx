@@ -11,7 +11,7 @@ import { colors, textStyles, borderRadius, spacing, motion, fontFamily } from '.
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { analytics } from '../../lib/analytics'
-import { getApiBaseUrl } from '../../lib/apiClient'
+import { getApiBaseUrl, getNoahScopeHeaders } from '../../lib/apiClient'
 import { supabase } from '../../lib/supabase'
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
 
@@ -63,8 +63,9 @@ export default function StablecoinScreen({ navigation, route }: NavigationProps)
       try {
         const token = (await supabase.auth.getSession()).data.session?.access_token
         if (!token) throw new Error('Not authenticated')
+        const scopeHeaders = await getNoahScopeHeaders()
         const res = await fetch(`${getApiBaseUrl()}/api/noah/wallets`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${token}`, ...scopeHeaders },
         })
         const data = (await res.json().catch(() => ({}))) as { wallets?: Array<{ address?: string }>; error?: string }
         if (!res.ok) throw new Error(data.error || 'Could not load wallet')
