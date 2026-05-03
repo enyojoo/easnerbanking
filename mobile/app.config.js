@@ -38,6 +38,10 @@ function aliasPublicEnv() {
   }
 }
 
+function isLocalUrl(value) {
+  return /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(\/|$)/i.test(value)
+}
+
 module.exports = ({ config }) => {
   loadEnvFile(path.join(__dirname, '.env'))
   loadEnvFile(path.join(__dirname, '..', 'business', '.env.local'))
@@ -51,15 +55,31 @@ module.exports = ({ config }) => {
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     ''
 
+  const configuredApiUrl = (
+    process.env.EXPO_PUBLIC_API_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    ''
+  ).replace(/\/$/, '')
   const apiUrl =
-    (process.env.EXPO_PUBLIC_API_URL ||
-      process.env.NEXT_PUBLIC_API_URL ||
-      '')
-      .replace(/\/$/, '') || ''
+    process.env.EAS_BUILD && isLocalUrl(configuredApiUrl)
+      ? 'https://api.easner.com'
+      : configuredApiUrl
 
-  if (process.env.EAS_BUILD && !apiUrl) {
+  if (process.env.EAS_BUILD && (!supabaseUrl || !supabasePublishableKey)) {
+    console.warn(
+      '[easner-mobile] EAS build has no EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY. The app will show a startup configuration error instead of crashing; set them in EAS Environment variables and rebuild.'
+    )
+  }
+
+  if (process.env.EAS_BUILD && !configuredApiUrl) {
     console.warn(
       '[easner-mobile] EAS build has no EXPO_PUBLIC_API_URL / NEXT_PUBLIC_API_URL — profile & Easetag saves require the business app URL. Set it in EAS Environment variables and rebuild.'
+    )
+  }
+
+  if (process.env.EAS_BUILD && configuredApiUrl && configuredApiUrl !== apiUrl) {
+    console.warn(
+      `[easner-mobile] EAS build ignored local API URL ${configuredApiUrl}; using ${apiUrl}. Set EXPO_PUBLIC_API_URL for the target backend.`
     )
   }
 

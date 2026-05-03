@@ -6,14 +6,18 @@ import Constants from 'expo-constants'
 /** SecureStore caps ~2048 bytes; large JWT sessions use AsyncStorage (same device). */
 const AUTH_LARGE_KEY_PREFIX = '@easner-sb-auth-large:'
 
-const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl || process.env.EXPO_PUBLIC_SUPABASE_URL!
+const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl || process.env.EXPO_PUBLIC_SUPABASE_URL
 const supabasePublishableKey =
   Constants.expoConfig?.extra?.supabasePublishableKey ||
-  process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
+  process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 
-if (!supabaseUrl || !supabasePublishableKey) {
-  throw new Error('Missing Supabase environment variables')
-}
+export const supabaseConfigError =
+  !supabaseUrl || !supabasePublishableKey
+    ? 'Missing Supabase environment variables. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY for this build.'
+    : null
+
+const resolvedSupabaseUrl = supabaseUrl || 'https://missing-config.supabase.co'
+const resolvedSupabasePublishableKey = supabasePublishableKey || 'missing-supabase-publishable-key'
 
 // Custom storage: SecureStore when small; full session in AsyncStorage when >2048 bytes
 const ExpoSecureStoreAdapter = {
@@ -52,7 +56,7 @@ const ExpoSecureStoreAdapter = {
 }
 
 // Client-side Supabase client (singleton pattern)
-export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
+export const supabase = createClient(resolvedSupabaseUrl, resolvedSupabasePublishableKey, {
   auth: {
     storage: ExpoSecureStoreAdapter,
     persistSession: true,

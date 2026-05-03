@@ -36,6 +36,7 @@ import {
 } from './src/lib/backgroundTasks'
 import { lightColors } from './src/theme/colors'
 import { isIosOnMac, MAC_INSTALLED_MOBILE_DESIGN_POINTS } from './src/lib/effective-window'
+import { supabaseConfigError } from './src/lib/supabase'
 
 // Keep the splash screen visible while we load fonts
 SplashScreen.preventAutoHideAsync()
@@ -216,6 +217,13 @@ export default function App() {
     void SystemUI.setBackgroundColorAsync(lightColors.background.primary)
   }, [])
 
+  useEffect(() => {
+    if (!fontsLoaded || !supabaseConfigError) return
+    void SplashScreen.hideAsync().catch((e) => {
+      console.warn('SplashScreen.hideAsync', e)
+    })
+  }, [fontsLoaded, supabaseConfigError])
+
   // Foreground/tap listeners only; token registration is gated on user prefs in PushNotificationBootstrap
   useEffect(() => {
     try {
@@ -281,6 +289,15 @@ export default function App() {
   if (!fontsLoaded) {
     return null
   }
+
+  if (supabaseConfigError) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorTitle}>App configuration is missing</Text>
+        <Text style={styles.errorText}>{supabaseConfigError}</Text>
+      </View>
+    )
+  }
   
   try {
     return (
@@ -341,6 +358,13 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 16,
     color: '#ef4444',
+    textAlign: 'center',
+  },
+  errorTitle: {
+    marginBottom: 8,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f172a',
     textAlign: 'center',
   },
 })
