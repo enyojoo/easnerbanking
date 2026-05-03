@@ -86,7 +86,6 @@ export default function SendConfirmPage() {
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [isAuthorizing, setIsAuthorizing] = useState(false)
   const [authorizeError, setAuthorizeError] = useState<string | null>(null)
-  const [ledgerReserveLoading, setLedgerReserveLoading] = useState(false)
   const [ledgerReserveError, setLedgerReserveError] = useState<string | null>(null)
 
   const needPinChallenge =
@@ -128,10 +127,8 @@ export default function SendConfirmPage() {
   }, [router])
 
   /**
-   * Easetag ledger P2P: reserve ETID on review.
-   * Must not run until profile `businessId` is known — otherwise we reserve under individual scope
-   * while authorize sends `X-Easner-Noah-Scope: business` → `reserved_debit_etid_not_found` (same as mobile
-   * always pairing scope on reserve + transfer).
+   * Easetag ledger P2P: ETID is reserved on `/send` before navigation (mobile parity).
+   * This effect only fixes stale session rows or legacy flows missing `ledgerReserveNoahScope`.
    */
   useEffect(() => {
     if (!state) return
@@ -158,10 +155,10 @@ export default function SendConfirmPage() {
       return
     }
 
-    if (tidLooksReserved) return
+    const expectedLedgerReserveScope: "business" | "individual" = businessId ? "business" : "individual"
+    if (tidLooksReserved && state.ledgerReserveNoahScope === expectedLedgerReserveScope) return
 
     let cancelled = false
-    setLedgerReserveLoading(true)
     setLedgerReserveError(null)
     void (async () => {
       const reserved = await fetchReserveEasnerTransactionId(
@@ -174,7 +171,6 @@ export default function SendConfirmPage() {
             ? "Could not reserve transaction reference. Sign in and try again."
             : `Could not reserve transaction reference: ${reserved.error}`,
         )
-        setLedgerReserveLoading(false)
         return
       }
       if (cancelled) return
@@ -189,7 +185,6 @@ export default function SendConfirmPage() {
         sessionStorage.setItem(SEND_FLOW_STATE_KEY, JSON.stringify(next))
         return next
       })
-      setLedgerReserveLoading(false)
     })()
     return () => {
       cancelled = true
@@ -337,10 +332,14 @@ export default function SendConfirmPage() {
     : state.pricingQuote?.exchangeRate ?? (hasFx && state.amount > 0 ? state.sendAmount / state.amount : 1)
 
   const needsLedgerEtReserve = easenetSend && isEasetagLedgerP2PEnabled()
-  const hasValidEtId = /^ETID\d{8}$/i.test(state.transactionId?.trim() ?? "")
+  const expectedLedgerReserveScope: "business" | "individual" = businessId ? "business" : "individual"
+  /** Server-reserved ETID only — ignore client `generateTransactionId()` shape so the row does not swap IDs. */
+  const easetagLedgerEtReady =
+    !needsLedgerEtReserve ||
+    (/^ETID\d{8}$/i.test(state.transactionId?.trim() ?? "") &&
+      state.ledgerReserveNoahScope === expectedLedgerReserveScope)
   const authorizeDisabled =
-    isAuthorizing ||
-    (needsLedgerEtReserve && (ledgerReserveLoading || Boolean(ledgerReserveError) || !hasValidEtId))
+    isAuthorizing || (needsLedgerEtReserve && (Boolean(ledgerReserveError) || !easetagLedgerEtReady))
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -354,10 +353,26 @@ export default function SendConfirmPage() {
             <span className="text-sm text-muted-foreground">Transaction ID</span>
             <button
               type="button"
-              onClick={() => handleCopy(state.transactionId ?? generateTransactionId(), "transactionId")}
-              className="flex items-center gap-2 font-mono text-sm font-medium transition-colors hover:text-primary"
+              disabled={needsLedgerEtReserve && !easetagLedgerEtReady}
+              className="flex items-center gap-2 font-mono text-sm font-medium transition-colors hover:text-primary disabled:pointer-events-none disabled:opacity-60"
+              onClick={() => {
+                const id = state.transactionId?.trim()
+                if (!id || (needsLedgerEtReserve && !easetagLedgerEtReady)) return
+                void handleCopy(id, "transactionId")
+              }}
+              aria-label={
+                needsLedgerEtReserve && !easetagLedgerEtReady
+                  ? "Transaction reference loading"
+                  : "Copy transaction id"
+              }
             >
-              {state.transactionId ?? generateTransactionId()}
+              {needsLedgerEtReserve && !easetagLedgerEtReady ? (
+                <span className="invisible select-none" aria-hidden>
+                  ETID00000000
+                </span>
+              ) : (
+                (state.transactionId ?? generateTransactionId()).trim()
+              )}
               {copiedKey === "transactionId" ? (
                 <Check className="h-4 w-4 shrink-0 text-primary" />
               ) : (

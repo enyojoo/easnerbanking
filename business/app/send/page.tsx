@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -38,6 +38,8 @@ import {
 import { generateTransactionId } from "@/lib/transaction-id"
 import { CurrencyFlag } from "@/components/flags"
 import { useBusinessProfile } from "@/lib/use-business-profile"
+import { fetchReserveEasnerTransactionId } from "@/lib/reserve-easner-transaction-id"
+import { isEasetagLedgerP2PEnabled } from "@/lib/ledger/easetag-transfer"
 import {
   TIER2_COMPLETE_PLACEHOLDER,
 } from "@/lib/compliance-placeholders"
@@ -45,6 +47,9 @@ import {
   type SendFlowState,
   SEND_FLOW_STATE_KEY,
   persistSendFlowState,
+  readSendFlowLedgerEtidCache,
+  writeSendFlowLedgerEtidCache,
+  clearSendFlowLedgerEtidCache,
 } from "@/lib/send-flow-session"
 import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
 
@@ -87,7 +92,7 @@ function parseAmountFromDisplay(display: string): number {
 
 export default function SendPage() {
   const router = useRouter()
-  const { tier1Complete } = useBusinessProfile()
+  const { tier1Complete, businessId, hasData, isLoading: profileLoading } = useBusinessProfile()
   const { accountRows: sourceAccounts } = useBusinessAccountRows()
   const [recipient, setRecipient] = useState<Beneficiary | null>(null)
   const [amountStr, setAmountStr] = useState("")
@@ -98,6 +103,7 @@ export default function SendPage() {
   const [otherPaymentMethod, setOtherPaymentMethod] = useState<string | null>(null)
   const [note, setNote] = useState("")
   const [sourceSheetOpen, setSourceSheetOpen] = useState(false)
+  const ledgerEtidReserveGen = useRef(0)
 
   useEffect(() => {
     const raw = sessionStorage.getItem(SEND_FLOW_STATE_KEY)
@@ -177,6 +183,13 @@ export default function SendPage() {
   }, [recipient, sourceAccountId, paymentMethod, suggestedAccount])
 
   const isBalanceSource = paymentMethod === "balance"
+  const isEasenetEasetagLedgerReserve =
+    isBalanceSource &&
+    recipient !== null &&
+    Boolean(recipient.payeeEasetag?.trim()) &&
+    isEasetagLedgerP2PEnabled()
+  const profileReadyForLedgerReserve =
+    !isEasenetEasetagLedgerReserve || (hasData && !profileLoading)
   const isStablecoinSource = paymentMethod === "usdc" || paymentMethod === "usdt"
   const hasValidOtherCurrencySelection =
     (otherCurrency &&
@@ -195,7 +208,8 @@ export default function SendPage() {
     sourceAccount &&
     sourceAccount.availableBalance >= sendAmount &&
     isBalanceSource &&
-    tier1Complete
+    tier1Complete &&
+    profileReadyForLedgerReserve
 
   const canContinueStablecoin =
     recipient !== null && receiveAmount > 0 && hasValidStablecoinSelection && tier1Complete
@@ -214,6 +228,44 @@ export default function SendPage() {
         : canContinueOtherCurrency
 
   const isAuthorizeFlow = !isBalanceSource
+
+  useEffect(() => {
+    if (!isEasenetEasetagLedgerReserve || !profileReadyForLedgerReserve || !recipient) {
+      if (!isEasenetEasetagLedgerReserve) clearSendFlowLedgerEtidCache()
+      return
+    }
+    const recipientReserveKey = recipient.payeeEasetag?.trim().toUpperCase() ?? ""
+    if (!recipientReserveKey) return
+
+    const myGen = ++ledgerEtidReserveGen.current
+    let cancelled = false
+
+    void (async () => {
+      const orgSend = Boolean(businessId)
+      const reserved = await fetchReserveEasnerTransactionId(
+        orgSend ? { "X-Easner-Noah-Scope": "business" } : undefined,
+      )
+      if (cancelled || myGen !== ledgerEtidReserveGen.current) return
+      if (reserved.ok) {
+        const etid = reserved.easner_transaction_id.trim().toUpperCase()
+        writeSendFlowLedgerEtidCache({
+          transactionId: etid,
+          ledgerReserveNoahScope: orgSend ? "business" : "individual",
+          businessIdKey: businessId ?? "",
+          recipientReserveKey,
+        })
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    isEasenetEasetagLedgerReserve,
+    profileReadyForLedgerReserve,
+    recipient?.payeeEasetag,
+    businessId,
+  ])
 
   const hasInsufficientBalance =
     isBalanceSource &&
@@ -266,10 +318,28 @@ export default function SendPage() {
     return "Select method"
   }
 
-  const handleContinue = async () => {
+  const handleContinue = () => {
     if (!canContinue || !recipient) return
-
     let transactionId = generateTransactionId()
+    let ledgerReserveNoahScope: "business" | "individual" | undefined
+
+    if (isEasenetEasetagLedgerReserve) {
+      const orgSend = Boolean(businessId)
+      const expectedScope = orgSend ? "business" : "individual"
+      const recipientReserveKey = recipient.payeeEasetag?.trim().toUpperCase() ?? ""
+      const cached = readSendFlowLedgerEtidCache()
+      if (
+        recipientReserveKey &&
+        cached &&
+        cached.ledgerReserveNoahScope === expectedScope &&
+        cached.businessIdKey === (businessId ?? "") &&
+        cached.recipientReserveKey === recipientReserveKey &&
+        /^ETID\d{8}$/i.test(cached.transactionId)
+      ) {
+        transactionId = cached.transactionId.trim().toUpperCase()
+        ledgerReserveNoahScope = cached.ledgerReserveNoahScope
+      }
+    }
 
     const state: SendFlowState = {
       recipient: coerceBeneficiaryEasenetDisplay(recipient),
@@ -283,6 +353,7 @@ export default function SendPage() {
       otherPaymentMethod: otherPaymentMethod ?? undefined,
       note: note.trim(),
       transactionId,
+      ...(ledgerReserveNoahScope ? { ledgerReserveNoahScope } : {}),
     }
     persistSendFlowState(state)
 
