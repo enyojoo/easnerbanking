@@ -22,7 +22,6 @@ import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { refetchBusinessMoneyQueries } from "@/lib/query/refresh-after-money-move"
 import { useScope } from "@/lib/query/scope"
 import { fetchReserveEasnerTransactionId } from "@/lib/reserve-easner-transaction-id"
-import { isEasetagLedgerP2PEnabled } from "@/lib/ledger/easetag-transfer"
 import { ArrowLeft, User, Copy, Check, Loader2 } from "lucide-react"
 
 const SEND_FLOW_STATE_KEY = "send_flow_state"

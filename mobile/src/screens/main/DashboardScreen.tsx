@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
+import ShimmerLoader from '../../components/premium/ShimmerLoader'
 import * as Haptics from 'expo-haptics'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
@@ -95,14 +96,12 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const heroBalanceFontSize = scaledFontSize(56)
   const heroBalanceLineHeight =
     Math.round(heroBalanceFontSize * lineHeight.tight) + (Platform.OS === 'android' ? 6 : 4)
-  /** Placeholder geometry aligned to tabular balance line (symbol + body + decimals). */
+  /** One shimmer bar ~ "$0.00" at hero size — no full-row frame. */
   const balanceSkeletonDims = useMemo(() => {
-    const capH = Math.max(42, Math.round(heroBalanceFontSize * 0.62))
-    const corner = Math.max(7, Math.round(capH * 0.13))
-    const symW = Math.round(heroBalanceFontSize * 0.36)
-    const centsW = Math.round(heroBalanceFontSize * 0.48)
-    const gap = Math.max(5, Math.round(heroBalanceFontSize * 0.05))
-    return { capH, corner, symW, centsW, gap }
+    const width = Math.round(heroBalanceFontSize * 3.35)
+    const height = Math.max(34, Math.round(heroBalanceFontSize * 0.58))
+    const borderRadius = Math.max(6, Math.round(height * 0.14))
+    return { width, height, borderRadius }
   }, [heroBalanceFontSize])
   const { user, userProfile, refreshUserProfile, loading: authLoading } = useAuth()
   const { scope } = useScope()
@@ -804,42 +803,16 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
           <View style={styles.balanceContainer}>
             {shouldShowBalanceSkeleton ? (
               <View
-                style={[styles.balanceSkeletonWrap, { minHeight: heroBalanceLineHeight }]}
                 accessibilityLabel="Loading balance"
                 accessible
+                style={[styles.balanceSkeletonSlot, { minHeight: heroBalanceLineHeight }]}
               >
-                <View style={[styles.balanceSkeletonRow, { gap: balanceSkeletonDims.gap }]}>
-                  <View
-                    style={[
-                      styles.balanceSkeletonSegment,
-                      {
-                        width: balanceSkeletonDims.symW,
-                        height: balanceSkeletonDims.capH,
-                        borderRadius: balanceSkeletonDims.corner,
-                      },
-                    ]}
-                  />
-                  <View
-                    style={[
-                      styles.balanceSkeletonSegment,
-                      styles.balanceSkeletonMainDigits,
-                      {
-                        height: balanceSkeletonDims.capH,
-                        borderRadius: balanceSkeletonDims.corner,
-                      },
-                    ]}
-                  />
-                  <View
-                    style={[
-                      styles.balanceSkeletonSegment,
-                      {
-                        width: balanceSkeletonDims.centsW,
-                        height: balanceSkeletonDims.capH,
-                        borderRadius: balanceSkeletonDims.corner,
-                      },
-                    ]}
-                  />
-                </View>
+                <ShimmerLoader
+                  width={balanceSkeletonDims.width}
+                  height={balanceSkeletonDims.height}
+                  borderRadius={balanceSkeletonDims.borderRadius}
+                  style={styles.balanceSkeletonShimmer}
+                />
               </View>
             ) : (
               <Text
@@ -1308,26 +1281,12 @@ function createDashboardStyles(c: Colors, scrollBottomPadding: number) {
     fontWeight: '700',
     letterSpacing: -1,
   },
-  balanceSkeletonWrap: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-  },
-  balanceSkeletonRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  balanceSkeletonSlot: {
     alignSelf: 'flex-start',
-    maxWidth: '100%',
+    justifyContent: 'center',
   },
-  balanceSkeletonSegment: {
-    backgroundColor: 'rgba(255,255,255,0.24)',
-  },
-  /** Middle segment reads as the comma-separated integer block. */
-  balanceSkeletonMainDigits: {
-    flexGrow: 1,
-    flexShrink: 1,
-    minWidth: 112,
-    maxWidth: 228,
+  balanceSkeletonShimmer: {
+    backgroundColor: 'rgba(255,255,255,0.22)',
   },
   hideBalanceButton: {
     width: 40,

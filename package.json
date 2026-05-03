@@ -30,10 +30,10 @@
     "dev:business": "turbo run dev --filter=easner-business",
     "build:business": "turbo run build --filter=easner-business",
     "start:business": "turbo run start --filter=easner-business",
-    "test:login-pin-vectors": "node scripts/login-pin-test-vectors.mjs"
+    "test:login-pin-vectors": "node scripts/login-pin-test-vectors.mjs",
+    "postinstall": "node scripts/fix-bigint-buffer-warn.cjs"
   },
   "devDependencies": {
-    "expo": "~54.0.34",
     "turbo": "^2.8.12"
   },
   "dependencies": {
@@ -45,6 +45,8 @@
     "@noble/hashes": "1.8.0",
     "@radix-ui/react-slot": "1.2.3",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "glob": "^13.0.6",
+    "rimraf": "^5.0.10"
   }
 }
