@@ -951,7 +951,7 @@ const styles = StyleSheet.create({
   fieldValueContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.full }),
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[2],
   },

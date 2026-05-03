@@ -1099,7 +1099,7 @@ const styles = StyleSheet.create({
   fieldInput: {
     borderWidth: 0.5,
     borderColor: colors.frame.border,
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius.full,
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[3],
     minHeight: 48,
@@ -1198,7 +1198,7 @@ const styles = StyleSheet.create({
     marginTop: spacing[1],
     borderWidth: 0.5,
     borderColor: colors.frame.border,
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius.full,
     backgroundColor: colors.background.primary,
     overflow: 'hidden',
   },

@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
   input: {
     borderWidth: 1,
     borderColor: colors.neutral[200],
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.full,
     padding: spacing[3],
     ...textStyles.titleMedium,
     color: colors.text.primary,

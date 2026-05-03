@@ -1230,7 +1230,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[3],
-    borderRadius: borderRadius['2xl'],
+    borderRadius: borderRadius.full,
     backgroundColor: colors.semantic.card,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border.default,

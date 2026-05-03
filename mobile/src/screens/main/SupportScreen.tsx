@@ -284,7 +284,7 @@ const styles = StyleSheet.create({
   input: {
     borderWidth: 1,
     borderColor: colors.border.default,
-    borderRadius: 8,
+    borderRadius: borderRadius.full,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 13,

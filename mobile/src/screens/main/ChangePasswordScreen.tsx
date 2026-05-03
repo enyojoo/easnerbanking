@@ -279,7 +279,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.frame.border,
-    borderRadius: borderRadius['2xl'],
+    borderRadius: borderRadius.full,
     backgroundColor: colors.semantic.card,
     minHeight: 52,
   },

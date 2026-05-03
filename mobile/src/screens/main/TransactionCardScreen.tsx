@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.full }),
     paddingHorizontal: spacing[4],
     ...Platform.select({
       ios: { paddingVertical: spacing[3] },

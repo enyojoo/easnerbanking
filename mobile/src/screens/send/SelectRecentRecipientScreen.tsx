@@ -1877,7 +1877,7 @@ const styles = StyleSheet.create({
   searchWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.full }),
     paddingHorizontal: spacing[4],
     ...Platform.select({
       ios: { paddingVertical: spacing[3] },
@@ -2204,7 +2204,7 @@ const styles = StyleSheet.create({
   modalInput: {
     borderWidth: 1,
     borderColor: colors.frame.border,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.full,
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
     ...textStyles.bodyMedium,
@@ -2334,7 +2334,7 @@ const styles = StyleSheet.create({
     zIndex: 4000,
   },
   currencySelector: {
-    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.lg }),
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.full }),
     padding: spacing[3],
   },
   currencySelectorContent: {
@@ -2501,7 +2501,7 @@ const styles = StyleSheet.create({
   transferTypeOption: {
     flex: 1,
     backgroundColor: colors.frame.background,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.full,
     borderWidth: 1.5,
     borderColor: colors.frame.border,
     paddingHorizontal: spacing[4],

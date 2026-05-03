@@ -61,7 +61,7 @@ function svgXmlFromQrDataUrl(qrDataUrl: string | null): string | null {
 
 /** MFA enroll copy (kept in sync with `business/components/settings/mfa-settings-dialog.tsx`). */
 const MFA_COPY = {
-  title: 'Two-factor authentication',
+  title: 'Two-factor Auth',
   enrollDescription:
     'Scan this QR code to set up your account using your preferred authenticator app.',
   alreadyEnabled: 'Two-factor authentication is already enabled for this account.',
@@ -83,7 +83,10 @@ const MFA_COPY = {
 const MFA_QR_CONTAINER = 240
 const MFA_QR_SIZE = 200
 const MFA_QR_PADDING = spacing[3]
-const MFA_SECRET_BOX_HEIGHT = 56
+/** Single-line secret row + compact vertical padding (copy icon aligns with text). */
+const MFA_SECRET_BOX_HEIGHT = 40
+const MFA_SECRET_SKELETON_HEIGHT =
+  MFA_SECRET_BOX_HEIGHT - spacing[1] * 2
 
 type MfaRouteParams = { autoStartEnroll?: boolean; mfaVerifiedOnCard?: boolean }
 
@@ -648,7 +651,8 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
                           <Text
                             style={styles.secretText}
                             selectable
-                            numberOfLines={2}
+                            numberOfLines={1}
+                            ellipsizeMode="tail"
                             {...Platform.select({
                               android: { includeFontPadding: false },
                             })}
@@ -657,7 +661,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
                           </Text>
                           <Pressable
                             android_ripple={ripple.neutral}
-                            style={[styles.copySecretButton, surfaceChromeCircleStyle(colors, 40), { marginLeft: spacing[2] }]}
+                            style={[styles.copySecretButton, { marginLeft: spacing[2] }]}
                             onPress={() => void copySecret()}
                             accessibilityRole="button"
                             accessibilityLabel={secretJustCopied ? 'Copied' : 'Copy secret key'}
@@ -671,7 +675,11 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
                           </Pressable>
                         </View>
                       ) : (
-                        <SkeletonLoader width="100%" height={20} borderRadius={4} />
+                        <SkeletonLoader
+                          width="100%"
+                          height={MFA_SECRET_SKELETON_HEIGHT}
+                          borderRadius={borderRadius.md}
+                        />
                       )}
                     </View>
                   </>
@@ -864,8 +872,8 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     backgroundColor: colors.semantic.card,
     paddingLeft: spacing[3],
-    paddingRight: spacing[1],
-    paddingVertical: spacing[2],
+    paddingRight: spacing[2],
+    paddingVertical: spacing[1],
     marginBottom: 0,
     height: MFA_SECRET_BOX_HEIGHT,
     justifyContent: 'center',
@@ -884,6 +892,8 @@ const styles = StyleSheet.create({
   copySecretButton: {
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[1],
   },
   stackedOutlineButton: {
     marginTop: spacing[2],

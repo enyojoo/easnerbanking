@@ -350,7 +350,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   networkDisplay: {
-    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.full }),
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
   },
@@ -362,7 +362,7 @@ const styles = StyleSheet.create({
   phoneInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.full }),
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[2],
   },
