@@ -208,5 +208,9 @@ export function isEasnerProductReceiveTitle(name: string | null | undefined): bo
 /** Outbound titles from {@link toEasnerTransactionPrimaryLabel}. */
 export function isEasnerProductSendTitle(name: string | null | undefined): boolean {
   const n = String(name ?? "").trim()
-  return n === "Stablecoin Transfer" || n === "Bank Transfer"
+  if (n === "Stablecoin Transfer" || n === "Bank Transfer") return true
+  // Easetag P2P: primary label is "Sent to @handle" or fallback "Easetag Send" (see toEasnerTransactionPrimaryLabel).
+  if (n === "Easetag Send") return true
+  if (/^Sent to @/i.test(n)) return true
+  return false
 }

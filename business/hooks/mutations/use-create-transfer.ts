@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { markRecentMoneyActivity, qk } from "@easner/shared"
 import { apiFetch } from "@/lib/query/api-client"
 import { useScope } from "@/lib/query/scope"
-import type { TransactionsPage } from "@/hooks/queries/use-transactions"
+import { BUSINESS_TRANSACTIONS_LIST_LIMIT, type TransactionsPage } from "@/hooks/queries/use-transactions"
 import type { TransactionWithSource } from "@/lib/transactions"
 
 export interface CreateTransferInput {
@@ -52,7 +52,7 @@ export function useCreateTransfer() {
       // Temporarily speed fallback polling right after money movement.
       markRecentMoneyActivity()
       if (!scope) return {}
-      const listKey = qk.transactions.list(scope, {})
+      const listKey = qk.transactions.list(scope, { limit: BUSINESS_TRANSACTIONS_LIST_LIMIT })
       await qc.cancelQueries({ queryKey: qk.transactions.root(scope) })
       const prev = qc.getQueryData<{ pages: TransactionsPage[]; pageParams: unknown[] }>(listKey)
       const optimisticId = `optimistic_${Date.now()}`
@@ -91,11 +91,11 @@ export function useCreateTransfer() {
     },
     onError: (_err, _input, ctx) => {
       if (!scope) return
-      if (ctx?.prev) qc.setQueryData(qk.transactions.list(scope, {}), ctx.prev)
+      if (ctx?.prev) qc.setQueryData(qk.transactions.list(scope, { limit: BUSINESS_TRANSACTIONS_LIST_LIMIT }), ctx.prev)
     },
     onSuccess: (data, _input, ctx) => {
       if (!scope) return
-      const listKey = qk.transactions.list(scope, {})
+      const listKey = qk.transactions.list(scope, { limit: BUSINESS_TRANSACTIONS_LIST_LIMIT })
       // Swap optimistic row for the server row in the first page.
       const current = qc.getQueryData<{ pages: TransactionsPage[]; pageParams: unknown[] }>(listKey)
       if (!current || current.pages.length === 0) return

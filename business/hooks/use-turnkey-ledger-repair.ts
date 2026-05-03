@@ -35,7 +35,7 @@ export function useTurnkeyLedgerRepair() {
           if (inserted) {
             markRecentMoneyActivity()
             await Promise.all([
-              qc.invalidateQueries({ queryKey: qk.transactions.list(scope, {}) }),
+              qc.invalidateQueries({ queryKey: qk.transactions.root(scope) }),
               qc.invalidateQueries({ queryKey: qk.wallets.root(scope) }),
             ])
           }

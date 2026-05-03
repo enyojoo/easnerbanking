@@ -33,6 +33,8 @@ export type TxFilters = QueryFilters & {
   readonly search?: string
   readonly from?: string | null
   readonly to?: string | null
+  /** API page size; part of list cache identity. Mobile ledger uses one shared limit for Home + Transactions tab. */
+  readonly limit?: number
 }
 
 export type AuditFilters = QueryFilters

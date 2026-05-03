@@ -1,5 +1,6 @@
 export { PinDotsRow } from './PinDotsRow'
 export { PinKeypad } from './PinKeypad'
 export { PinChallengeModal } from './PinChallengeModal'
+export { PinChallengePanel } from './PinChallengePanel'
 export { PinLockedHintText } from './PinLockedHintText'
 export { useConfirmWithPin } from '../../hooks/useConfirmWithPin'

@@ -7,7 +7,7 @@ import QRCode from 'react-native-qrcode-svg'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import type { Recipient } from '../../types'
-import { colors, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
+import { colors, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { analytics } from '../../lib/analytics'
@@ -101,7 +101,7 @@ export default function StablecoinScreen({ navigation, route }: NavigationProps)
 
   return (
     <ScreenWrapper>
-      <View style={[styles.container, { paddingTop: insets.top + spacing[2], paddingBottom: insets.bottom + spacing[4] }]}>
+      <View style={[styles.container, { paddingBottom: insets.bottom + spacing[4] }]}>
         <Animated.View
           style={[
             styles.header,
@@ -121,11 +121,13 @@ export default function StablecoinScreen({ navigation, route }: NavigationProps)
           <Pressable android_ripple={ripple.neutral} onPress={() => navigation.goBack()} style={styles.backButton}>
             <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
           </Pressable>
-          <Text style={styles.title}>Pay with {stableType}</Text>
-          <Text style={styles.subtitle}>Send on-chain to your Easner deposit address</Text>
+          <View style={styles.headerContent}>
+            <Text style={styles.title}>Pay with {stableType}</Text>
+            <Text style={styles.subtitle}>Send on-chain to your Easner deposit address</Text>
+          </View>
         </Animated.View>
 
-        <Animated.View style={{ flex: 1, opacity: contentAnim }}>
+        <Animated.View style={[styles.main, { opacity: contentAnim }]}>
           <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
             {loadError ? (
               <Text style={styles.error}>{loadError}</Text>
@@ -182,27 +184,34 @@ function Row({ label, value, last }: { label: string; value: string; last?: bool
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: spacing[5],
   },
   header: {
-    marginBottom: spacing[4],
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing[5],
+    paddingTop: spacing[4],
+    paddingBottom: spacing[4],
   },
   backButton: {
-    alignSelf: 'flex-start',
-    padding: spacing[2],
-    marginLeft: -spacing[2],
-    marginBottom: spacing[2],
+    ...surfaceChromeCircleStyle(colors, 44),
+    marginRight: spacing[3],
+  },
+  headerContent: {
+    flex: 1,
+    justifyContent: 'center',
   },
   title: {
-    fontFamily: fontFamily.semibold,
-    fontSize: 22,
+    ...textStyles.headlineMedium,
     color: colors.text.primary,
   },
   subtitle: {
     marginTop: spacing[1],
-    fontFamily: fontFamily.regular,
-    fontSize: 14,
+    ...textStyles.bodyMedium,
     color: colors.text.secondary,
+  },
+  main: {
+    flex: 1,
+    paddingHorizontal: spacing[5],
   },
   scroll: {
     paddingBottom: spacing[6],
@@ -280,6 +289,7 @@ const styles = StyleSheet.create({
   },
   cta: {
     marginTop: spacing[2],
+    marginHorizontal: spacing[5],
     backgroundColor: colors.primary.main,
     borderRadius: borderRadius.full,
     paddingVertical: spacing[4],

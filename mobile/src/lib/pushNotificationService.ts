@@ -193,6 +193,18 @@ class PushNotificationService {
     return Notifications.addNotificationResponseReceivedListener(listener)
   }
 
+  /** Tap that opened the app from quit — pair with `addNotificationResponseReceivedListener` for warm opens. */
+  async getLastNotificationResponse(): Promise<NotificationResponse | null> {
+    const Notifications = getNotifications()
+    if (!Notifications) return null
+    try {
+      return await Notifications.getLastNotificationResponseAsync()
+    } catch (e) {
+      console.warn('getLastNotificationResponse:', e)
+      return null
+    }
+  }
+
   removeNotificationSubscription(subscription: Subscription) {
     if (subscription && typeof subscription.remove === 'function') {
       subscription.remove()

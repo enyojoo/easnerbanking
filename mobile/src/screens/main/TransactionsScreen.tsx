@@ -28,7 +28,7 @@ import ScreenWrapper from '../../components/ScreenWrapper'
 import { PremiumModalSheet } from '../../components/premium'
 import { GroupedListCardSkeleton } from '../../components/skeletons'
 import { FilterChip, SectionCard } from '../../components/ui'
-import { useCurrenciesCatalog, useTransactionsList } from '../../hooks/queries'
+import { useCurrenciesCatalog, useTransactionsList, TRANSACTIONS_LEDGER_PAGE_SIZE } from '../../hooks/queries'
 import { NavigationProps, Transaction } from '../../types'
 import { analytics } from '../../lib/analytics'
 import { useBalance } from '../../contexts/BalanceContext'
@@ -428,8 +428,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
   const { scope } = useScope()
   const qc = useQueryClient()
   const currencies = useCurrencies()
-  /** Match `/api/transactions` max page size so one fetch loads full history when ≤200 rows. */
-  const txQuery = useTransactionsList({}, 200)
+  const txQuery = useTransactionsList({}, TRANSACTIONS_LEDGER_PAGE_SIZE)
   
   const [refreshing, setRefreshing] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
@@ -580,7 +579,10 @@ function TransactionsContent({ navigation }: NavigationProps) {
     setRefreshing(true)
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-      await syncChainLedgerIfDue(true)
+      // Chain sync can take many seconds — don't block the spinner; refresh ledger after if it inserted rows.
+      void syncChainLedgerIfDue(true).then((inserted) => {
+        if (inserted) void txQuery.refetch()
+      })
       await Promise.all([refreshBalances(true), txQuery.refetch()])
     } catch (error: any) {
       if (error?.message?.includes('Network request failed') || error?.name === 'TypeError') {

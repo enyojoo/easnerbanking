@@ -21,6 +21,8 @@ import { isEasetagLedgerP2PEnabled } from "@/lib/ledger/easetag-transfer"
 import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { refetchBusinessMoneyQueries } from "@/lib/query/refresh-after-money-move"
 import { useScope } from "@/lib/query/scope"
+import { fetchReserveEasnerTransactionId } from "@/lib/reserve-easner-transaction-id"
+import { isEasetagLedgerP2PEnabled } from "@/lib/ledger/easetag-transfer"
 import { ArrowLeft, User, Copy, Check, Loader2 } from "lucide-react"
 
 const SEND_FLOW_STATE_KEY = "send_flow_state"
@@ -83,6 +85,8 @@ export default function SendConfirmPage() {
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [isAuthorizing, setIsAuthorizing] = useState(false)
   const [authorizeError, setAuthorizeError] = useState<string | null>(null)
+  const [ledgerReserveLoading, setLedgerReserveLoading] = useState(false)
+  const [ledgerReserveError, setLedgerReserveError] = useState<string | null>(null)
 
   const needPinChallenge =
     !!user?.id && isLoginPinModuleAvailable() && hasPin(user.id)
@@ -121,6 +125,42 @@ export default function SendConfirmPage() {
       router.replace("/send")
     }
   }, [router])
+
+  /** Easetag ledger P2P: reserve ETID on review (send page no longer awaits — faster Continue). */
+  useEffect(() => {
+    if (!state) return
+    if (!isEasenetRecipient(state.recipient) || !isEasetagLedgerP2PEnabled()) return
+    const tid = state.transactionId?.trim() ?? ""
+    if (/^ETID\d{8}$/i.test(tid)) return
+
+    let cancelled = false
+    setLedgerReserveLoading(true)
+    setLedgerReserveError(null)
+    void (async () => {
+      const reserved = await fetchReserveEasnerTransactionId()
+      if (cancelled) return
+      if (!reserved.ok) {
+        setLedgerReserveError(
+          reserved.error === "reserve_failed" || reserved.error === "Unauthorized"
+            ? "Could not reserve transaction reference. Sign in and try again."
+            : `Could not reserve transaction reference: ${reserved.error}`,
+        )
+        setLedgerReserveLoading(false)
+        return
+      }
+      if (cancelled) return
+      setState((prev) => {
+        if (!prev) return prev
+        const next = { ...prev, transactionId: reserved.easner_transaction_id }
+        sessionStorage.setItem(SEND_FLOW_STATE_KEY, JSON.stringify(next))
+        return next
+      })
+      setLedgerReserveLoading(false)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [state?.recipient, state?.transactionId])
 
   useEffect(() => {
     if (profileLoading) return
@@ -262,6 +302,12 @@ export default function SendConfirmPage() {
     ? 1
     : state.pricingQuote?.exchangeRate ?? (hasFx && state.amount > 0 ? state.sendAmount / state.amount : 1)
 
+  const needsLedgerEtReserve = easenetSend && isEasetagLedgerP2PEnabled()
+  const hasValidEtId = /^ETID\d{8}$/i.test(state.transactionId?.trim() ?? "")
+  const authorizeDisabled =
+    isAuthorizing ||
+    (needsLedgerEtReserve && (ledgerReserveLoading || Boolean(ledgerReserveError) || !hasValidEtId))
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
@@ -286,6 +332,17 @@ export default function SendConfirmPage() {
               )}
             </button>
           </div>
+          {needsLedgerEtReserve && ledgerReserveLoading ? (
+            <p className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              Reserving transaction reference…
+            </p>
+          ) : null}
+          {needsLedgerEtReserve && ledgerReserveError ? (
+            <p className="text-sm text-red-600" role="alert">
+              {ledgerReserveError}
+            </p>
+          ) : null}
           <div className="flex items-center justify-between border-b pb-4">
             <span className="text-sm text-muted-foreground">Amount</span>
             <span className="text-xl font-semibold">
@@ -392,7 +449,7 @@ export default function SendConfirmPage() {
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
-        <Button size="lg" className="h-11 flex-1" onClick={onAuthorizeClick} disabled={isAuthorizing}>
+        <Button size="lg" className="h-11 flex-1" onClick={onAuthorizeClick} disabled={authorizeDisabled}>
           {isAuthorizing ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />

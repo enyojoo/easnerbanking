@@ -132,6 +132,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   // UI State only - no backend integration
   const [recipient, setRecipient] = useState<Recipient | null>(recipientFromRoute || null)
   const easenetDisplay = useEasenetRecipientHydration(recipient)
+  /** Internal Easetag P2P does not use fiat payout corridors — don’t block the CTA on corridor status. */
+  const easetagUi = recipient ? resolveRecipientEasetagForUi(recipient).trim() : ''
+  const isEasetagRecipient = easetagUi.length > 0
   const [payoutCorridorActive, setPayoutCorridorActive] = useState(true)
   const [sendAmount, setSendAmount] = useState('0')
   const [note, setNote] = useState('')
@@ -515,7 +518,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     sendAmount === '0.00' ||
     Number.parseFloat(sendAmount.replace(/,/g, '')) <= 0 ||
     !recipient ||
-    !payoutCorridorActive ||
+    (!isEasetagRecipient && !payoutCorridorActive) ||
     !selectedPaymentMethod ||
     (selectedPaymentMethod === 'otherCurrency' && (!selectedOtherCurrency || !selectedOtherPaymentMethod)) ||
     verificationBlocksSend ||
@@ -718,7 +721,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 </Pressable>
               )}
 
-              {recipient && !payoutCorridorActive ? (
+              {recipient && !isEasetagRecipient && !payoutCorridorActive ? (
                 <View
                   style={{
                     marginHorizontal: spacing[4],
@@ -1037,27 +1040,27 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               if (selectedPaymentMethod === 'otherCurrency' && (!selectedOtherCurrency || !selectedOtherPaymentMethod)) return
 
               if (verificationBlocksSend) return
-              
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-              
-              // Calculate order amounts using FX Engine
+
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+
+              // Calculate order amounts using FX Engine (sync — instant navigation for balance sends)
               let calculatedSendingAmount = 0
               let calculatedFeeAmount = 0
               let calculatedTotalAmount = 0
-              
+
               if (sendCurrency !== receiveCurrency) {
                 // Validate exchangeRates before using
                 if (!exchangeRates || !Array.isArray(exchangeRates) || exchangeRates.length === 0) {
                   showError('Exchange rates not available. Please try again later.')
                   return
                 }
-                
+
                 try {
                   const orderAmounts = mobileFxEngine.calculateOrderAmounts(
                     receiveAmountValue,
                     sendCurrency,
                     receiveCurrency,
-                    exchangeRates
+                    exchangeRates,
                   )
                   calculatedSendingAmount = orderAmounts.sendAmount
                   calculatedFeeAmount = orderAmounts.feeAmount
@@ -1073,6 +1076,20 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 calculatedTotalAmount = receiveAmountValue
               }
 
+              // Balance: navigate immediately — Noah pricing quote runs on review screen (was blocking here ~300ms–2s).
+              if (selectedPaymentMethod === 'balance') {
+                navigation.navigate('SendConfirm' as never, {
+                  recipient,
+                  calculatedSendingAmount,
+                  calculatedFeeAmount,
+                  calculatedTotalAmount,
+                  receiveAmountValue,
+                  selectedBalanceCurrency,
+                  receiveCurrency: recipient.currency,
+                } as never)
+                return
+              }
+
               let pricingQuoteId: string | undefined
               let pricingQuoteExpiry: string | undefined
               let pricingQuoteResult: PricingQuote | null = null
@@ -1086,11 +1103,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   destinationCurrency: recipient.currency,
                   sourceAmount: calculatedSendingAmount,
                   rail:
-                    selectedPaymentMethod === 'balance'
-                      ? 'wallet'
-                      : selectedPaymentMethod === 'otherCurrency'
-                        ? selectedOtherPaymentMethod || undefined
-                        : selectedPaymentMethod,
+                    selectedPaymentMethod === 'otherCurrency'
+                      ? selectedOtherPaymentMethod || undefined
+                      : selectedPaymentMethod,
                   countryCode: recipient.country_code,
                   payoutCountry: recipient.country_code || inferCountryFromRecipientCurrency(recipient.currency),
                   payoutMethod: payoutMethodForQuote,
@@ -1104,22 +1119,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               } catch (quoteError) {
                 console.warn('Pricing quote unavailable, falling back to local calculation:', quoteError)
               }
-              
-              if (selectedPaymentMethod === 'balance') {
-                navigation.navigate('SendConfirm' as never, {
-                  recipient,
-                  calculatedSendingAmount,
-                  calculatedFeeAmount,
-                  calculatedTotalAmount,
-                  receiveAmountValue,
-                  selectedBalanceCurrency,
-                  receiveCurrency: recipient.currency,
-                  pricingQuoteId,
-                  pricingQuoteExpiry,
-                  pricingQuoteResult,
-                } as never)
-                return
-              } else if (selectedPaymentMethod === 'linkBank') {
+
+              if (selectedPaymentMethod === 'linkBank') {
                 // Generate Transaction ID (same format as web app)
                 const transactionId = generateTransactionId()
                 navigation.navigate('OpenBanking' as never, {
@@ -1215,13 +1216,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               style={styles.sendButtonGradient}
             >
               <Text style={styles.sendButtonText}>
-                {selectedPaymentMethod === 'balance' 
-                  ? 'Send' 
+                {selectedPaymentMethod === 'balance'
+                  ? 'Confirm & Send'
                   : selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency && selectedOtherPaymentMethod
-                  ? 'Authorize'
-                  : selectedPaymentMethod 
-                  ? 'Authorize' 
-                  : 'Select Method'}
+                    ? 'Authorize'
+                    : selectedPaymentMethod
+                      ? 'Authorize'
+                      : 'Select Method'}
               </Text>
             </LinearGradient>
           </Pressable>

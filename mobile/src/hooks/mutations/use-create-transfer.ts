@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { markRecentMoneyActivity, qk } from '@easner/shared'
+import { markRecentMoneyActivity, qk, scopeKey } from '@easner/shared'
 import { apiFetch } from '../../query/api-client'
 import { useScope } from '../../query/scope'
 import type { MobileTransactionRow } from '../queries/use-transactions'
@@ -63,9 +63,7 @@ export function useCreateTransfer() {
       // Temporarily speed fallback polling right after money movement.
       markRecentMoneyActivity()
       if (!scope) return {}
-      const listKey = qk.transactions.list(scope, {})
       await qc.cancelQueries({ queryKey: qk.transactions.root(scope) })
-      const prev = qc.getQueryData<InfinitePages>(listKey)
       const optimisticId = `optimistic_${Date.now()}`
       const optimisticRow: MobileTransactionRow = {
         id: optimisticId,
@@ -80,21 +78,29 @@ export function useCreateTransfer() {
         name: 'Transfer',
         description: input.memo ?? null,
       }
-      if (prev && prev.pages.length > 0) {
-        const [first, ...rest] = prev.pages
-        qc.setQueryData<InfinitePages>(listKey, {
-          ...prev,
+      const entries = qc.getQueriesData<InfinitePages>({
+        queryKey: [...scopeKey(scope), 'transactions', 'list'],
+        exact: false,
+      })
+      const prevSnapshots = entries.map(([key, data]) => [key, data] as const)
+      for (const [key, data] of entries) {
+        if (!data?.pages?.length) continue
+        const [first, ...rest] = data.pages
+        qc.setQueryData<InfinitePages>(key, {
+          ...data,
           pages: [
             { ...first, transactions: [optimisticRow, ...first.transactions] },
             ...rest,
           ],
         })
       }
-      return { prev, optimisticId }
+      return { prevSnapshots, optimisticId }
     },
     onError: (_err, _input, ctx) => {
-      if (!scope || !ctx?.prev) return
-      qc.setQueryData(qk.transactions.list(scope, {}), ctx.prev)
+      if (!scope || !ctx?.prevSnapshots) return
+      for (const [key, data] of ctx.prevSnapshots) {
+        qc.setQueryData(key, data)
+      }
     },
     onSettled: () => {
       if (!scope) return

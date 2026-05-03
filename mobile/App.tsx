@@ -19,6 +19,11 @@ import { PostHogProvider } from './src/components/PostHogProvider'
 import { analytics } from './src/lib/analytics'
 import { deepLinkService } from './src/services/DeepLinkService'
 import { pushNotificationService } from './src/lib/pushNotificationService'
+import {
+  bootstrapPushNotificationDeepLink,
+  flushPendingPushNavigation,
+  stashPendingPushFromNotificationData,
+} from './src/lib/pendingPushNavigation'
 import AppNavigator from './src/navigation/AppNavigator'
 import { PushNotificationBootstrap } from './src/components/PushNotificationBootstrap'
 import {
@@ -86,6 +91,12 @@ function AppContent() {
       cancelled = true
     }
   }, [authLoading, navReady, splashFinished])
+
+  // Cold-open from notification: stash intent + flush when main stack is ready (PIN may still be showing).
+  useEffect(() => {
+    if (!navReady) return
+    void bootstrapPushNotificationDeepLink()
+  }, [navReady])
 
   // Fade in app content when splash finishes
   useEffect(() => {
@@ -217,19 +228,11 @@ export default function App() {
       const responseSubscription = pushNotificationService.addNotificationResponseReceivedListener(
         (response) => {
           console.log('Notification tapped:', response)
-          const data = response.notification.request.content.data
-
-          if (data?.transactionId && (global as any).rootNavigationRef?.current) {
-            ;(global as any).rootNavigationRef.current.navigate('TransactionDetails', {
-              transactionId: data.transactionId,
-              fromScreen: 'PushNotification',
-            })
-          } else if (data?.type === 'card_transaction' && (global as any).rootNavigationRef?.current) {
-            ;(global as any).rootNavigationRef.current.navigate('TransactionCard', {})
-          } else if ((global as any).rootNavigationRef?.current) {
-            ;(global as any).rootNavigationRef.current.navigate('InAppNotifications', {})
-          }
-        }
+          const data = response.notification.request.content.data as Record<string, unknown> | undefined
+          void stashPendingPushFromNotificationData(data).then(() =>
+            flushPendingPushNavigation((global as any).rootNavigationRef?.current),
+          )
+        },
       )
 
       return () => {

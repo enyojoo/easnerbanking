@@ -14,7 +14,10 @@ import {
   markSessionInteraction,
   evaluateIdleLock,
 } from '../lib/pinAuth'
-import { emitAppLocked, registerAppLockListener } from '../lib/app-lock-bus'
+import {
+  flushPendingPushNavigation,
+  setPushNavMainReady,
+} from '../lib/pendingPushNavigation'
 import { useBusinessNoahSync } from '../hooks/useBusinessNoahSync'
 import { useConsumerKycNoahSync } from '../hooks/useConsumerKycNoahSync'
 // Stack timing and Android vs iOS card transitions: see `transitionPresets.ts`.
@@ -63,6 +66,7 @@ import SendAmountScreen from '../screens/send/SendAmountScreen'
 import SelectRecentRecipientScreen from '../screens/send/SelectRecentRecipientScreen'
 import SelectRecipientScreen from '../screens/send/SelectRecipientScreen'
 import SendConfirmScreen from '../screens/send/SendConfirmScreen'
+import SendPinScreen from '../screens/send/SendPinScreen'
 import StablecoinScreen from '../screens/send/StablecoinScreen'
 import OpenBankingScreen from '../screens/send/OpenBankingScreen'
 import VirtualBankAccountScreen from '../screens/send/VirtualBankAccountScreen'
@@ -404,6 +408,14 @@ function MainStack() {
           ...sendFlowStandardPreset(),
         }}
       />
+      <Stack.Screen
+        name="SendPin"
+        component={SendPinScreen}
+        options={{
+          headerShown: false,
+          ...sendFlowStandardPreset(),
+        }}
+      />
       <Stack.Screen 
         name="Stablecoin" 
         component={StablecoinScreen}
@@ -691,6 +703,14 @@ export default function AppNavigator() {
       setLockTick((t) => t + 1)
     })
   }, [])
+
+  useEffect(() => {
+    const ready = pinGate === 'main'
+    setPushNavMainReady(ready)
+    if (ready) {
+      flushPendingPushNavigation((global as any).rootNavigationRef?.current)
+    }
+  }, [pinGate, lockTick])
 
   useEffect(() => {
     if (!user) {

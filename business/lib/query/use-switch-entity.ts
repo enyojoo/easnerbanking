@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { scopeKey, scopesEqual, qk, type BusinessScope } from "@easner/shared"
 import { apiFetch } from "./api-client"
 import { useScope } from "./scope"
+import { BUSINESS_TRANSACTIONS_LIST_LIMIT } from "@/hooks/queries/use-transactions"
 
 /**
  * Atomic entity switcher for the Easner Business app.
@@ -43,9 +44,10 @@ export function useSwitchEntity() {
             staleTime: 15_000,
           }),
           qc.prefetchInfiniteQuery({
-            queryKey: qk.transactions.list(next, {}),
+            queryKey: qk.transactions.list(next, { limit: BUSINESS_TRANSACTIONS_LIST_LIMIT }),
             initialPageParam: null as string | null,
-            queryFn: () => apiFetch("/api/transactions", { query: { limit: 50 } }),
+            queryFn: () =>
+              apiFetch("/api/transactions", { query: { limit: BUSINESS_TRANSACTIONS_LIST_LIMIT } }),
             staleTime: 30_000,
           }),
         ])

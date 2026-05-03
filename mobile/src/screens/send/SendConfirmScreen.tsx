@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { View, Text, Pressable, StyleSheet, ScrollView, Animated, ActivityIndicator } from 'react-native'
+import { View, Text, Pressable, StyleSheet, ScrollView, Animated } from 'react-native'
 import Constants from 'expo-constants'
 import { ArrowLeft } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -8,23 +8,26 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import type { Recipient } from '../../types'
-import { colors, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
+import { colors, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToast } from '../../components/ToastProvider'
-import { useQueryClient } from '@tanstack/react-query'
-import { useScope } from '../../query/scope'
-import { useBalance } from '../../contexts/BalanceContext'
-import { PinChallengeModal } from '../../components/pin'
-import { useConfirmWithPin } from '../../hooks/useConfirmWithPin'
 import { hasPin } from '../../lib/pinAuth'
 import { analytics } from '../../lib/analytics'
 import type { PricingQuote } from '../../lib/noahService'
 import { noahService } from '../../lib/noahService'
 import { resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
-import { executeBalanceSend } from '../../hooks/executeBalanceSend'
-import { invalidateTransactionsFeed } from '../../query/refresh-user-feeds'
+
+function inferCountryFromRecipientCurrency(currency: string): string | undefined {
+  const m: Record<string, string> = {
+    KES: 'KE',
+    GHS: 'GH',
+    NGN: 'NG',
+    ZAR: 'ZA',
+  }
+  return m[currency.toUpperCase()]
+}
 
 function fmtMoney(amount: number, currency: string): string {
   const sym =
@@ -42,14 +45,8 @@ function fmtMoney(amount: number, currency: string): string {
 
 export default function SendConfirmScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
-  const { user, userProfile } = useAuth()
-  const { showError, showInfo } = useToast()
-  const qc = useQueryClient()
-  const { scope } = useScope()
-  const { updateBalanceOptimistically } = useBalance()
-  const { open: pinOpen, requestConfirm, onVerified, onOpenChange } = useConfirmWithPin()
-
-  const [busy, setBusy] = useState(false)
+  const { user } = useAuth()
+  const { showError } = useToast()
 
   const headerAnim = useRef(new Animated.Value(0)).current
   const contentAnim = useRef(new Animated.Value(0)).current
@@ -69,15 +66,27 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   }
 
   const recipient = params.recipient
-  const calculatedSendingAmount = params.calculatedSendingAmount ?? 0
-  const calculatedFeeAmount = params.calculatedFeeAmount ?? 0
-  const calculatedTotalAmount = params.calculatedTotalAmount ?? 0
   const receiveAmountValue = params.receiveAmountValue ?? 0
   const selectedBalanceCurrency = params.selectedBalanceCurrency ?? 'USD'
   const receiveCurrency = params.receiveCurrency ?? recipient?.currency ?? ''
-  const pricingQuoteId = params.pricingQuoteId
-  const pricingQuoteExpiry = params.pricingQuoteExpiry
-  const pricingQuoteResult = params.pricingQuoteResult
+
+  const [pricing, setPricing] = useState(() => ({
+    calculatedSendingAmount: params.calculatedSendingAmount ?? 0,
+    calculatedFeeAmount: params.calculatedFeeAmount ?? 0,
+    calculatedTotalAmount: params.calculatedTotalAmount ?? 0,
+    pricingQuoteId: params.pricingQuoteId as string | undefined,
+    pricingQuoteExpiry: params.pricingQuoteExpiry as string | undefined,
+    pricingQuoteResult: (params.pricingQuoteResult ?? null) as PricingQuote | null,
+  }))
+
+  const {
+    calculatedSendingAmount,
+    calculatedFeeAmount,
+    calculatedTotalAmount,
+    pricingQuoteId,
+    pricingQuoteExpiry,
+    pricingQuoteResult,
+  } = pricing
 
   const easetagUi = recipient ? resolveRecipientEasetagForUi(recipient) : ''
   const useLedger =
@@ -111,52 +120,51 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     }
   }, [recipient, needReserve])
 
-  const runSend = async () => {
-    if (!recipient) {
-      showError('Missing recipient.')
-      return
-    }
-    setBusy(true)
-    try {
-      const { detailId } = await executeBalanceSend(
-        {
-          recipient,
-          calculatedTotalAmount,
-          receiveAmountValue,
-          selectedBalanceCurrency,
-          pricingQuoteId,
-          pricingQuoteExpiry,
-          pricingQuoteResult,
-          ...(reservedDebitEtid?.trim() ? { reservedDebitEtid: reservedDebitEtid.trim() } : {}),
-        },
-        {
-          userId: user?.id,
-          userProfile,
-          scope: scope ?? undefined,
-          qc,
-          updateBalanceOptimistically,
-          showError,
-          showInfo,
-        },
-      )
-      if (scope && user?.id) {
-        await invalidateTransactionsFeed(qc, scope, user.id)
+  /** Noah wallet pricing — not used for Easetag P2P (internal ledger); amounts already finalized on the amount screen. */
+  useEffect(() => {
+    if (!recipient || easetagUi) return
+    const sendAmt = pricing.calculatedSendingAmount
+    if (!(sendAmt > 0)) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const quote = await noahService.createPricingQuote({
+          sourceCurrency: selectedBalanceCurrency,
+          destinationCurrency: recipient.currency,
+          sourceAmount: sendAmt,
+          rail: 'wallet',
+          countryCode: recipient.country_code,
+          payoutCountry: recipient.country_code || inferCountryFromRecipientCurrency(recipient.currency),
+        })
+        if (cancelled) return
+        const feeFromQuote = quote.pricingTotals?.total_user_fee ?? quote.totalFeeAmount
+        setPricing((prev) => ({
+          ...prev,
+          calculatedFeeAmount: feeFromQuote,
+          calculatedTotalAmount: sendAmt + feeFromQuote,
+          pricingQuoteId: quote.quoteId,
+          pricingQuoteExpiry: quote.expiresAt,
+          pricingQuoteResult: quote,
+        }))
+      } catch {
+        // Keep FX-engine fallback from the amount screen
       }
-      navigation.replace('TransactionDetails' as never, {
-        transactionId: detailId,
-        fromScreen: 'SendFlow',
-      } as never)
-    } catch (e: unknown) {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
-      showError(e instanceof Error ? e.message : 'Transfer failed.')
-    } finally {
-      setBusy(false)
+    })()
+    return () => {
+      cancelled = true
     }
-  }
+  }, [
+    easetagUi,
+    recipient?.id,
+    recipient?.currency,
+    recipient?.country_code,
+    selectedBalanceCurrency,
+    pricing.calculatedSendingAmount,
+  ])
 
   const onConfirmPress = async () => {
-    if (!recipient || busy) return
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    if (!recipient) return
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     if (!user?.id) {
       showError('Not authenticated.')
       return
@@ -165,15 +173,25 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       showError('Set an app PIN in Settings before authorizing transfers.')
       return
     }
-    const ok = await requestConfirm()
-    if (!ok) return
-    await runSend()
+    navigation.navigate('SendPin' as never, {
+      recipient,
+      calculatedSendingAmount: pricing.calculatedSendingAmount,
+      calculatedFeeAmount: pricing.calculatedFeeAmount,
+      calculatedTotalAmount: pricing.calculatedTotalAmount,
+      receiveAmountValue,
+      selectedBalanceCurrency,
+      receiveCurrency,
+      pricingQuoteId: pricing.pricingQuoteId,
+      pricingQuoteExpiry: pricing.pricingQuoteExpiry,
+      pricingQuoteResult: pricing.pricingQuoteResult,
+      ...(reservedDebitEtid?.trim() ? { reservedDebitEtid: reservedDebitEtid.trim() } : {}),
+    } as never)
   }
 
   if (!recipient) {
     return (
       <ScreenWrapper>
-        <View style={[styles.container, { paddingTop: insets.top + spacing[4] }]}>
+        <View style={[styles.container, { paddingBottom: insets.bottom + spacing[4] }]}>
           <Text style={textStyles.body}>Nothing to confirm.</Text>
           <Pressable onPress={() => navigation.goBack()} style={{ marginTop: spacing[4] }}>
             <Text style={{ color: colors.primary.main }}>Go back</Text>
@@ -185,7 +203,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
 
   return (
     <ScreenWrapper>
-      <View style={[styles.container, { paddingTop: insets.top + spacing[2], paddingBottom: insets.bottom + spacing[4] }]}>
+      <View style={[styles.container, { paddingBottom: insets.bottom + spacing[4] }]}>
         <Animated.View
           style={[
             styles.header,
@@ -205,8 +223,10 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           <Pressable android_ripple={ripple.neutral} onPress={() => navigation.goBack()} style={styles.backButton}>
             <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
           </Pressable>
-          <Text style={styles.title}>Review transfer</Text>
-          <Text style={styles.subtitle}>Confirm before sending from your balance</Text>
+          <View style={styles.headerContent}>
+            <Text style={styles.title}>Review transfer</Text>
+            <Text style={styles.subtitle}>Confirm before sending from your balance</Text>
+          </View>
         </Animated.View>
 
         <Animated.View
@@ -250,13 +270,13 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
 
         <Pressable
           android_ripple={ripple.neutral}
-          style={[styles.cta, (busy || !canSendEasetagLedger || reserveError) && styles.ctaDisabled]}
+          style={[styles.cta, (!canSendEasetagLedger || reserveError) && styles.ctaDisabled]}
           onPress={() => void onConfirmPress()}
-          disabled={busy || !canSendEasetagLedger || Boolean(reserveError)}
+          disabled={!canSendEasetagLedger || Boolean(reserveError)}
         >
           <LinearGradient
             colors={
-              busy || !canSendEasetagLedger || reserveError
+              !canSendEasetagLedger || reserveError
                 ? [colors.neutral[400], colors.neutral[400]]
                 : colors.primary.gradient
             }
@@ -264,21 +284,10 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
             end={{ x: 1, y: 0 }}
             style={styles.ctaGradient}
           >
-            {busy ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.ctaText}>Confirm and send</Text>
-            )}
+            <Text style={styles.ctaText}>Confirm & Send</Text>
           </LinearGradient>
         </Pressable>
       </View>
-
-      <PinChallengeModal
-        visible={pinOpen}
-        userId={user?.id ?? ''}
-        onClose={() => onOpenChange(false)}
-        onVerified={onVerified}
-      />
     </ScreenWrapper>
   )
 }
@@ -297,30 +306,34 @@ function Row({ label, value, bold, last }: { label: string; value: string; bold?
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: spacing[5],
   },
   header: {
-    marginBottom: spacing[4],
-  },
-  contentWrap: {
-    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing[5],
+    paddingTop: spacing[4],
+    paddingBottom: spacing[4],
   },
   backButton: {
-    alignSelf: 'flex-start',
-    padding: spacing[2],
-    marginLeft: -spacing[2],
-    marginBottom: spacing[2],
+    ...surfaceChromeCircleStyle(colors, 44),
+    marginRight: spacing[3],
+  },
+  headerContent: {
+    flex: 1,
+    justifyContent: 'center',
   },
   title: {
-    fontFamily: fontFamily.semibold,
-    fontSize: 22,
+    ...textStyles.headlineMedium,
     color: colors.text.primary,
   },
   subtitle: {
     marginTop: spacing[1],
-    fontFamily: fontFamily.regular,
-    fontSize: 14,
+    ...textStyles.bodyMedium,
     color: colors.text.secondary,
+  },
+  contentWrap: {
+    flex: 1,
+    paddingHorizontal: spacing[5],
   },
   scrollContent: {
     paddingBottom: spacing[4],
@@ -371,6 +384,7 @@ const styles = StyleSheet.create({
   },
   cta: {
     marginTop: spacing[2],
+    marginHorizontal: spacing[5],
   },
   ctaDisabled: {
     opacity: 0.85,

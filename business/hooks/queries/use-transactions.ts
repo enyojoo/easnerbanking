@@ -10,6 +10,9 @@ import { useScope } from "@/lib/query/scope"
 
 const LEDGER_BUSINESS_HEADERS = { "X-Easner-Noah-Scope": "business" } as const
 
+/** Must match `limit` in `qk.transactions.list` for this hook (cache identity). */
+export const BUSINESS_TRANSACTIONS_LIST_LIMIT = 200 as const
+
 export interface TransactionsPage {
   transactions: TransactionWithSource[]
   nextCursor: string | null
@@ -74,8 +77,9 @@ export function getTransactionDetailPrefetchOptions(scope: Scope, txId: string) 
  */
 export function useTransactionsList(filters: TxFilters = {}) {
   const { scope } = useScope()
+  const listFilters: TxFilters = { ...filters, limit: BUSINESS_TRANSACTIONS_LIST_LIMIT }
   return useInfiniteQuery({
-    queryKey: scope ? qk.transactions.list(scope, filters) : ["transactions", "disabled"],
+    queryKey: scope ? qk.transactions.list(scope, listFilters) : ["transactions", "disabled"],
     enabled: Boolean(scope),
     initialPageParam: null as string | null,
     queryFn: async ({ pageParam }) => {
@@ -83,7 +87,7 @@ export function useTransactionsList(filters: TxFilters = {}) {
         query: {
           ...filters,
           cursor: pageParam ?? undefined,
-          limit: 200,
+          limit: BUSINESS_TRANSACTIONS_LIST_LIMIT,
         },
         headers: { ...LEDGER_BUSINESS_HEADERS },
       })
@@ -130,5 +134,5 @@ export function useTransactionDetail(txId: string | null) {
 }
 
 export function useTransactionsFirstPageKey(scope: Scope, filters: TxFilters = {}) {
-  return qk.transactions.list(scope, filters)
+  return qk.transactions.list(scope, { ...filters, limit: BUSINESS_TRANSACTIONS_LIST_LIMIT })
 }

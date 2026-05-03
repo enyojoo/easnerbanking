@@ -61,10 +61,19 @@ interface TransactionsResponse {
   transactions?: MobileTransactionRow[]
 }
 
-export function useTransactionsList(filters: TxFilters = {}, pageSize = 25) {
+/**
+ * Single page size for the unified ledger list on mobile.
+ * Home dashboard only displays the first four rows — it uses this same query so cache is shared with the
+ * Transactions tab (no second cold fetch / endless skeleton).
+ */
+export const TRANSACTIONS_LEDGER_PAGE_SIZE = 200
+
+export function useTransactionsList(filters: TxFilters = {}, pageSize = TRANSACTIONS_LEDGER_PAGE_SIZE) {
   const { scope } = useScope()
+  /** `limit` is part of the cache key — keep one page size for main ledger consumers (dashboard + list tab). */
+  const listFilters: TxFilters = { ...filters, limit: pageSize }
   return useInfiniteQuery({
-    queryKey: scope ? qk.transactions.list(scope, filters) : ['transactions', 'disabled'],
+    queryKey: scope ? qk.transactions.list(scope, listFilters) : ['transactions', 'disabled'],
     enabled: Boolean(scope),
     initialPageParam: null as string | null,
     queryFn: async ({ pageParam }) => {

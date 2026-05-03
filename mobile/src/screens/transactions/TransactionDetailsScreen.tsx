@@ -43,7 +43,7 @@ import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
 import { ripple } from '../../lib/androidRipple'
 import { useTransactionDetail, useCurrenciesCatalog } from '../../hooks/queries'
-import { isEasnerProductReceiveTitle, isEasnerProductSendTitle, qk } from '@easner/shared'
+import { isEasnerProductReceiveTitle, isEasnerProductSendTitle, qk, scopeKey } from '@easner/shared'
 import { ApiError } from '../../query/api-client'
 import { useScope } from '../../query/scope'
 
@@ -130,18 +130,22 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   const copyToClipboard = useCopyToClipboard()
   const cachedListSnapshot = useMemo<LedgerTransaction | null>(() => {
     if (!scope || !transactionId) return null
-    const listState = qc.getQueryState(qk.transactions.list(scope, {}))
-    const listData = qc.getQueryData(qk.transactions.list(scope, {})) as
-      | { pages?: Array<{ transactions?: Array<Record<string, unknown>> }> }
-      | undefined
-    if (!listState || !listData?.pages?.length) return null
-    for (const page of listData.pages) {
-      for (const row of page.transactions ?? []) {
-        const id = String(row?.id ?? '')
-        const txid = String(row?.transaction_id ?? '')
-        const ledgerId = String(row?.ledger_row_id ?? '')
-        if (transactionId === id || transactionId === txid || transactionId === ledgerId) {
-          return row as unknown as LedgerTransaction
+    const entries = qc.getQueriesData<{
+      pages?: Array<{ transactions?: Array<Record<string, unknown>> }>
+    }>({
+      queryKey: [...scopeKey(scope), 'transactions', 'list'],
+      exact: false,
+    })
+    for (const [, listData] of entries) {
+      if (!listData?.pages?.length) continue
+      for (const page of listData.pages) {
+        for (const row of page.transactions ?? []) {
+          const id = String(row?.id ?? '')
+          const txid = String(row?.transaction_id ?? '')
+          const ledgerId = String(row?.ledger_row_id ?? '')
+          if (transactionId === id || transactionId === txid || transactionId === ledgerId) {
+            return row as unknown as LedgerTransaction
+          }
         }
       }
     }
@@ -926,21 +930,39 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
           </Animated.View>
         </ScrollView>
 
-        {/* Bottom Actions — Send Again for sends; Get help only for receives. */}
+        {/* Bottom Actions — Send: Send again + Get help; Receive: Get help only. */}
         {transaction.transaction_type === 'send' ? (
           <View style={[styles.bottomContainer, { paddingBottom: Math.max(insets.bottom + spacing[4], spacing[6]) }]}>
-            <Pressable
-              android_ripple={ripple.primaryTint}
-              style={({ pressed }) => [
-                styles.primaryButton,
-                pressed && styles.primaryButtonPressed,
-              ]}
-              onPress={handleSendAgain}
-              accessibilityRole="button"
-              accessibilityLabel="Send again"
-            >
-              <Text style={styles.primaryButtonText}>Send Again</Text>
-            </Pressable>
+            <View style={styles.bottomActionsRow}>
+              <Pressable
+                android_ripple={ripple.primaryTint}
+                style={({ pressed }) => [
+                  styles.primaryButtonFlex,
+                  pressed && styles.primaryButtonPressed,
+                ]}
+                onPress={handleSendAgain}
+                accessibilityRole="button"
+                accessibilityLabel="Send again"
+              >
+                <Text style={styles.primaryButtonText}>Send Again</Text>
+              </Pressable>
+              <Pressable
+                android_ripple={ripple.neutral}
+                style={({ pressed }) => [
+                  styles.outlineButtonFlex,
+                  pressed && styles.outlineButtonPressed,
+                ]}
+                onPress={async () => {
+                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  navigation.navigate('Support' as never)
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Get help"
+              >
+                <HelpCircle size={18} color={colors.primary.main} strokeWidth={2.25} />
+                <Text style={styles.outlineButtonText}>Get help</Text>
+              </Pressable>
+            </View>
           </View>
         ) : (
           <View style={[styles.bottomContainer, { paddingBottom: Math.max(insets.bottom + spacing[4], spacing[6]) }]}>
@@ -1213,8 +1235,24 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border.default,
   },
+  bottomActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: spacing[3],
+  },
   primaryButton: {
     width: '100%',
+    height: 52,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.primary.main,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButtonFlex: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    minWidth: 0,
     height: 52,
     borderRadius: borderRadius.full,
     backgroundColor: colors.primary.main,
@@ -1233,6 +1271,21 @@ const styles = StyleSheet.create({
   },
   outlineButton: {
     width: '100%',
+    height: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.semantic.card,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  outlineButtonFlex: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    minWidth: 0,
     height: 52,
     flexDirection: 'row',
     alignItems: 'center',

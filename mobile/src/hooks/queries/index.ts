@@ -1,6 +1,11 @@
 export { useWalletBalances } from './use-wallets'
 export type { WalletBalancesEnvelope } from './use-wallets'
-export { useTransactionsList, useTransactionDetail, mapLedgerRowToTransaction } from './use-transactions'
+export {
+  useTransactionsList,
+  useTransactionDetail,
+  mapLedgerRowToTransaction,
+  TRANSACTIONS_LEDGER_PAGE_SIZE,
+} from './use-transactions'
 export type { MobileTransactionRow } from './use-transactions'
 export { useRecipientsList } from './use-recipients'
 export { usePaymentMethodsList } from './use-payment-methods'

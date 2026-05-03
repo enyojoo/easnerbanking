@@ -59,7 +59,7 @@ import { getTransactionStatusDisplay } from '../../utils/formatters'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import { isTier1Complete } from '../../lib/compliance'
 import { noahService } from '../../lib/noahService'
-import { useTransactionsList } from '../../hooks/queries'
+import { useTransactionsList, TRANSACTIONS_LEDGER_PAGE_SIZE } from '../../hooks/queries'
 import { isEasnerProductReceiveTitle, isEasnerProductSendTitle, markRecentMoneyActivity, qk } from '@easner/shared'
 import { avatarImageSource, normalizeAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
 import { buildGroupedActivityItems } from '../../lib/transactionListGrouping'
@@ -67,7 +67,7 @@ import { buildGroupedActivityItems } from '../../lib/transactionListGrouping'
 const DASHBOARD_SELECTED_CURRENCY_KEY_PREFIX = 'easner_dashboard_selected_currency_'
 const DASHBOARD_RECENT_TX_CACHE_KEY_PREFIX = 'easner_dashboard_recent_tx_'
 const DASHBOARD_RECENT_TX_CACHE_TTL_MS = 60 * 60 * 1000
-/** Recent activity rows on Home; keep in sync with cache slices and skeleton count. */
+/** Recent activity rows shown on Home (UI only). Ledger fetch uses {@link TRANSACTIONS_LEDGER_PAGE_SIZE}. */
 const DASHBOARD_RECENT_TX_LIMIT = 4
 
 // Transaction interface for dashboard
@@ -97,7 +97,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const { user, userProfile, refreshUserProfile, loading: authLoading } = useAuth()
   const { scope } = useScope()
   const qc = useQueryClient()
-  const txQuery = useTransactionsList({}, DASHBOARD_RECENT_TX_LIMIT)
+  const txQuery = useTransactionsList({}, TRANSACTIONS_LEDGER_PAGE_SIZE)
   const { balances, hasResolvedBalance, hasAuthoritativeBalance, refreshBalances } = useBalance()
   const [selectedCurrency, setSelectedCurrency] = useState<'USD' | 'EUR' | 'GBP'>('USD')
   const [balanceVisible, setBalanceVisible] = useState(true)
@@ -730,7 +730,9 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
             onRefresh={async () => {
               setRefreshing(true)
               try {
-                await syncChainLedgerIfDue(true)
+                void syncChainLedgerIfDue(true).then((inserted) => {
+                  if (inserted) void txQuery.refetch()
+                })
                 await Promise.all([refreshBalances(true), txQuery.refetch()])
               } catch (error) {
                 console.error('Error refreshing dashboard:', error)
