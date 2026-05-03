@@ -21,7 +21,7 @@ type Body = {
 
 /**
  * Instant Easetag P2P via internal ledger (USD/EUR buckets). Requires `EASETAG_LEDGER_P2P_ENABLED=true`.
- * @see `transfer_easetag_p2p` (ETID allocated in-DB; optional `reserved_debit_etid` when supported).
+ * Implemented in-app ({@link executeEasetagTransfer}): `wallet_balances` + `transactions` — no Postgres RPC.
  */
 export async function POST(request: Request) {
   if (!isEasetagLedgerP2PEnabled()) {
@@ -96,6 +96,15 @@ export async function POST(request: Request) {
   const senderBusinessId = acc.ctx.scope === "business" && acc.ctx.subjectBusinessId ? acc.ctx.subjectBusinessId : null
   const senderUserId = acc.ctx.subjectUserId
 
+  let senderEasetag: string | null = null
+  if (senderBusinessId) {
+    const { data: sb } = await admin.from("businesses").select("easetag").eq("id", senderBusinessId).maybeSingle()
+    senderEasetag = sb?.easetag != null ? String(sb.easetag).trim() : null
+  } else {
+    const { data: su } = await admin.from("users").select("easetag").eq("id", senderUserId).maybeSingle()
+    senderEasetag = su?.easetag != null ? String(su.easetag).trim() : null
+  }
+
   const idemHeader = request.headers.get("idempotency-key")?.trim() || request.headers.get("x-idempotency-key")?.trim()
   const idempotencyKey =
     idemHeader ||
@@ -113,6 +122,7 @@ export async function POST(request: Request) {
     payeeUserId: payeeUserId!,
     payeeBusinessId: payeeBusinessId ?? null,
     payeeEasetag: payeeEasetagResolved,
+    senderEasetag: senderEasetag || undefined,
     reservedDebitEtid: reservedDebit || undefined,
   })
 
