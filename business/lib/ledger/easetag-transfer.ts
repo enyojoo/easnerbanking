@@ -20,7 +20,7 @@ export type ExecuteEasetagTransferInput = {
   payeeUserId: string
   payeeBusinessId: string | null
   payeeEasetag: string
-  /** From POST `/api/transactions/reserve-etid`; must match persisted debit ETID. */
+  /** When set, passed as `p_reserved_debit_etid` to `transfer_easetag_p2p` (optional if DB allocates ETID). */
   reservedDebitEtid?: string | null
 }
 

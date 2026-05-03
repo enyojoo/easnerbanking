@@ -69,8 +69,6 @@ export type ExecuteBalanceSendInput = {
   pricingQuoteId?: string
   pricingQuoteExpiry?: string
   pricingQuoteResult?: PricingQuote | null
-  /** Ledger Easetag P2P: server-reserved debit ETID shown on confirm. */
-  reservedDebitEtid?: string
 }
 
 export type ExecuteBalanceSendContext = {
@@ -106,7 +104,6 @@ export async function executeBalanceSend(
     pricingQuoteId,
     pricingQuoteExpiry,
     pricingQuoteResult,
-    reservedDebitEtid,
   } = input
 
   const {
@@ -161,7 +158,6 @@ export async function executeBalanceSend(
       destinationEasetag: easetag,
       amount: calculatedTotalAmount.toFixed(8),
       currency: selectedBalanceCurrency.toLowerCase(),
-      ...(reservedDebitEtid?.trim() ? { reservedDebitEtid: reservedDebitEtid.trim() } : {}),
     })
   } else if (recipient.noah_external_account_id?.trim()) {
     transfer = await noahService.createTransfer({

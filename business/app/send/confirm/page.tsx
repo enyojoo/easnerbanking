@@ -21,7 +21,6 @@ import { isEasetagLedgerP2PEnabled } from "@/lib/ledger/easetag-transfer"
 import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { refetchBusinessMoneyQueries } from "@/lib/query/refresh-after-money-move"
 import { useScope } from "@/lib/query/scope"
-import { fetchReserveEasnerTransactionId } from "@/lib/reserve-easner-transaction-id"
 import { ArrowLeft, User, Copy, Check, Loader2 } from "lucide-react"
 
 const SEND_FLOW_STATE_KEY = "send_flow_state"
@@ -36,8 +35,6 @@ interface SendFlowState {
   paymentMethod?: string
   note: string
   transactionId?: string
-  /** Which Noah scope was used for `/api/transactions/reserve-etid` (must match easetag-transfer). */
-  ledgerReserveNoahScope?: "business" | "individual"
   pricingQuote?: {
     transferFee?: number
     payoutFee?: number
@@ -79,14 +76,13 @@ export default function SendConfirmPage() {
   const qc = useQueryClient()
   const { scope } = useScope()
   const { user } = useAuth()
-  const { tier1Complete, isLoading: profileLoading, businessId, hasData } = useBusinessProfile()
+  const { tier1Complete, isLoading: profileLoading, businessId } = useBusinessProfile()
   const { accountRows: sourceAccounts } = useBusinessAccountRows()
   const [state, setState] = useState<SendFlowState | null>(null)
   const [showPinDialog, setShowPinDialog] = useState(false)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [isAuthorizing, setIsAuthorizing] = useState(false)
   const [authorizeError, setAuthorizeError] = useState<string | null>(null)
-  const [ledgerReserveError, setLedgerReserveError] = useState<string | null>(null)
 
   const needPinChallenge =
     !!user?.id && isLoginPinModuleAvailable() && hasPin(user.id)
@@ -126,71 +122,6 @@ export default function SendConfirmPage() {
     }
   }, [router])
 
-  /**
-   * Easetag ledger P2P: ETID is reserved on `/send` before navigation (mobile parity).
-   * This effect only fixes stale session rows or legacy flows missing `ledgerReserveNoahScope`.
-   */
-  useEffect(() => {
-    if (!state) return
-    if (!isEasenetRecipient(state.recipient) || !isEasetagLedgerP2PEnabled()) return
-    if (profileLoading || !hasData) return
-
-    const tid = state.transactionId?.trim() ?? ""
-    const tidLooksReserved = /^ETID\d{8}$/i.test(tid)
-    const orgSend = Boolean(businessId)
-
-    if (tidLooksReserved && orgSend && state.ledgerReserveNoahScope !== "business") {
-      setLedgerReserveError(null)
-      setState((prev) => {
-        if (!prev) return prev
-        const next: SendFlowState = { ...prev, transactionId: undefined }
-        delete next.ledgerReserveNoahScope
-        try {
-          sessionStorage.setItem(SEND_FLOW_STATE_KEY, JSON.stringify(next))
-        } catch {
-          // ignore
-        }
-        return next
-      })
-      return
-    }
-
-    const expectedLedgerReserveScope: "business" | "individual" = businessId ? "business" : "individual"
-    if (tidLooksReserved && state.ledgerReserveNoahScope === expectedLedgerReserveScope) return
-
-    let cancelled = false
-    setLedgerReserveError(null)
-    void (async () => {
-      const reserved = await fetchReserveEasnerTransactionId(
-        orgSend ? { "X-Easner-Noah-Scope": "business" } : undefined,
-      )
-      if (cancelled) return
-      if (!reserved.ok) {
-        setLedgerReserveError(
-          reserved.error === "reserve_failed" || reserved.error === "Unauthorized"
-            ? "Could not reserve transaction reference. Sign in and try again."
-            : `Could not reserve transaction reference: ${reserved.error}`,
-        )
-        return
-      }
-      if (cancelled) return
-      const etid = reserved.easner_transaction_id.trim().toUpperCase()
-      setState((prev) => {
-        if (!prev) return prev
-        const next: SendFlowState = {
-          ...prev,
-          transactionId: etid,
-          ledgerReserveNoahScope: orgSend ? "business" : "individual",
-        }
-        sessionStorage.setItem(SEND_FLOW_STATE_KEY, JSON.stringify(next))
-        return next
-      })
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [state?.recipient, state?.transactionId, state?.ledgerReserveNoahScope, businessId, profileLoading, hasData])
-
   useEffect(() => {
     if (profileLoading) return
     if (state && !tier1Complete) {
@@ -215,18 +146,11 @@ export default function SendConfirmPage() {
         const tag = state.recipient.payeeEasetag!.trim().replace(/^@+/, "")
         const ledger = isEasetagLedgerP2PEnabled()
         const path = ledger ? "/api/wallets/easetag-transfer" : "/api/noah/transfers/w2w"
-        const reserved =
-          ledger &&
-          typeof state.transactionId === "string" &&
-          /^ETID\d{8}$/i.test(state.transactionId.trim())
-            ? state.transactionId.trim().toUpperCase()
-            : ""
         const body = ledger
           ? {
               destination_easetag: tag,
               amount: state.sendAmount,
               currency: state.sendCurrency.toUpperCase(),
-              ...(reserved ? { reserved_debit_etid: reserved } : {}),
             }
           : {
               destinationEasetag: tag,
@@ -331,15 +255,8 @@ export default function SendConfirmPage() {
     ? 1
     : state.pricingQuote?.exchangeRate ?? (hasFx && state.amount > 0 ? state.sendAmount / state.amount : 1)
 
-  const needsLedgerEtReserve = easenetSend && isEasetagLedgerP2PEnabled()
-  const expectedLedgerReserveScope: "business" | "individual" = businessId ? "business" : "individual"
-  /** Server-reserved ETID only — ignore client `generateTransactionId()` shape so the row does not swap IDs. */
-  const easetagLedgerEtReady =
-    !needsLedgerEtReserve ||
-    (/^ETID\d{8}$/i.test(state.transactionId?.trim() ?? "") &&
-      state.ledgerReserveNoahScope === expectedLedgerReserveScope)
-  const authorizeDisabled =
-    isAuthorizing || (needsLedgerEtReserve && (Boolean(ledgerReserveError) || !easetagLedgerEtReady))
+  const displayTransactionId = (state.transactionId ?? generateTransactionId()).trim()
+  const authorizeDisabled = isAuthorizing
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -353,26 +270,13 @@ export default function SendConfirmPage() {
             <span className="text-sm text-muted-foreground">Transaction ID</span>
             <button
               type="button"
-              disabled={needsLedgerEtReserve && !easetagLedgerEtReady}
-              className="flex items-center gap-2 font-mono text-sm font-medium transition-colors hover:text-primary disabled:pointer-events-none disabled:opacity-60"
+              className="flex items-center gap-2 font-mono text-sm font-medium transition-colors hover:text-primary"
               onClick={() => {
-                const id = state.transactionId?.trim()
-                if (!id || (needsLedgerEtReserve && !easetagLedgerEtReady)) return
-                void handleCopy(id, "transactionId")
+                void handleCopy(displayTransactionId, "transactionId")
               }}
-              aria-label={
-                needsLedgerEtReserve && !easetagLedgerEtReady
-                  ? "Transaction reference loading"
-                  : "Copy transaction id"
-              }
+              aria-label="Copy transaction id"
             >
-              {needsLedgerEtReserve && !easetagLedgerEtReady ? (
-                <span className="invisible select-none" aria-hidden>
-                  ETID00000000
-                </span>
-              ) : (
-                (state.transactionId ?? generateTransactionId()).trim()
-              )}
+              {displayTransactionId}
               {copiedKey === "transactionId" ? (
                 <Check className="h-4 w-4 shrink-0 text-primary" />
               ) : (
@@ -380,11 +284,6 @@ export default function SendConfirmPage() {
               )}
             </button>
           </div>
-          {needsLedgerEtReserve && ledgerReserveError ? (
-            <p className="text-sm text-red-600" role="alert">
-              {ledgerReserveError}
-            </p>
-          ) : null}
           <div className="flex items-center justify-between border-b pb-4">
             <span className="text-sm text-muted-foreground">Amount</span>
             <span className="text-xl font-semibold">

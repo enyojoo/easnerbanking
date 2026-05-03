@@ -21,7 +21,7 @@ type Body = {
 
 /**
  * Instant Easetag P2P via internal ledger (USD/EUR buckets). Requires `EASETAG_LEDGER_P2P_ENABLED=true`.
- * @see supabase migration `transfer_easetag_p2p`
+ * @see `transfer_easetag_p2p` (ETID allocated in-DB; optional `reserved_debit_etid` when supported).
  */
 export async function POST(request: Request) {
   if (!isEasetagLedgerP2PEnabled()) {

@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { View, Text, Pressable, StyleSheet, ScrollView, Animated, ActivityIndicator } from 'react-native'
-import Constants from 'expo-constants'
 import { ArrowLeft } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
@@ -53,11 +52,6 @@ function fmtMoney(amount: number, currency: string): string {
   return `${sym}${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-/** Same `ETID` + 8 digits as business; ledger Easetag balance sends use server-reserved id from Send Amount (prefetch + Continue). */
-function isClientEasnerTransactionIdFormat(value: string): boolean {
-  return /^ETID\d{8}$/i.test(value.trim())
-}
-
 export default function SendConfirmScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
   const { user, userProfile } = useAuth()
@@ -81,7 +75,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     pricingQuoteId?: string
     pricingQuoteExpiry?: string
     pricingQuoteResult?: PricingQuote | null
-    /** Easetag ledger: server-reserved ETID from amount prefetch; other rails may use client `generateTransactionId()`. */
+    /** Preview transaction id for review (server assigns final id on Easetag ledger send). */
     transactionId?: string
   }
 
@@ -110,54 +104,14 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   } = pricing
 
   const easetagUi = recipient ? resolveRecipientEasetagForUi(recipient) : ''
-  const useLedger =
-    Constants.expoConfig?.extra?.easetagLedgerP2pEnabled === true ||
-    process.env.EXPO_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true' ||
-    process.env.NEXT_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true'
-  const needReserve = Boolean(useLedger && easetagUi)
 
-  const hasPrefilledReservedEtid = needReserve && isClientEasnerTransactionIdFormat(paramTransactionId)
+  const displayTransactionId = paramTransactionId ? paramTransactionId.toUpperCase() : null
 
-  const [reservedDebitEtid, setReservedDebitEtid] = useState<string | null>(() =>
-    hasPrefilledReservedEtid ? paramTransactionId.toUpperCase() : null,
-  )
-  const [reserveError, setReserveError] = useState<string | null>(null)
   const [sendingAfterPin, setSendingAfterPin] = useState(false)
-
-  const canSendEasetagLedger = !needReserve || Boolean(reservedDebitEtid)
-
-  /** Show ETID from amount for balance sends; ledger uses server-reserved param (same id through PIN + transfer). */
-  const displayTransactionId = isClientEasnerTransactionIdFormat(paramTransactionId)
-    ? paramTransactionId.toUpperCase()
-    : reservedDebitEtid?.trim() || null
 
   useEffect(() => {
     analytics.trackScreenView('SendConfirm')
   }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    setReserveError(null)
-    if (!recipient || !needReserve) {
-      if (!needReserve) setReservedDebitEtid(null)
-      return
-    }
-    /** Same as business `/send/confirm`: amount step already holds server ETID — no reserve round-trip here. */
-    if (isClientEasnerTransactionIdFormat(paramTransactionId)) {
-      setReservedDebitEtid(paramTransactionId.toUpperCase())
-      return
-    }
-    setReservedDebitEtid(null)
-    void (async () => {
-      const r = await noahService.reserveEasnerTransactionId()
-      if (cancelled) return
-      if (r.ok) setReservedDebitEtid(r.easner_transaction_id)
-      else setReserveError(r.error)
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [recipient?.id, needReserve, paramTransactionId])
 
   /** Noah wallet pricing — not used for Easetag P2P (internal ledger); amounts already finalized on the amount screen. */
   useEffect(() => {
@@ -220,7 +174,6 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
               pricingQuoteId,
               pricingQuoteExpiry,
               pricingQuoteResult,
-              ...(reservedDebitEtid?.trim() ? { reservedDebitEtid: reservedDebitEtid.trim() } : {}),
             },
             {
               userId: user.id,
@@ -288,7 +241,6 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       qc,
       receiveAmountValue,
       recipient,
-      reservedDebitEtid,
       scope,
       selectedBalanceCurrency,
       showError,
@@ -321,7 +273,6 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       pricingQuoteId: pricing.pricingQuoteId,
       pricingQuoteExpiry: pricing.pricingQuoteExpiry,
       pricingQuoteResult: pricing.pricingQuoteResult,
-      ...(reservedDebitEtid?.trim() ? { reservedDebitEtid: reservedDebitEtid.trim() } : {}),
     } as never)
   }
 
@@ -400,13 +351,6 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
               {displayTransactionId ? (
                 <Row label="Transaction ID" value={displayTransactionId} last={!pricingQuoteExpiry} />
               ) : null}
-              {needReserve && !isClientEasnerTransactionIdFormat(paramTransactionId) ? (
-                reserveError ? (
-                  <Text style={styles.reserveError}>Could not reserve transaction ID ({reserveError}). Try again later.</Text>
-                ) : !reservedDebitEtid ? (
-                  <Text style={styles.quoteHint}>Reserving transaction ID…</Text>
-                ) : null
-              ) : null}
               {pricingQuoteExpiry ? (
                 <Text style={styles.quoteHint}>Quote expires {new Date(pricingQuoteExpiry).toLocaleTimeString()}</Text>
               ) : null}
@@ -416,16 +360,12 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
 
         <Pressable
           android_ripple={ripple.neutral}
-          style={[styles.cta, (!canSendEasetagLedger || reserveError) && styles.ctaDisabled]}
+          style={[styles.cta, sendingAfterPin && styles.ctaDisabled]}
           onPress={() => void onConfirmPress()}
-          disabled={!canSendEasetagLedger || Boolean(reserveError) || sendingAfterPin}
+          disabled={sendingAfterPin}
         >
           <LinearGradient
-            colors={
-              !canSendEasetagLedger || reserveError
-                ? [colors.neutral[400], colors.neutral[400]]
-                : colors.primary.gradient
-            }
+            colors={sendingAfterPin ? [colors.neutral[400], colors.neutral[400]] : colors.primary.gradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.ctaGradient}
@@ -523,11 +463,6 @@ const styles = StyleSheet.create({
   quoteHint: {
     ...textStyles.caption,
     color: colors.text.tertiary,
-    marginTop: spacing[2],
-  },
-  reserveError: {
-    ...textStyles.caption,
-    color: colors.error.main,
     marginTop: spacing[2],
   },
   cta: {

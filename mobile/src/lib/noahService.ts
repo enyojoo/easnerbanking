@@ -993,38 +993,11 @@ export const noahService = {
     }
   },
 
-  async reserveEasnerTransactionId(): Promise<
-    { ok: true; easner_transaction_id: string } | { ok: false; error: string }
-  > {
-    const session = await requireAuthSession()
-    const scopeHeaders = await getNoahScopeHeaders()
-    const response = await fetch(`${apiUrl()}/api/transactions/reserve-etid`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-        ...scopeHeaders,
-      },
-    })
-    const data = (await response.json().catch(() => ({}))) as {
-      easner_transaction_id?: string
-      error?: string
-    }
-    if (!response.ok) {
-      return { ok: false, error: typeof data.error === 'string' ? data.error : 'reserve_failed' }
-    }
-    const id = typeof data.easner_transaction_id === 'string' ? data.easner_transaction_id.trim() : ''
-    if (!id) return { ok: false, error: 'missing_easner_transaction_id' }
-    return { ok: true, easner_transaction_id: id }
-  },
-
   async createWalletToWalletTransfer(input: {
     destinationEasetag: string
     amount: string
     currency: string
     cryptoCurrency?: string
-    /** Server-reserved debit ETID for ledger Easetag P2P (must match preview). */
-    reservedDebitEtid?: string
   }): Promise<NoahTransfer> {
     const session = await requireAuthSession()
     const scopeHeaders = await getNoahScopeHeaders()
@@ -1046,9 +1019,6 @@ export const noahService = {
           destination_easetag: input.destinationEasetag.replace(/^@/, '').trim(),
           amount: input.amount,
           currency: String(input.currency || 'usd').toUpperCase(),
-          ...(input.reservedDebitEtid?.trim()
-            ? { reserved_debit_etid: input.reservedDebitEtid.trim().toUpperCase() }
-            : {}),
         }),
       })
       const data = (await response.json().catch(() => ({}))) as Record<string, unknown>

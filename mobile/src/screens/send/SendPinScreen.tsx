@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   Animated,
 } from 'react-native'
-import Constants from 'expo-constants'
 import { ArrowLeft } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -26,7 +25,6 @@ import { ripple } from '../../lib/androidRipple'
 import { useAuth } from '../../contexts/AuthContext'
 import { analytics } from '../../lib/analytics'
 import type { PricingQuote } from '../../lib/noahService'
-import { resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
 import { appPinStrings } from '../../constants/app-pin-en'
 import { getLockoutState, verifyPin } from '../../lib/pinAuth'
 import { PinKeypad } from '../../components/pin'
@@ -61,23 +59,11 @@ export default function SendPinScreen({ navigation, route }: NavigationProps) {
     pricingQuoteId?: string
     pricingQuoteExpiry?: string
     pricingQuoteResult?: PricingQuote | null
-    reservedDebitEtid?: string
   }
 
   const recipient = params.recipient
-  const reservedDebitEtid = params.reservedDebitEtid?.trim()
 
-  const useLedger =
-    Constants.expoConfig?.extra?.easetagLedgerP2pEnabled === true ||
-    process.env.EXPO_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true' ||
-    process.env.NEXT_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true'
-
-  const easetagUi = recipient ? resolveRecipientEasetagForUi(recipient) : ''
-  const needReserve = Boolean(useLedger && easetagUi)
-  const reserveBlocked = needReserve && !reservedDebitEtid
-
-  const canVerifyPin =
-    Boolean(recipient && user?.id) && !reserveBlocked && !lockedOut
+  const canVerifyPin = Boolean(recipient && user?.id) && !lockedOut
 
   const refreshLock = useCallback(async () => {
     if (!user?.id) return
@@ -162,7 +148,7 @@ export default function SendPinScreen({ navigation, route }: NavigationProps) {
   }, [pin, canVerifyPin, verifyingPin, user?.id, shakeAnim, navigation])
 
   const filledCount = pin.length
-  const keypadDisabled = verifyingPin || lockedOut || reserveBlocked
+  const keypadDisabled = verifyingPin || lockedOut
 
   const onDigit = (d: string) => {
     if (keypadDisabled || pin.length >= 4) return
@@ -200,9 +186,6 @@ export default function SendPinScreen({ navigation, route }: NavigationProps) {
   const showDotsSpinner = verifyingPin && showVerifySpinner
 
   const hintContent = (() => {
-    if (reserveBlocked) {
-      return <Text style={styles.errorText}>Missing transaction ID. Go back and try again.</Text>
-    }
     if (lockedOut) {
       return (
         <PinLockedHintText
@@ -273,14 +256,12 @@ export default function SendPinScreen({ navigation, route }: NavigationProps) {
           </View>
 
           <View style={styles.keypadContainer}>
-            {reserveBlocked ? null : (
-              <PinKeypad
-                onDigit={onDigit}
-                onBackspace={onBackspace}
-                disabled={keypadDisabled}
-                filledCount={filledCount}
-              />
-            )}
+            <PinKeypad
+              onDigit={onDigit}
+              onBackspace={onBackspace}
+              disabled={keypadDisabled}
+              filledCount={filledCount}
+            />
           </View>
         </View>
       </KeyboardAvoidingView>
