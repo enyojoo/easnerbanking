@@ -22,7 +22,7 @@ import { apiFetch } from '../../query/api-client'
 import { invalidateTransactionsFeed } from '../../query/refresh-user-feeds'
 import { executeBalanceSend } from '../../hooks/executeBalanceSend'
 import { NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
-import { consumeBalanceSendPinVerified, markBalanceSendPinVerified } from '../../lib/sendFlowPostPinGate'
+import { consumeBalanceSendPinVerified } from '../../lib/sendFlowPostPinGate'
 import { hasPin } from '../../lib/pinAuth'
 import { analytics } from '../../lib/analytics'
 import type { PricingQuote } from '../../lib/noahService'
@@ -53,7 +53,7 @@ function fmtMoney(amount: number, currency: string): string {
   return `${sym}${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-/** Same rule as business `/send/confirm`: client `generateTransactionId()` matches this — no reserve RPC needed. */
+/** Same `ETID` + 8 digits as business; ledger Easetag balance sends use server-reserved id from Send Amount (prefetch + Continue). */
 function isClientEasnerTransactionIdFormat(value: string): boolean {
   return /^ETID\d{8}$/i.test(value.trim())
 }
@@ -81,7 +81,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     pricingQuoteId?: string
     pricingQuoteExpiry?: string
     pricingQuoteResult?: PricingQuote | null
-    /** Client ETID from Send Amount (same as business); avoids reserve-etid round-trip on confirm when valid. */
+    /** Easetag ledger: server-reserved ETID from amount prefetch; other rails may use client `generateTransactionId()`. */
     transactionId?: string
   }
 
@@ -116,17 +116,17 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     process.env.NEXT_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true'
   const needReserve = Boolean(useLedger && easetagUi)
 
-  const hasPrefilledClientEtid = needReserve && isClientEasnerTransactionIdFormat(paramTransactionId)
+  const hasPrefilledReservedEtid = needReserve && isClientEasnerTransactionIdFormat(paramTransactionId)
 
   const [reservedDebitEtid, setReservedDebitEtid] = useState<string | null>(() =>
-    hasPrefilledClientEtid ? paramTransactionId.toUpperCase() : null,
+    hasPrefilledReservedEtid ? paramTransactionId.toUpperCase() : null,
   )
   const [reserveError, setReserveError] = useState<string | null>(null)
   const [sendingAfterPin, setSendingAfterPin] = useState(false)
 
   const canSendEasetagLedger = !needReserve || Boolean(reservedDebitEtid)
 
-  /** Show ETID from amount screen for all balance sends; ledger fallback uses reserve RPC when needed. */
+  /** Show ETID from amount for balance sends; ledger uses server-reserved param (same id through PIN + transfer). */
   const displayTransactionId = isClientEasnerTransactionIdFormat(paramTransactionId)
     ? paramTransactionId.toUpperCase()
     : reservedDebitEtid?.trim() || null
@@ -138,8 +138,11 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   useEffect(() => {
     let cancelled = false
     setReserveError(null)
-    if (!recipient || !needReserve) return
-    /** Business parity: amount step already generated ETID — show immediately, no reserve RPC. */
+    if (!recipient || !needReserve) {
+      if (!needReserve) setReservedDebitEtid(null)
+      return
+    }
+    /** Same as business `/send/confirm`: amount step already holds server ETID — no reserve round-trip here. */
     if (isClientEasnerTransactionIdFormat(paramTransactionId)) {
       setReservedDebitEtid(paramTransactionId.toUpperCase())
       return
@@ -154,7 +157,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     return () => {
       cancelled = true
     }
-  }, [recipient, needReserve, paramTransactionId])
+  }, [recipient?.id, needReserve, paramTransactionId])
 
   /** Noah wallet pricing — not used for Easetag P2P (internal ledger); amounts already finalized on the amount screen. */
   useEffect(() => {
@@ -201,13 +204,9 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   useFocusEffect(
     useCallback(() => {
       if (!consumeBalanceSendPinVerified()) return
-      if (!recipient || !user?.id) {
-        markBalanceSendPinVerified()
-        return
-      }
+      if (!recipient || !user?.id) return
 
       let cancelled = false
-      let finished = false
 
       void (async () => {
         setSendingAfterPin(true)
@@ -251,7 +250,6 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
               .catch(() => {})
           }
 
-          finished = true
           navigation.dispatch(
             CommonActions.reset({
               index: 1,
@@ -280,7 +278,6 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
 
       return () => {
         cancelled = true
-        if (!finished) markBalanceSendPinVerified()
       }
     }, [
       calculatedTotalAmount,

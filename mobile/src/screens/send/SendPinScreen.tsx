@@ -40,12 +40,15 @@ export default function SendPinScreen({ navigation, route }: NavigationProps) {
 
   const [pin, setPin] = useState('')
   const [verifyingPin, setVerifyingPin] = useState(false)
+  /** Spinner only after a short delay so fast success dismisses without flashing ActivityIndicator. */
+  const [showVerifySpinner, setShowVerifySpinner] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lockedOut, setLockedOut] = useState(false)
   const [lockMsRemaining, setLockMsRemaining] = useState(0)
 
   const lastTryRef = useRef('')
   const shakeAnim = useRef(new Animated.Value(0)).current
+  const verifySpinnerDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const params = route.params as {
     recipient?: Recipient
@@ -88,6 +91,15 @@ export default function SendPinScreen({ navigation, route }: NavigationProps) {
   }, [])
 
   useEffect(() => {
+    return () => {
+      if (verifySpinnerDelayRef.current) {
+        clearTimeout(verifySpinnerDelayRef.current)
+        verifySpinnerDelayRef.current = null
+      }
+    }
+  }, [])
+
+  useEffect(() => {
     if (!user?.id) return
     void refreshLock()
     const id = setInterval(() => void refreshLock(), 1000)
@@ -104,9 +116,23 @@ export default function SendPinScreen({ navigation, route }: NavigationProps) {
     if (lastTryRef.current === pin) return
     lastTryRef.current = pin
     void (async () => {
+      if (verifySpinnerDelayRef.current) {
+        clearTimeout(verifySpinnerDelayRef.current)
+        verifySpinnerDelayRef.current = null
+      }
       setVerifyingPin(true)
+      setShowVerifySpinner(false)
+      verifySpinnerDelayRef.current = setTimeout(() => {
+        verifySpinnerDelayRef.current = null
+        setShowVerifySpinner(true)
+      }, 220)
       setError(null)
       const res = await verifyPin(pin, user.id)
+      if (verifySpinnerDelayRef.current) {
+        clearTimeout(verifySpinnerDelayRef.current)
+        verifySpinnerDelayRef.current = null
+      }
+      setShowVerifySpinner(false)
       setVerifyingPin(false)
       if (res.success) {
         setPin('')
@@ -171,7 +197,7 @@ export default function SendPinScreen({ navigation, route }: NavigationProps) {
   }
 
   const dotsFilled = Math.min(4, filledCount)
-  const showDotsSpinner = verifyingPin
+  const showDotsSpinner = verifyingPin && showVerifySpinner
 
   const hintContent = (() => {
     if (reserveBlocked) {

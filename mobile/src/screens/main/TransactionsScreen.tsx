@@ -1297,6 +1297,8 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: spacing[3],
     paddingHorizontal: spacing[4],
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   summaryLabel: {
     fontSize: 11,
@@ -1305,6 +1307,8 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     letterSpacing: 0.6,
     marginBottom: 4,
+    textAlign: 'center',
+    width: '100%',
   },
   summaryValue: {
     fontSize: 22,
@@ -1312,6 +1316,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.text.primary,
     letterSpacing: -0.2,
+    textAlign: 'center',
+    width: '100%',
   },
   summaryValueIn: {
     color: colors.primary.main,

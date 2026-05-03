@@ -18,6 +18,7 @@ import {
 import { MessageSquareText, ChevronDown, User, Coins, RotateCcw, ArrowLeft, ArrowUpDown, Link, Delete, X, ChevronRight } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
+import Constants from 'expo-constants'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Path } from 'react-native-svg'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -83,6 +84,14 @@ function normalizePayoutMethodForPricing(methodCode: string | undefined | null):
   return methodCode
 }
 
+function isEasetagLedgerP2pEnabled(): boolean {
+  return (
+    Constants.expoConfig?.extra?.easetagLedgerP2pEnabled === true ||
+    process.env.EXPO_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true' ||
+    process.env.NEXT_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true'
+  )
+}
+
 // Landmark/Bank Icon Component
 function LandmarkIcon({ size = 24, color = colors.text.primary }: { size?: number; color?: string }) {
   return (
@@ -135,6 +144,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   /** Internal Easetag P2P does not use fiat payout corridors — don’t block the CTA on corridor status. */
   const easetagUi = recipient ? resolveRecipientEasetagForUi(recipient).trim() : ''
   const isEasetagRecipient = easetagUi.length > 0
+  /** Server-reserved debit ETID for balance → confirm (matches business confirm + `reserved_debit_etid`). */
+  const [ledgerBalanceReservedEtid, setLedgerBalanceReservedEtid] = useState<string | null>(null)
   const [payoutCorridorActive, setPayoutCorridorActive] = useState(true)
   const [sendAmount, setSendAmount] = useState('0')
   const [note, setNote] = useState('')
@@ -167,6 +178,23 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     }
     didInitializeBalanceCurrency.current = true
   }, [balances, isPreferredBalanceCurrency, preferredBalanceCurrencyFromRoute])
+
+  React.useEffect(() => {
+    if (!recipient?.id || !isEasetagRecipient || !isEasetagLedgerP2pEnabled()) {
+      setLedgerBalanceReservedEtid(null)
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      const r = await noahService.reserveEasnerTransactionId()
+      if (cancelled || !r.ok) return
+      const id = r.easner_transaction_id
+      setLedgerBalanceReservedEtid((prev) => (prev ? prev : id))
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [recipient?.id, isEasetagRecipient])
 
   // Available currencies for the dropdown (wallet balances - USD/EUR only)
   const availableCurrencies = [
@@ -1078,7 +1106,24 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
               // Balance: navigate immediately — Noah pricing quote runs on review screen (was blocking here ~300ms–2s).
               if (selectedPaymentMethod === 'balance') {
-                const transactionId = generateTransactionId()
+                let transactionId = generateTransactionId()
+                if (isEasetagRecipient && isEasetagLedgerP2pEnabled()) {
+                  if (ledgerBalanceReservedEtid) {
+                    transactionId = ledgerBalanceReservedEtid
+                  } else {
+                    const r = await noahService.reserveEasnerTransactionId()
+                    if (!r.ok) {
+                      showError(
+                        typeof r.error === 'string'
+                          ? r.error
+                          : 'Could not reserve transaction reference. Try again.',
+                      )
+                      return
+                    }
+                    transactionId = r.easner_transaction_id
+                    setLedgerBalanceReservedEtid(r.easner_transaction_id)
+                  }
+                }
                 navigation.navigate('SendConfirm' as never, {
                   recipient,
                   calculatedSendingAmount,
