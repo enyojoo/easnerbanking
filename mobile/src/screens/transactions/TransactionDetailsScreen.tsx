@@ -1058,7 +1058,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary.main,
     paddingHorizontal: spacing[6],
     paddingVertical: spacing[3],
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.full,
     marginBottom: spacing[3],
   },
   retryButtonText: {

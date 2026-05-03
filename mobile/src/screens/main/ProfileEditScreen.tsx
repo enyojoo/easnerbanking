@@ -15,7 +15,7 @@ import {
   Image,
 } from 'react-native'
 import DateTimePicker from '@react-native-community/datetimepicker'
-import { ArrowLeft, Calendar, Camera, CircleCheck, CircleX } from 'lucide-react-native'
+import { ArrowLeft, Calendar, Camera, CircleCheck, CircleX, Trash2 } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -884,12 +884,13 @@ function ProfileEditContent({ navigation }: NavigationProps) {
             {/* Delete Account Section */}
             <View style={styles.deleteSection}>
               <Pressable
-               android_ripple={ripple.neutral}
+               android_ripple={ripple.destructiveTint}
                 onPress={async () => {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                   setShowDeleteDialog(true)
                 }}
                 style={styles.deleteButton} >
+                <Trash2 size={18} color={colors.error.main} strokeWidth={2.25} />
                 <Text style={styles.deleteButtonText}>Delete Account</Text>
               </Pressable>
             </View>
@@ -1009,7 +1010,7 @@ const styles = StyleSheet.create({
   actionButton: {
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[2],
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius.full,
     backgroundColor: colors.primary.main,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1017,7 +1018,7 @@ const styles = StyleSheet.create({
     height: 32,
   },
   actionButtonSecondary: {
-    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.full }),
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[2],
     alignItems: 'center',
@@ -1290,14 +1291,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   deleteButton: {
-    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
-    paddingHorizontal: spacing[4],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    paddingHorizontal: spacing[5],
     paddingVertical: spacing[3],
+    backgroundColor: colors.semantic.card,
+    borderRadius: borderRadius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border.default,
   },
   deleteButtonText: {
-    ...textStyles.labelMedium,
+    ...textStyles.bodyMedium,
     color: colors.error.main,
-    fontWeight: '500',
+    fontFamily: fontFamily.semibold,
+    fontWeight: '600',
   },
 })
 

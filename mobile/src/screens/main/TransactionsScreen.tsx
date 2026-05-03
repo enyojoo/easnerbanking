@@ -1406,7 +1406,7 @@ const styles = StyleSheet.create({
   },
   regularWidthDetailButton: {
     minHeight: 44,
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius.full,
     backgroundColor: colors.primary.main,
     alignItems: 'center',
     justifyContent: 'center',

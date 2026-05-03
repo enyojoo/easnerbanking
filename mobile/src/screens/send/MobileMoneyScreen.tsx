@@ -402,7 +402,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.primary,
   },
   payButton: {
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius.full,
     overflow: 'hidden',
   },
   payButtonDisabled: {

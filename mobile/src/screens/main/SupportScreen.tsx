@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
   },
   sendButton: {
     backgroundColor: colors.primary.main,
-    borderRadius: 8,
+    borderRadius: borderRadius.full,
     padding: 16,
     alignItems: 'center',
   },

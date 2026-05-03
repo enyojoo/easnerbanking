@@ -2263,7 +2263,7 @@ const styles = StyleSheet.create({
   },
   addRecipientButton: {
     backgroundColor: colors.primary.main,
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius.full,
     paddingVertical: spacing[4],
     alignItems: 'center',
     justifyContent: 'center',
@@ -2529,11 +2529,11 @@ const styles = StyleSheet.create({
   modalButton: {
     flex: 1,
     padding: spacing[3],
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.full,
     alignItems: 'center',
   },
   cancelButton: {
-    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.lg }),
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.full }),
   },
   saveButton: {
     backgroundColor: colors.primary.main,

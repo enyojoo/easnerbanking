@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
     marginTop: spacing[3],
   },
   connectButton: {
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius.full,
     overflow: 'hidden',
     marginTop: 'auto',
     marginBottom: spacing[4],

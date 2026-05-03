@@ -558,7 +558,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.primary,
   },
   confirmButton: {
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius.full,
     overflow: 'hidden',
   },
   confirmButtonGradient: {
