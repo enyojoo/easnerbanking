@@ -177,7 +177,7 @@ export default function SendPinScreen({ navigation, route }: NavigationProps) {
 
   const hintContent = (() => {
     if (reserveBlocked) {
-      return <Text style={styles.errorText}>Missing transaction reference. Go back and try again.</Text>
+      return <Text style={styles.errorText}>Missing transaction ID. Go back and try again.</Text>
     }
     if (lockedOut) {
       return (

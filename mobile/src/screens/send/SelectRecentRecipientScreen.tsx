@@ -232,7 +232,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     }
   }, [user?.id, transactions])
 
-  const { sorted: hubSorted, recentIds } = useMemo(
+  const { sorted: hubSorted } = useMemo(
     () => sortRecipientsForSendHub(recipients, lastSentAtByRecipient),
     [recipients, lastSentAtByRecipient],
   )
@@ -660,7 +660,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
 
   const renderRecipient = ({ item, index }: { item: Recipient; index: number }) => {
     const isDraftEasenet = isDraftEasenetRecipient(item.id)
-    const showRecentBadge = recentIds.has(item.id) && !isDraftEasenet
     const isEasenet = isEasenetRecipientRecord(item)
     const isLast = index === sendHubFlatListData.length - 1
     return (
@@ -669,53 +668,19 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
         style={[styles.recipientItem, !isLast && styles.recipientItemDivider]}
         onPress={() => handleSelectRecipient(item)} >
         <View style={styles.recipientRow}>
-          {isEasenet ? (
-            <>
-              <EasenetRecipientHydratedPreview
-                recipient={item}
-                variant="row"
-                getInitials={getInitials}
-                titleEndAccessory={
-                  <>
-                    {showRecentBadge ? (
-                      <View style={[styles.recentBadge, styles.recipientMetaBadge]}>
-                        <Text style={styles.recentBadgeText}>Recent</Text>
-                      </View>
-                    ) : null}
-                    {isDraftEasenet ? (
-                      <View style={[styles.newRecipientBadge, styles.recipientMetaBadge]}>
-                        <Text style={styles.newRecipientBadgeText}>New</Text>
-                      </View>
-                    ) : null}
-                  </>
-                }
-              />
-              <ChevronRight size={20} color={colors.text.secondary} strokeWidth={2} />
-            </>
-          ) : (
-            <>
-              <RecipientPayoutPreview
-                recipient={item}
-                variant="row"
-                getInitials={getInitials}
-                titleEndAccessory={
-                  <>
-                    {showRecentBadge ? (
-                      <View style={[styles.recentBadge, styles.recipientMetaBadge]}>
-                        <Text style={styles.recentBadgeText}>Recent</Text>
-                      </View>
-                    ) : null}
-                    {isDraftEasenet ? (
-                      <View style={[styles.newRecipientBadge, styles.recipientMetaBadge]}>
-                        <Text style={styles.newRecipientBadgeText}>New</Text>
-                      </View>
-                    ) : null}
-                  </>
-                }
-              />
-              <ChevronRight size={20} color={colors.text.secondary} strokeWidth={2} />
-            </>
-          )}
+          <View style={[styles.recipientPreviewSlot, isDraftEasenet && styles.recipientPreviewSlotWithBadge]}>
+            {isEasenet ? (
+              <EasenetRecipientHydratedPreview recipient={item} variant="row" getInitials={getInitials} />
+            ) : (
+              <RecipientPayoutPreview recipient={item} variant="row" getInitials={getInitials} />
+            )}
+            {isDraftEasenet ? (
+              <View style={[styles.newRecipientBadge, styles.newRecipientBadgeCorner]} pointerEvents="none">
+                <Text style={styles.newRecipientBadgeText}>New</Text>
+              </View>
+            ) : null}
+          </View>
+          <ChevronRight size={20} color={colors.text.secondary} strokeWidth={2} />
         </View>
       </Pressable>
     )
@@ -2005,6 +1970,15 @@ const styles = StyleSheet.create({
   recipientRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing[2],
+  },
+  recipientPreviewSlot: {
+    flex: 1,
+    minWidth: 0,
+    position: 'relative',
+  },
+  recipientPreviewSlotWithBadge: {
+    paddingRight: 44,
   },
   avatarContainer: {
     position: 'relative',
@@ -2066,9 +2040,6 @@ const styles = StyleSheet.create({
     flexWrap: 'nowrap',
     minWidth: 0,
   },
-  recipientMetaBadge: {
-    flexShrink: 0,
-  },
   easnerMarkBadgeImage: {
     width: 20,
     height: 20,
@@ -2081,28 +2052,24 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     minWidth: 0,
   },
-  recentBadge: {
+  newRecipientBadge: {
     backgroundColor: colors.primary.main + '18',
     paddingHorizontal: spacing[2],
     paddingVertical: 2,
     borderRadius: borderRadius.sm,
   },
-  recentBadgeText: {
-    ...textStyles.bodySmall,
-    fontFamily: fontFamily.semibold,
-    color: colors.primary.main,
-    fontSize: 11,
-  },
-  newRecipientBadge: {
-    backgroundColor: colors.neutral[200],
-    paddingHorizontal: spacing[2],
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
+  /** Draft Easenet row — top-trailing corner of the preview block (clear of the chevron). */
+  newRecipientBadgeCorner: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    zIndex: 2,
+    elevation: 2,
   },
   newRecipientBadgeText: {
     ...textStyles.bodySmall,
     fontFamily: fontFamily.semibold,
-    color: colors.text.secondary,
+    color: colors.primary.main,
     fontSize: 11,
   },
   recipientBank: {

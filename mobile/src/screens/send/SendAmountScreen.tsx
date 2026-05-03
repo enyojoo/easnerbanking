@@ -1078,6 +1078,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
               // Balance: navigate immediately — Noah pricing quote runs on review screen (was blocking here ~300ms–2s).
               if (selectedPaymentMethod === 'balance') {
+                const transactionId = generateTransactionId()
                 navigation.navigate('SendConfirm' as never, {
                   recipient,
                   calculatedSendingAmount,
@@ -1086,6 +1087,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   receiveAmountValue,
                   selectedBalanceCurrency,
                   receiveCurrency: recipient.currency,
+                  transactionId,
                 } as never)
                 return
               }

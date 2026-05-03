@@ -53,6 +53,11 @@ function fmtMoney(amount: number, currency: string): string {
   return `${sym}${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
+/** Same rule as business `/send/confirm`: client `generateTransactionId()` matches this — no reserve RPC needed. */
+function isClientEasnerTransactionIdFormat(value: string): boolean {
+  return /^ETID\d{8}$/i.test(value.trim())
+}
+
 export default function SendConfirmScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
   const { user, userProfile } = useAuth()
@@ -76,12 +81,15 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     pricingQuoteId?: string
     pricingQuoteExpiry?: string
     pricingQuoteResult?: PricingQuote | null
+    /** Client ETID from Send Amount (same as business); avoids reserve-etid round-trip on confirm when valid. */
+    transactionId?: string
   }
 
   const recipient = params.recipient
   const receiveAmountValue = params.receiveAmountValue ?? 0
   const selectedBalanceCurrency = params.selectedBalanceCurrency ?? 'USD'
   const receiveCurrency = params.receiveCurrency ?? recipient?.currency ?? ''
+  const paramTransactionId = typeof params.transactionId === 'string' ? params.transactionId.trim() : ''
 
   const [pricing, setPricing] = useState(() => ({
     calculatedSendingAmount: params.calculatedSendingAmount ?? 0,
@@ -108,11 +116,20 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     process.env.NEXT_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true'
   const needReserve = Boolean(useLedger && easetagUi)
 
-  const [reservedDebitEtid, setReservedDebitEtid] = useState<string | null>(null)
+  const hasPrefilledClientEtid = needReserve && isClientEasnerTransactionIdFormat(paramTransactionId)
+
+  const [reservedDebitEtid, setReservedDebitEtid] = useState<string | null>(() =>
+    hasPrefilledClientEtid ? paramTransactionId.toUpperCase() : null,
+  )
   const [reserveError, setReserveError] = useState<string | null>(null)
   const [sendingAfterPin, setSendingAfterPin] = useState(false)
 
   const canSendEasetagLedger = !needReserve || Boolean(reservedDebitEtid)
+
+  /** Show ETID from amount screen for all balance sends; ledger fallback uses reserve RPC when needed. */
+  const displayTransactionId = isClientEasnerTransactionIdFormat(paramTransactionId)
+    ? paramTransactionId.toUpperCase()
+    : reservedDebitEtid?.trim() || null
 
   useEffect(() => {
     analytics.trackScreenView('SendConfirm')
@@ -120,9 +137,14 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
 
   useEffect(() => {
     let cancelled = false
-    setReservedDebitEtid(null)
     setReserveError(null)
     if (!recipient || !needReserve) return
+    /** Business parity: amount step already generated ETID — show immediately, no reserve RPC. */
+    if (isClientEasnerTransactionIdFormat(paramTransactionId)) {
+      setReservedDebitEtid(paramTransactionId.toUpperCase())
+      return
+    }
+    setReservedDebitEtid(null)
     void (async () => {
       const r = await noahService.reserveEasnerTransactionId()
       if (cancelled) return
@@ -132,7 +154,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     return () => {
       cancelled = true
     }
-  }, [recipient, needReserve])
+  }, [recipient, needReserve, paramTransactionId])
 
   /** Noah wallet pricing — not used for Easetag P2P (internal ledger); amounts already finalized on the amount screen. */
   useEffect(() => {
@@ -214,7 +236,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           if (cancelled) return
           const txId = String(detailId ?? '').trim()
           if (!txId) {
-            throw new Error('Transfer succeeded but no transaction reference was returned.')
+            throw new Error('Transfer succeeded but no transaction ID was returned.')
           }
 
           if (scope) {
@@ -373,15 +395,20 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
               <Row label="Fees" value={fmtMoney(calculatedFeeAmount, selectedBalanceCurrency)} />
               <Row label="Total debited" value={`${fmtMoney(calculatedTotalAmount, selectedBalanceCurrency)} ${selectedBalanceCurrency}`} bold />
               <Row label="Recipient gets" value={`${fmtMoney(receiveAmountValue, receiveCurrency)} ${receiveCurrency}`} />
-              <Row label="To" value={recipient.full_name} last={!needReserve && !pricingQuoteExpiry} />
-              {needReserve ? (
-                reservedDebitEtid ? (
-                  <Row label="Transaction reference" value={reservedDebitEtid} last={!pricingQuoteExpiry} />
-                ) : reserveError ? (
-                  <Text style={styles.reserveError}>Could not reserve reference ({reserveError}). Try again later.</Text>
-                ) : (
-                  <Text style={styles.quoteHint}>Reserving transaction reference…</Text>
-                )
+              <Row
+                label="To"
+                value={recipient.full_name}
+                last={!displayTransactionId && !pricingQuoteExpiry}
+              />
+              {displayTransactionId ? (
+                <Row label="Transaction ID" value={displayTransactionId} last={!pricingQuoteExpiry} />
+              ) : null}
+              {needReserve && !isClientEasnerTransactionIdFormat(paramTransactionId) ? (
+                reserveError ? (
+                  <Text style={styles.reserveError}>Could not reserve transaction ID ({reserveError}). Try again later.</Text>
+                ) : !reservedDebitEtid ? (
+                  <Text style={styles.quoteHint}>Reserving transaction ID…</Text>
+                ) : null
               ) : null}
               {pricingQuoteExpiry ? (
                 <Text style={styles.quoteHint}>Quote expires {new Date(pricingQuoteExpiry).toLocaleTimeString()}</Text>
