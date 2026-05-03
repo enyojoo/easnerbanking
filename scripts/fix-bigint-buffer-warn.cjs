@@ -5,7 +5,8 @@
  * console.warn when optional native bindings fail to load. Behavior is correct
  * without them; the warning only adds noise in CI and Next builds.
  *
- * 1) Try `npm rebuild bigint-buffer` so bindings compile when node-gyp/toolchain exists.
+ * 1) Try `npm rebuild bigint-buffer` locally so bindings compile when toolchain exists.
+ *    Skipped on Vercel — native rebuild adds noisy node-gyp stderr / failures there.
  * 2) Strip the warn line from every installed dist/node.js copy so fallback stays silent.
  */
 
@@ -20,11 +21,12 @@ const WARN_LINE_RE =
   /\r?\n[ \t]*console\.warn\(\s*['"]bigint: Failed to load bindings, pure JS will be used \(try npm run rebuild\?\)['"]\s*\);[ \t]*/g
 
 function rebuild () {
+  if (process.env.VERCEL === '1') return
   if (!fs.existsSync(path.join(root, 'node_modules', 'bigint-buffer', 'package.json'))) return
   try {
     execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['rebuild', 'bigint-buffer'], {
       cwd: root,
-      stdio: 'pipe',
+      stdio: 'ignore',
     })
   } catch {
     // No native toolchain is fine; we patch the warn below.
@@ -36,9 +38,18 @@ function rebuild () {
  */
 function findBigintBufferNodeJs () {
   const out = []
+  const seen = new Set()
   const stack = [path.join(root, 'node_modules')]
   while (stack.length) {
     const nm = stack.pop()
+    let real
+    try {
+      real = fs.realpathSync(nm)
+    } catch {
+      continue
+    }
+    if (seen.has(real)) continue
+    seen.add(real)
     let entries
     try {
       entries = fs.readdirSync(nm, { withFileTypes: true })
@@ -50,7 +61,11 @@ function findBigintBufferNodeJs () {
       const full = path.join(nm, ent.name)
       if (ent.name === 'bigint-buffer') {
         const f = path.join(full, 'dist', 'node.js')
-        if (fs.existsSync(f)) out.push(f)
+        try {
+          if (fs.existsSync(f)) out.push(f)
+        } catch {
+          continue
+        }
       }
       const nested = path.join(full, 'node_modules')
       if (fs.existsSync(nested)) stack.push(nested)
@@ -61,12 +76,21 @@ function findBigintBufferNodeJs () {
 
 function stripWarn () {
   for (const nodeJs of findBigintBufferNodeJs()) {
-    const before = fs.readFileSync(nodeJs, 'utf8')
-    WARN_LINE_RE.lastIndex = 0
-    const after = before.replace(WARN_LINE_RE, '\n')
-    if (after !== before) fs.writeFileSync(nodeJs, after)
+    try {
+      const before = fs.readFileSync(nodeJs, 'utf8')
+      WARN_LINE_RE.lastIndex = 0
+      const after = before.replace(WARN_LINE_RE, '\n')
+      if (after !== before) fs.writeFileSync(nodeJs, after)
+    } catch {
+      // Ignore unreadable trees (e.g. frozen installs).
+    }
   }
 }
 
-rebuild()
-stripWarn()
+try {
+  rebuild()
+  stripWarn()
+} catch {
+  // Never fail install — bigint-buffer still works via pure JS fallback.
+}
+process.exitCode = 0
