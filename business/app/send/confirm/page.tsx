@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
@@ -14,7 +14,7 @@ import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 import type { Beneficiary } from "@/lib/recipient-types"
 import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
 import { EasenetRecipientProfileRowHydrated } from "@/components/easenet-recipient-profile-row-hydrated"
-import { generateTransactionId } from "@/lib/transaction-id"
+import { generateTransactionId, isEasnerClientTransactionIdFormat } from "@/lib/transaction-id"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { dataCache, CACHE_KEYS, requestBusinessAccountsRefresh } from "@/lib/cache"
 import { isEasetagLedgerP2PEnabled } from "@/lib/ledger/easetag-transfer"
@@ -83,6 +83,14 @@ export default function SendConfirmPage() {
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [isAuthorizing, setIsAuthorizing] = useState(false)
   const [authorizeError, setAuthorizeError] = useState<string | null>(null)
+  const displayIdFallbackRef = useRef<string | null>(null)
+
+  const displayTransactionId = useMemo(() => {
+    const s = state?.transactionId?.trim()
+    if (s) return s.toUpperCase()
+    if (!displayIdFallbackRef.current) displayIdFallbackRef.current = generateTransactionId()
+    return displayIdFallbackRef.current
+  }, [state?.transactionId])
 
   const needPinChallenge =
     !!user?.id && isLoginPinModuleAvailable() && hasPin(user.id)
@@ -146,11 +154,18 @@ export default function SendConfirmPage() {
         const tag = state.recipient.payeeEasetag!.trim().replace(/^@+/, "")
         const ledger = isEasetagLedgerP2PEnabled()
         const path = ledger ? "/api/wallets/easetag-transfer" : "/api/noah/transfers/w2w"
+        const plannedEtid =
+          ledger &&
+          typeof state.transactionId === "string" &&
+          isEasnerClientTransactionIdFormat(state.transactionId)
+            ? state.transactionId.trim().toUpperCase()
+            : ""
         const body = ledger
           ? {
               destination_easetag: tag,
               amount: state.sendAmount,
               currency: state.sendCurrency.toUpperCase(),
+              ...(plannedEtid ? { reserved_debit_etid: plannedEtid } : {}),
             }
           : {
               destinationEasetag: tag,
@@ -185,12 +200,14 @@ export default function SendConfirmPage() {
           return
         }
         const tx = data.transaction
+        const serverEtid = String(data.easner_transaction_id ?? "").trim().toUpperCase()
+        const planned = plannedEtid || String(state.transactionId ?? "").trim().toUpperCase()
         const id = ledger
           ? String(
-              data.easner_transaction_id ??
-                data.debit_provider_transaction_id ??
-                data.transfer_group_id ??
-                state.transactionId ??
+              serverEtid ||
+                data.debit_provider_transaction_id ||
+                data.transfer_group_id ||
+                planned ||
                 generateTransactionId(),
             )
           : String(
@@ -255,7 +272,6 @@ export default function SendConfirmPage() {
     ? 1
     : state.pricingQuote?.exchangeRate ?? (hasFx && state.amount > 0 ? state.sendAmount / state.amount : 1)
 
-  const displayTransactionId = (state.transactionId ?? generateTransactionId()).trim()
   const authorizeDisabled = isAuthorizing
 
   return (

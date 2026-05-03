@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { View, Text, Pressable, StyleSheet, ScrollView, Animated, ActivityIndicator } from 'react-native'
 import { ArrowLeft } from 'lucide-react-native'
+import Constants from 'expo-constants'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -27,6 +28,7 @@ import { analytics } from '../../lib/analytics'
 import type { PricingQuote } from '../../lib/noahService'
 import { noahService } from '../../lib/noahService'
 import { resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
+import { isEasnerClientTransactionIdFormat } from '../../lib/transactionId'
 
 function inferCountryFromRecipientCurrency(currency: string): string | undefined {
   const m: Record<string, string> = {
@@ -75,7 +77,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     pricingQuoteId?: string
     pricingQuoteExpiry?: string
     pricingQuoteResult?: PricingQuote | null
-    /** Preview transaction id for review (server assigns final id on Easetag ledger send). */
+    /** Same ETID through review → PIN → transfer (`reserved_debit_etid` on ledger P2P). */
     transactionId?: string
   }
 
@@ -104,6 +106,17 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   } = pricing
 
   const easetagUi = recipient ? resolveRecipientEasetagForUi(recipient) : ''
+  const useLedger =
+    Constants.expoConfig?.extra?.easetagLedgerP2pEnabled === true ||
+    process.env.EXPO_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true' ||
+    process.env.NEXT_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true'
+  const ledgerReservedDebitEtid =
+    useLedger &&
+    easetagUi &&
+    paramTransactionId &&
+    isEasnerClientTransactionIdFormat(paramTransactionId)
+      ? paramTransactionId.toUpperCase()
+      : undefined
 
   const displayTransactionId = paramTransactionId ? paramTransactionId.toUpperCase() : null
 
@@ -174,6 +187,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
               pricingQuoteId,
               pricingQuoteExpiry,
               pricingQuoteResult,
+              ...(ledgerReservedDebitEtid ? { reservedDebitEtid: ledgerReservedDebitEtid } : {}),
             },
             {
               userId: user.id,
@@ -241,6 +255,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       qc,
       receiveAmountValue,
       recipient,
+      ledgerReservedDebitEtid,
       scope,
       selectedBalanceCurrency,
       showError,

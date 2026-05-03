@@ -998,6 +998,8 @@ export const noahService = {
     amount: string
     currency: string
     cryptoCurrency?: string
+    /** Same `ETID`+8 digits as review; passed as `reserved_debit_etid` for ledger P2P (no DB reservation row). */
+    reservedDebitEtid?: string
   }): Promise<NoahTransfer> {
     const session = await requireAuthSession()
     const scopeHeaders = await getNoahScopeHeaders()
@@ -1019,6 +1021,9 @@ export const noahService = {
           destination_easetag: input.destinationEasetag.replace(/^@/, '').trim(),
           amount: input.amount,
           currency: String(input.currency || 'usd').toUpperCase(),
+          ...(input.reservedDebitEtid?.trim()
+            ? { reserved_debit_etid: input.reservedDebitEtid.trim().toUpperCase() }
+            : {}),
         }),
       })
       const data = (await response.json().catch(() => ({}))) as Record<string, unknown>
