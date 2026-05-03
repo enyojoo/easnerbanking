@@ -94,6 +94,15 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const heroBalanceFontSize = scaledFontSize(56)
   const heroBalanceLineHeight =
     Math.round(heroBalanceFontSize * lineHeight.tight) + (Platform.OS === 'android' ? 6 : 4)
+  /** Placeholder geometry aligned to tabular balance line (symbol + body + decimals). */
+  const balanceSkeletonDims = useMemo(() => {
+    const capH = Math.max(42, Math.round(heroBalanceFontSize * 0.62))
+    const corner = Math.max(7, Math.round(capH * 0.13))
+    const symW = Math.round(heroBalanceFontSize * 0.36)
+    const centsW = Math.round(heroBalanceFontSize * 0.48)
+    const gap = Math.max(5, Math.round(heroBalanceFontSize * 0.05))
+    return { capH, corner, symW, centsW, gap }
+  }, [heroBalanceFontSize])
   const { user, userProfile, refreshUserProfile, loading: authLoading } = useAuth()
   const { scope } = useScope()
   const qc = useQueryClient()
@@ -790,12 +799,43 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
           {/* Balance Display */}
           <View style={styles.balanceContainer}>
             {shouldShowBalanceSkeleton ? (
-              <View style={styles.balanceSkeletonWrap}>
-                <ShimmerLoader
-                  width={240}
-                  height={Math.max(48, Math.round(heroBalanceFontSize * 0.8))}
-                  borderRadius={borderRadius.lg}
-                />
+              <View
+                style={[styles.balanceSkeletonWrap, { minHeight: heroBalanceLineHeight }]}
+                accessibilityLabel="Loading balance"
+                accessible
+              >
+                <View style={[styles.balanceSkeletonRow, { gap: balanceSkeletonDims.gap }]}>
+                  <View
+                    style={[
+                      styles.balanceSkeletonSegment,
+                      {
+                        width: balanceSkeletonDims.symW,
+                        height: balanceSkeletonDims.capH,
+                        borderRadius: balanceSkeletonDims.corner,
+                      },
+                    ]}
+                  />
+                  <View
+                    style={[
+                      styles.balanceSkeletonSegment,
+                      styles.balanceSkeletonMainDigits,
+                      {
+                        height: balanceSkeletonDims.capH,
+                        borderRadius: balanceSkeletonDims.corner,
+                      },
+                    ]}
+                  />
+                  <View
+                    style={[
+                      styles.balanceSkeletonSegment,
+                      {
+                        width: balanceSkeletonDims.centsW,
+                        height: balanceSkeletonDims.capH,
+                        borderRadius: balanceSkeletonDims.corner,
+                      },
+                    ]}
+                  />
+                </View>
               </View>
             ) : (
               <Text
@@ -1267,6 +1307,23 @@ function createDashboardStyles(c: Colors, scrollBottomPadding: number) {
   balanceSkeletonWrap: {
     flex: 1,
     justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  balanceSkeletonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
+  },
+  balanceSkeletonSegment: {
+    backgroundColor: 'rgba(255,255,255,0.24)',
+  },
+  /** Middle segment reads as the comma-separated integer block. */
+  balanceSkeletonMainDigits: {
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 112,
+    maxWidth: 228,
   },
   hideBalanceButton: {
     width: 40,

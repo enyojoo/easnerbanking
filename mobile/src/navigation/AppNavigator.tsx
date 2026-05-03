@@ -18,6 +18,7 @@ import {
   flushPendingPushNavigation,
   setPushNavMainReady,
 } from '../lib/pendingPushNavigation'
+import { emitAppLocked, registerAppLockListener } from '../lib/app-lock-bus'
 import { useBusinessNoahSync } from '../hooks/useBusinessNoahSync'
 import { useConsumerKycNoahSync } from '../hooks/useConsumerKycNoahSync'
 // Stack timing and Android vs iOS card transitions: see `transitionPresets.ts`.

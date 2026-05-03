@@ -1,18 +1,28 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { View, Text, Pressable, StyleSheet, ScrollView, Animated } from 'react-native'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { View, Text, Pressable, StyleSheet, ScrollView, Animated, ActivityIndicator } from 'react-native'
 import Constants from 'expo-constants'
 import { ArrowLeft } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { CommonActions, useFocusEffect } from '@react-navigation/native'
+import { useQueryClient } from '@tanstack/react-query'
+import { qk } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
-import type { Recipient } from '../../types'
+import type { Recipient, User } from '../../types'
 import { colors, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToast } from '../../components/ToastProvider'
+import { useBalance } from '../../contexts/BalanceContext'
+import { useScope } from '../../query/scope'
+import { apiFetch } from '../../query/api-client'
+import { invalidateTransactionsFeed } from '../../query/refresh-user-feeds'
+import { executeBalanceSend } from '../../hooks/executeBalanceSend'
+import { NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
+import { consumeBalanceSendPinVerified, markBalanceSendPinVerified } from '../../lib/sendFlowPostPinGate'
 import { hasPin } from '../../lib/pinAuth'
 import { analytics } from '../../lib/analytics'
 import type { PricingQuote } from '../../lib/noahService'
@@ -45,8 +55,11 @@ function fmtMoney(amount: number, currency: string): string {
 
 export default function SendConfirmScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
-  const { user } = useAuth()
-  const { showError } = useToast()
+  const { user, userProfile } = useAuth()
+  const { showError, showInfo } = useToast()
+  const qc = useQueryClient()
+  const { scope } = useScope()
+  const { updateBalanceOptimistically } = useBalance()
 
   const headerAnim = useRef(new Animated.Value(0)).current
   const contentAnim = useRef(new Animated.Value(0)).current
@@ -97,6 +110,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
 
   const [reservedDebitEtid, setReservedDebitEtid] = useState<string | null>(null)
   const [reserveError, setReserveError] = useState<string | null>(null)
+  const [sendingAfterPin, setSendingAfterPin] = useState(false)
 
   const canSendEasetagLedger = !needReserve || Boolean(reservedDebitEtid)
 
@@ -162,8 +176,112 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     pricing.calculatedSendingAmount,
   ])
 
+  useFocusEffect(
+    useCallback(() => {
+      if (!consumeBalanceSendPinVerified()) return
+      if (!recipient || !user?.id) {
+        markBalanceSendPinVerified()
+        return
+      }
+
+      let cancelled = false
+      let finished = false
+
+      void (async () => {
+        setSendingAfterPin(true)
+        try {
+          const { detailId } = await executeBalanceSend(
+            {
+              recipient,
+              calculatedTotalAmount,
+              receiveAmountValue,
+              selectedBalanceCurrency,
+              pricingQuoteId,
+              pricingQuoteExpiry,
+              pricingQuoteResult,
+              ...(reservedDebitEtid?.trim() ? { reservedDebitEtid: reservedDebitEtid.trim() } : {}),
+            },
+            {
+              userId: user.id,
+              userProfile: userProfile as User | null | undefined,
+              scope: scope ?? undefined,
+              qc,
+              updateBalanceOptimistically,
+              showError,
+              showInfo,
+            },
+          )
+          if (cancelled) return
+          const txId = String(detailId ?? '').trim()
+          if (!txId) {
+            throw new Error('Transfer succeeded but no transaction reference was returned.')
+          }
+
+          if (scope) {
+            void qc
+              .prefetchQuery({
+                queryKey: qk.transactions.detail(scope, txId),
+                queryFn: () =>
+                  apiFetch<{ transaction?: unknown }>(`/api/transactions/${encodeURIComponent(txId)}`, {
+                    headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
+                  }),
+              })
+              .catch(() => {})
+          }
+
+          finished = true
+          navigation.dispatch(
+            CommonActions.reset({
+              index: 1,
+              routes: [
+                { name: 'MainTabs' },
+                {
+                  name: 'TransactionDetails',
+                  params: { transactionId: txId, fromScreen: 'SendFlow' },
+                },
+              ],
+            }),
+          )
+
+          if (scope && user.id) {
+            void invalidateTransactionsFeed(qc, scope, user.id).catch(() => {})
+          }
+        } catch (e: unknown) {
+          if (!cancelled) {
+            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+            showError(e instanceof Error ? e.message : 'Transfer failed.')
+          }
+        } finally {
+          if (!cancelled) setSendingAfterPin(false)
+        }
+      })()
+
+      return () => {
+        cancelled = true
+        if (!finished) markBalanceSendPinVerified()
+      }
+    }, [
+      calculatedTotalAmount,
+      navigation,
+      pricingQuoteExpiry,
+      pricingQuoteId,
+      pricingQuoteResult,
+      qc,
+      receiveAmountValue,
+      recipient,
+      reservedDebitEtid,
+      scope,
+      selectedBalanceCurrency,
+      showError,
+      showInfo,
+      updateBalanceOptimistically,
+      user?.id,
+      userProfile,
+    ]),
+  )
+
   const onConfirmPress = async () => {
-    if (!recipient) return
+    if (!recipient || sendingAfterPin) return
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     if (!user?.id) {
       showError('Not authenticated.')
@@ -220,12 +338,16 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
             },
           ]}
         >
-          <Pressable android_ripple={ripple.neutral} onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Pressable
+            android_ripple={ripple.neutral}
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+            disabled={sendingAfterPin}
+          >
             <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
           </Pressable>
           <View style={styles.headerContent}>
             <Text style={styles.title}>Review transfer</Text>
-            <Text style={styles.subtitle}>Confirm before sending from your balance</Text>
           </View>
         </Animated.View>
 
@@ -272,7 +394,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           android_ripple={ripple.neutral}
           style={[styles.cta, (!canSendEasetagLedger || reserveError) && styles.ctaDisabled]}
           onPress={() => void onConfirmPress()}
-          disabled={!canSendEasetagLedger || Boolean(reserveError)}
+          disabled={!canSendEasetagLedger || Boolean(reserveError) || sendingAfterPin}
         >
           <LinearGradient
             colors={
@@ -284,7 +406,14 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
             end={{ x: 1, y: 0 }}
             style={styles.ctaGradient}
           >
-            <Text style={styles.ctaText}>Confirm & Send</Text>
+            {sendingAfterPin ? (
+              <View style={styles.ctaSendingRow}>
+                <ActivityIndicator color="#fff" size="small" />
+                <Text style={styles.ctaText}>Sending…</Text>
+              </View>
+            ) : (
+              <Text style={styles.ctaText}>Confirm & Send</Text>
+            )}
           </LinearGradient>
         </Pressable>
       </View>
@@ -325,11 +454,6 @@ const styles = StyleSheet.create({
   title: {
     ...textStyles.headlineMedium,
     color: colors.text.primary,
-  },
-  subtitle: {
-    marginTop: spacing[1],
-    ...textStyles.bodyMedium,
-    color: colors.text.secondary,
   },
   contentWrap: {
     flex: 1,
@@ -395,6 +519,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 52,
+  },
+  ctaSendingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
   },
   ctaText: {
     fontFamily: fontFamily.semibold,

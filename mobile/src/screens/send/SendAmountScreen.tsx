@@ -1025,7 +1025,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
           ) : null}
           <Pressable
            android_ripple={ripple.neutral}
-            style={[styles.sendButton, sendButtonDisabled && styles.sendButtonDisabled]}
+            style={[styles.sendButton, { marginTop: spacing[2] }, sendButtonDisabled && styles.sendButtonDisabled]}
             onPress={async () => {
               const enteredAmountValue = Number.parseFloat(sendAmount.replace(/,/g, ''))
               const receiveAmountValue =
@@ -1217,7 +1217,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             >
               <Text style={styles.sendButtonText}>
                 {selectedPaymentMethod === 'balance'
-                  ? 'Confirm & Send'
+                  ? 'Continue'
                   : selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency && selectedOtherPaymentMethod
                     ? 'Authorize'
                     : selectedPaymentMethod
@@ -1853,22 +1853,22 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
   sendButton: {
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius.full,
     overflow: 'hidden',
   },
   sendButtonDisabled: {
-    opacity: 0.6,
+    opacity: 0.85,
   },
   sendButtonGradient: {
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: spacing[4],
+    minHeight: 52,
   },
   sendButtonText: {
-    ...textStyles.titleLarge,
-    color: colors.text.inverse,
     fontFamily: fontFamily.semibold,
+    fontSize: 17,
+    color: '#fff',
   },
   // Modal Styles
   modalOverlay: {
