@@ -49,7 +49,8 @@ export function DashboardNav() {
     tier1VerificationStatus,
   } = useBusinessProfile()
 
-  const showBusinessHeaderSkeleton = businessProfileLoading || !businessProfileHasData
+  /** Only skeleton on first load with no cached/profile rows — not during background refetch when data exists */
+  const showBusinessHeaderSkeleton = businessProfileLoading && !businessProfileHasData
 
   const hasBusinessLogo = Boolean(businessLogoUrl?.trim())
   const normalizedBusinessLogoUrl = normalizeBusinessLogoUrl(businessLogoUrl)

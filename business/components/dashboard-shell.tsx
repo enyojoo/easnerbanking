@@ -31,7 +31,8 @@ export function DashboardShell({ children, mainClassName = "", constrained = fal
     tier1Complete,
   } = useBusinessProfile()
   const { avatarUrl: profileImageUrl } = usePersonalProfileAvatar()
-  const showProfileChromeSkeleton = profileLoading || !profileHasData
+  /** Keep header avatar/menu mounted while revalidating if we already showed org + profile once */
+  const showProfileChromeSkeleton = profileLoading && !profileHasData
   const showTier1Banner = profileHasData && !profileLoading && !tier1Complete
 
   useEffect(() => {

@@ -7,7 +7,7 @@ export {
   TRANSACTIONS_LEDGER_PAGE_SIZE,
 } from './use-transactions'
 export type { MobileTransactionRow } from './use-transactions'
-export { useRecipientsList } from './use-recipients'
+export { useRecipientsList, prefetchRecipientsList, RECIPIENTS_STALE_MS } from './use-recipients'
 export { usePaymentMethodsList } from './use-payment-methods'
 export { useCommunicationPreferences } from './use-communication-preferences'
 export { useCurrenciesCatalog } from './use-currencies'

@@ -1,7 +1,6 @@
 import React from 'react'
 import { AppState, AppStateStatus, Platform } from 'react-native'
 import { QueryClientProvider, focusManager } from '@tanstack/react-query'
-import { qk } from '@easner/shared'
 import { getMobileQueryClient } from './client'
 import { startQueryPersistence, clearPersistedQueryCache } from './persister'
 import { PersonalScopeProvider, useScope } from './scope'
@@ -9,6 +8,8 @@ import { useSupabaseRealtimeScope } from './use-supabase-realtime-scope'
 import { RealtimeHealthProvider } from './realtime-health-context'
 import { useAuth } from '../contexts/AuthContext'
 import { registerAppLockListener } from '../lib/app-lock-bus'
+import { prefetchReceiveDepositQueries } from '../hooks/queries/use-receive-deposit-queries'
+import { prefetchRecipientsList } from '../hooks/queries/use-recipients'
 
 /**
  * Root Query provider for the mobile app. Owns:
@@ -66,6 +67,21 @@ function AuthGatedCacheReset({ children }: { children: React.ReactNode }) {
     lastUserIdRef.current = next
   }, [user?.id])
 
+  return <>{children}</>
+}
+
+/**
+ * As soon as personal scope exists (signed-in user), warm caches for screens that should feel instant:
+ * Receive deposit lines + recipient list (both rarely change; recipients also persist to disk).
+ * Idempotent with Dashboard prefetch + `prefetchQuery` deduping in-flight work.
+ */
+function WarmOperationalCachesOnScope({ children }: { children: React.ReactNode }) {
+  const { scope, isReady } = useScope()
+  React.useEffect(() => {
+    if (!isReady || !scope) return
+    void prefetchReceiveDepositQueries(qc, scope)
+    void prefetchRecipientsList(qc, scope)
+  }, [isReady, scope])
   return <>{children}</>
 }
 
@@ -131,9 +147,11 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={qc}>
       <AuthGatedCacheReset>
         <PersonalScopeProvider>
-          <ForegroundResumeRefresher>
-            <ScopeRealtimeBridge>{children}</ScopeRealtimeBridge>
-          </ForegroundResumeRefresher>
+          <WarmOperationalCachesOnScope>
+            <ForegroundResumeRefresher>
+              <ScopeRealtimeBridge>{children}</ScopeRealtimeBridge>
+            </ForegroundResumeRefresher>
+          </WarmOperationalCachesOnScope>
         </PersonalScopeProvider>
       </AuthGatedCacheReset>
     </QueryClientProvider>

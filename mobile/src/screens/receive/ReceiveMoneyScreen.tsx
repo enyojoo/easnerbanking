@@ -1,5 +1,7 @@
-import React, { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react'
+import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
+import { useQueryClient } from '@tanstack/react-query'
+import { qk } from '@easner/shared'
 import {
   View,
   Text,
@@ -30,9 +32,13 @@ import { useToast } from '../../components/ToastProvider'
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
 import { EasnerAlertSheet } from '../../components/premium'
 import { getApiBaseUrl } from '../../lib/apiClient'
-import { noahService } from '../../lib/noahService'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { useScope } from '../../query/scope'
+import {
+  useConsumerDepositAddresses,
+  useConsumerVirtualAccounts,
+} from '../../hooks/queries/use-receive-deposit-queries'
 import QRCode from 'react-native-qrcode-svg'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 type TabType = 'bank' | 'stablecoin'
@@ -42,37 +48,54 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const { user, userProfile, refreshUserProfile } = useAuth()
   const { showSuccess, showError } = useToast()
   const copyToClipboard = useCopyToClipboard()
+  const queryClient = useQueryClient()
+  const { scope } = useScope()
+  const vaQuery = useConsumerVirtualAccounts()
+  const depositQuery = useConsumerDepositAddresses()
+
   const [activeTab, setActiveTab] = useState<TabType>('bank')
   const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>({})
-  const [virtualAccount, setVirtualAccount] = useState<any>(null)
-  /** Turnkey Solana USDC / EURC deposit address (ATA) for the selected currency. */
-  const [turnkeyDepositAddress, setTurnkeyDepositAddress] = useState<string | null>(null)
-  const [turnkeyDepositMemo, setTurnkeyDepositMemo] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false) // Start as false, will be set to true only if we need to fetch
   const [creatingAccounts, setCreatingAccounts] = useState(false)
   const [accountCreationError, setAccountCreationError] = useState<string | null>(null)
   const [tosTermsSheetMessage, setTosTermsSheetMessage] = useState<string | null>(null)
-  
-  // Get currency from route params or default to USD (only USD/EUR supported)
+
   const currency = ((route.params as any)?.currency || 'USD') as 'USD' | 'EUR'
-  
-  // Determine if stablecoins are supported for this currency (always true for USD/EUR)
   const supportsStablecoins = currency === 'USD' || currency === 'EUR'
-  
-  // State to track if accounts exist in database (fallback when API times out)
-  const [hasTurnkeyDepositCached, setHasTurnkeyDepositCached] = useState(false)
-  const [hasAccountInDb, setHasAccountInDb] = useState(false)
-  // Start as false - only set to true after we've checked for data
-  const [initialCheckComplete, setInitialCheckComplete] = useState(false)
-  const [dataLoadedFromCache, setDataLoadedFromCache] = useState(false)
-  
-  // Get KYC status from userProfile (Noah KYC status)
-  // Map Noah status values to our display logic
+
+  const vaRecord = vaQuery.data?.[currency]
+  const virtualAccount = useMemo(() => {
+    if (!vaRecord?.hasAccount) return null
+    const cl = currency.toLowerCase() as 'usd' | 'eur'
+    return {
+      hasAccount: true as const,
+      currency: cl,
+      accountNumber: vaRecord.accountNumber,
+      routingNumber: vaRecord.routingNumber,
+      iban: vaRecord.iban,
+      bic: vaRecord.bic,
+      bankName: vaRecord.bankName,
+      bankAddress: vaRecord.bankAddress,
+      accountHolderName: vaRecord.accountHolderName,
+    }
+  }, [currency, vaRecord])
+
+  const depLine = currency === 'USD' ? depositQuery.data?.USD : depositQuery.data?.EUR
+  const turnkeyDepositAddress =
+    depLine?.address &&
+    depLine.address !== 'Loading...' &&
+    depLine.address !== 'Wallet address not available'
+      ? depLine.address.trim()
+      : null
+  const turnkeyDepositMemo = depLine?.memo?.trim() ? depLine.memo : null
+
+  /** Gate empty-state cards so we never flash "setup in progress" before the query settled (cached data shows immediately). */
+  const vaFetched = vaQuery.isFetched
+  const depositFetched = depositQuery.isFetched
+
   const getKycStatus = (): string | null => {
     const noahKycStatus = userProfile?.noah_kyc_status || userProfile?.profile?.noah_kyc_status
     if (!noahKycStatus) return null
 
-    // Map Noah KYC status to our display status
     switch (noahKycStatus) {
       case 'approved':
         return 'approved'
@@ -84,10 +107,10 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
       case 'not_started':
       case 'incomplete':
       default:
-        return null // Treat as pending/not started
+        return null
     }
   }
-  
+
   const [cachedKycStatus, setCachedKycStatus] = useState<string | null>(null)
   const profileRefreshAtRef = useRef(0)
   const PROFILE_REFRESH_TTL_MS = 5 * 60 * 1000
@@ -98,38 +121,25 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
 
   const liveKycStatus = getKycStatus()
   const kycStatus = liveKycStatus ?? cachedKycStatus
-  
-  // Check if account data exists (from DB or API)
-  const hasAccountData = virtualAccount?.hasAccount || hasAccountInDb || (virtualAccount && virtualAccount.accountNumber)
-  
-  // Check if account is ready (has account and KYC approved)
-  // If account data exists, always show it (don't show "in progress")
+
+  const hasAccountData =
+    Boolean(virtualAccount?.hasAccount) ||
+    Boolean(virtualAccount && (virtualAccount.accountNumber || virtualAccount.iban))
+
   const accountReady = hasAccountData && kycStatus === 'approved'
-  
-  const hasTurnkeyDepositData =
-    Boolean(
-      turnkeyDepositAddress &&
-        turnkeyDepositAddress !== 'Loading...' &&
-        turnkeyDepositAddress !== 'Wallet address not available',
-    ) || hasTurnkeyDepositCached
-  const hasStablecoinData = hasTurnkeyDepositData
+
+  const hasStablecoinData = Boolean(
+    turnkeyDepositAddress &&
+      turnkeyDepositAddress !== 'Loading...' &&
+      turnkeyDepositAddress !== 'Wallet address not available',
+  )
 
   const walletReady = hasStablecoinData && kycStatus === 'approved'
-  
-  // Ref to track if we've already triggered account creation
+
   const accountCreationTriggeredRef = useRef(false)
-  // Ref to track if we've loaded data to prevent unnecessary refetches
-  const dataLoadedRef = useRef(false)
-  // Ref to track previous currency to detect actual changes
-  const prevCurrencyRef = useRef<string | null>(null)
-  // Ref to track if initial load is in progress (prevent multiple loads)
-  const initialLoadInProgressRef = useRef(false)
   const prevKycStatusRef = useRef<string | null>(null)
-  /** Avoid treating first focus after mount as a KYC transition (null → status), which was clearing cache and replaying the notice. */
+  /** Avoid treating first focus after mount as a KYC transition (null → status), which was replaying the notice. */
   const isFirstFocusAfterMountRef = useRef(true)
-  
-  // Keep receive account/wallet cache warm much longer; still refreshed explicitly on mutations.
-  const CACHE_TTL = 24 * 60 * 60 * 1000
 
   useEffect(() => {
     if (!kycStatusStorageKey) return
@@ -159,512 +169,6 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     void AsyncStorage.setItem(kycStatusStorageKey, JSON.stringify({ status: liveKycStatus })).catch(() => {})
   }, [kycStatusStorageKey, liveKycStatus])
   
-  // Helper to get cached data (use useCallback to ensure stable reference)
-  const getCachedData = React.useCallback(async <T,>(key: string): Promise<{ data: T; timestamp: number } | null> => {
-    try {
-      const cached = await AsyncStorage.getItem(key)
-      if (!cached) return null
-      return JSON.parse(cached)
-    } catch {
-      return null
-    }
-  }, [])
-  
-  // Helper to set cached data (use useCallback to ensure stable reference)
-  const setCachedData = React.useCallback(async <T,>(key: string, data: T): Promise<void> => {
-    try {
-      await AsyncStorage.setItem(key, JSON.stringify({
-        data,
-        timestamp: Date.now(),
-      }))
-    } catch (error) {
-      console.warn(`[ReceiveMoney] Error caching ${key}:`, error)
-    }
-  }, [])
-  
-  // Helper to check if data is stale (use useCallback to ensure stable reference)
-  const isStale = React.useCallback((timestamp: number | undefined, ttl: number): boolean => {
-    if (!timestamp) return true
-    return Date.now() - timestamp > ttl
-  }, [])
-  
-  // Fetch virtual account and wallet data function (defined outside useEffect so it can be called from multiple places)
-  const fetchAccountData = async (skipIfLoaded = false) => {
-      // AGGRESSIVE GUARD: Always skip if data is already loaded (prevents all refetches)
-      if (dataLoadedRef.current) {
-        console.log('[ReceiveMoney] 🛑 BLOCKED fetchAccountData - data already loaded (dataLoadedRef=true)')
-        return
-      }
-      
-      // VA already in state (e.g. from navigation) — still load Turnkey deposit address once.
-      if (hasAccountData || virtualAccount?.hasAccount) {
-        dataLoadedRef.current = true
-        try {
-          const { data: { session: s } } = await supabase.auth.getSession()
-          const uid = s?.user?.id
-          if (uid) {
-            const dep = await noahService.getTurnkeyDepositAddresses()
-            const row = currency === 'USD' ? dep.USD : dep.EUR
-            if (row?.address) {
-              setTurnkeyDepositAddress(row.address)
-              setTurnkeyDepositMemo(row.memo ? row.memo : null)
-              setHasTurnkeyDepositCached(true)
-              const cl = currency.toLowerCase() as 'usd' | 'eur'
-              await setCachedData(`easner_wallet_${uid}_${cl}`, {
-                turnkeyAddress: row.address,
-                turnkeyMemo: row.memo || '',
-              })
-            }
-          }
-        } catch (e) {
-          console.error('[ReceiveMoney] Turnkey deposit (short path):', e)
-        }
-        return
-      }
-      
-      // Skip if initial load is in progress
-      if (initialLoadInProgressRef.current) {
-        console.log('[ReceiveMoney] 🛑 BLOCKED fetchAccountData - initial load in progress')
-        return
-      }
-      
-      console.log('[ReceiveMoney] ▶️ Starting fetchAccountData...')
-      try {
-        const currencyLower = currency.toLowerCase() as 'usd' | 'eur'
-        
-        // Get user ID
-        const { data: { session } } = await supabase.auth.getSession()
-        const userId = session?.user?.id
-        if (!userId) {
-          setLoading(false)
-          return
-        }
-        
-        // Check database FIRST (fast, no API call) - this prevents showing "in progress" if account exists
-        // BUT skip if data is already loaded (loadInitialData already handled it)
-        let accountFoundInDb = false
-        if (dataLoadedRef.current && hasAccountData) {
-          // Data already loaded, skip
-          accountFoundInDb = true
-        } else {
-          try {
-            const { data: userProfileData } = await supabase
-              .from('users')
-              .select('noah_wallet_id, noah_usd_virtual_account_id, noah_eur_virtual_account_id, noah_kyc_status')
-              .eq('id', userId)
-              .single()
-            
-            if (userProfileData) {
-            // Check if virtual account exists in database
-            const accountId = currencyLower === 'usd' 
-              ? userProfileData.noah_usd_virtual_account_id 
-              : userProfileData.noah_eur_virtual_account_id
-            if (accountId) {
-              // Try to get account details from database
-              const { data: account } = await supabase
-                .from('virtual_accounts')
-                .select('account_number, routing_number, iban, bic, bank_name, bank_address, account_holder_name')
-                .eq('noah_virtual_account_id', accountId)
-                .single()
-              if (account) {
-                // Set account data immediately from database - this prevents "in progress" flash
-                accountFoundInDb = true
-                setHasAccountInDb(true)
-                setVirtualAccount({ 
-                  hasAccount: true,
-                  currency: currencyLower,
-                  accountNumber: account.account_number,
-                  routingNumber: account.routing_number,
-                  iban: account.iban,
-                  bic: account.bic,
-                  bankName: account.bank_name,
-                  bankAddress: account.bank_address,
-                  accountHolderName: account.account_holder_name,
-                })
-                // Set loading to false immediately if we have database data
-                // This prevents showing "Account Setup in Progress" when account already exists
-                setLoading(false)
-                // Mark data as loaded to prevent unnecessary refetches
-                dataLoadedRef.current = true
-                // Backfill account holder name and bank address from verification API if missing (e.g. EUR accounts created before fix)
-                if (!account.account_holder_name || !account.bank_address) {
-                  noahService.getVirtualAccount(currencyLower).then((apiAccount) => {
-                    if (apiAccount?.hasAccount) {
-                      const updates: Record<string, string> = {}
-                      if (apiAccount.accountHolderName && !account.account_holder_name) updates.accountHolderName = apiAccount.accountHolderName
-                      if (apiAccount.bankAddress && !account.bank_address) updates.bankAddress = apiAccount.bankAddress
-                      if (Object.keys(updates).length > 0) {
-                        setVirtualAccount((prev) => prev ? { ...prev, ...updates } : prev)
-                      }
-                    }
-                  }).catch(() => {})
-                }
-              } else {
-                // Account ID exists but no account data found - might need to fetch from API
-                console.log('Account ID exists but no account data in database, will fetch from API')
-              }
-            }
-            }
-            // Mark initial check as complete after database check
-            setInitialCheckComplete(true)
-          } catch (dbError) {
-            console.error('Error checking database:', dbError)
-            setInitialCheckComplete(true) // Still mark as complete even on error
-          }
-        }
-        
-        // Only fetch from API if we don't have complete data from database
-        // This prevents unnecessary API calls and delays when data already exists
-        if (!accountFoundInDb) {
-          setLoading(true)
-          
-          // Fetch virtual account from API
-          // The API will update the database with any missing fields from the provider
-          // and return the complete data
-          try {
-            // Use AbortController for proper timeout handling
-            const controller = new AbortController()
-            const timeoutId = setTimeout(() => controller.abort(), 8000)
-            
-            let account: any
-            try {
-              account = await noahService.getVirtualAccount(currencyLower)
-              clearTimeout(timeoutId)
-            } catch (fetchError: any) {
-              clearTimeout(timeoutId)
-              if (fetchError.name === 'AbortError' || fetchError.message?.includes('timeout')) {
-                throw new Error('Timeout')
-              }
-              throw fetchError
-            }
-            
-          console.log('[ReceiveMoney] Fetched virtual account from API:', JSON.stringify(account, null, 2))
-          if (account && account.hasAccount) {
-            // Only update if we don't already have data (prevent overwriting existing data)
-            if (!dataLoadedRef.current || !hasAccountData) {
-              // Update with API data - it has the most complete information
-              setVirtualAccount(account)
-              setHasAccountInDb(true)
-              dataLoadedRef.current = true
-            } else {
-              // Data already loaded, skip API update
-            }
-          } else {
-            console.log('[ReceiveMoney] API returned no account or hasAccount=false')
-            // Only set to no account if we don't already have data
-            if (!hasAccountData) {
-              setVirtualAccount({ hasAccount: false, currency: currencyLower })
-            }
-          }
-        } catch (accountError: any) {
-          console.error('Error fetching virtual account from API:', accountError)
-          // Keep database data if we have it, otherwise set to no account
-          if (!hasAccountData) {
-            setVirtualAccount({ hasAccount: false, currency: currencyLower })
-          }
-        }
-        } else {
-          // We have data from database, no need to fetch from API
-          // Using cached data from database, skipping API call
-        }
-
-        if (!hasStablecoinData && !turnkeyDepositAddress) {
-          try {
-            const dep = await noahService.getTurnkeyDepositAddresses()
-            const row = currency === 'USD' ? dep.USD : dep.EUR
-            if (row?.address) {
-              setTurnkeyDepositAddress(row.address)
-              setTurnkeyDepositMemo(row.memo ? row.memo : null)
-              setHasTurnkeyDepositCached(true)
-              const currencyLower = currency.toLowerCase() as 'usd' | 'eur'
-              const CACHE_KEY_WALLET = `easner_wallet_${userId}_${currencyLower}`
-              await setCachedData(CACHE_KEY_WALLET, {
-                turnkeyAddress: row.address,
-                turnkeyMemo: row.memo || '',
-              })
-              dataLoadedRef.current = true
-            }
-          } catch (e) {
-            console.error('[ReceiveMoney] Turnkey deposit addresses:', e)
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching account data:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-  
-  // Load initial data from database immediately (synchronous-like, no API calls)
-  useEffect(() => {
-    // Skip if data is already loaded (prevents refetching on every focus/remount)
-    if (dataLoadedRef.current) {
-      console.log('[ReceiveMoney] ⏭️ Data already loaded, skipping loadInitialData completely')
-      setInitialCheckComplete(true) // Ensure this is set so UI doesn't show "in progress"
-      setDataLoadedFromCache(true) // Mark as loaded so UI shows immediately
-      return
-    }
-    
-    // Prevent multiple simultaneous loads
-    if (initialLoadInProgressRef.current) {
-      console.log('[ReceiveMoney] ⏸️ Initial load already in progress, skipping...')
-      return
-    }
-    
-    // Don't set initialCheckComplete yet - wait until we've checked for data
-
-    const loadInitialData = async (force: boolean = false): Promise<boolean> => {
-      // Define cache helpers inside this function to ensure they're in scope
-      const getCachedDataLocal = async <T,>(key: string): Promise<{ data: T; timestamp: number } | null> => {
-        try {
-          const cached = await AsyncStorage.getItem(key)
-          if (!cached) return null
-          return JSON.parse(cached)
-        } catch {
-          return null
-        }
-      }
-      
-      const setCachedDataLocal = async <T,>(key: string, data: T): Promise<void> => {
-        try {
-          await AsyncStorage.setItem(key, JSON.stringify({
-            data,
-            timestamp: Date.now(),
-          }))
-        } catch (error) {
-          console.warn(`[ReceiveMoney] Error caching ${key}:`, error)
-        }
-      }
-      
-      const isStaleLocal = (timestamp: number | undefined, ttl: number): boolean => {
-        if (!timestamp) return true
-        return Date.now() - timestamp > ttl
-      }
-      initialLoadInProgressRef.current = true
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        const userId = session?.user?.id
-        if (!userId) {
-          setInitialCheckComplete(true)
-          initialLoadInProgressRef.current = false
-          return false
-        }
-
-        const currencyLower = currency.toLowerCase() as 'usd' | 'eur'
-        const CACHE_KEY_ACCOUNT = `easner_virtual_account_${userId}_${currencyLower}`
-        const CACHE_KEY_WALLET = `easner_wallet_${userId}_${currencyLower}`
-        let foundAccountData = false
-        
-        // Try to load from cache first (stale-while-revalidate pattern)
-        if (!force) {
-          const cachedAccount = await getCachedDataLocal<any>(CACHE_KEY_ACCOUNT)
-          if (cachedAccount && !isStaleLocal(cachedAccount.timestamp, CACHE_TTL)) {
-            // Cache is fresh - use it immediately
-            foundAccountData = true
-            setHasAccountInDb(true)
-            setVirtualAccount(cachedAccount.data)
-            setDataLoadedFromCache(true)
-            setInitialCheckComplete(true)
-            dataLoadedRef.current = true
-            // Backfill missing EUR fields (accountHolderName, bankAddress) from API - cache may be stale
-            if (currencyLower === 'eur' && cachedAccount.data && (!cachedAccount.data.accountHolderName || !cachedAccount.data.bankAddress)) {
-              noahService.getVirtualAccount(currencyLower).then((apiAccount) => {
-                if (apiAccount?.hasAccount) {
-                  const updates: Record<string, string> = {}
-                  if (apiAccount.accountHolderName && !cachedAccount.data.accountHolderName) updates.accountHolderName = apiAccount.accountHolderName
-                  if (apiAccount.bankAddress && !cachedAccount.data.bankAddress) updates.bankAddress = apiAccount.bankAddress
-                  if (Object.keys(updates).length > 0) {
-                    setVirtualAccount((prev) => prev ? { ...prev, ...updates } : prev)
-                    setCachedDataLocal(CACHE_KEY_ACCOUNT, { ...cachedAccount.data, ...updates })
-                  }
-                }
-              }).catch(() => {})
-            }
-          } else if (cachedAccount) {
-            // Cache is stale - show it immediately, then refresh in background
-            foundAccountData = true
-            setHasAccountInDb(true)
-            setVirtualAccount(cachedAccount.data)
-            setDataLoadedFromCache(true)
-            setInitialCheckComplete(true)
-            dataLoadedRef.current = true
-            // Backfill missing EUR fields when cache is stale
-            if (currencyLower === 'eur' && cachedAccount.data && (!cachedAccount.data.accountHolderName || !cachedAccount.data.bankAddress)) {
-              noahService.getVirtualAccount(currencyLower).then((apiAccount) => {
-                if (apiAccount?.hasAccount) {
-                  const updates: Record<string, string> = {}
-                  if (apiAccount.accountHolderName && !cachedAccount.data.accountHolderName) updates.accountHolderName = apiAccount.accountHolderName
-                  if (apiAccount.bankAddress && !cachedAccount.data.bankAddress) updates.bankAddress = apiAccount.bankAddress
-                  if (Object.keys(updates).length > 0) {
-                    setVirtualAccount((prev) => prev ? { ...prev, ...updates } : prev)
-                    setCachedDataLocal(CACHE_KEY_ACCOUNT, { ...cachedAccount.data, ...updates })
-                  }
-                }
-              }).catch(() => {})
-            }
-          }
-          
-          const cachedWallet = await getCachedDataLocal<any>(CACHE_KEY_WALLET)
-          if (cachedWallet && !isStaleLocal(cachedWallet.timestamp, CACHE_TTL)) {
-            if (cachedWallet.data.turnkeyAddress) {
-              setTurnkeyDepositAddress(cachedWallet.data.turnkeyAddress)
-              setTurnkeyDepositMemo(cachedWallet.data.turnkeyMemo || null)
-              setHasTurnkeyDepositCached(true)
-            }
-            dataLoadedRef.current = true
-          } else if (cachedWallet) {
-            if (cachedWallet.data.turnkeyAddress) {
-              setTurnkeyDepositAddress(cachedWallet.data.turnkeyAddress)
-              setTurnkeyDepositMemo(cachedWallet.data.turnkeyMemo || null)
-              setHasTurnkeyDepositCached(true)
-            }
-          }
-          
-          // If we have fresh cache, return early (no need to fetch from DB)
-          if (cachedAccount && !isStaleLocal(cachedAccount.timestamp, CACHE_TTL)) {
-            initialLoadInProgressRef.current = false
-            return foundAccountData
-          }
-        }
-        
-        // Load account data from database (either no cache or force refresh)
-        const { data: userProfileData } = await supabase
-          .from('users')
-          .select('noah_wallet_id, noah_usd_virtual_account_id, noah_eur_virtual_account_id')
-          .eq('id', userId)
-          .single()
-
-        if (userProfileData) {
-          // Load virtual account from database
-          const accountId = currencyLower === 'usd' 
-            ? userProfileData.noah_usd_virtual_account_id 
-            : userProfileData.noah_eur_virtual_account_id
-          
-          if (accountId) {
-            const { data: account } = await supabase
-              .from('virtual_accounts')
-              .select('account_number, routing_number, iban, bic, bank_name, bank_address, account_holder_name')
-              .eq('noah_virtual_account_id', accountId)
-              .single()
-            
-            if (account) {
-              // Set all state immediately - React batches these updates automatically
-              const accountData = {
-                hasAccount: true,
-                currency: currencyLower,
-                accountNumber: account.account_number,
-                routingNumber: account.routing_number,
-                iban: account.iban,
-                bic: account.bic,
-                bankName: account.bank_name,
-                bankAddress: account.bank_address,
-                accountHolderName: account.account_holder_name,
-              }
-              foundAccountData = true
-              setHasAccountInDb(true)
-              setVirtualAccount(accountData)
-              setDataLoadedFromCache(true)
-              setInitialCheckComplete(true)
-              dataLoadedRef.current = true
-              // Cache the account data
-              await setCachedDataLocal(CACHE_KEY_ACCOUNT, accountData)
-              // Backfill account holder name and bank address from verification API if missing (e.g. EUR accounts created before fix)
-              if (!account.account_holder_name || !account.bank_address) {
-                noahService.getVirtualAccount(currencyLower).then((apiAccount) => {
-                  if (apiAccount?.hasAccount) {
-                    const updates: Record<string, string> = {}
-                    if (apiAccount.accountHolderName && !account.account_holder_name) updates.accountHolderName = apiAccount.accountHolderName
-                    if (apiAccount.bankAddress && !account.bank_address) updates.bankAddress = apiAccount.bankAddress
-                    if (Object.keys(updates).length > 0) {
-                      setVirtualAccount((prev) => prev ? { ...prev, ...updates } : prev)
-                      setCachedDataLocal(CACHE_KEY_ACCOUNT, { ...accountData, ...updates })
-                    }
-                  }
-                }).catch(() => {})
-              }
-            } else {
-              // No account data found
-              setInitialCheckComplete(true)
-            }
-          } else {
-            // No account ID
-            setInitialCheckComplete(true)
-          }
-
-          try {
-            const dep = await noahService.getTurnkeyDepositAddresses()
-            const row = currency === 'USD' ? dep.USD : dep.EUR
-            if (row?.address) {
-              setTurnkeyDepositAddress(row.address)
-              setTurnkeyDepositMemo(row.memo ? row.memo : null)
-              setHasTurnkeyDepositCached(true)
-              dataLoadedRef.current = true
-              await setCachedDataLocal(CACHE_KEY_WALLET, {
-                turnkeyAddress: row.address,
-                turnkeyMemo: row.memo || '',
-              })
-            }
-          } catch {
-            /* defer to Receive tab refetch */
-          }
-        } else {
-          // No user profile data
-          setInitialCheckComplete(true)
-        }
-        
-        return foundAccountData
-      } catch (error) {
-        console.error('Error loading initial data:', error)
-        setInitialCheckComplete(true) // Mark as complete even on error
-        return false
-      } finally {
-        initialLoadInProgressRef.current = false
-      }
-    }
-
-    // Only reset and reload if currency actually changed
-    if (prevCurrencyRef.current !== currency) {
-      const wasCurrencyChange = prevCurrencyRef.current !== null
-      prevCurrencyRef.current = currency
-      // Only reset dataLoadedRef if currency actually changed (not on initial mount)
-      if (wasCurrencyChange) {
-        dataLoadedRef.current = false
-        initialLoadInProgressRef.current = false
-      }
-      
-      // Reset state when currency changes to prevent showing wrong data
-      if (wasCurrencyChange) {
-        setVirtualAccount(null)
-        setHasAccountInDb(false)
-        setTurnkeyDepositAddress(null)
-        setTurnkeyDepositMemo(null)
-        setHasTurnkeyDepositCached(false)
-      }
-      
-      // Only load if we don't already have data loaded for this currency
-      if (!dataLoadedRef.current) {
-        loadInitialData(false).then((foundData) => {
-        // Only fetch from API if we didn't find data in database
-        if (!foundData) {
-          console.log('[ReceiveMoney] No data found in database, fetching from API...')
-          // Small delay to ensure state is set before fetching
-          setTimeout(() => {
-            // Double-check we still don't have data before fetching
-            if (!dataLoadedRef.current && !hasAccountData) {
-              fetchAccountData(false)
-            } else {
-              console.log('[ReceiveMoney] ⏭️ Data appeared after initial load, skipping API fetch')
-            }
-          }, 50)
-        } else {
-          // Data loaded from database, skipping API fetch
-        }
-        })
-      } else {
-        console.log('[ReceiveMoney] ⏭️ Data already loaded for this currency, skipping loadInitialData')
-      }
-    }
-  }, [currency])
   
   // Automatically create accounts when KYC is approved but accounts don't exist
   useEffect(() => {
@@ -716,13 +220,9 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
               
               if (syncResponse.ok) {
                 console.log('[RECEIVE-MONEY] ✅ create-accounts completed, accounts should be created')
-                // Reset refs to allow fetching new data after account creation
-                dataLoadedRef.current = false
-                initialLoadInProgressRef.current = false
-                // Refresh account data after a short delay to allow account creation
                 setTimeout(() => {
-                  if (!dataLoadedRef.current) {
-                    fetchAccountData(false)
+                  if (scope) {
+                    void queryClient.invalidateQueries({ queryKey: qk.wallets.root(scope) })
                   }
                 }, 3000)
               }
@@ -758,17 +258,12 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
       } else {
         const kycChanged = prev !== kycStatus
         prevKycStatusRef.current = kycStatus
-        if (kycChanged) {
-          dataLoadedRef.current = false
-          void fetchAccountData(false)
+        if (kycChanged && scope) {
+          void queryClient.invalidateQueries({ queryKey: qk.wallets.root(scope) })
           return
         }
       }
-
-      if (!dataLoadedRef.current) {
-        void fetchAccountData(false)
-      }
-    }, [kycStatus, refreshUserProfile])
+    }, [kycStatus, queryClient, refreshUserProfile, scope]),
   )
   
   // Set default tab based on currency support
@@ -871,43 +366,30 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
 
   // Get bank account details from virtual account (memoized to prevent unnecessary recalculations)
   const bankAccountDetails = useMemo(() => {
-    // Account exists, return real data from the provider
-    // Show data if we have it, regardless of KYC status (KYC status only affects "in progress" message)
-    // Check virtualAccount directly - if it exists and has data, return it
-    if (virtualAccount && (virtualAccount.hasAccount || virtualAccount.accountNumber || virtualAccount.iban || hasAccountInDb)) {
-      // Map all fields that the provider returns
+    if (virtualAccount && (virtualAccount.hasAccount || virtualAccount.accountNumber || virtualAccount.iban)) {
       if (currency === 'USD') {
-        const details = {
+        return {
           accountName: virtualAccount.accountHolderName,
           accountNumber: virtualAccount.accountNumber,
           routingNumber: virtualAccount.routingNumber,
-          iban: undefined, // Not for USD
-          swiftBic: undefined, // Not for USD
-          bankName: virtualAccount.bankName,
-          bankAddress: virtualAccount.bankAddress,
-        }
-        // Only log once when data is first loaded (not on every render)
-        if (dataLoadedFromCache || initialCheckComplete) {
-          // Log removed to prevent spam - data is already validated
-        }
-        return details
-      } else {
-        // EUR account
-        return {
-          accountName: virtualAccount.accountHolderName,
-          accountNumber: undefined, // Not for EUR
-          routingNumber: undefined, // Not for EUR
-          iban: virtualAccount.iban,
-          swiftBic: virtualAccount.bic,
+          iban: undefined,
+          swiftBic: undefined,
           bankName: virtualAccount.bankName,
           bankAddress: virtualAccount.bankAddress,
         }
       }
+      return {
+        accountName: virtualAccount.accountHolderName,
+        accountNumber: undefined,
+        routingNumber: undefined,
+        iban: virtualAccount.iban,
+        swiftBic: virtualAccount.bic,
+        bankName: virtualAccount.bankName,
+        bankAddress: virtualAccount.bankAddress,
+      }
     }
-    
-    // Account not ready or virtualAccount is null - return empty
     return null
-  }, [virtualAccount, currency, hasAccountInDb, dataLoadedFromCache, initialCheckComplete])
+  }, [virtualAccount, currency])
 
   /** Turnkey Solana vault for this currency tab. */
   const getStablecoinAddress = () => {
@@ -987,35 +469,8 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
         `Wallet ${result.walletCreated ? 'created' : 'ready'} · USD ${result.usdAccountCreated ? 'created' : result.usdAccountId ? 'exists' : 'pending'} · EUR ${result.eurAccountCreated ? 'created' : result.eurAccountId ? 'exists' : 'pending'}`,
         4500,
       )
-      if (!dataLoadedRef.current) {
-        void (async () => {
-          try {
-            setLoading(true)
-            const currencyLower = currency.toLowerCase() as 'usd' | 'eur'
-            try {
-              const account = await noahService.getVirtualAccount(currencyLower)
-              setVirtualAccount(account)
-              if (account?.hasAccount) {
-                setHasAccountInDb(true)
-              }
-            } catch (error) {
-              console.error('Error refreshing virtual account:', error)
-            }
-            try {
-              const dep = await noahService.getTurnkeyDepositAddresses()
-              const row = currency === 'USD' ? dep.USD : dep.EUR
-              if (row?.address) {
-                setTurnkeyDepositAddress(row.address)
-                setTurnkeyDepositMemo(row.memo ? row.memo : null)
-                setHasTurnkeyDepositCached(true)
-              }
-            } catch (error) {
-              console.error('Error refreshing Turnkey deposit address:', error)
-            }
-          } finally {
-            setLoading(false)
-          }
-        })()
+      if (scope) {
+        void queryClient.invalidateQueries({ queryKey: qk.wallets.root(scope) })
       }
     } catch (error: any) {
       console.error('Error creating accounts:', error)
@@ -1194,9 +649,9 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                       )}
                     </View>
                   </>
-                ) : initialCheckComplete ? (
+                ) : vaFetched ? (
                   /* Show KYC notice only when:
-                     - We've completed initial check AND
+                     - Virtual account query has settled AND
                      - No account data exists
                   */
                   <View style={styles.kycNoticeContainer}>
@@ -1329,9 +784,9 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                       )}
                     </View>
                   </>
-                ) : initialCheckComplete ? (
+                ) : depositFetched ? (
                   /* Show KYC notice only when:
-                     - We've completed initial check AND
+                     - Deposit-address query has settled AND
                      - No stablecoin address data exists
                   */
                   <View style={styles.kycNoticeContainer}>

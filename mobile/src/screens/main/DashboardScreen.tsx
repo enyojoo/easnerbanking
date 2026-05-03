@@ -60,6 +60,7 @@ import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import { isTier1Complete } from '../../lib/compliance'
 import { noahService } from '../../lib/noahService'
 import { useTransactionsList, TRANSACTIONS_LEDGER_PAGE_SIZE } from '../../hooks/queries'
+import { prefetchReceiveDepositQueries } from '../../hooks/queries/use-receive-deposit-queries'
 import { isEasnerProductReceiveTitle, isEasnerProductSendTitle, markRecentMoneyActivity, qk } from '@easner/shared'
 import { avatarImageSource, normalizeAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
 import { buildGroupedActivityItems } from '../../lib/transactionListGrouping'
@@ -328,6 +329,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
       loadAvailableCurrencies().catch(() => {
         // Silently fail
       })
+      void prefetchReceiveDepositQueries(qc, scope)
     }, [
       user?.id,
       userProfile,
@@ -336,6 +338,8 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
       loadAvailableCurrencies,
       syncChainLedgerIfDue,
       txQuery,
+      qc,
+      scope,
     ])
   )
 

@@ -1,35 +1,39 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useSyncExternalStore } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { personalSettingsStore } from "@/lib/personal-settings-store"
 
-/** Profile photo from Personal settings (auth user_metadata); used in header account menu. */
+/**
+ * Profile photo from Personal settings (`/api/settings/personal`); used in header account menu.
+ *
+ * Uses `useSyncExternalStore` so the URL from `personalSettingsStore` (localStorage hydrate) is
+ * available on the first client paint after `hydrateSync`, instead of one frame of null from
+ * `useState` + `useEffect`.
+ */
 export function usePersonalProfileAvatar() {
   const { user } = useAuth()
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const userId = user?.id
 
-  useEffect(() => {
-    if (!user?.id) {
-      setAvatarUrl(null)
-      return
-    }
+  const avatarUrl = useSyncExternalStore(
+    (onStoreChange) => {
+      if (!userId) return () => {}
+      if (typeof window !== "undefined") {
+        personalSettingsStore.hydrateSync(userId)
+      }
+      const unsub = personalSettingsStore.subscribe(onStoreChange)
+      void personalSettingsStore.initialize(userId)
+      return unsub
+    },
+    () => {
+      if (!userId) return null
+      if (typeof window !== "undefined") {
+        personalSettingsStore.hydrateSync(userId)
+      }
+      return personalSettingsStore.getData()?.personal.avatarUrl ?? null
+    },
+    () => null,
+  )
 
-    personalSettingsStore.hydrateSync(user.id)
-    const d = personalSettingsStore.getData()
-    setAvatarUrl(d?.personal.avatarUrl ?? null)
-
-    const unsub = personalSettingsStore.subscribe(() => {
-      const next = personalSettingsStore.getData()
-      setAvatarUrl(next?.personal.avatarUrl ?? null)
-    })
-
-    void personalSettingsStore.initialize(user.id)
-
-    return () => {
-      unsub()
-    }
-  }, [user?.id])
-
-  return { avatarUrl }
+  return { avatarUrl: userId ? avatarUrl : null }
 }
