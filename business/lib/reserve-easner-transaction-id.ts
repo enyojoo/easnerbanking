@@ -7,10 +7,13 @@ export type ReserveEasnerTransactionIdResult =
   | { ok: false; error: string }
 
 /** Server-issued ETID hold (see `reserve_easner_transaction_id`); matches persisted debit leg when Easetag ledger P2P completes. */
-export async function fetchReserveEasnerTransactionId(): Promise<ReserveEasnerTransactionIdResult> {
+export async function fetchReserveEasnerTransactionId(
+  /** e.g. `{ "X-Easner-Noah-Scope": "business" }` so the hold is under the org ledger (matches mobile). */
+  extraHeaders?: Record<string, string>,
+): Promise<ReserveEasnerTransactionIdResult> {
   const res = await fetchWithSession("/api/transactions/reserve-etid", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...extraHeaders },
   })
   const data = (await res.json().catch(() => ({}))) as { easner_transaction_id?: string; error?: string }
   if (!res.ok) {

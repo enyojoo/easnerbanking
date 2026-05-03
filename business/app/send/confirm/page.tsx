@@ -136,7 +136,9 @@ export default function SendConfirmPage() {
     setLedgerReserveLoading(true)
     setLedgerReserveError(null)
     void (async () => {
-      const reserved = await fetchReserveEasnerTransactionId()
+      const reserved = await fetchReserveEasnerTransactionId(
+        businessId ? { "X-Easner-Noah-Scope": "business" } : undefined,
+      )
       if (cancelled) return
       if (!reserved.ok) {
         setLedgerReserveError(
@@ -159,7 +161,7 @@ export default function SendConfirmPage() {
     return () => {
       cancelled = true
     }
-  }, [state?.recipient, state?.transactionId])
+  }, [state?.recipient, state?.transactionId, businessId])
 
   useEffect(() => {
     if (profileLoading) return

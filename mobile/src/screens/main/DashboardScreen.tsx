@@ -9,11 +9,11 @@ import {
   Platform,
   RefreshControl,
   Image,
+  Animated,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
-import ShimmerLoader from '../../components/premium/ShimmerLoader'
 import * as Haptics from 'expo-haptics'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
@@ -71,6 +71,8 @@ const DASHBOARD_RECENT_TX_CACHE_KEY_PREFIX = 'easner_dashboard_recent_tx_'
 const DASHBOARD_RECENT_TX_CACHE_TTL_MS = 60 * 60 * 1000
 /** Recent activity rows shown on Home (UI only). Ledger fetch uses {@link TRANSACTIONS_LEDGER_PAGE_SIZE}. */
 const DASHBOARD_RECENT_TX_LIMIT = 4
+/** Hidden-balance + currency picker label (text). */
+const DASHBOARD_BALANCE_PLACEHOLDER = '••••••'
 
 // Transaction interface for dashboard
 interface DashboardTransaction {
@@ -96,13 +98,6 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const heroBalanceFontSize = scaledFontSize(56)
   const heroBalanceLineHeight =
     Math.round(heroBalanceFontSize * lineHeight.tight) + (Platform.OS === 'android' ? 6 : 4)
-  /** One shimmer bar ~ "$0.00" at hero size — no full-row frame. */
-  const balanceSkeletonDims = useMemo(() => {
-    const width = Math.round(heroBalanceFontSize * 3.35)
-    const height = Math.max(34, Math.round(heroBalanceFontSize * 0.58))
-    const borderRadius = Math.max(6, Math.round(height * 0.14))
-    return { width, height, borderRadius }
-  }, [heroBalanceFontSize])
   const { user, userProfile, refreshUserProfile, loading: authLoading } = useAuth()
   const { scope } = useScope()
   const qc = useQueryClient()
@@ -356,12 +351,33 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     lastStableBalanceTextRef.current[selectedCurrency] = resolvedBalanceText
   }
   const visibleBalanceText = !balanceVisible
-    ? '••••••'
+    ? DASHBOARD_BALANCE_PLACEHOLDER
     : resolvedBalanceText ??
       lastStableBalanceTextRef.current[selectedCurrency] ??
       null
 
   const shouldShowBalanceSkeleton = balanceVisible && !visibleBalanceText
+
+  const balanceSkeletonShapeOpacity = useRef(new Animated.Value(0.42)).current
+  useEffect(() => {
+    if (!shouldShowBalanceSkeleton) return
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(balanceSkeletonShapeOpacity, {
+          toValue: 0.82,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+        Animated.timing(balanceSkeletonShapeOpacity, {
+          toValue: 0.38,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+      ]),
+    )
+    loop.start()
+    return () => loop.stop()
+  }, [shouldShowBalanceSkeleton, balanceSkeletonShapeOpacity])
 
   /** Only after `userProfile` is loaded: `isTier1Complete(undefined)` is false and would flash the banner. */
   const showVerifyIdentityBanner =
@@ -619,7 +635,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                 // Use the same formatting as the main balance display for consistency
                 const balanceDisplay = balanceVisible 
                   ? formatBalanceDisplay(balance, item.code as 'USD' | 'EUR')
-                  : '••••••'
+                  : DASHBOARD_BALANCE_PLACEHOLDER
                 const isSelected = selectedCurrency === item.code
                 return (
                   <Pressable
@@ -802,18 +818,22 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
           {/* Balance Display */}
           <View style={styles.balanceContainer}>
             {shouldShowBalanceSkeleton ? (
-              <View
+              <Animated.Text
                 accessibilityLabel="Loading balance"
                 accessible
-                style={[styles.balanceSkeletonSlot, { minHeight: heroBalanceLineHeight }]}
+                style={[
+                  textStyles.balanceDisplay,
+                  styles.balanceAmount,
+                  {
+                    color: '#FFFFFF',
+                    fontSize: heroBalanceFontSize,
+                    lineHeight: heroBalanceLineHeight,
+                    opacity: balanceSkeletonShapeOpacity,
+                  },
+                ]}
               >
-                <ShimmerLoader
-                  width={balanceSkeletonDims.width}
-                  height={balanceSkeletonDims.height}
-                  borderRadius={balanceSkeletonDims.borderRadius}
-                  style={styles.balanceSkeletonShimmer}
-                />
-              </View>
+                {formatBalanceDisplay(0, selectedCurrency)}
+              </Animated.Text>
             ) : (
               <Text
                 style={[
@@ -1280,13 +1300,6 @@ function createDashboardStyles(c: Colors, scrollBottomPadding: number) {
     flex: 1,
     fontWeight: '700',
     letterSpacing: -1,
-  },
-  balanceSkeletonSlot: {
-    alignSelf: 'flex-start',
-    justifyContent: 'center',
-  },
-  balanceSkeletonShimmer: {
-    backgroundColor: 'rgba(255,255,255,0.22)',
   },
   hideBalanceButton: {
     width: 40,
