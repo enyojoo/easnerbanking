@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Animated,
 } from 'react-native'
-import { ArrowLeft, HelpCircle } from 'lucide-react-native'
+import { ArrowLeft } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { NavigationProps } from '../../types'
@@ -50,8 +50,6 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
   const [mismatchSheetOpen, setMismatchSheetOpen] = useState(false)
   const [setupFailSheetOpen, setSetupFailSheetOpen] = useState(false)
   const [setupFailMessage, setSetupFailMessage] = useState('')
-  const [helpSheetOpen, setHelpSheetOpen] = useState(false)
-
   const userId = user?.id
 
   const refreshLock = useCallback(async () => {
@@ -233,16 +231,10 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
     navigation.goBack()
   }
 
-  const helpTitle =
+  /** Under the PIN dots (same placement as send flow). */
+  const hintUnderDots =
     step === 'verify'
-      ? appPinStrings.settingsCurrentPin
-      : step === 'pin'
-        ? appPinStrings.settingsNewPin
-        : appPinStrings.settingsConfirmNew
-
-  const helpBody =
-    step === 'verify'
-      ? appPinStrings.dialogAuthorizeDesc
+      ? appPinStrings.lockEnterPin
       : step === 'pin'
         ? appPinStrings.setupSubtitle
         : appPinStrings.confirmSubtitle
@@ -283,7 +275,7 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
       ]}
     >
       <KeyboardAvoidingView style={styles.keyboardView} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <View style={styles.header}>
+        <View style={styles.navRow}>
           <Pressable
             android_ripple={ripple.neutral}
             style={styles.backButton}
@@ -294,17 +286,6 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <ArrowLeft size={24} color={palette.primary.main} strokeWidth={2} />
-          </Pressable>
-          <View style={styles.headerSpacer} />
-          <Pressable
-            android_ripple={ripple.neutral}
-            style={styles.helpHeaderButton}
-            onPress={async () => {
-              await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-              setHelpSheetOpen(true)
-            }}
-          >
-            <HelpCircle size={24} color={palette.text.primary} strokeWidth={2} />
           </Pressable>
         </View>
 
@@ -350,7 +331,7 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
               ) : error ? (
                 <Text style={styles.verifyErrorText}>{error}</Text>
               ) : (
-                <Text style={styles.subtitle}>{helpBody}</Text>
+                <Text style={styles.subtitle}>{hintUnderDots}</Text>
               )}
             </View>
           </View>
@@ -416,15 +397,6 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
         }}
         singleAction
       />
-      <EasnerAlertSheet
-        visible={helpSheetOpen}
-        onDismiss={() => setHelpSheetOpen(false)}
-        title={helpTitle}
-        message={helpBody}
-        primaryLabel={appPinStrings.dialogConfirm}
-        onPrimary={() => setHelpSheetOpen(false)}
-        singleAction
-      />
     </View>
   )
 }
@@ -442,22 +414,17 @@ const styles = StyleSheet.create({
   keyboardView: {
     flex: 1,
   },
-  header: {
+  navRow: {
+    width: '100%',
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     alignItems: 'center',
     paddingHorizontal: spacing[5],
     paddingTop: spacing[4],
     paddingBottom: spacing[4],
-  },
-  headerSpacer: {
-    flex: 1,
+    marginBottom: spacing[1],
   },
   backButton: {
-    ...surfaceChromeCircleStyle(colors, 44),
-    marginRight: spacing[3],
-  },
-  helpHeaderButton: {
     ...surfaceChromeCircleStyle(colors, 44),
   },
   content: {

@@ -10,7 +10,7 @@ import {
   Animated,
 } from 'react-native'
 import Constants from 'expo-constants'
-import { ArrowLeft, HelpCircle } from 'lucide-react-native'
+import { ArrowLeft } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { NavigationProps } from '../../types'
@@ -27,7 +27,6 @@ import { useAuth } from '../../contexts/AuthContext'
 import { analytics } from '../../lib/analytics'
 import type { PricingQuote } from '../../lib/noahService'
 import { resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
-import { EasnerAlertSheet } from '../../components/premium'
 import { appPinStrings } from '../../constants/app-pin-en'
 import { getLockoutState, verifyPin } from '../../lib/pinAuth'
 import { PinKeypad } from '../../components/pin'
@@ -44,7 +43,6 @@ export default function SendPinScreen({ navigation, route }: NavigationProps) {
   const [error, setError] = useState<string | null>(null)
   const [lockedOut, setLockedOut] = useState(false)
   const [lockMsRemaining, setLockMsRemaining] = useState(0)
-  const [helpSheetOpen, setHelpSheetOpen] = useState(false)
 
   const lastTryRef = useRef('')
   const shakeAnim = useRef(new Animated.Value(0)).current
@@ -191,7 +189,7 @@ export default function SendPinScreen({ navigation, route }: NavigationProps) {
     if (error) {
       return <Text style={styles.errorText}>{error}</Text>
     }
-    return null
+    return <Text style={styles.subtitle}>{appPinStrings.lockEnterPin}</Text>
   })()
 
   return (
@@ -205,35 +203,23 @@ export default function SendPinScreen({ navigation, route }: NavigationProps) {
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={styles.content}>
-          <View style={styles.navRow}>
-            <Pressable
-              android_ripple={ripple.neutral}
-              style={styles.sendFlowBackButton}
-              onPress={() => navigation.goBack()}
-              accessibilityRole="button"
-              accessibilityLabel="Go back"
-            >
-              <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
-            </Pressable>
-            <Pressable
-              android_ripple={ripple.neutral}
-              style={styles.headerButton}
-              onPress={() => setHelpSheetOpen(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Help"
-            >
-              <View style={styles.headerButtonCircle}>
-                <HelpCircle size={20} color={palette.text.primary} strokeWidth={2} />
-              </View>
-            </Pressable>
+        <View style={styles.header}>
+          <Pressable
+            android_ripple={ripple.neutral}
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
+          </Pressable>
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>Confirm with PIN</Text>
           </View>
+        </View>
 
+        <View style={styles.content}>
           <View style={styles.topBlock}>
-            <View style={styles.titleBlock}>
-              <Text style={styles.title}>Confirm with PIN</Text>
-            </View>
-
             <View style={styles.pinDotsWrapper}>
               {showDotsSpinner ? (
                 <View style={styles.pinDotsLoadingOnly}>
@@ -272,16 +258,6 @@ export default function SendPinScreen({ navigation, route }: NavigationProps) {
           </View>
         </View>
       </KeyboardAvoidingView>
-
-      <EasnerAlertSheet
-        visible={helpSheetOpen}
-        onDismiss={() => setHelpSheetOpen(false)}
-        title="Confirm with PIN"
-        message={appPinStrings.dialogAuthorizeDesc}
-        primaryLabel="OK"
-        onPrimary={() => setHelpSheetOpen(false)}
-        singleAction
-      />
     </View>
   )
 }
@@ -294,21 +270,25 @@ const styles = StyleSheet.create({
   keyboardView: {
     flex: 1,
   },
-  navRow: {
-    width: '100%',
+  /** Matches Send Amount / Send Confirm / recipient hub. */
+  header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing[1],
+    paddingHorizontal: spacing[5],
+    paddingTop: spacing[4],
+    paddingBottom: spacing[4],
   },
-  headerButton: {
-    padding: spacing[1],
-  },
-  headerButtonCircle: {
-    ...surfaceChromeCircleStyle(colors, 40),
-  },
-  sendFlowBackButton: {
+  backButton: {
     ...surfaceChromeCircleStyle(colors, 44),
+    marginRight: spacing[3],
+  },
+  headerContent: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    ...textStyles.headlineMedium,
+    color: colors.text.primary,
   },
   content: {
     flex: 1,
@@ -319,16 +299,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
   },
-  titleBlock: {
-    width: '100%',
-    alignItems: 'center',
-    paddingHorizontal: spacing[4],
-    marginBottom: spacing[4],
-  },
-  title: {
-    ...textStyles.headlineLarge,
-    color: colors.text.primary,
+  subtitle: {
+    ...textStyles.bodyMedium,
+    color: colors.text.secondary,
     textAlign: 'center',
+    lineHeight: 22,
     width: '100%',
   },
   errorText: {
