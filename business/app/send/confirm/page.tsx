@@ -36,6 +36,8 @@ interface SendFlowState {
   paymentMethod?: string
   note: string
   transactionId?: string
+  /** Which Noah scope was used for `/api/transactions/reserve-etid` (must match easetag-transfer). */
+  ledgerReserveNoahScope?: "business" | "individual"
   pricingQuote?: {
     transferFee?: number
     payoutFee?: number
@@ -77,7 +79,7 @@ export default function SendConfirmPage() {
   const qc = useQueryClient()
   const { scope } = useScope()
   const { user } = useAuth()
-  const { tier1Complete, isLoading: profileLoading, businessId } = useBusinessProfile()
+  const { tier1Complete, isLoading: profileLoading, businessId, hasData } = useBusinessProfile()
   const { accountRows: sourceAccounts } = useBusinessAccountRows()
   const [state, setState] = useState<SendFlowState | null>(null)
   const [showPinDialog, setShowPinDialog] = useState(false)
@@ -125,19 +127,45 @@ export default function SendConfirmPage() {
     }
   }, [router])
 
-  /** Easetag ledger P2P: reserve ETID on review (send page no longer awaits — faster Continue). */
+  /**
+   * Easetag ledger P2P: reserve ETID on review.
+   * Must not run until profile `businessId` is known — otherwise we reserve under individual scope
+   * while authorize sends `X-Easner-Noah-Scope: business` → `reserved_debit_etid_not_found` (same as mobile
+   * always pairing scope on reserve + transfer).
+   */
   useEffect(() => {
     if (!state) return
     if (!isEasenetRecipient(state.recipient) || !isEasetagLedgerP2PEnabled()) return
+    if (profileLoading || !hasData) return
+
     const tid = state.transactionId?.trim() ?? ""
-    if (/^ETID\d{8}$/i.test(tid)) return
+    const tidLooksReserved = /^ETID\d{8}$/i.test(tid)
+    const orgSend = Boolean(businessId)
+
+    if (tidLooksReserved && orgSend && state.ledgerReserveNoahScope !== "business") {
+      setLedgerReserveError(null)
+      setState((prev) => {
+        if (!prev) return prev
+        const next: SendFlowState = { ...prev, transactionId: undefined }
+        delete next.ledgerReserveNoahScope
+        try {
+          sessionStorage.setItem(SEND_FLOW_STATE_KEY, JSON.stringify(next))
+        } catch {
+          // ignore
+        }
+        return next
+      })
+      return
+    }
+
+    if (tidLooksReserved) return
 
     let cancelled = false
     setLedgerReserveLoading(true)
     setLedgerReserveError(null)
     void (async () => {
       const reserved = await fetchReserveEasnerTransactionId(
-        businessId ? { "X-Easner-Noah-Scope": "business" } : undefined,
+        orgSend ? { "X-Easner-Noah-Scope": "business" } : undefined,
       )
       if (cancelled) return
       if (!reserved.ok) {
@@ -150,9 +178,14 @@ export default function SendConfirmPage() {
         return
       }
       if (cancelled) return
+      const etid = reserved.easner_transaction_id.trim().toUpperCase()
       setState((prev) => {
         if (!prev) return prev
-        const next = { ...prev, transactionId: reserved.easner_transaction_id }
+        const next: SendFlowState = {
+          ...prev,
+          transactionId: etid,
+          ledgerReserveNoahScope: orgSend ? "business" : "individual",
+        }
         sessionStorage.setItem(SEND_FLOW_STATE_KEY, JSON.stringify(next))
         return next
       })
@@ -161,7 +194,7 @@ export default function SendConfirmPage() {
     return () => {
       cancelled = true
     }
-  }, [state?.recipient, state?.transactionId, businessId])
+  }, [state?.recipient, state?.transactionId, state?.ledgerReserveNoahScope, businessId, profileLoading, hasData])
 
   useEffect(() => {
     if (profileLoading) return
