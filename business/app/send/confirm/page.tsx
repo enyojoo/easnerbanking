@@ -346,7 +346,6 @@ export default function SendConfirmPage() {
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-foreground">Review transfer</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Confirm your transfer details before authorizing</p>
       </div>
 
       <Card>
@@ -366,12 +365,6 @@ export default function SendConfirmPage() {
               )}
             </button>
           </div>
-          {needsLedgerEtReserve && ledgerReserveLoading ? (
-            <p className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-              Reserving transaction reference…
-            </p>
-          ) : null}
           {needsLedgerEtReserve && ledgerReserveError ? (
             <p className="text-sm text-red-600" role="alert">
               {ledgerReserveError}
