@@ -9,11 +9,11 @@ import {
   Platform,
   RefreshControl,
   Image,
-  Animated,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
+import ShimmerLoader from '../../components/premium/ShimmerLoader'
 import * as Haptics from 'expo-haptics'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
@@ -98,6 +98,13 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const heroBalanceFontSize = scaledFontSize(56)
   const heroBalanceLineHeight =
     Math.round(heroBalanceFontSize * lineHeight.tight) + (Platform.OS === 'android' ? 6 : 4)
+  /** Shimmer only: ~width of a short `0.00` balance line (no `$` / `€` / `£` / digits shown). */
+  const balanceCompactSkeletonMetrics = useMemo(() => {
+    const width = Math.round(heroBalanceFontSize * 2.45)
+    const height = Math.max(30, Math.round(heroBalanceFontSize * 0.54))
+    const r = Math.max(6, Math.round(height * 0.15))
+    return { width, height, borderRadius: r }
+  }, [heroBalanceFontSize])
   const { user, userProfile, refreshUserProfile, loading: authLoading } = useAuth()
   const { scope } = useScope()
   const qc = useQueryClient()
@@ -357,27 +364,6 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
       null
 
   const shouldShowBalanceSkeleton = balanceVisible && !visibleBalanceText
-
-  const balanceSkeletonShapeOpacity = useRef(new Animated.Value(0.42)).current
-  useEffect(() => {
-    if (!shouldShowBalanceSkeleton) return
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(balanceSkeletonShapeOpacity, {
-          toValue: 0.82,
-          duration: 700,
-          useNativeDriver: true,
-        }),
-        Animated.timing(balanceSkeletonShapeOpacity, {
-          toValue: 0.38,
-          duration: 700,
-          useNativeDriver: true,
-        }),
-      ]),
-    )
-    loop.start()
-    return () => loop.stop()
-  }, [shouldShowBalanceSkeleton, balanceSkeletonShapeOpacity])
 
   /** Only after `userProfile` is loaded: `isTier1Complete(undefined)` is false and would flash the banner. */
   const showVerifyIdentityBanner =
@@ -818,22 +804,22 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
           {/* Balance Display */}
           <View style={styles.balanceContainer}>
             {shouldShowBalanceSkeleton ? (
-              <Animated.Text
+              <View
                 accessibilityLabel="Loading balance"
                 accessible
                 style={[
-                  textStyles.balanceDisplay,
                   styles.balanceAmount,
-                  {
-                    color: '#FFFFFF',
-                    fontSize: heroBalanceFontSize,
-                    lineHeight: heroBalanceLineHeight,
-                    opacity: balanceSkeletonShapeOpacity,
-                  },
+                  styles.balanceCompactSkeletonSlot,
+                  { minHeight: heroBalanceLineHeight },
                 ]}
               >
-                {formatBalanceDisplay(0, selectedCurrency)}
-              </Animated.Text>
+                <ShimmerLoader
+                  width={balanceCompactSkeletonMetrics.width}
+                  height={balanceCompactSkeletonMetrics.height}
+                  borderRadius={balanceCompactSkeletonMetrics.borderRadius}
+                  style={styles.balanceCompactSkeletonShimmer}
+                />
+              </View>
             ) : (
               <Text
                 style={[
@@ -1300,6 +1286,13 @@ function createDashboardStyles(c: Colors, scrollBottomPadding: number) {
     flex: 1,
     fontWeight: '700',
     letterSpacing: -1,
+  },
+  balanceCompactSkeletonSlot: {
+    alignSelf: 'flex-start',
+    justifyContent: 'center',
+  },
+  balanceCompactSkeletonShimmer: {
+    backgroundColor: 'rgba(255,255,255,0.22)',
   },
   hideBalanceButton: {
     width: 40,
