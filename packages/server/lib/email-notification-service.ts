@@ -1,7 +1,23 @@
 // Simple, working email notification service
 
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { createServerClient } from './supabase'
 import { emailService } from './email-service'
+
+async function fetchUserCommunicationPreferences(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<unknown | undefined> {
+  const { data, error } = await supabase
+    .from('user_preferences')
+    .select('communication_preferences')
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (error && error.code !== '42P01' && error.code !== '42703') {
+    console.warn('fetchUserCommunicationPreferences:', error.message)
+  }
+  return (data as { communication_preferences?: unknown } | null)?.communication_preferences
+}
 
 export interface TransactionEmailData {
   transactionId: string
@@ -61,24 +77,11 @@ export class EmailNotificationService {
 
       // Get user email
       console.log('Fetching user data...')
-      let user: { email?: string; communication_preferences?: unknown } | null = null
-      let userError = null as { message?: string } | null
-      const u1 = await supabase
+      const { data: user, error: userError } = await supabase
         .from('users')
-        .select('email, communication_preferences')
+        .select('email')
         .eq('id', transaction.user_id)
         .single()
-      user = u1.data
-      userError = u1.error
-      if (userError?.message?.includes('communication_preferences') || (userError as { code?: string })?.code === '42703') {
-        const u2 = await supabase
-          .from('users')
-          .select('email')
-          .eq('id', transaction.user_id)
-          .single()
-        user = u2.data
-        userError = u2.error
-      }
 
       if (userError || !user?.email) {
         console.error('User not found:', userError)
@@ -86,6 +89,8 @@ export class EmailNotificationService {
       }
 
       console.log('User email found:', user.email)
+
+      const comm = await fetchUserCommunicationPreferences(supabase, transaction.user_id)
 
       // Get recipient name
       console.log('Fetching recipient data...')
@@ -115,8 +120,6 @@ export class EmailNotificationService {
 
       // Send email based on status
       console.log('Sending email to:', user.email, 'with status:', status)
-      
-      const comm = (user as { communication_preferences?: unknown }).communication_preferences
 
       let result
       if (status === 'completed') {
@@ -162,7 +165,7 @@ export class EmailNotificationService {
         .select(`
           *,
           crypto_wallet:crypto_wallets(*, recipient:recipients(*)),
-          user:users(first_name, last_name, email, communication_preferences)
+          user:users(first_name, last_name, email)
         `)
         .eq('transaction_id', transactionId)
         .single()
@@ -178,8 +181,7 @@ export class EmailNotificationService {
         return
       }
 
-      const comm = (transaction.user as { communication_preferences?: unknown } | undefined)
-        ?.communication_preferences
+      const comm = await fetchUserCommunicationPreferences(supabase, transaction.user_id as string)
 
       // Map crypto receive status to transaction email status
       let emailStatus: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' = 'processing'
@@ -244,10 +246,12 @@ export class EmailNotificationService {
         const supabase = createServerClient()
         const { data: row } = await supabase
           .from('users')
-          .select('communication_preferences')
+          .select('id')
           .eq('email', userEmail)
           .maybeSingle()
-        prefs = row?.communication_preferences
+        prefs = row?.id
+          ? await fetchUserCommunicationPreferences(supabase, row.id)
+          : undefined
       } catch {
         prefs = undefined
       }

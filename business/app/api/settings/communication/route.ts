@@ -23,31 +23,18 @@ export async function GET(request: Request) {
     .eq("user_id", user.id)
     .maybeSingle()
 
-  if (error && error.code !== "42703") {
+  // Missing table/column → treat as “no row yet” (defaults).
+  if (error && error.code !== "42P01" && error.code !== "42703") {
     console.error("communication GET:", error)
-    // If user_preferences table doesn't exist yet, fall back to legacy users column.
-    if (error.code !== "42P01") {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  let preferences: CommunicationPreferences | null = null
-  if (data && "communication_preferences" in data) {
-    preferences = parseCommunicationPreferences(data.communication_preferences)
-  } else {
-    const legacy = await admin
-      .from("users")
-      .select("communication_preferences")
-      .eq("id", user.id)
-      .maybeSingle()
-    const raw =
-      legacy.data && "communication_preferences" in legacy.data
-        ? legacy.data.communication_preferences
-        : undefined
-    preferences = parseCommunicationPreferences(raw)
-  }
+  const preferences =
+    data && "communication_preferences" in data
+      ? parseCommunicationPreferences(data.communication_preferences)
+      : parseCommunicationPreferences(undefined)
 
-  return NextResponse.json({ preferences: preferences ?? parseCommunicationPreferences(undefined) })
+  return NextResponse.json({ preferences })
 }
 
 export async function PATCH(request: Request) {
@@ -62,24 +49,22 @@ export async function PATCH(request: Request) {
   }
 
   const admin = createSupabaseAdmin()
-  // Read current from user_preferences when available; otherwise fall back to legacy users column.
   let current: CommunicationPreferences = parseCommunicationPreferences(undefined)
   const prefRead = await admin
     .from("user_preferences")
     .select("communication_preferences")
     .eq("user_id", user.id)
     .maybeSingle()
+  if (
+    prefRead.error &&
+    prefRead.error.code !== "42P01" &&
+    prefRead.error.code !== "42703"
+  ) {
+    console.error("communication PATCH read:", prefRead.error)
+    return NextResponse.json({ error: prefRead.error.message }, { status: 500 })
+  }
   if (!prefRead.error && prefRead.data && "communication_preferences" in prefRead.data) {
     current = parseCommunicationPreferences(prefRead.data.communication_preferences)
-  } else {
-    const legacy = await admin
-      .from("users")
-      .select("communication_preferences")
-      .eq("id", user.id)
-      .maybeSingle()
-    if (!legacy.error && legacy.data && "communication_preferences" in legacy.data) {
-      current = parseCommunicationPreferences(legacy.data.communication_preferences)
-    }
   }
 
   const next: CommunicationPreferences = {
@@ -99,7 +84,6 @@ export async function PATCH(request: Request) {
     },
   }
 
-  // Write to user_preferences (authoritative). If table missing, still try legacy users update.
   const nowIso = new Date().toISOString()
   const prefUpsert = await admin
     .from("user_preferences")
@@ -111,19 +95,6 @@ export async function PATCH(request: Request) {
   if (prefUpsert.error && prefUpsert.error.code !== "42P01") {
     console.error("communication PATCH user_preferences:", prefUpsert.error)
     return NextResponse.json({ error: prefUpsert.error.message }, { status: 500 })
-  }
-
-  // Compatibility: keep legacy column in sync when present.
-  const legacyUp = await admin
-    .from("users")
-    .update({
-      communication_preferences: next,
-      updated_at: nowIso,
-    })
-    .eq("id", user.id)
-
-  if (legacyUp.error && legacyUp.error.code !== "42703") {
-    console.warn("communication PATCH legacy users update (non-fatal):", legacyUp.error)
   }
 
   await syncSendGridMarketingState(user.email ?? "", next).catch((e) =>

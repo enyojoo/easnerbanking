@@ -36,7 +36,7 @@ export class EmailService {
 
   /**
    * Send a generic email using a template
-   * @param communicationPreferences — from `users.communication_preferences` (raw jsonb); omit to send without a preference check (avoid for user-facing mail).
+   * @param communicationPreferences — from `user_preferences.communication_preferences` (raw jsonb); omit to send without a preference check (avoid for user-facing mail).
    */
   async sendEmail(
     emailData: EmailData,

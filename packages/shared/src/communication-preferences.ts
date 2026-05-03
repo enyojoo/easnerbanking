@@ -1,6 +1,6 @@
 /**
- * Stored in `public.users.communication_preferences` (jsonb).
- * Business app and mobile consumer share the same Supabase user row.
+ * Stored in `public.user_preferences.communication_preferences` (jsonb).
+ * Business app and mobile share the same row keyed by `user_id`.
  */
 export type CommunicationChannels = {
   email: boolean
