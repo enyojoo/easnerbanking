@@ -44,9 +44,11 @@ export function RecipientPayoutPreview({ recipient, getInitials, variant = 'card
       <View style={styles.avatarWrap}>
         {avatarSource && !imageFailed ? (
           <Image
-            source={avatarSource}
+            source={{ uri: avatarSource.uri }}
             style={styles.avatarImg}
-            resizeMode="cover"
+            contentFit="cover"
+            cachePolicy="disk"
+            transition={0}
             onError={() => setImageFailed(true)}
           />
         ) : (
@@ -56,7 +58,7 @@ export function RecipientPayoutPreview({ recipient, getInitials, variant = 'card
         )}
         <View style={styles.cornerBadge}>
           {isWalletRecipient && tokenIcon ? (
-            <Image source={{ uri: tokenIcon }} style={styles.badgeFill} resizeMode="cover" />
+            <Image source={{ uri: tokenIcon }} style={styles.badgeFill} contentFit="cover" />
           ) : (
             <CountryFlag code={countryCode} size={20} />
           )}

@@ -37,7 +37,7 @@ export function CurrencyFlag({ currency, size = 20, style }: CurrencyFlagProps) 
     <Image
       source={source}
       style={[{ width: size, height: Math.round(size * 0.75), borderRadius: 4 }, style]}
-      resizeMode="cover"
+      contentFit="cover"
     />
   )
 }

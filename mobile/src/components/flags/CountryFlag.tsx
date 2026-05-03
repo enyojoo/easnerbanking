@@ -33,7 +33,7 @@ export function CountryFlag({ code, size = 20, style }: CountryFlagProps) {
     <Image
       source={source}
       style={[{ width: size, height: Math.round(size * 0.75), borderRadius: 4 }, style]}
-      resizeMode="cover"
+      contentFit="cover"
     />
   )
 }

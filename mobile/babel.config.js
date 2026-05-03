@@ -1,17 +1,4 @@
-const fs = require('fs')
 const path = require('path')
-
-function firstExistingDir(...candidates) {
-  for (const p of candidates) {
-    if (fs.existsSync(p)) return p
-  }
-  return candidates[0]
-}
-
-const nobleHashesRoot = firstExistingDir(
-  path.join(__dirname, 'node_modules', '@noble', 'hashes'),
-  path.join(__dirname, '..', 'node_modules', '@noble', 'hashes'),
-)
 
 module.exports = function (api) {
   api.cache(true)
@@ -23,9 +10,10 @@ module.exports = function (api) {
         {
           extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
           alias: {
-            // Monorepo: Metro can miss hoisted workspace / root deps; Babel rewrites imports.
+            // Monorepo: shared package source (not only root node_modules).
             '@easner/shared': path.resolve(__dirname, '../packages/shared'),
-            '@noble/hashes': nobleHashesRoot,
+            // @noble/hashes: do not alias here — subpath imports like `@noble/hashes/pbkdf2.js`
+            // must resolve via package `exports` (see mobile/metro.config.js extraNodeModules).
           },
         },
       ],

@@ -50,6 +50,16 @@ for (const pkg of ['@supabase/supabase-js']) {
   }
 }
 
+// @noble/hashes: `package.json` "exports" omit `package.json` itself, so use a known subpath.
+try {
+  const nobleEntry = require.resolve('@noble/hashes/pbkdf2.js', {
+    paths: [projectRoot, monorepoRoot],
+  })
+  extraNodeModules['@noble/hashes'] = path.dirname(nobleEntry)
+} catch {
+  // install issue
+}
+
 config.resolver.extraNodeModules = {
   ...(config.resolver.extraNodeModules || {}),
   ...extraNodeModules,
