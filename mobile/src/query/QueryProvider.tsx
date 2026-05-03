@@ -1,6 +1,7 @@
 import React from 'react'
 import { AppState, AppStateStatus, Platform } from 'react-native'
 import { QueryClientProvider, focusManager } from '@tanstack/react-query'
+import { qk } from '@easner/shared'
 import { getMobileQueryClient } from './client'
 import { startQueryPersistence, clearPersistedQueryCache } from './persister'
 import { PersonalScopeProvider, useScope } from './scope'
