@@ -7,9 +7,6 @@
 --   • Any branch that validated rows in `easner_etid_reservations` is removed.
 --
 -- Until that RPC change is deployed, dropping this table will break ledger P2P sends.
---
--- If you already dropped the table and get: relation "public.easner_etid_reservations"
--- does not exist — run supabase/scripts/easner-etid-reservations-runbook.sql (manual).
 
 drop index if exists public.easner_etid_reservations_user_expires_idx;
 
