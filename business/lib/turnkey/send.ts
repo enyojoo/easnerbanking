@@ -4,6 +4,7 @@ import {
   getTurnkeySolanaBroadcastCaip2,
   isTurnkeySolSponsorshipEnabled,
 } from "@/lib/turnkey/config"
+import { buildStablecoinSplTransferUnsignedTxBase64 } from "@/lib/turnkey/sol-spl-transfer-unsigned-tx"
 import { resolveWalletOwnerIdForEasnerContext } from "@/lib/wallet/resolve-wallet-owner"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
@@ -14,6 +15,11 @@ export type TurnkeySendInput = {
   chain: "solana"
   destinationAddress: string
   amount: number
+  /**
+   * When false (default), `destinationAddress` is the token owner wallet and we derive the SPL ATA.
+   * When true, `destinationAddress` is already the recipient token account (Easetag settlement).
+   */
+  destinationIsTokenAccount?: boolean
   /** Tags turnkey ledger rows for Easetag chain settlement (hidden from activity feed). */
   easetagSettlement?: { transferGroupId: string }
 }
@@ -133,31 +139,38 @@ export async function createTurnkeySend(
   }
 
   const sponsor = isTurnkeySolSponsorshipEnabled()
-  const caip2 = sponsor ? getTurnkeySolanaBroadcastCaip2() : undefined
+  const caip2 = getTurnkeySolanaBroadcastCaip2()
+  const destinationIsTokenAccount = Boolean(input.destinationIsTokenAccount)
+
+  const unsignedTransaction = await buildStablecoinSplTransferUnsignedTxBase64({
+    asset: input.asset,
+    ownerAddress: sender.sourceAddress,
+    destinationAddress,
+    destinationIsTokenAccount,
+    amountHuman: input.amount,
+  })
 
   let sendRes: unknown
   try {
     console.info("turnkey_sol_send_transaction", {
       sponsor,
-      caip2: caip2 ?? null,
+      caip2,
       asset: input.asset,
       chain: input.chain,
       subOrgId: sender.subOrgId,
     })
     sendRes = await client.solSendTransaction({
       organizationId: sender.subOrgId,
-      sourceAddress: sender.sourceAddress,
-      destinationAddress,
-      amount: input.amount.toString(),
-      tokenSymbol: input.asset,
-      token: input.asset,
-      ...(sponsor ? { sponsor: true, caip2 } : {}),
+      unsignedTransaction,
+      signWith: sender.sourceAddress,
+      caip2,
+      ...(sponsor ? { sponsor: true } : {}),
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     console.error("turnkey_sol_send_transaction_failed", {
       sponsor,
-      caip2: caip2 ?? null,
+      caip2,
       asset: input.asset,
       chain: input.chain,
       subOrgId: sender.subOrgId,
@@ -194,7 +207,7 @@ export async function createTurnkeySend(
       source: "turnkey_send",
       turnkey_sub_org_id: sender.subOrgId,
       turnkey_sponsor_requested: sponsor ? "true" : "false",
-      turnkey_solana_caip2: caip2 ?? null,
+      turnkey_solana_caip2: caip2,
       ...easetagMeta,
     },
     txHash: parsed.txHash,

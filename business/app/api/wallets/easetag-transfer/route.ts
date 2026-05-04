@@ -304,6 +304,7 @@ export async function POST(request: Request) {
         asset,
         chain: "solana",
         destinationAddress: payeeAta,
+        destinationIsTokenAccount: true,
         amount: amt,
         easetagSettlement: { transferGroupId },
       })
