@@ -97,7 +97,7 @@ function asRecord(v: unknown): Record<string, unknown> | null {
   return null
 }
 
-const DEEP_SEARCH_SKIP = new Set(["votes", "appProofs", "intent"])
+const DEEP_SEARCH_SKIP = new Set(["votes", "intent"])
 
 function takeSendStatusId(v: unknown): string | null {
   const s = String(v ?? "").trim()
@@ -105,9 +105,58 @@ function takeSendStatusId(v: unknown): string | null {
   return s
 }
 
+function normalizeActivityResult(result: unknown): Record<string, unknown> | null {
+  const obj = asRecord(result)
+  if (obj) return obj
+  if (typeof result === "string") {
+    const t = result.trim()
+    if (!t.startsWith("{") && !t.startsWith("[")) return null
+    try {
+      return asRecord(JSON.parse(t) as unknown)
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+function extractSendStatusIdFromAppProofs(activity: Record<string, unknown>): string | null {
+  const proofs = activity.appProofs
+  if (!Array.isArray(proofs)) return null
+  for (const p of proofs) {
+    const pr = asRecord(p)
+    const raw = pr?.proofPayload
+    if (typeof raw !== "string") continue
+    if (!raw.includes("sendTransaction") && !raw.includes("send_transaction")) continue
+    try {
+      const id = deepFindSendTransactionStatusId(JSON.parse(raw) as unknown, 0)
+      if (id) return id
+    } catch {
+      /* ignore */
+    }
+  }
+  return null
+}
+
 /** Depth-first: Turnkey sometimes nests `sendTransactionStatusId` under protobuf/JSON shapes we do not enumerate. */
 function deepFindSendTransactionStatusId(node: unknown, depth: number): string | null {
   if (depth > 16) return null
+  if (typeof node === "string") {
+    const t = node.trim()
+    if (
+      t.length > 2 &&
+      t.length < 200_000 &&
+      (t.includes("sendTransactionStatusId") || t.includes("send_transaction_status_id"))
+    ) {
+      try {
+        const id = deepFindSendTransactionStatusId(JSON.parse(t) as unknown, depth + 1)
+        if (id) return id
+      } catch {
+        /* ignore */
+      }
+    }
+    return null
+  }
   const rec = asRecord(node)
   if (!rec) return null
   const hit = takeSendStatusId(rec.sendTransactionStatusId ?? rec.send_transaction_status_id)
@@ -122,8 +171,12 @@ function deepFindSendTransactionStatusId(node: unknown, depth: number): string |
 
 function activityResultKeySummary(response: Record<string, unknown>): string {
   const act = asRecord(response.activity)
-  const res = act ? asRecord(act.result) : null
-  if (!res) return "no_activity.result"
+  if (!act) return "no_activity"
+  const raw = act.result
+  if (raw == null) return "activity.result=null"
+  if (typeof raw === "string") return `activity.result_is_string(len=${raw.length})`
+  const res = asRecord(raw)
+  if (!res) return "activity.result_non_object"
   return `activity.result_keys=${Object.keys(res).join(",")}`
 }
 
@@ -133,7 +186,12 @@ export function extractTurnkeySolSendTransactionStatusId(response: Record<string
   if (direct) return direct
 
   const act = asRecord(response.activity)
-  const res = act ? asRecord(act.result) : null
+  if (act) {
+    const fromProofs = extractSendStatusIdFromAppProofs(act)
+    if (fromProofs) return fromProofs
+  }
+
+  const res = act ? normalizeActivityResult(act.result) : null
   if (res) {
     const sol =
       asRecord(res.solSendTransactionResult) ?? asRecord(res.sol_send_transaction_result)
@@ -144,6 +202,67 @@ export function extractTurnkeySolSendTransactionStatusId(response: Record<string
   }
 
   return deepFindSendTransactionStatusId(response, 0)
+}
+
+async function probeActivityIdAsSendTransactionStatusId(
+  client: TurnkeyClientLike,
+  organizationId: string,
+  activityId: string,
+): Promise<string | null> {
+  if (!activityId || activityId.startsWith("sha256:")) return null
+  if (typeof client.getSendTransactionStatus !== "function") return null
+  try {
+    const res = await client.getSendTransactionStatus({
+      organizationId,
+      sendTransactionStatusId: activityId,
+    })
+    if (String(res?.txStatus ?? res?.transactionStatus ?? res?.sendTransactionStatus ?? "").trim()) {
+      return activityId
+    }
+  } catch {
+    /* Turnkey rejects unknown ids */
+  }
+  return null
+}
+
+async function resolveSolSendParsedIds(
+  client: TurnkeyClientLike,
+  subOrgId: string,
+  initialResponse: Record<string, unknown>,
+): Promise<{ providerTransactionId: string; providerEventId: string | null; txHash: string | null }> {
+  const bodies: Record<string, unknown>[] = [initialResponse]
+  const act0 = asRecord(initialResponse.activity)
+  const activityId = String(act0?.id ?? "").trim()
+  if (activityId && !activityId.startsWith("sha256:") && typeof client.getActivity === "function") {
+    try {
+      bodies.push(
+        (await client.getActivity({
+          organizationId: subOrgId,
+          activityId,
+        })) as Record<string, unknown>,
+      )
+    } catch {
+      /* best-effort */
+    }
+  }
+
+  let lastErr: unknown
+  for (const body of bodies) {
+    try {
+      return parseTurnkeySendIds(body)
+    } catch (e) {
+      lastErr = e
+    }
+  }
+
+  if (activityId && !activityId.startsWith("sha256:")) {
+    const probed = await probeActivityIdAsSendTransactionStatusId(client, subOrgId, activityId)
+    if (probed) {
+      return { providerTransactionId: probed, providerEventId: null, txHash: null }
+    }
+  }
+
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr))
 }
 
 function parseTurnkeySendIds(response: Record<string, unknown>): {
@@ -233,26 +352,15 @@ export async function createTurnkeySend(
     throw e
   }
   const rawSend = (sendRes || {}) as Record<string, unknown>
-  let parsed: ReturnType<typeof parseTurnkeySendIds>
-  try {
-    parsed = parseTurnkeySendIds(rawSend)
-  } catch (parseErr) {
-    const act = asRecord(rawSend.activity)
-    const activityId = String(act?.id ?? "").trim()
-    if (activityId && !activityId.startsWith("sha256:") && typeof client.getActivity === "function") {
-      console.info("turnkey_sol_send_refetch_activity", {
-        subOrgId: sender.subOrgId,
-        activityId: activityId.slice(0, 12),
-      })
-      const full = (await client.getActivity({
-        organizationId: sender.subOrgId,
-        activityId,
-      })) as Record<string, unknown>
-      parsed = parseTurnkeySendIds(full)
-    } else {
-      throw parseErr
-    }
+  const act0 = asRecord(rawSend.activity)
+  const activityId = String(act0?.id ?? "").trim()
+  if (activityId && !activityId.startsWith("sha256:")) {
+    console.info("turnkey_sol_send_resolve_ids", {
+      subOrgId: sender.subOrgId,
+      activityId: activityId.slice(0, 12),
+    })
   }
+  const parsed = await resolveSolSendParsedIds(client, sender.subOrgId, rawSend)
 
   const easetagMeta =
     input.easetagSettlement?.transferGroupId != null && String(input.easetagSettlement.transferGroupId).trim()

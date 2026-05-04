@@ -58,4 +58,33 @@ describe("extractTurnkeySolSendTransactionStatusId", () => {
       }),
     ).toBe("sts_deep")
   })
+
+  it("parses stringified activity.result JSON", () => {
+    expect(
+      extractTurnkeySolSendTransactionStatusId({
+        activity: {
+          result: JSON.stringify({
+            solSendTransactionResult: { sendTransactionStatusId: "sts_str_result" },
+          }),
+        },
+      }),
+    ).toBe("sts_str_result")
+  })
+
+  it("extracts from appProofs proofPayload JSON", () => {
+    expect(
+      extractTurnkeySolSendTransactionStatusId({
+        activity: {
+          appProofs: [
+            {
+              proofPayload: JSON.stringify({
+                nested: { sendTransactionStatusId: "sts_from_proof" },
+              }),
+            },
+          ],
+          result: {},
+        },
+      }),
+    ).toBe("sts_from_proof")
+  })
 })
