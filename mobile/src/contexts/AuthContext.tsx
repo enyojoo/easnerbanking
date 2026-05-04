@@ -24,6 +24,7 @@ import { hydratePayoutCorridorsFromStorage, refreshPayoutCorridors } from '../li
 import { readProfileSnapshot, writeProfileSnapshot } from '../lib/profileSnapshot'
 import { clearMfaVerified } from '../lib/mfaStatusCache'
 import { warmAvatarCache } from '../lib/avatarCache'
+import { syncIntercomIdentity } from '../lib/intercom'
 import Constants from 'expo-constants'
 
 // Completes the auth session on web popup flows. Native deep links are handled below.
@@ -672,6 +673,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       void updateSessionActivity()
     }
   }, [user?.id])
+
+  useEffect(() => {
+    void syncIntercomIdentity(user)
+  }, [user?.id, user?.email, user?.full_name])
 
   const signIn = async (email: string, password: string, rememberMe: boolean = false) => {
     try {

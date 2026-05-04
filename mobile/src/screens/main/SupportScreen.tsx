@@ -8,15 +8,16 @@ import {
   Linking,
   Animated,
   Platform,
+  Alert,
 } from 'react-native'
 import { ArrowLeft, ChevronRight } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import Constants from 'expo-constants'
 import ScreenWrapper from '../../components/ScreenWrapper'
-import ExternalLinkModal from '../../components/ExternalLinkModal'
-import { useExternalLink } from '../../hooks/useExternalLink'
 import { NavigationProps } from '../../types'
 import { analytics } from '../../lib/analytics'
+import { presentIntercomMessenger } from '../../lib/intercom'
 import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
@@ -24,7 +25,6 @@ import { ripple } from '../../lib/androidRipple'
 export default function SupportScreen({ navigation }: NavigationProps) {
   const insets = useSafeAreaInsets()
   const [expandedFAQ, setExpandedFAQ] = useState<number | null>(null)
-  const telegramLink = useExternalLink()
 
   // Animation refs
   const headerAnim = useRef(new Animated.Value(0)).current
@@ -44,8 +44,23 @@ export default function SupportScreen({ navigation }: NavigationProps) {
     Linking.openURL(`mailto:${email}?subject=${encodeURIComponent(subject)}`)
   }
 
-  const handleOpenTelegram = () => {
-    telegramLink.openLink('https://t.me/enyosam', 'Telegram Chat')
+  const handleLiveChat = async () => {
+    if (Constants.expoConfig?.extra?.intercomConfigured !== true && __DEV__) {
+      console.warn(
+        '[Support] Intercom native plugin was not applied (set EXPO_PUBLIC_INTERCOM_* env and rebuild).',
+      )
+    }
+    try {
+      analytics.trackSupportLiveChatOpened()
+      await presentIntercomMessenger()
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : 'Unable to open live chat. Try email support instead.'
+      Alert.alert('Live Chat unavailable', message, [
+        { text: 'Email support', onPress: handleEmailSupport },
+        { text: 'OK', style: 'cancel' },
+      ])
+    }
   }
 
   const toggleFAQ = async (index: number) => {
@@ -168,11 +183,11 @@ export default function SupportScreen({ navigation }: NavigationProps) {
         <Text style={styles.sectionTitle}>Get in Touch</Text>
         {renderContactButton('Email Support', handleEmailSupport, '📧', false, 'support@easner.com')}
         {renderContactButton(
-          'Telegram Chat',
-          handleOpenTelegram,
+          'Live Chat',
+          handleLiveChat,
           '💬',
           true,
-          'Chat with us on Telegram',
+          'Chat with our team in the app',
         )}
             </View>
 
@@ -192,12 +207,6 @@ export default function SupportScreen({ navigation }: NavigationProps) {
           </Animated.View>
         </ScrollView>
       </View>
-      <ExternalLinkModal
-        visible={telegramLink.isVisible}
-        url={telegramLink.url}
-        title={telegramLink.title}
-        onClose={telegramLink.closeLink}
-      />
     </ScreenWrapper>
   )
 }

@@ -83,8 +83,49 @@ module.exports = ({ config }) => {
     )
   }
 
+  const intercomAppId = (process.env.EXPO_PUBLIC_INTERCOM_APP_ID || '').trim()
+  const intercomIosKey = (process.env.EXPO_PUBLIC_INTERCOM_IOS_API_KEY || '').trim()
+  const intercomAndroidKey = (process.env.EXPO_PUBLIC_INTERCOM_ANDROID_API_KEY || '').trim()
+  const intercomRegionRaw = (process.env.EXPO_PUBLIC_INTERCOM_REGION || 'US').trim()
+  const intercomRegion = ['US', 'EU', 'AU'].includes(intercomRegionRaw) ? intercomRegionRaw : 'US'
+
+  const intercomPluginConfigured = Boolean(
+    intercomAppId && intercomIosKey && intercomAndroidKey,
+  )
+
+  const intercomPlugins = intercomPluginConfigured
+    ? [
+        [
+          '@intercom/intercom-react-native',
+          {
+            appId: intercomAppId,
+            iosApiKey: intercomIosKey,
+            androidApiKey: intercomAndroidKey,
+            intercomRegion,
+          },
+        ],
+      ]
+    : []
+
+  if (process.env.EAS_BUILD && !intercomPluginConfigured) {
+    console.warn(
+      '[easner-mobile] Intercom plugin skipped: set EXPO_PUBLIC_INTERCOM_APP_ID, EXPO_PUBLIC_INTERCOM_IOS_API_KEY, and EXPO_PUBLIC_INTERCOM_ANDROID_API_KEY on EAS for native live chat.',
+    )
+  }
+
   const merged = {
     ...config,
+    ios: {
+      ...(config.ios || {}),
+      infoPlist: {
+        ...((config.ios && config.ios.infoPlist) || {}),
+        NSCameraUsageDescription:
+          'Easner uses the camera when you attach photos in support chat.',
+        NSMicrophoneUsageDescription:
+          'Easner uses the microphone for voice messages in support chat.',
+      },
+    },
+    plugins: [...(config.plugins || []), ...intercomPlugins],
     extra: {
       ...config.extra,
       supabaseUrl,
@@ -93,6 +134,7 @@ module.exports = ({ config }) => {
       easetagLedgerP2pEnabled:
         process.env.EXPO_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true' ||
         process.env.NEXT_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true',
+      intercomConfigured: intercomPluginConfigured,
     },
   }
 

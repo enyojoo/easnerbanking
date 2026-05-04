@@ -23,6 +23,7 @@
     "@easner/shared": "*",
     "@expo/metro-runtime": "~6.1.2",
     "@expo/ngrok": "^4.1.3",
+    "@intercom/intercom-react-native": "^10.0.1",
     "@noble/hashes": "^2.2.0",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/datetimepicker": "8.4.4",
