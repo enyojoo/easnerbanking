@@ -11,6 +11,11 @@ export const runtime = "nodejs"
  */
 export async function POST(request: Request) {
   const raw = Buffer.from(await request.arrayBuffer())
+  const secretConfigured = Boolean(process.env.TURNKEY_WEBHOOK_SECRET?.trim())
+  if (process.env.NODE_ENV === "production" && !secretConfigured) {
+    console.error("turnkey_webhook_rejected: TURNKEY_WEBHOOK_SECRET is not set on this deployment")
+    return NextResponse.json({ error: "webhook_secret_not_configured" }, { status: 503 })
+  }
   const sig =
     request.headers.get("X-Turnkey-Signature") ||
     request.headers.get("x-turnkey-signature") ||

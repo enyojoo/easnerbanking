@@ -43,4 +43,19 @@ describe("extractTurnkeySolSendTransactionStatusId", () => {
       }),
     ).toBe("sts_top")
   })
+
+  it("finds sendTransactionStatusId deep under arbitrary nesting", () => {
+    expect(
+      extractTurnkeySolSendTransactionStatusId({
+        activity: {
+          status: "ACTIVITY_STATUS_COMPLETED",
+          result: {
+            someWrapper: {
+              payload: { send_transaction_status_id: "sts_deep" },
+            },
+          },
+        },
+      }),
+    ).toBe("sts_deep")
+  })
 })

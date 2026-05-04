@@ -97,15 +97,39 @@ function asRecord(v: unknown): Record<string, unknown> | null {
   return null
 }
 
+const DEEP_SEARCH_SKIP = new Set(["votes", "appProofs", "intent"])
+
+function takeSendStatusId(v: unknown): string | null {
+  const s = String(v ?? "").trim()
+  if (!s || s.startsWith("sha256:")) return null
+  return s
+}
+
+/** Depth-first: Turnkey sometimes nests `sendTransactionStatusId` under protobuf/JSON shapes we do not enumerate. */
+function deepFindSendTransactionStatusId(node: unknown, depth: number): string | null {
+  if (depth > 16) return null
+  const rec = asRecord(node)
+  if (!rec) return null
+  const hit = takeSendStatusId(rec.sendTransactionStatusId ?? rec.send_transaction_status_id)
+  if (hit) return hit
+  for (const [k, v] of Object.entries(rec)) {
+    if (DEEP_SEARCH_SKIP.has(k)) continue
+    const found = deepFindSendTransactionStatusId(v, depth + 1)
+    if (found) return found
+  }
+  return null
+}
+
+function activityResultKeySummary(response: Record<string, unknown>): string {
+  const act = asRecord(response.activity)
+  const res = act ? asRecord(act.result) : null
+  if (!res) return "no_activity.result"
+  return `activity.result_keys=${Object.keys(res).join(",")}`
+}
+
 /** Turnkey `getSendTransactionStatus` expects `sendTransactionStatusId`, not root `id` (often `sha256:` activity fingerprint). */
 export function extractTurnkeySolSendTransactionStatusId(response: Record<string, unknown>): string | null {
-  const take = (v: unknown): string | null => {
-    const s = String(v ?? "").trim()
-    if (!s || s.startsWith("sha256:")) return null
-    return s
-  }
-
-  const direct = take(response.sendTransactionStatusId ?? response.send_transaction_status_id)
+  const direct = takeSendStatusId(response.sendTransactionStatusId ?? response.send_transaction_status_id)
   if (direct) return direct
 
   const act = asRecord(response.activity)
@@ -114,12 +138,12 @@ export function extractTurnkeySolSendTransactionStatusId(response: Record<string
     const sol =
       asRecord(res.solSendTransactionResult) ?? asRecord(res.sol_send_transaction_result)
     if (sol) {
-      const nested = take(sol.sendTransactionStatusId ?? sol.send_transaction_status_id)
+      const nested = takeSendStatusId(sol.sendTransactionStatusId ?? sol.send_transaction_status_id)
       if (nested) return nested
     }
   }
 
-  return null
+  return deepFindSendTransactionStatusId(response, 0)
 }
 
 function parseTurnkeySendIds(response: Record<string, unknown>): {
@@ -130,8 +154,9 @@ function parseTurnkeySendIds(response: Record<string, unknown>): {
   const providerTransactionId = extractTurnkeySolSendTransactionStatusId(response)
   if (!providerTransactionId) {
     const status = String(asRecord(response.activity)?.status ?? "").trim() || "unknown"
+    const summary = activityResultKeySummary(response)
     throw new Error(
-      `Turnkey send did not return sendTransactionStatusId (activity.status=${status}). Cannot poll broadcast status.`,
+      `Turnkey send did not return sendTransactionStatusId (activity.status=${status}; ${summary}). Cannot poll broadcast status.`,
     )
   }
   const providerEventId = String(response.eventId ?? response.requestId ?? "").trim() || null
@@ -207,7 +232,27 @@ export async function createTurnkeySend(
     if (mapped) throw new Error(mapped)
     throw e
   }
-  const parsed = parseTurnkeySendIds((sendRes || {}) as Record<string, unknown>)
+  const rawSend = (sendRes || {}) as Record<string, unknown>
+  let parsed: ReturnType<typeof parseTurnkeySendIds>
+  try {
+    parsed = parseTurnkeySendIds(rawSend)
+  } catch (parseErr) {
+    const act = asRecord(rawSend.activity)
+    const activityId = String(act?.id ?? "").trim()
+    if (activityId && !activityId.startsWith("sha256:") && typeof client.getActivity === "function") {
+      console.info("turnkey_sol_send_refetch_activity", {
+        subOrgId: sender.subOrgId,
+        activityId: activityId.slice(0, 12),
+      })
+      const full = (await client.getActivity({
+        organizationId: sender.subOrgId,
+        activityId,
+      })) as Record<string, unknown>
+      parsed = parseTurnkeySendIds(full)
+    } else {
+      throw parseErr
+    }
+  }
 
   const easetagMeta =
     input.easetagSettlement?.transferGroupId != null && String(input.easetagSettlement.transferGroupId).trim()
