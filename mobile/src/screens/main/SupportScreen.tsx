@@ -17,12 +17,14 @@ import Constants from 'expo-constants'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { analytics } from '../../lib/analytics'
+import { useAuth } from '../../contexts/AuthContext'
 import { presentIntercomMessenger } from '../../lib/intercom'
 import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 
 export default function SupportScreen({ navigation }: NavigationProps) {
+  const { user } = useAuth()
   const insets = useSafeAreaInsets()
   const [expandedFAQ, setExpandedFAQ] = useState<number | null>(null)
 
@@ -52,7 +54,7 @@ export default function SupportScreen({ navigation }: NavigationProps) {
     }
     try {
       analytics.trackSupportLiveChatOpened()
-      await presentIntercomMessenger()
+      await presentIntercomMessenger(user)
     } catch (e) {
       const message =
         e instanceof Error ? e.message : 'Unable to open live chat. Try email support instead.'

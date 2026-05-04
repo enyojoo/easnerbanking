@@ -2,6 +2,7 @@ import { Platform } from 'react-native'
 import Intercom, { Space } from '@intercom/intercom-react-native'
 import type { User } from '../types'
 import { apiGet } from './apiClient'
+import { supabase } from './supabase'
 
 let lastSyncedKey: string | null = null
 
@@ -17,23 +18,67 @@ function identityUserId(key: string | null): string | null {
   return i === -1 ? key : key.slice(0, i)
 }
 
-/**
- * `503` = backend has no `INTERCOM_MESSENGER_API_SECRET` (legacy Messenger).
- * `null` = auth/network/parsing failure — caller should skip or non-fatal continue.
- */
-async function fetchMessengerJwt(): Promise<{ token: string } | 'legacy' | null> {
-  const res = await apiGet('/api/intercom/jwt')
+type JwtFetch = { token: string } | 'legacy' | 'unauth' | null
+
+function parseJwtResponse(res: Response): JwtFetch {
   if ((res as { isNetworkError?: boolean }).isNetworkError) return null
   if (res.status === 503) return 'legacy'
-  if (!res.ok) return null
-  let data: { token?: string }
+  if (res.status === 401) return 'unauth'
+  return null
+}
+
+/** Read JSON body when `res.ok`; otherwise caller already handled status. */
+async function parseJwtBody(res: Response): Promise<{ token: string } | null> {
   try {
-    data = (await res.json()) as { token?: string }
+    const data = (await res.json()) as { token?: string }
+    if (typeof data.token !== 'string') return null
+    return { token: data.token }
   } catch {
     return null
   }
-  if (typeof data.token !== 'string') return null
-  return { token: data.token }
+}
+
+/**
+ * Fetches a Messenger Security JWT from the business API.
+ * - `503` = no `INTERCOM_MESSENGER_API_SECRET` (legacy Messenger).
+ * - Retries once after `refreshSession` on 401 or a missing/invalid access token (stale session).
+ * - `null` = network, server error, or auth still failing after refresh.
+ */
+async function fetchMessengerJwt(): Promise<{ token: string } | 'legacy' | null> {
+  const doRequest = async (): Promise<JwtFetch> => {
+    let res: Response
+    try {
+      res = await apiGet('/api/intercom/jwt')
+    } catch {
+      return 'unauth'
+    }
+    if (res.ok) {
+      return await parseJwtBody(res)
+    }
+    return parseJwtResponse(res)
+  }
+
+  let out = await doRequest()
+  if (out === 'unauth') {
+    const { data, error } = await supabase.auth.refreshSession()
+    if (error || !data.session) {
+      if (__DEV__) {
+        console.warn(
+          '[Intercom] Could not fetch Messenger JWT (unauthorized). After refresh:',
+          error?.message ?? 'no session',
+        )
+      }
+      return null
+    }
+    out = await doRequest()
+  }
+  if (out === 'unauth') {
+    if (__DEV__) {
+      console.warn('[Intercom] Messenger JWT still unauthorized after session refresh')
+    }
+    return null
+  }
+  return out
 }
 
 /**
@@ -124,11 +169,19 @@ async function refreshIntercomJwtIfConfigured(): Promise<void> {
   }
 }
 
-/** Opens the Intercom Messenger on the Messages space (live chat). */
-export async function presentIntercomMessenger(): Promise<void> {
+/**
+ * Opens the Intercom Messenger on the Messages space (live chat).
+ * Pass the signed-in `user` so identity and JWT are refreshed right before the UI opens
+ * (avoids race on cold start and expired access tokens).
+ */
+export async function presentIntercomMessenger(user?: User | null): Promise<void> {
   if (Platform.OS === 'web') {
     throw new Error('Live chat is only available in the mobile app.')
   }
-  await refreshIntercomJwtIfConfigured()
+  if (user) {
+    await syncIntercomIdentity(user)
+  } else {
+    await refreshIntercomJwtIfConfigured()
+  }
   await Intercom.presentSpace(Space.messages)
 }
