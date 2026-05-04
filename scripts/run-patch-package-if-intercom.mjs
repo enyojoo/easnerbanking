@@ -26,9 +26,22 @@ if (!hasIntercom) {
   process.exit(0)
 }
 
-const r = spawnSync('npx', ['patch-package'], {
+const patchPackageCli = path.join(root, 'node_modules', 'patch-package', 'index.js')
+
+if (!hasIntercom) {
+  console.log(
+    '[patch-package] Skipping: @intercom/intercom-react-native not installed (partial workspace install).',
+  )
+  process.exit(0)
+}
+
+if (!fs.existsSync(patchPackageCli)) {
+  console.warn('[patch-package] patch-package CLI missing; skipping.')
+  process.exit(0)
+}
+
+const r = spawnSync(process.execPath, [patchPackageCli], {
   cwd: root,
   stdio: 'inherit',
-  shell: process.platform === 'win32',
 })
 process.exit(r.status ?? 1)
