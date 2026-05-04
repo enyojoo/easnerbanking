@@ -91,11 +91,18 @@ export function PinUnlockScreen({
   const name = firstName(user)
 
   return (
-    <div className="flex min-h-screen flex-col items-center bg-background px-6 pb-10 pt-16">
+    <div
+      className="fixed inset-0 z-[2147483647] flex min-h-screen flex-col items-center overflow-y-auto bg-background px-6 pb-10 pt-16"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="pin-unlock-title"
+    >
       <div className="flex w-full max-w-sm flex-col items-center gap-8">
         <PinUserAvatar initials={initials(user)} avatarUrl={avatarUrl} />
         <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">{appPinStrings.lockWelcome(name)}</h1>
+          <h1 id="pin-unlock-title" className="text-2xl font-semibold tracking-tight text-foreground">
+            {appPinStrings.lockWelcome(name)}
+          </h1>
         </div>
         <PinEntryBlock
           pin={pin}

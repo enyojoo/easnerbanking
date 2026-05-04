@@ -70,10 +70,15 @@ export function PinSetupScreen({
   }, [step, confirm, busy, userId, onComplete])
 
   return (
-    <div className="flex min-h-screen flex-col items-center bg-background px-6 pb-10 pt-16">
+    <div
+      className="fixed inset-0 z-[2147483647] flex min-h-screen flex-col items-center overflow-y-auto bg-background px-6 pb-10 pt-16"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="pin-setup-title"
+    >
       <div className="flex w-full max-w-sm flex-col items-center gap-8">
         <div className="flex w-full flex-col items-center gap-2 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          <h1 id="pin-setup-title" className="text-2xl font-semibold tracking-tight text-foreground">
             {step === "enter" ? appPinStrings.setupTitle : appPinStrings.confirmTitle}
           </h1>
           <p className="w-full text-sm leading-relaxed text-muted-foreground">
