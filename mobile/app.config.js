@@ -103,8 +103,16 @@ module.exports = ({ config }) => {
   const intercomAppId = (process.env.EXPO_PUBLIC_INTERCOM_APP_ID || '').trim()
   const intercomIosKey = (process.env.EXPO_PUBLIC_INTERCOM_IOS_API_KEY || '').trim()
   const intercomAndroidKey = (process.env.EXPO_PUBLIC_INTERCOM_ANDROID_API_KEY || '').trim()
-  const intercomRegionRaw = (process.env.EXPO_PUBLIC_INTERCOM_REGION || 'US').trim()
-  const intercomRegion = ['US', 'EU', 'AU'].includes(intercomRegionRaw) ? intercomRegionRaw : 'US'
+  /** Native SDK expects US | EU | AU (must match Intercom workspace datacenter). Lowercase or web-style values must normalize — otherwise we silently fell back to US and JWT/chat broke for EU workspaces. */
+  function normalizeIntercomRegion(raw) {
+    const r = (raw || 'US').trim().toLowerCase()
+    if (r === 'eu') return 'EU'
+    if (r === 'us') return 'US'
+    if (r === 'au' || r === 'ap') return 'AU'
+    const u = (raw || '').trim().toUpperCase()
+    return ['US', 'EU', 'AU'].includes(u) ? u : 'US'
+  }
+  const intercomRegion = normalizeIntercomRegion(process.env.EXPO_PUBLIC_INTERCOM_REGION)
 
   const intercomPluginConfigured = Boolean(
     intercomAppId && intercomIosKey && intercomAndroidKey,
@@ -152,6 +160,9 @@ module.exports = ({ config }) => {
         process.env.EXPO_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true' ||
         process.env.NEXT_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true',
       intercomConfigured: intercomPluginConfigured,
+      /** Non-secret: lets JS logs confirm the native build matches Intercom Settings → App ID / region. */
+      intercomAppId: intercomAppId || undefined,
+      intercomRegion,
     },
   }
 

@@ -976,6 +976,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       payoutCorridorsBootstrappedForUserRef.current = null
       setLoading(false) // Also set loading to false to ensure AppNavigator doesn't wait
 
+      /** Clear Intercom before Supabase so native messenger never stays “half logged in” vs JS `lastSyncedKey`. */
+      await syncIntercomIdentity(null)
+
       await clearJurisdictionCountryPolicyCache()
 
       // Sign out from Supabase (this will trigger onAuthStateChange which also sets user to null)

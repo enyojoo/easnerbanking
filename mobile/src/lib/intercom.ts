@@ -1,10 +1,25 @@
+import Constants from 'expo-constants'
 import { Platform } from 'react-native'
-import Intercom, { Space } from '@intercom/intercom-react-native'
+import Intercom from '@intercom/intercom-react-native'
 import type { User } from '../types'
-import { apiGet } from './apiClient'
+import { apiGet, getApiBaseUrl } from './apiClient'
 import { supabase } from './supabase'
 
 let lastSyncedKey: string | null = null
+let loggedIntercomBuildHint = false
+
+function logIntercomNativeError(context: string, e: unknown): void {
+  const msg = e instanceof Error ? e.message : String(e)
+  console.warn(`[Intercom] ${context}:`, msg)
+}
+
+/** `created_at` in JWT must align with server-side minting (same user id + email). */
+function signedUpAtFromUser(user: User): number | undefined {
+  const c = user.created_at
+  if (!c) return undefined
+  const sec = Math.floor(Date.parse(c) / 1000)
+  return Number.isNaN(sec) ? undefined : sec
+}
 
 function identityKey(user: User): string {
   const email = user.email?.trim() ?? ''
@@ -53,9 +68,33 @@ async function fetchMessengerJwt(): Promise<{ token: string } | 'legacy' | null>
       return 'unauth'
     }
     if (res.ok) {
-      return await parseJwtBody(res)
+      const body = await parseJwtBody(res)
+      if (!body) {
+        console.warn(
+          `[Intercom] ${getApiBaseUrl()}/api/intercom/jwt returned 200 but JSON had no token string`,
+        )
+      }
+      return body
     }
-    return parseJwtResponse(res)
+    const parsed = parseJwtResponse(res)
+    if (parsed === null) {
+      const isNet = Boolean((res as { isNetworkError?: boolean }).isNetworkError)
+      if (isNet) {
+        console.warn(
+          `[Intercom] cannot reach ${getApiBaseUrl()}/api/intercom/jwt (network) — check device connectivity and EXPO_PUBLIC_API_URL`,
+        )
+      } else {
+        console.warn(
+          `[Intercom] ${getApiBaseUrl()}/api/intercom/jwt → HTTP ${res.status} (expected 200, or 401/503 for known paths)`,
+        )
+      }
+    }
+    if (parsed === 'legacy') {
+      console.warn(
+        `[Intercom] ${getApiBaseUrl()}/api/intercom/jwt → 503: INTERCOM_MESSENGER_API_SECRET missing on this deployment. Money/N Noah routes do not use this env — only this JWT route does.`,
+      )
+    }
+    return parsed
   }
 
   let out = await doRequest()
@@ -110,14 +149,20 @@ export async function syncIntercomIdentity(user: User | null): Promise<void> {
     const jwtState = await fetchMessengerJwt()
 
     if (jwtState === null) {
-      if (__DEV__) {
-        console.warn('[Intercom] Could not fetch Messenger JWT — check session and EXPO_PUBLIC_API_URL')
-      }
+      console.warn(
+        '[Intercom] Messenger JWT unavailable — user may see chat errors. Check EXPO_PUBLIC_API_URL, session, and INTERCOM_MESSENGER_API_SECRET on the API.',
+      )
       return
     }
 
     if (jwtState === 'legacy') {
-      if (lastSyncedKey === key) return
+      let nativeOk = false
+      try {
+        nativeOk = await Intercom.isUserLoggedIn()
+      } catch {
+        nativeOk = false
+      }
+      if (lastSyncedKey === key && nativeOk) return
 
       const email = user.email?.trim()
       await Intercom.loginUserWithUserAttributes({
@@ -129,18 +174,47 @@ export async function syncIntercomIdentity(user: User | null): Promise<void> {
       return
     }
 
-    await Intercom.setUserJwt(jwtState.token)
+    try {
+      await Intercom.setUserJwt(jwtState.token)
+    } catch (e) {
+      logIntercomNativeError('setUserJwt failed', e)
+      throw e
+    }
 
-    if (lastSyncedKey === key) {
+    /**
+     * Do not skip `loginUserWithUserAttributes` just because `lastSyncedKey` matches: after sign-out,
+     * `Intercom.logout()` clears native state but a race or ordering bug can leave `lastSyncedKey` stale,
+     * so we would only refresh JWT and never re-register — same “couldn’t load conversation” until reload.
+     * If the native SDK reports not logged in, always run login again for this identity.
+     */
+    let nativeLoggedIn = false
+    try {
+      nativeLoggedIn = await Intercom.isUserLoggedIn()
+    } catch {
+      nativeLoggedIn = false
+    }
+    if (lastSyncedKey === key && nativeLoggedIn) {
       return
     }
 
+    /**
+     * After `setUserJwt`, register the user. Intercom iOS may return error 2001 if `userId`/`email` are missing
+     * (`userAttributes` must include at least one). Match JWT claims: same `user_id`, optional `email`.
+     * @see https://developers.intercom.com/installing-intercom/ios/error-codes/
+     */
     const email = user.email?.trim()
-    await Intercom.loginUserWithUserAttributes({
+    const su = signedUpAtFromUser(user)
+    const attrs = {
       userId: user.id,
       ...(email ? { email } : {}),
-      ...(user.full_name?.trim() ? { name: user.full_name.trim() } : {}),
-    })
+      ...(su !== undefined ? { signedUpAt: su } : {}),
+    }
+    try {
+      await Intercom.loginUserWithUserAttributes(attrs)
+    } catch (e) {
+      logIntercomNativeError('loginUserWithUserAttributes (JWT path) failed', e)
+      throw e
+    }
     lastSyncedKey = key
   } catch (e) {
     if (
@@ -170,18 +244,37 @@ async function refreshIntercomJwtIfConfigured(): Promise<void> {
 }
 
 /**
- * Opens the Intercom Messenger on the Messages space (live chat).
- * Pass the signed-in `user` so identity and JWT are refreshed right before the UI opens
- * (avoids race on cold start and expired access tokens).
+ * Opens the Intercom Messenger (default Home space — includes Messages).
+ * Avoids opening the Messages sub-space directly, which can show “couldn’t load your conversation” when the
+ * session is still settling or a thread fails to hydrate.
+ * Pass the signed-in `user` so identity and JWT are refreshed right before the UI opens.
  */
 export async function presentIntercomMessenger(user?: User | null): Promise<void> {
   if (Platform.OS === 'web') {
     throw new Error('Live chat is only available in the mobile app.')
+  }
+  const extra = Constants.expoConfig?.extra as { intercomAppId?: string; intercomRegion?: string } | undefined
+  if (extra?.intercomAppId && !loggedIntercomBuildHint) {
+    loggedIntercomBuildHint = true
+    console.warn(
+      `[Intercom] native build app_id=${extra.intercomAppId} region=${extra?.intercomRegion ?? '?'} — must match Intercom workspace for INTERCOM_MESSENGER_API_SECRET + iOS SDK key`,
+    )
   }
   if (user) {
     await syncIntercomIdentity(user)
   } else {
     await refreshIntercomJwtIfConfigured()
   }
-  await Intercom.presentSpace(Space.messages)
+  const loggedIn = await Intercom.isUserLoggedIn()
+  if (!loggedIn) {
+    throw new Error(
+      'Support chat could not connect. Check your connection, ensure EXPO_PUBLIC_INTERCOM_REGION matches your Intercom workspace (e.g. EU), then try again or use email support.',
+    )
+  }
+  try {
+    await Intercom.present()
+  } catch (e) {
+    logIntercomNativeError('present() failed', e)
+    throw e
+  }
 }
