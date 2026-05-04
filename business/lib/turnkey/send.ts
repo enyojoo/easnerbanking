@@ -14,6 +14,8 @@ export type TurnkeySendInput = {
   chain: "solana"
   destinationAddress: string
   amount: number
+  /** Tags turnkey ledger rows for Easetag chain settlement (hidden from activity feed). */
+  easetagSettlement?: { transferGroupId: string }
 }
 
 type TurnkeyClientLike = Record<string, (...args: any[]) => Promise<any>>
@@ -109,7 +111,13 @@ function parseTurnkeySendIds(response: Record<string, unknown>): {
 export async function createTurnkeySend(
   admin: SupabaseClient,
   input: TurnkeySendInput,
-): Promise<{ providerTransactionId: string; ledgerId: string; status: string }> {
+): Promise<{
+  providerTransactionId: string
+  ledgerId: string
+  status: "pending" | "settled" | "failed"
+  txHash: string | null
+  subOrgId: string
+}> {
   const destinationAddress = String(input.destinationAddress || "").trim()
   if (!destinationAddress) throw new Error("destinationAddress is required")
   if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error("amount must be positive")
@@ -161,6 +169,15 @@ export async function createTurnkeySend(
   }
   const parsed = parseTurnkeySendIds((sendRes || {}) as Record<string, unknown>)
 
+  const easetagMeta =
+    input.easetagSettlement?.transferGroupId != null && String(input.easetagSettlement.transferGroupId).trim()
+      ? {
+          easetag_settlement_leg: true,
+          suppress_in_feed: true,
+          transfer_group_id: String(input.easetagSettlement.transferGroupId).trim(),
+        }
+      : {}
+
   await upsertLedgerTransaction(admin, {
     userId: scopeOwner.userId,
     businessId: scopeOwner.businessId,
@@ -178,6 +195,7 @@ export async function createTurnkeySend(
       turnkey_sub_org_id: sender.subOrgId,
       turnkey_sponsor_requested: sponsor ? "true" : "false",
       turnkey_solana_caip2: caip2 ?? null,
+      ...easetagMeta,
     },
     txHash: parsed.txHash,
     walletAddress: sender.sourceAddress,
@@ -188,8 +206,12 @@ export async function createTurnkeySend(
     baseCurrency: mapAssetToCurrency(input.asset),
   })
 
+  let reconciled: { status: "pending" | "settled" | "failed"; txHash: string | null } = {
+    status: "pending",
+    txHash: parsed.txHash,
+  }
   try {
-    await reconcileTurnkeySendStatus(admin, {
+    reconciled = await reconcileTurnkeySendStatus(admin, {
       subOrgId: sender.subOrgId,
       providerTransactionId: parsed.providerTransactionId,
     })
@@ -197,7 +219,13 @@ export async function createTurnkeySend(
     // Best-effort reconciliation.
   }
 
-  return { providerTransactionId: parsed.providerTransactionId, ledgerId: parsed.providerTransactionId, status: "pending" }
+  return {
+    providerTransactionId: parsed.providerTransactionId,
+    ledgerId: parsed.providerTransactionId,
+    status: reconciled.status,
+    txHash: reconciled.txHash ?? parsed.txHash,
+    subOrgId: sender.subOrgId,
+  }
 }
 
 export async function reconcileTurnkeySendStatus(
@@ -226,7 +254,7 @@ export async function reconcileTurnkeySendStatus(
 
   const { data: existing } = await admin
     .from("transactions")
-    .select("id, user_id, business_id, amount, currency, direction, wallet_address, counterparty_address, asset, chain")
+    .select("id, user_id, business_id, amount, currency, direction, wallet_address, counterparty_address, asset, chain, metadata")
     .eq("provider", "turnkey")
     .eq("provider_transaction_id", params.providerTransactionId)
     .maybeSingle()

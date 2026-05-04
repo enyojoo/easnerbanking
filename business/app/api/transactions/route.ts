@@ -6,6 +6,7 @@ import { resolveLedgerListScope } from "@/lib/transactions-ledger-scope"
 import { displayEasnerTransactionId } from "@/lib/easner-transaction-id"
 import { toEasnerTransactionPrimaryLabel } from "@easner/shared"
 import { mapRowToBusinessTransaction } from "@/lib/transactions/map-row-to-business"
+import { isTurnkeyTransactionHiddenFromFeed } from "@/lib/transactions/transaction-feed-filters"
 
 const LEDGER_SELECT =
   "id, easner_transaction_id, provider, provider_transaction_id, status, amount, currency, direction, metadata, payload, created_at, updated_at, occurred_at, settled_at, tx_hash, wallet_address, counterparty_address, asset, chain, base_currency, base_amount"
@@ -105,11 +106,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 400 })
   }
 
+  const rawRows = (rows ?? []) as Record<string, unknown>[]
+  const rowsFiltered = rawRows.filter((r) => !isTurnkeyTransactionHiddenFromFeed(r.metadata))
+
   if (scope === "business") {
-    const transactions = (rows ?? []).map((r) => mapRowToBusinessTransaction(r as Record<string, unknown>))
+    const transactions = rowsFiltered.map((r) => mapRowToBusinessTransaction(r))
     return NextResponse.json({ transactions })
   }
 
-  const transactions = (rows ?? []).map((r) => mapRowToMobileTransaction(r as Record<string, unknown>))
+  const transactions = rowsFiltered.map((r) => mapRowToMobileTransaction(r))
   return NextResponse.json({ transactions })
 }

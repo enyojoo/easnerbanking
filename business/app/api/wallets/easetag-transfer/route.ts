@@ -6,8 +6,31 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { normalizeEasetag } from "@/lib/easetag-validation"
 import { isUndefinedEasetagColumnError } from "@/lib/easetag-global"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
-import { executeEasetagTransfer, isEasetagLedgerP2PEnabled } from "@/lib/ledger/easetag-transfer"
+import {
+  deleteEasetagSettlement,
+  getEasetagSettlementByIdempotencyKey,
+  insertEasetagSettlementPending,
+  resetEasetagSettlementForRetry,
+  updateEasetagSettlementFailed,
+  updateEasetagSettlementLedgerPtids,
+  updateEasetagSettlementSettled,
+  updateEasetagSettlementSubmitted,
+} from "@/lib/ledger/easetag-settlement"
+import {
+  deterministicTransferGroupUuid,
+  executeEasetagTransfer,
+  isEasetagChainSettlementEnabled,
+  isEasetagLedgerP2PEnabled,
+  rollbackEasetagP2pLedger,
+} from "@/lib/ledger/easetag-transfer"
+import {
+  assetForEasetagCurrency,
+  preflightSenderOnChainStablecoinBalance,
+  resolvePayeeSolanaVaultAta,
+  resolveSenderTurnkeySubOrgId,
+} from "@/lib/ledger/easetag-turnkey-settlement"
 import { notifyEasetagTransferSettled } from "@/lib/ledger/easetag-transfer-notify"
+import { createTurnkeySend, reconcileTurnkeySendStatus } from "@/lib/turnkey/send"
 
 export const runtime = "nodejs"
 
@@ -42,6 +65,8 @@ export async function POST(request: Request) {
   if (currencyRaw !== "USD" && currencyRaw !== "EUR") {
     return NextResponse.json({ error: "currency must be USD or EUR" }, { status: 400 })
   }
+
+  const ledgerAmount = Math.round(amount * 100) / 100
 
   const acc = await resolveNoahAccountContext(request, auth.user.id)
   if (!acc.ok) return acc.response
@@ -113,9 +138,139 @@ export async function POST(request: Request) {
   const reservedDebit =
     typeof body?.reserved_debit_etid === "string" ? body.reserved_debit_etid.trim() : ""
 
+  const transferGroupId = deterministicTransferGroupUuid(idempotencyKey)
+  const chainSettle = isEasetagChainSettlementEnabled()
+  let payeeAta: string | null = null
+
+  if (chainSettle) {
+    let settlementRow = await getEasetagSettlementByIdempotencyKey(admin, idempotencyKey)
+
+    if (settlementRow?.status === "failed") {
+      const debitPtidProbe = `easetag_p2p:${transferGroupId}:debit`
+      const { data: debitProbe } = await admin
+        .from("transactions")
+        .select("id")
+        .eq("provider", "easner_internal")
+        .eq("provider_transaction_id", debitPtidProbe)
+        .maybeSingle()
+      if (!debitProbe?.id) {
+        await deleteEasetagSettlement(admin, transferGroupId)
+        settlementRow = null
+      } else {
+        await resetEasetagSettlementForRetry(admin, transferGroupId)
+        settlementRow = await getEasetagSettlementByIdempotencyKey(admin, idempotencyKey)
+      }
+    }
+
+    const payeeRes = await resolvePayeeSolanaVaultAta(admin, {
+      payeeUserId: payeeUserId!,
+      payeeBusinessId: payeeBusinessId ?? null,
+      currency: currencyRaw as "USD" | "EUR",
+    })
+    if ("error" in payeeRes) {
+      return NextResponse.json({ ok: false, error: payeeRes.error }, { status: 400 })
+    }
+    payeeAta = payeeRes.ata
+
+    const pre = await preflightSenderOnChainStablecoinBalance(admin, acc.ctx, currencyRaw as "USD" | "EUR", ledgerAmount)
+    if (!pre.ok) {
+      return NextResponse.json({ ok: false, error: pre.error }, { status: 400 })
+    }
+
+    if (!settlementRow) {
+      const ins = await insertEasetagSettlementPending(admin, {
+        transfer_group_id: transferGroupId,
+        idempotency_key: idempotencyKey,
+        sender_user_id: senderUserId,
+        sender_business_id: senderBusinessId,
+        payee_user_id: payeeUserId!,
+        payee_business_id: payeeBusinessId ?? null,
+        amount: ledgerAmount,
+        currency: currencyRaw as "USD" | "EUR",
+        asset: assetForEasetagCurrency(currencyRaw as "USD" | "EUR"),
+      })
+      if (!ins.ok && ins.error !== "duplicate_idempotency") {
+        return NextResponse.json({ ok: false, error: ins.error }, { status: 400 })
+      }
+      settlementRow = await getEasetagSettlementByIdempotencyKey(admin, idempotencyKey)
+    }
+
+    if (settlementRow?.status === "settled") {
+      const result = await executeEasetagTransfer(admin, {
+        idempotencyKey,
+        amount: ledgerAmount,
+        currency: currencyRaw as "USD" | "EUR",
+        senderUserId,
+        senderBusinessId,
+        payeeUserId: payeeUserId!,
+        payeeBusinessId: payeeBusinessId ?? null,
+        payeeEasetag: payeeEasetagResolved,
+        senderEasetag: senderEasetag || undefined,
+        reservedDebitEtid: reservedDebit || undefined,
+      })
+      if (!result.ok) {
+        return NextResponse.json({ ok: false, error: result.error }, { status: 400 })
+      }
+      await notifyEasetagTransferSettled(admin, {
+        idempotent: result.idempotent,
+        debitProviderTransactionId: result.debitProviderTransactionId,
+        creditProviderTransactionId: result.creditProviderTransactionId,
+      }).catch((e) => console.warn("easetag transfer notify:", e))
+      return NextResponse.json({
+        ok: true,
+        idempotent: result.idempotent,
+        transfer_group_id: result.transferGroupId,
+        debit_provider_transaction_id: result.debitProviderTransactionId,
+        credit_provider_transaction_id: result.creditProviderTransactionId,
+        easner_transaction_id: result.easnerTransactionId,
+      })
+    }
+
+    if (settlementRow?.status === "submitted" && settlementRow.turnkey_send_status_id) {
+      const result = await executeEasetagTransfer(admin, {
+        idempotencyKey,
+        amount: ledgerAmount,
+        currency: currencyRaw as "USD" | "EUR",
+        senderUserId,
+        senderBusinessId,
+        payeeUserId: payeeUserId!,
+        payeeBusinessId: payeeBusinessId ?? null,
+        payeeEasetag: payeeEasetagResolved,
+        senderEasetag: senderEasetag || undefined,
+        reservedDebitEtid: reservedDebit || undefined,
+      })
+      if (!result.ok) {
+        return NextResponse.json({ ok: false, error: result.error }, { status: 400 })
+      }
+      const subOrgId = await resolveSenderTurnkeySubOrgId(admin, senderUserId, senderBusinessId)
+      if (subOrgId) {
+        const rec = await reconcileTurnkeySendStatus(admin, {
+          subOrgId,
+          providerTransactionId: settlementRow.turnkey_send_status_id,
+        })
+        if (rec.status === "settled") {
+          await updateEasetagSettlementSettled(admin, transferGroupId, rec.txHash)
+        }
+      }
+      await notifyEasetagTransferSettled(admin, {
+        idempotent: result.idempotent,
+        debitProviderTransactionId: result.debitProviderTransactionId,
+        creditProviderTransactionId: result.creditProviderTransactionId,
+      }).catch((e) => console.warn("easetag transfer notify:", e))
+      return NextResponse.json({
+        ok: true,
+        idempotent: result.idempotent,
+        transfer_group_id: result.transferGroupId,
+        debit_provider_transaction_id: result.debitProviderTransactionId,
+        credit_provider_transaction_id: result.creditProviderTransactionId,
+        easner_transaction_id: result.easnerTransactionId,
+      })
+    }
+  }
+
   const result = await executeEasetagTransfer(admin, {
     idempotencyKey,
-    amount,
+    amount: ledgerAmount,
     currency: currencyRaw as "USD" | "EUR",
     senderUserId,
     senderBusinessId,
@@ -127,9 +282,57 @@ export async function POST(request: Request) {
   })
 
   if (!result.ok) {
-    const status =
-      result.error === "insufficient_balance" || result.error === "sender_balance_row_missing" ? 400 : 400
-    return NextResponse.json({ ok: false, error: result.error }, { status })
+    if (chainSettle) {
+      await updateEasetagSettlementFailed(admin, transferGroupId, result.error).catch(() => {})
+    }
+    return NextResponse.json({ ok: false, error: result.error }, { status: 400 })
+  }
+
+  if (chainSettle && payeeAta) {
+    const amt = ledgerAmount
+    const asset = assetForEasetagCurrency(currencyRaw as "USD" | "EUR")
+    await updateEasetagSettlementLedgerPtids(
+      admin,
+      transferGroupId,
+      result.debitProviderTransactionId,
+      result.creditProviderTransactionId,
+    ).catch((e) => console.warn("easetag settlement ptids:", e))
+
+    try {
+      const send = await createTurnkeySend(admin, {
+        ctx: acc.ctx,
+        asset,
+        chain: "solana",
+        destinationAddress: payeeAta,
+        amount: amt,
+        easetagSettlement: { transferGroupId },
+      })
+      await updateEasetagSettlementSubmitted(admin, transferGroupId, send.providerTransactionId, send.txHash)
+      if (send.status === "settled") {
+        await updateEasetagSettlementSettled(admin, transferGroupId, send.txHash)
+      } else if (send.subOrgId) {
+        const rec = await reconcileTurnkeySendStatus(admin, {
+          subOrgId: send.subOrgId,
+          providerTransactionId: send.providerTransactionId,
+        })
+        if (rec.status === "settled") {
+          await updateEasetagSettlementSettled(admin, transferGroupId, rec.txHash)
+        }
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      await rollbackEasetagP2pLedger(admin, {
+        transferGroupId: result.transferGroupId,
+        amount: amt,
+        currency: currencyRaw as "USD" | "EUR",
+        senderUserId,
+        senderBusinessId,
+        payeeUserId: payeeUserId!,
+        payeeBusinessId: payeeBusinessId ?? null,
+      })
+      await updateEasetagSettlementFailed(admin, transferGroupId, msg).catch(() => {})
+      return NextResponse.json({ ok: false, error: msg || "turnkey_settlement_failed" }, { status: 400 })
+    }
   }
 
   await notifyEasetagTransferSettled(admin, {

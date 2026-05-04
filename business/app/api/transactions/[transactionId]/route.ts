@@ -8,6 +8,7 @@ import {
   normalizeEasnerTransactionIdForLookup,
 } from "@/lib/easner-transaction-id"
 import { mapRowToBusinessTransaction } from "@/lib/transactions/map-row-to-business"
+import { isTurnkeyTransactionHiddenFromFeed } from "@/lib/transactions/transaction-feed-filters"
 import {
   deriveEasnerInboundRemitterDisplayName,
   toEasnerTransactionPrimaryLabel,
@@ -210,6 +211,10 @@ export async function GET(request: Request, routeCtx: Props) {
   }
 
   const rec = row as Record<string, unknown>
+  if (isTurnkeyTransactionHiddenFromFeed(rec.metadata)) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 })
+  }
+
   const payload = rec.payload as Record<string, unknown> | null | undefined
   let transaction: Record<string, unknown>
   if (payload && typeof payload === "object" && (payload.ID != null || payload.id != null)) {

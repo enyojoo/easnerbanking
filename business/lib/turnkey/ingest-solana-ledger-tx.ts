@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { Connection } from "@solana/web3.js"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
+import { findEasetagSettlementForChainSuppression } from "@/lib/ledger/easetag-settlement"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 import { mintForStablecoinAsset } from "@/lib/solana/spl-mints"
 
@@ -86,6 +87,13 @@ export async function ingestTurnkeySolanaTxForOwnerVault(
   const occurredAt = params.blockTime
     ? new Date(params.blockTime * 1000).toISOString()
     : new Date().toISOString()
+
+  const easetagSuppressed = await findEasetagSettlementForChainSuppression(admin, {
+    txHash: params.signature,
+  })
+  if (easetagSuppressed) {
+    return { upserts: 0, kind: "noop" }
+  }
 
   try {
     const upsert = await upsertLedgerTransaction(admin, {

@@ -3,7 +3,7 @@ import { createHash } from "crypto"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 import { generateTransactionId, isEasnerClientTransactionIdFormat } from "@/lib/transaction-id"
 
-function deterministicTransferGroupUuid(idempotencyKey: string): string {
+export function deterministicTransferGroupUuid(idempotencyKey: string): string {
   const h = createHash("sha256").update(idempotencyKey).digest()
   const bytes = Buffer.alloc(16)
   h.copy(bytes, 0, 0, 16)
@@ -255,4 +255,181 @@ export function isEasetagLedgerP2PEnabled(): boolean {
   const a = String(process.env.EASETAG_LEDGER_P2P_ENABLED || "").trim().toLowerCase()
   const b = String(process.env.NEXT_PUBLIC_EASETAG_LEDGER_P2P_ENABLED || "").trim().toLowerCase()
   return a === "true" || b === "true"
+}
+
+/** When true, Easetag P2P also triggers Turnkey Solana SPL settlement (`EASETAG_CHAIN_SETTLEMENT_ENABLED`). */
+export function isEasetagChainSettlementEnabled(): boolean {
+  const a = String(process.env.EASETAG_CHAIN_SETTLEMENT_ENABLED || "").trim().toLowerCase()
+  const b = String(process.env.NEXT_PUBLIC_EASETAG_CHAIN_SETTLEMENT_ENABLED || "").trim().toLowerCase()
+  return a === "true" || b === "true"
+}
+
+/**
+ * Roll back ledger + internal `transactions` for a completed Easetag P2P pair (used if Turnkey send fails after ledger).
+ */
+export async function rollbackEasetagP2pLedger(
+  admin: SupabaseClient,
+  params: {
+    transferGroupId: string
+    amount: number
+    currency: "USD" | "EUR"
+    senderUserId: string
+    senderBusinessId: string | null
+    payeeUserId: string
+    payeeBusinessId: string | null
+  },
+): Promise<void> {
+  const debitPtid = `easetag_p2p:${params.transferGroupId}:debit`
+  const creditPtid = `easetag_p2p:${params.transferGroupId}:credit`
+  const amt = Math.round(params.amount * 100) / 100
+  const senderBalanceScope = {
+    businessId: params.senderBusinessId,
+    userId: params.senderBusinessId ? null : params.senderUserId,
+    currency: params.currency,
+  }
+  const payeeBalanceScope = {
+    businessId: params.payeeBusinessId,
+    userId: params.payeeBusinessId ? null : params.payeeUserId,
+    currency: params.currency,
+  }
+  try {
+    await admin.from("transactions").delete().eq("provider", "easner_internal").eq("provider_transaction_id", debitPtid)
+    await admin.from("transactions").delete().eq("provider", "easner_internal").eq("provider_transaction_id", creditPtid)
+    await applyWalletBalanceDelta(admin, {
+      ...payeeBalanceScope,
+      delta: -amt,
+    })
+    await applyWalletBalanceDelta(admin, {
+      ...senderBalanceScope,
+      delta: amt,
+    })
+  } catch {
+    // best-effort
+  }
+}
+
+export type ExecuteEasetagReversalInput = {
+  transferGroupId: string
+  amount: number
+  currency: "USD" | "EUR"
+  senderUserId: string
+  senderBusinessId: string | null
+  payeeUserId: string
+  payeeBusinessId: string | null
+  /** Original Easetag ETID (for reversal row metadata only). */
+  originalEasnerTransactionId: string
+}
+
+export type ExecuteEasetagReversalResult = { ok: true; idempotent: boolean } | { ok: false; error: string }
+
+/**
+ * Idempotent ledger reversal when on-chain settlement definitively failed after an Easetag credit/debit.
+ */
+export async function executeEasetagReversal(
+  admin: SupabaseClient,
+  input: ExecuteEasetagReversalInput,
+): Promise<ExecuteEasetagReversalResult> {
+  const transferGroupId = String(input.transferGroupId || "").trim()
+  if (!transferGroupId) return { ok: false, error: "transfer_group_id_required" }
+  if (!Number.isFinite(input.amount) || input.amount <= 0) return { ok: false, error: "invalid_amount" }
+
+  const creditToSenderPtid = `easetag_p2p_reversal:${transferGroupId}:credit_sender`
+  const debitFromPayeePtid = `easetag_p2p_reversal:${transferGroupId}:debit_payee`
+
+  const { data: existing, error: existErr } = await admin
+    .from("transactions")
+    .select("id")
+    .eq("provider", "easner_internal")
+    .eq("provider_transaction_id", creditToSenderPtid)
+    .maybeSingle()
+  if (existErr) return { ok: false, error: existErr.message }
+  if (existing?.id) return { ok: true, idempotent: true }
+
+  const amt = Math.round(input.amount * 100) / 100
+  const now = new Date().toISOString()
+  const senderBalanceScope = {
+    businessId: input.senderBusinessId,
+    userId: input.senderBusinessId ? null : input.senderUserId,
+    currency: input.currency,
+  }
+  const payeeBalanceScope = {
+    businessId: input.payeeBusinessId,
+    userId: input.payeeBusinessId ? null : input.payeeUserId,
+    currency: input.currency,
+  }
+
+  const reversalEtid = generateTransactionId()
+  const metaBase = {
+    source: "easetag_p2p_reversal",
+    transfer_group_id: transferGroupId,
+    original_easner_transaction_id: input.originalEasnerTransactionId,
+  }
+
+  let debitedPayee = false
+  let creditedSender = false
+  let debitInserted = false
+  try {
+    await applyWalletBalanceDelta(admin, {
+      ...payeeBalanceScope,
+      delta: -amt,
+    })
+    debitedPayee = true
+    await applyWalletBalanceDelta(admin, {
+      ...senderBalanceScope,
+      delta: amt,
+    })
+    creditedSender = true
+
+    const debitPayeeInsert = buildTransactionInsert({
+      userId: input.payeeUserId,
+      businessId: input.payeeBusinessId,
+      providerTransactionId: debitFromPayeePtid,
+      direction: "out",
+      amount: amt,
+      currency: input.currency,
+      easnerTransactionId: reversalEtid,
+      metadata: { ...metaBase, leg: "debit_payee" },
+      now,
+    })
+    const creditSenderInsert = buildTransactionInsert({
+      userId: input.senderUserId,
+      businessId: input.senderBusinessId,
+      providerTransactionId: creditToSenderPtid,
+      direction: "in",
+      amount: amt,
+      currency: input.currency,
+      easnerTransactionId: reversalEtid,
+      metadata: { ...metaBase, leg: "credit_sender" },
+      now,
+    })
+
+    const { error: dErr } = await admin.from("transactions").insert(debitPayeeInsert)
+    if (dErr) throw dErr
+    debitInserted = true
+    const { error: cErr } = await admin.from("transactions").insert(creditSenderInsert)
+    if (cErr) throw cErr
+
+    return { ok: true, idempotent: false }
+  } catch (e) {
+    try {
+      if (debitInserted) {
+        await admin.from("transactions").delete().eq("provider", "easner_internal").eq("provider_transaction_id", debitFromPayeePtid)
+      }
+      await admin.from("transactions").delete().eq("provider", "easner_internal").eq("provider_transaction_id", creditToSenderPtid)
+      if (creditedSender)
+        await applyWalletBalanceDelta(admin, {
+          ...senderBalanceScope,
+          delta: -amt,
+        })
+      if (debitedPayee)
+        await applyWalletBalanceDelta(admin, {
+          ...payeeBalanceScope,
+          delta: amt,
+        })
+    } catch {
+      // best-effort rollback
+    }
+    const msg = e instanceof Error ? e.message : String(e)
+    return { ok: false, error: msg || "reversal_failed" }
+  }
 }

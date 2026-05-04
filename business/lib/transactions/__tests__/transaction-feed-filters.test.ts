@@ -1,0 +1,31 @@
+import { describe, expect, it } from "vitest"
+import { isTurnkeyTransactionHiddenFromFeed } from "@/lib/transactions/transaction-feed-filters"
+import { deterministicTransferGroupUuid } from "@/lib/ledger/easetag-transfer"
+
+describe("isTurnkeyTransactionHiddenFromFeed", () => {
+  it("returns false for null or empty metadata", () => {
+    expect(isTurnkeyTransactionHiddenFromFeed(null)).toBe(false)
+    expect(isTurnkeyTransactionHiddenFromFeed(undefined)).toBe(false)
+    expect(isTurnkeyTransactionHiddenFromFeed({})).toBe(false)
+  })
+
+  it("returns true when easetag_settlement_leg is true", () => {
+    expect(isTurnkeyTransactionHiddenFromFeed({ easetag_settlement_leg: true })).toBe(true)
+  })
+
+  it("returns true when suppress_in_feed is true", () => {
+    expect(isTurnkeyTransactionHiddenFromFeed({ suppress_in_feed: true })).toBe(true)
+  })
+})
+
+describe("deterministicTransferGroupUuid", () => {
+  it("is stable for the same idempotency key", () => {
+    const k = "easetag:user1:user2:USD:10:alice"
+    expect(deterministicTransferGroupUuid(k)).toBe(deterministicTransferGroupUuid(k))
+  })
+
+  it("produces a valid UUID shape", () => {
+    const id = deterministicTransferGroupUuid("x")
+    expect(id).toMatch(/^[0-9a-f-]{36}$/i)
+  })
+})

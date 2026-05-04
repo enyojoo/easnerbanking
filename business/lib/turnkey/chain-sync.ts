@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
+import { findEasetagSettlementForChainSuppression, updateEasetagSettlementSettled } from "@/lib/ledger/easetag-settlement"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 import { enqueueLiquiditySweepJob } from "@/lib/liquidity/sweep-jobs"
 import { resolvePooledSolanaSourceAddress, ledgerCurrencyForStablecoinAsset } from "@/lib/liquidity/platform-pool"
@@ -294,9 +295,17 @@ export async function applyTurnkeyWebhookSideEffects(
     baseCurrency: currency,
   })
 
+  const easetagSuppressed = await findEasetagSettlementForChainSuppression(admin, {
+    turnkeySendStatusId: providerTransactionId,
+    txHash,
+  })
+  if (easetagSuppressed && status === "settled") {
+    await updateEasetagSettlementSettled(admin, easetagSuppressed.transfer_group_id, txHash).catch(() => {})
+  }
+
   // Update DB-backed balance snapshot for realtime dashboards.
   // For settled events we apply the delta; pending/failed should not move balances.
-  if (status === "settled" && (upsert.inserted || upsert.becameSettled)) {
+  if (!easetagSuppressed && status === "settled" && (upsert.inserted || upsert.becameSettled)) {
     const businessScopeId = businessId ? businessId : null
     const userScopeId = businessId ? null : userId
     const signed = direction === "in" ? amount : -amount
