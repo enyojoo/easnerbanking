@@ -1,4 +1,4 @@
-import { Connection, PublicKey, Transaction } from "@solana/web3.js"
+import { Connection, PublicKey, SystemProgram, Transaction } from "@solana/web3.js"
 import { createTransferCheckedInstruction, getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token"
 import { mintForStablecoinAsset } from "@/lib/solana/spl-mints"
 
@@ -8,9 +8,17 @@ function getSolanaRpcUrl(): string {
 
 /**
  * Builds a legacy, single-instruction SPL `TransferChecked` (6 decimals) for USDC/EURC,
- * serialized for Turnkey `solSendTransaction` (`unsignedTransaction` is base64 of wire bytes).
+ * serialized for Turnkey `solSendTransaction`.
+ *
+ * Turnkey's API decodes `unsignedTransaction` as **hex-encoded wire bytes** (Go `encoding/hex`);
+ * some docs still say "base64" but production rejects base64 (e.g. invalid hex byte `Q`).
+ *
+ * Sponsored flows: Turnkey requires the System Program in static account keys; we prepend a
+ * no-op 0-lamport self-transfer so parsing/sponsorship succeeds.
+ *
+ * @see https://docs.turnkey.com/networks/solana-transaction-construction
  */
-export async function buildStablecoinSplTransferUnsignedTxBase64(input: {
+export async function buildStablecoinSplTransferUnsignedTxPayloadForTurnkey(input: {
   asset: "USDC" | "EURC"
   /** Vault wallet pubkey (Turnkey `signWith` must match this). */
   ownerAddress: string
@@ -18,6 +26,8 @@ export async function buildStablecoinSplTransferUnsignedTxBase64(input: {
   destinationAddress: string
   destinationIsTokenAccount: boolean
   amountHuman: number
+  /** When true, prepend a System Program ix (Turnkey sponsored Solana constraint). */
+  sponsoredFlow: boolean
 }): Promise<string> {
   const mintStr = mintForStablecoinAsset(input.asset)
   if (!mintStr) throw new Error("Unsupported asset for Solana SPL transfer")
@@ -34,7 +44,7 @@ export async function buildStablecoinSplTransferUnsignedTxBase64(input: {
   const amountAtomic = BigInt(Math.round(input.amountHuman * 1_000_000))
   if (amountAtomic <= BigInt(0)) throw new Error("amount must be positive")
 
-  const ix = createTransferCheckedInstruction(
+  const transferIx = createTransferCheckedInstruction(
     sourceAta,
     mint,
     destAta,
@@ -51,11 +61,22 @@ export async function buildStablecoinSplTransferUnsignedTxBase64(input: {
   const tx = new Transaction({
     feePayer: owner,
     recentBlockhash: blockhash,
-  }).add(ix)
+  })
+
+  if (input.sponsoredFlow) {
+    tx.add(
+      SystemProgram.transfer({
+        fromPubkey: owner,
+        toPubkey: owner,
+        lamports: 0,
+      }),
+    )
+  }
+  tx.add(transferIx)
 
   const serialized = tx.serialize({
     requireAllSignatures: false,
     verifySignatures: false,
   })
-  return Buffer.from(serialized).toString("base64")
+  return Buffer.from(serialized).toString("hex")
 }

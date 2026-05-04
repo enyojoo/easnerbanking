@@ -4,7 +4,7 @@ import {
   getTurnkeySolanaBroadcastCaip2,
   isTurnkeySolSponsorshipEnabled,
 } from "@/lib/turnkey/config"
-import { buildStablecoinSplTransferUnsignedTxBase64 } from "@/lib/turnkey/sol-spl-transfer-unsigned-tx"
+import { buildStablecoinSplTransferUnsignedTxPayloadForTurnkey } from "@/lib/turnkey/sol-spl-transfer-unsigned-tx"
 import { resolveWalletOwnerIdForEasnerContext } from "@/lib/wallet/resolve-wallet-owner"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
@@ -142,12 +142,13 @@ export async function createTurnkeySend(
   const caip2 = getTurnkeySolanaBroadcastCaip2()
   const destinationIsTokenAccount = Boolean(input.destinationIsTokenAccount)
 
-  const unsignedTransaction = await buildStablecoinSplTransferUnsignedTxBase64({
+  const unsignedTransaction = await buildStablecoinSplTransferUnsignedTxPayloadForTurnkey({
     asset: input.asset,
     ownerAddress: sender.sourceAddress,
     destinationAddress,
     destinationIsTokenAccount,
     amountHuman: input.amount,
+    sponsoredFlow: sponsor,
   })
 
   let sendRes: unknown
