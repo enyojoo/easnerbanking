@@ -21,6 +21,7 @@ import {
   writeBusinessStartupSnapshot,
   clearAllBusinessBrowserState,
 } from "@/lib/query/web-persist"
+import { BusinessIntercom } from "@/components/intercom-business"
 
 /**
  * Root client provider tree for Easner Business.
@@ -60,6 +61,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           },
         }}
       >
+        <BusinessIntercom />
         <BusinessScopeProvider>
           <ScopeRealtimeBridge>
             <PersistedBusinessLifecycleBridge />

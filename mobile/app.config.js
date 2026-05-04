@@ -38,6 +38,22 @@ function aliasPublicEnv() {
   }
 }
 
+/** Intercom Expo plugin reads keys only during `eas build` / prebuild — not from the JS bundle. */
+function aliasIntercomEnvForConfig() {
+  if (!process.env.EXPO_PUBLIC_INTERCOM_APP_ID && process.env.INTERCOM_APP_ID) {
+    process.env.EXPO_PUBLIC_INTERCOM_APP_ID = process.env.INTERCOM_APP_ID
+  }
+  if (!process.env.EXPO_PUBLIC_INTERCOM_IOS_API_KEY && process.env.INTERCOM_IOS_API_KEY) {
+    process.env.EXPO_PUBLIC_INTERCOM_IOS_API_KEY = process.env.INTERCOM_IOS_API_KEY
+  }
+  if (
+    !process.env.EXPO_PUBLIC_INTERCOM_ANDROID_API_KEY &&
+    process.env.INTERCOM_ANDROID_API_KEY
+  ) {
+    process.env.EXPO_PUBLIC_INTERCOM_ANDROID_API_KEY = process.env.INTERCOM_ANDROID_API_KEY
+  }
+}
+
 function isLocalUrl(value) {
   return /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(\/|$)/i.test(value)
 }
@@ -47,6 +63,7 @@ module.exports = ({ config }) => {
   loadEnvFile(path.join(__dirname, '..', 'business', '.env.local'))
   loadEnvFile(path.join(__dirname, '..', 'business', '.env'))
   aliasPublicEnv()
+  aliasIntercomEnvForConfig()
 
   const supabaseUrl =
     process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || ''
@@ -109,7 +126,7 @@ module.exports = ({ config }) => {
 
   if (process.env.EAS_BUILD && !intercomPluginConfigured) {
     console.warn(
-      '[easner-mobile] Intercom plugin skipped: set EXPO_PUBLIC_INTERCOM_APP_ID, EXPO_PUBLIC_INTERCOM_IOS_API_KEY, and EXPO_PUBLIC_INTERCOM_ANDROID_API_KEY on EAS for native live chat.',
+      '[easner-mobile] Intercom native plugin skipped — live chat needs all of: EXPO_PUBLIC_INTERCOM_APP_ID (or INTERCOM_APP_ID), EXPO_PUBLIC_INTERCOM_IOS_API_KEY (or INTERCOM_IOS_API_KEY), EXPO_PUBLIC_INTERCOM_ANDROID_API_KEY (or INTERCOM_ANDROID_API_KEY). Set them on the EAS Environment for this project and rebuild (OTA alone cannot add native Intercom). See https://developers.intercom.com/installing-intercom/react-native/installation#using-intercom-with-expo',
     )
   }
 
