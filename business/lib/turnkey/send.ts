@@ -92,21 +92,47 @@ async function getSubOrgAndWallet(
   return { subOrgId, sourceAddress }
 }
 
+function asRecord(v: unknown): Record<string, unknown> | null {
+  if (v && typeof v === "object" && !Array.isArray(v)) return v as Record<string, unknown>
+  return null
+}
+
+/** Turnkey `getSendTransactionStatus` expects `sendTransactionStatusId`, not root `id` (often `sha256:` activity fingerprint). */
+export function extractTurnkeySolSendTransactionStatusId(response: Record<string, unknown>): string | null {
+  const take = (v: unknown): string | null => {
+    const s = String(v ?? "").trim()
+    if (!s || s.startsWith("sha256:")) return null
+    return s
+  }
+
+  const direct = take(response.sendTransactionStatusId ?? response.send_transaction_status_id)
+  if (direct) return direct
+
+  const act = asRecord(response.activity)
+  const res = act ? asRecord(act.result) : null
+  if (res) {
+    const sol =
+      asRecord(res.solSendTransactionResult) ?? asRecord(res.sol_send_transaction_result)
+    if (sol) {
+      const nested = take(sol.sendTransactionStatusId ?? sol.send_transaction_status_id)
+      if (nested) return nested
+    }
+  }
+
+  return null
+}
+
 function parseTurnkeySendIds(response: Record<string, unknown>): {
   providerTransactionId: string
   providerEventId: string | null
   txHash: string | null
 } {
-  const providerTransactionId = String(
-    response.sendTransactionStatusId ??
-      response.send_transaction_status_id ??
-      response.activityId ??
-      response.transactionId ??
-      response.id ??
-      "",
-  ).trim()
+  const providerTransactionId = extractTurnkeySolSendTransactionStatusId(response)
   if (!providerTransactionId) {
-    throw new Error("Turnkey send did not return a transaction status id")
+    const status = String(asRecord(response.activity)?.status ?? "").trim() || "unknown"
+    throw new Error(
+      `Turnkey send did not return sendTransactionStatusId (activity.status=${status}). Cannot poll broadcast status.`,
+    )
   }
   const providerEventId = String(response.eventId ?? response.requestId ?? "").trim() || null
   const txHash =

@@ -17,6 +17,8 @@ export function getTurnkeyServer(): Turnkey | null {
       apiPrivateKey: getTurnkeyApiPrivateKey(),
       apiPublicKey: getTurnkeyApiPublicKey(),
       defaultOrganizationId: getTurnkeyOrganizationId(),
+      /** Default SDK poller (3×1s) can return before `solSendTransaction` result is merged; then we mis-parse `id` as status id. */
+      activityPoller: { intervalMs: 1_000, numRetries: 60 },
     })
   }
   return cached
@@ -41,6 +43,7 @@ export function getTurnkeyApiClientForSubOrganization(subOrganizationId: string)
     apiPrivateKey: getTurnkeyApiPrivateKey(),
     apiPublicKey: getTurnkeyApiPublicKey(),
     defaultOrganizationId: orgId,
+    activityPoller: { intervalMs: 1_000, numRetries: 60 },
   })
   return turnkey.apiClient()
 }

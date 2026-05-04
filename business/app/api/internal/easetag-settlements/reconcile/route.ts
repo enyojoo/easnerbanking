@@ -31,6 +31,12 @@ export async function POST(request: Request) {
 
   for (const row of stale) {
     if (!row.turnkey_send_status_id) continue
+    if (String(row.turnkey_send_status_id).startsWith("sha256:")) {
+      errors.push(
+        `${row.transfer_group_id}:stored_turnkey_send_status_id_is_activity_fingerprint_not_broadcast_id`,
+      )
+      continue
+    }
     const subOrg = await resolveSenderTurnkeySubOrgId(admin, row.sender_user_id, row.sender_business_id)
     if (!subOrg) {
       errors.push(`${row.transfer_group_id}:no_sub_org`)
