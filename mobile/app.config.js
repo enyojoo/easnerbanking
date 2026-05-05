@@ -38,24 +38,26 @@ function aliasPublicEnv() {
   }
 }
 
-/** Intercom Expo plugin reads keys only during `eas build` / prebuild — not from the JS bundle. */
-function aliasIntercomEnvForConfig() {
-  if (!process.env.EXPO_PUBLIC_INTERCOM_APP_ID && process.env.INTERCOM_APP_ID) {
-    process.env.EXPO_PUBLIC_INTERCOM_APP_ID = process.env.INTERCOM_APP_ID
+function aliasIntercomEnvFromBusiness() {
+  if (!process.env.EXPO_PUBLIC_INTERCOM_APP_ID && process.env.NEXT_PUBLIC_INTERCOM_APP_ID) {
+    process.env.EXPO_PUBLIC_INTERCOM_APP_ID = process.env.NEXT_PUBLIC_INTERCOM_APP_ID
   }
-  if (!process.env.EXPO_PUBLIC_INTERCOM_IOS_API_KEY && process.env.INTERCOM_IOS_API_KEY) {
-    process.env.EXPO_PUBLIC_INTERCOM_IOS_API_KEY = process.env.INTERCOM_IOS_API_KEY
-  }
-  if (
-    !process.env.EXPO_PUBLIC_INTERCOM_ANDROID_API_KEY &&
-    process.env.INTERCOM_ANDROID_API_KEY
-  ) {
-    process.env.EXPO_PUBLIC_INTERCOM_ANDROID_API_KEY = process.env.INTERCOM_ANDROID_API_KEY
-  }
-  /** Align mobile native region with business web when only NEXT_PUBLIC_INTERCOM_REGION is set locally. */
   if (!process.env.EXPO_PUBLIC_INTERCOM_REGION && process.env.NEXT_PUBLIC_INTERCOM_REGION) {
     process.env.EXPO_PUBLIC_INTERCOM_REGION = process.env.NEXT_PUBLIC_INTERCOM_REGION
   }
+}
+
+/** Expo plugin expects US | EU | AU */
+function parseIntercomPluginRegion(raw) {
+  const s = (raw || '').trim()
+  const upper = s.toUpperCase()
+  if (upper === 'EU' || upper === 'EUROPE') return 'EU'
+  if (upper === 'AU' || upper === 'AP' || upper === 'AUSTRALIA') return 'AU'
+  if (upper === 'US' || upper === 'USA') return 'US'
+  const lower = s.toLowerCase()
+  if (lower === 'eu') return 'EU'
+  if (lower === 'ap' || lower === 'au') return 'AU'
+  return 'US'
 }
 
 function isLocalUrl(value) {
@@ -67,7 +69,7 @@ module.exports = ({ config }) => {
   loadEnvFile(path.join(__dirname, '..', 'business', '.env.local'))
   loadEnvFile(path.join(__dirname, '..', 'business', '.env'))
   aliasPublicEnv()
-  aliasIntercomEnvForConfig()
+  aliasIntercomEnvFromBusiness()
 
   const supabaseUrl =
     process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || ''
@@ -104,47 +106,45 @@ module.exports = ({ config }) => {
     )
   }
 
-  const intercomAppId = (process.env.EXPO_PUBLIC_INTERCOM_APP_ID || '').trim()
-  const intercomIosKey = (process.env.EXPO_PUBLIC_INTERCOM_IOS_API_KEY || '').trim()
-  const intercomAndroidKey = (process.env.EXPO_PUBLIC_INTERCOM_ANDROID_API_KEY || '').trim()
-  /** Native SDK expects US | EU | AU (must match Intercom workspace datacenter). Lowercase or web-style values must normalize — otherwise we silently fell back to US and JWT/chat broke for EU workspaces. */
-  function normalizeIntercomRegion(raw) {
-    const r = (raw || 'US').trim().toLowerCase()
-    if (r === 'eu') return 'EU'
-    if (r === 'us') return 'US'
-    if (r === 'au' || r === 'ap') return 'AU'
-    const u = (raw || '').trim().toUpperCase()
-    return ['US', 'EU', 'AU'].includes(u) ? u : 'US'
-  }
-  const intercomRegion = normalizeIntercomRegion(process.env.EXPO_PUBLIC_INTERCOM_REGION)
-
-  const intercomPluginConfigured = Boolean(
-    intercomAppId && intercomIosKey && intercomAndroidKey,
+  const intercomAppId =
+    process.env.EXPO_PUBLIC_INTERCOM_APP_ID?.trim() ||
+    process.env.INTERCOM_APP_ID?.trim() ||
+    ''
+  const intercomIosApiKey =
+    process.env.EXPO_PUBLIC_INTERCOM_IOS_API_KEY?.trim() ||
+    process.env.INTERCOM_IOS_API_KEY?.trim() ||
+    ''
+  const intercomAndroidApiKey =
+    process.env.EXPO_PUBLIC_INTERCOM_ANDROID_API_KEY?.trim() ||
+    process.env.INTERCOM_ANDROID_API_KEY?.trim() ||
+    ''
+  const intercomRegion = parseIntercomPluginRegion(
+    process.env.EXPO_PUBLIC_INTERCOM_REGION || process.env.NEXT_PUBLIC_INTERCOM_REGION || 'US'
   )
 
-  /**
-   * Intercom + Expo: https://developers.intercom.com/installing-intercom/react-native/installation#using-intercom-with-expo
-   * - Automatic native init: plugin gets appId, iosApiKey, androidApiKey, intercomRegion (US|EU|AU). `useManualInit` omitted → false.
-   * - Do not call Intercom.initialize() from JS unless you set useManualInit: true and remove keys from here per docs.
-   * - Values are injected from env at prebuild/EAS (same shape as Intercom’s JSON example, without committing keys).
-   */
-  const intercomPlugins = intercomPluginConfigured
+  const intercomKeysReady =
+    Boolean(intercomAppId && intercomIosApiKey && intercomAndroidApiKey)
+
+  const intercomPlugins = intercomKeysReady
     ? [
         [
           '@intercom/intercom-react-native',
           {
-            appId: intercomAppId,
-            iosApiKey: intercomIosKey,
-            androidApiKey: intercomAndroidKey,
+            /** Avoid embedding SDK keys in committed native sources; init from JS (see `intercomBootstrap.ts`). */
+            useManualInit: true,
             intercomRegion,
           },
         ],
       ]
     : []
 
-  if (process.env.EAS_BUILD && !intercomPluginConfigured) {
+  if (
+    process.env.EAS_BUILD &&
+    !intercomKeysReady &&
+    (intercomAppId || intercomIosApiKey || intercomAndroidApiKey)
+  ) {
     console.warn(
-      '[easner-mobile] Intercom native plugin skipped — live chat needs all of: EXPO_PUBLIC_INTERCOM_APP_ID (or INTERCOM_APP_ID), EXPO_PUBLIC_INTERCOM_IOS_API_KEY (or INTERCOM_IOS_API_KEY), EXPO_PUBLIC_INTERCOM_ANDROID_API_KEY (or INTERCOM_ANDROID_API_KEY). Set them on the EAS Environment for this project and rebuild (OTA alone cannot add native Intercom). See https://developers.intercom.com/installing-intercom/react-native/installation#using-intercom-with-expo',
+      '[easner-mobile] Intercom env is incomplete — set EXPO_PUBLIC_INTERCOM_APP_ID, EXPO_PUBLIC_INTERCOM_IOS_API_KEY, and EXPO_PUBLIC_INTERCOM_ANDROID_API_KEY (or INTERCOM_* equivalents) for native messenger.'
     )
   }
 
@@ -155,9 +155,9 @@ module.exports = ({ config }) => {
       infoPlist: {
         ...((config.ios && config.ios.infoPlist) || {}),
         NSCameraUsageDescription:
-          'Easner uses the camera when you attach photos in support chat.',
+          'Easner uses the camera when you take or attach photos.',
         NSMicrophoneUsageDescription:
-          'Easner uses the microphone for voice messages in support chat.',
+          'Easner uses the microphone when you record or send audio.',
       },
     },
     plugins: [...(config.plugins || []), ...intercomPlugins],
@@ -166,13 +166,17 @@ module.exports = ({ config }) => {
       supabaseUrl,
       supabasePublishableKey,
       apiUrl,
+      intercomConfigured: intercomKeysReady,
+      ...(intercomKeysReady
+        ? {
+            intercomAppId,
+            intercomIosApiKey,
+            intercomAndroidApiKey,
+          }
+        : {}),
       easetagLedgerP2pEnabled:
         process.env.EXPO_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true' ||
         process.env.NEXT_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true',
-      intercomConfigured: intercomPluginConfigured,
-      /** Non-secret: lets JS logs confirm the native build matches Intercom Settings → App ID / region. */
-      intercomAppId: intercomAppId || undefined,
-      intercomRegion,
     },
   }
 

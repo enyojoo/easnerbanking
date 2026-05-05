@@ -24,7 +24,6 @@ import { hydratePayoutCorridorsFromStorage, refreshPayoutCorridors } from '../li
 import { readProfileSnapshot, writeProfileSnapshot } from '../lib/profileSnapshot'
 import { clearMfaVerified } from '../lib/mfaStatusCache'
 import { warmAvatarCache } from '../lib/avatarCache'
-import { syncIntercomIdentity } from '../lib/intercom'
 import Constants from 'expo-constants'
 
 // Completes the auth session on web popup flows. Native deep links are handled below.
@@ -674,10 +673,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [user?.id])
 
-  useEffect(() => {
-    void syncIntercomIdentity(user)
-  }, [user?.id, user?.email, user?.full_name])
-
   const signIn = async (email: string, password: string, rememberMe: boolean = false) => {
     try {
       console.log('AuthContext: Attempting sign in for:', email)
@@ -975,9 +970,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setUserProfile(null)
       payoutCorridorsBootstrappedForUserRef.current = null
       setLoading(false) // Also set loading to false to ensure AppNavigator doesn't wait
-
-      /** Clear Intercom before Supabase so native messenger never stays “half logged in” vs JS `lastSyncedKey`. */
-      await syncIntercomIdentity(null)
 
       await clearJurisdictionCountryPolicyCache()
 

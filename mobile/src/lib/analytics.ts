@@ -124,10 +124,6 @@ export const analytics = {
     posthog.screen(screenName, withDefaults(properties))
   },
 
-  trackSupportLiveChatOpened: () => {
-    capture('support_live_chat_opened')
-  },
-
   trackNavigationScreenView: (screenName: string, properties?: Props) => {
     const posthog = getPostHog()
     if (!posthog) return

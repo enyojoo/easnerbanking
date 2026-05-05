@@ -60,11 +60,11 @@
       <true/>
     </dict>
     <key>NSCameraUsageDescription</key>
-    <string>Easner uses the camera when you attach photos in support chat.</string>
+    <string>Easner uses the camera when you take or attach photos.</string>
     <key>NSFaceIDUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your Face ID biometric data.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Easner uses the microphone for voice messages in support chat.</string>
+    <string>Easner uses the microphone when you record or send audio.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your photos</string>
     <key>RCTNewArchEnabled</key>
@@ -73,6 +73,7 @@
     <array>
       <string>processing</string>
       <string>fetch</string>
+      <string>remote-notification</string>
     </array>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>

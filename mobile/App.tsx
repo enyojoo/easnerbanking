@@ -17,6 +17,7 @@ import { QueryProvider } from './src/query'
 import { ToastProvider } from './src/components/ToastProvider'
 import { PostHogProvider } from './src/components/PostHogProvider'
 import { analytics } from './src/lib/analytics'
+import { bootstrapIntercomGuestMessenger } from './src/lib/intercomBootstrap'
 import { deepLinkService } from './src/services/DeepLinkService'
 import { pushNotificationService } from './src/lib/pushNotificationService'
 import {
@@ -67,6 +68,10 @@ function AppContent() {
     return () => {
       delete (global as any).rootNavigationRef
     }
+  }, [])
+
+  useEffect(() => {
+    void bootstrapIntercomGuestMessenger()
   }, [])
 
   // Single native splash (`app.json` + `expo-splash-screen`): keep it visible until:

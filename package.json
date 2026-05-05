@@ -31,7 +31,7 @@
     "build:business": "turbo run build --filter=easner-business",
     "start:business": "turbo run start --filter=easner-business",
     "test:login-pin-vectors": "node scripts/login-pin-test-vectors.mjs",
-    "postinstall": "node scripts/fix-bigint-buffer-warn.cjs && node scripts/run-patch-package-if-intercom.cjs"
+    "postinstall": "node scripts/fix-bigint-buffer-warn.cjs"
   },
   "devDependencies": {
     "patch-package": "^8.0.1",
