@@ -130,7 +130,7 @@ module.exports = ({ config }) => {
         [
           '@intercom/intercom-react-native',
           {
-            /** Avoid embedding SDK keys in committed native sources; init from JS (see `intercomBootstrap.ts`). */
+            /** Avoid embedding SDK keys in committed native sources; init from JS (`src/lib/intercom.ts`). */
             useManualInit: true,
             intercomRegion,
           },

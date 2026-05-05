@@ -8,6 +8,7 @@ import {
   Linking,
   Animated,
   Platform,
+  Alert,
 } from 'react-native'
 import { ArrowLeft, ChevronRight } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
@@ -15,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { analytics } from '../../lib/analytics'
+import { presentIntercomMessenger } from '../../lib/intercom'
 import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
@@ -34,6 +36,21 @@ export default function SupportScreen({ navigation }: NavigationProps) {
   useEffect(() => {
     analytics.trackScreenView('Support')
   }, [])
+
+  const handleLiveChat = async () => {
+    try {
+      analytics.trackSupportLiveChatOpened()
+      await presentIntercomMessenger()
+    } catch (e) {
+      const message =
+        e instanceof Error && e.message === 'INTERCOM_NOT_CONFIGURED'
+          ? 'Live chat is not available in this build. Set Intercom env and rebuild, or use email support.'
+          : e instanceof Error && e.message === 'INTERCOM_JWT_UNAVAILABLE'
+            ? 'Could not refresh chat login. Check your connection and that the Easner API can mint Intercom tokens (INTERCOM_MESSENGER_API_SECRET on the server).'
+            : 'Could not open chat. Please try again or use email support.'
+      Alert.alert('Live chat', message)
+    }
+  }
 
   const handleEmailSupport = () => {
     const email = 'support@easner.com'
@@ -159,6 +176,13 @@ export default function SupportScreen({ navigation }: NavigationProps) {
       {/* Contact Options */}
             <View style={styles.sectionCard}>
         <Text style={styles.sectionTitle}>Get in Touch</Text>
+        {renderContactButton(
+          'Live Chat',
+          handleLiveChat,
+          '💬',
+          false,
+          'Message our team in the app',
+        )}
         {renderContactButton('Email Support', handleEmailSupport, '📧', true, 'support@easner.com')}
             </View>
 

@@ -25,6 +25,7 @@ import { readProfileSnapshot, writeProfileSnapshot } from '../lib/profileSnapsho
 import { clearMfaVerified } from '../lib/mfaStatusCache'
 import { warmAvatarCache } from '../lib/avatarCache'
 import Constants from 'expo-constants'
+import { syncIntercomSession } from '../lib/intercom'
 
 // Completes the auth session on web popup flows. Native deep links are handled below.
 WebBrowser.maybeCompleteAuthSession()
@@ -562,6 +563,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           })
           /** Keep MFA sync out of the critical path so OAuth/session restore can leave Auth immediately. */
           void syncMfaGateFromSession()
+          void syncIntercomSession(session)
         }
       } catch (error) {
         console.error('Error getting initial session:', error)
@@ -600,6 +602,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
        */
       if (event === 'TOKEN_REFRESHED' && session?.user) {
         if (mounted) setLoading(false)
+        void syncIntercomSession(session)
         return
       }
 
@@ -631,6 +634,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             warmAvatarCache(snap.profile.avatar_url)
           })
           void syncMfaGateFromSession()
+          void syncIntercomSession(session)
           const profileForce =
             event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'PASSWORD_RECOVERY'
           fetchUserProfile(session.user.id, mappedUser, {
@@ -648,6 +652,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           payoutCorridorsBootstrappedForUserRef.current = null
           setMfaPending(null)
           setLoading(false) // Ensure loading is false so AppNavigator doesn't wait
+          void syncIntercomSession(null)
         }
       } catch (error) {
         console.error('Error handling auth state change:', error)
