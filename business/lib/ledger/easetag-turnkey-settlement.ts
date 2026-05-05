@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
+import { deriveStablecoinAssociatedTokenAddress } from "@/lib/solana/ata"
 import { getWalletOwnerId } from "@/lib/wallet/resolve-wallet-owner"
-import { getActiveWalletAddress } from "@/lib/wallet/turnkey-wallet-db"
 import { getTurnkeyDisplayBalancesUsdEur } from "@/lib/wallet/turnkey-chain-balances"
 
 export function assetForEasetagCurrency(c: "USD" | "EUR"): "USDC" | "EURC" {
@@ -17,9 +17,22 @@ export async function resolvePayeeSolanaVaultAta(
   const ownerId = await getWalletOwnerId(admin, ownerType, ownerRef)
   if (!ownerId) return { error: "payee_wallet_not_provisioned" }
   const asset = assetForEasetagCurrency(input.currency)
-  const ata = await getActiveWalletAddress(admin, ownerId, "solana", asset, input.currency)
-  if (!String(ata || "").trim()) return { error: "payee_wallet_not_provisioned" }
-  return { ata: String(ata).trim() }
+  const { data } = await admin
+    .from("wallet_accounts")
+    .select("address, associated_token_account_address")
+    .eq("wallet_owner_id", ownerId)
+    .eq("chain", "solana")
+    .eq("asset", asset)
+    .eq("ledger_currency", input.currency)
+    .eq("status", "active")
+    .maybeSingle()
+  const vault = String(data?.address ?? "").trim()
+  if (!vault) return { error: "payee_wallet_not_provisioned" }
+  const fromDb = String(data?.associated_token_account_address ?? "").trim()
+  const derived = deriveStablecoinAssociatedTokenAddress(vault, asset)
+  const ata = (fromDb || derived || "").trim()
+  if (!ata) return { error: "payee_wallet_not_provisioned" }
+  return { ata }
 }
 
 export async function preflightSenderOnChainStablecoinBalance(

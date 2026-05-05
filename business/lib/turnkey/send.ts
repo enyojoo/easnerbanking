@@ -386,7 +386,8 @@ function extractTurnkeySendFailureSummary(raw: unknown): string | null {
     String(asRecord(r.error)?.message ?? "").trim(),
     String(sol?.rpcMessage ?? "").trim(),
   ].filter(Boolean)
-  return parts.length ? parts.join(" | ").slice(0, 1500) : null
+  const unique = [...new Set(parts)]
+  return unique.length ? unique.join(" | ").slice(0, 1500) : null
 }
 
 export async function createTurnkeySend(
