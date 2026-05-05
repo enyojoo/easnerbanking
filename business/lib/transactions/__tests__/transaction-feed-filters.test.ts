@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest"
-import { isTurnkeyTransactionHiddenFromFeed } from "@/lib/transactions/transaction-feed-filters"
+import {
+  isEasetagChainSettlementTransaction,
+  isTurnkeyTransactionHiddenFromFeed,
+} from "@/lib/transactions/transaction-feed-filters"
 import { deterministicTransferGroupUuid } from "@/lib/ledger/easetag-transfer"
 
 describe("isTurnkeyTransactionHiddenFromFeed", () => {
@@ -15,6 +18,22 @@ describe("isTurnkeyTransactionHiddenFromFeed", () => {
 
   it("returns true when suppress_in_feed is true", () => {
     expect(isTurnkeyTransactionHiddenFromFeed({ suppress_in_feed: true })).toBe(true)
+  })
+})
+
+describe("isEasetagChainSettlementTransaction", () => {
+  it("returns false for null or empty metadata", () => {
+    expect(isEasetagChainSettlementTransaction(null)).toBe(false)
+    expect(isEasetagChainSettlementTransaction({})).toBe(false)
+  })
+
+  it("returns true when easetag_settlement_leg is true or string true", () => {
+    expect(isEasetagChainSettlementTransaction({ easetag_settlement_leg: true })).toBe(true)
+    expect(isEasetagChainSettlementTransaction({ easetag_settlement_leg: "true" })).toBe(true)
+  })
+
+  it("returns false for suppress_in_feed without easetag_settlement_leg", () => {
+    expect(isEasetagChainSettlementTransaction({ suppress_in_feed: true })).toBe(false)
   })
 })
 

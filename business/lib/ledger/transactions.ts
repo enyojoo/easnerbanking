@@ -3,6 +3,7 @@ import { ensureExchangeRatesFresh, findExchangeRate } from "@/lib/fx/exchange-ra
 import { ensureEasnerTransactionId } from "@/lib/easner-transaction-id"
 import { sendTransactionSettledPush } from "@/lib/notifications/expo-push"
 import { buildTransactionSettledPushContent } from "@/lib/notifications/transaction-settled-content"
+import { isEasetagChainSettlementTransaction } from "@/lib/transactions/transaction-feed-filters"
 
 export type LedgerDirection = "in" | "out"
 
@@ -145,7 +146,7 @@ export async function upsertLedgerTransaction(
       .update(record)
       .eq("id", existing.id)
     if (error) throw error
-    if (becameSettled) {
+    if (becameSettled && !isEasetagChainSettlementTransaction(mergedMetadata)) {
       const { title, body } = buildTransactionSettledPushContent({
         provider,
         direction,
@@ -171,7 +172,7 @@ export async function upsertLedgerTransaction(
   if (!insertedId) throw new Error("Inserted transaction missing id")
 
   const insertedBecameSettled = nextStatus === "settled"
-  if (insertedBecameSettled) {
+  if (insertedBecameSettled && !isEasetagChainSettlementTransaction(mergedMetadata)) {
     const { title, body } = buildTransactionSettledPushContent({
       provider,
       direction,
