@@ -47,6 +47,7 @@ export async function POST(request: Request) {
       provider_transaction_id: created.providerTransactionId,
       transaction_id: created.ledgerId,
       status: created.status,
+      chain_failure_detail: created.chainFailureDetail,
     })
   } catch (e) {
     const correlationId = crypto.randomUUID()

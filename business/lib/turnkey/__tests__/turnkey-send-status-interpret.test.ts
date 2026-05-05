@@ -58,6 +58,14 @@ describe("interpretTurnkeyGetSendTransactionStatus", () => {
     ).toEqual({ status: "settled", txHash: "sigOnly" })
   })
 
+  it("unwraps nested result shape from some gateways", () => {
+    expect(
+      interpretTurnkeyGetSendTransactionStatus({
+        result: { txStatus: "COMPLETED", solana: { signature: "sigNested" } },
+      }),
+    ).toEqual({ status: "settled", txHash: "sigNested" })
+  })
+
   it("keeps pending when txStatus is explicit PENDING even if signature is present", () => {
     expect(
       interpretTurnkeyGetSendTransactionStatus({

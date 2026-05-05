@@ -2,7 +2,7 @@ import { Connection, PublicKey, SystemProgram, Transaction } from "@solana/web3.
 import { createTransferCheckedInstruction, getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token"
 import { mintForStablecoinAsset } from "@/lib/solana/spl-mints"
 
-function getSolanaRpcUrl(): string {
+export function getSolanaRpcUrl(): string {
   return (process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com").trim()
 }
 
@@ -28,6 +28,11 @@ export async function buildStablecoinSplTransferUnsignedTxPayloadForTurnkey(inpu
   amountHuman: number
   /** When true, prepend a System Program ix (Turnkey sponsored Solana constraint). */
   sponsoredFlow: boolean
+  /**
+   * When set, use this blockhash instead of fetching RPC here (keeps wire hash aligned with
+   * `recentBlockhash` passed to Turnkey `solSendTransaction`, reducing expiry skew).
+   */
+  recentBlockhash?: string
 }): Promise<string> {
   const mintStr = mintForStablecoinAsset(input.asset)
   if (!mintStr) throw new Error("Unsupported asset for Solana SPL transfer")
@@ -55,8 +60,9 @@ export async function buildStablecoinSplTransferUnsignedTxPayloadForTurnkey(inpu
     TOKEN_PROGRAM_ID,
   )
 
-  const connection = new Connection(getSolanaRpcUrl(), "confirmed")
-  const { blockhash } = await connection.getLatestBlockhash("confirmed")
+  const blockhash =
+    String(input.recentBlockhash || "").trim() ||
+    (await new Connection(getSolanaRpcUrl(), "confirmed").getLatestBlockhash("finalized")).blockhash
 
   const tx = new Transaction({
     feePayer: owner,

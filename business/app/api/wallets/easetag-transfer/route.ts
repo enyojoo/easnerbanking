@@ -309,6 +309,22 @@ export async function POST(request: Request) {
         easetagSettlement: { transferGroupId },
       })
       await updateEasetagSettlementSubmitted(admin, transferGroupId, send.providerTransactionId, send.txHash)
+      if (send.status === "failed") {
+        const detail =
+          send.chainFailureDetail?.trim() ||
+          "Turnkey Solana broadcast failed (check gas sponsorship, rent sponsorship, and wallet USDC on-chain balance)."
+        await rollbackEasetagP2pLedger(admin, {
+          transferGroupId: result.transferGroupId,
+          amount: amt,
+          currency: currencyRaw as "USD" | "EUR",
+          senderUserId,
+          senderBusinessId,
+          payeeUserId: payeeUserId!,
+          payeeBusinessId: payeeBusinessId ?? null,
+        })
+        await updateEasetagSettlementFailed(admin, transferGroupId, detail).catch(() => {})
+        return NextResponse.json({ ok: false, error: "turnkey_chain_settlement_failed", detail }, { status: 502 })
+      }
       if (send.status === "settled") {
         await updateEasetagSettlementSettled(admin, transferGroupId, send.txHash)
       } else if (send.subOrgId) {

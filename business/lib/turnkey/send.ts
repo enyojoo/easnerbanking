@@ -4,7 +4,8 @@ import {
   getTurnkeySolanaBroadcastCaip2,
   isTurnkeySolSponsorshipEnabled,
 } from "@/lib/turnkey/config"
-import { buildStablecoinSplTransferUnsignedTxPayloadForTurnkey } from "@/lib/turnkey/sol-spl-transfer-unsigned-tx"
+import { buildStablecoinSplTransferUnsignedTxPayloadForTurnkey, getSolanaRpcUrl } from "@/lib/turnkey/sol-spl-transfer-unsigned-tx"
+import { Connection } from "@solana/web3.js"
 import { resolveWalletOwnerIdForEasnerContext } from "@/lib/wallet/resolve-wallet-owner"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
@@ -365,6 +366,29 @@ function parseTurnkeySendIds(response: Record<string, unknown>): {
   return { providerTransactionId, providerEventId, txHash }
 }
 
+/** Turnkey query bodies are usually flat; unwrap common gateway nesting. */
+export function normalizeTurnkeyGetSendTransactionStatusPayload(raw: unknown): Record<string, unknown> {
+  const r = asRecord(raw)
+  if (!r) return {}
+  if (r.txStatus != null || r.solana != null || r.eth != null || r.txError != null) return r
+  const inner = asRecord(r.result ?? r.data ?? r.activity ?? r.sendTransactionStatus)
+  if (inner && (inner.txStatus != null || inner.solana != null || inner.eth != null || inner.txError != null)) {
+    return inner
+  }
+  return r
+}
+
+function extractTurnkeySendFailureSummary(raw: unknown): string | null {
+  const r = normalizeTurnkeyGetSendTransactionStatusPayload(raw)
+  const sol = asRecord(r.solana)
+  const parts = [
+    String(r.txError ?? "").trim(),
+    String(asRecord(r.error)?.message ?? "").trim(),
+    String(sol?.rpcMessage ?? "").trim(),
+  ].filter(Boolean)
+  return parts.length ? parts.join(" | ").slice(0, 1500) : null
+}
+
 export async function createTurnkeySend(
   admin: SupabaseClient,
   input: TurnkeySendInput,
@@ -374,6 +398,8 @@ export async function createTurnkeySend(
   status: "pending" | "settled" | "failed"
   txHash: string | null
   subOrgId: string
+  /** Populated when Turnkey broadcast/simulation ends in FAILED (for Easetag rollback / ops). */
+  chainFailureDetail: string | null
 }> {
   const destinationAddress = String(input.destinationAddress || "").trim()
   if (!destinationAddress) throw new Error("destinationAddress is required")
@@ -393,6 +419,9 @@ export async function createTurnkeySend(
   const caip2 = getTurnkeySolanaBroadcastCaip2()
   const destinationIsTokenAccount = Boolean(input.destinationIsTokenAccount)
 
+  const connection = new Connection(getSolanaRpcUrl(), "confirmed")
+  const { blockhash } = await connection.getLatestBlockhash("finalized")
+
   const unsignedTransaction = await buildStablecoinSplTransferUnsignedTxPayloadForTurnkey({
     asset: input.asset,
     ownerAddress: sender.sourceAddress,
@@ -400,6 +429,7 @@ export async function createTurnkeySend(
     destinationIsTokenAccount,
     amountHuman: input.amount,
     sponsoredFlow: sponsor,
+    recentBlockhash: blockhash,
   })
 
   let sendRes: unknown
@@ -416,7 +446,7 @@ export async function createTurnkeySend(
       unsignedTransaction,
       signWith: sender.sourceAddress,
       caip2,
-      ...(sponsor ? { sponsor: true } : {}),
+      ...(sponsor ? { sponsor: true, recentBlockhash: blockhash } : {}),
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -484,6 +514,7 @@ export async function createTurnkeySend(
     status: "pending",
     txHash: parsed.txHash,
   }
+  let lastPollPayload: unknown = null
   try {
     const pollMs = Number(process.env.TURNKEY_SOL_SEND_POLL_TIMEOUT_MS)
     const pollTimeoutMs =
@@ -492,27 +523,38 @@ export async function createTurnkeySend(
     const pollIntervalMs =
       Number.isFinite(intervalMsRaw) && intervalMsRaw >= 200 ? Math.min(intervalMsRaw, 5_000) : 500
 
-    const terminalPayload = await pollUntilTurnkeySendTerminal(
+    lastPollPayload = await pollUntilTurnkeySendTerminal(
       client,
       sender.subOrgId,
       parsed.providerTransactionId,
       { timeoutMs: pollTimeoutMs, intervalMs: pollIntervalMs },
     )
-    const polled = interpretTurnkeyGetSendTransactionStatus(terminalPayload)
+    const polled = interpretTurnkeyGetSendTransactionStatus(lastPollPayload)
     console.info("turnkey_sol_send_poll_done", {
       subOrgId: sender.subOrgId,
       terminal: polled.status,
       hasSig: Boolean(polled.txHash),
     })
+    if (polled.status === "pending" && lastPollPayload != null) {
+      const stall = normalizeTurnkeyGetSendTransactionStatusPayload(lastPollPayload)
+      console.warn("turnkey_sol_send_still_pending", {
+        subOrgId: sender.subOrgId,
+        txStatus: stall.txStatus ?? null,
+        txError: stall.txError ?? null,
+      })
+    }
 
     reconciled = await reconcileTurnkeySendStatus(admin, {
       subOrgId: sender.subOrgId,
       providerTransactionId: parsed.providerTransactionId,
-      ...(terminalPayload != null ? { statusResponse: terminalPayload } : {}),
+      ...(lastPollPayload != null ? { statusResponse: lastPollPayload } : {}),
     })
   } catch {
     // Best-effort reconciliation.
   }
+
+  const chainFailureDetail =
+    reconciled.status === "failed" ? extractTurnkeySendFailureSummary(lastPollPayload) : null
 
   return {
     providerTransactionId: parsed.providerTransactionId,
@@ -520,13 +562,13 @@ export async function createTurnkeySend(
     status: reconciled.status,
     txHash: reconciled.txHash ?? parsed.txHash,
     subOrgId: sender.subOrgId,
+    chainFailureDetail,
   }
 }
 
 /** Turnkey nests Solana signature on `getSendTransactionStatus` under `solana.signature`, not root `signature`. */
 export function extractTxHashFromTurnkeySendStatusResponse(res: unknown): string | null {
-  const r = asRecord(res)
-  if (!r) return null
+  const r = normalizeTurnkeyGetSendTransactionStatusPayload(res)
   const sol = asRecord(r.solana)
   const eth = asRecord(r.eth)
   const fromSol = String(sol?.signature ?? "").trim()
@@ -545,7 +587,7 @@ export function interpretTurnkeyGetSendTransactionStatus(res: unknown): {
   status: "pending" | "settled" | "failed"
   txHash: string | null
 } {
-  const r = asRecord(res) || {}
+  const r = normalizeTurnkeyGetSendTransactionStatusPayload(res)
   const txHash = extractTxHashFromTurnkeySendStatusResponse(r)
 
   const txError = String(r.txError ?? "").trim()
@@ -569,7 +611,9 @@ export function interpretTurnkeyGetSendTransactionStatus(res: unknown): {
     statusRaw.includes("confirm") ||
     statusRaw.includes("includ") ||
     statusRaw.includes("complete") ||
-    statusRaw.includes("success")
+    statusRaw.includes("success") ||
+    statusRaw.includes("landed") ||
+    statusRaw.includes("finalized")
   ) {
     return { status: "settled", txHash }
   }
@@ -619,11 +663,13 @@ export async function reconcileTurnkeySendStatus(
   }
   const res =
     params.statusResponse !== undefined
-      ? params.statusResponse
-      : await client.getSendTransactionStatus({
-          organizationId: params.subOrgId,
-          sendTransactionStatusId: params.providerTransactionId,
-        })
+      ? normalizeTurnkeyGetSendTransactionStatusPayload(params.statusResponse)
+      : normalizeTurnkeyGetSendTransactionStatusPayload(
+          await client.getSendTransactionStatus({
+            organizationId: params.subOrgId,
+            sendTransactionStatusId: params.providerTransactionId,
+          }),
+        )
   const { status, txHash } = interpretTurnkeyGetSendTransactionStatus(res)
 
   const { data: existing } = await admin
