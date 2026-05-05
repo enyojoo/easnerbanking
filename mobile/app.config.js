@@ -122,6 +122,12 @@ module.exports = ({ config }) => {
     intercomAppId && intercomIosKey && intercomAndroidKey,
   )
 
+  /**
+   * Intercom + Expo: https://developers.intercom.com/installing-intercom/react-native/installation#using-intercom-with-expo
+   * - Automatic native init: plugin gets appId, iosApiKey, androidApiKey, intercomRegion (US|EU|AU). `useManualInit` omitted → false.
+   * - Do not call Intercom.initialize() from JS unless you set useManualInit: true and remove keys from here per docs.
+   * - Values are injected from env at prebuild/EAS (same shape as Intercom’s JSON example, without committing keys).
+   */
   const intercomPlugins = intercomPluginConfigured
     ? [
         [

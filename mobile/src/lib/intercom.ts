@@ -251,7 +251,7 @@ async function refreshIntercomJwtIfConfigured(): Promise<void> {
  */
 export async function presentIntercomMessenger(user?: User | null): Promise<void> {
   if (Platform.OS === 'web') {
-    throw new Error('Live chat is only available in the mobile app.')
+    throw new Error('LIVE_CHAT_UNAVAILABLE')
   }
   const extra = Constants.expoConfig?.extra as { intercomAppId?: string; intercomRegion?: string } | undefined
   if (extra?.intercomAppId && !loggedIntercomBuildHint) {
@@ -267,14 +267,15 @@ export async function presentIntercomMessenger(user?: User | null): Promise<void
   }
   const loggedIn = await Intercom.isUserLoggedIn()
   if (!loggedIn) {
-    throw new Error(
-      'Live chat could not start. If your Intercom admin URL is app.eu.intercom.com or app.au.intercom.com, set EXPO_PUBLIC_INTERCOM_REGION to EU or AU in EAS, then run a new native build. (app.intercom.com → US.) If the region is already correct, check device logs for [Intercom] and use email support.',
+    console.warn(
+      '[Intercom] isUserLoggedIn() is false after sync — not blocking open; if chat still fails, verify iOS/Android Messenger enabled in Intercom, and that JWT + native app_id/keys are the same workspace. API:',
+      getApiBaseUrl(),
     )
   }
   try {
     await Intercom.present()
   } catch (e) {
     logIntercomNativeError('present() failed', e)
-    throw e
+    throw new Error('LIVE_CHAT_UNAVAILABLE')
   }
 }

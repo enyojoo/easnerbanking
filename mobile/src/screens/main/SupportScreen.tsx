@@ -56,12 +56,17 @@ export default function SupportScreen({ navigation }: NavigationProps) {
       analytics.trackSupportLiveChatOpened()
       await presentIntercomMessenger(user)
     } catch (e) {
-      const message =
-        e instanceof Error ? e.message : 'Unable to open live chat. Try email support instead.'
-      Alert.alert('Live Chat unavailable', message, [
-        { text: 'Email support', onPress: handleEmailSupport },
-        { text: 'OK', style: 'cancel' },
-      ])
+      if (__DEV__) {
+        console.warn('[Support] Live chat error:', e)
+      }
+      Alert.alert(
+        'Live Chat unavailable',
+        "We couldn’t open chat just now. Please try again later, or contact us by email.",
+        [
+          { text: 'Email support', onPress: handleEmailSupport },
+          { text: 'OK', style: 'cancel' },
+        ],
+      )
     }
   }
 
