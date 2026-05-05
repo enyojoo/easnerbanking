@@ -110,10 +110,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const noahKycStatus =
     userProfile?.noah_kyc_status ??
     (userProfile as { noah_kyc_status?: string; profile?: { noah_kyc_status?: string } })?.profile?.noah_kyc_status
-  const { data: exchangeRatesFromContext = [] } = useExchangeRatesList()
   const { balances, refreshBalances } = useBalance()
-  // Ensure exchangeRates is always an array (fallback to empty array if undefined)
-  const exchangeRates = exchangeRatesFromContext || []
   
   // Get recipient from route params if coming from the send recipient hub
   const recipientFromRoute = (route.params as any)?.recipient as Recipient | undefined
@@ -151,6 +148,16 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   )
   const [amountEntryMode, setAmountEntryMode] = useState<'receive' | 'send'>('receive')
   const [pricingPreviewQuote, setPricingPreviewQuote] = useState<PricingQuote | null>(null)
+
+  /** Same-currency Easetag P2P never uses Noah `/prices` (two FX quotes); skip the query to speed the send flow. */
+  const skipNoahExchangeRatesForEasetagP2p =
+    isEasetagRecipient &&
+    selectedPaymentMethod === 'balance' &&
+    String(selectedBalanceCurrency).toUpperCase() === String((recipient?.currency || '').trim().toUpperCase())
+  const { data: exchangeRatesFromContext = [] } = useExchangeRatesList({
+    enabled: !skipNoahExchangeRatesForEasetagP2p,
+  })
+  const exchangeRates = exchangeRatesFromContext || []
 
   // Initialize sending balance currency once:
   // 1) honor incoming preference from prior screen flow, 2) otherwise fallback to available balance.
