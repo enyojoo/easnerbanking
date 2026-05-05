@@ -268,7 +268,7 @@ export async function presentIntercomMessenger(user?: User | null): Promise<void
   const loggedIn = await Intercom.isUserLoggedIn()
   if (!loggedIn) {
     throw new Error(
-      'Support chat could not connect. Check your connection, ensure EXPO_PUBLIC_INTERCOM_REGION matches your Intercom workspace (e.g. EU), then try again or use email support.',
+      'Live chat could not start. If your Intercom admin URL is app.eu.intercom.com or app.au.intercom.com, set EXPO_PUBLIC_INTERCOM_REGION to EU or AU in EAS, then run a new native build. (app.intercom.com → US.) If the region is already correct, check device logs for [Intercom] and use email support.',
     )
   }
   try {

@@ -52,6 +52,10 @@ function aliasIntercomEnvForConfig() {
   ) {
     process.env.EXPO_PUBLIC_INTERCOM_ANDROID_API_KEY = process.env.INTERCOM_ANDROID_API_KEY
   }
+  /** Align mobile native region with business web when only NEXT_PUBLIC_INTERCOM_REGION is set locally. */
+  if (!process.env.EXPO_PUBLIC_INTERCOM_REGION && process.env.NEXT_PUBLIC_INTERCOM_REGION) {
+    process.env.EXPO_PUBLIC_INTERCOM_REGION = process.env.NEXT_PUBLIC_INTERCOM_REGION
+  }
 }
 
 function isLocalUrl(value) {
