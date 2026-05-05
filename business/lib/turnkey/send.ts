@@ -502,6 +502,65 @@ export async function createTurnkeySend(
   }
 }
 
+/** Turnkey nests Solana signature on `getSendTransactionStatus` under `solana.signature`, not root `signature`. */
+export function extractTxHashFromTurnkeySendStatusResponse(res: unknown): string | null {
+  const r = asRecord(res)
+  if (!r) return null
+  const sol = asRecord(r.solana)
+  const eth = asRecord(r.eth)
+  const fromSol = String(sol?.signature ?? "").trim()
+  if (fromSol) return fromSol
+  const fromEth = String(eth?.txHash ?? "").trim()
+  if (fromEth) return fromEth
+  const top = String(r.signature ?? r.txHash ?? r.transactionHash ?? r.hash ?? "").trim()
+  return top || null
+}
+
+/**
+ * Maps Turnkey `getSendTransactionStatus` to Easner ledger semantics.
+ * @see Turnkey `pollTransactionStatus` — terminal success `COMPLETED` | `INCLUDED`, failure `FAILED` | `CANCELLED`.
+ */
+export function interpretTurnkeyGetSendTransactionStatus(res: unknown): {
+  status: "pending" | "settled" | "failed"
+  txHash: string | null
+} {
+  const r = asRecord(res) || {}
+  const txHash = extractTxHashFromTurnkeySendStatusResponse(r)
+
+  const txError = String(r.txError ?? "").trim()
+  const errObj = asRecord(r.error)
+  const errMsg = String(errObj?.message ?? "").trim()
+  if (txError || errMsg) {
+    return { status: "failed", txHash }
+  }
+
+  const statusRaw = String(
+    r.txStatus ?? r.status ?? r.transactionStatus ?? r.sendTransactionStatus ?? "",
+  ).toLowerCase()
+
+  if (statusRaw.includes("fail") || statusRaw.includes("revert") || statusRaw.includes("cancel")) {
+    return { status: "failed", txHash }
+  }
+
+  if (
+    statusRaw === "completed" ||
+    statusRaw === "included" ||
+    statusRaw.includes("confirm") ||
+    statusRaw.includes("includ") ||
+    statusRaw.includes("complete") ||
+    statusRaw.includes("success")
+  ) {
+    return { status: "settled", txHash }
+  }
+
+  // If Turnkey omits `txStatus` briefly but already populated the chain payload, treat as settled.
+  if (txHash) {
+    return { status: "settled", txHash }
+  }
+
+  return { status: "pending", txHash: null }
+}
+
 export async function reconcileTurnkeySendStatus(
   admin: SupabaseClient,
   params: { subOrgId: string; providerTransactionId: string },
@@ -515,16 +574,7 @@ export async function reconcileTurnkeySendStatus(
     organizationId: params.subOrgId,
     sendTransactionStatusId: params.providerTransactionId,
   })
-  const statusRaw = String(
-    res?.txStatus ?? res?.status ?? res?.transactionStatus ?? res?.sendTransactionStatus ?? "",
-  ).toLowerCase()
-  const status =
-    statusRaw.includes("fail") || statusRaw.includes("revert")
-      ? "failed"
-      : statusRaw.includes("confirm") || statusRaw.includes("includ") || statusRaw.includes("complete")
-        ? "settled"
-        : "pending"
-  const txHash = String(res?.signature ?? res?.txHash ?? res?.transactionHash ?? "").trim() || null
+  const { status, txHash } = interpretTurnkeyGetSendTransactionStatus(res)
 
   const { data: existing } = await admin
     .from("transactions")
