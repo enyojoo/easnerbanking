@@ -485,9 +485,30 @@ export async function createTurnkeySend(
     txHash: parsed.txHash,
   }
   try {
+    const pollMs = Number(process.env.TURNKEY_SOL_SEND_POLL_TIMEOUT_MS)
+    const pollTimeoutMs =
+      Number.isFinite(pollMs) && pollMs >= 5_000 ? Math.min(pollMs, 180_000) : 90_000
+    const intervalMsRaw = Number(process.env.TURNKEY_SOL_SEND_POLL_INTERVAL_MS)
+    const pollIntervalMs =
+      Number.isFinite(intervalMsRaw) && intervalMsRaw >= 200 ? Math.min(intervalMsRaw, 5_000) : 500
+
+    const terminalPayload = await pollUntilTurnkeySendTerminal(
+      client,
+      sender.subOrgId,
+      parsed.providerTransactionId,
+      { timeoutMs: pollTimeoutMs, intervalMs: pollIntervalMs },
+    )
+    const polled = interpretTurnkeyGetSendTransactionStatus(terminalPayload)
+    console.info("turnkey_sol_send_poll_done", {
+      subOrgId: sender.subOrgId,
+      terminal: polled.status,
+      hasSig: Boolean(polled.txHash),
+    })
+
     reconciled = await reconcileTurnkeySendStatus(admin, {
       subOrgId: sender.subOrgId,
       providerTransactionId: parsed.providerTransactionId,
+      ...(terminalPayload != null ? { statusResponse: terminalPayload } : {}),
     })
   } catch {
     // Best-effort reconciliation.
@@ -534,9 +555,9 @@ export function interpretTurnkeyGetSendTransactionStatus(res: unknown): {
     return { status: "failed", txHash }
   }
 
-  const statusRaw = String(
-    r.txStatus ?? r.status ?? r.transactionStatus ?? r.sendTransactionStatus ?? "",
-  ).toLowerCase()
+  const statusPick =
+    r.txStatus ?? r.status ?? r.transactionStatus ?? r.sendTransactionStatus ?? null
+  const statusRaw = (statusPick == null ? "" : String(statusPick)).toLowerCase()
 
   if (statusRaw.includes("fail") || statusRaw.includes("revert") || statusRaw.includes("cancel")) {
     return { status: "failed", txHash }
@@ -553,27 +574,56 @@ export function interpretTurnkeyGetSendTransactionStatus(res: unknown): {
     return { status: "settled", txHash }
   }
 
-  // If Turnkey omits `txStatus` briefly but already populated the chain payload, treat as settled.
-  if (txHash) {
+  // Early snapshots may omit `txStatus` while `solana.signature` is already present.
+  if (txHash && statusRaw === "") {
     return { status: "settled", txHash }
   }
 
-  return { status: "pending", txHash: null }
+  return { status: "pending", txHash }
+}
+
+/**
+ * Polls `getSendTransactionStatus` until {@link interpretTurnkeyGetSendTransactionStatus} is terminal
+ * or timeout. Turnkey's SDK `pollTransactionStatus` skips ticks when `txStatus` is empty, which can
+ * hang; we use our own loop and shared interpretation (incl. `solana.signature`).
+ */
+async function pollUntilTurnkeySendTerminal(
+  client: TurnkeyClientLike,
+  organizationId: string,
+  sendTransactionStatusId: string,
+  opts: { timeoutMs: number; intervalMs: number },
+): Promise<unknown | null> {
+  if (typeof client.getSendTransactionStatus !== "function") return null
+  const deadline = Date.now() + opts.timeoutMs
+  let last: unknown = null
+  while (Date.now() < deadline) {
+    last = await client.getSendTransactionStatus({
+      organizationId,
+      sendTransactionStatusId,
+    })
+    const m = interpretTurnkeyGetSendTransactionStatus(last)
+    if (m.status === "settled" || m.status === "failed") return last
+    await sleep(opts.intervalMs)
+  }
+  return last
 }
 
 export async function reconcileTurnkeySendStatus(
   admin: SupabaseClient,
-  params: { subOrgId: string; providerTransactionId: string },
+  params: { subOrgId: string; providerTransactionId: string; statusResponse?: unknown },
 ): Promise<{ status: "pending" | "settled" | "failed"; txHash: string | null }> {
   const client = getTurnkeyApiClientForSubOrganization(params.subOrgId) as TurnkeyClientLike | null
   if (!client) throw new Error("Turnkey API client is not configured")
   if (typeof client.getSendTransactionStatus !== "function") {
     return { status: "pending", txHash: null }
   }
-  const res = await client.getSendTransactionStatus({
-    organizationId: params.subOrgId,
-    sendTransactionStatusId: params.providerTransactionId,
-  })
+  const res =
+    params.statusResponse !== undefined
+      ? params.statusResponse
+      : await client.getSendTransactionStatus({
+          organizationId: params.subOrgId,
+          sendTransactionStatusId: params.providerTransactionId,
+        })
   const { status, txHash } = interpretTurnkeyGetSendTransactionStatus(res)
 
   const { data: existing } = await admin

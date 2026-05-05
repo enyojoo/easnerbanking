@@ -50,11 +50,20 @@ describe("interpretTurnkeyGetSendTransactionStatus", () => {
     })
   })
 
-  it("treats signature without explicit terminal status as settled", () => {
+  it("treats signature without txStatus as settled (early snapshot)", () => {
     expect(
       interpretTurnkeyGetSendTransactionStatus({
         solana: { signature: "sigOnly" },
       }),
     ).toEqual({ status: "settled", txHash: "sigOnly" })
+  })
+
+  it("keeps pending when txStatus is explicit PENDING even if signature is present", () => {
+    expect(
+      interpretTurnkeyGetSendTransactionStatus({
+        txStatus: "PENDING",
+        solana: { signature: "sigEarly" },
+      }),
+    ).toEqual({ status: "pending", txHash: "sigEarly" })
   })
 })
