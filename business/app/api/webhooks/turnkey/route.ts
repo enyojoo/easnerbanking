@@ -19,10 +19,33 @@ export async function POST(request: Request) {
   const sig =
     request.headers.get("X-Turnkey-Signature") ||
     request.headers.get("x-turnkey-signature") ||
-    request.headers.get("X-Webhook-Signature")
+    request.headers.get("X-Webhook-Signature") ||
+    request.headers.get("webhook-signature") ||
+    request.headers.get("Webhook-Signature") ||
+    request.headers.get("svix-signature")
 
-  if (!verifyTurnkeyWebhookSignature(raw, sig)) {
-    return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 })
+  const allowUnsigned =
+    process.env.TURNKEY_WEBHOOK_ALLOW_UNSIGNED === "true" || process.env.TURNKEY_WEBHOOK_ALLOW_UNSIGNED === "1"
+
+  if (sig?.trim()) {
+    if (!verifyTurnkeyWebhookSignature(raw, sig)) {
+      return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 })
+    }
+  } else if (secretConfigured) {
+    if (allowUnsigned) {
+      console.warn(
+        "turnkey_webhook: unsigned delivery accepted (TURNKEY_WEBHOOK_ALLOW_UNSIGNED is set). Prefer verifying X-Turnkey-Signature when Turnkey sends it.",
+      )
+    } else {
+      return NextResponse.json(
+        {
+          error: "Missing webhook signature header",
+          hint:
+            "Turnkey organization activity webhooks (FEATURE_NAME_WEBHOOK) are not documented as signed. If your deliveries have no signature header, set TURNKEY_WEBHOOK_ALLOW_UNSIGNED=true after assessing risk, or verify using another mechanism.",
+        },
+        { status: 401 },
+      )
+    }
   }
 
   let payload: unknown

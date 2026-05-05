@@ -101,23 +101,47 @@ const DEEP_SEARCH_SKIP = new Set(["votes", "intent"])
 
 function takeSendStatusId(v: unknown): string | null {
   const s = String(v ?? "").trim()
-  if (!s || s.startsWith("sha256:")) return null
+  if (!s) return null
+  // Turnkey may set `sendTransactionStatusId` to the activity fingerprint (`sha256:…`); that value is valid for `getSendTransactionStatus`.
   return s
 }
 
 function normalizeActivityResult(result: unknown): Record<string, unknown> | null {
+  if (Array.isArray(result) && result.length === 1) {
+    return normalizeActivityResult(result[0])
+  }
   const obj = asRecord(result)
   if (obj) return obj
   if (typeof result === "string") {
     const t = result.trim()
     if (!t.startsWith("{") && !t.startsWith("[")) return null
     try {
-      return asRecord(JSON.parse(t) as unknown)
+      return normalizeActivityResult(JSON.parse(t) as unknown)
     } catch {
       return null
     }
   }
   return null
+}
+
+function unwrapSolSendTransactionResultPayload(raw: unknown): Record<string, unknown> | null {
+  if (Array.isArray(raw)) {
+    for (const item of raw) {
+      const hit = unwrapSolSendTransactionResultPayload(item)
+      if (hit) return hit
+    }
+    return null
+  }
+  if (typeof raw === "string") {
+    const t = raw.trim()
+    if (!t.startsWith("{") && !t.startsWith("[")) return null
+    try {
+      return unwrapSolSendTransactionResultPayload(JSON.parse(t) as unknown)
+    } catch {
+      return null
+    }
+  }
+  return asRecord(raw)
 }
 
 function extractSendStatusIdFromAppProofs(activity: Record<string, unknown>): string | null {
@@ -141,6 +165,13 @@ function extractSendStatusIdFromAppProofs(activity: Record<string, unknown>): st
 /** Depth-first: Turnkey sometimes nests `sendTransactionStatusId` under protobuf/JSON shapes we do not enumerate. */
 function deepFindSendTransactionStatusId(node: unknown, depth: number): string | null {
   if (depth > 16) return null
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const found = deepFindSendTransactionStatusId(item, depth + 1)
+      if (found) return found
+    }
+    return null
+  }
   if (typeof node === "string") {
     const t = node.trim()
     if (
@@ -180,7 +211,7 @@ function activityResultKeySummary(response: Record<string, unknown>): string {
   return `activity.result_keys=${Object.keys(res).join(",")}`
 }
 
-/** Turnkey `getSendTransactionStatus` expects `sendTransactionStatusId`, not root `id` (often `sha256:` activity fingerprint). */
+/** Reads `sendTransactionStatusId` from SDK-merged fields or `activity.result` (including fingerprint-shaped ids). */
 export function extractTurnkeySolSendTransactionStatusId(response: Record<string, unknown>): string | null {
   const direct = takeSendStatusId(response.sendTransactionStatusId ?? response.send_transaction_status_id)
   if (direct) return direct
@@ -193,12 +224,14 @@ export function extractTurnkeySolSendTransactionStatusId(response: Record<string
 
   const res = act ? normalizeActivityResult(act.result) : null
   if (res) {
-    const sol =
-      asRecord(res.solSendTransactionResult) ?? asRecord(res.sol_send_transaction_result)
+    const rawSol = res.solSendTransactionResult ?? res.sol_send_transaction_result
+    const sol = unwrapSolSendTransactionResultPayload(rawSol)
     if (sol) {
       const nested = takeSendStatusId(sol.sendTransactionStatusId ?? sol.send_transaction_status_id)
       if (nested) return nested
     }
+    const flat = takeSendStatusId(res.sendTransactionStatusId ?? res.send_transaction_status_id)
+    if (flat) return flat
   }
 
   return deepFindSendTransactionStatusId(response, 0)
@@ -216,13 +249,50 @@ async function probeActivityIdAsSendTransactionStatusId(
       organizationId,
       sendTransactionStatusId: activityId,
     })
-    if (String(res?.txStatus ?? res?.transactionStatus ?? res?.sendTransactionStatus ?? "").trim()) {
-      return activityId
-    }
+    const txStatus = String(
+      res?.txStatus ?? res?.status ?? res?.transactionStatus ?? res?.sendTransactionStatus ?? "",
+    ).trim()
+    if (txStatus) return activityId
   } catch {
     /* Turnkey rejects unknown ids */
   }
   return null
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * Turnkey can return `ACTIVITY_STATUS_COMPLETED` while `activity.result.solSendTransactionResult` is still `{}`.
+ * The SDK `command()` merge then omits `sendTransactionStatusId` until the result row is populated.
+ */
+async function backoffRefetchActivityUntilSolSendStatusId(
+  client: TurnkeyClientLike,
+  subOrgId: string,
+  activityId: string,
+): Promise<Record<string, unknown>[]> {
+  if (typeof client.getActivity !== "function") return []
+  const snapshots: Record<string, unknown>[] = []
+  const maxAttempts = 36
+  const delayMs = 500
+  for (let i = 0; i < maxAttempts; i++) {
+    if (i > 0) await sleep(delayMs)
+    try {
+      const data = (await client.getActivity({
+        organizationId: subOrgId,
+        activityId,
+      })) as Record<string, unknown>
+      snapshots.push(data)
+      if (extractTurnkeySolSendTransactionStatusId(data)) return snapshots
+      const act = asRecord(data.activity)
+      const st = String(act?.status ?? "")
+      if (st === "ACTIVITY_STATUS_FAILED" || st === "ACTIVITY_STATUS_REJECTED") return snapshots
+    } catch {
+      break
+    }
+  }
+  return snapshots
 }
 
 async function resolveSolSendParsedIds(
@@ -252,6 +322,17 @@ async function resolveSolSendParsedIds(
       return parseTurnkeySendIds(body)
     } catch (e) {
       lastErr = e
+    }
+  }
+
+  if (activityId && !activityId.startsWith("sha256:")) {
+    const refetched = await backoffRefetchActivityUntilSolSendStatusId(client, subOrgId, activityId)
+    for (const body of refetched) {
+      try {
+        return parseTurnkeySendIds(body)
+      } catch (e) {
+        lastErr = e
+      }
     }
   }
 
@@ -435,7 +516,7 @@ export async function reconcileTurnkeySendStatus(
     sendTransactionStatusId: params.providerTransactionId,
   })
   const statusRaw = String(
-    res?.status ?? res?.transactionStatus ?? res?.sendTransactionStatus ?? "",
+    res?.txStatus ?? res?.status ?? res?.transactionStatus ?? res?.sendTransactionStatus ?? "",
   ).toLowerCase()
   const status =
     statusRaw.includes("fail") || statusRaw.includes("revert")
