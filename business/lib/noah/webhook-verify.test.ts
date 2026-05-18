@@ -36,19 +36,24 @@ describe("verifyNoahWebhookSignature", () => {
     }
   })
 
-  it("defaults to production then sandbox keys when env unset", () => {
+  it("defaults to production key when env unset", () => {
     const prevKey = process.env.NOAH_WEBHOOK_PUBLIC_KEY
     const prevEnv = process.env.NOAH_WEBHOOK_NOAH_ENV
     delete process.env.NOAH_WEBHOOK_PUBLIC_KEY
     delete process.env.NOAH_WEBHOOK_NOAH_ENV
     try {
-      expect(getNoahWebhookVerifyPublicKeys()[0]).toBe(NOAH_WEBHOOK_PUBLIC_KEY_PRODUCTION)
+      expect(getNoahWebhookVerifyPublicKeys()).toEqual([NOAH_WEBHOOK_PUBLIC_KEY_PRODUCTION])
     } finally {
       if (prevKey === undefined) delete process.env.NOAH_WEBHOOK_PUBLIC_KEY
       else process.env.NOAH_WEBHOOK_PUBLIC_KEY = prevKey
       if (prevEnv === undefined) delete process.env.NOAH_WEBHOOK_NOAH_ENV
       else process.env.NOAH_WEBHOOK_NOAH_ENV = prevEnv
     }
+  })
+
+  it("embedded production PEM matches Noah docs and parses", () => {
+    const key = crypto.createPublicKey(NOAH_WEBHOOK_PUBLIC_KEY_PRODUCTION)
+    expect(key.asymmetricKeyType).toBe("ec")
   })
 
   it("splits comma-separated signature headers", () => {

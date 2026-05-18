@@ -7,7 +7,7 @@ MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAEm8yBiD+kmVJ1Xc9sfRkDx0yo9+u8yiADPngI20KoEswz0gfl
 
 /** Noah production webhook ECDSA public key (ES384 / secp384r1). */
 export const NOAH_WEBHOOK_PUBLIC_KEY_PRODUCTION = `-----BEGIN PUBLIC KEY-----
-MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAELKJhxcUGJr3XgRrf+laSAVHvp31wFhE2XdicXvF0DAdKzSPN8bkSdjrsUA6nnVUq3M47Y7RUYugMfkagaYjUExQZVjpMFg0PDnXWl9y0dXYD+pzYhAgL+MNpnY0eJ78
+MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAELKJhxcUGJr3XgRrf+laSAVHvp31wFhE2XdicXvF0DAdKzSPN8bkSdjrsUA6nnVUq3M47Y7RUYugMfkagaYjUExQZVjpMFg0PDnXWl9y0dXYDq+pzYhAgL+MNpnY0eJ78
 -----END PUBLIC KEY-----`
 
 export type NoahWebhookVerifyFailureCode = "MISSING_SIGNATURE" | "INVALID_SIGNATURE" | "EMPTY_BODY"
@@ -24,6 +24,7 @@ export type NoahWebhookVerifyDiagnostic = {
 
 /**
  * Public keys used to verify Noah `Webhook-Signature` (ECDSA SHA-384 over raw body).
+ * Production Noah only — sandbox key is opt-in via `NOAH_WEBHOOK_NOAH_ENV=sandbox`.
  * @see https://docs.noah.com/api-concepts/webhooks/configuration
  */
 export function getNoahWebhookVerifyPublicKeys(): string[] {
@@ -32,9 +33,8 @@ export function getNoahWebhookVerifyPublicKeys(): string[] {
 
   const envHint = process.env.NOAH_WEBHOOK_NOAH_ENV?.trim().toLowerCase()
   if (envHint === "sandbox") return [NOAH_WEBHOOK_PUBLIC_KEY_SANDBOX]
-  if (envHint === "production" || envHint === "prod") return [NOAH_WEBHOOK_PUBLIC_KEY_PRODUCTION]
 
-  return [NOAH_WEBHOOK_PUBLIC_KEY_PRODUCTION, NOAH_WEBHOOK_PUBLIC_KEY_SANDBOX]
+  return [NOAH_WEBHOOK_PUBLIC_KEY_PRODUCTION]
 }
 
 function normalizeWebhookPublicKeyPem(pem: string): string {
