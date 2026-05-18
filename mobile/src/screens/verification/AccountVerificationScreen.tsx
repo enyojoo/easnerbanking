@@ -162,7 +162,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
         return
       }
 
-      // Throttle only for in-review / rejected polling — never block not_started → approved (sandbox).
+      // Throttle only for in-review / rejected polling — never block not_started → approved.
       if (!force) {
         try {
           const kycPulled =
@@ -248,7 +248,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
             ? ` Tried CustomerIDs: ${result.triedCustomerIds.join(', ')}`
             : ''
           console.log(
-            `[SYNC-STATUS] No Noah customer in this environment yet (wrong API key/sandbox or ID mismatch).${tried}`,
+            `[SYNC-STATUS] No Noah customer in this environment yet (wrong API key or ID mismatch).${tried}`,
           )
         } else {
           console.warn('[SYNC-STATUS] Sync finished without success flag; kycStatus may be missing in response')

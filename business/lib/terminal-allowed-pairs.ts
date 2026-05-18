@@ -2,7 +2,7 @@ import { WALLET_ASSET_NETWORKS } from "@/lib/wallet-asset-networks"
 
 /**
  * Merchant-facing deposit options for Stablecoin Terminal / QR Pay.
- * Built from the same asset×network catalog as Add recipient → Wallet address, plus optional sandbox pair.
+ * Built from the same asset×network catalog as Add recipient → Wallet address.
  */
 export type TerminalAllowedPair = {
   cryptoCurrency: string
@@ -24,14 +24,7 @@ function pairsFromWalletCatalog(): TerminalAllowedPair[] {
   return out
 }
 
-export const TERMINAL_ALLOWED_PAIRS: TerminalAllowedPair[] = [
-  ...pairsFromWalletCatalog(),
-  {
-    cryptoCurrency: "USDC_TEST",
-    network: "EthereumTestSepolia",
-    label: "USDC (Sepolia testnet)",
-  },
-]
+export const TERMINAL_ALLOWED_PAIRS: TerminalAllowedPair[] = pairsFromWalletCatalog()
 
 export function isAllowedTerminalPair(
   cryptoCurrency: string,

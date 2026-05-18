@@ -4,7 +4,7 @@ import { noahFetch } from "@/lib/noah/http"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { normalizeEasetag } from "@/lib/easetag-validation"
 import { isUndefinedEasetagColumnError } from "@/lib/easetag-global"
-import { getNoahWalletTransferPath } from "@/lib/noah/config"
+import { getNoahSettlementCryptoCurrency, getNoahWalletTransferPath } from "@/lib/noah/config"
 import { resolveBusinessOrgOwnerUserId, resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { pickTxAmountAndCurrency } from "@/lib/noah/map-transactions"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
   const tag = String(body?.destinationEasetag || "").trim()
   const amount = Number.parseFloat(String(body?.amount ?? ""))
   const currency = String(body?.currency || "usd").toLowerCase()
-  const cryptoCurrency = String(body?.cryptoCurrency || "USDC_TEST").trim()
+  const cryptoCurrency = String(body?.cryptoCurrency || getNoahSettlementCryptoCurrency()).trim()
 
   if (!tag || !Number.isFinite(amount) || amount <= 0) {
     return NextResponse.json({ error: "destinationEasetag and positive amount required." }, { status: 400 })

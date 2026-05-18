@@ -157,7 +157,7 @@ export function BusinessVerificationSection() {
     syncBusinessTier1FromNoah,
   ])
 
-  /** While Tier 1 is incomplete, poll Noah occasionally (sandbox / missed webhooks). */
+  /** While Tier 1 is incomplete, poll Noah occasionally (missed webhooks). */
   useEffect(() => {
     if (!businessId || !canManageBusinessVerification || tier1Complete) return
     const id = window.setInterval(() => {

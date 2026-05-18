@@ -6,7 +6,7 @@ export const runtime = "nodejs"
 
 /**
  * Noah webhook ingress — verify `Webhook-Signature` (ECDSA SHA-384) over raw body per Noah docs.
- * Register this URL in the Noah dashboard (sandbox).
+ * Register this URL in the Noah production dashboard.
  */
 export async function POST(request: Request) {
   const raw = Buffer.from(await request.arrayBuffer())

@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { isNoahConfigured, getNoahSigningPrivateKey } from "@/lib/noah/config"
+import {
+  getNoahBaseUrl,
+  getNoahProductionConfigIssues,
+  getNoahSettlementCryptoCurrency,
+  isNoahConfigured,
+  isNoahSigningConfigured,
+} from "@/lib/noah/config"
 import {
   isTurnkeyConfigured,
   validateTurnkeyEnvForProduction,
@@ -23,11 +29,14 @@ export async function GET() {
   }
 
   checks.noah = isNoahConfigured() ? "configured" : "missing NOAH_API_KEY"
-  if (isNoahConfigured() && !getNoahSigningPrivateKey()) {
-    checks.noah_signing = "missing NOAH_SIGNING_PRIVATE_KEY (required for production Api-Signature)"
-  } else {
-    checks.noah_signing = "ok"
-  }
+  checks.noah_environment = "production"
+  checks.noah_base_url = getNoahBaseUrl()
+  checks.noah_signing = isNoahSigningConfigured()
+    ? "ok"
+    : "missing NOAH_SIGNING_PRIVATE_KEY (required for production Api-Signature)"
+  checks.noah_settlement_crypto = getNoahSettlementCryptoCurrency()
+  const noahIssues = getNoahProductionConfigIssues()
+  checks.noah_production = noahIssues.length === 0 ? "ok" : noahIssues.join("; ")
 
   const tk = validateTurnkeyEnvForProduction()
   checks.turnkey = tk.ok

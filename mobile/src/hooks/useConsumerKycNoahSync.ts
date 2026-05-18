@@ -9,8 +9,8 @@ import { isTier1Complete } from '../lib/compliance'
  * reaches the main app — same idea as business KYB auto-sync (`useBusinessNoahSync`).
  *
  * The backend resolves Noah customer id as `users.noah_customer_id` or deterministic `eind_{userId}`,
- * so we **must not** require a stored `noah_customer_id` row for sync to run (sandbox often had
- * approval in Noah before Easner stored the id).
+ * so we **must not** require a stored `noah_customer_id` row for sync to run (Noah may approve
+ * before Easner stores the id).
  */
 export function useConsumerKycNoahSync(): void {
   const { user, userProfile, refreshUserProfile } = useAuth()
@@ -54,7 +54,7 @@ export function useConsumerKycNoahSync(): void {
     return () => clearInterval(id)
   }, [shouldSync, runSync])
 
-  /** Same as business: pull Noah when returning to the app (sandbox approvals often land while away). */
+  /** Same as business: pull Noah when returning to the app (approvals often land while away). */
   useEffect(() => {
     if (!shouldSync) return
 

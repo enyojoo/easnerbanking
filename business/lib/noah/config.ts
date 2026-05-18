@@ -1,18 +1,15 @@
 /**
- * Noah Business API — server-side config.
+ * Noah Business API — production configuration.
  * @see https://docs.noah.com/api-concepts/authentication/configuration
  */
 
-export function getNoahBaseUrl(): string {
-  const raw = (process.env.NOAH_API_BASE_URL || "https://api.sandbox.noah.com/v1").replace(/\/$/, "")
+const NOAH_PRODUCTION_BASE_URL = "https://api.noah.com/v1"
+
+function normalizeNoahBaseUrl(raw: string): string {
   try {
     const url = new URL(raw.startsWith("http") ? raw : `https://${raw}`)
     const path = url.pathname.replace(/\/$/, "") || "/"
-    // OpenAPI paths are `/v1/customers/...`. A bare host (`https://api.sandbox.noah.com`) yields 404 on `/customers/...`.
-    if (
-      (url.hostname === "api.sandbox.noah.com" || url.hostname === "api.noah.com") &&
-      path === "/"
-    ) {
+    if (url.hostname === "api.noah.com" && path === "/") {
       return `${url.origin}/v1`
     }
   } catch {
@@ -21,11 +18,30 @@ export function getNoahBaseUrl(): string {
   return raw
 }
 
+export function getNoahBaseUrl(): string {
+  const configured = process.env.NOAH_API_BASE_URL?.trim()
+  const raw = (configured || NOAH_PRODUCTION_BASE_URL).replace(/\/$/, "")
+  return normalizeNoahBaseUrl(raw)
+}
+
+export function getNoahUsdCryptoTicker(): string {
+  return "USDC"
+}
+
+export function getNoahEurCryptoTicker(): string {
+  return "EURC"
+}
+
+/** Default settlement asset for sell/offramp when `NOAH_SETTLEMENT_CRYPTO` is unset. */
+export function getNoahSettlementCryptoCurrency(): string {
+  return (process.env.NOAH_SETTLEMENT_CRYPTO || "USDC").trim()
+}
+
 export function getNoahApiKey(): string {
   return process.env.NOAH_API_KEY || ""
 }
 
-/** PEM ES384 private key for Api-Signature (required in production; sandbox optional depending on key setup). */
+/** PEM ES384 private key for mandatory production `Api-Signature`. */
 export function getNoahSigningPrivateKey(): string {
   return process.env.NOAH_SIGNING_PRIVATE_KEY || ""
 }
@@ -81,4 +97,31 @@ export function isNoahConfigured(): boolean {
   return Boolean(getNoahApiKey())
 }
 
-// NOAH_SETTLEMENT_CRYPTO: optional; defaults in `payout-prepare.ts` (sandbox USDC_TEST).
+export function isNoahSigningConfigured(): boolean {
+  return Boolean(getNoahSigningPrivateKey().trim())
+}
+
+/** Smoke / health diagnostics for production Noah wiring. */
+export function getNoahProductionConfigIssues(): string[] {
+  const issues: string[] = []
+  if (!isNoahConfigured()) {
+    issues.push("missing NOAH_API_KEY")
+    return issues
+  }
+  const key = getNoahApiKey()
+  if (!key.includes("_prod_")) {
+    issues.push("NOAH_API_KEY should be a production key (apikey_prod_…)")
+  }
+  const base = getNoahBaseUrl().toLowerCase()
+  if (!base.includes("api.noah.com")) {
+    issues.push(`NOAH_API_BASE_URL must target production (got ${getNoahBaseUrl()})`)
+  }
+  if (!isNoahSigningConfigured()) {
+    issues.push("missing NOAH_SIGNING_PRIVATE_KEY (required for production Api-Signature)")
+  }
+  const settlement = getNoahSettlementCryptoCurrency()
+  if (/_TEST$/i.test(settlement)) {
+    issues.push(`NOAH_SETTLEMENT_CRYPTO must not use test assets (got ${settlement})`)
+  }
+  return issues
+}

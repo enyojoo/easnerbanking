@@ -11,7 +11,7 @@ export function vaultSpecForNoahAssetNetwork(
   const c = cryptoCurrency.trim().toUpperCase()
   const n = network.trim()
 
-  if (n === "Solana" && (c === "USDC" || c === "USDC_TEST")) {
+  if (n === "Solana" && c === "USDC") {
     return DEFAULT_INDIVIDUAL_VAULTS.find((v) => v.asset === "USDC") ?? null
   }
   if (n === "Solana" && c === "EURC") {

@@ -50,7 +50,7 @@ function initialsFromAddress(address: string): string {
 }
 
 function tokenIconSymbol(crypto: string): string {
-  return String(crypto || "").replace(/_TEST$/i, "").toUpperCase()
+  return String(crypto || "").toUpperCase()
 }
 
 export type AutopayoutPayerWalletPanelProps = {

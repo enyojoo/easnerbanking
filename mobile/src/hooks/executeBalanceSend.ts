@@ -189,7 +189,7 @@ export async function executeBalanceSend(
       if (!prep.ok || !prep.formSessionId || !prep.cryptoAuthorizedAmount) {
         throw new Error(
           prep.error ||
-            'Noah could not prepare this mobile payout. Confirm Identifier channels exist in sandbox.',
+            'Noah could not prepare this mobile payout. Confirm Identifier channels exist for this country and currency.',
         )
       }
       transfer = await noahService.createTransfer({

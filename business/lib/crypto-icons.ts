@@ -8,8 +8,6 @@ const tokenIcons: Record<string, string> = {
 }
 
 const networkIcons: Record<string, string> = {
-  EthereumTestSepolia:
-    "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png",
   Base: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png",
   Bitcoin: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/bitcoin/info/logo.png",
   Celo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/celo/info/logo.png",

@@ -1,7 +1,7 @@
 import crypto from "node:crypto"
 import jwt from "jsonwebtoken"
 
-/** Noah verifies `aud` as this value (sandbox + prod). @see Noah signing docs */
+/** Noah verifies `aud` as this value in production. @see Noah signing docs */
 const NOAH_AUDIENCE = "https://api.noah.com"
 
 export function createNoahSignatureJwt(input: {

@@ -77,7 +77,7 @@ export async function POST(request: Request) {
         return NextResponse.json(
           {
             error:
-              "No Noah Identifier (mobile money) payout channel for this country and currency. Verify sandbox channels are enabled.",
+              "No Noah Identifier (mobile money) payout channel for this country and currency. Verify payout channels are enabled for your Noah program.",
           },
           { status: 400 },
         )

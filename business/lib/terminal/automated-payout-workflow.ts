@@ -11,7 +11,7 @@ export type StartAutomatedPayoutInput = {
   externalId: string
   network: string
   /**
-   * Payer wallet (Noah Trigger). Required by API; use request body or env for sandbox.
+   * Payer wallet (Noah Trigger). Required by API; use request body or env.
    * @see https://docs.noah.com/recipes/payout/automated-payouts/
    */
   sourceAddress: string

@@ -28,7 +28,10 @@ export async function noahFetch<T>(opts: NoahFetchOptions): Promise<T> {
     throw new Error("NOAH_API_KEY is not configured")
   }
 
-  const signingKey = getNoahSigningPrivateKey()
+  const signingKey = getNoahSigningPrivateKey().trim()
+  if (!signingKey) {
+    throw new Error("NOAH_SIGNING_PRIVATE_KEY is required for Noah production API requests")
+  }
   const qp = new URLSearchParams()
   if (opts.query) {
     for (const [k, v] of Object.entries(opts.query)) {
@@ -55,17 +58,15 @@ export async function noahFetch<T>(opts: NoahFetchOptions): Promise<T> {
     headers["Content-Type"] = "application/json"
   }
 
-  if (signingKey) {
-    const queryParamsForJwt: Record<string, string | number | boolean | undefined> | undefined =
-      opts.query && Object.keys(opts.query).length > 0 ? opts.query : undefined
-    headers["Api-Signature"] = createNoahSignatureJwt({
-      method: opts.method,
-      path: jwtPath,
-      queryParams: queryParamsForJwt,
-      body: bodyBuf,
-      privateKeyPem: signingKey,
-    })
-  }
+  const queryParamsForJwt: Record<string, string | number | boolean | undefined> | undefined =
+    opts.query && Object.keys(opts.query).length > 0 ? opts.query : undefined
+  headers["Api-Signature"] = createNoahSignatureJwt({
+    method: opts.method,
+    path: jwtPath,
+    queryParams: queryParamsForJwt,
+    body: bodyBuf,
+    privateKeyPem: signingKey,
+  })
 
   const res = await fetch(fullUrl, {
     method: opts.method,

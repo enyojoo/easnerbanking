@@ -263,6 +263,4 @@ export async function prepareSellTransaction(input: {
   }
 }
 
-export function getNoahSettlementCryptoCurrency(): string {
-  return (process.env.NOAH_SETTLEMENT_CRYPTO || "USDC_TEST").trim()
-}
+export { getNoahSettlementCryptoCurrency } from "./config"

@@ -16,5 +16,5 @@ export function assetTickerFromCrypto(currency: string): string {
   const c = currency.trim().toUpperCase()
   if (c.includes("USDC")) return "USDC"
   if (c.includes("EURC")) return "EURC"
-  return c.replace(/_TEST$/i, "").slice(0, 8) || c
+  return c.slice(0, 8) || c
 }

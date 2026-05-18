@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getUserFromApiRequest } from "@/lib/supabase/admin"
 import type { NoahCustomerScope } from "@/lib/noah/customer-id"
-import { isNoahConfigured } from "@/lib/noah/config"
+import { isNoahConfigured, isNoahSigningConfigured } from "@/lib/noah/config"
 import {
   readNoahScopeFromRequest,
   resolveNoahContextAsync,
@@ -25,6 +25,15 @@ export function requireNoahEnv() {
       {
         error:
           "Easner payments are not available in this environment. If you administer this deployment, configure the payment provider credentials.",
+      },
+      { status: 503 }
+    )
+  }
+  if (!isNoahSigningConfigured()) {
+    return NextResponse.json(
+      {
+        error:
+          "Noah production signing is not configured. Set NOAH_SIGNING_PRIVATE_KEY on the business API deployment.",
       },
       { status: 503 }
     )

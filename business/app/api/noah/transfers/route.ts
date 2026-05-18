@@ -5,7 +5,7 @@ import { noahFetch } from "@/lib/noah/http"
 import { pickTxAmountAndCurrency } from "@/lib/noah/map-transactions"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
-import { getNoahSettlementCryptoCurrency } from "@/lib/noah/payout-prepare"
+import { getNoahSettlementCryptoCurrency } from "@/lib/noah/config"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 
 export async function POST(request: Request) {

@@ -2,7 +2,7 @@
  * Map Noah verification / customer payload to legacy `noah_kyc_status` column used by mobile.
  *
  * Handles REST + webhook shapes: `Verifications` as object or array, camelCase variants, and
- * sandbox/out-of-band approvals that only appear on GET /customers/:id.
+ * delayed approvals that only appear on GET /customers/:id.
  */
 function collectVerificationStatusStrings(customer: Record<string, unknown>): string[] {
   const out: string[] = []

@@ -19,17 +19,18 @@ Server routes use the **Supabase service role** (`createSupabaseAdmin`); no extr
 
 ## 2. Business app — environment variables
 
-### Noah (minimum to unlock `/api/noah/*` and gated wallet routes)
+### Noah (production — required for `/api/noah/*` and gated wallet routes)
 
 | Variable | Role |
 |----------|------|
-| `NOAH_API_KEY` | Required — `isNoahConfigured()` |
-| `NOAH_API_BASE_URL` | Optional — defaults to sandbox; production use `https://api.noah.com/v1` (or equivalent Noah documents) |
-| `NOAH_SIGNING_PRIVATE_KEY` | Production signing (PEM ES384) when Noah expects `Api-Signature` |
+| `NOAH_API_KEY` | Required — production key (`apikey_prod_…`) |
+| `NOAH_API_BASE_URL` | Optional — defaults to `https://api.noah.com/v1` |
+| `NOAH_SIGNING_PRIVATE_KEY` | Required — PEM ES384 private key for mandatory `Api-Signature` |
+| `NOAH_SETTLEMENT_CRYPTO` | Optional — defaults to `USDC` |
 | `NOAH_ONBOARDING_RETURN_URL` | Required when calling hosted onboarding — full `https://…` return URL |
 | `NOAH_BUSINESS_ONBOARDING_RETURN_URL` | Optional — KYB return; falls back to consumer URL |
 
-Webhook verification and behaviour: see `business/lib/noah/webhook-verify.ts` and `NOAH_WEBHOOK_NOAH_ENV` if you need to force production verification mode.
+Webhook verification: `business/lib/noah/webhook-verify.ts` (Noah production public key).
 
 ### Turnkey (vaults, balances, deposit addresses, intents)
 
@@ -72,7 +73,7 @@ Standard Supabase env vars for the business app (`NEXT_PUBLIC_SUPABASE_*`, servi
 
 ## 3. Noah — external configuration
 
-1. **Customers** — Easner derives Noah `CustomerID` from user/business records (`noah_customer_id`, `ebiz_{id}` pattern); ensure sandbox/production Noah matches your Easner IDs.
+1. **Customers** — Easner derives Noah `CustomerID` from user/business records (`noah_customer_id`, `ebiz_{id}` pattern); production Noah customers are separate from any prior test data.
 2. **Webhooks** — Point Noah to your deployed `POST /api/noah/webhooks` URL; configure signing/verification per Noah dashboard and `business/lib/noah/webhook-verify.ts`.
 3. **Workflows** — Onramp / offramp expect Solana **USDC** / **EURC** aligned with `business/lib/wallet/vault-spec.ts` (USDC + EURC vaults).
 

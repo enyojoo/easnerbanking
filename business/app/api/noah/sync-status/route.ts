@@ -74,7 +74,7 @@ async function runSyncFromNoah(request: Request) {
                 ? { triedCustomerIds: [...e.attemptedIds] }
                 : {}),
               hint:
-                "No customer in this Noah environment matches that CustomerID. Typical causes: NOAH_API_BASE_URL must include /v1 (e.g. https://api.sandbox.noah.com/v1); wrong sandbox vs production API key; customer created in a different Noah program; individual vs business scope mismatch; or set users.noah_customer_id to Noah’s exact CustomerID string.",
+                "No customer in this Noah environment matches that CustomerID. Typical causes: NOAH_API_BASE_URL must include /v1 (https://api.noah.com/v1); wrong production API key; customer created in a different Noah program; individual vs business scope mismatch; or set users.noah_customer_id to Noah’s exact CustomerID string.",
             }
           : {}),
       },

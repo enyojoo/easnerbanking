@@ -94,7 +94,7 @@ function isUsdcBalanceRow(row: BalanceRow): boolean {
   const sym = String(row.symbol || "")
     .toUpperCase()
     .replace(/\s+/g, "")
-  if (sym === "USDC" || sym === "USDC_TEST") return true
+  if (sym === "USDC") return true
   const name = String(row.name || "").toUpperCase()
   if (name.includes("USD COIN") || name.includes("USDC")) return true
   if (caip19HasMint(String(row.caip19 || ""), SOLANA_USDC_MINTS)) return true
@@ -105,7 +105,7 @@ function isEurcBalanceRow(row: BalanceRow): boolean {
   const sym = String(row.symbol || "")
     .toUpperCase()
     .replace(/\s+/g, "")
-  if (sym === "EURC" || sym === "EURC_TEST") return true
+  if (sym === "EURC") return true
   const name = String(row.name || "").toUpperCase()
   if (name.includes("EURO COIN") || name.includes("EURC")) return true
   if (caip19HasMint(String(row.caip19 || ""), SOLANA_EURC_MINTS)) return true

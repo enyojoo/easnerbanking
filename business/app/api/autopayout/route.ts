@@ -153,7 +153,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "source_address is required for automated payout, or set NOAH_TERMINAL_SOURCE_ADDRESS for sandbox.",
+          "source_address is required for automated payout (payer wallet), or set NOAH_TERMINAL_SOURCE_ADDRESS, or provision a Turnkey Solana wallet for this asset.",
       },
       { status: 400 },
     )

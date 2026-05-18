@@ -935,7 +935,7 @@ export const noahService = {
       ok: true,
       formSessionId: (data.formSessionId as string) ?? null,
       cryptoAuthorizedAmount: (data.cryptoAuthorizedAmount as string) ?? null,
-      cryptoCurrency: (data.cryptoCurrency as string) ?? 'USDC_TEST',
+      cryptoCurrency: (data.cryptoCurrency as string) ?? 'USDC',
       paymentMethodId: (data.paymentMethodId as string) ?? null,
     }
   },
@@ -988,7 +988,7 @@ export const noahService = {
       ok: true,
       formSessionId: (data.formSessionId as string) ?? null,
       cryptoAuthorizedAmount: (data.cryptoAuthorizedAmount as string) ?? null,
-      cryptoCurrency: (data.cryptoCurrency as string) ?? 'USDC_TEST',
+      cryptoCurrency: (data.cryptoCurrency as string) ?? 'USDC',
       paymentMethodId: (data.paymentMethodId as string) ?? null,
     }
   },
