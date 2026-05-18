@@ -22,6 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { BUSINESS_TIER_LADDER } from "@/lib/compliance-tier-ladder-copy"
+import { buildNoahHostedIframeUrl } from "@/lib/noah/hosted-iframe-url"
 import { formatNoahRejectionReasonsText } from "@/lib/noah/rejection-reasons"
 import { cn } from "@/lib/utils"
 
@@ -53,6 +54,11 @@ export function BusinessVerificationSection() {
   const [hostedTierLevel, setHostedTierLevel] = useState<1 | 2 | 3>(1)
   /** Clear iframe after Radix exit animation so the dialog can close smoothly (iframe unmount is heavy). */
   const clearUrlAfterCloseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const hostedIframeSrc =
+    hostedUrl && typeof window !== "undefined"
+      ? buildNoahHostedIframeUrl(hostedUrl, window.location.origin)
+      : hostedUrl
 
   useEffect(() => {
     return () => {
@@ -88,6 +94,18 @@ export function BusinessVerificationSection() {
       return false
     }
   }, [])
+
+  useEffect(() => {
+    if (!hostedOpen) return
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data as { type?: string; kycCompleted?: boolean } | null
+      if (data?.type === "kycCompleted" || data?.kycCompleted) {
+        void syncBusinessTier1FromNoah()
+      }
+    }
+    window.addEventListener("message", onMessage)
+    return () => window.removeEventListener("message", onMessage)
+  }, [hostedOpen, syncBusinessTier1FromNoah])
 
   const openHostedVerification = useCallback(async () => {
     setError(null)
@@ -297,9 +315,9 @@ export function BusinessVerificationSection() {
       >
         <DialogContent
           showCloseButton
-          className="flex max-h-[90vh] w-[min(100vw-2rem,56rem)] flex-col gap-0 overflow-hidden p-0 duration-300 data-[state=open]:duration-300 data-[state=closed]:duration-300 sm:max-w-[56rem]"
+          className="flex h-[min(92vh,44rem)] w-[min(calc(100vw-1.5rem),56rem)] max-w-none flex-col gap-0 overflow-hidden p-0 duration-300 data-[state=open]:duration-300 data-[state=closed]:duration-300 sm:max-w-[min(calc(100vw-1.5rem),56rem)]"
         >
-          <DialogHeader className="border-b px-6 py-4 pr-12">
+          <DialogHeader className="shrink-0 border-b px-6 py-4 pr-12">
             <div className="flex flex-wrap items-center gap-2 gap-y-1">
               <DialogTitle className="text-left text-base leading-snug sm:text-lg">
                 Business verification for {hostedTierTitle}
@@ -312,13 +330,13 @@ export function BusinessVerificationSection() {
               Complete the steps in the provider window below.
             </DialogDescription>
           </DialogHeader>
-          {hostedUrl ? (
-            <div className="relative min-h-[min(70vh,560px)] flex-1 bg-muted/30">
+          {hostedIframeSrc ? (
+            <div className="relative min-h-0 flex-1 overflow-hidden bg-black">
               <iframe
                 title={`Business verification for ${hostedTierTitle} (Tier ${hostedTierLevel})`}
-                src={hostedUrl}
-                className="h-full min-h-[min(70vh,560px)] w-full border-0"
-                allow="payment *; publickey-credentials-get *"
+                src={hostedIframeSrc}
+                className="absolute inset-0 size-full border-0"
+                allow="payment *; publickey-credentials-get *; clipboard-read *; clipboard-write *"
               />
             </div>
           ) : null}
