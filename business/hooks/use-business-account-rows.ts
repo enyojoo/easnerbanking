@@ -73,6 +73,11 @@ export function useBusinessAccountRows() {
     walletQuery.data?.deposits?.USD?.address?.trim() || walletQuery.data?.deposits?.EUR?.address?.trim(),
   )
 
+  const vaCurrencies = useMemo(() => {
+    const extras = enabledExtras.filter((c) => c !== "USD" && c !== "EUR")
+    return ["USD", "EUR", ...extras]
+  }, [enabledExtras])
+
   const virtualAccountsQuery = useQuery({
     queryKey: scope ? qk.wallets.virtualAccounts(scope, vaCurrencies) : ["wallets", "virtual-accounts", "disabled"],
     enabled: Boolean(scope) && vaCurrencies.length > 0,
@@ -148,11 +153,6 @@ export function useBusinessAccountRows() {
       walletQuery.data?.deposits?.USD?.address,
     ],
   )
-
-  const vaCurrencies = useMemo(() => {
-    const extras = enabledExtras.filter((c) => c !== "USD" && c !== "EUR")
-    return ["USD", "EUR", ...extras]
-  }, [enabledExtras])
 
   const refreshAccounts = useCallback(async () => {
     if (!scope) return
