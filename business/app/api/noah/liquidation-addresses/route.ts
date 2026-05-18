@@ -51,7 +51,7 @@ export async function GET(request: Request) {
     chain,
     address: result.address,
     memo: result.memo,
-    liquidationAddressId: result.walletId,
+    liquidationAddressId: result.address ?? null,
   })
 }
 
@@ -106,6 +106,6 @@ export async function POST(request: Request) {
     chain,
     address: result.address,
     memo: result.memo,
-    liquidationAddressId: result.walletId,
+    liquidationAddressId: result.address ?? null,
   })
 }

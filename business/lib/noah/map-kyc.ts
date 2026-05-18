@@ -1,3 +1,5 @@
+import { extractNoahRejectionReasons } from "./rejection-reasons"
+
 /**
  * Map Noah verification / customer payload to legacy `noah_kyc_status` column used by mobile.
  *
@@ -21,6 +23,15 @@ function collectVerificationStatusStrings(customer: Record<string, unknown>): st
   } else if (raw && typeof raw === "object") {
     const o = raw as Record<string, unknown>
     push(o.Status ?? o.status)
+    const entities = o.EntityVerifications ?? o.entityVerifications
+    if (Array.isArray(entities)) {
+      for (const item of entities) {
+        if (item && typeof item === "object") {
+          const e = item as Record<string, unknown>
+          push(e.Status ?? e.status)
+        }
+      }
+    }
   }
 
   const legacy = customer.Verification ?? customer.verification
@@ -44,17 +55,18 @@ export function mapNoahVerificationToKycStatus(customer: Record<string, unknown>
 /** Mobile `getCustomerStatus` / dashboard — human-readable KYC string */
 export function mapNoahCustomerToMobileSummary(
   customer: Record<string, unknown>,
-  customerId: string
+  customerId: string,
 ): {
   hasCustomer: boolean
   customerId: string
   kycStatus: string
-  rejectionReasons: unknown | null
+  rejectionReasons: unknown[] | null
 } {
+  const kycStatus = mapNoahVerificationToKycStatus(customer)
   return {
     hasCustomer: true,
     customerId,
-    kycStatus: mapNoahVerificationToKycStatus(customer),
-    rejectionReasons: null,
+    kycStatus,
+    rejectionReasons: kycStatus === "rejected" ? extractNoahRejectionReasons(customer) : null,
   }
 }

@@ -113,12 +113,7 @@ export async function POST(request: Request) {
       resolvedCustomerId,
     )
     return NextResponse.json({
-      customerId: resolvedCustomerId,
-      kycStatus: mapNoahVerificationToKycStatus(customer),
-      walletId: undefined,
-      usdVirtualAccountId: undefined,
-      eurVirtualAccountId: undefined,
-      rejectionReasons: undefined,
+      ...mapNoahCustomerToMobileSummary(customer, resolvedCustomerId),
       noahScope: ctx.scope,
     })
   } catch (e: unknown) {

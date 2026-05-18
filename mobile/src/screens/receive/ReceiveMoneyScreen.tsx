@@ -195,7 +195,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
         
         const { data: userProfileData } = await supabase
           .from('users')
-          .select('noah_wallet_id, noah_usd_virtual_account_id, noah_eur_virtual_account_id, noah_kyc_status')
+          .select('noah_usd_virtual_account_id, noah_eur_virtual_account_id, noah_kyc_status')
           .eq('id', session.user.id)
           .single()
         
@@ -205,8 +205,8 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
             ? userProfileData.noah_usd_virtual_account_id 
             : userProfileData.noah_eur_virtual_account_id
           
-          // If accounts don't exist, trigger create-accounts provisioning
-          if (!userProfileData.noah_wallet_id || !accountId) {
+          // If fiat virtual account is missing, trigger create-accounts provisioning
+          if (!accountId) {
             accountCreationTriggeredRef.current = true
             console.log('[RECEIVE-MONEY] KYC approved but accounts missing, triggering create-accounts provisioning...')
             try {
@@ -466,7 +466,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
 
       // Toast + refresh (no blocking OK alert)
       showSuccess(
-        `Wallet ${result.walletCreated ? 'created' : 'ready'} · USD ${result.usdAccountCreated ? 'created' : result.usdAccountId ? 'exists' : 'pending'} · EUR ${result.eurAccountCreated ? 'created' : result.eurAccountId ? 'exists' : 'pending'}`,
+        `USD ${result.usdAccountCreated ? 'created' : result.usdAccountId ? 'exists' : 'pending'} · EUR ${result.eurAccountCreated ? 'created' : result.eurAccountId ? 'exists' : 'pending'}`,
         4500,
       )
       if (scope) {

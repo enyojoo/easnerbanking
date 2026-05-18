@@ -390,24 +390,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
         const row = regularUser as Record<string, unknown>
         const profile = mapUsersRowToUser(row)
-        const orgId =
-          typeof row.easner_business_id === 'string' ? row.easner_business_id : null
-        const role = row.role === 'business' || row.role === 'individual' ? row.role : profile.role
-        if (orgId && role === 'business') {
-          const { data: biz } = await supabase
-            .from('businesses')
-            .select('noah_kyb_status, noah_customer_id')
-            .eq('id', orgId)
-            .maybeSingle()
-          if (biz) {
-            if (typeof biz.noah_kyb_status === 'string' && biz.noah_kyb_status.trim()) {
-              profile.noah_kyb_status = biz.noah_kyb_status
-            }
-            if (typeof biz.noah_customer_id === 'string' && biz.noah_customer_id.trim()) {
-              profile.noah_kyb_customer_id = biz.noah_customer_id
-            }
-          }
-        }
         setUser(profile)
         if (payoutCorridorsBootstrappedForUserRef.current !== userId) {
           payoutCorridorsBootstrappedForUserRef.current = userId
@@ -423,7 +405,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
           noah_kyc_status: profile.noah_kyc_status,
           noah_kyc_rejection_reasons: profile.noah_kyc_rejection_reasons,
           noah_signed_agreement_id: profile.noah_signed_agreement_id,
-          noah_kyb_status: profile.noah_kyb_status ?? null,
           role: profile.role,
           easner_business_id: profile.easner_business_id,
           bridge_kyc_status: row.bridge_kyc_status as string | undefined,

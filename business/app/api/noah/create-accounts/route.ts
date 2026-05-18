@@ -75,8 +75,7 @@ export async function POST(request: Request) {
     })
 
     return NextResponse.json({
-      walletCreated: provisioned.walletCreated,
-      walletId: provisioned.walletId,
+      success: true,
       usdAccountCreated: provisioned.usdAccountCreated,
       eurAccountCreated: provisioned.eurAccountCreated,
       gbpAccountCreated: provisioned.gbpAccountCreated,
@@ -94,7 +93,6 @@ export async function POST(request: Request) {
     errors.push(msg)
     return NextResponse.json(
       {
-        walletCreated: false,
         usdAccountCreated: false,
         eurAccountCreated: false,
         gbpAccountCreated: false,

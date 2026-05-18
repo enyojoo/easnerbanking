@@ -35,6 +35,8 @@ export type BusinessProfile = {
   tier1Complete: boolean
   /** Org `noah_kyb_status` from profile API (provider-backed; Easner-facing label via UI copy). */
   tier1VerificationStatus: string | null
+  /** Decline reasons from Noah when org KYB is rejected. */
+  tier1RejectionReasons: unknown[] | null
   /** Internal reference on Owner's user row; not shown to customers in UI. */
   noahKybCustomerId: string | null
   /** Whether the signed-in user may start or refresh hosted business verification. */
@@ -65,6 +67,7 @@ const DEFAULT_PROFILE: BusinessProfile = {
   ownerName: "",
   tier1Complete: false,
   tier1VerificationStatus: null,
+  tier1RejectionReasons: null,
   noahKybCustomerId: null,
   canManageBusinessVerification: true,
 }

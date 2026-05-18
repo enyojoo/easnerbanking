@@ -238,23 +238,6 @@ function MoreContent({ navigation }: NavigationProps) {
   }, [userProfile?.id, navigation])
 
   const getVerificationStatus = (): "approved" | "in_review" | "take_action" => {
-    const role =
-      userProfile?.role ?? (userProfile as { profile?: { role?: string } })?.profile?.role
-    if (role === "business") {
-      const kyb =
-        userProfile?.noah_kyb_status ??
-        (userProfile as { profile?: { noah_kyb_status?: string } })?.profile?.noah_kyb_status
-      const s = String(kyb ?? "").trim().toLowerCase()
-      if (s === "approved") return "approved"
-      if (
-        s === "pending" ||
-        s === "in_review" ||
-        s === "under_review"
-      ) {
-        return "in_review"
-      }
-      return "take_action"
-    }
     const noahStatus =
       userProfile?.noah_kyc_status ??
       (userProfile as { profile?: { noah_kyc_status?: string } })?.profile?.noah_kyc_status

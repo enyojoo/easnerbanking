@@ -12,7 +12,7 @@ import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 /**
  * Wallet-to-wallet (Easetag P2P) via **Noah** internal transfer (legacy).
  * Prefer `/api/wallets/easetag-transfer` + `EASETAG_LEDGER_P2P_ENABLED` for instant ledger P2P.
- * Path defaults to `/transactions/transfer`; override with `NOAH_WALLET_TRANSFER_PATH` per your Noah program contract.
+ * Noah production does not provision custodial wallets — CustomerID is used as wallet id.
  */
 export async function POST(request: Request) {
   const mis = requireNoahEnv()
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
 
   const { data: payeeUser, error: payeeUserErr } = await admin
     .from("users")
-    .select("id,easetag,noah_wallet_id")
+    .select("id,easetag,noah_customer_id")
     .eq("easetag", cleanTag)
     .maybeSingle()
   if (payeeUserErr && !isUndefinedEasetagColumnError(payeeUserErr)) {
@@ -74,13 +74,13 @@ export async function POST(request: Request) {
     if (resolvedPayeeUser.id === user.id) {
       return NextResponse.json({ error: "You cannot add yourself as a recipient." }, { status: 400 })
     }
-    payeeWalletId = resolvedPayeeUser.noah_wallet_id as string | null
+    payeeWalletId = resolvedPayeeUser.noah_customer_id as string | null
     payeeEasetagResolved = resolvedPayeeUser.easetag as string
     payeeUserId = resolvedPayeeUser.id
   } else {
     const { data: biz, error: bizErr } = await admin
       .from("businesses")
-      .select("id,easetag,noah_wallet_id")
+      .select("id,easetag,noah_customer_id")
       .eq("easetag", cleanTag)
       .maybeSingle()
     if (bizErr) {
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
     if (myBusinessId && biz.id === myBusinessId) {
       return NextResponse.json({ error: "You cannot add yourself as a recipient." }, { status: 400 })
     }
-    payeeWalletId = biz.noah_wallet_id as string | null
+    payeeWalletId = biz.noah_customer_id as string | null
     payeeEasetagResolved = biz.easetag as string
     payeeBusinessId = biz.id as string
     const ownerUserId = await resolveOrgOwnerUserId(admin, biz.id as string, user.id)
@@ -100,23 +100,26 @@ export async function POST(request: Request) {
   }
 
   if (!payeeWalletId) {
-    return NextResponse.json({ error: "Payee does not have an Easner wallet ready yet." }, { status: 400 })
+    return NextResponse.json({ error: "Payee does not have an Easner account ready yet." }, { status: 400 })
   }
 
   let sourceWalletId: string | undefined
   if (noahCtx.scope === "business" && noahCtx.businessId) {
     const { data: senderBiz } = await admin
       .from("businesses")
-      .select("noah_wallet_id")
+      .select("noah_customer_id")
       .eq("id", noahCtx.businessId)
       .maybeSingle()
-    sourceWalletId = senderBiz?.noah_wallet_id as string | undefined
+    sourceWalletId = senderBiz?.noah_customer_id as string | undefined
   } else {
-    const { data: sender } = await admin.from("users").select("noah_wallet_id").eq("id", user.id).maybeSingle()
-    sourceWalletId = sender?.noah_wallet_id as string | undefined
+    const { data: sender } = await admin.from("users").select("noah_customer_id").eq("id", user.id).maybeSingle()
+    sourceWalletId = sender?.noah_customer_id as string | undefined
   }
   if (!sourceWalletId) {
-    return NextResponse.json({ error: "Your account does not have an Easner wallet ready yet." }, { status: 400 })
+    sourceWalletId = noahCtx.noahCustomerId
+  }
+  if (!sourceWalletId) {
+    return NextResponse.json({ error: "Your account does not have Noah verification ready yet." }, { status: 400 })
   }
 
   const path = getNoahWalletTransferPath()

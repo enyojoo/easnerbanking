@@ -40,7 +40,6 @@ type BusinessRow = {
   enabled_extra_account_currencies?: string[]
   noah_customer_id?: string | null
   noah_kyb_status?: string | null
-  noah_wallet_id?: string | null
   noah_usd_virtual_account_id?: string | null
   noah_eur_virtual_account_id?: string | null
   created_at: string
@@ -433,8 +432,8 @@ function BusinessesPageInner() {
                         <span className="shrink-0 text-gray-600">KYB status</span>
                         <KybBadge rawStatus={selectedBusiness.noah_kyb_status || "not_started"} />
                       </div>
-                      <DetailRow label="Noah wallet" mono>
-                        {displayText(selectedBusiness.noah_wallet_id)}
+                      <DetailRow label="Noah customer ID" mono>
+                        {displayText(selectedBusiness.noah_customer_id)}
                       </DetailRow>
                       <DetailRow label="USD virtual account" mono>
                         {displayText(selectedBusiness.noah_usd_virtual_account_id)}

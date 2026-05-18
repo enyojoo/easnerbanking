@@ -1,12 +1,14 @@
 // Username Service (Easetag)
 // Handles username lookup for P2P transfers (Cashtag-style)
-// Maps @username to noah_wallet_id for wallet-to-wallet transfers
+// Maps @username to noah_customer_id for legacy Noah wallet-to-wallet transfers
 
 import { createServerClient } from "./supabase"
 
 export interface UsernameLookupResult {
   userId: string
   easetag: string
+  noahCustomerId: string | null
+  /** @deprecated Use noahCustomerId — Noah production has no custodial wallets. */
   noahWalletId: string | null
   firstName: string | null
   lastName: string | null
@@ -117,8 +119,8 @@ export async function setEasetag(userId: string, easetag: string): Promise<void>
 }
 
 /**
- * Get wallet ID by username (for P2P transfers)
- * Resolves @username to noah_wallet_id
+ * Get wallet / customer id by username (for legacy P2P transfers).
+ * Resolves @username to noah_customer_id.
  */
 export async function getWalletIdByUsername(
   username: string
@@ -131,7 +133,7 @@ export async function getWalletIdByUsername(
     .select(`
       id,
       easetag,
-      noah_wallet_id,
+      noah_customer_id,
       first_name,
       last_name,
       email
@@ -152,10 +154,12 @@ export async function getWalletIdByUsername(
     return null
   }
 
+  const customerId = data.noah_customer_id as string | null
   return {
     userId: data.id,
     easetag: data.easetag,
-    noahWalletId: data.noah_wallet_id,
+    noahCustomerId: customerId,
+    noahWalletId: customerId,
     firstName: data.first_name,
     lastName: data.last_name,
     email: data.email,
@@ -163,7 +167,7 @@ export async function getWalletIdByUsername(
 }
 
 /**
- * Get username by wallet ID (reverse lookup)
+ * Get username by Noah customer id (reverse lookup).
  */
 export async function getUsernameByWalletId(
   walletId: string
@@ -173,7 +177,7 @@ export async function getUsernameByWalletId(
   const { data, error } = await serverClient
     .from("users")
     .select("easetag")
-    .eq("noah_wallet_id", walletId)
+    .eq("noah_customer_id", walletId)
     .single()
 
   if (error) {

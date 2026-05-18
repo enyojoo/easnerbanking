@@ -1165,8 +1165,10 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                                   // Extract unique customer-facing reasons (deduplicate)
                                   const uniqueReasons = new Set<string>()
                                   userProfile.noah_kyc_rejection_reasons.forEach((reasonObj: any) => {
-                                    if (typeof reasonObj === 'object' && reasonObj !== null && reasonObj.reason) {
-                                      const reason = String(reasonObj.reason).trim()
+                                    if (typeof reasonObj === 'object' && reasonObj !== null) {
+                                      const reason = String(
+                                        reasonObj.reason ?? reasonObj.message ?? reasonObj.detail ?? '',
+                                      ).trim()
                                       if (reason) {
                                         uniqueReasons.add(reason)
                                       }

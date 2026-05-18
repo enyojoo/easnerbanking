@@ -3,17 +3,12 @@ import { noahFetch } from "./http"
 import { fetchAllPaymentMethodsForCustomer } from "./list-payment-methods"
 import { hasPayinBank, matchesCurrency } from "./payment-method-map"
 import { persistVirtualAccountFromPaymentMethod } from "./persist-account-data"
-import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import type { NoahAccountContext } from "./resolve-account-context"
+import { resolveTurnkeyAddressForNoahPair } from "@/lib/wallet/resolve-wallet-owner"
 
 type Scope = "individual" | "business"
 
 type LiquidationCurrency = "usdc" | "eurc"
-
-type WalletSnapshot = {
-  walletId: string
-  address: string
-  blockchainMemo: string | null
-}
 
 type LiquidationSnapshot = {
   currency: LiquidationCurrency
@@ -23,8 +18,6 @@ type LiquidationSnapshot = {
 }
 
 type ProvisionSummary = {
-  walletCreated: boolean
-  walletId?: string
   usdAccountCreated: boolean
   eurAccountCreated: boolean
   gbpAccountCreated: boolean
@@ -33,19 +26,6 @@ type ProvisionSummary = {
   gbpAccountId?: string
   usdcAddress?: string
   eurcAddress?: string
-}
-
-function parseWalletFromProvider(payload: Record<string, unknown>): WalletSnapshot | null {
-  const items = Array.isArray(payload.Items) ? payload.Items : []
-  const first = (items[0] ?? payload) as Record<string, unknown>
-  const walletIdRaw = first.ID ?? first.WalletID ?? first.walletId
-  const addressRaw = first.Address ?? first.address
-  if (!walletIdRaw || !addressRaw) return null
-  return {
-    walletId: String(walletIdRaw),
-    address: String(addressRaw),
-    blockchainMemo: first.BlockchainMemo != null ? String(first.BlockchainMemo) : null,
-  }
 }
 
 function parseLiquidationFromProvider(
@@ -61,19 +41,6 @@ function parseLiquidationFromProvider(
     chain: "solana",
     address: String(addressRaw),
     memo: first.Memo != null ? String(first.Memo) : null,
-  }
-}
-
-async function tryFetchWallet(customerId: string): Promise<WalletSnapshot | null> {
-  try {
-    const payload = await noahFetch<Record<string, unknown>>({
-      method: "GET",
-      path: "/wallets",
-      query: { CustomerID: customerId, PageSize: 10 },
-    })
-    return parseWalletFromProvider(payload)
-  } catch {
-    return null
   }
 }
 
@@ -109,44 +76,6 @@ async function tryCreateLiquidationAddress(
   }
 }
 
-async function upsertWalletData(
-  subjectUserId: string,
-  wallet: WalletSnapshot | null,
-  usdc: LiquidationSnapshot | null,
-  eurc: LiquidationSnapshot | null,
-  subjectBusinessId: string | null,
-): Promise<void> {
-  if (!wallet) return
-  const admin = createSupabaseAdmin()
-  await admin.from("wallets").upsert(
-    {
-      user_id: subjectUserId,
-      business_id: subjectBusinessId,
-      noah_wallet_id: wallet.walletId,
-      address: wallet.address,
-      blockchain_memo: wallet.blockchainMemo,
-      usdc_liquidation_address: usdc?.address ?? null,
-      usdc_liquidation_memo: usdc?.memo ?? null,
-      eurc_liquidation_address: eurc?.address ?? null,
-      eurc_liquidation_memo: eurc?.memo ?? null,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "noah_wallet_id" },
-  )
-
-  if (subjectBusinessId) {
-    await admin
-      .from("businesses")
-      .update({ noah_wallet_id: wallet.walletId, updated_at: new Date().toISOString() })
-      .eq("id", subjectBusinessId)
-  } else {
-    await admin
-      .from("users")
-      .update({ noah_wallet_id: wallet.walletId, updated_at: new Date().toISOString() })
-      .eq("id", subjectUserId)
-  }
-}
-
 export async function provisionNoahArtifactsForCustomer(opts: {
   subjectUserId: string
   subjectBusinessId?: string | null
@@ -168,16 +97,14 @@ export async function provisionNoahArtifactsForCustomer(opts: {
   if (eurPm) await persistVirtualAccountFromPaymentMethod(subjectUserId, "eur", eurPm, subjectBusinessId)
   if (gbpPm) await persistVirtualAccountFromPaymentMethod(subjectUserId, "gbp", gbpPm, subjectBusinessId)
 
-  const wallet = await tryFetchWallet(noahCustomerId)
-  const usdc = (await tryFetchLiquidationAddress(noahCustomerId, "usdc")) ??
+  const usdc =
+    (await tryFetchLiquidationAddress(noahCustomerId, "usdc")) ??
     (await tryCreateLiquidationAddress(noahCustomerId, "usdc"))
-  const eurc = (await tryFetchLiquidationAddress(noahCustomerId, "eurc")) ??
+  const eurc =
+    (await tryFetchLiquidationAddress(noahCustomerId, "eurc")) ??
     (await tryCreateLiquidationAddress(noahCustomerId, "eurc"))
-  await upsertWalletData(subjectUserId, wallet, usdc, eurc, subjectBusinessId)
 
   return {
-    walletCreated: Boolean(wallet),
-    walletId: wallet?.walletId,
     usdAccountCreated: Boolean(usdPm),
     eurAccountCreated: Boolean(eurPm),
     gbpAccountCreated: Boolean(gbpPm),
@@ -195,53 +122,30 @@ export async function getNoahLiquidationAddressForCustomer(opts: {
   noahCustomerId: string
   currency: LiquidationCurrency
   ensureCreated?: boolean
-}): Promise<{ hasAddress: boolean; address?: string; memo?: string; walletId?: string }> {
-  const { subjectUserId, subjectBusinessId = null, noahCustomerId, currency, ensureCreated = false } = opts
+}): Promise<{ hasAddress: boolean; address?: string; memo?: string }> {
+  const { noahCustomerId, currency, ensureCreated = false } = opts
   const fetched = await tryFetchLiquidationAddress(noahCustomerId, currency)
   const created = !fetched && ensureCreated ? await tryCreateLiquidationAddress(noahCustomerId, currency) : null
   const snap = fetched ?? created
-
-  const wallet = await tryFetchWallet(noahCustomerId)
-  await upsertWalletData(
-    subjectUserId,
-    wallet,
-    currency === "usdc" ? snap : null,
-    currency === "eurc" ? snap : null,
-    subjectBusinessId,
-  )
 
   return {
     hasAddress: Boolean(snap?.address),
     address: snap?.address,
     memo: snap?.memo ?? undefined,
-    walletId: wallet?.walletId,
   }
 }
 
-/** Address stored for Easner’s provisioned Noah wallet row (used as autopayout source / trigger wallet). */
-export async function readProvisionedWalletAddressFromDb(
+/** Turnkey Solana USDC address for payout/autopayout source (Noah does not provision custodial wallets). */
+export async function readTurnkeySolanaUsdcAddressFromContext(
   admin: SupabaseClient,
-  opts: { subjectUserId: string; subjectBusinessId: string | null },
+  ctx: Pick<NoahAccountContext, "subjectUserId" | "subjectBusinessId" | "scope" | "noahCustomerId">,
 ): Promise<string | null> {
-  const { subjectUserId, subjectBusinessId } = opts
-  let wid: string | undefined
-  if (subjectBusinessId) {
-    const { data: bizRow } = await admin
-      .from("businesses")
-      .select("noah_wallet_id")
-      .eq("id", subjectBusinessId)
-      .maybeSingle()
-    wid = bizRow?.noah_wallet_id as string | undefined
-  } else {
-    const { data: userRow } = await admin
-      .from("users")
-      .select("noah_wallet_id")
-      .eq("id", subjectUserId)
-      .maybeSingle()
-    wid = userRow?.noah_wallet_id as string | undefined
+  const accountCtx: NoahAccountContext = {
+    subjectUserId: ctx.subjectUserId,
+    subjectBusinessId: ctx.subjectBusinessId ?? null,
+    scope: ctx.scope,
+    noahCustomerId: ctx.noahCustomerId,
+    customerType: ctx.scope === "business" ? "Business" : "Individual",
   }
-  if (!wid) return null
-  const { data: w } = await admin.from("wallets").select("address").eq("noah_wallet_id", wid).maybeSingle()
-  const addr = w?.address != null ? String(w.address).trim() : ""
-  return addr || null
+  return resolveTurnkeyAddressForNoahPair(admin, accountCtx, "USDC", "Solana")
 }

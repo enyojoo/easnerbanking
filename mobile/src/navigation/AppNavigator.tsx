@@ -19,7 +19,6 @@ import {
   setPushNavMainReady,
 } from '../lib/pendingPushNavigation'
 import { emitAppLocked, registerAppLockListener } from '../lib/app-lock-bus'
-import { useBusinessNoahSync } from '../hooks/useBusinessNoahSync'
 import { useConsumerKycNoahSync } from '../hooks/useConsumerKycNoahSync'
 // Stack timing and Android vs iOS card transitions: see `transitionPresets.ts`.
 import {
@@ -163,7 +162,6 @@ function AuthStack() {
 function MainTabs() {
   const insets = useSafeAreaInsets()
   const palette = useThemeColors()
-  useBusinessNoahSync()
   useConsumerKycNoahSync()
 
   const activeColor = palette.primary.main

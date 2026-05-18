@@ -213,6 +213,7 @@ export async function GET(request: Request) {
   const orgId = userRow?.easner_business_id ?? null
   let tier1Complete = false
   let tier1VerificationStatus: string | null = null
+  let tier1RejectionReasons: unknown[] | null = null
   /** Noah B2B customer id on the org (`businesses.noah_customer_id`). */
   let noahKybCustomerId: string | null = null
   let canManageBusinessVerification = true
@@ -223,12 +224,13 @@ export async function GET(request: Request) {
 
     const { data: orgKyb } = await admin
       .from("businesses")
-      .select("noah_kyb_status,noah_customer_id")
+      .select("noah_kyb_status,noah_customer_id,noah_kyb_rejection_reasons")
       .eq("id", orgId)
       .maybeSingle()
 
     tier1VerificationStatus = (orgKyb?.noah_kyb_status as string | null | undefined) ?? null
     noahKybCustomerId = (orgKyb?.noah_customer_id as string | null | undefined) ?? null
+    tier1RejectionReasons = (orgKyb?.noah_kyb_rejection_reasons as unknown[] | null | undefined) ?? null
     tier1Complete = tier1VerificationStatus === "approved"
   }
 
@@ -260,6 +262,7 @@ export async function GET(request: Request) {
       ownerName,
       tier1Complete,
       tier1VerificationStatus,
+      tier1RejectionReasons,
       noahKybCustomerId,
       canManageBusinessVerification,
     },

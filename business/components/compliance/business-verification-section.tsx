@@ -22,6 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { BUSINESS_TIER_LADDER } from "@/lib/compliance-tier-ladder-copy"
+import { formatNoahRejectionReasonsText } from "@/lib/noah/rejection-reasons"
 import { cn } from "@/lib/utils"
 
 function formatTier1Status(status: string | null): string {
@@ -38,6 +39,7 @@ export function BusinessVerificationSection() {
   const {
     tier1Complete,
     tier1VerificationStatus,
+    tier1RejectionReasons,
     canManageBusinessVerification,
     isLoading,
     businessId,
@@ -172,6 +174,8 @@ export function BusinessVerificationSection() {
 
   const hostedTierMeta = tierLadderCopy(hostedTierLevel)
   const hostedTierTitle = hostedTierMeta?.title ?? `Tier ${hostedTierLevel}`
+  const tier1Rejected = tier1VerificationStatus === "rejected"
+  const rejectionCopy = tier1Rejected ? formatNoahRejectionReasonsText(tier1RejectionReasons) : ""
 
   return (
     <div className="space-y-6" id="business-verification">
@@ -214,6 +218,17 @@ export function BusinessVerificationSection() {
               {isT1 ? (
                 <CardContent className="space-y-4 pt-0">
                   {error ? <p className="text-sm text-destructive">{error}</p> : null}
+                  {tier1Rejected && rejectionCopy ? (
+                    <p className="text-sm text-destructive">
+                      Verification was declined: {rejectionCopy}. Review your documents and try again, or contact
+                      support if you need help.
+                    </p>
+                  ) : tier1Rejected ? (
+                    <p className="text-sm text-destructive">
+                      Verification was declined. Review your documents and try again, or contact support if you need
+                      help.
+                    </p>
+                  ) : null}
                   {!businessId ? (
                     <p className="text-xs text-muted-foreground">Create or join an organization to continue.</p>
                   ) : null}

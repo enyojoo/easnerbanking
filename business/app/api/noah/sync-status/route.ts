@@ -8,6 +8,7 @@ import { noahFetch } from "@/lib/noah/http"
 import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
 import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "../_helpers"
 import { mapNoahVerificationToKycStatus } from "@/lib/noah/map-kyc"
+import { extractNoahRejectionReasons } from "@/lib/noah/rejection-reasons"
 import { provisionNoahArtifactsForCustomer } from "@/lib/noah/provisioning"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 
@@ -40,6 +41,7 @@ async function runSyncFromNoah(request: Request) {
       resolvedCustomerId,
     )
     const kyc = mapNoahVerificationToKycStatus(customer)
+    const rejectionReasons = kyc === "rejected" ? extractNoahRejectionReasons(customer) : null
     let provisioned: Record<string, unknown> | undefined
     if (kyc === "approved") {
       const accountCtx = await resolveNoahAccountContext(request, user.id)
@@ -56,6 +58,7 @@ async function runSyncFromNoah(request: Request) {
       success: true,
       noahScope: ctx.scope,
       kycStatus: kyc,
+      rejectionReasons,
       provisioned,
     })
   } catch (e: unknown) {

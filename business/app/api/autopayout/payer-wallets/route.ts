@@ -7,7 +7,7 @@ import { requireEasnerBusinessId } from "@/lib/terminal/context"
 import { isAllowedTerminalPair } from "@/lib/terminal-allowed-pairs"
 import {
   provisionNoahArtifactsForCustomer,
-  readProvisionedWalletAddressFromDb,
+  readTurnkeySolanaUsdcAddressFromContext,
 } from "@/lib/noah/provisioning"
 
 export async function GET(request: Request) {
@@ -99,15 +99,12 @@ export async function POST(request: Request) {
     )
   }
 
-  const sourceAddress = await readProvisionedWalletAddressFromDb(admin, {
-    subjectUserId: acc.ctx.subjectUserId,
-    subjectBusinessId: acc.ctx.subjectBusinessId,
-  })
+  const sourceAddress = await readTurnkeySolanaUsdcAddressFromContext(admin, acc.ctx)
   if (!sourceAddress) {
     return NextResponse.json(
       {
         error:
-          "No provisioned wallet address yet. Complete verification and wallet setup, then try again.",
+          "No Turnkey Solana USDC address yet. Complete verification and wait for wallet provisioning, then try again.",
       },
       { status: 400 },
     )

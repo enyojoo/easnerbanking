@@ -179,27 +179,8 @@ export const NOAH_SCOPE_INDIVIDUAL_HEADERS = { 'X-Easner-Noah-Scope': 'individua
 
 export const NOAH_SCOPE_BUSINESS_HEADERS = { 'X-Easner-Noah-Scope': 'business' } as const
 
-/**
- * Resolves which Noah scope header to send so `/api/noah/*` and `/api/wallets/*` tier guards
- * check KYB (`businesses.noah_kyb_status`) vs KYC (`users.noah_kyc_status`).
- * Mirrors web `X-Easner-Noah-Scope` when the signed-in user is a business org owner.
- */
-export async function getNoahScopeHeaders(): Promise<
-  typeof NOAH_SCOPE_INDIVIDUAL_HEADERS | typeof NOAH_SCOPE_BUSINESS_HEADERS
-> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-  const uid = session?.user?.id
-  if (!uid) return NOAH_SCOPE_INDIVIDUAL_HEADERS
-
-  const { data: row } = await supabase.from('users').select('easner_business_id,role').eq('id', uid).maybeSingle()
-
-  const bizId = row?.easner_business_id as string | null | undefined
-  const role = row?.role as string | undefined
-  if (typeof bizId === 'string' && bizId.trim().length > 0 && role === 'business') {
-    return NOAH_SCOPE_BUSINESS_HEADERS
-  }
+/** Mobile is consumer-only — always use individual Noah scope. */
+export async function getNoahScopeHeaders(): Promise<typeof NOAH_SCOPE_INDIVIDUAL_HEADERS> {
   return NOAH_SCOPE_INDIVIDUAL_HEADERS
 }
 
