@@ -1,7 +1,8 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useState } from "react"
 import { useAuth } from "@/lib/auth-context"
+import { applyIdlePolicy, evaluateIdlePolicy } from "@/lib/app-idle-policy"
 import { PostUnlockResumeProvider } from "@/lib/post-unlock-resume-context"
 import { registerAppLockListener } from "@/lib/app-lock-bus"
 import {
@@ -28,6 +29,14 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     return registerAppLockListener(() => setBump((n) => n + 1))
   }, [])
+
+  useLayoutEffect(() => {
+    if (!user?.id) return
+    const action = applyIdlePolicy(user.id)
+    if (action === "logout") {
+      void logout()
+    }
+  }, [user?.id, logout])
 
   const onUnlocked = useCallback(() => {
     if (!user?.id) return
@@ -65,7 +74,8 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
     )
   }
 
-  if (isAppLocked(uid)) {
+  const idleRequiresLock = evaluateIdlePolicy(uid) === "lock"
+  if (isAppLocked(uid) || idleRequiresLock) {
     return (
       <PostUnlockResumeProvider resumeUntil={resume.until} resumeVersion={resume.version}>
         <PinUnlockScreen

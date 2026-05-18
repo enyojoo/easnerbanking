@@ -133,7 +133,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(false)
     })()
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN") {
+        resetSessionActivity()
+      }
       setUser((prev) => {
         const nextUser = session?.user ?? null
         if (!nextUser) {
@@ -234,12 +237,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user?.id) return
     void import("@/lib/use-payout-corridors").then((m) => m.prefetchPayoutCorridors())
-  }, [user?.id])
-
-  useEffect(() => {
-    if (user?.id) {
-      resetSessionActivity()
-    }
   }, [user?.id])
 
   const login = async (email: string, password: string) => {
