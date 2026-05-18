@@ -2,7 +2,6 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireAuth } from "@/app/api/noah/_helpers"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
-import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
 import { getTurnkeyDisplayBalancesUsdEur } from "@/lib/wallet/turnkey-chain-balances"
 import { upsertWalletBalanceSnapshot } from "@/lib/wallet/wallet-balances-db"
 
@@ -22,13 +21,6 @@ export async function GET(request: Request) {
 
   const acc = await resolveNoahAccountContext(request, user.id)
   if (!acc.ok) return acc.response
-
-  const guard = await requireNoahVerificationApproved(
-    acc.ctx.subjectUserId,
-    acc.ctx.scope,
-    acc.ctx.subjectBusinessId,
-  )
-  if (guard) return guard
 
   const admin = createSupabaseAdmin()
 

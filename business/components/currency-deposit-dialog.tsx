@@ -130,7 +130,11 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
 
   const isNgn = account.currency === "NGN"
   const blockedByAfricanTier = isNgn && !TIER2_COMPLETE_PLACEHOLDER
-  const blockedByGlobalTier = !isNgn && !tier1Complete
+  const hasProvisionedDepositDetails =
+    Boolean(account.fullAccountNumber?.trim()) ||
+    Boolean(account.stablecoinAddress?.trim()) ||
+    account.accountNumber !== "—"
+  const blockedByGlobalTier = !isNgn && !tier1Complete && !hasProvisionedDepositDetails
   const depositDetailsBlocked = blockedByAfricanTier || blockedByGlobalTier
 
   const handleShare = async (type: "bank" | "stablecoin") => {

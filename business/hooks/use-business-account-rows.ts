@@ -8,6 +8,10 @@ import { useBusinessProfile } from "@/lib/use-business-profile"
 import type { Account } from "@/lib/finance-types"
 import { useWalletBalances } from "@/hooks/queries/use-wallets"
 import { useScope } from "@/lib/query/scope"
+import {
+  canDisplayProvisionedFinancialData,
+  canPerformNoahMoneyMovement,
+} from "@/lib/compliance-display"
 
 type VaJson = {
   hasAccount?: boolean
@@ -48,65 +52,30 @@ export function useBusinessAccountRows() {
   const lastKnownAuthoritativeBalancesRef = useRef<{ USD: string; EUR: string } | null>(null)
 
   const balancesSource = walletQuery.data?.balances?.source
-  // Treat missing `source` as non-authoritative (older cache shapes).
   const isAuthoritativeBalanceRead =
     Boolean(walletQuery.data) &&
     (balancesSource === "turnkey" || balancesSource === "db" || balancesSource === "realtime")
 
   useEffect(() => {
-    if (!tier1Complete) return
     if (!isAuthoritativeBalanceRead) return
     lastKnownAuthoritativeBalancesRef.current = {
       USD: String(walletQuery.data?.balances?.USD ?? "0"),
       EUR: String(walletQuery.data?.balances?.EUR ?? "0"),
     }
-  }, [
-    isAuthoritativeBalanceRead,
-    tier1Complete,
-    walletQuery.data?.balances?.EUR,
-    walletQuery.data?.balances?.USD,
-  ])
+  }, [isAuthoritativeBalanceRead, walletQuery.data?.balances?.EUR, walletQuery.data?.balances?.USD])
 
   const enabledExtras = useMemo(
-    () =>
-      tier1Complete
-        ? normalizeAvailableExtras(walletQuery.data?.available?.enabledExtras)
-        : [],
-    [tier1Complete, walletQuery.data?.available?.enabledExtras],
+    () => normalizeAvailableExtras(walletQuery.data?.available?.enabledExtras),
+    [walletQuery.data?.available?.enabledExtras],
   )
 
-  const balances = useMemo(
-    () => ({
-      USD: tier1Complete
-        ? isAuthoritativeBalanceRead
-          ? String(walletQuery.data?.balances?.USD ?? "0")
-          : (lastKnownAuthoritativeBalancesRef.current?.USD ?? "0")
-        : "0",
-      EUR: tier1Complete
-        ? isAuthoritativeBalanceRead
-          ? String(walletQuery.data?.balances?.EUR ?? "0")
-          : (lastKnownAuthoritativeBalancesRef.current?.EUR ?? "0")
-        : "0",
-    }),
-    [isAuthoritativeBalanceRead, tier1Complete, walletQuery.data?.balances?.EUR, walletQuery.data?.balances?.USD],
+  const hasStablecoinDeposits = Boolean(
+    walletQuery.data?.deposits?.USD?.address?.trim() || walletQuery.data?.deposits?.EUR?.address?.trim(),
   )
-
-  const stablecoinDeposit = useMemo(
-    () => ({
-      USD: tier1Complete ? String(walletQuery.data?.deposits?.USD?.address ?? "") : "",
-      EUR: tier1Complete ? String(walletQuery.data?.deposits?.EUR?.address ?? "") : "",
-    }),
-    [tier1Complete, walletQuery.data?.deposits?.EUR?.address, walletQuery.data?.deposits?.USD?.address],
-  )
-
-  const vaCurrencies = useMemo(() => {
-    const extras = enabledExtras.filter((c) => c !== "USD" && c !== "EUR")
-    return ["USD", "EUR", ...extras]
-  }, [enabledExtras])
 
   const virtualAccountsQuery = useQuery({
     queryKey: scope ? qk.wallets.virtualAccounts(scope, vaCurrencies) : ["wallets", "virtual-accounts", "disabled"],
-    enabled: Boolean(scope) && tier1Complete && vaCurrencies.length > 0,
+    enabled: Boolean(scope) && vaCurrencies.length > 0,
     queryFn: async () => {
       const entries = await Promise.all(
         vaCurrencies.map(async (code) => {
@@ -131,6 +100,59 @@ export function useBusinessAccountRows() {
     gcTime: 15 * 60_000,
     meta: { safePersist: false, freshness: "operational" },
   })
+
+  const hasProvisionedVirtualAccounts = useMemo(
+    () => Object.values(virtualAccountsQuery.data ?? {}).some((va) => Boolean(va?.hasAccount)),
+    [virtualAccountsQuery.data],
+  )
+
+  const hasAnyProvisionedData = useMemo(() => {
+    if (isAuthoritativeBalanceRead || lastKnownAuthoritativeBalancesRef.current) return true
+    if (hasStablecoinDeposits) return true
+    if (hasProvisionedVirtualAccounts) return true
+    return false
+  }, [hasProvisionedVirtualAccounts, hasStablecoinDeposits, isAuthoritativeBalanceRead])
+
+  const canDisplayFinancialData = canDisplayProvisionedFinancialData(tier1Complete, hasAnyProvisionedData)
+  const canMoveMoney = canPerformNoahMoneyMovement(tier1Complete)
+
+  const balances = useMemo(
+    () => ({
+      USD: canDisplayFinancialData
+        ? isAuthoritativeBalanceRead
+          ? String(walletQuery.data?.balances?.USD ?? "0")
+          : (lastKnownAuthoritativeBalancesRef.current?.USD ?? "0")
+        : "0",
+      EUR: canDisplayFinancialData
+        ? isAuthoritativeBalanceRead
+          ? String(walletQuery.data?.balances?.EUR ?? "0")
+          : (lastKnownAuthoritativeBalancesRef.current?.EUR ?? "0")
+        : "0",
+    }),
+    [
+      canDisplayFinancialData,
+      isAuthoritativeBalanceRead,
+      walletQuery.data?.balances?.EUR,
+      walletQuery.data?.balances?.USD,
+    ],
+  )
+
+  const stablecoinDeposit = useMemo(
+    () => ({
+      USD: canDisplayFinancialData ? String(walletQuery.data?.deposits?.USD?.address ?? "") : "",
+      EUR: canDisplayFinancialData ? String(walletQuery.data?.deposits?.EUR?.address ?? "") : "",
+    }),
+    [
+      canDisplayFinancialData,
+      walletQuery.data?.deposits?.EUR?.address,
+      walletQuery.data?.deposits?.USD?.address,
+    ],
+  )
+
+  const vaCurrencies = useMemo(() => {
+    const extras = enabledExtras.filter((c) => c !== "USD" && c !== "EUR")
+    return ["USD", "EUR", ...extras]
+  }, [enabledExtras])
 
   const refreshAccounts = useCallback(async () => {
     if (!scope) return
@@ -162,11 +184,18 @@ export function useBusinessAccountRows() {
             : null
 
   const accountRows: Account[] = useMemo(() => {
-    // Tier 1 complete but we have no authoritative balance yet (e.g. transient provider failure).
-    // Return empty rows so screens render skeletons instead of flashing 0.00.
-    if (tier1Complete && !isAuthoritativeBalanceRead && !lastKnownAuthoritativeBalancesRef.current) {
+    if (!canDisplayFinancialData) {
       return []
     }
+
+    if (
+      tier1Complete &&
+      !isAuthoritativeBalanceRead &&
+      !lastKnownAuthoritativeBalancesRef.current
+    ) {
+      return []
+    }
+
     const codes = ["USD", "EUR", ...enabledExtras.filter((c) => c !== "USD" && c !== "EUR")] as Account["currency"][]
     return codes.map((currency) => {
       const va = vaByCurrency[currency]
@@ -199,7 +228,7 @@ export function useBusinessAccountRows() {
         bankAddress: va?.bankAddress,
         balance: bal,
         availableBalance: bal,
-        status: tier1Complete ? "active" : "pending",
+        status: tier1Complete ? "active" : "restricted",
         stablecoinAddress,
         stablecoinChain: "Solana",
         stablecoinToken: usdc ? "USDC" : eurc ? "EURC" : "USDC",
@@ -208,6 +237,7 @@ export function useBusinessAccountRows() {
   }, [
     balances.EUR,
     balances.USD,
+    canDisplayFinancialData,
     displayName,
     enabledExtras,
     isAuthoritativeBalanceRead,
@@ -222,17 +252,20 @@ export function useBusinessAccountRows() {
     (tier1Complete &&
       accountRows.length === 0 &&
       ((walletQuery.isPending && !walletQuery.data) ||
-        (virtualAccountsQuery.isPending && !virtualAccountsQuery.data)))
-    ||
-    // If Tier1 is complete but we have no authoritative balances yet, keep skeletons up
-    // instead of rendering empty rows or fake 0.00.
-    (tier1Complete && accountRows.length === 0 && !isAuthoritativeBalanceRead && !lastKnownAuthoritativeBalancesRef.current)
+        (virtualAccountsQuery.isPending && !virtualAccountsQuery.data))) ||
+    (tier1Complete &&
+      accountRows.length === 0 &&
+      !isAuthoritativeBalanceRead &&
+      !lastKnownAuthoritativeBalancesRef.current)
 
   return {
     accountRows,
     loading,
     loadError,
     tier1Complete,
+    canDisplayFinancialData,
+    canMoveMoney,
+    hasProvisionedVirtualAccounts,
     profileLoading,
     refreshAccounts,
     noahHeaders: NOAH_HEADERS,

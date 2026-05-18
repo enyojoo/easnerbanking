@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { noahFetch } from "@/lib/noah/http"
 import { requireAuth, requireNoahEnv } from "../_helpers"
-import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { uiFiatToNoahPriceTicker } from "@/lib/noah/fx-tickers"
 import { isTerminalChargeFiatSupported } from "@/lib/noah/terminal-charge-fiats"
@@ -19,13 +18,6 @@ export async function GET(request: Request) {
 
   const acc = await resolveNoahAccountContext(request, user.id)
   if (!acc.ok) return acc.response
-
-  const guard = await requireNoahVerificationApproved(
-      acc.ctx.subjectUserId,
-      acc.ctx.scope,
-      acc.ctx.subjectBusinessId,
-    )
-  if (guard) return guard
 
   const url = new URL(request.url)
   const terminalCrypto = (url.searchParams.get("terminalCrypto") || "").trim()

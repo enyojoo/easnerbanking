@@ -126,7 +126,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     Boolean(virtualAccount?.hasAccount) ||
     Boolean(virtualAccount && (virtualAccount.accountNumber || virtualAccount.iban))
 
-  const accountReady = hasAccountData && kycStatus === 'approved'
+  const accountReady = hasAccountData
 
   const hasStablecoinData = Boolean(
     turnkeyDepositAddress &&
@@ -134,7 +134,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
       turnkeyDepositAddress !== 'Wallet address not available',
   )
 
-  const walletReady = hasStablecoinData && kycStatus === 'approved'
+  const walletReady = hasStablecoinData
 
   const accountCreationTriggeredRef = useRef(false)
   const prevKycStatusRef = useRef<string | null>(null)
@@ -395,15 +395,14 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const getStablecoinAddress = () => {
     const raw = turnkeyDepositAddress || ''
     const memo = turnkeyDepositMemo || undefined
-    const kycOk = kycStatus === 'approved'
     const addrValid =
       Boolean(raw) && raw !== 'Loading...' && raw !== 'Wallet address not available'
 
     return {
-      address: kycOk && addrValid ? raw : '',
+      address: addrValid ? raw : '',
       network: 'Solana',
       supportedStablecoins: currency === 'USD' ? ['USDC'] : ['EURC'],
-      memo: kycOk && addrValid ? memo : undefined,
+      memo: addrValid ? memo : undefined,
       isLiquidationAddress: false,
     }
   }

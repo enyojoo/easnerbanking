@@ -3,7 +3,6 @@ import { getUserFromApiRequest } from "@/lib/supabase/admin"
 import { buildOpenCurrencyCatalog } from "@/lib/accounts/open-currency-catalog"
 import { getEnabledExtraCurrencies } from "@/lib/accounts/enabled-extras"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
-import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
 import { getGlobalCurrencyPolicies } from "@/lib/accounts/currency-controls"
 
 const DEFAULTS = ["USD", "EUR"] as const
@@ -17,13 +16,6 @@ export async function GET(request: Request) {
 
   const acc = await resolveNoahAccountContext(request, user.id)
   if (!acc.ok) return acc.response
-
-  const guard = await requireNoahVerificationApproved(
-      acc.ctx.subjectUserId,
-      acc.ctx.scope,
-      acc.ctx.subjectBusinessId,
-    )
-  if (guard) return guard
 
   const enabledExtras = await getEnabledExtraCurrencies(acc.ctx.subjectUserId, acc.ctx.scope)
   const enabledSet = new Set(enabledExtras.map((c) => c.toUpperCase()))

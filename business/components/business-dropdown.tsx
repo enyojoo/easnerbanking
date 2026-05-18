@@ -22,6 +22,7 @@ import {
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { normalizeBusinessLogoUrl, normalizeProfileImageUrl } from "@/lib/image-cache"
+import { openBusinessSupport } from "@/lib/intercom-messenger"
 
 interface BusinessDropdownProps {
   businessName: string
@@ -144,11 +145,16 @@ export function BusinessDropdown({
             <DropdownMenuSeparator />
           </>
         )}
-        <DropdownMenuItem asChild>
-          <a href="mailto:support@easner.com" className="flex items-center gap-2">
-            <HelpCircle className="h-4 w-4" />
-            <span>Contact Support</span>
-          </a>
+        <DropdownMenuItem
+          className="gap-2 cursor-pointer"
+          onSelect={(event) => {
+            event.preventDefault()
+            setIsOpen(false)
+            void openBusinessSupport()
+          }}
+        >
+          <HelpCircle className="h-4 w-4" />
+          <span>Contact Support</span>
         </DropdownMenuItem>
         <DropdownMenuItem asChild className="gap-2">
           <Link href="/settings">

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
 import { requireAuth, requireNoahEnv } from "../../_helpers"
-import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import {
   collectNoahTransactionsForRange,
@@ -30,13 +29,6 @@ export async function POST(request: Request) {
 
   const acc = await resolveNoahAccountContext(request, user.id)
   if (!acc.ok) return acc.response
-
-  const guard = await requireNoahVerificationApproved(
-      acc.ctx.subjectUserId,
-      acc.ctx.scope,
-      acc.ctx.subjectBusinessId,
-    )
-  if (guard) return guard
 
   let body: unknown
   try {

@@ -8,8 +8,6 @@ export interface UsernameLookupResult {
   userId: string
   easetag: string
   noahCustomerId: string | null
-  /** @deprecated Use noahCustomerId — Noah production has no custodial wallets. */
-  noahWalletId: string | null
   firstName: string | null
   lastName: string | null
   email: string
@@ -159,7 +157,6 @@ export async function getWalletIdByUsername(
     userId: data.id,
     easetag: data.easetag,
     noahCustomerId: customerId,
-    noahWalletId: customerId,
     firstName: data.first_name,
     lastName: data.last_name,
     email: data.email,

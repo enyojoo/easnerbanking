@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireAuth, requireNoahEnv } from "../_helpers"
 import { fetchAllPaymentMethodsForCustomer } from "@/lib/noah/list-payment-methods"
 import {
@@ -7,7 +8,8 @@ import {
 } from "@/lib/noah/payment-method-map"
 import { persistVirtualAccountFromPaymentMethod } from "@/lib/noah/persist-account-data"
 import { provisionNoahArtifactsForCustomer } from "@/lib/noah/provisioning"
-import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
+import { isNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
+import { getVirtualAccountDisplayFromDb } from "@/lib/noah/virtual-accounts-db"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { ensureCurrencyUsable } from "@/lib/accounts/currency-controls"
 
@@ -21,20 +23,7 @@ export async function GET(request: Request) {
   const acc = await resolveNoahAccountContext(request, user.id)
   if (!acc.ok) return acc.response
 
-  const guard = await requireNoahVerificationApproved(
-      acc.ctx.subjectUserId,
-      acc.ctx.scope,
-      acc.ctx.subjectBusinessId,
-    )
-  if (guard) return guard
-
   const { noahCustomerId, subjectUserId, subjectBusinessId } = acc.ctx
-  await provisionNoahArtifactsForCustomer({
-    subjectUserId,
-    subjectBusinessId,
-    noahCustomerId,
-    scope: acc.ctx.scope,
-  })
 
   const url = new URL(request.url)
   const currency = (url.searchParams.get("currency") || "usd").toLowerCase() as "usd" | "eur" | "gbp"
@@ -45,6 +34,45 @@ export async function GET(request: Request) {
   if (!guardCurrency.ok) {
     return NextResponse.json({ error: guardCurrency.reason, code: "CURRENCY_DISABLED" }, { status: 403 })
   }
+
+  const admin = createSupabaseAdmin()
+  const cached = await getVirtualAccountDisplayFromDb(admin, {
+    currency,
+    userId: subjectUserId,
+    businessId: subjectBusinessId,
+  })
+  if (cached?.hasAccount) {
+    return NextResponse.json({
+      hasAccount: true,
+      currency,
+      accountNumber: cached.accountNumber,
+      routingNumber: cached.routingNumber,
+      sortCode: cached.sortCode,
+      iban: cached.iban,
+      bic: cached.bic,
+      bankName: cached.bankName,
+      bankAddress: cached.bankAddress,
+      accountHolderName: cached.accountHolderName,
+      status: cached.status,
+      source: "db",
+    })
+  }
+
+  const approved = await isNoahVerificationApproved(admin, {
+    subjectUserId,
+    scope: acc.ctx.scope,
+    subjectBusinessId,
+  })
+  if (!approved) {
+    return NextResponse.json({ hasAccount: false, currency })
+  }
+
+  await provisionNoahArtifactsForCustomer({
+    subjectUserId,
+    subjectBusinessId,
+    noahCustomerId,
+    scope: acc.ctx.scope,
+  })
 
   try {
     const all = await fetchAllPaymentMethodsForCustomer(noahCustomerId)
@@ -78,6 +106,7 @@ export async function GET(request: Request) {
       bankAddress: display.bankAddress,
       accountHolderName: display.accountHolderName,
       status: display.status,
+      source: "noah",
     })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)

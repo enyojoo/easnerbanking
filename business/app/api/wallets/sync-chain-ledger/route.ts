@@ -2,7 +2,6 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireAuth } from "@/app/api/noah/_helpers"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
-import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
 import { resolveWalletOwnerIdForEasnerContext } from "@/lib/wallet/resolve-wallet-owner"
 import { backfillTurnkeyOnchainTransactions } from "@/lib/turnkey/onchain-backfill"
 
@@ -27,13 +26,6 @@ export async function POST(request: Request) {
 
   const acc = await resolveNoahAccountContext(request, user.id)
   if (!acc.ok) return acc.response
-
-  const guard = await requireNoahVerificationApproved(
-    acc.ctx.subjectUserId,
-    acc.ctx.scope,
-    acc.ctx.subjectBusinessId,
-  )
-  if (guard) return guard
 
   const admin = createSupabaseAdmin()
   const walletOwnerId = await resolveWalletOwnerIdForEasnerContext(admin, acc.ctx)

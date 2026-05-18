@@ -115,9 +115,9 @@ export function BusinessOnboardingChecklist() {
   const step3Raw = Boolean(terminalPayoutId)
 
   const refreshBalances = useCallback(async () => {
-    if (!userId || !profile.tier1Complete) return
+    if (!userId) return
     await walletQuery.refetch()
-  }, [profile.tier1Complete, userId, walletQuery])
+  }, [userId, walletQuery])
 
   const refreshTerminal = useCallback(async () => {
     if (!userId) return

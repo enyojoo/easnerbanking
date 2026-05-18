@@ -15,13 +15,6 @@ export async function GET(request: Request) {
   const acc = await resolveNoahAccountContext(request, user.id)
   if (!acc.ok) return acc.response
 
-  const guard = await requireNoahVerificationApproved(
-      acc.ctx.subjectUserId,
-      acc.ctx.scope,
-      acc.ctx.subjectBusinessId,
-    )
-  if (guard) return guard
-
   const url = new URL(request.url)
   const currency = (url.searchParams.get("currency") || "usdc").toLowerCase()
   const chain = (url.searchParams.get("chain") || "solana").toLowerCase()

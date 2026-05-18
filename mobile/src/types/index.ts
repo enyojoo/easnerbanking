@@ -174,9 +174,9 @@ export interface User {
   noah_kyc_rejection_reasons?: unknown
   noah_kyc_metadata?: unknown
   noah_signed_agreement_id?: string | null
-  noah_wallet_id?: string | null
   noah_usd_virtual_account_id?: string | null
   noah_eur_virtual_account_id?: string | null
+  noah_gbp_virtual_account_id?: string | null
   noah_kyb_customer_id?: string | null
   noah_kyb_status?: string | null
   status: "active" | "inactive"

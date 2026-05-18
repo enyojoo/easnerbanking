@@ -40,8 +40,13 @@ export async function persistVirtualAccountFromPaymentMethod(
     return
   }
 
-  if (currency === "usd" || currency === "eur") {
-    const col = currency === "usd" ? "noah_usd_virtual_account_id" : "noah_eur_virtual_account_id"
+  const virtualAccountColumnByCurrency = {
+    usd: "noah_usd_virtual_account_id",
+    eur: "noah_eur_virtual_account_id",
+    gbp: "noah_gbp_virtual_account_id",
+  } as const
+  const col = virtualAccountColumnByCurrency[currency]
+  if (col) {
     if (businessId) {
       const { error: bizErr } = await admin
         .from("businesses")

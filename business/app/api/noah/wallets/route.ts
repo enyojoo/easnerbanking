@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireAuth, requireNoahEnv } from "../_helpers"
-import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
+import { isNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { provisionNoahArtifactsForCustomer } from "@/lib/noah/provisioning"
 import { getTurnkeyDepositAddressesForContext } from "@/lib/wallet/turnkey-deposit-addresses"
@@ -20,27 +20,27 @@ export async function GET(request: Request) {
   const acc = await resolveNoahAccountContext(request, user.id)
   if (!acc.ok) return acc.response
 
-  const guard = await requireNoahVerificationApproved(
-    acc.ctx.subjectUserId,
-    acc.ctx.scope,
-    acc.ctx.subjectBusinessId,
-  )
-  if (guard) return guard
-
   const { noahCustomerId } = acc.ctx
+  const admin = createSupabaseAdmin()
 
-  try {
-    await provisionNoahArtifactsForCustomer({
-      subjectUserId: acc.ctx.subjectUserId,
-      subjectBusinessId: acc.ctx.subjectBusinessId,
-      noahCustomerId,
-      scope: acc.ctx.scope,
-    })
-  } catch {
-    /* virtual accounts / liquidation are best-effort */
+  const approved = await isNoahVerificationApproved(admin, {
+    subjectUserId: acc.ctx.subjectUserId,
+    scope: acc.ctx.scope,
+    subjectBusinessId: acc.ctx.subjectBusinessId,
+  })
+  if (approved) {
+    try {
+      await provisionNoahArtifactsForCustomer({
+        subjectUserId: acc.ctx.subjectUserId,
+        subjectBusinessId: acc.ctx.subjectBusinessId,
+        noahCustomerId,
+        scope: acc.ctx.scope,
+      })
+    } catch {
+      /* virtual accounts / liquidation are best-effort */
+    }
   }
 
-  const admin = createSupabaseAdmin()
   const deposits = await getTurnkeyDepositAddressesForContext(admin, acc.ctx)
   const address = deposits.USD.address.trim()
 

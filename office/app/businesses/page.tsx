@@ -42,6 +42,7 @@ type BusinessRow = {
   noah_kyb_status?: string | null
   noah_usd_virtual_account_id?: string | null
   noah_eur_virtual_account_id?: string | null
+  noah_gbp_virtual_account_id?: string | null
   created_at: string
   updated_at?: string | null
   owner_user_id?: string | null
@@ -440,6 +441,9 @@ function BusinessesPageInner() {
                       </DetailRow>
                       <DetailRow label="EUR virtual account" mono>
                         {displayText(selectedBusiness.noah_eur_virtual_account_id)}
+                      </DetailRow>
+                      <DetailRow label="GBP virtual account" mono>
+                        {displayText(selectedBusiness.noah_gbp_virtual_account_id)}
                       </DetailRow>
                     </div>
                   </div>

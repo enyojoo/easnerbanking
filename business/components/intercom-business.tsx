@@ -1,10 +1,16 @@
 "use client"
 
-import Intercom, { shutdown, update } from "@intercom/messenger-js-sdk"
+import Intercom, { hide, shutdown, update } from "@intercom/messenger-js-sdk"
 import * as React from "react"
 import type { User } from "@supabase/supabase-js"
 import { useAuth } from "@/lib/auth-context"
 import { intercomJwtPayloadFromUser } from "@/lib/intercom-user-attributes"
+import {
+  markIntercomMessengerReady,
+  markIntercomMessengerShutdown,
+  registerIntercomHideOnClose,
+  resetIntercomHideOnCloseRegistration,
+} from "@/lib/intercom-messenger"
 
 type IntercomRegion = "us" | "eu" | "ap"
 
@@ -44,7 +50,12 @@ function bootPayload(
   user: User,
   auth: Extract<IntercomAuthResult, { ok: true }>,
 ) {
-  const base = { app_id: appId, region }
+  const base = {
+    app_id: appId,
+    region,
+    /** Only open from profile → Contact Support; no persistent launcher bubble. */
+    hide_default_launcher: true,
+  }
   if (auth.mode === "jwt") {
     return {
       ...base,
@@ -64,9 +75,13 @@ function updatePayload(user: User, auth: Extract<IntercomAuthResult, { ok: true 
     return {
       intercom_user_jwt: auth.token,
       session_duration: 86_400_000,
+      hide_default_launcher: true,
     }
   }
-  return intercomJwtPayloadFromUser(user)
+  return {
+    ...intercomJwtPayloadFromUser(user),
+    hide_default_launcher: true,
+  }
 }
 
 /**
@@ -106,6 +121,8 @@ export function BusinessIntercom() {
 
     if (!user) {
       shutdown()
+      markIntercomMessengerShutdown()
+      resetIntercomHideOnCloseRegistration()
       prevUserIdRef.current = null
       return
     }
@@ -143,10 +160,15 @@ export function BusinessIntercom() {
 
       if (prevUserIdRef.current) {
         shutdown()
+        markIntercomMessengerShutdown()
+        resetIntercomHideOnCloseRegistration()
       }
       prevUserIdRef.current = current.id
 
       Intercom(bootPayload(appId, region, current, auth))
+      registerIntercomHideOnClose()
+      hide()
+      markIntercomMessengerReady()
     })()
 
     return () => {
