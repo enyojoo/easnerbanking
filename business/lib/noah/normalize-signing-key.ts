@@ -1,4 +1,4 @@
-import { createPrivateKey, type KeyObject } from "node:crypto"
+import { createPrivateKey } from "node:crypto"
 
 /**
  * Normalize `NOAH_SIGNING_PRIVATE_KEY` from env (Vercel often stores PEM as one line with `\n`).
@@ -23,17 +23,11 @@ export function normalizeNoahSigningPrivateKeyPem(raw: string): string {
   return pem.endsWith("\n") ? pem : `${pem}\n`
 }
 
-export type NoahSigningKeyMaterial = {
-  pem: string
-  key: KeyObject
-  /** JWS alg that matches the key curve and Noah dashboard registration. */
-  algorithm: "ES384" | "ES256"
-}
-
 /**
- * Parse and validate the request-signing private key; picks ES384 vs ES256 from the curve.
+ * Validate PEM and require secp384r1 (ES384) per Noah key generation:
+ * openssl ecparam -name secp384r1 -genkey -noout -out private-key.pem
  */
-export function loadNoahSigningKeyMaterial(raw: string): NoahSigningKeyMaterial {
+export function assertNoahEs384SigningPrivateKeyPem(raw: string): string {
   const pem = normalizeNoahSigningPrivateKeyPem(raw)
   if (!pem.includes("BEGIN") || !pem.includes("PRIVATE KEY")) {
     throw new Error(
@@ -41,7 +35,7 @@ export function loadNoahSigningKeyMaterial(raw: string): NoahSigningKeyMaterial 
     )
   }
 
-  let key: KeyObject
+  let key
   try {
     key = createPrivateKey({ key: pem, format: "pem" })
   } catch (e) {
@@ -52,12 +46,22 @@ export function loadNoahSigningKeyMaterial(raw: string): NoahSigningKeyMaterial 
   }
 
   if (key.asymmetricKeyType !== "ec") {
-    throw new Error("NOAH_SIGNING_PRIVATE_KEY must be an elliptic-curve key for ES384/ES256")
+    throw new Error("NOAH_SIGNING_PRIVATE_KEY must be an elliptic-curve key (ES384 / secp384r1)")
   }
 
   const curve = key.asymmetricKeyDetails?.namedCurve
-  const algorithm: "ES384" | "ES256" =
-    curve === "prime256v1" || curve === "secp256r1" ? "ES256" : "ES384"
+  if (curve !== "secp384r1") {
+    throw new Error(
+      `NOAH_SIGNING_PRIVATE_KEY must use curve secp384r1 (ES384) per Noah docs; got ${curve ?? "unknown"}. Generate with: openssl ecparam -name secp384r1 -genkey -noout -out private-key.pem && openssl ec -in private-key.pem -pubout -out public-key.pem`,
+    )
+  }
 
-  return { pem, key, algorithm }
+  return pem
+}
+
+/** @deprecated Use assertNoahEs384SigningPrivateKeyPem */
+export function loadNoahSigningKeyMaterial(raw: string) {
+  const pem = assertNoahEs384SigningPrivateKeyPem(raw)
+  const key = createPrivateKey({ key: pem, format: "pem" })
+  return { pem, key, algorithm: "ES384" as const }
 }

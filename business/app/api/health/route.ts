@@ -8,7 +8,7 @@ import {
   isNoahConfigured,
   isNoahSigningConfigured,
 } from "@/lib/noah/config"
-import { loadNoahSigningKeyMaterial } from "@/lib/noah/normalize-signing-key"
+import { assertNoahEs384SigningPrivateKeyPem } from "@/lib/noah/normalize-signing-key"
 import {
   isTurnkeyConfigured,
   validateTurnkeyEnvForProduction,
@@ -37,8 +37,8 @@ export async function GET() {
     checks.noah_signing = "missing NOAH_SIGNING_PRIVATE_KEY (required for production Api-Signature)"
   } else {
     try {
-      const material = loadNoahSigningKeyMaterial(getNoahSigningPrivateKey())
-      checks.noah_signing = `ok (${material.algorithm}, curve ${material.key.asymmetricKeyDetails?.namedCurve ?? "unknown"})`
+      assertNoahEs384SigningPrivateKeyPem(getNoahSigningPrivateKey())
+      checks.noah_signing = "ok (ES384, secp384r1)"
     } catch (e) {
       checks.noah_signing = e instanceof Error ? e.message : "invalid NOAH_SIGNING_PRIVATE_KEY PEM"
     }

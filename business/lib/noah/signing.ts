@@ -1,48 +1,46 @@
 import crypto from "node:crypto"
 import jwt from "jsonwebtoken"
-import { loadNoahSigningKeyMaterial } from "./normalize-signing-key"
 
-/** Noah verifies `aud` as this value in production. @see Noah signing docs */
-const NOAH_AUDIENCE = "https://api.noah.com"
+/**
+ * Noah Request Signing — mirrors the official `createJwt` from:
+ * https://docs.noah.com/api-concepts/authentication/signing
+ *
+ * Use the same `body` buffer for the JWT and the HTTP request payload.
+ */
 
-export function createNoahSignatureJwt(input: {
+export const NOAH_JWT_AUDIENCE = "https://api.noah.com"
+
+export type CreateNoahJwtOptions = {
+  body: Buffer | undefined
   method: string
-  /** Signed path including `/v1`, e.g. `/v1/onboarding/:CustomerID` */
+  /** JWT `path` claim, e.g. `/v1/onboarding/:CustomerID` */
   path: string
-  queryParams?: Record<string, string | number | boolean | undefined>
-  body?: Buffer
-  privateKeyPem: string
-}): string {
-  const { key, algorithm } = loadNoahSigningKeyMaterial(input.privateKeyPem)
+  /** PEM ES384 private key (secp384r1) */
+  privateKey: string
+  queryParams?: Record<string, string | number> | undefined
+}
+
+/**
+ * Creates a JWT for the `Api-Signature` header (Noah docs — ES384, aud, 5m expiry).
+ */
+export function createNoahSignatureJwt(opts: CreateNoahJwtOptions): string {
+  const { body, method, path, privateKey, queryParams } = opts
 
   let bodyHash: string | undefined
-  if (input.body && input.body.length > 0) {
-    bodyHash = crypto.createHash("sha256").update(input.body).digest("hex")
+  if (body) {
+    bodyHash = crypto.createHash("sha256").update(body).digest("hex")
   }
 
-  const payload: Record<string, unknown> = {
-    method: input.method.toUpperCase(),
-    path: input.path,
+  const payload = {
+    bodyHash,
+    method,
+    path,
+    queryParams,
   }
 
-  if (input.queryParams && Object.keys(input.queryParams).length > 0) {
-    const cleaned: Record<string, string | number> = {}
-    for (const [k, v] of Object.entries(input.queryParams)) {
-      if (v === undefined) continue
-      cleaned[k] = v as string | number
-    }
-    if (Object.keys(cleaned).length > 0) {
-      payload.queryParams = cleaned
-    }
-  }
-
-  if (bodyHash) {
-    payload.bodyHash = bodyHash
-  }
-
-  return jwt.sign(payload, key, {
-    algorithm,
-    audience: NOAH_AUDIENCE,
+  return jwt.sign(payload, privateKey, {
+    algorithm: "ES384",
+    audience: NOAH_JWT_AUDIENCE,
     expiresIn: "5m",
   })
 }

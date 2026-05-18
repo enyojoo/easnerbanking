@@ -1,6 +1,6 @@
 import { createNoahSignatureJwt } from "./signing"
 import { getNoahApiKey, getNoahBaseUrl, getNoahSigningPrivateKey } from "./config"
-import { loadNoahSigningKeyMaterial } from "./normalize-signing-key"
+import { assertNoahEs384SigningPrivateKeyPem } from "./normalize-signing-key"
 
 /** Thrown by `noahFetch` on non-OK responses; use `status` for reliable 404 detection (Noah `Detail` text varies). */
 export class NoahHttpError extends Error {
@@ -15,14 +15,14 @@ export class NoahHttpError extends Error {
 
 export type NoahFetchOptions = {
   method: "GET" | "POST" | "PUT"
-  /** OpenAPI path only, e.g. `/customers/foo` or `/onboarding/:id` (without host; `/v1` added for signing). */
+  /** OpenAPI path segment; JWT `path` claim is `/v1` + this (Noah docs). */
   path: string
   query?: Record<string, string | number | boolean | undefined>
-  /** JSON body — serialized compactly; the same bytes are hashed and sent on the wire. */
+  /** JSON body — same bytes are hashed (`bodyHash`) and sent on the wire. */
   json?: unknown
 }
 
-/** Path claim for Api-Signature JWT — must match Noah docs (`/v1/...`). */
+/** JWT `path` claim — e.g. `/v1/transactions` (Noah signing docs). */
 export function toNoahSignedPath(openApiPath: string): string {
   const p = openApiPath.startsWith("/") ? openApiPath : `/${openApiPath}`
   if (p === "/v1" || p.startsWith("/v1/")) return p
@@ -47,16 +47,17 @@ export function isNoahSignatureErrorMessage(message: string): boolean {
 export function formatNoahSignatureHelpError(detail: string): string {
   return [
     detail,
-    "Check NOAH_SIGNING_PRIVATE_KEY: PEM must match the public key registered on this API key in the Noah dashboard.",
-    "Use the ES384 (secp384r1) or ES256 (prime256v1) key pair you uploaded when creating the production API key — not a sandbox key.",
-    "In Vercel, store the private key with real line breaks or literal \\n sequences between PEM lines.",
+    "Per Noah signing docs: use an ES384 (secp384r1) key pair — openssl ecparam -name secp384r1 -genkey -noout -out private-key.pem; upload public-key.pem on this production API key; set NOAH_SIGNING_PRIVATE_KEY to the private PEM in Vercel.",
+    "https://docs.noah.com/api-concepts/authentication/signing",
   ].join(" ")
 }
 
+/**
+ * Signed Noah API request — same body buffer for JWT `bodyHash` and fetch body (Noah docs).
+ */
 export async function noahFetch<T>(opts: NoahFetchOptions): Promise<T> {
-  const origin = getNoahApiOrigin()
-  const key = getNoahApiKey()
-  if (!key) {
+  const apiKey = getNoahApiKey()
+  if (!apiKey) {
     throw new Error("NOAH_API_KEY is not configured")
   }
 
@@ -65,53 +66,55 @@ export async function noahFetch<T>(opts: NoahFetchOptions): Promise<T> {
     throw new Error("NOAH_SIGNING_PRIVATE_KEY is required for Noah production API requests")
   }
 
-  let signingMaterial: ReturnType<typeof loadNoahSigningKeyMaterial>
-  try {
-    signingMaterial = loadNoahSigningKeyMaterial(signingKeyRaw)
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    throw new Error(msg)
+  const privateKey = assertNoahEs384SigningPrivateKeyPem(signingKeyRaw)
+
+  const path = toNoahSignedPath(opts.path)
+
+  let queryParamsForJwt: Record<string, string | number> | undefined
+  if (opts.query) {
+    const entries = Object.entries(opts.query)
+      .filter(([, v]) => v !== undefined)
+      .map(([k, v]) => [k, typeof v === "boolean" ? String(v) : v] as [string, string | number])
+    if (entries.length > 0) {
+      queryParamsForJwt = Object.fromEntries(entries)
+    }
   }
 
-  const signedPath = toNoahSignedPath(opts.path)
   const qp = new URLSearchParams()
-  if (opts.query) {
-    for (const [k, v] of Object.entries(opts.query)) {
-      if (v === undefined) continue
+  if (queryParamsForJwt) {
+    for (const [k, v] of Object.entries(queryParamsForJwt)) {
       qp.set(k, String(v))
     }
   }
   const qs = qp.toString()
-  const fullUrl = `${origin}${signedPath}${qs ? `?${qs}` : ""}`
+  const origin = getNoahApiOrigin()
+  const fullUrl = `${origin}${path}${qs ? `?${qs}` : ""}`
 
-  let bodyBuf: Buffer | undefined
+  let body: Buffer | undefined
   if (opts.json !== undefined) {
-    const raw = JSON.stringify(opts.json)
-    bodyBuf = Buffer.from(raw, "utf8")
+    body = Buffer.from(JSON.stringify(opts.json), "utf8")
   }
+
+  const signature = createNoahSignatureJwt({
+    body,
+    method: opts.method,
+    path,
+    privateKey,
+    queryParams: queryParamsForJwt,
+  })
 
   const headers: Record<string, string> = {
-    "X-Api-Key": key,
+    "X-Api-Key": apiKey,
+    "Api-Signature": signature,
   }
-  if (bodyBuf) {
+  if (body) {
     headers["Content-Type"] = "application/json"
   }
-
-  const queryParamsForJwt: Record<string, string | number | boolean | undefined> | undefined =
-    opts.query && Object.keys(opts.query).length > 0 ? opts.query : undefined
-
-  headers["Api-Signature"] = createNoahSignatureJwt({
-    method: opts.method,
-    path: signedPath,
-    queryParams: queryParamsForJwt,
-    body: bodyBuf,
-    privateKeyPem: signingMaterial.pem,
-  })
 
   const res = await fetch(fullUrl, {
     method: opts.method,
     headers,
-    body: bodyBuf !== undefined ? new Uint8Array(bodyBuf) : undefined,
+    body: body !== undefined ? new Uint8Array(body) : undefined,
   })
 
   const text = await res.text()

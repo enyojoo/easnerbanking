@@ -3,7 +3,7 @@
  * @see https://docs.noah.com/api-concepts/authentication/configuration
  */
 
-import { loadNoahSigningKeyMaterial } from "./normalize-signing-key"
+import { assertNoahEs384SigningPrivateKeyPem } from "./normalize-signing-key"
 
 const NOAH_PRODUCTION_BASE_URL = "https://api.noah.com/v1"
 
@@ -43,7 +43,7 @@ export function getNoahApiKey(): string {
   return process.env.NOAH_API_KEY || ""
 }
 
-/** PEM EC private key for mandatory production `Api-Signature` (ES384 or ES256). */
+/** PEM ES384 private key (secp384r1) for mandatory production `Api-Signature`. */
 export function getNoahSigningPrivateKey(): string {
   return process.env.NOAH_SIGNING_PRIVATE_KEY || ""
 }
@@ -122,7 +122,7 @@ export function getNoahProductionConfigIssues(): string[] {
     issues.push("missing NOAH_SIGNING_PRIVATE_KEY (required for production Api-Signature)")
   } else {
     try {
-      loadNoahSigningKeyMaterial(getNoahSigningPrivateKey())
+      assertNoahEs384SigningPrivateKeyPem(getNoahSigningPrivateKey())
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       issues.push(`NOAH_SIGNING_PRIVATE_KEY invalid: ${msg}`)
