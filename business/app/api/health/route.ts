@@ -9,6 +9,7 @@ import {
   isNoahSigningConfigured,
 } from "@/lib/noah/config"
 import { assertNoahEs384SigningPrivateKeyPem } from "@/lib/noah/normalize-signing-key"
+import { getNoahWebhookVerifyPublicKeys } from "@/lib/noah/webhook-verify"
 import {
   isTurnkeyConfigured,
   validateTurnkeyEnvForProduction,
@@ -46,6 +47,8 @@ export async function GET() {
   checks.noah_settlement_crypto = getNoahSettlementCryptoCurrency()
   const noahIssues = getNoahProductionConfigIssues()
   checks.noah_production = noahIssues.length === 0 ? "ok" : noahIssues.join("; ")
+  const webhookEnv = process.env.NOAH_WEBHOOK_NOAH_ENV?.trim() || "production (default)"
+  checks.noah_webhook_keys = `${getNoahWebhookVerifyPublicKeys().length} key(s); NOAH_WEBHOOK_NOAH_ENV=${webhookEnv}`
 
   const tk = validateTurnkeyEnvForProduction()
   checks.turnkey = tk.ok

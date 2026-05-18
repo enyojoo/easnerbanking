@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server"
-import { verifyNoahWebhookSignature } from "@/lib/noah/webhook-verify"
+import {
+  readNoahWebhookSignatureHeader,
+  verifyNoahWebhookSignature,
+} from "@/lib/noah/webhook-verify"
 import { recordNoahWebhookDelivery } from "@/lib/noah/process-webhook"
 
 export const runtime = "nodejs"
@@ -10,9 +13,27 @@ export const runtime = "nodejs"
  */
 export async function POST(request: Request) {
   const raw = Buffer.from(await request.arrayBuffer())
-  const sig = request.headers.get("Webhook-Signature")
+  const sig = readNoahWebhookSignatureHeader(request)
+  if (!sig?.trim()) {
+    return NextResponse.json(
+      {
+        error: "Missing Webhook-Signature header",
+        code: "MISSING_WEBHOOK_SIGNATURE",
+        hint: "Noah must send Webhook-Signature on POST deliveries. Check the webhook URL points at this deployment.",
+      },
+      { status: 401 },
+    )
+  }
   if (!verifyNoahWebhookSignature(raw, sig)) {
-    return NextResponse.json({ error: "Invalid Webhook-Signature" }, { status: 401 })
+    const envHint = process.env.NOAH_WEBHOOK_NOAH_ENV?.trim() || "production (default)"
+    return NextResponse.json(
+      {
+        error: "Invalid Webhook-Signature",
+        code: "INVALID_WEBHOOK_SIGNATURE",
+        hint: `Verify NOAH_WEBHOOK_NOAH_ENV matches the Noah program (${envHint}). Sandbox and production use different public keys — see Noah webhook configuration docs.`,
+      },
+      { status: 401 },
+    )
   }
 
   let payload: unknown

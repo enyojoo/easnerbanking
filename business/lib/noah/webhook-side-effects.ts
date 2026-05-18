@@ -4,8 +4,7 @@ import { parseEasnerNoahCustomerId } from "@/lib/noah/customer-id"
 import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
 import { mapNoahVerificationToKycStatus } from "@/lib/noah/map-kyc"
 import { pickTxAmountAndCurrency } from "@/lib/noah/map-transactions"
-import { provisionNoahArtifactsForCustomer } from "@/lib/noah/provisioning"
-import { scheduleTurnkeyWalletsAfterKycApproved } from "@/lib/wallet/turnkey-provisioning"
+import { provisionNoahAfterVerificationApproved } from "@/lib/noah/provision-after-approval"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 
 function pickTxHash(tx: Record<string, unknown>): string | null {
@@ -180,36 +179,13 @@ export async function applyNoahWebhookSideEffects(
       }
       const mappedStatus = mapNoahVerificationToKycStatus(customerLike)
       if (mappedStatus === "approved") {
-        if (parsed.kind === "individual") {
-          await provisionNoahArtifactsForCustomer({
-            subjectUserId: parsed.userId,
-            subjectBusinessId: null,
-            noahCustomerId: customerId,
-            scope: "individual",
-          })
-          await scheduleTurnkeyWalletsAfterKycApproved({
-            scope: "individual",
-            subjectUserId: parsed.userId,
-            subjectBusinessId: null,
-            noahCustomerId: customerId,
-          })
-        } else {
-          const ownerId = await resolveBusinessOrgOwnerUserId(admin, parsed.businessId)
-          if (ownerId) {
-            await provisionNoahArtifactsForCustomer({
-              subjectUserId: ownerId,
-              subjectBusinessId: parsed.businessId,
-              noahCustomerId: customerId,
-              scope: "business",
-            })
-            await scheduleTurnkeyWalletsAfterKycApproved({
-              scope: "business",
-              subjectUserId: ownerId,
-              subjectBusinessId: parsed.businessId,
-              noahCustomerId: customerId,
-            })
-          }
-        }
+        await provisionNoahAfterVerificationApproved({
+          admin,
+          scope: parsed.kind === "business" ? "business" : "individual",
+          noahCustomerId: customerId,
+          subjectUserId: parsed.kind === "individual" ? parsed.userId : "",
+          subjectBusinessId: parsed.kind === "business" ? parsed.businessId : null,
+        })
       }
     }
   }

@@ -4,8 +4,8 @@ import { noahFetch } from "@/lib/noah/http"
 import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
 import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "../_helpers"
 import { mapNoahVerificationToKycStatus } from "@/lib/noah/map-kyc"
-import { provisionNoahArtifactsForCustomer } from "@/lib/noah/provisioning"
-import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
+import { provisionNoahAfterVerificationApproved } from "@/lib/noah/provision-after-approval"
+import { createSupabaseAdmin } from "@/lib/supabase/admin"
 
 export async function POST(request: Request) {
   const mis = requireNoahEnv()
@@ -38,15 +38,14 @@ export async function POST(request: Request) {
     const kyc = mapNoahVerificationToKycStatus(customer)
     let provisioned: Record<string, unknown> | undefined
     if (kyc === "approved") {
-      const accountCtx = await resolveNoahAccountContext(request, user.id)
-      if (accountCtx.ok) {
-        provisioned = await provisionNoahArtifactsForCustomer({
-          subjectUserId: accountCtx.ctx.subjectUserId,
-          subjectBusinessId: accountCtx.ctx.subjectBusinessId,
-          noahCustomerId: accountCtx.ctx.noahCustomerId,
-          scope: accountCtx.ctx.scope,
-        })
-      }
+      const admin = createSupabaseAdmin()
+      provisioned = await provisionNoahAfterVerificationApproved({
+        admin,
+        scope: ctx.scope,
+        noahCustomerId: resolvedCustomerId,
+        subjectUserId: user.id,
+        subjectBusinessId: ctx.businessId,
+      })
     }
     return NextResponse.json({ success: true, noahScope: ctx.scope, provisioned })
   } catch (e: unknown) {
