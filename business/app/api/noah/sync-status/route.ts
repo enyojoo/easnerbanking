@@ -9,6 +9,7 @@ import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
 import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "../_helpers"
 import { mapNoahVerificationToKycStatus } from "@/lib/noah/map-kyc"
 import { extractNoahRejectionReasons } from "@/lib/noah/rejection-reasons"
+import { needsNoahFiatVirtualAccountProvision } from "@/lib/noah/needs-account-provision"
 import { provisionNoahAfterVerificationApproved } from "@/lib/noah/provision-after-approval"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 
@@ -42,9 +43,9 @@ async function runSyncFromNoah(request: Request) {
     )
     const kyc = mapNoahVerificationToKycStatus(customer)
     const rejectionReasons = kyc === "rejected" ? extractNoahRejectionReasons(customer) : null
+    const admin = createSupabaseAdmin()
     let provisioned: Record<string, unknown> | undefined
     if (kyc === "approved") {
-      const admin = createSupabaseAdmin()
       provisioned = await provisionNoahAfterVerificationApproved({
         admin,
         scope: ctx.scope,
@@ -53,12 +54,30 @@ async function runSyncFromNoah(request: Request) {
         subjectBusinessId: ctx.businessId,
       })
     }
+
+    const needsFiatAccountsAfter =
+      kyc === "approved"
+        ? await needsNoahFiatVirtualAccountProvision(admin, {
+            scope: ctx.scope,
+            subjectUserId: user.id,
+            subjectBusinessId: ctx.businessId,
+          })
+        : false
+
     return NextResponse.json({
       success: true,
       noahScope: ctx.scope,
       kycStatus: kyc,
       rejectionReasons,
       provisioned,
+      needsFiatAccounts: needsFiatAccountsAfter,
+      fiatAccountsProvisionAttempted: kyc === "approved",
+      ...(needsFiatAccountsAfter && kyc === "approved"
+        ? {
+            hint:
+              "KYC/KYB is approved but USD/EUR virtual account ids are still missing. Noah may not have issued payment methods yet — retry sync-status in a few minutes or check the Noah dashboard.",
+          }
+        : {}),
     })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)

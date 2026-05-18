@@ -1,18 +1,21 @@
 import { describe, expect, it } from "vitest"
 import crypto from "crypto"
 import {
+  diagnoseNoahWebhookVerification,
   getNoahWebhookVerifyPublicKeys,
   NOAH_WEBHOOK_PUBLIC_KEY_PRODUCTION,
+  splitWebhookSignatureHeader,
   verifyNoahWebhookSignature,
 } from "./webhook-verify"
 
 describe("verifyNoahWebhookSignature", () => {
   it("returns false when header is missing", () => {
-    expect(verifyNoahWebhookSignature(Buffer.from("{}"), null)).toBe(false)
-    expect(verifyNoahWebhookSignature(Buffer.from("{}"), "")).toBe(false)
+    const d = diagnoseNoahWebhookVerification(Buffer.from("{}"), null)
+    expect(d.ok).toBe(false)
+    expect(d.code).toBe("MISSING_SIGNATURE")
   })
 
-  it("verifies ECDSA SHA-384 signatures (DER and ieee-p1363)", () => {
+  it("verifies ECDSA SHA-384 signatures (Noah docs Node + Go patterns)", () => {
     const { privateKey, publicKey } = crypto.generateKeyPairSync("ec", {
       namedCurve: "secp384r1",
     })
@@ -46,5 +49,9 @@ describe("verifyNoahWebhookSignature", () => {
       if (prevEnv === undefined) delete process.env.NOAH_WEBHOOK_NOAH_ENV
       else process.env.NOAH_WEBHOOK_NOAH_ENV = prevEnv
     }
+  })
+
+  it("splits comma-separated signature headers", () => {
+    expect(splitWebhookSignatureHeader("a,b")).toEqual(["a", "b"])
   })
 })

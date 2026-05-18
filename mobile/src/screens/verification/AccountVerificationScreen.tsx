@@ -53,6 +53,7 @@ import {
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { CONSUMER_TIER_LADDER } from '../../lib/compliance-tier-ladder-copy'
 import { isTier1Complete } from '../../lib/compliance'
+import { needsNoahVirtualAccountProvision } from '../../lib/noahAccountSync'
 import { useToast } from '../../components/ToastProvider'
 
 /**
@@ -152,12 +153,13 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     try {
       const kycRaw = userProfile?.noah_kyc_status
       const kycNorm = typeof kycRaw === 'string' ? kycRaw.trim().toLowerCase() : ''
-      /** Always pull Noah until Easner shows approved (not_started / pending must still sync). */
-      const shouldSyncByStatus = kycNorm !== 'approved'
+      /** Pull Noah until approved; after approval, keep syncing until fiat VA ids exist. */
+      const shouldSyncByStatus =
+        kycNorm !== 'approved' || needsNoahVirtualAccountProvision(userProfile)
 
       if (!shouldSyncByStatus && !force) {
         if (!silent) {
-          console.log('[SYNC-STATUS] Status is approved, skipping sync')
+          console.log('[SYNC-STATUS] Approved with fiat accounts present, skipping sync')
         }
         return
       }
@@ -973,8 +975,14 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
       }
       
       // Production Noah HostedURL is checkout.noah.com/kyc?session=… — open as-is in the system browser.
-      // ReturnURL (NOAH_ONBOARDING_RETURN_URL) lands on business web /auth/noah-kyc-return → app deep link.
+      // ReturnURL (NOAH_ONBOARDING_RETURN_URL) should be /auth/noah-complete?context=kyc on the business web app.
       await externalLink.openLink(response.kyc_link, 'Verification for global banking')
+      try {
+        await syncNoahStatus(false, true)
+        if (refreshUserProfile) await refreshUserProfile()
+      } catch {
+        // Non-blocking: background hooks may also sync.
+      }
     } catch (error: any) {
       console.error('Error opening KYC:', error)
       showError(

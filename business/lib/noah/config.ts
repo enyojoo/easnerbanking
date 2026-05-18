@@ -80,13 +80,13 @@ export function getNoahReturnUrl(): string {
   const raw = process.env.NOAH_ONBOARDING_RETURN_URL?.trim()
   if (!raw) {
     throw new Error(
-      "NOAH_ONBOARDING_RETURN_URL is required — set it to the absolute https URL Noah should redirect to after hosted onboarding (see Noah Hosted Onboarding recipe)."
+      "NOAH_ONBOARDING_RETURN_URL is required — set it to https://<host>/auth/noah-complete?context=kyc (see Noah Hosted Onboarding recipe)."
     )
   }
   return assertHttpsReturnUrl(raw, "NOAH_ONBOARDING_RETURN_URL")
 }
 
-/** KYB (Business) hosted onboarding; if unset, uses the same URL as consumer. */
+/** KYB (Business) hosted onboarding; if unset, uses the same URL as consumer. Prefer `…/auth/noah-complete?context=kyb`. */
 export function getNoahBusinessReturnUrl(): string {
   const raw = process.env.NOAH_BUSINESS_ONBOARDING_RETURN_URL?.trim()
   if (!raw) {

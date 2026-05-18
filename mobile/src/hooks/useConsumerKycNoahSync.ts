@@ -3,6 +3,7 @@ import { AppState, AppStateStatus } from 'react-native'
 import { useAuth } from '../contexts/AuthContext'
 import { noahService } from '../lib/noahService'
 import { isTier1Complete } from '../lib/compliance'
+import { needsNoahVirtualAccountProvision } from '../lib/noahAccountSync'
 
 /**
  * Consumer (individual) KYC: POST `/api/noah/sync-status` with `individual` scope after the user
@@ -21,7 +22,7 @@ export function useConsumerKycNoahSync(): void {
   const shouldSync =
     !!user?.id &&
     role !== 'business' &&
-    !isTier1Complete(userProfile)
+    (!isTier1Complete(userProfile) || needsNoahVirtualAccountProvision(userProfile))
 
   const runSync = useCallback(async () => {
     if (!shouldSync || !refreshUserProfile) return

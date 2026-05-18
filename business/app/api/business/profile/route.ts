@@ -216,6 +216,8 @@ export async function GET(request: Request) {
   let tier1RejectionReasons: unknown[] | null = null
   /** Noah B2B customer id on the org (`businesses.noah_customer_id`). */
   let noahKybCustomerId: string | null = null
+  let noahUsdVirtualAccountId: string | null = null
+  let noahEurVirtualAccountId: string | null = null
   let canManageBusinessVerification = true
 
   if (orgId) {
@@ -224,7 +226,9 @@ export async function GET(request: Request) {
 
     const { data: orgKyb } = await admin
       .from("businesses")
-      .select("noah_kyb_status,noah_customer_id,noah_kyb_rejection_reasons")
+      .select(
+        "noah_kyb_status,noah_customer_id,noah_kyb_rejection_reasons,noah_usd_virtual_account_id,noah_eur_virtual_account_id",
+      )
       .eq("id", orgId)
       .maybeSingle()
 
@@ -232,6 +236,10 @@ export async function GET(request: Request) {
     noahKybCustomerId = (orgKyb?.noah_customer_id as string | null | undefined) ?? null
     tier1RejectionReasons = (orgKyb?.noah_kyb_rejection_reasons as unknown[] | null | undefined) ?? null
     tier1Complete = tier1VerificationStatus === "approved"
+    noahUsdVirtualAccountId =
+      (orgKyb?.noah_usd_virtual_account_id as string | null | undefined) ?? null
+    noahEurVirtualAccountId =
+      (orgKyb?.noah_eur_virtual_account_id as string | null | undefined) ?? null
   }
 
   return NextResponse.json({
@@ -265,6 +273,8 @@ export async function GET(request: Request) {
       tier1RejectionReasons,
       noahKybCustomerId,
       canManageBusinessVerification,
+      noahUsdVirtualAccountId,
+      noahEurVirtualAccountId,
     },
   })
 }

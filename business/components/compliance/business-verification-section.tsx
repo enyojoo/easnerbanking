@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
+import { syncBusinessNoahStatus } from "@/lib/noah/sync-business-noah-status"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -23,6 +24,7 @@ import {
 } from "@/components/ui/dialog"
 import { BUSINESS_TIER_LADDER } from "@/lib/compliance-tier-ladder-copy"
 import { buildNoahHostedIframeUrl } from "@/lib/noah/hosted-iframe-url"
+import { isNoahCompleteUrl } from "@/lib/noah/noah-complete-url"
 import { formatNoahRejectionReasonsText } from "@/lib/noah/rejection-reasons"
 import { cn } from "@/lib/utils"
 
@@ -66,46 +68,53 @@ export function BusinessVerificationSection() {
     }
   }, [])
 
-  /** POST /api/noah/sync-status (business scope). Silent on failure — webhooks also update Tier 1. */
   const syncBusinessTier1FromNoah = useCallback(async (): Promise<boolean> => {
-    try {
-      const supabase = createSupabaseBrowser()
-      const { data } = await supabase.auth.getSession()
-      if (!data.session) return false
-      const res = await fetchWithSession("/api/noah/sync-status", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Easner-Noah-Scope": "business",
-        },
-      })
-      const text = await res.text()
-      if (!res.ok) return false
-      if (text) {
-        try {
-          JSON.parse(text)
-        } catch {
-          return false
-        }
-      }
-      window.dispatchEvent(new Event("business-profile-updated"))
-      return true
-    } catch {
-      return false
-    }
+    const result = await syncBusinessNoahStatus()
+    return result.ok
   }, [])
+
+  const closeHostedAndSync = useCallback(() => {
+    setHostedOpen(false)
+    void syncBusinessTier1FromNoah()
+    if (clearUrlAfterCloseRef.current) clearTimeout(clearUrlAfterCloseRef.current)
+    clearUrlAfterCloseRef.current = setTimeout(() => {
+      setHostedUrl(null)
+      clearUrlAfterCloseRef.current = null
+    }, 280)
+  }, [syncBusinessTier1FromNoah])
 
   useEffect(() => {
     if (!hostedOpen) return
     const onMessage = (event: MessageEvent) => {
-      const data = event.data as { type?: string; kycCompleted?: boolean } | null
-      if (data?.type === "kycCompleted" || data?.kycCompleted) {
-        void syncBusinessTier1FromNoah()
+      if (event.origin !== window.location.origin) return
+      const data = event.data as
+        | { type?: string; kycCompleted?: boolean; noahHostedComplete?: boolean }
+        | null
+      if (
+        data?.type === "kycCompleted" ||
+        data?.kycCompleted ||
+        data?.noahHostedComplete
+      ) {
+        closeHostedAndSync()
       }
     }
     window.addEventListener("message", onMessage)
     return () => window.removeEventListener("message", onMessage)
-  }, [hostedOpen, syncBusinessTier1FromNoah])
+  }, [hostedOpen, closeHostedAndSync])
+
+  const handleHostedIframeLoad = useCallback(
+    (event: React.SyntheticEvent<HTMLIFrameElement>) => {
+      try {
+        const href = event.currentTarget.contentWindow?.location?.href
+        if (href && isNoahCompleteUrl(href)) {
+          closeHostedAndSync()
+        }
+      } catch {
+        // Cross-origin until Noah redirects to our ReturnURL.
+      }
+    },
+    [closeHostedAndSync],
+  )
 
   const openHostedVerification = useCallback(async () => {
     setError(null)
@@ -179,35 +188,6 @@ export function BusinessVerificationSection() {
       setBusy(null)
     }
   }, [syncBusinessTier1FromNoah])
-
-  const lastAutoSyncMsRef = useRef(0)
-
-  /** Auto-sync Tier 1 when the section is relevant (webhook / hosted-return complement). */
-  useEffect(() => {
-    if (isLoading || !businessId || !canManageBusinessVerification || tier1Complete) return
-
-      const now = Date.now()
-      const MIN_MS = 90_000
-      if (now - lastAutoSyncMsRef.current < MIN_MS) return
-      lastAutoSyncMsRef.current = now
-
-      void syncBusinessTier1FromNoah()
-  }, [
-    isLoading,
-    businessId,
-    canManageBusinessVerification,
-    tier1Complete,
-    syncBusinessTier1FromNoah,
-  ])
-
-  /** While Tier 1 is incomplete, poll Noah occasionally (missed webhooks). */
-  useEffect(() => {
-    if (!businessId || !canManageBusinessVerification || tier1Complete) return
-    const id = window.setInterval(() => {
-      void syncBusinessTier1FromNoah()
-    }, 5 * 60 * 1000)
-    return () => window.clearInterval(id)
-  }, [businessId, canManageBusinessVerification, tier1Complete, syncBusinessTier1FromNoah])
 
   if (isLoading) {
     return <div className="text-sm text-muted-foreground">Loading verification status…</div>
@@ -337,6 +317,7 @@ export function BusinessVerificationSection() {
                 src={hostedIframeSrc}
                 className="absolute inset-0 size-full border-0"
                 allow="payment *; publickey-credentials-get *; clipboard-read *; clipboard-write *"
+                onLoad={handleHostedIframeLoad}
               />
             </div>
           ) : null}

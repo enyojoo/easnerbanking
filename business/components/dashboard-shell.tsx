@@ -9,6 +9,7 @@ import { DashboardNav } from "@/components/dashboard-nav"
 import { BusinessDropdown } from "@/components/business-dropdown"
 import { AppLockProvider } from "@/components/app-lock/app-lock-provider"
 import { useBusinessProfile } from "@/lib/use-business-profile"
+import { useBusinessNoahSync } from "@/hooks/use-business-noah-sync"
 import { usePersonalProfileAvatar } from "@/lib/use-personal-profile-avatar"
 import { cn } from "@/lib/utils"
 
@@ -21,6 +22,7 @@ interface DashboardShellProps {
 }
 
 export function DashboardShell({ children, mainClassName = "", constrained = false }: DashboardShellProps) {
+  useBusinessNoahSync()
   const { user, isLoading, logout } = useAuth()
   const router = useRouter()
   const {
