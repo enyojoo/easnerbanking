@@ -85,6 +85,14 @@ export async function provisionNoahArtifactsForCustomer(opts: {
   const { subjectUserId, subjectBusinessId = null, noahCustomerId } = opts
   const paymentMethods = await fetchAllPaymentMethodsForCustomer(noahCustomerId)
 
+  if (paymentMethods.length === 0) {
+    console.warn("[provisionNoahArtifactsForCustomer] no payment methods from Noah", {
+      noahCustomerId,
+      scope: opts.scope,
+      businessId: subjectBusinessId,
+    })
+  }
+
   const usdPm = paymentMethods.find((pm) => hasPayinBank(pm, "US"))
   const eurPm = paymentMethods.find((pm) => {
     const caps = pm.Capabilities as Record<string, unknown> | undefined
@@ -93,9 +101,50 @@ export async function provisionNoahArtifactsForCustomer(opts: {
   })
   const gbpPm = paymentMethods.find((pm) => hasPayinBank(pm, "GB"))
 
-  if (usdPm) await persistVirtualAccountFromPaymentMethod(subjectUserId, "usd", usdPm, subjectBusinessId)
-  if (eurPm) await persistVirtualAccountFromPaymentMethod(subjectUserId, "eur", eurPm, subjectBusinessId)
-  if (gbpPm) await persistVirtualAccountFromPaymentMethod(subjectUserId, "gbp", gbpPm, subjectBusinessId)
+  if (!usdPm || !eurPm) {
+    console.warn("[provisionNoahArtifactsForCustomer] missing fiat VA payment methods", {
+      noahCustomerId,
+      scope: opts.scope,
+      paymentMethodCount: paymentMethods.length,
+      usdFound: Boolean(usdPm),
+      eurFound: Boolean(eurPm),
+      sample: paymentMethods.slice(0, 3).map((pm) => ({
+        id: pm.ID,
+        country: pm.Country,
+        fiat: pm.FiatCurrency,
+        entity: pm.Entity,
+        displayType: (pm.DisplayDetails as Record<string, unknown> | undefined)?.Type,
+      })),
+    })
+  }
+
+  if (usdPm) {
+    await persistVirtualAccountFromPaymentMethod(
+      subjectUserId,
+      "usd",
+      usdPm,
+      subjectBusinessId,
+      noahCustomerId,
+    )
+  }
+  if (eurPm) {
+    await persistVirtualAccountFromPaymentMethod(
+      subjectUserId,
+      "eur",
+      eurPm,
+      subjectBusinessId,
+      noahCustomerId,
+    )
+  }
+  if (gbpPm) {
+    await persistVirtualAccountFromPaymentMethod(
+      subjectUserId,
+      "gbp",
+      gbpPm,
+      subjectBusinessId,
+      noahCustomerId,
+    )
+  }
 
   const usdc =
     (await tryFetchLiquidationAddress(noahCustomerId, "usdc")) ??

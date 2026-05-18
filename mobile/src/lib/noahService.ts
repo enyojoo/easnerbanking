@@ -474,6 +474,12 @@ export const noahService = {
           success?: boolean
           kycStatus?: string
           rejectionReasons?: unknown[]
+          needsFiatAccounts?: boolean
+          provisioned?: {
+            usdAccountCreated?: boolean
+            eurAccountCreated?: boolean
+          }
+          hint?: string
           [key: string]: unknown
         }
         const success =
@@ -487,6 +493,9 @@ export const noahService = {
               ? {
                   kycStatus: data.kycStatus,
                   rejectionReasons: data.rejectionReasons as any[] | undefined,
+                  needsFiatAccounts: data.needsFiatAccounts,
+                  provisioned: data.provisioned,
+                  hint: typeof data.hint === 'string' ? data.hint : undefined,
                 }
               : undefined,
         }

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
-import { parseEasnerNoahCustomerId } from "@/lib/noah/customer-id"
+import { resolveNoahCustomerTarget } from "@/lib/noah/resolve-noah-customer-target"
 import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
 import { mapNoahVerificationToKycStatus } from "@/lib/noah/map-kyc"
 import { pickTxAmountAndCurrency } from "@/lib/noah/map-transactions"
@@ -52,7 +52,9 @@ export async function applyNoahWebhookSideEffects(
   if (eventType === "Transaction" && data) {
     const txData = data as Record<string, unknown>
     const txCustomerId = txData.CustomerID != null ? String(txData.CustomerID) : customerId
-    const parsed = txCustomerId ? parseEasnerNoahCustomerId(txCustomerId) : null
+    const parsed = txCustomerId
+      ? await resolveNoahCustomerTarget(admin, { customerId: txCustomerId, webhookData: txData })
+      : null
     if (parsed) {
       const id = String(txData.ID ?? "")
       const { amount, currency } = pickTxAmountAndCurrency(txData)
@@ -158,7 +160,7 @@ export async function applyNoahWebhookSideEffects(
   }
 
   if (eventType === "Customer" && customerId) {
-    const parsed = parseEasnerNoahCustomerId(customerId)
+    const parsed = await resolveNoahCustomerTarget(admin, { customerId, webhookData: data })
     if (parsed && data) {
       const customerLike: Record<string, unknown> = {
         ...data,

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { fetchNoahCustomerWithIndividualFallback } from "@/lib/noah/fetch-customer"
+import { fetchNoahCustomerForScope } from "@/lib/noah/fetch-customer"
 import {
   formatNoahSignatureHelpError,
   isNoahSignatureErrorMessage,
@@ -41,6 +41,7 @@ export async function POST(request: Request) {
         customerType: ctx.customerType,
         metadata: {
           easner_user_id: user.id,
+          ...(ctx.businessId ? { easner_business_id: ctx.businessId } : {}),
           full_name: body.full_name || "",
           email: body.email || user.email || "",
           easner_product: ctx.scope === "business" ? "easner_business" : "easner_mobile",
@@ -68,16 +69,12 @@ export async function POST(request: Request) {
       })
     }
 
-    const { customer, resolvedCustomerId } =
-      ctx.scope === "individual"
-        ? await fetchNoahCustomerWithIndividualFallback(user.id, ctx.noahCustomerId)
-        : {
-            customer: await noahFetch<Record<string, unknown>>({
-              method: "GET",
-              path: `/customers/${encodeURIComponent(ctx.noahCustomerId)}`,
-            }),
-            resolvedCustomerId: ctx.noahCustomerId,
-          }
+    const subjectId = ctx.scope === "business" ? (ctx.businessId ?? ctx.noahCustomerId) : user.id
+    const { customer, resolvedCustomerId } = await fetchNoahCustomerForScope(
+      ctx.scope,
+      subjectId,
+      ctx.noahCustomerId,
+    )
 
     await syncNoahCustomerToSupabase(
       ctx.scope === "business" && ctx.businessId

@@ -1,6 +1,8 @@
 import {
   compactUuidForNoahCustomerId,
+  noahCustomerIdFromBusinessId,
   noahCustomerIdFromUserId,
+  type NoahCustomerScope,
 } from "./customer-id"
 import { NoahHttpError, noahFetch } from "./http"
 
@@ -65,4 +67,55 @@ export async function fetchNoahCustomerWithIndividualFallback(
     throw new NoahCustomerNotFoundAfterTriesError(attemptedIds, lastNotFound)
   }
   throw new Error("Noah customer fetch failed")
+}
+
+/**
+ * GET /customers/:id — try stored id, `ebiz_{uuid}`, compact UUID, and hyphenated business id.
+ */
+export async function fetchNoahCustomerWithBusinessFallback(
+  businessId: string,
+  primaryNoahCustomerId: string,
+): Promise<{ customer: Record<string, unknown>; resolvedCustomerId: string }> {
+  const bare = compactUuidForNoahCustomerId(businessId)
+  const ebiz = noahCustomerIdFromBusinessId(businessId)
+  const hyphenated = businessId.trim().toLowerCase()
+  const get = (id: string) =>
+    noahFetch<Record<string, unknown>>({
+      method: "GET",
+      path: `/customers/${encodeURIComponent(id)}`,
+    })
+
+  const order = [primaryNoahCustomerId, ebiz, bare, hyphenated]
+  const seen = new Set<string>()
+  const attemptedIds: string[] = []
+  let lastNotFound: unknown
+
+  for (const id of order) {
+    if (seen.has(id)) continue
+    seen.add(id)
+    attemptedIds.push(id)
+    try {
+      const customer = await get(id)
+      return { customer, resolvedCustomerId: id }
+    } catch (e) {
+      if (!isNoahCustomerNotFoundError(e)) throw e
+      lastNotFound = e
+    }
+  }
+
+  if (lastNotFound) {
+    throw new NoahCustomerNotFoundAfterTriesError(attemptedIds, lastNotFound)
+  }
+  throw new Error("Noah customer fetch failed")
+}
+
+export async function fetchNoahCustomerForScope(
+  scope: NoahCustomerScope,
+  subjectId: string,
+  primaryNoahCustomerId: string,
+): Promise<{ customer: Record<string, unknown>; resolvedCustomerId: string }> {
+  if (scope === "business") {
+    return fetchNoahCustomerWithBusinessFallback(subjectId, primaryNoahCustomerId)
+  }
+  return fetchNoahCustomerWithIndividualFallback(subjectId, primaryNoahCustomerId)
 }

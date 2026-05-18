@@ -92,7 +92,13 @@ export async function GET(request: Request) {
     }
 
     const display = mapPaymentMethodToVirtualAccountDisplay(pm, currency)
-    await persistVirtualAccountFromPaymentMethod(subjectUserId, currency, pm, subjectBusinessId)
+    await persistVirtualAccountFromPaymentMethod(
+      subjectUserId,
+      currency,
+      pm,
+      subjectBusinessId,
+      noahCustomerId,
+    )
 
     return NextResponse.json({
       hasAccount: true,

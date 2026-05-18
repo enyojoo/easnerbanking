@@ -37,18 +37,39 @@ export function isEurCountry(code: string): boolean {
   return eu.has(code.toUpperCase())
 }
 
+function pmFiatCurrency(pm: Record<string, unknown>): string {
+  return String(pm.FiatCurrency ?? pm.fiatCurrency ?? "").toUpperCase()
+}
+
+function pmEntity(pm: Record<string, unknown>): string {
+  return String(pm.Entity ?? pm.entity ?? "").toUpperCase()
+}
+
 export function matchesCurrency(pm: Record<string, unknown>, want: "usd" | "eur" | "gbp"): boolean {
   const country = String(pm.Country ?? "").toUpperCase()
-  if (want === "usd") return country === "US"
-  if (want === "eur") return isEurCountry(country)
-  if (want === "gbp") return country === "GB"
+  const fiat = pmFiatCurrency(pm)
+  const entity = pmEntity(pm)
+
+  if (want === "usd") {
+    return country === "US" || fiat === "USD" || entity === "US"
+  }
+  if (want === "eur") {
+    return isEurCountry(country) || fiat === "EUR" || entity === "LT"
+  }
+  if (want === "gbp") {
+    return country === "GB" || fiat === "GBP"
+  }
   return false
 }
 
 export function hasPayinBank(pm: Record<string, unknown>, country: string): boolean {
   const caps = pm.Capabilities as Record<string, unknown> | undefined
   if (caps && caps.PayinTo === false) return false
-  return String(pm.Country ?? "").toUpperCase() === country
+  const want = country.toUpperCase()
+  if (String(pm.Country ?? "").toUpperCase() === want) return true
+  if (want === "US") return pmFiatCurrency(pm) === "USD" || pmEntity(pm) === "US"
+  if (want === "GB") return pmFiatCurrency(pm) === "GBP"
+  return false
 }
 
 export type VirtualAccountDisplay = {

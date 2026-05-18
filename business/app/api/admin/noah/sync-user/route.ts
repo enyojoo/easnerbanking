@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
-import { fetchNoahCustomerWithIndividualFallback } from "@/lib/noah/fetch-customer"
-import { noahFetch } from "@/lib/noah/http"
+import { fetchNoahCustomerForScope } from "@/lib/noah/fetch-customer"
 import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
 import { requireNoahEnv, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { requireOfficeAdmin } from "@/lib/api/admin-auth"
@@ -35,16 +34,12 @@ export async function POST(request: Request) {
   if (!ctx.ok) return ctx.response
 
   try {
-    const { customer, resolvedCustomerId } =
-      ctx.scope === "individual"
-        ? await fetchNoahCustomerWithIndividualFallback(userId, ctx.noahCustomerId)
-        : {
-            customer: await noahFetch<Record<string, unknown>>({
-              method: "GET",
-              path: `/customers/${encodeURIComponent(ctx.noahCustomerId)}`,
-            }),
-            resolvedCustomerId: ctx.noahCustomerId,
-          }
+    const subjectId = ctx.scope === "business" ? (ctx.businessId ?? ctx.noahCustomerId) : userId
+    const { customer, resolvedCustomerId } = await fetchNoahCustomerForScope(
+      ctx.scope,
+      subjectId,
+      ctx.noahCustomerId,
+    )
     await syncNoahCustomerToSupabase(
       ctx.scope === "business" && ctx.businessId
         ? { kind: "business", businessId: ctx.businessId }

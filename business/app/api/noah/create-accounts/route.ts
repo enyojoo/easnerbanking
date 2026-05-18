@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { fetchNoahCustomerForScope } from "@/lib/noah/fetch-customer"
 import { noahFetch } from "@/lib/noah/http"
 import { buildHostedOnboardingBody } from "@/lib/noah/hosted-onboarding"
 import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
@@ -45,6 +46,7 @@ export async function POST(request: Request) {
         customerType,
         metadata: {
           easner_user_id: subjectUserId,
+          ...(acc.ctx.subjectBusinessId ? { easner_business_id: acc.ctx.subjectBusinessId } : {}),
           easner_product: scope === "business" ? "easner_business" : "easner_mobile",
         },
       }),
@@ -55,22 +57,25 @@ export async function POST(request: Request) {
       /* hosted session returned — customer may still be completing setup */
     }
 
-    const customer = await noahFetch<Record<string, unknown>>({
-      method: "GET",
-      path: `/customers/${encodeURIComponent(noahCustomerId)}`,
-    })
+    const subjectId =
+      scope === "business" ? (acc.ctx.subjectBusinessId ?? noahCustomerId) : subjectUserId
+    const { customer, resolvedCustomerId } = await fetchNoahCustomerForScope(
+      scope,
+      subjectId,
+      noahCustomerId,
+    )
     await syncNoahCustomerToSupabase(
       scope === "business" && acc.ctx.subjectBusinessId
         ? { kind: "business", businessId: acc.ctx.subjectBusinessId }
         : { kind: "individual", userId: subjectUserId },
       customer,
-      noahCustomerId,
+      resolvedCustomerId,
     )
 
     const provisioned = await provisionNoahArtifactsForCustomer({
       subjectUserId,
       subjectBusinessId: acc.ctx.subjectBusinessId,
-      noahCustomerId,
+      noahCustomerId: resolvedCustomerId,
       scope,
     })
 

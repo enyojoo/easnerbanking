@@ -9,6 +9,7 @@ export async function persistVirtualAccountFromPaymentMethod(
   currency: "usd" | "eur" | "gbp",
   pm: Record<string, unknown>,
   businessId?: string | null,
+  noahCustomerId?: string | null,
 ): Promise<void> {
   const pmId = String(pm.ID ?? "").trim()
   if (!pmId) return
@@ -22,6 +23,8 @@ export async function persistVirtualAccountFromPaymentMethod(
       user_id: subjectUserId,
       business_id: businessId ?? null,
       noah_virtual_account_id: pmId,
+      noah_payment_method_id: pmId,
+      noah_customer_id: noahCustomerId?.trim() || null,
       currency: fiat,
       account_number: display.accountNumber ?? null,
       routing_number: display.routingNumber ?? null,

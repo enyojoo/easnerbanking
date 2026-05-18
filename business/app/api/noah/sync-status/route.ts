@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server"
 import {
-  fetchNoahCustomerWithIndividualFallback,
+  fetchNoahCustomerForScope,
   isNoahCustomerNotFoundError,
   NoahCustomerNotFoundAfterTriesError,
 } from "@/lib/noah/fetch-customer"
-import { noahFetch } from "@/lib/noah/http"
 import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
 import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "../_helpers"
 import { mapNoahVerificationToKycStatus } from "@/lib/noah/map-kyc"
@@ -24,16 +23,12 @@ async function runSyncFromNoah(request: Request) {
   if (!ctx.ok) return ctx.response
 
   try {
-    const { customer, resolvedCustomerId } =
-      ctx.scope === "individual"
-        ? await fetchNoahCustomerWithIndividualFallback(user.id, ctx.noahCustomerId)
-        : {
-            customer: await noahFetch<Record<string, unknown>>({
-              method: "GET",
-              path: `/customers/${encodeURIComponent(ctx.noahCustomerId)}`,
-            }),
-            resolvedCustomerId: ctx.noahCustomerId,
-          }
+    const subjectId = ctx.scope === "business" ? (ctx.businessId ?? ctx.noahCustomerId) : user.id
+    const { customer, resolvedCustomerId } = await fetchNoahCustomerForScope(
+      ctx.scope,
+      subjectId,
+      ctx.noahCustomerId,
+    )
     await syncNoahCustomerToSupabase(
       ctx.scope === "business" && ctx.businessId
         ? { kind: "business", businessId: ctx.businessId }

@@ -3,7 +3,7 @@ import { recordEventInbox, markEventInboxProcessed } from "@/lib/webhooks/event-
 import { applyNoahWebhookSideEffects } from "@/lib/noah/webhook-side-effects"
 
 /**
- * Persist webhook (idempotent) and sync Customer events to users or businesses when CustomerID is Easner-shaped.
+ * Persist webhook (idempotent) and sync Customer events to users or businesses (Easner-shaped or stored ids).
  */
 export async function recordNoahWebhookDelivery(payload: unknown): Promise<{ skipped: boolean }> {
   const p = payload as Record<string, unknown>
