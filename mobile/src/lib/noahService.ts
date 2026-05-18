@@ -273,6 +273,7 @@ export const noahService = {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session.access_token}`,
+        'X-Easner-Noah-Scope': 'individual',
       },
       body: JSON.stringify({ full_name, email, type }),
     })

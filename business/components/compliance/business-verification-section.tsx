@@ -60,56 +60,6 @@ export function BusinessVerificationSection() {
     }
   }, [])
 
-  const openHostedVerification = useCallback(async () => {
-    setError(null)
-    setBusy("link")
-    try {
-      const supabase = createSupabaseBrowser()
-      const { data } = await supabase.auth.getSession()
-      if (!data.session) {
-        setError("You need to be signed in.")
-        return
-      }
-      const res = await fetchWithSession("/api/noah/kyc-links", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "business" }),
-      })
-      const text = await res.text()
-      let json = {} as { kyc_link?: string; error?: string }
-      if (text) {
-        try {
-          json = JSON.parse(text) as { kyc_link?: string; error?: string }
-        } catch {
-          setError(res.status === 431 ? "Request headers too large. Sign out, sign in again, or clear site data for localhost." : "Invalid response from server.")
-          return
-        }
-      }
-      if (res.status === 431) {
-        setError(
-          json.error ??
-            "Session data is too large (often from a profile image stored in your account). Sign out and sign in again, or visit Personal settings after we refresh your session.",
-        )
-        return
-      }
-      if (!res.ok || !json.kyc_link) {
-        setError(json.error ?? "Could not start verification.")
-        return
-      }
-      if (clearUrlAfterCloseRef.current) {
-        clearTimeout(clearUrlAfterCloseRef.current)
-        clearUrlAfterCloseRef.current = null
-      }
-      setHostedTierLevel(1)
-      setHostedUrl(json.kyc_link)
-      setHostedOpen(true)
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Something went wrong.")
-    } finally {
-      setBusy(null)
-    }
-  }, [])
-
   /** POST /api/noah/sync-status (business scope). Silent on failure — webhooks also update Tier 1. */
   const syncBusinessTier1FromNoah = useCallback(async (): Promise<boolean> => {
     try {
@@ -138,6 +88,79 @@ export function BusinessVerificationSection() {
       return false
     }
   }, [])
+
+  const openHostedVerification = useCallback(async () => {
+    setError(null)
+    setBusy("link")
+    try {
+      const supabase = createSupabaseBrowser()
+      const { data } = await supabase.auth.getSession()
+      if (!data.session) {
+        setError("You need to be signed in.")
+        return
+      }
+      const res = await fetchWithSession("/api/noah/kyc-links", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Easner-Noah-Scope": "business",
+        },
+        body: JSON.stringify({ type: "business" }),
+      })
+      const text = await res.text()
+      let json = {} as {
+        kyc_link?: string | null
+        error?: string
+        alreadyOnboarded?: boolean
+        kyc_status?: string
+      }
+      if (text) {
+        try {
+          json = JSON.parse(text) as { kyc_link?: string; error?: string }
+        } catch {
+          setError(res.status === 431 ? "Request headers too large. Sign out, sign in again, or clear site data for localhost." : "Invalid response from server.")
+          return
+        }
+      }
+      if (res.status === 431) {
+        setError(
+          json.error ??
+            "Session data is too large (often from a profile image stored in your account). Sign out and sign in again, or visit Personal settings after we refresh your session.",
+        )
+        return
+      }
+      if (!res.ok) {
+        setError(json.error ?? "Could not start verification.")
+        return
+      }
+      if (json.alreadyOnboarded || !json.kyc_link) {
+        void syncBusinessTier1FromNoah()
+        if (json.kyc_status === "approved") {
+          setError(null)
+          return
+        }
+        setError(
+          json.kyc_status === "under_review" || json.kyc_status === "in_review"
+            ? "Verification is already in review. We will update your status shortly."
+            : json.kyc_status === "rejected"
+              ? "Verification was declined. Review the message above or contact support."
+              : "Verification session is not available right now. Try again shortly or contact support.",
+        )
+        return
+      }
+      if (clearUrlAfterCloseRef.current) {
+        clearTimeout(clearUrlAfterCloseRef.current)
+        clearUrlAfterCloseRef.current = null
+      }
+      setHostedTierLevel(1)
+      setHostedUrl(json.kyc_link)
+      setHostedOpen(true)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Something went wrong.")
+    } finally {
+      setBusy(null)
+    }
+  }, [syncBusinessTier1FromNoah])
 
   const lastAutoSyncMsRef = useRef(0)
 

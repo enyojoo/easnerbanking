@@ -955,12 +955,26 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
       }
       
       if (!response.kyc_link) {
-        showError('Unable to load KYC verification. Please try again or contact support.')
+        if ((response as { alreadyOnboarded?: boolean }).alreadyOnboarded) {
+          if (refreshUserProfile) await refreshUserProfile()
+          const st = String(response.kyc_status || '').toLowerCase()
+          if (st === 'approved') {
+            showSuccess('Verification is already approved.', 4000)
+          } else if (st === 'under_review' || st === 'in_review') {
+            showSuccess('Verification is in review. We will notify you when it completes.', 4500)
+          } else {
+            showWarning('Verification is already in progress. Check back shortly.')
+          }
+        } else {
+          showError('Unable to load KYC verification. Please try again or contact support.')
+        }
         setLoadingKyc(false)
         return
       }
       
-      await externalLink.openLink(buildKycIframeUrl(response.kyc_link), 'Verification for global banking')
+      // Production Noah HostedURL is checkout.noah.com/kyc?session=… — open as-is in the system browser.
+      // ReturnURL (NOAH_ONBOARDING_RETURN_URL) lands on business web /auth/noah-kyc-return → app deep link.
+      await externalLink.openLink(response.kyc_link, 'Verification for global banking')
     } catch (error: any) {
       console.error('Error opening KYC:', error)
       showError(
@@ -990,12 +1004,13 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     }
   }
 
+  /** In-app WebView only — legacy Sumsub-style /verify URLs; Noah production uses checkout.noah.com/kyc. */
   const buildKycIframeUrl = (link: string): string => {
-    // Replace /verify with /widget and add iframe-origin parameter
+    if (!link.includes('/verify')) {
+      return link
+    }
     const widgetUrl = link.replace('/verify', '/widget')
-    // Use the API base URL as the origin (for React Native, we use the API URL)
     const origin = getApiBaseUrl()
-    // Check if URL already has query parameters
     const separator = widgetUrl.includes('?') ? '&' : '?'
     return `${widgetUrl}${separator}iframe-origin=${encodeURIComponent(origin)}`
   }

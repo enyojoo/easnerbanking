@@ -4,9 +4,11 @@ import {
   getNoahBaseUrl,
   getNoahProductionConfigIssues,
   getNoahSettlementCryptoCurrency,
+  getNoahSigningPrivateKey,
   isNoahConfigured,
   isNoahSigningConfigured,
 } from "@/lib/noah/config"
+import { loadNoahSigningKeyMaterial } from "@/lib/noah/normalize-signing-key"
 import {
   isTurnkeyConfigured,
   validateTurnkeyEnvForProduction,
@@ -31,9 +33,16 @@ export async function GET() {
   checks.noah = isNoahConfigured() ? "configured" : "missing NOAH_API_KEY"
   checks.noah_environment = "production"
   checks.noah_base_url = getNoahBaseUrl()
-  checks.noah_signing = isNoahSigningConfigured()
-    ? "ok"
-    : "missing NOAH_SIGNING_PRIVATE_KEY (required for production Api-Signature)"
+  if (!isNoahSigningConfigured()) {
+    checks.noah_signing = "missing NOAH_SIGNING_PRIVATE_KEY (required for production Api-Signature)"
+  } else {
+    try {
+      const material = loadNoahSigningKeyMaterial(getNoahSigningPrivateKey())
+      checks.noah_signing = `ok (${material.algorithm}, curve ${material.key.asymmetricKeyDetails?.namedCurve ?? "unknown"})`
+    } catch (e) {
+      checks.noah_signing = e instanceof Error ? e.message : "invalid NOAH_SIGNING_PRIVATE_KEY PEM"
+    }
+  }
   checks.noah_settlement_crypto = getNoahSettlementCryptoCurrency()
   const noahIssues = getNoahProductionConfigIssues()
   checks.noah_production = noahIssues.length === 0 ? "ok" : noahIssues.join("; ")

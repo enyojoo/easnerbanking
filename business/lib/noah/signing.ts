@@ -1,17 +1,20 @@
 import crypto from "node:crypto"
 import jwt from "jsonwebtoken"
+import { loadNoahSigningKeyMaterial } from "./normalize-signing-key"
 
 /** Noah verifies `aud` as this value in production. @see Noah signing docs */
 const NOAH_AUDIENCE = "https://api.noah.com"
 
 export function createNoahSignatureJwt(input: {
   method: string
-  /** URL pathname including /v1 prefix, e.g. /v1/customers/abc */
+  /** Signed path including `/v1`, e.g. `/v1/onboarding/:CustomerID` */
   path: string
   queryParams?: Record<string, string | number | boolean | undefined>
   body?: Buffer
   privateKeyPem: string
 }): string {
+  const { key, algorithm } = loadNoahSigningKeyMaterial(input.privateKeyPem)
+
   let bodyHash: string | undefined
   if (input.body && input.body.length > 0) {
     bodyHash = crypto.createHash("sha256").update(input.body).digest("hex")
@@ -37,8 +40,8 @@ export function createNoahSignatureJwt(input: {
     payload.bodyHash = bodyHash
   }
 
-  return jwt.sign(payload, input.privateKeyPem, {
-    algorithm: "ES384",
+  return jwt.sign(payload, key, {
+    algorithm,
     audience: NOAH_AUDIENCE,
     expiresIn: "5m",
   })
