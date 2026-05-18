@@ -109,7 +109,13 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const { scope } = useScope()
   const qc = useQueryClient()
   const txQuery = useTransactionsList({}, TRANSACTIONS_LEDGER_PAGE_SIZE)
-  const { balances, hasResolvedBalance, hasAuthoritativeBalance, refreshBalances } = useBalance()
+  const {
+    balances,
+    hasResolvedBalance,
+    hasAuthoritativeBalance,
+    hasDefinitiveEmptyBalance,
+    refreshBalances,
+  } = useBalance()
   const [selectedCurrency, setSelectedCurrency] = useState<'USD' | 'EUR' | 'GBP'>('USD')
   const [balanceVisible, setBalanceVisible] = useState(true)
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false)
@@ -350,7 +356,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const canRenderNumericBalance =
     hasResolvedBalance &&
     hasBalanceForSelectedCurrency &&
-    (hasAuthoritativeBalance || Math.abs(balance) > 1e-9)
+    (hasAuthoritativeBalance || hasDefinitiveEmptyBalance || Math.abs(balance) > 1e-9)
   const resolvedBalanceText = canRenderNumericBalance
     ? formatBalanceDisplay(balance, selectedCurrency)
     : null

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useCallback, useMemo, ReactNode, useE
 import { useQueryClient } from '@tanstack/react-query'
 import { qk } from '@easner/shared'
 import { useWalletBalances } from '../hooks/queries/use-wallets'
+import { isDefinitiveEmptyBalanceResponse } from '../lib/wallet-balance-display'
 import { useMaybeScope } from '../query/scope'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
@@ -36,6 +37,11 @@ interface BalanceContextType {
   hasResolvedBalance: boolean
   /** True when the latest wallet query returned an authoritative on-chain/DB balance (`source !== 'none'`). */
   hasAuthoritativeBalance: boolean
+  /**
+   * True when the server returned a settled empty-wallet response (`source: "none"` with a
+   * non-transient detail such as `no_wallet_owner`). UI can show $0.00 without waiting for Turnkey.
+   */
+  hasDefinitiveEmptyBalance: boolean
   refreshBalances: (force?: boolean) => Promise<void>
   updateBalanceOptimistically: (
     currency: 'USD' | 'EUR',
@@ -67,6 +73,10 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
   const lastKnownBalancesRef = useRef<Balances>(EMPTY_BALANCES)
   const [hydratedFromDisk, setHydratedFromDisk] = useState(false)
   const isAuthoritativeBalanceRead = Boolean(query.data && query.data.source !== 'none')
+  const hasDefinitiveEmptyBalance = isDefinitiveEmptyBalanceResponse(
+    query.data?.source,
+    query.data?.detail,
+  )
 
   // Hydrate last-known authoritative snapshot for instant cold-start UX.
   useEffect(() => {
@@ -167,10 +177,18 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
       balances,
       hasResolvedBalance,
       hasAuthoritativeBalance: isAuthoritativeBalanceRead,
+      hasDefinitiveEmptyBalance,
       refreshBalances,
       updateBalanceOptimistically,
     }),
-    [balances, hasResolvedBalance, isAuthoritativeBalanceRead, refreshBalances, updateBalanceOptimistically],
+    [
+      balances,
+      hasResolvedBalance,
+      isAuthoritativeBalanceRead,
+      hasDefinitiveEmptyBalance,
+      refreshBalances,
+      updateBalanceOptimistically,
+    ],
   )
 
   return <BalanceContext.Provider value={value}>{children}</BalanceContext.Provider>
