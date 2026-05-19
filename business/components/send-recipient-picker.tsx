@@ -193,7 +193,7 @@ export function SendRecipientPicker({
                       <User className="h-5 w-5 text-primary" />
                     </div>
                   )}
-                  <div className="absolute -bottom-0.5 -right-0.5 size-5 overflow-hidden rounded-full border-2 border-background">
+                  <div className="absolute -bottom-0.5 -right-0.5 w-6 aspect-[3/2] overflow-hidden rounded-[2px] border-2 border-background">
                     {selected.countryCode ? (
                       <CountryFlag code={selected.countryCode} className="size-full rounded-none" />
                     ) : (
@@ -289,7 +289,7 @@ export function SendRecipientPicker({
                             <User className="h-5 w-5 text-primary" />
                           </div>
                         )}
-                        <div className="absolute -bottom-0.5 -right-0.5 size-5 overflow-hidden rounded-full border-2 border-background">
+                        <div className="absolute -bottom-0.5 -right-0.5 w-6 aspect-[3/2] overflow-hidden rounded-[2px] border-2 border-background">
                           {b.countryCode ? (
                             <CountryFlag code={b.countryCode} className="size-full rounded-none" />
                           ) : (

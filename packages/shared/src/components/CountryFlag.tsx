@@ -6,6 +6,7 @@ import { flagIsoForCurrency, getFlagPublicUrl, hasFlagAsset, normalizeFlagIso } 
 import {
   FLAG_BORDER_RADIUS_PX,
   FLAG_FILL_CLASS,
+  FLAG_FRAME_BG_CLASS,
   FLAG_WEB_DECORATIVE_CLASS,
   flagFillsParentClass,
   resolveFlagBoxSizeFromStyle,
@@ -16,6 +17,7 @@ const flagRadiusClass = "rounded-[2px]"
 export type CountryFlagProps = {
   /** ISO 3166-1 alpha-2 */
   code: string
+  /** Flag width in px (height = 2/3 × width, 3:2 like country-flag-icons). */
   size?: number | string
   className?: string
   style?: CSSProperties
@@ -54,6 +56,7 @@ export function CountryFlag({ code, size = 24, className, style, title }: Countr
       aria-label={label}
       className={cn(
         FLAG_WEB_DECORATIVE_CLASS,
+        FLAG_FRAME_BG_CLASS,
         flagRadiusClass,
         fillParent && FLAG_FILL_CLASS,
         className
@@ -62,7 +65,7 @@ export function CountryFlag({ code, size = 24, className, style, title }: Countr
         ...(fillParent ? {} : { width, height }),
         borderRadius: FLAG_BORDER_RADIUS_PX,
         backgroundImage: `url(${JSON.stringify(src)})`,
-        backgroundSize: "cover",
+        backgroundSize: "contain",
         ...style,
       }}
       onContextMenu={(e) => e.preventDefault()}

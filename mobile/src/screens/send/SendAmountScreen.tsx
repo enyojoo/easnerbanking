@@ -1554,25 +1554,23 @@ const styles = StyleSheet.create({
     right: -2,
     zIndex: 3,
     elevation: 3,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    width: 14,
+    height: 9,
+    borderRadius: 2,
     backgroundColor: colors.background.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
+    overflow: 'hidden',
     borderWidth: 2,
     borderColor: colors.background.primary,
-    overflow: 'hidden',
   },
   easenetMarkImgSmall: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    width: 14,
+    height: 9,
+    borderRadius: 2,
   },
   /** Full-bleed inside circular clip (flag, token, or easetag photo) */
   recipientAvatarFill: {
     width: 36,
-    height: 36,
+    height: 24,
     borderRadius: 0,
   },
   recipientAvatarInitials: {
@@ -1751,13 +1749,13 @@ const styles = StyleSheet.create({
   },
   flagContainer: {
     width: 24,
-    height: 24,
+    height: 16,
     borderRadius: 2,
     overflow: 'hidden',
   },
   flagImage: {
     width: 24,
-    height: 24,
+    height: 16,
   },
   balanceSelectorText: {
     flex: 1,
@@ -2006,13 +2004,13 @@ const styles = StyleSheet.create({
   },
   flagContainerSmall: {
     width: 24,
-    height: 24,
+    height: 16,
     borderRadius: 2,
     overflow: 'hidden',
   },
   flagImageSmall: {
     width: 24,
-    height: 24,
+    height: 16,
   },
 })
 

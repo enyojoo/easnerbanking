@@ -888,9 +888,9 @@ const styles = StyleSheet.create({
     gap: spacing[2],
   },
   currencyFlag: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 28,
+    height: 19,
+    borderRadius: 2,
   },
   currencyText: {
     ...textStyles.bodyMedium,

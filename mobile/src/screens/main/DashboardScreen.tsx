@@ -1141,13 +1141,13 @@ function createDashboardStyles(c: Colors, scrollBottomPadding: number) {
   },
   flagContainer: {
     width: 22,
-    height: 22,
+    height: 15,
     borderRadius: 2,
     overflow: 'hidden',
   },
   flagImage: {
     width: 22,
-    height: 22,
+    height: 15,
   },
   currencyText: {
     fontSize: 14,
@@ -1268,13 +1268,13 @@ function createDashboardStyles(c: Colors, scrollBottomPadding: number) {
   },
   flagContainerSmall: {
     width: 24,
-    height: 24,
+    height: 16,
     borderRadius: 2,
     overflow: 'hidden',
   },
   flagImageSmall: {
     width: 24,
-    height: 24,
+    height: 16,
   },
   currencyOptionText: {
     ...textStyles.bodyMedium,

@@ -9,6 +9,7 @@ import { FLAG_BORDER_RADIUS_PX, resolveFlagBoxSizeFromStyle } from "../flags/fla
 
 export type CountryFlagProps = {
   code: string
+  /** Flag width in px (height = 2/3 × width, 3:2). */
   size?: number
   className?: string
   style?: StyleProp<ImageStyle>
@@ -30,6 +31,9 @@ export function CountryFlag({ code, size = 20, style }: CountryFlagProps) {
     height,
     borderRadius: FLAG_BORDER_RADIUS_PX,
     overflow: "hidden",
+    backgroundColor: "rgba(0,0,0,0.04)",
+    alignItems: "center",
+    justifyContent: "center",
   }
 
   if (!source) {
@@ -46,7 +50,8 @@ export function CountryFlag({ code, size = 20, style }: CountryFlagProps) {
         source={source}
         recyclingKey={upper}
         style={StyleSheet.absoluteFill}
-        contentFit="cover"
+        contentFit="contain"
+        contentPosition="center"
         cachePolicy="memory-disk"
         transition={0}
         allowDownscaling

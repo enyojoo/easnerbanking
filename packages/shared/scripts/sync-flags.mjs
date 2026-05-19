@@ -15,7 +15,7 @@ const manifestOut = path.join(sharedRoot, 'src', 'flags', 'flag-assets.manifest.
 const webManifestOut = path.join(sharedRoot, 'src', 'flags', 'flag-assets.web.manifest.ts')
 const businessFlagsDir = path.resolve(sharedRoot, '../../business/public/flags')
 
-/** flagcdn width (w80 was soft on retina; w320 is sharp up to ~80px display width). */
+/** flagcdn width (w320 is sharp on retina). Display flags at 3:2 (country-flag-icons convention). */
 const FLAGCDN_WIDTH = Number.parseInt(process.env.FLAGCDN_WIDTH || '320', 10) || 320
 const forceRedownload = process.argv.includes('--force')
 
