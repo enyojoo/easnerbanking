@@ -21,6 +21,8 @@ const FLAGCDN_WIDTH = Number.parseInt(process.env.FLAGCDN_WIDTH || '320', 10) ||
 /** Uniform 3:2 output — matches country-flag-icons / UI frames. */
 const FLAG_OUT_WIDTH = FLAGCDN_WIDTH
 const FLAG_OUT_HEIGHT = Math.round((FLAGCDN_WIDTH * 2) / 3)
+/** EU flag is a circle of stars on blue — zoom so it matches visual weight of country flags. */
+const FLAG_NORMALIZE_ZOOM = { EU: 1.22 }
 const forceRedownload = process.argv.includes('--force')
 
 function extractIsoCodes() {
@@ -44,8 +46,15 @@ async function downloadFlag(iso) {
 }
 
 /** Fit flag into fixed 3:2 canvas so every asset fills UI frames consistently. */
-async function normalizeFlagPng(input) {
-  return sharp(input)
+async function normalizeFlagPng(input, iso) {
+  const zoom = FLAG_NORMALIZE_ZOOM[iso] ?? 1
+  let pipeline = sharp(input)
+  if (zoom !== 1) {
+    const zw = Math.round(FLAG_OUT_WIDTH * zoom)
+    const zh = Math.round(FLAG_OUT_HEIGHT * zoom)
+    pipeline = pipeline.resize(zw, zh, { fit: 'cover', position: 'centre' })
+  }
+  return pipeline
     .resize(FLAG_OUT_WIDTH, FLAG_OUT_HEIGHT, {
       fit: 'cover',
       position: 'centre',
@@ -56,7 +65,7 @@ async function normalizeFlagPng(input) {
 
 async function writeNormalizedFlag(iso, rawBuf) {
   const dest = path.join(assetsDir, `${iso.toLowerCase()}.png`)
-  const normalized = await normalizeFlagPng(rawBuf)
+  const normalized = await normalizeFlagPng(rawBuf, iso)
   fs.writeFileSync(dest, normalized)
   return dest
 }

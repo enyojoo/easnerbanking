@@ -19,7 +19,10 @@ export function getFlagPublicUrl(iso: string): string | undefined {
 
 import { getCountryCodeForCurrency } from './currency-mapping'
 
-/** ISO for currency flag display (EUR → EU). */
+/**
+ * ISO for currency flag display.
+ * EUR uses bundled `eu.png` (EU emblem), not a single member state — see flagIsoForCurrency in sync list.
+ */
 export function flagIsoForCurrency(currency: string): string {
   const code = String(currency || '').trim().toUpperCase()
   if (code === 'EUR') return 'EU'
