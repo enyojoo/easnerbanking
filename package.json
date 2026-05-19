@@ -2,6 +2,9 @@
   "name": "easner",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "22.x"
+  },
   "packageManager": "npm@10.9.3",
   "workspaces": [
     "packages/*",

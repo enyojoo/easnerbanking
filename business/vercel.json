@@ -1,6 +1,14 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "cd .. && npm ci --workspace=easner-business --workspace=@easner/shared --workspace=@easner/server --include-workspace-root",
+  "installCommand": "cd .. && NODE_OPTIONS='--disable-warning=DEP0040' npm ci --workspace=easner-business --workspace=@easner/shared --workspace=@easner/server --include-workspace-root",
+  "build": {
+    "env": {
+      "NODE_OPTIONS": "--disable-warning=DEP0040"
+    }
+  },
+  "env": {
+    "NODE_OPTIONS": "--disable-warning=DEP0040 --max-http-header-size=1048576"
+  },
   "crons": [
     {
       "path": "/api/internal/wallet-provisioning/process",
