@@ -61,12 +61,16 @@ export async function POST(request: Request) {
   }
 
   if (gateRow) {
-    const gate = await payoutCorridorGate(admin, {
-      country_code: gateRow.country_code,
-      currency: gateRow.currency,
-      bank_name: gateRow.bank_name,
-      mobile_provider: gateRow.mobile_provider,
-    })
+    const gate = await payoutCorridorGate(
+      admin,
+      {
+        country_code: gateRow.country_code,
+        currency: gateRow.currency,
+        bank_name: gateRow.bank_name,
+        mobile_provider: gateRow.mobile_provider,
+      },
+      { requireExecutableNoahChannel: true },
+    )
     if (gate) return gate
   }
 

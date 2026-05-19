@@ -27,6 +27,15 @@ function isMobileRow(row: RecipientLike): boolean {
   return Boolean(row.mobile_provider) || String(row.bank_name || "").toLowerCase().includes("mobile money")
 }
 
+export type PayoutCorridorGateOptions = {
+  /**
+   * When true, also require Noah GET /channels/sell (executable payout).
+   * Use for quote/send only — not recipient save. Noah may list a country on
+   * /channels/sell/countries and quote /prices without sell channels yet (e.g. NGN).
+   */
+  requireExecutableNoahChannel?: boolean
+}
+
 /**
  * Returns an error response if the row maps to a disabled or mismatched payout corridor.
  * No-op when catalog is disabled via env or row is wallet/easenet or country is missing.
@@ -34,6 +43,7 @@ function isMobileRow(row: RecipientLike): boolean {
 export async function payoutCorridorGate(
   admin: SupabaseClient,
   row: RecipientLike,
+  options?: PayoutCorridorGateOptions,
 ): Promise<NextResponse | null> {
   if (!isPayoutCorridorsCatalogEnabled()) return null
   if (isWalletRow(row) || isEasenetRow(row)) return null
@@ -65,19 +75,21 @@ export async function payoutCorridorGate(
     )
   }
 
-  const sellOk = await hasNoahSellChannel({
-    country: cc,
-    fiatCurrency: String(row.currency || "").toUpperCase(),
-  })
-  if (!sellOk) {
-    return NextResponse.json(
-      {
-        error:
-          "Payouts to this country and currency are not available on your Noah program yet. Choose another corridor or contact support.",
-        code: "NOAH_SELL_CHANNEL_UNAVAILABLE",
-      },
-      { status: 400 },
-    )
+  if (options?.requireExecutableNoahChannel) {
+    const sellOk = await hasNoahSellChannel({
+      country: cc,
+      fiatCurrency: String(row.currency || "").toUpperCase(),
+    })
+    if (!sellOk) {
+      return NextResponse.json(
+        {
+          error:
+            "Payouts to this country and currency are not available on your Noah program yet. You can save this recipient, but sending is not supported until Noah enables sell channels for this corridor.",
+          code: "NOAH_SELL_CHANNEL_UNAVAILABLE",
+        },
+        { status: 400 },
+      )
+    }
   }
 
   return null
