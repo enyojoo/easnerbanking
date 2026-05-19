@@ -21,7 +21,7 @@ import { getCountryCodeForCurrency } from './currency-mapping'
 
 /**
  * ISO for currency flag display.
- * EUR uses bundled `eu.png` (EU emblem), not a single member state — see flagIsoForCurrency in sync list.
+ * EUR uses bundled `eu.png` (EU flag) — same convention as country-flag-icons; USD → US, GBP → GB.
  */
 export function flagIsoForCurrency(currency: string): string {
   const code = String(currency || '').trim().toUpperCase()

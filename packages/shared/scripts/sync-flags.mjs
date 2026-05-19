@@ -21,8 +21,8 @@ const FLAGCDN_WIDTH = Number.parseInt(process.env.FLAGCDN_WIDTH || '320', 10) ||
 /** Uniform 3:2 output — matches country-flag-icons / UI frames. */
 const FLAG_OUT_WIDTH = FLAGCDN_WIDTH
 const FLAG_OUT_HEIGHT = Math.round((FLAGCDN_WIDTH * 2) / 3)
-/** EU flag is a circle of stars on blue — zoom so it matches visual weight of country flags. */
-const FLAG_NORMALIZE_ZOOM = { EU: 1.22 }
+/** flagcdn EU art is a small centered circle; zoom so EUR matches US/GBP visual weight. */
+const FLAG_ZOOM_BY_ISO = { EU: 1.32 }
 const forceRedownload = process.argv.includes('--force')
 
 function extractIsoCodes() {
@@ -47,20 +47,28 @@ async function downloadFlag(iso) {
 
 /** Fit flag into fixed 3:2 canvas so every asset fills UI frames consistently. */
 async function normalizeFlagPng(input, iso) {
-  const zoom = FLAG_NORMALIZE_ZOOM[iso] ?? 1
-  let pipeline = sharp(input)
-  if (zoom !== 1) {
-    const zw = Math.round(FLAG_OUT_WIDTH * zoom)
-    const zh = Math.round(FLAG_OUT_HEIGHT * zoom)
-    pipeline = pipeline.resize(zw, zh, { fit: 'cover', position: 'centre' })
-  }
-  return pipeline
-    .resize(FLAG_OUT_WIDTH, FLAG_OUT_HEIGHT, {
+  const zoom = FLAG_ZOOM_BY_ISO[iso] ?? 1
+  let pipeline = sharp(input).trim()
+
+  if (zoom > 1) {
+    const w = Math.round(FLAG_OUT_WIDTH * zoom)
+    const h = Math.round(FLAG_OUT_HEIGHT * zoom)
+    pipeline = pipeline
+      .resize(w, h, { fit: 'cover', position: 'centre' })
+      .extract({
+        left: Math.max(0, Math.floor((w - FLAG_OUT_WIDTH) / 2)),
+        top: Math.max(0, Math.floor((h - FLAG_OUT_HEIGHT) / 2)),
+        width: FLAG_OUT_WIDTH,
+        height: FLAG_OUT_HEIGHT,
+      })
+  } else {
+    pipeline = pipeline.resize(FLAG_OUT_WIDTH, FLAG_OUT_HEIGHT, {
       fit: 'cover',
       position: 'centre',
     })
-    .png({ compressionLevel: 9, adaptiveFiltering: true })
-    .toBuffer()
+  }
+
+  return pipeline.png({ compressionLevel: 9, adaptiveFiltering: true }).toBuffer()
 }
 
 async function writeNormalizedFlag(iso, rawBuf) {
@@ -141,6 +149,7 @@ async function needsNormalize(iso) {
   const dest = path.join(assetsDir, `${iso.toLowerCase()}.png`)
   if (!fs.existsSync(dest) || fs.statSync(dest).size === 0) return true
   if (forceRedownload) return true
+  if (FLAG_ZOOM_BY_ISO[iso]) return true
   try {
     const meta = await sharp(dest).metadata()
     if (meta.width !== FLAG_OUT_WIDTH || meta.height !== FLAG_OUT_HEIGHT) return true
