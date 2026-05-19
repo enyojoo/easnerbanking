@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import {
   View,
@@ -41,12 +41,15 @@ import { useToast } from '../../components/ToastProvider'
 import { useNoahSendExchangeRates } from '../../hooks/queries'
 import { useAuth } from '../../contexts/AuthContext'
 import { isTier1Complete, TIER2_COMPLETE_PLACEHOLDER } from '../../lib/compliance'
-import { mobileFxEngine } from '../../lib/fxEngine'
 import { generateTransactionId } from '../../lib/transactionId'
 import { useBalance } from '../../contexts/BalanceContext'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { CountryFlag } from '../../components/flags/CountryFlag'
-import { getCountryCodeForCurrency } from '@easner/shared'
+import {
+  convertNoahSendFlowAmounts,
+  exchangeRatesToRateMap,
+  getCountryCodeForCurrency,
+} from '@easner/shared'
 import { noahService, type PricingQuote } from '../../lib/noahService'
 import { getWalletAssets } from '../../lib/recipientCatalog'
 import { getPayoutCorridorCache, isRecipientPayoutCorridorActive, refreshPayoutCorridors } from '../../lib/payoutCorridors'
@@ -429,50 +432,36 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const showCrossCurrencyExchangeUi =
     String(sendCurrency || '').toUpperCase() !== String(receiveCurrency || '').toUpperCase()
 
-  // Get exchange rate using FX Engine (with safety check)
-  const rateData = exchangeRates && Array.isArray(exchangeRates) && exchangeRates.length > 0
-    ? mobileFxEngine.getRate(exchangeRates, sendCurrency, receiveCurrency)
-    : null
-  const exchangeRate = rateData?.rate || 1
-  const reverseExchangeRate = exchangeRate > 0 ? 1 / exchangeRate : 0
-  
-  // Calculate order amounts using FX Engine.
-  // receiveAmount is payout currency amount; sendingAmount is funding currency amount.
-  let receiveAmount = 0
-  let sendingAmount = 0
-  let feeAmount = 0
-  let totalAmount = 0
+  const noahRateMap = useMemo(
+    () => exchangeRatesToRateMap(exchangeRates),
+    [exchangeRates],
+  )
 
-  if (amountEntryMode === 'receive') {
-    receiveAmount = enteredAmount
-  } else if (sendCurrency !== receiveCurrency) {
-    receiveAmount = reverseExchangeRate > 0 ? enteredAmount / reverseExchangeRate : enteredAmount * exchangeRate
-  } else {
-    receiveAmount = enteredAmount
-  }
-  
-  if (recipient && receiveAmount > 0 && sendCurrency !== receiveCurrency && rateData && exchangeRates && Array.isArray(exchangeRates)) {
-    try {
-      const orderAmounts = mobileFxEngine.calculateOrderAmounts(
-        receiveAmount,
-        sendCurrency,
-        receiveCurrency,
-        exchangeRates
-      )
-      sendingAmount = orderAmounts.sendAmount
-      feeAmount = orderAmounts.feeAmount
-      totalAmount = orderAmounts.totalAmount
-    } catch (error) {
-      console.error('Error calculating order amounts:', error)
-      // Fallback to simple calculation if FX engine fails
-      sendingAmount = receiveAmount / exchangeRate
+  const flowAmounts = useMemo(() => {
+    if (!showCrossCurrencyExchangeUi || enteredAmount <= 0) {
+      return { sendAmount: enteredAmount, receiveAmount: enteredAmount, forwardRate: 1 }
     }
-  } else if (receiveAmount > 0 && sendCurrency !== receiveCurrency) {
-    // Fallback calculation if no rate data
-    sendingAmount = receiveAmount / exchangeRate
-  } else if (receiveAmount > 0) {
-    sendingAmount = receiveAmount
-  }
+    return convertNoahSendFlowAmounts({
+      direction: amountEntryMode,
+      amount: enteredAmount,
+      sendCurrency,
+      receiveCurrency,
+      rateMap: noahRateMap,
+    })
+  }, [
+    showCrossCurrencyExchangeUi,
+    enteredAmount,
+    amountEntryMode,
+    sendCurrency,
+    receiveCurrency,
+    noahRateMap,
+  ])
+
+  const receiveAmount = flowAmounts.receiveAmount
+  const sendingAmount = flowAmounts.sendAmount
+  const exchangeRate = flowAmounts.forwardRate
+  const feeAmount = 0
+  const totalAmount = sendingAmount
 
   /** Debit from wallet when paying from balance (includes fees when FX order amounts are available). */
   const balanceDebitEstimate =
@@ -830,9 +819,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                         </Pressable>
                         <Text style={styles.exchangeInfoText}>
                           {' • '}
-                          {amountEntryMode === 'receive'
-                            ? `Rate: 1 ${sendCurrency} = ${exchangeRate.toFixed(2)} ${receiveCurrency}`
-                            : `Rate: 1 ${receiveCurrency} = ${reverseExchangeRate.toFixed(4)} ${sendCurrency}`}
+                          {`Rate: 1 ${sendCurrency} = ${exchangeRate.toFixed(4)} ${receiveCurrency}`}
                         </Text>
                       </View>
                       <View style={styles.exchangeQuoteLine}>
@@ -1036,14 +1023,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             style={[styles.sendButton, { marginTop: spacing[2] }, sendButtonDisabled && styles.sendButtonDisabled]}
             onPress={async () => {
               const enteredAmountValue = Number.parseFloat(sendAmount.replace(/,/g, ''))
-              const receiveAmountValue =
-                amountEntryMode === 'receive'
-                  ? enteredAmountValue
-                  : sendCurrency !== receiveCurrency
-                    ? (reverseExchangeRate > 0 ? enteredAmountValue / reverseExchangeRate : enteredAmountValue * exchangeRate)
-                    : enteredAmountValue
-              if (!sendAmount || sendAmount === '0' || receiveAmountValue <= 0 || !recipient || !selectedPaymentMethod) return
-              
+              if (!sendAmount || sendAmount === '0' || enteredAmountValue <= 0 || !recipient || !selectedPaymentMethod) return
+
               // For otherCurrency, require both currency and payment method selection
               if (selectedPaymentMethod === 'otherCurrency' && (!selectedOtherCurrency || !selectedOtherPaymentMethod)) return
 
@@ -1051,38 +1032,24 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
               void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
 
-              // Calculate order amounts using FX Engine (sync — instant navigation for balance sends)
-              let calculatedSendingAmount = 0
-              let calculatedFeeAmount = 0
-              let calculatedTotalAmount = 0
-
-              if (sendCurrency !== receiveCurrency) {
-                // Validate exchangeRates before using
-                if (!exchangeRates || !Array.isArray(exchangeRates) || exchangeRates.length === 0) {
-                  showError('Exchange rates not available. Please try again later.')
-                  return
-                }
-
-                try {
-                  const orderAmounts = mobileFxEngine.calculateOrderAmounts(
-                    receiveAmountValue,
-                    sendCurrency,
-                    receiveCurrency,
-                    exchangeRates,
-                  )
-                  calculatedSendingAmount = orderAmounts.sendAmount
-                  calculatedFeeAmount = orderAmounts.feeAmount
-                  calculatedTotalAmount = orderAmounts.totalAmount
-                } catch (error) {
-                  console.error('Error calculating order amounts:', error)
-                  showError('Failed to calculate exchange rate. Please try again.')
-                  return
-                }
-              } else {
-                // Same currency - no conversion needed
-                calculatedSendingAmount = receiveAmountValue
-                calculatedTotalAmount = receiveAmountValue
-              }
+              const navAmounts =
+                sendCurrency !== receiveCurrency
+                  ? convertNoahSendFlowAmounts({
+                      direction: amountEntryMode,
+                      amount: enteredAmountValue,
+                      sendCurrency,
+                      receiveCurrency,
+                      rateMap: noahRateMap,
+                    })
+                  : {
+                      sendAmount: enteredAmountValue,
+                      receiveAmount: enteredAmountValue,
+                      forwardRate: 1,
+                    }
+              const receiveAmountValue = navAmounts.receiveAmount
+              const calculatedSendingAmount = navAmounts.sendAmount
+              const calculatedFeeAmount = 0
+              const calculatedTotalAmount = calculatedSendingAmount
 
               // Balance: navigate immediately — Noah pricing quote runs on review screen (was blocking here ~300ms–2s).
               if (selectedPaymentMethod === 'balance') {

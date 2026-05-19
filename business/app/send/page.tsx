@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { SendRecipientPicker } from "@/components/send-recipient-picker"
 import { getCurrencySymbol } from "@/lib/utils"
 import {
-  getNoahSendConversionRate,
+  convertNoahSendFlowAmounts,
   noahSendRatesQueryPath,
   noahWalletRowsToRateMap,
 } from "@easner/shared"
@@ -53,13 +53,6 @@ import {
   persistSendFlowState,
 } from "@/lib/send-flow-session"
 import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
-
-function convertAmountWithRate(
-  amount: number,
-  rate: number
-): number {
-  return amount * rate
-}
 
 function formatAmountForDisplay(raw: string): string {
   if (!raw || raw === ".") return raw || ""
@@ -139,12 +132,6 @@ export default function SendPage() {
     }
   }, [recipient?.currency])
 
-  const getConversionRate = useCallback(
-    (fromCurrency: string, toCurrency: string): number =>
-      getNoahSendConversionRate(noahFxRates, fromCurrency, toCurrency),
-    [noahFxRates],
-  )
-
   const sendCurrency = useMemo(() => {
     if (paymentMethod === "balance" && sourceAccount) return sourceAccount.currency
     if (paymentMethod === "usdc" || paymentMethod === "usdt" || otherCurrency === "STABLECOIN")
@@ -153,35 +140,34 @@ export default function SendPage() {
     return "USD"
   }, [paymentMethod, sourceAccount, otherCurrency])
 
-  const receiveAmount = useMemo(() => {
-    if (!recipient || enteredAmount <= 0) return 0
-    if (receiveCurrency === sendCurrency) return enteredAmount
-    return amountEntryMode === "receive"
-      ? enteredAmount
-      : convertAmountWithRate(
-          enteredAmount,
-          getConversionRate(sendCurrency, receiveCurrency),
-        )
-  }, [recipient, enteredAmount, receiveCurrency, sendCurrency, amountEntryMode, getConversionRate])
+  const flowAmounts = useMemo(() => {
+    if (!recipient || enteredAmount <= 0) {
+      return { sendAmount: 0, receiveAmount: 0, forwardRate: 1 }
+    }
+    return convertNoahSendFlowAmounts({
+      direction: amountEntryMode,
+      amount: enteredAmount,
+      sendCurrency,
+      receiveCurrency,
+      rateMap: noahFxRates,
+    })
+  }, [
+    recipient,
+    enteredAmount,
+    amountEntryMode,
+    sendCurrency,
+    receiveCurrency,
+    noahFxRates,
+  ])
 
-  const sendAmount = useMemo(() => {
-    if (!recipient || receiveAmount <= 0) return 0
-    if (receiveCurrency === sendCurrency) return receiveAmount
-    return amountEntryMode === "send"
-      ? enteredAmount
-      : convertAmountWithRate(
-          receiveAmount,
-          getConversionRate(receiveCurrency, sendCurrency),
-        )
-  }, [recipient, receiveAmount, receiveCurrency, sendCurrency, amountEntryMode, enteredAmount, getConversionRate])
+  const sendAmount = flowAmounts.sendAmount
+  const receiveAmount = flowAmounts.receiveAmount
 
-  const hasFx = receiveCurrency !== sendCurrency && receiveAmount > 0
-  const forwardRate = hasFx ? getConversionRate(sendCurrency, receiveCurrency) : 1
-  const reverseRate = hasFx ? getConversionRate(receiveCurrency, sendCurrency) : 1
+  const hasFx =
+    receiveCurrency !== sendCurrency && receiveAmount > 0 && sendAmount > 0
+  const forwardRate = flowAmounts.forwardRate
   const rateDisplay = hasFx
-    ? amountEntryMode === "receive"
-      ? `1 ${sendCurrency} = ${forwardRate.toFixed(4)} ${receiveCurrency}`
-      : `1 ${receiveCurrency} = ${reverseRate.toFixed(4)} ${sendCurrency}`
+    ? `1 ${sendCurrency} = ${forwardRate.toFixed(4)} ${receiveCurrency}`
     : null
 
   const displayBalanceForSource =

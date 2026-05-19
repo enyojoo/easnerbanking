@@ -70,3 +70,49 @@ export function getNoahSendConversionRate(
   if (noah && noah > 0) return noah
   return referenceConversionRate(from, to)
 }
+
+/**
+ * Bidirectional send preview using one forward rate: 1 send = forwardRate × receive.
+ * - User enters receive → send = receive / forwardRate
+ * - User enters send → receive = send × forwardRate
+ */
+export function convertNoahSendFlowAmounts(input: {
+  direction: "receive" | "send"
+  amount: number
+  sendCurrency: string
+  receiveCurrency: string
+  rateMap: Record<string, number>
+}): { sendAmount: number; receiveAmount: number; forwardRate: number } {
+  const { direction, amount, sendCurrency, receiveCurrency, rateMap } = input
+  const send = sendCurrency.trim().toUpperCase()
+  const receive = receiveCurrency.trim().toUpperCase()
+
+  if (amount <= 0) {
+    return { sendAmount: 0, receiveAmount: 0, forwardRate: 1 }
+  }
+  if (send === receive) {
+    return { sendAmount: amount, receiveAmount: amount, forwardRate: 1 }
+  }
+
+  const forwardRate = getNoahSendConversionRate(rateMap, send, receive)
+  if (direction === "receive") {
+    const sendAmount = forwardRate > 0 ? amount / forwardRate : 0
+    return { sendAmount, receiveAmount: amount, forwardRate }
+  }
+  return { sendAmount: amount, receiveAmount: amount * forwardRate, forwardRate }
+}
+
+/** Build rate map from `ExchangeRate[]` rows (e.g. mobile Noah hook). */
+export function exchangeRatesToRateMap(
+  rates: Array<{ from_currency: string; to_currency: string; rate: number; status?: string }>,
+): Record<string, number> {
+  const map: Record<string, number> = {}
+  for (const r of rates) {
+    if (r.status && r.status !== "active") continue
+    if (!Number.isFinite(r.rate) || r.rate <= 0) continue
+    const from = r.from_currency.toUpperCase()
+    const to = r.to_currency.toUpperCase()
+    map[`${from}_${to}`] = r.rate
+  }
+  return map
+}
