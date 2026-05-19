@@ -21,8 +21,10 @@ const FLAGCDN_WIDTH = Number.parseInt(process.env.FLAGCDN_WIDTH || '320', 10) ||
 /** Uniform 3:2 output — matches country-flag-icons / UI frames. */
 const FLAG_OUT_WIDTH = FLAGCDN_WIDTH
 const FLAG_OUT_HEIGHT = Math.round((FLAGCDN_WIDTH * 2) / 3)
-/** flagcdn EU art is a small centered circle; zoom so EUR matches US/GBP visual weight. */
-const FLAG_ZOOM_BY_ISO = { EU: 1.32 }
+const TARGET_ASPECT = FLAG_OUT_WIDTH / FLAG_OUT_HEIGHT
+/** Bump when normalize logic changes — triggers re-download of all flags. */
+const NORMALIZE_VERSION = 2
+const normalizeVersionFile = path.join(assetsDir, '.normalize-version')
 const forceRedownload = process.argv.includes('--force')
 
 function extractIsoCodes() {
@@ -45,22 +47,43 @@ async function downloadFlag(iso) {
   return Buffer.from(await res.arrayBuffer())
 }
 
-/** Fit flag into fixed 3:2 canvas so every asset fills UI frames consistently. */
-async function normalizeFlagPng(input, iso) {
-  const zoom = FLAG_ZOOM_BY_ISO[iso] ?? 1
-  let pipeline = sharp(input).trim()
+/** Sample top-left pixel for letterbox background (square/tall flags). */
+async function sampleCornerBackground(input) {
+  const { data, info } = await sharp(input)
+    .extract({ left: 0, top: 0, width: 1, height: 1 })
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+  const ch = info.channels
+  return {
+    r: data[0],
+    g: data[1],
+    b: data[2],
+    alpha: ch >= 4 ? data[3] / 255 : 1,
+  }
+}
 
-  if (zoom > 1) {
-    const w = Math.round(FLAG_OUT_WIDTH * zoom)
-    const h = Math.round(FLAG_OUT_HEIGHT * zoom)
-    pipeline = pipeline
-      .resize(w, h, { fit: 'cover', position: 'centre' })
-      .extract({
-        left: Math.max(0, Math.floor((w - FLAG_OUT_WIDTH) / 2)),
-        top: Math.max(0, Math.floor((h - FLAG_OUT_HEIGHT) / 2)),
-        width: FLAG_OUT_WIDTH,
-        height: FLAG_OUT_HEIGHT,
-      })
+/**
+ * Fit flag into fixed 3:2 canvas.
+ * - ~3:2 and wider sources: cover (fills frame, e.g. US).
+ * - Square/taller sources: contain + corner background (avoids cropping EU stars, CH cross).
+ */
+async function normalizeFlagPng(input) {
+  const meta = await sharp(input).metadata()
+  const srcW = meta.width || FLAG_OUT_WIDTH
+  const srcH = meta.height || FLAG_OUT_HEIGHT
+  const srcAspect = srcW / srcH
+  const nearTarget = Math.abs(srcAspect - TARGET_ASPECT) < 0.06
+  const fit = nearTarget || srcAspect > TARGET_ASPECT ? 'cover' : 'contain'
+
+  let pipeline = sharp(input)
+  if (fit === 'contain') {
+    const background = await sampleCornerBackground(input)
+    pipeline = pipeline.resize(FLAG_OUT_WIDTH, FLAG_OUT_HEIGHT, {
+      fit: 'contain',
+      position: 'centre',
+      background,
+    })
   } else {
     pipeline = pipeline.resize(FLAG_OUT_WIDTH, FLAG_OUT_HEIGHT, {
       fit: 'cover',
@@ -73,7 +96,7 @@ async function normalizeFlagPng(input, iso) {
 
 async function writeNormalizedFlag(iso, rawBuf) {
   const dest = path.join(assetsDir, `${iso.toLowerCase()}.png`)
-  const normalized = await normalizeFlagPng(rawBuf, iso)
+  const normalized = await normalizeFlagPng(rawBuf)
   fs.writeFileSync(dest, normalized)
   return dest
 }
@@ -145,11 +168,16 @@ function copyToBusiness(codes) {
   }
 }
 
+function normalizeVersionStale() {
+  if (forceRedownload) return true
+  if (!fs.existsSync(normalizeVersionFile)) return true
+  return fs.readFileSync(normalizeVersionFile, 'utf8').trim() !== String(NORMALIZE_VERSION)
+}
+
 async function needsNormalize(iso) {
   const dest = path.join(assetsDir, `${iso.toLowerCase()}.png`)
   if (!fs.existsSync(dest) || fs.statSync(dest).size === 0) return true
-  if (forceRedownload) return true
-  if (FLAG_ZOOM_BY_ISO[iso]) return true
+  if (normalizeVersionStale()) return true
   try {
     const meta = await sharp(dest).metadata()
     if (meta.width !== FLAG_OUT_WIDTH || meta.height !== FLAG_OUT_HEIGHT) return true
@@ -181,6 +209,9 @@ async function main() {
     }
   }
   console.log(`\n${ok}/${codes.length} flags in ${assetsDir}`)
+  if (ok > 0) {
+    fs.writeFileSync(normalizeVersionFile, `${NORMALIZE_VERSION}\n`)
+  }
   writeIsoCodesFile(codes)
   writeManifest(codes)
   writeWebManifest(codes)
