@@ -54,8 +54,8 @@ interface UserData {
   noah_customer_id?: string | null
   noah_kyc_status?: string | null
   noah_kyc_rejection_reasons?: unknown
-  noah_kyc_metadata?: Record<string, unknown> | null
-  noah_signed_agreement_id?: string | null
+  kyc_id_type?: string | null
+  kyc_verified_at?: string | null
   noah_usd_virtual_account_id?: string | null
   noah_eur_virtual_account_id?: string | null
   noah_gbp_virtual_account_id?: string | null
@@ -164,8 +164,8 @@ export default function AdminUsersPage() {
           noah_customer_id: row.noah_customer_id as string | null | undefined,
           noah_kyc_status: row.noah_kyc_status as string | null | undefined,
           noah_kyc_rejection_reasons: row.noah_kyc_rejection_reasons,
-          noah_kyc_metadata: row.noah_kyc_metadata as UserData["noah_kyc_metadata"],
-          noah_signed_agreement_id: row.noah_signed_agreement_id as string | null | undefined,
+          kyc_id_type: row.kyc_id_type as string | null | undefined,
+          kyc_verified_at: row.kyc_verified_at as string | null | undefined,
           noah_usd_virtual_account_id: row.noah_usd_virtual_account_id as string | null | undefined,
           noah_eur_virtual_account_id: row.noah_eur_virtual_account_id as string | null | undefined,
           noah_gbp_virtual_account_id: row.noah_gbp_virtual_account_id as string | null | undefined,

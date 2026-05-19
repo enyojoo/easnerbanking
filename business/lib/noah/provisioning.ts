@@ -3,7 +3,11 @@ import { ensureFiatVirtualAccountsViaBankOnramp } from "@/lib/noah/bank-onramp-v
 import { noahFetch } from "./http"
 import { fetchAllPaymentMethodsForCustomer } from "./list-payment-methods"
 import { hasPayinBank, matchesCurrency } from "./payment-method-map"
-import { persistVirtualAccountFromPaymentMethod } from "./persist-account-data"
+import { persistAllPayinVirtualAccountsFromPaymentMethods } from "./persist-account-data"
+import {
+  selectPreferredEurPayinPaymentMethod,
+  selectPreferredUsdPayinPaymentMethod,
+} from "./payment-method-map"
 import type { NoahAccountContext } from "./resolve-account-context"
 import { resolveTurnkeyAddressForNoahPair } from "@/lib/wallet/resolve-wallet-owner"
 
@@ -100,12 +104,8 @@ export async function provisionNoahArtifactsForCustomer(opts: {
     })
   }
 
-  const usdPm = paymentMethods.find((pm) => hasPayinBank(pm, "US"))
-  const eurPm = paymentMethods.find((pm) => {
-    const caps = pm.Capabilities as Record<string, unknown> | undefined
-    if (caps && caps.PayinTo === false) return false
-    return matchesCurrency(pm, "eur")
-  })
+  const usdPm = selectPreferredUsdPayinPaymentMethod(paymentMethods)
+  const eurPm = selectPreferredEurPayinPaymentMethod(paymentMethods)
   const gbpPm = paymentMethods.find((pm) => hasPayinBank(pm, "GB"))
 
   if (!usdPm || !eurPm) {
@@ -125,33 +125,12 @@ export async function provisionNoahArtifactsForCustomer(opts: {
     })
   }
 
-  if (usdPm) {
-    await persistVirtualAccountFromPaymentMethod(
-      subjectUserId,
-      "usd",
-      usdPm,
-      subjectBusinessId,
-      noahCustomerId,
-    )
-  }
-  if (eurPm) {
-    await persistVirtualAccountFromPaymentMethod(
-      subjectUserId,
-      "eur",
-      eurPm,
-      subjectBusinessId,
-      noahCustomerId,
-    )
-  }
-  if (gbpPm) {
-    await persistVirtualAccountFromPaymentMethod(
-      subjectUserId,
-      "gbp",
-      gbpPm,
-      subjectBusinessId,
-      noahCustomerId,
-    )
-  }
+  await persistAllPayinVirtualAccountsFromPaymentMethods(
+    subjectUserId,
+    paymentMethods,
+    subjectBusinessId,
+    noahCustomerId,
+  )
 
   let usdAccountCreated = Boolean(usdPm)
   let eurAccountCreated = Boolean(eurPm)
@@ -175,6 +154,18 @@ export async function provisionNoahArtifactsForCustomer(opts: {
     eurAccountCreated = eurAccountCreated || bankOnrampSummary.eurBankOnrampCreated
   }
 
+  const finalPms = await fetchAllPaymentMethodsForCustomer(noahCustomerId)
+  await persistAllPayinVirtualAccountsFromPaymentMethods(
+    subjectUserId,
+    finalPms,
+    subjectBusinessId,
+    noahCustomerId,
+  )
+  const usdFinal = selectPreferredUsdPayinPaymentMethod(finalPms)
+  const eurFinal = selectPreferredEurPayinPaymentMethod(finalPms)
+  if (usdFinal) usdAccountCreated = true
+  if (eurFinal) eurAccountCreated = true
+
   const usdc =
     (await tryFetchLiquidationAddress(noahCustomerId, "usdc")) ??
     (await tryCreateLiquidationAddress(noahCustomerId, "usdc"))
@@ -186,8 +177,8 @@ export async function provisionNoahArtifactsForCustomer(opts: {
     usdAccountCreated,
     eurAccountCreated,
     gbpAccountCreated: Boolean(gbpPm),
-    usdAccountId: usdPm ? String(usdPm.ID ?? "") : undefined,
-    eurAccountId: eurPm ? String(eurPm.ID ?? "") : undefined,
+    usdAccountId: usdFinal ? String(usdFinal.ID ?? "") : usdPm ? String(usdPm.ID ?? "") : undefined,
+    eurAccountId: eurFinal ? String(eurFinal.ID ?? "") : eurPm ? String(eurPm.ID ?? "") : undefined,
     gbpAccountId: gbpPm ? String(gbpPm.ID ?? "") : undefined,
     usdcAddress: usdc?.address,
     eurcAddress: eurc?.address,

@@ -213,7 +213,7 @@ async function fetchUserContext(
   const admin = createSupabaseAdmin()
   const { data: userData } = await admin
     .from("users")
-    .select("role, noah_kyc_status, noah_kyb_status, easner_business_id")
+    .select("role, noah_kyc_status, easner_business_id")
     .eq("id", userId)
     .maybeSingle()
 
@@ -244,7 +244,7 @@ async function fetchUserContext(
     }
   }
   const role = typeof userData.role === "string" ? userData.role : undefined
-  let businessKyb = userData.noah_kyb_status as string | undefined
+  let businessKyb: string | undefined
   if (role === "business" && userData.easner_business_id) {
     const { data: biz } = await admin
       .from("businesses")

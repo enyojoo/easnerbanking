@@ -11,9 +11,9 @@ import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
 import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "../_helpers"
 
 /**
- * Start or resume Noah hosted onboarding (KYC individual / KYB business).
- * Returns `kyc_link` = Noah `HostedURL` when a session is required (HTTP 200).
- * On 201/202 Noah may omit `HostedURL` — sync customer and return status instead.
+ * Start or resume Noah hosted onboarding (Standard Model).
+ * One `HostedURL` covers identity verification (KYC/KYB) and partner Terms & Conditions — no separate TOS API.
+ * @see https://docs.noah.com/recipes/onboarding/hosted-onboarding/
  */
 export async function POST(request: Request) {
   const mis = requireNoahEnv()
@@ -57,15 +57,15 @@ export async function POST(request: Request) {
           : "not_started"
       return NextResponse.json({
         kyc_link: hostedUrl,
-        tos_link: hostedUrl,
         kyc_status: kycStatus || "not_started",
-        tos_status: "pending",
         customer_id: ctx.noahCustomerId,
         kyc_link_id: ctx.noahCustomerId,
         noahScope: ctx.scope,
         hostedCustomerType: ctx.customerType,
         onboardingStatus: session.OnboardingStatus ?? null,
         missingSteps: session.MissingSteps ?? null,
+        /** Noah Standard Model: identity + partner T&C in one hosted session (no separate TOS link). */
+        hostedIncludesTerms: true,
       })
     }
 
@@ -89,15 +89,14 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       kyc_link: null,
-      tos_link: null,
       kyc_status: kycStatus,
-      tos_status: kycStatus === "approved" ? "signed" : "pending",
       customer_id: resolvedCustomerId,
       kyc_link_id: resolvedCustomerId,
       noahScope: ctx.scope,
       hostedCustomerType: ctx.customerType,
       onboardingStatus: session.OnboardingStatus ?? null,
       alreadyOnboarded: true,
+      hostedIncludesTerms: true,
       ...summary,
     })
   } catch (e: unknown) {

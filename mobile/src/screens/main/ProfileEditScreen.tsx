@@ -26,9 +26,12 @@ import {
   userService,
   personalFromUpdateProfileResult,
   fetchPersonalSettings,
+  parseVerifiedIdentity,
   UserProfileData,
   UserStats,
+  type VerifiedIdentityPayload,
 } from '../../lib/userService'
+import { CountryFlag } from '../../components/flags/CountryFlag'
 import { colors, shadows, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, userAvatarStyles, PROFILE_EDIT_AVATAR_SIZE, motion, fontFamily } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
@@ -71,6 +74,8 @@ function ProfileEditContent({ navigation }: NavigationProps) {
    * before the parent re-renders with refreshed auth profile.
    */
   const skipNextProfileHydrateRef = useRef(false)
+  const [profileLocked, setProfileLocked] = useState(false)
+  const [verifiedIdentity, setVerifiedIdentity] = useState<VerifiedIdentityPayload>({ visible: false })
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     // Initialize with existing date or default to 25 years ago
@@ -90,6 +95,20 @@ function ProfileEditContent({ navigation }: NavigationProps) {
 
   // Run entrance animations
   useCalmParallelEnterWhen(true, headerAnim, contentAnim)
+
+  useEffect(() => {
+    if (!user?.id) return
+    let cancelled = false
+    void (async () => {
+      const settings = await fetchPersonalSettings(user.id)
+      if (cancelled || !settings) return
+      setProfileLocked(settings.personal.profileLocked === true)
+      setVerifiedIdentity(settings.verifiedIdentity ?? { visible: false })
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id, userProfile?.profile?.noah_kyc_status])
 
   useEffect(() => {
     if (!userProfile) return
@@ -139,7 +158,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
   const handleSaveProfile = async () => {
     if (!user) return
 
-    if (!editProfileData.fullName?.trim()) {
+    if (!profileLocked && !editProfileData.fullName?.trim()) {
       setNoticeSheet({ title: 'Error', message: 'Please enter your full name' })
       return
     }
@@ -147,12 +166,15 @@ function ProfileEditContent({ navigation }: NavigationProps) {
     setLoading(true)
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-      const updateResult = await userService.updateProfile(user.id, {
-        fullName: editProfileData.fullName.trim(),
+      const profileUpdate: UserProfileData = {
         phone: editProfileData.phone,
-        dateOfBirth: editProfileData.dateOfBirth,
         avatarUrl: editProfileData.avatarUrl,
-      })
+      }
+      if (!profileLocked) {
+        profileUpdate.fullName = editProfileData.fullName.trim()
+        profileUpdate.dateOfBirth = editProfileData.dateOfBirth
+      }
+      const updateResult = await userService.updateProfile(user.id, profileUpdate)
       /** `updateProfile` refreshes JWT after API save; keep an extra refresh before hub refetch for older binaries. */
       await supabase.auth.refreshSession().catch(() => undefined)
 
@@ -176,11 +198,26 @@ function ProfileEditContent({ navigation }: NavigationProps) {
       }
 
       let fromServer = personalFromUpdateProfileResult(updateResult)
+      let verifiedFromServer: VerifiedIdentityPayload | null = null
       if (!fromServer) {
-        fromServer = await fetchPersonalSettings(user.id)
+        const settings = await fetchPersonalSettings(user.id)
+        fromServer = settings?.personal ?? null
+        verifiedFromServer = settings?.verifiedIdentity ?? null
+      } else {
+        const parsed = updateResult as Record<string, unknown> | null
+        if (parsed && typeof parsed === 'object' && parsed.verifiedIdentity) {
+          verifiedFromServer = parseVerifiedIdentity(parsed.verifiedIdentity)
+        }
       }
       if (fromServer) {
         applyPersonalSettingsFromServer(fromServer, easetagSaved ? { easetag: editProfileData.easetag } : undefined)
+        setProfileLocked(fromServer.profileLocked === true)
+      }
+      if (verifiedFromServer) {
+        setVerifiedIdentity(verifiedFromServer)
+      } else if (fromServer?.profileLocked) {
+        const settings = await fetchPersonalSettings(user.id)
+        if (settings?.verifiedIdentity) setVerifiedIdentity(settings.verifiedIdentity)
       }
       const updatedProfileData = fromServer
         ? (() => {
@@ -552,10 +589,73 @@ function ProfileEditContent({ navigation }: NavigationProps) {
     )
   }
 
+  const renderCountryRow = (country: { code: string; name: string } | null | undefined) => {
+    if (!country?.code) return null
+    return (
+      <View style={styles.countryRow}>
+        <CountryFlag code={country.code} size={20} />
+        <Text style={styles.countryRowText}>{country.name || country.code}</Text>
+      </View>
+    )
+  }
+
+  const renderVerifiedIdentityCard = () => {
+    if (!verifiedIdentity.visible) return null
+    return (
+      <View style={[styles.profileCard, styles.verifiedCard]}>
+        <Text style={styles.verifiedCardTitle}>Verified identity</Text>
+        {verifiedIdentity.idType ? (
+          <View style={styles.fieldContainer}>
+            <Text style={styles.fieldLabelEdit}>ID type</Text>
+            <View style={[styles.fieldInput, styles.fieldInputReadOnly, styles.fieldReadOnlyInner]}>
+              <Text style={styles.fieldReadOnlyText}>{verifiedIdentity.idType}</Text>
+            </View>
+          </View>
+        ) : null}
+        {verifiedIdentity.idNumberMasked ? (
+          <View style={styles.fieldContainer}>
+            <Text style={styles.fieldLabelEdit}>ID number</Text>
+            <View style={[styles.fieldInput, styles.fieldInputReadOnly, styles.fieldReadOnlyInner]}>
+              <Text style={styles.fieldReadOnlyText}>{verifiedIdentity.idNumberMasked}</Text>
+            </View>
+          </View>
+        ) : null}
+        {verifiedIdentity.issuingCountry ? (
+          <View style={styles.fieldContainer}>
+            <Text style={styles.fieldLabelEdit}>Issuing country</Text>
+            <View style={[styles.fieldInput, styles.fieldInputReadOnly, styles.fieldReadOnlyInner]}>
+              {renderCountryRow(verifiedIdentity.issuingCountry)}
+            </View>
+          </View>
+        ) : null}
+        {(verifiedIdentity.addressLines?.length ?? 0) > 0 ? (
+          <View style={styles.fieldContainer}>
+            <Text style={styles.fieldLabelEdit}>Residential address</Text>
+            <View style={[styles.fieldInput, styles.fieldInputReadOnly, styles.fieldReadOnlyInner]}>
+              {verifiedIdentity.addressLines?.map((line, i) => (
+                <Text key={`addr-${i}`} style={[styles.fieldReadOnlyText, i > 0 && styles.addressLineGap]}>
+                  {line}
+                </Text>
+              ))}
+            </View>
+          </View>
+        ) : null}
+        {verifiedIdentity.addressCountry ? (
+          <View style={styles.fieldContainer}>
+            <Text style={styles.fieldLabelEdit}>Country</Text>
+            <View style={[styles.fieldInput, styles.fieldInputReadOnly, styles.fieldReadOnlyInner]}>
+              {renderCountryRow(verifiedIdentity.addressCountry)}
+            </View>
+          </View>
+        ) : null}
+      </View>
+    )
+  }
+
   const renderDateOfBirthField = () => (
     <View style={styles.fieldContainer}>
       <Text style={styles.fieldLabelEdit}>Date of Birth</Text>
-      {isEditing ? (
+      {isEditing && !profileLocked ? (
         <>
           <Pressable
            android_ripple={ripple.neutral}
@@ -864,6 +964,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                   'Full Name',
                   isEditing ? editProfileData.fullName : profileData.fullName,
                   (text) => setEditProfileData((prev) => ({ ...prev, fullName: text })),
+                  profileLocked,
                 )}
                 {renderProfileField(
                   'Email',
@@ -880,6 +981,8 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                 {renderEasetagField()}
               </View>
             </View>
+
+            {renderVerifiedIdentityCard()}
 
             {/* Delete Account Section */}
             <View style={styles.deleteSection}>
@@ -1038,6 +1141,27 @@ const styles = StyleSheet.create({
     ...textStyles.labelMedium,
     color: colors.text.secondary,
     fontWeight: '500',
+  },
+  verifiedCard: {
+    marginTop: spacing.md,
+  },
+  verifiedCardTitle: {
+    ...textStyles.headlineMedium,
+    color: colors.text.primary,
+    marginBottom: spacing.md,
+  },
+  countryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  countryRowText: {
+    ...textStyles.body,
+    color: colors.text.primary,
+    flex: 1,
+  },
+  addressLineGap: {
+    marginTop: 4,
   },
   profileCard: {
     ...surfaceFrameStyle(colors),

@@ -162,21 +162,30 @@ export async function applyNoahWebhookSideEffects(
   if (eventType === "Customer" && customerId) {
     const parsed = await resolveNoahCustomerTarget(admin, { customerId, webhookData: data })
     if (parsed && data) {
+      const occurredAt =
+        p.Occurred != null
+          ? String(p.Occurred)
+          : data.Occurred != null
+            ? String(data.Occurred)
+            : undefined
       const customerLike: Record<string, unknown> = {
         ...data,
         Verifications: data.Verifications,
+        Occurred: occurredAt ?? data.Occurred,
       }
       if (parsed.kind === "individual") {
         await syncNoahCustomerToSupabase(
           { kind: "individual", userId: parsed.userId },
           customerLike,
           customerId,
+          { occurredAt },
         )
       } else {
         await syncNoahCustomerToSupabase(
           { kind: "business", businessId: parsed.businessId },
           customerLike,
           customerId,
+          { occurredAt },
         )
       }
       const mappedStatus = mapNoahVerificationToKycStatus(customerLike)

@@ -32,11 +32,6 @@ export type NoahSyncStatusResult = {
   data?: { kycStatus: string; rejectionReasons?: any[] }
 }
 
-interface NoahTOSLink {
-  tosLink: string
-  tosLinkId: string
-}
-
 interface NoahCustomer {
   customerId: string
   kycStatus: string
@@ -110,12 +105,12 @@ export interface PricingQuote {
 }
 
 interface NoahKycLink {
-  kyc_link: string
-  tos_link?: string
+  kyc_link: string | null
   kyc_status?: string
-  tos_status?: string
   customer_id?: string
   kyc_link_id?: string
+  alreadyOnboarded?: boolean
+  hostedIncludesTerms?: boolean
 }
 
 export const noahService = {
@@ -219,51 +214,7 @@ export const noahService = {
   },
 
   /**
-   * Get TOS link for user
-   */
-  async getTOSLink(email: string, type: 'individual' | 'business' = 'individual'): Promise<NoahTOSLink> {
-    const session = await requireAuthSession()
-
-    const response = await fetch(`${apiUrl()}/api/noah/tos`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ email, type }),
-    })
-
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.error || 'Failed to create TOS link')
-    }
-
-    return await response.json()
-  },
-
-  /**
-   * Check if TOS has been accepted
-   */
-  async checkTOSStatus(tosLinkId: string): Promise<{ signed: boolean; signedAgreementId?: string }> {
-    const session = await requireAuthSession()
-
-    const response = await fetch(`${apiUrl()}/api/noah/tos?tosLinkId=${tosLinkId}`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`,
-      },
-    })
-
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.error || 'Failed to check TOS status')
-    }
-
-    return await response.json()
-  },
-
-  /**
-   * Get KYC link for user
+   * Noah hosted onboarding (identity + partner terms in one session).
    */
   async getKycLink(full_name: string, email: string, type: 'individual' | 'business' = 'individual'): Promise<NoahKycLink> {
     const session = await requireAuthSession()
@@ -281,32 +232,6 @@ export const noahService = {
     if (!response.ok) {
       const error = await response.json()
       throw new Error(error.error || 'Failed to create KYC link')
-    }
-
-    return await response.json()
-  },
-
-  /**
-   * Update customer with signed_agreement_id after TOS acceptance
-   * This is required because accepting TOS via hosted link doesn't automatically update the customer
-   */
-  async updateCustomerTOS(signedAgreementId: string): Promise<{ success: boolean; hasAcceptedTOS: boolean }> {
-    const session = await requireAuthSession()
-
-    const response = await fetch(`${apiUrl()}/api/noah/customers/update-tos`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({
-        signedAgreementId,
-      }),
-    })
-
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.error || 'Failed to update customer TOS')
     }
 
     return await response.json()

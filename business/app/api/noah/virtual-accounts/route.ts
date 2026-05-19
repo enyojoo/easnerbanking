@@ -4,7 +4,8 @@ import { requireAuth, requireNoahEnv } from "../_helpers"
 import { fetchAllPaymentMethodsForCustomer } from "@/lib/noah/list-payment-methods"
 import {
   mapPaymentMethodToVirtualAccountDisplay,
-  matchesCurrency,
+  selectPreferredEurPayinPaymentMethod,
+  selectPreferredUsdPayinPaymentMethod,
 } from "@/lib/noah/payment-method-map"
 import { persistVirtualAccountFromPaymentMethod } from "@/lib/noah/persist-account-data"
 import { provisionNoahArtifactsForCustomer } from "@/lib/noah/provisioning"
@@ -49,7 +50,7 @@ export async function GET(request: Request) {
       routingNumber: cached.routingNumber,
       sortCode: cached.sortCode,
       iban: cached.iban,
-      bic: cached.bic,
+      bic: currency === "usd" ? undefined : cached.bic,
       bankName: cached.bankName,
       bankAddress: cached.bankAddress,
       accountHolderName: cached.accountHolderName,
@@ -78,13 +79,15 @@ export async function GET(request: Request) {
   try {
     const all = await fetchAllPaymentMethodsForCustomer(noahCustomerId)
 
-    const candidates = all.filter((pm) => {
-      const caps = pm.Capabilities as Record<string, unknown> | undefined
-      if (caps && caps.PayinTo === false) return false
-      return matchesCurrency(pm, currency)
-    })
-
-    const pm = candidates[0]
+    const pm =
+      currency === "usd"
+        ? selectPreferredUsdPayinPaymentMethod(all)
+        : currency === "eur"
+          ? selectPreferredEurPayinPaymentMethod(all)
+          : all.find((p) => {
+              const caps = p.Capabilities as Record<string, unknown> | undefined
+              return !(caps && caps.PayinTo === false)
+            })
     if (!pm) {
       return NextResponse.json({
         hasAccount: false,
@@ -108,7 +111,7 @@ export async function GET(request: Request) {
       routingNumber: display.routingNumber,
       sortCode: display.sortCode,
       iban: display.iban,
-      bic: display.bic,
+      bic: currency === "usd" ? undefined : display.bic,
       bankName: display.bankName,
       bankAddress: display.bankAddress,
       accountHolderName: display.accountHolderName,

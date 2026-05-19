@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
+import {
+  countryDisplayName,
+  mapNoahIdTypeLabel,
+  maskIdNumber,
+} from "@/lib/noah/parse-noah-customer-for-users"
 
 type PersonalUpdateBody = {
   fullName?: string
@@ -14,15 +19,16 @@ type PersonalUpdateBody = {
   avatarUrl?: string | null
 }
 
+const USER_SELECT =
+  "id,email,full_name,phone,date_of_birth,avatar_url,noah_kyc_status,kyc_verified_at,kyc_id_type,kyc_id_number,kyc_id_issuing_country,kyc_address_street,kyc_address_city,kyc_address_state,kyc_address_post_code,kyc_address_country"
+
+const USER_SELECT_LEGACY =
+  "id,email,full_name,phone,date_of_birth,avatar_url,noah_kyc_status"
+
 function hasOwn(o: object, k: string): boolean {
   return Object.prototype.hasOwnProperty.call(o, k)
 }
 
-/**
- * `undefined` = do not change `full_name`; `null` = clear.
- * Only use split first/middle/last when at least one part is a non-empty string — otherwise
- * `{"firstName":null,"fullName":"Jane"}` would take the split branch, drop `fullName`, and clear the DB name.
- */
 function resolveFullNameForUpdate(body: PersonalUpdateBody): string | null | undefined {
   const splitParts = [body.firstName, body.middleName, body.lastName]
     .map((s) => (typeof s === "string" ? s.trim() : ""))
@@ -46,26 +52,76 @@ function fallbackNameFromMeta(user: { user_metadata?: Record<string, unknown> | 
   return user.email ?? "User"
 }
 
+function isProfileLocked(row: Record<string, unknown> | null | undefined): boolean {
+  if (!row) return false
+  const status = String(row.noah_kyc_status ?? "").toLowerCase()
+  return status === "approved" && row.kyc_verified_at != null
+}
+
+function buildVerifiedIdentity(row: Record<string, unknown> | null | undefined) {
+  if (!row || !isProfileLocked(row)) {
+    return { visible: false as const }
+  }
+  const hasId = Boolean(row.kyc_id_type || row.kyc_id_number)
+  const hasAddress = Boolean(row.kyc_address_street)
+  if (!hasId && !hasAddress) {
+    return { visible: false as const }
+  }
+
+  const issuingCode =
+    typeof row.kyc_id_issuing_country === "string" ? row.kyc_id_issuing_country.trim().toUpperCase() : ""
+  const addressCountryCode =
+    typeof row.kyc_address_country === "string" ? row.kyc_address_country.trim().toUpperCase() : ""
+
+  const addressLines: string[] = []
+  if (typeof row.kyc_address_street === "string" && row.kyc_address_street.trim()) {
+    addressLines.push(row.kyc_address_street.trim())
+  }
+  const cityLine = [
+    typeof row.kyc_address_city === "string" ? row.kyc_address_city.trim() : "",
+    typeof row.kyc_address_state === "string" ? row.kyc_address_state.trim() : "",
+    typeof row.kyc_address_post_code === "string" ? row.kyc_address_post_code.trim() : "",
+  ]
+    .filter(Boolean)
+    .join(", ")
+  if (cityLine) addressLines.push(cityLine)
+
+  const idTypeRaw = typeof row.kyc_id_type === "string" ? row.kyc_id_type : null
+
+  return {
+    visible: true as const,
+    idType: idTypeRaw ? mapNoahIdTypeLabel(idTypeRaw) : null,
+    idTypeRaw,
+    idNumberMasked:
+      typeof row.kyc_id_number === "string" && row.kyc_id_number.trim()
+        ? maskIdNumber(row.kyc_id_number)
+        : null,
+    issuingCountry: issuingCode
+      ? { code: issuingCode, name: countryDisplayName(issuingCode) }
+      : null,
+    addressLines,
+    addressCountry: addressCountryCode
+      ? { code: addressCountryCode, name: countryDisplayName(addressCountryCode) }
+      : null,
+  }
+}
+
+async function fetchUserRow(admin: ReturnType<typeof createSupabaseAdmin>, userId: string) {
+  let { data, error } = await admin.from("users").select(USER_SELECT).eq("id", userId).maybeSingle()
+  if (error?.code === "42703" || error?.message?.includes("kyc_")) {
+    const r2 = await admin.from("users").select(USER_SELECT_LEGACY).eq("id", userId).maybeSingle()
+    data = r2.data
+    error = r2.error
+  }
+  return { data: data as Record<string, unknown> | null, error }
+}
+
 export async function GET(request: Request) {
   const user = await getUserFromApiRequest(request)
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const admin = createSupabaseAdmin()
-  let { data, error } = await admin
-    .from("users")
-    .select("id,email,full_name,phone,date_of_birth,avatar_url")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (error?.message?.includes("avatar_url") || error?.code === "42703") {
-    const r2 = await admin
-      .from("users")
-      .select("id,email,full_name,phone,date_of_birth")
-      .eq("id", user.id)
-      .maybeSingle()
-    data = r2.data
-    error = r2.error
-  }
+  const { data, error } = await fetchUserRow(admin, user.id)
 
   if (error) {
     console.error("personal GET users:", error)
@@ -104,14 +160,18 @@ export async function GET(request: Request) {
     }
   }
 
+  const profileLocked = isProfileLocked(data)
+
   return NextResponse.json({
     personal: {
-      fullName: data?.full_name ?? fallbackNameFromMeta(user),
-      email: data?.email ?? user.email ?? "",
-      phone: data?.phone ?? "",
-      dateOfBirth: data?.date_of_birth ?? "",
+      fullName: (data?.full_name as string | null) ?? fallbackNameFromMeta(user),
+      email: (data?.email as string | null) ?? user.email ?? "",
+      phone: (data?.phone as string | null) ?? "",
+      dateOfBirth: (data?.date_of_birth as string | null) ?? "",
       avatarUrl,
+      profileLocked,
     },
+    verifiedIdentity: buildVerifiedIdentity(data),
     sessionRefreshSuggested,
   })
 }
@@ -128,7 +188,24 @@ export async function PUT(request: Request) {
   }
 
   const admin = createSupabaseAdmin()
-  /** Partial PUT: only keys present in JSON are applied (mobile often sends fullName + phone only). */
+  const { data: existing } = await fetchUserRow(admin, user.id)
+  const locked = isProfileLocked(existing)
+
+  if (locked) {
+    const wantsName =
+      resolveFullNameForUpdate(body) !== undefined ||
+      "firstName" in body ||
+      "middleName" in body ||
+      "lastName" in body
+    const wantsDob = "dateOfBirth" in body
+    if (wantsName || wantsDob) {
+      return NextResponse.json(
+        { error: "Verified profile fields (name and date of birth) cannot be changed." },
+        { status: 403 },
+      )
+    }
+  }
+
   const updatePayload: Record<string, unknown> = {
     id: user.id,
     updated_at: new Date().toISOString(),
@@ -162,11 +239,6 @@ export async function PUT(request: Request) {
   const { error } = await admin.from("users").upsert(updatePayload, { onConflict: "id" })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  /**
-   * Keep Supabase Auth `user_metadata` aligned with `public.users` so:
-   * - Mobile `POST /api/auth/bootstrap` (which reads `session.user.user_metadata.name`) does not fight the DB.
-   * - Noah KYC sync and other flows never need to touch `full_name`; profile remains source of truth on the row.
-   */
   const shouldSyncAuthMetadata = "avatarUrl" in body || resolvedFullName !== undefined
   if (shouldSyncAuthMetadata) {
     const { data: cur, error: getErr } = await admin.auth.admin.getUserById(user.id)

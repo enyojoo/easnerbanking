@@ -404,7 +404,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
           noah_customer_id: profile.noah_customer_id,
           noah_kyc_status: profile.noah_kyc_status,
           noah_kyc_rejection_reasons: profile.noah_kyc_rejection_reasons,
-          noah_signed_agreement_id: profile.noah_signed_agreement_id,
           role: profile.role,
           easner_business_id: profile.easner_business_id,
           bridge_kyc_status: row.bridge_kyc_status as string | undefined,

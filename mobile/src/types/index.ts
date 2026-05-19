@@ -172,13 +172,18 @@ export interface User {
   noah_customer_id?: string | null
   noah_kyc_status?: string | null
   noah_kyc_rejection_reasons?: unknown
-  noah_kyc_metadata?: unknown
-  noah_signed_agreement_id?: string | null
   noah_usd_virtual_account_id?: string | null
   noah_eur_virtual_account_id?: string | null
   noah_gbp_virtual_account_id?: string | null
-  noah_kyb_customer_id?: string | null
-  noah_kyb_status?: string | null
+  kyc_id_type?: string | null
+  kyc_id_number?: string | null
+  kyc_id_issuing_country?: string | null
+  kyc_address_street?: string | null
+  kyc_address_city?: string | null
+  kyc_address_state?: string | null
+  kyc_address_post_code?: string | null
+  kyc_address_country?: string | null
+  kyc_verified_at?: string | null
   status: "active" | "inactive"
   /** Legacy default for stats until preferences live on `users` */
   base_currency?: string
@@ -213,8 +218,6 @@ export interface AuthUser {
   noah_customer_id?: string | null
   noah_kyc_status?: string | null
   noah_kyc_rejection_reasons?: unknown
-  noah_signed_agreement_id?: string | null
-  noah_kyb_status?: string | null
   role?: "individual" | "business"
   easner_business_id?: string | null
   bridge_kyc_status?: string

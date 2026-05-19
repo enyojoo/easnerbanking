@@ -3,10 +3,13 @@ import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { startBankDepositToOnchainAddress } from "@/lib/noah/bank-onramp-workflow"
 import { getNoahEurCryptoTicker, getNoahUsdCryptoTicker } from "@/lib/noah/config"
 import { fetchAllPaymentMethodsForCustomer } from "@/lib/noah/list-payment-methods"
-import { hasPayinBank, matchesCurrency } from "@/lib/noah/payment-method-map"
 import {
+  selectPreferredEurPayinPaymentMethod,
+  selectPreferredUsdPayinPaymentMethod,
+} from "@/lib/noah/payment-method-map"
+import {
+  persistAllPayinVirtualAccountsFromPaymentMethods,
   persistVirtualAccountFromBankOnrampWorkflow,
-  persistVirtualAccountFromPaymentMethod,
 } from "@/lib/noah/persist-account-data"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { resolveTurnkeyAddressForNoahPair } from "@/lib/wallet/resolve-wallet-owner"
@@ -88,30 +91,13 @@ async function readMirroredVirtualAccountId(
   return id?.trim() || null
 }
 
-async function persistPaymentMethodIfFound(
-  subjectUserId: string,
+function hasPreferredPayinForRail(
   rail: RailConfig,
   paymentMethods: Record<string, unknown>[],
-  subjectBusinessId: string | null,
-  noahCustomerId: string,
-): Promise<boolean> {
-  const pm =
-    rail.fiat === "usd"
-      ? paymentMethods.find((p) => hasPayinBank(p, "US"))
-      : paymentMethods.find((p) => {
-          const caps = p.Capabilities as Record<string, unknown> | undefined
-          if (caps && caps.PayinTo === false) return false
-          return matchesCurrency(p, "eur")
-        })
-  if (!pm) return false
-  await persistVirtualAccountFromPaymentMethod(
-    subjectUserId,
-    rail.fiat,
-    pm,
-    subjectBusinessId,
-    noahCustomerId,
-  )
-  return true
+): boolean {
+  return rail.fiat === "usd"
+    ? Boolean(selectPreferredUsdPayinPaymentMethod(paymentMethods))
+    : Boolean(selectPreferredEurPayinPaymentMethod(paymentMethods))
 }
 
 async function ensureSingleFiatRailViaBankOnramp(
@@ -169,7 +155,14 @@ async function ensureSingleFiatRailViaBankOnramp(
       opts.subjectBusinessId,
       opts.noahCustomerId,
     )
-    return { attempted: true, created: true }
+    const paymentMethods = await fetchAllPaymentMethodsForCustomer(opts.noahCustomerId)
+    await persistAllPayinVirtualAccountsFromPaymentMethods(
+      opts.subjectUserId,
+      paymentMethods,
+      opts.subjectBusinessId,
+      opts.noahCustomerId,
+    )
+    return { attempted: true, created: hasPreferredPayinForRail(rail, paymentMethods) || true }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     console.warn("[ensureFiatVirtualAccountsViaBankOnramp] workflow failed", {
@@ -179,14 +172,13 @@ async function ensureSingleFiatRailViaBankOnramp(
     })
 
     const paymentMethods = await fetchAllPaymentMethodsForCustomer(opts.noahCustomerId)
-    const persisted = await persistPaymentMethodIfFound(
+    await persistAllPayinVirtualAccountsFromPaymentMethods(
       opts.subjectUserId,
-      rail,
       paymentMethods,
       opts.subjectBusinessId,
       opts.noahCustomerId,
     )
-    return { attempted: true, created: persisted }
+    return { attempted: true, created: hasPreferredPayinForRail(rail, paymentMethods) }
   }
 }
 

@@ -1,6 +1,21 @@
 import { supabase } from './supabase'
 import { getApiBaseUrl } from './apiClient'
 
+export type VerifiedCountryRef = {
+  code: string
+  name: string
+}
+
+export type VerifiedIdentityPayload = {
+  visible: boolean
+  idType?: string | null
+  idTypeRaw?: string | null
+  idNumberMasked?: string | null
+  issuingCountry?: VerifiedCountryRef | null
+  addressLines?: string[]
+  addressCountry?: VerifiedCountryRef | null
+}
+
 /** Shape returned by `PUT /api/settings/personal` (and normalized Supabase fallback). */
 export type PersonalSettingsPayload = {
   fullName: string
@@ -8,11 +23,18 @@ export type PersonalSettingsPayload = {
   phone: string
   dateOfBirth: string
   avatarUrl: string | null
+  profileLocked?: boolean
+}
+
+export type PersonalSettingsResponse = {
+  personal: PersonalSettingsPayload
+  verifiedIdentity?: VerifiedIdentityPayload
+  sessionRefreshSuggested?: boolean
 }
 
 /** Persists to `users.full_name` via `PUT /api/settings/personal` (`fullName` only — matches DB). */
 export interface UserProfileData {
-  fullName: string
+  fullName?: string
   phone: string
   dateOfBirth?: string
   /** Public HTTPS URL from `/api/upload/profile-avatar`; `null` clears `users.avatar_url` */
@@ -29,6 +51,31 @@ export interface UserStats {
  * Normalize `updateProfile` return value so the UI can apply authoritative server fields on save
  * (avoids waiting on AuthContext + `userProfile` timing).
  */
+export function parseVerifiedIdentity(raw: unknown): VerifiedIdentityPayload | null {
+  if (!raw || typeof raw !== 'object') return null
+  const v = raw as Record<string, unknown>
+  if (v.visible !== true) return { visible: false }
+  const parseCountry = (c: unknown): VerifiedCountryRef | null => {
+    if (!c || typeof c !== 'object') return null
+    const o = c as Record<string, unknown>
+    const code = typeof o.code === 'string' ? o.code.trim().toUpperCase() : ''
+    const name = typeof o.name === 'string' ? o.name.trim() : ''
+    if (!code) return null
+    return { code, name: name || code }
+  }
+  return {
+    visible: true,
+    idType: typeof v.idType === 'string' ? v.idType : null,
+    idTypeRaw: typeof v.idTypeRaw === 'string' ? v.idTypeRaw : null,
+    idNumberMasked: typeof v.idNumberMasked === 'string' ? v.idNumberMasked : null,
+    issuingCountry: parseCountry(v.issuingCountry),
+    addressLines: Array.isArray(v.addressLines)
+      ? v.addressLines.filter((l): l is string => typeof l === 'string' && l.trim().length > 0)
+      : [],
+    addressCountry: parseCountry(v.addressCountry),
+  }
+}
+
 export function personalFromUpdateProfileResult(result: unknown): PersonalSettingsPayload | null {
   if (!result || typeof result !== 'object') return null
   const r = result as Record<string, unknown>
@@ -45,7 +92,8 @@ export function personalFromUpdateProfileResult(result: unknown): PersonalSettin
         : typeof av === 'string' && av.trim()
           ? av.trim()
           : null
-    return { fullName, email, phone, dateOfBirth, avatarUrl }
+    const profileLocked = p.profileLocked === true
+    return { fullName, email, phone, dateOfBirth, avatarUrl, profileLocked }
   }
   /** Direct `users` row from Supabase `.update().select().single()` */
   if (typeof r.id === 'string' && 'full_name' in r) {
@@ -66,8 +114,8 @@ export function personalFromUpdateProfileResult(result: unknown): PersonalSettin
   return null
 }
 
-/** GET `/api/settings/personal` — same `personal` shape as PUT response (for save fallback). */
-export async function fetchPersonalSettings(userId: string): Promise<PersonalSettingsPayload | null> {
+/** GET `/api/settings/personal` — personal + verified identity block. */
+export async function fetchPersonalSettings(userId: string): Promise<PersonalSettingsResponse | null> {
   const apiBase = getApiBaseUrl()
   await supabase.auth.refreshSession().catch(() => undefined)
   const {
@@ -86,7 +134,14 @@ export async function fetchPersonalSettings(userId: string): Promise<PersonalSet
     return null
   }
   if (!res.ok) return null
-  return personalFromUpdateProfileResult(json)
+  const personal = personalFromUpdateProfileResult(json)
+  if (!personal) return null
+  const r = json as Record<string, unknown>
+  return {
+    personal,
+    verifiedIdentity: parseVerifiedIdentity(r.verifiedIdentity) ?? { visible: false },
+    sessionRefreshSuggested: r.sessionRefreshSuggested === true,
+  }
 }
 
 export const userService = {

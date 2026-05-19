@@ -13,19 +13,21 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "sync:flags": "node scripts/sync-flags.mjs"
   },
   "dependencies": {
     "clsx": "^2.1.1",
-    "nucleo-flags": "^1.1.3",
     "tailwind-merge": "^2.5.5"
   },
   "peerDependencies": {
     "react": "^18 || ^19",
-    "@tanstack/react-query": "^5"
+    "@tanstack/react-query": "^5",
+    "expo-image": ">=3"
   },
   "peerDependenciesMeta": {
-    "@tanstack/react-query": { "optional": false }
+    "@tanstack/react-query": { "optional": false },
+    "expo-image": { "optional": true }
   },
   "devDependencies": {
     "@types/react": "^18",

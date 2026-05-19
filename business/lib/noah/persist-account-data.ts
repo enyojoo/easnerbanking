@@ -1,5 +1,13 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { mapPaymentMethodToVirtualAccountDisplay } from "./payment-method-map"
+import {
+  hasPayinBank,
+  mapNoahBankFieldsToColumns,
+  mapPaymentMethodToVirtualAccountDisplay,
+  matchesCurrency,
+  parseNoahPaymentMethodRail,
+  selectPreferredEurPayinPaymentMethod,
+  selectPreferredUsdPayinPaymentMethod,
+} from "./payment-method-map"
 
 function formatBankAddress(raw: unknown): string | null {
   if (!raw || typeof raw !== "object") return null
@@ -10,7 +18,7 @@ function formatBankAddress(raw: unknown): string | null {
   return parts.length ? parts.join(", ") : null
 }
 
-async function mirrorVirtualAccountIdOnSubject(
+export async function mirrorVirtualAccountIdOnSubject(
   admin: ReturnType<typeof createSupabaseAdmin>,
   opts: {
     subjectUserId: string
@@ -40,8 +48,64 @@ async function mirrorVirtualAccountIdOnSubject(
   }
 }
 
+type VirtualAccountUpsert = {
+  user_id: string
+  business_id: string | null
+  noah_virtual_account_id: string
+  noah_customer_id: string | null
+  currency: string
+  account_number: string | null
+  routing_number: string | null
+  iban: string | null
+  bic: string | null
+  sort_code: string | null
+  bank_name: string | null
+  bank_address: string | null
+  account_holder_name: string | null
+  updated_at: string
+}
+
+function inferPayinCurrency(pm: Record<string, unknown>): "usd" | "eur" | "gbp" | null {
+  const caps = pm.Capabilities as Record<string, unknown> | undefined
+  if (caps && caps.PayinTo === false) return null
+  if (hasPayinBank(pm, "US")) return "usd"
+  if (matchesCurrency(pm, "eur")) return "eur"
+  if (hasPayinBank(pm, "GB")) return "gbp"
+  return null
+}
+
+function buildUpsertRow(input: {
+  subjectUserId: string
+  businessId?: string | null
+  pmId: string
+  noahCustomerId?: string | null
+  currency: "usd" | "eur" | "gbp"
+  cols: ReturnType<typeof mapNoahBankFieldsToColumns>
+  bankName: string | null
+  bankAddress: string | null
+  accountHolderName: string | null
+}): VirtualAccountUpsert {
+  return {
+    user_id: input.subjectUserId,
+    business_id: input.businessId ?? null,
+    noah_virtual_account_id: input.pmId,
+    noah_customer_id: input.noahCustomerId?.trim() || null,
+    currency: input.currency.toUpperCase(),
+    account_number: input.cols.accountNumber,
+    routing_number: input.cols.routingNumber,
+    iban: input.cols.iban,
+    bic: input.cols.bic,
+    sort_code: input.cols.sortCode,
+    bank_name: input.bankName,
+    bank_address: input.bankAddress,
+    account_holder_name: input.accountHolderName,
+    updated_at: new Date().toISOString(),
+  }
+}
+
 /**
  * Upsert `virtual_accounts` and mirror VA ids on `users` or `businesses`.
+ * @see ./virtual-account-columns.ts for per-currency column contract.
  */
 export async function persistVirtualAccountFromPaymentMethod(
   subjectUserId: string,
@@ -55,34 +119,95 @@ export async function persistVirtualAccountFromPaymentMethod(
 
   const admin = createSupabaseAdmin()
   const display = mapPaymentMethodToVirtualAccountDisplay(pm, currency)
-  const fiat = currency.toUpperCase()
+  const details = pm.DisplayDetails as Record<string, unknown> | undefined
+  const accountNumber =
+    details?.AccountNumber != null ? String(details.AccountNumber).trim() : null
+  const bankCode = details?.BankCode != null ? String(details.BankCode).trim() : null
+  const rail = parseNoahPaymentMethodRail(pm)
+  const cols = mapNoahBankFieldsToColumns(currency, rail, accountNumber, bankCode)
 
-  const { error: upsertErr } = await admin.from("virtual_accounts").upsert(
-    {
-      user_id: subjectUserId,
-      business_id: businessId ?? null,
-      noah_virtual_account_id: pmId,
-      noah_payment_method_id: pmId,
-      noah_customer_id: noahCustomerId?.trim() || null,
-      currency: fiat,
-      account_number: display.accountNumber ?? null,
-      routing_number: display.routingNumber ?? null,
-      iban: display.iban ?? null,
-      bic: display.bic ?? null,
-      bank_name: display.bankName ?? null,
-      bank_address: display.bankAddress ?? null,
-      account_holder_name: display.accountHolderName ?? null,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "noah_virtual_account_id" },
-  )
+  const row = buildUpsertRow({
+    subjectUserId,
+    businessId,
+    pmId,
+    noahCustomerId,
+    currency,
+    cols,
+    bankName: display.bankName ?? null,
+    bankAddress: display.bankAddress ?? null,
+    accountHolderName: display.accountHolderName ?? null,
+  })
+
+  const { error: upsertErr } = await admin
+    .from("virtual_accounts")
+    .upsert(row, { onConflict: "noah_virtual_account_id" })
 
   if (upsertErr) {
     console.error("[persistVirtualAccountFromPaymentMethod] upsert virtual_accounts:", upsertErr)
-    return
+  }
+}
+
+/** Persist every PayinTo bank PM (ACH, Wire, SWIFT, SEPA, …); mirror preferred ACH/Wire (USD) and SEPA (EUR) on subject. */
+export async function persistAllPayinVirtualAccountsFromPaymentMethods(
+  subjectUserId: string,
+  paymentMethods: Record<string, unknown>[],
+  businessId?: string | null,
+  noahCustomerId?: string | null,
+): Promise<void> {
+  for (const pm of paymentMethods) {
+    const currency = inferPayinCurrency(pm)
+    if (!currency) continue
+    const type = String(
+      (pm.DisplayDetails as Record<string, unknown> | undefined)?.Type ?? "",
+    )
+    if (type && type !== "FiatPaymentMethodBankDisplay") continue
+    await persistVirtualAccountFromPaymentMethod(
+      subjectUserId,
+      currency,
+      pm,
+      businessId,
+      noahCustomerId,
+    )
   }
 
-  await mirrorVirtualAccountIdOnSubject(admin, { subjectUserId, businessId, currency, pmId })
+  const admin = createSupabaseAdmin()
+  const usdPreferred = selectPreferredUsdPayinPaymentMethod(paymentMethods)
+  const eurPreferred = selectPreferredEurPayinPaymentMethod(paymentMethods)
+  const gbpPm = paymentMethods.find((pm) => hasPayinBank(pm, "GB"))
+
+  if (usdPreferred) {
+    const pmId = String(usdPreferred.ID ?? "").trim()
+    if (pmId) {
+      await mirrorVirtualAccountIdOnSubject(admin, {
+        subjectUserId,
+        businessId,
+        currency: "usd",
+        pmId,
+      })
+    }
+  }
+  if (eurPreferred) {
+    const pmId = String(eurPreferred.ID ?? "").trim()
+    if (pmId) {
+      await mirrorVirtualAccountIdOnSubject(admin, {
+        subjectUserId,
+        businessId,
+        currency: "eur",
+        pmId,
+      })
+    }
+  }
+  if (gbpPm) {
+    const pmId = String(gbpPm.ID ?? "").trim()
+    if (pmId) {
+      await mirrorVirtualAccountIdOnSubject(admin, {
+        subjectUserId,
+        businessId,
+        currency: "gbp",
+        pmId,
+      })
+    }
+  }
 }
 
 /**
@@ -106,33 +231,31 @@ export async function persistVirtualAccountFromBankOnrampWorkflow(
   const accountNumber =
     workflow.AccountNumber != null ? String(workflow.AccountNumber).trim() : null
   const bankCode = workflow.BankCode != null ? String(workflow.BankCode).trim() : null
-  const fiat = currency.toUpperCase()
+  const rail = parseNoahPaymentMethodRail({
+    ID: pmId,
+    PaymentMethodID: pmId,
+    PaymentMethodType: workflow.PaymentMethodType,
+  })
+  const cols = mapNoahBankFieldsToColumns(currency, rail, accountNumber, bankCode)
 
-  const { error: upsertErr } = await admin.from("virtual_accounts").upsert(
-    {
-      user_id: subjectUserId,
-      business_id: businessId ?? null,
-      noah_virtual_account_id: pmId,
-      noah_payment_method_id: pmId,
-      noah_customer_id: noahCustomerId?.trim() || null,
-      currency: fiat,
-      account_number: currency === "eur" ? null : accountNumber,
-      routing_number: currency === "usd" ? bankCode : null,
-      iban: currency === "eur" ? accountNumber : null,
-      bic: currency === "eur" ? bankCode : null,
-      bank_name: workflow.BankName != null ? String(workflow.BankName) : null,
-      bank_address: formatBankAddress(workflow.BankAddress),
-      account_holder_name:
-        workflow.AccountHolderName != null ? String(workflow.AccountHolderName) : null,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "noah_virtual_account_id" },
-  )
+  const row = buildUpsertRow({
+    subjectUserId,
+    businessId,
+    pmId,
+    noahCustomerId,
+    currency,
+    cols,
+    bankName: workflow.BankName != null ? String(workflow.BankName) : null,
+    bankAddress: formatBankAddress(workflow.BankAddress),
+    accountHolderName:
+      workflow.AccountHolderName != null ? String(workflow.AccountHolderName) : null,
+  })
+
+  const { error: upsertErr } = await admin
+    .from("virtual_accounts")
+    .upsert(row, { onConflict: "noah_virtual_account_id" })
 
   if (upsertErr) {
     console.error("[persistVirtualAccountFromBankOnrampWorkflow] upsert virtual_accounts:", upsertErr)
-    return
   }
-
-  await mirrorVirtualAccountIdOnSubject(admin, { subjectUserId, businessId, currency, pmId })
 }

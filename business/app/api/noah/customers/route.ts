@@ -51,7 +51,7 @@ export async function POST(request: Request) {
   if ("error" in auth) return auth.error
   const { user } = auth
 
-  let body: { signedAgreementId?: string; needsUSD?: boolean; needsEUR?: boolean; type?: string } = {}
+  let body: { needsUSD?: boolean; needsEUR?: boolean; type?: string } = {}
   try {
     body = await request.json()
   } catch {
@@ -71,7 +71,6 @@ export async function POST(request: Request) {
         metadata: {
           easner_user_id: user.id,
           ...(ctx.businessId ? { easner_business_id: ctx.businessId } : {}),
-          signed_agreement_id: body.signedAgreementId || "",
           easner_product: ctx.scope === "business" ? "easner_business" : "easner_mobile",
         },
       }),

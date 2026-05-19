@@ -249,3 +249,38 @@ The shell never unmounts; `keepPreviousData` smooths the transition.
 | UX primitives | `business/components/data/`, `mobile/src/components/data/` |
 | UX rules constants | `packages/shared/src/query/ux-rules.ts` |
 | Storage policy | `packages/shared/src/query/storage-policy.ts` |
+| Noah virtual accounts (DB columns) | `business/lib/noah/virtual-account-columns.ts` |
+
+## 14. `virtual_accounts` (Noah fiat receive)
+
+One row per Noah `PaymentMethodID` (`noah_virtual_account_id`, unique). All PayinTo rails are synced (ACH, Wire, SWIFT, SEPA, …). Rail is encoded in the ID (`Bank/Ach/USD/…`, `Bank/Swift/USD/…`, etc.).
+
+| Column | USD ACH/Wire | USD SWIFT | EUR SEPA | GBP |
+| --- | --- | --- | --- | --- |
+| `account_number` | ✓ | ✓ | — | ✓ |
+| `routing_number` | ✓ (ABA) | — | — | — |
+| `iban` | — | — | ✓ | — |
+| `bic` | — | ✓ | ✓ | — |
+| `sort_code` | — | — | — | ✓ |
+
+Dropped: `account_name`, `noah_payment_method_id`, `source_type`, `swift_bic` (→ `bic`), `metadata`.
+
+Receive/API reads prefer ACH → Wire rows for USD (routing number only; SWIFT/BIC rows stay in DB but are not returned for USD display).
+
+## 15. Individual KYC on `users`
+
+On Noah **Customer** approval, `syncNoahCustomerToSupabase` writes normalized identity + address columns and sets `kyc_verified_at`. `GET /api/settings/personal` returns `profileLocked` and a `verifiedIdentity` block (masked ID number only).
+
+| Column | Source |
+| --- | --- |
+| `kyc_id_type` | Noah `Identities[0].IDType` (raw enum) |
+| `kyc_id_number` | Full number (mask in API/UI) |
+| `kyc_id_issuing_country` | ISO-2 |
+| `kyc_address_*` | `PrimaryResidence` (title-cased on write) |
+| `kyc_verified_at` | Webhook / approval time |
+
+Dropped on `users`: `noah_kyc_metadata`, `noah_kyb_customer_id`, `noah_kyb_status` (KYB remains on `businesses`).
+
+Flags: bundled PNGs in `packages/shared/assets/flags` (from flagcdn via `npm run sync:flags`); shared `CountryFlag` / `CurrencyFlag` for web + mobile.
+
+**Noah onboarding (Tier 1):** Use `POST /v1/onboarding/:CustomerID` (hosted onboarding) only. Noah Standard Model handles **KYC/KYB + partner Terms & Conditions** in one `HostedURL` — no separate TOS API, `noah_signed_agreement_id` column, or `/api/noah/tos` route. Mobile/business entry: `POST /api/noah/kyc-links`.

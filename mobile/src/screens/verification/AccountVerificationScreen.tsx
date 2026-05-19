@@ -56,12 +56,6 @@ import { isTier1Complete } from '../../lib/compliance'
 import { needsNoahVirtualAccountProvision } from '../../lib/noahAccountSync'
 import { useToast } from '../../components/ToastProvider'
 
-/**
- * Consumer Noah flow: hosted KYC is enough; do not fetch standalone Noah TOS links
- * (errors like "customer exists already" and extra WebView steps).
- */
-const SKIP_NOAH_STANDALONE_TOS = true
-
 const TIER_ICONS: Record<1 | 2 | 3, LucideIcon> = {
   1: Globe,
   2: Map,
@@ -90,24 +84,10 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
   const insets = useSafeAreaInsets()
   const { showInfo, showError, showSuccess, showWarning } = useToast()
 
-  // TOS state
-  const [tosLink, setTosLink] = useState<string | null>(null)
-  const [tosLinkId, setTosLinkId] = useState<string | null>(null)
-  const [tosSigned, setTosSigned] = useState(false)
-  const [tosSignedAgreementId, setTosSignedAgreementId] = useState<string | null>(null)
-  const [showTosModal, setShowTosModal] = useState(false)
-  const [loadingTos, setLoadingTos] = useState(false)
   const [creatingCustomer, setCreatingCustomer] = useState(false)
   const [customerError, setCustomerError] = useState<string | null>(null)
-  
-  // Ref to track if we've already processed TOS acceptance via postMessage
-  const tosProcessedRef = useRef(false)
-  // Ref to prevent duplicate loadTOSStatus calls
-  const loadingTosStatusRef = useRef(false)
   // Ref to prevent multiple simultaneous Noah / verification status fetches
   const fetchingNoahStatusRef = useRef(false)
-  // Ref to track the last noah_signed_agreement_id we processed
-  const lastProcessedTosAgreementIdRef = useRef<string | null>(null)
   // Ref to track periodic sync interval
   const syncIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Ref to prevent multiple simultaneous syncs
@@ -115,15 +95,11 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
 
   // KYC Link state
   const [kycLink, setKycLink] = useState<string | null>(null)
-  const [kycTosLink, setKycTosLink] = useState<string | null>(null)
   const [kycLinkId, setKycLinkId] = useState<string | null>(null)
   const [kycStatus, setKycStatus] = useState<string | null>(null)
-  const [tosStatus, setTosStatus] = useState<string | null>(null)
   const [showKycModal, setShowKycModal] = useState(false)
   const [loadingKyc, setLoadingKyc] = useState(false)
-  const [currentKycFlow, setCurrentKycFlow] = useState<'kyc' | 'tos'>('kyc')
   const [kycCompleted, setKycCompleted] = useState(false)
-  const [tosCompleted, setTosCompleted] = useState(false)
   const kycProcessedRef = useRef(false)
   const externalLink = useExternalLink()
 
@@ -281,12 +257,6 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     }, [userProfile?.id, syncNoahStatus]),
   )
 
-  useEffect(() => {
-    if (!SKIP_NOAH_STANDALONE_TOS) return
-    setTosSigned(true)
-    setTosCompleted(true)
-  }, [])
-
   // Initial Noah sync after login runs from `useConsumerKycNoahSync` (main tabs). This screen keeps
   // periodic sync while viewing in-review/rejected flows below.
 
@@ -354,455 +324,6 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     .toLowerCase()
   const noahKycInReview = kycStatusLower === 'under_review' || kycStatusLower === 'in_review'
   const noahKycRejected = kycStatusLower === 'rejected'
-  
-  // TOS should appear when KYC is approved
-  const bothSubmitted = noahKycApproved
-
-  // Load TOS status only if noah_signed_agreement_id is empty
-  // Database is source of truth - if noah_signed_agreement_id exists, TOS is signed
-  useEffect(() => {
-    if (SKIP_NOAH_STANDALONE_TOS) return
-    if (!bothSubmitted || !userProfile?.email || !userProfile?.id) return
-
-    // Prevent duplicate calls
-    if (loadingTosStatusRef.current) {
-      return
-    }
-
-    // Check if TOS is already signed in database (source of truth)
-    const noahSignedAgreementId = userProfile?.noah_signed_agreement_id || userProfile?.profile?.noah_signed_agreement_id
-    
-    if (noahSignedAgreementId) {
-      // Only update state if the agreement ID has changed (avoid unnecessary re-renders)
-      if (lastProcessedTosAgreementIdRef.current !== noahSignedAgreementId) {
-        lastProcessedTosAgreementIdRef.current = noahSignedAgreementId
-        setTosSigned(true)
-        setTosSignedAgreementId(noahSignedAgreementId)
-        // Update cache to match
-        const linkId = userProfile?.noah_customer_id ? `customer-${userProfile.noah_customer_id}` : null
-        updateTosStatusInCache(true, noahSignedAgreementId, linkId)
-      }
-      return
-    }
-
-    // Reset the ref if TOS is not signed
-    if (lastProcessedTosAgreementIdRef.current !== null) {
-      lastProcessedTosAgreementIdRef.current = null
-    }
-
-    // Only load TOS status if noah_signed_agreement_id is empty
-    // Only load if we haven't already set tosSigned to true (avoid unnecessary fetches)
-    if (!tosSigned) {
-      loadTOSStatus()
-    }
-  }, [bothSubmitted, userProfile?.email, userProfile?.id, userProfile?.noah_signed_agreement_id])
-
-  const updateTosStatusInCache = async (signed: boolean, agreementId: string | null = null, linkId: string | null = null) => {
-    if (!userProfile?.id) return
-    
-    try {
-      const CACHE_KEY = `easner_tos_status_${userProfile.id}`
-      await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({
-        tosSigned: signed,
-        tosSignedAgreementId: agreementId,
-        tosLinkId: linkId || tosLinkId,
-        timestamp: Date.now()
-      }))
-    } catch (error) {
-      console.error('Error updating TOS cache:', error)
-    }
-  }
-
-  const loadTOSStatus = async () => {
-    if (SKIP_NOAH_STANDALONE_TOS) return
-    if (!userProfile?.email || !userProfile?.id) return
-    
-    // Prevent duplicate calls
-    if (loadingTosStatusRef.current) {
-      return
-    }
-    
-    loadingTosStatusRef.current = true
-    
-    try {
-      // First, check cache for immediate UI update (like identity/address verification)
-      const CACHE_KEY = `easner_tos_status_${userProfile.id}`
-      const cached = await AsyncStorage.getItem(CACHE_KEY)
-      let cachedData: any = null
-      let useCache = false
-      
-      if (cached) {
-        try {
-          cachedData = JSON.parse(cached)
-          const { tosSigned: cachedTosSigned, tosSignedAgreementId: cachedAgreementId, tosLinkId: cachedTosLinkId, timestamp } = cachedData
-          const cacheAge = Date.now() - timestamp
-          
-          if (cacheAge < 5 * 60 * 1000) { // 5 minute cache
-            // Show cached value immediately for instant UI
-            setTosSigned(cachedTosSigned)
-            if (cachedAgreementId) {
-              setTosSignedAgreementId(cachedAgreementId)
-            }
-            if (cachedTosLinkId) {
-              setTosLinkId(cachedTosLinkId)
-            }
-            
-            // If cache is fresh and TOS is signed, use cache and fetch in background silently
-            if (cachedTosSigned) {
-              useCache = true
-              // Fetch fresh data in background (silently, no logs)
-              fetchTOSStatusFromDatabase(true)
-              loadingTosStatusRef.current = false
-              return
-            }
-            // If TOS is not signed, continue to check database for updates
-          } else {
-            // Cache expired, clear it
-            await AsyncStorage.removeItem(CACHE_KEY)
-          }
-        } catch (e) {
-          console.warn('[TOS-LOAD] Error parsing cache, clearing...', e)
-          await AsyncStorage.removeItem(CACHE_KEY)
-        }
-      }
-      
-      // Cache is expired or TOS is not signed - fetch from database
-      await fetchTOSStatusFromDatabase(false)
-    } catch (error: any) {
-      console.error('[TOS-LOAD] Error loading TOS status:', error)
-      setTosSigned(false)
-    } finally {
-      loadingTosStatusRef.current = false
-    }
-  }
-
-  const fetchTOSStatusFromDatabase = async (silent: boolean = false) => {
-    if (SKIP_NOAH_STANDALONE_TOS) return
-    if (!userProfile?.id) return
-    
-    try {
-      // Check database for persistent TOS status (source of truth)
-      const { data: userData, error: dbError } = await supabase
-        .from('users')
-        .select('noah_customer_id, noah_signed_agreement_id')
-        .eq('id', userProfile.id)
-        .single()
-      
-      if (dbError) {
-        if (!silent) {
-          console.error('[TOS-LOAD] Error fetching from database:', dbError)
-        }
-        return
-      }
-      
-      // If we have signed_agreement_id in database, TOS is signed - stop here
-      if (userData?.noah_signed_agreement_id) {
-        if (!silent) {
-          console.log('[TOS-LOAD] ✅ TOS signed (from database) - updating state')
-        }
-        setTosSigned(true)
-        setTosSignedAgreementId(userData.noah_signed_agreement_id)
-        
-        // Set tosLinkId for consistency
-        const linkId = userData.noah_customer_id ? `customer-${userData.noah_customer_id}` : null
-        if (linkId) {
-          setTosLinkId(linkId)
-        }
-        
-        // Update cache with database value (ensures cache matches database)
-        await updateTosStatusInCache(true, userData.noah_signed_agreement_id, linkId)
-        
-        // Don't fetch TOS link from verification API - not needed if already signed
-        return
-      }
-      
-      // If database says TOS is NOT signed, update state to false
-      if (userData && !userData.noah_signed_agreement_id) {
-        if (!silent) {
-          console.log('[TOS-LOAD] ❌ TOS not signed (from database) - updating state')
-        }
-        setTosSigned(false)
-        setTosSignedAgreementId(null)
-        // Update cache to match database
-        await updateTosStatusInCache(false, null, null)
-      }
-      
-      // Only fetch from verification API if noah_signed_agreement_id is empty
-      // This should be rare — only if the host requires TOS again
-      // First try to get TOS link (for cases where customer doesn't exist yet or needs new TOS)
-      try {
-        const response = await noahService.getTOSLink(userProfile.email!, 'individual')
-        const link = response.tosLink
-        const linkId = response.tosLinkId
-        
-        if (link && link.trim() !== '') {
-          setTosLink(link)
-          setTosLinkId(linkId)
-          
-          // Only check verification API status if we have a customer_id (to avoid unnecessary calls)
-          if (userData?.noah_customer_id && linkId) {
-            try {
-              const status = await noahService.checkTOSStatus(linkId)
-              if (status.signed) {
-                setTosSigned(true)
-                setTosSignedAgreementId(status.signedAgreementId || null)
-                
-                // Update cache
-                await updateTosStatusInCache(true, status.signedAgreementId || null, linkId)
-                
-                // Store in database for persistence
-                if (status.signedAgreementId) {
-                  await storeSignedAgreementId(status.signedAgreementId)
-                }
-              } else {
-                setTosSigned(false)
-                await updateTosStatusInCache(false, null, linkId)
-              }
-            } catch (statusError: any) {
-              // If status check fails, just set TOS as not signed
-              // The link is available for the user to sign
-              setTosSigned(false)
-              if (!silent) {
-                console.warn('[TOS-LOAD] Could not check TOS status from Noah:', statusError.message)
-              }
-            }
-          }
-        } else if ((response as any).alreadyAccepted) {
-          // Provider says TOS is already accepted but we don't have it in database
-          // This shouldn't happen, but handle it gracefully
-          setTosSigned(true)
-          setTosLinkId(linkId)
-          await updateTosStatusInCache(true, null, linkId)
-        } else {
-          setTosSigned(false)
-          if (linkId) {
-            await updateTosStatusInCache(false, null, linkId)
-          }
-        }
-      } catch (tosLinkError: any) {
-        // If TOS link creation fails, log but don't fail completely
-        if (!silent) {
-          console.warn('[TOS-LOAD] Could not get TOS link:', tosLinkError.message)
-        }
-        // Don't set tosSigned to false here - database is source of truth
-      }
-    } catch (error: any) {
-      if (!silent) {
-        console.error('[TOS-LOAD] Error fetching TOS status from database:', error)
-      }
-    }
-  }
-  
-  const storeSignedAgreementId = async (signedAgreementId: string) => {
-    if (!userProfile?.id) return
-    
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({ noah_signed_agreement_id: signedAgreementId })
-        .eq('id', userProfile?.id)
-      
-      if (error) {
-        console.error('Error storing signed_agreement_id:', error)
-      } else {
-        console.log('Stored signed_agreement_id in database:', signedAgreementId)
-        
-        // Immediately update UI state (don't wait for cache)
-        setTosSigned(true)
-        setTosSignedAgreementId(signedAgreementId)
-        
-        // Update cache to keep it in sync
-        await updateTosStatusInCache(true, signedAgreementId, tosLinkId)
-        
-        // Force refresh TOS status to ensure everything is in sync
-        // Use a small delay to ensure database write is complete
-        setTimeout(() => {
-          if (bothSubmitted && userProfile?.email) {
-            loadingTosStatusRef.current = false // Reset ref to allow refresh
-            loadTOSStatus()
-          }
-        }, 500)
-      }
-    } catch (error) {
-      console.error('Error storing signed_agreement_id:', error)
-    }
-  }
-
-  const handleOpenTOS = async () => {
-    if (SKIP_NOAH_STANDALONE_TOS) return
-    if (!userProfile?.email) return
-    
-    // FIRST: Check if TOS is already signed - if so, don't try to create a new link
-    if (tosSigned || userProfile.noah_signed_agreement_id) {
-      console.log('[TOS-OPEN] TOS already signed, skipping link generation')
-      showInfo('You have already accepted the partner terms of service.')
-      return
-    }
-    
-    // Reset the processed flag when opening TOS modal
-    tosProcessedRef.current = false
-    console.log('[TOS-OPEN] Opening TOS modal, reset processed flag')
-    
-    setLoadingTos(true)
-    try {
-      if (!tosLink || !tosLinkId) {
-        // Before trying to create TOS link, check database one more time
-        const { data: userData } = await supabase
-          .from('users')
-          .select('noah_signed_agreement_id, noah_customer_id')
-          .eq('id', userProfile.id)
-          .single()
-        
-        // If TOS is already signed, don't try to create a link
-        if (userData?.noah_signed_agreement_id) {
-          console.log('[TOS-OPEN] TOS already signed in database, skipping link generation')
-          setTosSigned(true)
-          setTosSignedAgreementId(userData.noah_signed_agreement_id)
-          setLoadingTos(false)
-          showInfo('You have already accepted the partner terms of service.')
-          return
-        }
-        
-        // If customer exists, try to get TOS link from customer object first (avoids 401)
-        if (userData?.noah_customer_id) {
-          try {
-            const customer = await noahService.getCustomer(userData.noah_customer_id)
-            const customerTosLink = (customer as any).tos_link
-            const hasAcceptedTOS = (customer as any).has_accepted_terms_of_service === true
-            
-            if (hasAcceptedTOS) {
-              console.log('[TOS-OPEN] Customer already accepted TOS')
-              setTosSigned(true)
-              setLoadingTos(false)
-              showInfo('You have already accepted the partner terms of service.')
-              return
-            }
-            
-            if (customerTosLink) {
-              console.log('[TOS-OPEN] Using TOS link from customer object')
-              setTosLink(customerTosLink)
-              setTosLinkId(`customer-${userData.noah_customer_id}`)
-              await externalLink.openLink(customerTosLink, 'Partner Terms of Service')
-              setLoadingTos(false)
-              return
-            }
-          } catch (customerError: any) {
-            console.warn('[TOS-OPEN] Could not get customer TOS link:', customerError.message)
-            // Fall through to try creating new TOS link
-          }
-        }
-        
-        // Last resort: Try to create new TOS link (this is where 401 happens)
-        console.log('[TOS-OPEN] Attempting to create new TOS link...')
-        try {
-        const response = await noahService.getTOSLink(userProfile.email, 'individual')
-        const link = response.tosLink
-        const linkId = response.tosLinkId
-        
-        setTosLink(link)
-        setTosLinkId(linkId)
-        
-        if (!link) {
-          showError('Unable to load Terms of Service. Please try again or contact support.')
-          setLoadingTos(false)
-          return
-        }
-        
-        await externalLink.openLink(link, 'Partner Terms of Service')
-        } catch (tosLinkError: any) {
-          // If TOS link creation fails (especially 401), check if TOS is already accepted
-          console.warn('[TOS-OPEN] TOS link creation failed:', tosLinkError.message)
-          
-          // If it's a 401 error, it might mean TOS is already accepted or API key doesn't have permission
-          // Check customer status one more time
-          if (userData?.noah_customer_id) {
-            try {
-              const customer = await noahService.getCustomer(userData.noah_customer_id)
-              const hasAcceptedTOS = (customer as any).has_accepted_terms_of_service === true
-              
-              if (hasAcceptedTOS) {
-                console.log('[TOS-OPEN] Customer already has TOS accepted (checked after 401 error)')
-                setTosSigned(true)
-                setLoadingTos(false)
-                showInfo('You have already accepted the partner terms of service.')
-                return
-              }
-            } catch (customerCheckError: any) {
-              console.warn('[TOS-OPEN] Could not verify customer TOS status:', customerCheckError.message)
-            }
-          }
-          
-          // If we can't verify TOS status, show a helpful error
-          // But first, check database one more time to be absolutely sure
-          try {
-            const { data: finalCheck } = await supabase
-            .from('users')
-            .select('noah_signed_agreement_id')
-              .eq('id', userProfile.id)
-            .single()
-          
-            if (finalCheck?.noah_signed_agreement_id) {
-              console.log('[TOS-OPEN] TOS confirmed signed in database after 401 error')
-            setTosSigned(true)
-              setTosSignedAgreementId(finalCheck.noah_signed_agreement_id)
-            setLoadingTos(false)
-              showInfo('You have already accepted the partner terms of service.')
-            return
-          }
-          } catch (dbError: any) {
-            console.warn('[TOS-OPEN] Could not verify TOS in database:', dbError.message)
-          }
-          
-          // If we still can't confirm TOS is accepted, show error
-          const errorMessage = tosLinkError.message || 'Failed to load terms of service'
-          if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
-            showWarning(
-              'Unable to create Terms of Service link. This may be because TOS is already accepted or there is a temporary API permission issue.',
-            )
-          } else {
-            showError(
-              `Unable to load Terms of Service: ${errorMessage}. If TOS is already accepted, you can ignore this.`,
-            )
-          }
-          setLoadingTos(false)
-          return
-        }
-      } else {
-        // We have tosLink and tosLinkId - just open the modal
-        // Don't check database here - state is managed by loadTOSStatus
-        if (!tosLink) {
-          showError('Terms of Service link is not available. Please try again or contact support.')
-          setLoadingTos(false)
-          return
-        }
-        await externalLink.openLink(tosLink, 'Partner Terms of Service')
-      }
-    } catch (error: any) {
-      console.error('Error opening TOS:', error)
-      const errorMessage = error.message || 'Failed to load terms of service'
-      showError(`${errorMessage}\n\nPlease try again or contact support if the issue persists.`)
-      // Don't update state on error - let loadTOSStatus handle state management
-    } finally {
-      setLoadingTos(false)
-    }
-  }
-
-  const handleTOSModalClose = () => {
-    setShowTosModal(false)
-    
-    // If we already processed TOS via postMessage, no need to check again
-    if (tosProcessedRef.current) {
-      console.log('[TOS-MODAL] Modal closed but TOS already processed via postMessage')
-      return
-    }
-    
-    // If postMessage didn't fire, rely on webhooks and sync-status
-    // Status will be updated when user refreshes or reopens the screen
-    console.log('[TOS-MODAL] Modal closed. TOS status will be synced via webhooks or next screen load.')
-    if (refreshUserProfile && userProfile?.id) {
-      void refreshUserProfile()
-    }
-  }
 
   const handleOpenKYC = async () => {
     if (!userProfile?.email) {
@@ -812,9 +333,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     
     setLoadingKyc(true)
     kycProcessedRef.current = false
-    setCurrentKycFlow('kyc')
     setKycCompleted(false)
-    setTosCompleted(SKIP_NOAH_STANDALONE_TOS)
     
     try {
       // Always sync latest Noah customer status before opening KYC
@@ -886,10 +405,8 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
               const kycLink = customer.kyc_link as string | undefined
               response = {
                 kyc_link: kycLink || '',
-                tos_link: null,
                 kyc_link_id: `customer-${userProfile.noah_customer_id}`,
                 kyc_status: userProfile.noah_kyc_status || 'not_started',
-                tos_status: 'pending',
                 customer_id: userProfile.noah_customer_id,
               }
             } catch (linkError: any) {
@@ -904,10 +421,8 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
       }
       
       setKycLink(response.kyc_link)
-      setKycTosLink(response.tos_link || null)
       setKycLinkId(response.kyc_link_id || null)
       setKycStatus(response.kyc_status || 'not_started')
-      setTosStatus(response.tos_status || 'pending')
       
       // If customer_id is returned, store it in database and fetch current status from Noah
       if (response.customer_id && userProfile?.id) {
@@ -995,18 +510,6 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
 
   const handleKycModalClose = () => {
     setShowKycModal(false)
-    
-    // If both flows are completed, refresh user profile
-    if (kycCompleted && tosCompleted) {
-      console.log('[KYC-MODAL] Both KYC and TOS completed, refreshing user profile')
-      // Refresh user profile to get updated KYC status
-      setTimeout(() => {
-        if (refreshUserProfile && userProfile?.id) {
-          void refreshUserProfile()
-        }
-      }, 2000)
-      return
-    }
     if (refreshUserProfile && userProfile?.id) {
       void refreshUserProfile()
     }
@@ -1345,166 +848,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
               ))}
             </View>
 
-            {/* TOS WebView Modal */}
-            <Modal
-              visible={showTosModal}
-              animationType="slide"
-              presentationStyle="pageSheet"
-              onRequestClose={handleTOSModalClose}
-            >
-              <View style={styles.modalContainer}>
-                <IframeWebViewModalHeader onClose={handleTOSModalClose} title="Partner Terms of Service" />
-                {tosLink && (
-                  <WebView
-                    source={{ uri: tosLink }}
-                    style={styles.webView}
-                    javaScriptEnabled={true}
-                    domStorageEnabled={true}
-                    onShouldStartLoadWithRequest={(request) => {
-                      // Suppress warnings for about:srcdoc (used by iframes with inline HTML)
-                      if (request.url === 'about:srcdoc') {
-                        return false
-                      }
-                      // Allow navigation to proceed
-                      return true
-                    }}
-                    onError={(syntheticEvent) => {
-                      const { nativeEvent } = syntheticEvent
-                      // Suppress harmless about:srcdoc warnings
-                      if (nativeEvent.url === 'about:srcdoc') {
-                        return
-                      }
-                      console.warn('[TOS-WEBVIEW] WebView error:', nativeEvent)
-                    }}
-                    onHttpError={(syntheticEvent) => {
-                      const { nativeEvent } = syntheticEvent
-                      console.warn('[TOS-WEBVIEW] HTTP error:', nativeEvent.statusCode, nativeEvent.url)
-                    }}
-                    onNavigationStateChange={(navState) => {
-                      // Check if user navigated away (might indicate acceptance)
-                      // Hosted TOS pages typically redirect after acceptance
-                      console.log('[TOS-WEBVIEW] Navigation changed:', {
-                        url: navState.url,
-                        originalUrl: tosLink,
-                        loading: navState.loading,
-                        canGoBack: navState.canGoBack
-                      })
-                      
-                      // If URL changed and page finished loading, user might have accepted TOS
-                      if (navState.url !== tosLink && !navState.loading) {
-                        console.log('[TOS-WEBVIEW] URL changed - user may have accepted TOS, will start polling when modal closes')
-                        // Don't start polling here - wait for modal to close
-                        // The handleTOSModalClose will start polling
-                      }
-                    }}
-                    onMessage={async (event) => {
-                      // Handle messages from WebView if the host sends any
-                      console.log('[TOS-WEBVIEW] 📨 Message received from WebView:', {
-                        data: event.nativeEvent.data,
-                        type: typeof event.nativeEvent.data,
-                        alreadyProcessed: tosProcessedRef.current
-                      })
-                      
-                      // Prevent duplicate processing
-                      if (tosProcessedRef.current) {
-                        console.log('[TOS-WEBVIEW] ⚠️ Message already processed, ignoring')
-                        return
-                      }
-                      
-                      try {
-                        const messageData = event.nativeEvent.data
-                        let data: any
-                        
-                        // Try to parse as JSON
-                        if (typeof messageData === 'string') {
-                          data = JSON.parse(messageData)
-                        } else {
-                          data = messageData
-                        }
-                        
-                        console.log('[TOS-WEBVIEW] 📋 Parsed message data:', data)
-                        
-                        if (data && data.signedAgreementId) {
-                          const signedAgreementId = data.signedAgreementId
-                          console.log(`[TOS-WEBVIEW] ✅ Received signedAgreementId from WebView: ${signedAgreementId.substring(0, 8)}...`)
-                          
-                          // Mark as processed to prevent duplicate handling
-                          tosProcessedRef.current = true
-                          
-                          // Store signed_agreement_id first
-                          await storeSignedAgreementId(signedAgreementId)
-                          
-                          // Update UI immediately
-                          setTosSigned(true)
-                          setTosSignedAgreementId(signedAgreementId)
-                          
-                          // Update cache immediately
-                          await updateTosStatusInCache(true, signedAgreementId, tosLinkId)
-                          
-                          console.log(`[TOS-WEBVIEW] ✅ TOS signed_agreement_id stored in database`)
-                          
-                          // Check if Noah customer exists before trying to update
-                          const { data: userData } = await supabase
-                            .from('users')
-                            .select('noah_customer_id')
-                            .eq('id', userProfile?.id)
-                            .single()
-                          
-                          if (userData?.noah_customer_id) {
-                            // Customer exists - update it with signed_agreement_id
-                            try {
-                              console.log(`[TOS-WEBVIEW] 🔄 Customer exists, updating with signed_agreement_id: ${signedAgreementId.substring(0, 8)}...`)
-                              const updateResult = await noahService.updateCustomerTOS(signedAgreementId)
-                              console.log(`[TOS-WEBVIEW] ✅ Customer updated successfully. Response:`, {
-                                success: updateResult.success,
-                                hasAcceptedTOS: updateResult.hasAcceptedTOS,
-                                customerId: updateResult.customerId
-                              })
-                              
-                              showSuccess(
-                                'Your Terms of Service have been accepted. You can now create your accounts.',
-                                4000,
-                              )
-                              setShowTosModal(false)
-                              return
-                            } catch (updateError: any) {
-                              console.error(`[TOS-WEBVIEW] ⚠️ Error updating customer TOS (customer exists):`, updateError.message)
-                              showWarning(
-                                'Terms accepted. There was an issue updating your Easner account; this will resolve when your account is set up.',
-                                5000,
-                              )
-                              setShowTosModal(false)
-                              return
-                            }
-                          } else {
-                            // Customer doesn't exist yet - this is expected if KYC is still in_review
-                            // The admin will create the customer via "Send to Noah" button
-                            console.log(`[TOS-WEBVIEW] ℹ️ Customer doesn't exist yet. TOS signed_agreement_id stored. Admin will create customer via "Send to Noah".`)
-                            
-                            showSuccess(
-                              'Terms accepted. Your account will finish setup after identity verification is approved.',
-                              4500,
-                            )
-                            setShowTosModal(false)
-                            return
-                          }
-                        } else {
-                          console.log('[TOS-WEBVIEW] ⚠️ Message received but no signedAgreementId found:', data)
-                        }
-                      } catch (parseError: any) {
-                        // Not JSON or parsing failed - that's OK, might be a different message
-                        console.log('[TOS-WEBVIEW] ⚠️ Could not parse message as JSON:', {
-                          error: parseError.message,
-                          data: event.nativeEvent.data
-                        })
-                      }
-                    }}
-                  />
-                )}
-              </View>
-            </Modal>
-
-            {/* KYC WebView Modal */}
+            {/* KYC WebView Modal (Noah hosted onboarding — identity + partner terms in one session) */}
             <Modal
               visible={showKycModal}
               animationType="slide"
@@ -1513,22 +857,16 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
             >
               <View style={styles.modalContainer}>
                 <IframeWebViewModalHeader onClose={handleKycModalClose}>
-                  {currentKycFlow === 'kyc' ? (
-                    <View style={styles.modalKycTitleRow}>
-                      <Text style={[iframeModalTitleTextStyle, styles.modalKycTitleText]} numberOfLines={2}>
-                        Verification for global banking
-                      </Text>
-                      <View style={styles.tierPill}>
-                        <Text style={styles.tierPillText}>Tier 1</Text>
-                      </View>
-                    </View>
-                  ) : (
-                    <Text style={iframeModalTitleTextStyle} numberOfLines={2}>
-                      Partner Terms of Service
+                  <View style={styles.modalKycTitleRow}>
+                    <Text style={[iframeModalTitleTextStyle, styles.modalKycTitleText]} numberOfLines={2}>
+                      Verification for global banking
                     </Text>
-                  )}
+                    <View style={styles.tierPill}>
+                      <Text style={styles.tierPillText}>Tier 1</Text>
+                    </View>
+                  </View>
                 </IframeWebViewModalHeader>
-                {currentKycFlow === 'kyc' && kycLink && (
+                {kycLink && (
                   <WebView
                     source={{ uri: buildKycIframeUrl(kycLink) }}
                     style={styles.webView}
@@ -1599,37 +937,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                             }
                           }
                           
-                          // If TOS link is available, switch to TOS flow (skipped when standalone Noah TOS is disabled)
-                          if (
-                            kycTosLink &&
-                            !tosCompleted &&
-                            !SKIP_NOAH_STANDALONE_TOS
-                          ) {
-                            console.log('[KYC-WEBVIEW] 🔄 Switching to TOS flow')
-                            setCurrentKycFlow('tos')
-                            kycProcessedRef.current = false // Reset for TOS flow
-                          } else {
-                            showSuccess('KYC verification completed.', 3500)
-                            handleKycModalClose()
-                          }
-                        }
-                        
-                        // Handle TOS completion
-                        if (data && (data.tosCompleted || data.signedAgreementId)) {
-                          console.log('[KYC-WEBVIEW] ✅ TOS completed')
-                          kycProcessedRef.current = true
-                          setTosCompleted(true)
-                          setTosStatus('approved')
-                          
-                          if (data.signedAgreementId && userProfile?.id) {
-                            // Store signed_agreement_id
-                            await supabase
-                              .from('users')
-                              .update({ noah_signed_agreement_id: data.signedAgreementId })
-                              .eq('id', userProfile.id)
-                          }
-                          
-                          showSuccess('KYC and Terms of Service completed.', 4000)
+                          showSuccess('Verification submitted. We will update your status shortly.', 3500)
                           handleKycModalClose()
                         }
                       } catch (error: any) {
@@ -1638,59 +946,6 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                     }}
                     onNavigationStateChange={(navState) => {
                       console.log('[KYC-WEBVIEW] Navigation changed:', {
-                        url: navState.url,
-                        loading: navState.loading,
-                      })
-                    }}
-                  />
-                )}
-                {currentKycFlow === 'tos' && kycTosLink && (
-                  <WebView
-                    source={{ uri: kycTosLink }}
-                    style={styles.webView}
-                    javaScriptEnabled={true}
-                    domStorageEnabled={true}
-                    onMessage={async (event) => {
-                      console.log('[KYC-TOS-WEBVIEW] 📨 Message received from WebView:', {
-                        data: event.nativeEvent.data,
-                      })
-                      
-                      if (kycProcessedRef.current && tosCompleted) {
-                        return
-                      }
-                      
-                      try {
-                        const messageData = event.nativeEvent.data
-                        let data: any
-                        
-                        if (typeof messageData === 'string') {
-                          data = JSON.parse(messageData)
-                        } else {
-                          data = messageData
-                        }
-                        
-                        if (data && data.signedAgreementId) {
-                          console.log('[KYC-TOS-WEBVIEW] ✅ TOS completed')
-                          kycProcessedRef.current = true
-                          setTosCompleted(true)
-                          setTosStatus('approved')
-                          
-                          if (userProfile?.id) {
-                            await supabase
-                              .from('users')
-                              .update({ noah_signed_agreement_id: data.signedAgreementId })
-                              .eq('id', userProfile.id)
-                          }
-                          
-                          showSuccess('KYC and Terms of Service completed.', 4000)
-                          handleKycModalClose()
-                        }
-                      } catch (error: any) {
-                        console.error('[KYC-TOS-WEBVIEW] Error processing message:', error)
-                      }
-                    }}
-                    onNavigationStateChange={(navState) => {
-                      console.log('[KYC-TOS-WEBVIEW] Navigation changed:', {
                         url: navState.url,
                         loading: navState.loading,
                       })
