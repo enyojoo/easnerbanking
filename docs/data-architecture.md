@@ -253,19 +253,19 @@ The shell never unmounts; `keepPreviousData` smooths the transition.
 
 ## 14. `virtual_accounts` (Noah fiat receive)
 
-One row per Noah `PaymentMethodID` (`noah_virtual_account_id`, unique). All PayinTo rails are synced (ACH, Wire, SWIFT, SEPA, …). Rail is encoded in the ID (`Bank/Ach/USD/…`, `Bank/Swift/USD/…`, etc.).
+**USD:** one row per user/business — merged from ACH + Wire + SWIFT Noah PMs (`mergeUsdPayinPaymentMethods`). `noah_virtual_account_id` is the preferred ACH PaymentMethodID. Columns: `account_number` (all rails), `routing_number` (ACH/Wire ABA), `bic` (SWIFT). Extra per-rail USD rows are deleted on sync.
 
-| Column | USD ACH/Wire | USD SWIFT | EUR SEPA | GBP |
-| --- | --- | --- | --- | --- |
-| `account_number` | ✓ | ✓ | — | ✓ |
-| `routing_number` | ✓ (ABA) | — | — | — |
-| `iban` | — | — | ✓ | — |
-| `bic` | — | ✓ | ✓ | — |
-| `sort_code` | — | — | — | ✓ |
+**EUR / GBP:** one row per Noah PaymentMethodID (e.g. SEPA for EUR).
+
+| Column | USD (merged) | EUR SEPA | GBP |
+| --- | --- | --- | --- |
+| `account_number` | ✓ | — | ✓ |
+| `routing_number` | ✓ (ACH/Wire) | — | — |
+| `iban` | — | ✓ | — |
+| `bic` | ✓ (SWIFT) | ✓ | — |
+| `sort_code` | — | — | ✓ |
 
 Dropped: `account_name`, `noah_payment_method_id`, `source_type`, `swift_bic` (→ `bic`), `metadata`.
-
-Receive/API reads prefer ACH → Wire rows for USD (routing number only; SWIFT/BIC rows stay in DB but are not returned for USD display).
 
 On write (`persist-account-data`, `payment-method-map`): `account_holder_name` and `bank_name` are title-cased; `bank_address` uses the same rules as KYC addresses. Short all-caps bank tokens (2–5 letters, e.g. SSB, HSBC) stay uppercase; words like BANK → Bank (`format-display-text.ts`).
 

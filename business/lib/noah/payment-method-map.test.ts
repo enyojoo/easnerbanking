@@ -8,6 +8,7 @@ import {
   mapPaymentMethodToVirtualAccountDisplay,
   parseCurrencyFromNoahPaymentMethodId,
   parseNoahPaymentMethodRail,
+  mergeUsdPayinPaymentMethods,
   selectPreferredUsdPayinPaymentMethod,
 } from "./payment-method-map"
 
@@ -82,6 +83,52 @@ describe("parseCurrencyFromNoahPaymentMethodId", () => {
     const display = mapPaymentMethodToVirtualAccountDisplay(pm, "usd")
     expect(display.routingNumber).toBe("043087080")
     expect(selectPreferredUsdPayinPaymentMethod([pm])?.ID).toBe(pm.ID)
+  })
+})
+
+describe("mergeUsdPayinPaymentMethods", () => {
+  const ach = {
+    ID: "Bank/Ach/USD/043087080/659549996956/eind_test",
+    Country: "US",
+    DisplayDetails: {
+      Type: "FiatPaymentMethodBankDisplay",
+      AccountNumber: "659549996956",
+      BankCode: "043087080",
+    },
+  }
+  const swift = {
+    ID: "Bank/Swift/USD/SSBAUS32/659549996956/eind_test",
+    Country: "US",
+    DisplayDetails: {
+      Type: "FiatPaymentMethodBankDisplay",
+      AccountNumber: "659549996956",
+      BankCode: "SSBAUS32",
+    },
+  }
+
+  it("merges ACH routing and SWIFT bic into one USD snapshot", () => {
+    const merged = mergeUsdPayinPaymentMethods([swift, ach])
+    expect(merged?.canonicalPmId).toBe(ach.ID)
+    expect(merged?.accountNumber).toBe("659549996956")
+    expect(merged?.routingNumber).toBe("043087080")
+    expect(merged?.bic).toBe("SSBAUS32")
+  })
+
+  it("picks bank name/address from any rail when ACH omits IssuerDetails", () => {
+    const achOnly = {
+      ...ach,
+      IssuerDetails: undefined,
+    }
+    const swiftWithIssuer = {
+      ...swift,
+      IssuerDetails: {
+        Name: "SSB BANK",
+        Address: { Street: "89-16 JAMAICA AVE", City: "WOODHAVEN", State: "NY", Country: "US" },
+      },
+    }
+    const merged = mergeUsdPayinPaymentMethods([achOnly, swiftWithIssuer])
+    expect(merged?.bankName).toBe("SSB BANK")
+    expect(merged?.bankAddress).toContain("JAMAICA AVE")
   })
 })
 

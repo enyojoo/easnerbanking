@@ -5,6 +5,7 @@ import {
   formatVaBankAddress,
   formatVaBankName,
 } from "./format-display-text"
+import { extractIssuerBankDetails } from "./extract-issuer-bank-details"
 
 export function isEurCountry(code: string): boolean {
   const eu = new Set([
@@ -239,6 +240,124 @@ export function hasUsdPayinBankMethods(paymentMethods: Record<string, unknown>[]
   )
 }
 
+export type MergedUsdVirtualAccountFields = {
+  canonicalPmId: string
+  accountNumber: string | null
+  routingNumber: string | null
+  bic: string | null
+  bankName: string | null
+  bankAddress: string | null
+  accountHolderName: string | null
+}
+
+export function isFiatBankDisplayPaymentMethod(pm: Record<string, unknown>): boolean {
+  const type = String((pm.DisplayDetails as Record<string, unknown> | undefined)?.Type ?? "")
+  return !type || type === "FiatPaymentMethodBankDisplay"
+}
+
+export function filterUsdPayinBankPaymentMethods(
+  paymentMethods: Record<string, unknown>[],
+): Record<string, unknown>[] {
+  return paymentMethods.filter(
+    (pm) =>
+      isFiatBankDisplayPaymentMethod(pm) &&
+      (hasPayinBank(pm, "US") || parseCurrencyFromNoahPaymentMethodId(pm) === "usd"),
+  )
+}
+
+function coalesceNonEmpty(...values: Array<string | null | undefined>): string | null {
+  for (const v of values) {
+    if (v != null && String(v).trim()) return String(v).trim()
+  }
+  return null
+}
+
+/** Merge partial USD VA snapshots (DB row + Noah PMs). */
+export function mergeUsdVirtualAccountFieldPartials(
+  ...partials: Array<Partial<MergedUsdVirtualAccountFields>>
+): MergedUsdVirtualAccountFields | null {
+  const canonicalPmId = coalesceNonEmpty(...partials.map((p) => p.canonicalPmId))
+  if (!canonicalPmId) return null
+  return {
+    canonicalPmId,
+    accountNumber: coalesceNonEmpty(...partials.map((p) => p.accountNumber)),
+    routingNumber: coalesceNonEmpty(...partials.map((p) => p.routingNumber)),
+    bic: coalesceNonEmpty(...partials.map((p) => p.bic)),
+    bankName: coalesceNonEmpty(...partials.map((p) => p.bankName)),
+    bankAddress: coalesceNonEmpty(...partials.map((p) => p.bankAddress)),
+    accountHolderName: coalesceNonEmpty(...partials.map((p) => p.accountHolderName)),
+  }
+}
+
+/**
+ * One USD virtual account row: account_number from any rail; routing from ACH/Wire; BIC from SWIFT.
+ * `canonicalPmId` is the preferred ACH (then Wire) PaymentMethodID stored on users/businesses.
+ */
+export function mergeUsdPayinPaymentMethods(
+  paymentMethods: Record<string, unknown>[],
+): MergedUsdVirtualAccountFields | null {
+  const usdPms = filterUsdPayinBankPaymentMethods(paymentMethods)
+  if (!usdPms.length) return null
+
+  let accountNumber: string | null = null
+  let routingNumber: string | null = null
+  let bic: string | null = null
+  let bankName: string | null = null
+  let bankAddress: string | null = null
+  let accountHolderName: string | null = null
+
+  const bankNames: Array<string | null> = []
+  const bankAddresses: Array<string | null> = []
+
+  for (const pm of usdPms) {
+    const rail = parseNoahPaymentMethodRail(pm)
+    const display = mapPaymentMethodToVirtualAccountDisplay(pm, "usd")
+    const issuer = extractIssuerBankDetails(pm)
+    const details = pm.DisplayDetails as Record<string, unknown> | undefined
+    const acct = details?.AccountNumber != null ? String(details.AccountNumber).trim() : null
+    const bankCode = details?.BankCode != null ? String(details.BankCode).trim() : null
+    const cols = mapNoahBankFieldsToColumns("usd", rail, acct, bankCode)
+
+    accountNumber = accountNumber ?? cols.accountNumber
+    if (rail === "ach" || rail === "wire") {
+      routingNumber = routingNumber ?? cols.routingNumber
+    }
+    if (rail === "swift") {
+      bic = bic ?? cols.bic
+    }
+    bankNames.push(issuer.bankName, display.bankName ?? null)
+    bankAddresses.push(issuer.bankAddress, display.bankAddress ?? null)
+    accountHolderName = accountHolderName ?? display.accountHolderName ?? null
+  }
+
+  bankName = coalesceNonEmpty(...bankNames)
+  bankAddress = coalesceNonEmpty(...bankAddresses)
+
+  const preferred = selectPreferredUsdPayinPaymentMethod(usdPms)
+  const canonicalPmId = String(
+    preferred?.ID ?? preferred?.PaymentMethodID ?? usdPms[0]?.ID ?? "",
+  ).trim()
+  if (!canonicalPmId) return null
+
+  if (preferred) {
+    const d = mapPaymentMethodToVirtualAccountDisplay(preferred, "usd")
+    const issuer = extractIssuerBankDetails(preferred)
+    bankName = coalesceNonEmpty(issuer.bankName, d.bankName, bankName)
+    bankAddress = coalesceNonEmpty(issuer.bankAddress, d.bankAddress, bankAddress)
+    accountHolderName = coalesceNonEmpty(d.accountHolderName, accountHolderName)
+  }
+
+  return {
+    canonicalPmId,
+    accountNumber,
+    routingNumber,
+    bic,
+    bankName,
+    bankAddress,
+    accountHolderName,
+  }
+}
+
 export function selectPreferredEurPayinPaymentMethod(
   paymentMethods: Record<string, unknown>[],
 ): Record<string, unknown> | undefined {
@@ -255,7 +374,7 @@ export function mapPaymentMethodToVirtualAccountDisplay(
   currency: "usd" | "eur" | "gbp",
 ): VirtualAccountDisplay {
   const details = pm.DisplayDetails as Record<string, unknown> | undefined
-  const issuer = pm.IssuerDetails as { Name?: string; Address?: string } | undefined
+  const issuer = extractIssuerBankDetails(pm)
   const holder = pm.AccountHolderDetails as { Name?: { FirstName?: string; LastName?: string } } | undefined
 
   const type = String(details?.Type ?? "")
@@ -296,8 +415,8 @@ export function mapPaymentMethodToVirtualAccountDisplay(
     sortCode,
     iban,
     bic,
-    bankName: formatVaBankName(issuer?.Name) ?? undefined,
-    bankAddress: formatVaBankAddress(issuer?.Address) ?? undefined,
+    bankName: formatVaBankName(issuer.bankName) ?? undefined,
+    bankAddress: formatVaBankAddress(issuer.bankAddress) ?? undefined,
     accountHolderName: formatVaAccountHolderName(accountHolderName) ?? undefined,
     status: "active",
   }

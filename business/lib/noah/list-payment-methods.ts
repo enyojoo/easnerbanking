@@ -36,13 +36,43 @@ async function fetchPaymentMethodsPaginated(
   return all
 }
 
+function isNonEmptyRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length > 0)
+}
+
+/** Combine PayinTo + unfiltered PM payloads without dropping nested IssuerDetails / DisplayDetails. */
+export function mergePaymentMethodRecord(
+  base: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...base }
+  for (const [key, value] of Object.entries(incoming)) {
+    if (value === undefined || value === null) continue
+    const prev = out[key]
+    if (key === "IssuerDetails" || key === "DisplayDetails" || key === "AccountHolderDetails") {
+      if (isNonEmptyRecord(prev) && isNonEmptyRecord(value)) {
+        out[key] = { ...prev, ...value }
+      } else if (isNonEmptyRecord(value)) {
+        out[key] = value
+      } else if (!isNonEmptyRecord(prev)) {
+        out[key] = value
+      }
+      continue
+    }
+    if (typeof value === "string" && !value.trim() && prev != null && prev !== "") continue
+    out[key] = value
+  }
+  return out
+}
+
 function mergePaymentMethodsById(lists: Record<string, unknown>[][]): Record<string, unknown>[] {
   const byId = new Map<string, Record<string, unknown>>()
   for (const list of lists) {
     for (const pm of list) {
       const id = String(pm.ID ?? pm.Id ?? "").trim()
-      if (id) byId.set(id, pm)
-      else byId.set(`anon-${byId.size}`, pm)
+      const mapKey = id || `anon-${byId.size}`
+      const existing = byId.get(mapKey)
+      byId.set(mapKey, existing ? mergePaymentMethodRecord(existing, pm) : { ...pm })
     }
   }
   return [...byId.values()]

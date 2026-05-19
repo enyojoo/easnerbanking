@@ -37,7 +37,7 @@ function rowToDisplay(row: VirtualAccountDbRow, currency: "usd" | "eur" | "gbp")
     routingNumber,
     sortCode,
     iban: row.iban ?? undefined,
-    bic: currency === "usd" ? undefined : (row.bic ?? undefined),
+    bic: row.bic ?? undefined,
     bankName: row.bank_name ?? undefined,
     bankAddress: row.bank_address ?? undefined,
     accountHolderName: row.account_holder_name ?? undefined,
