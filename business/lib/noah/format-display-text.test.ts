@@ -32,4 +32,11 @@ describe("formatVaBankAddress", () => {
   it("title-cases address lines", () => {
     expect(formatVaBankAddress("39 PLOT, APO DUTSE, ABUJA")).toBe("39 Plot, Apo Dutse, Abuja")
   })
+
+  it("preserves US state and country abbreviations", () => {
+    expect(formatVaBankAddress("123 MAIN ST, PHILADELPHIA, PA 19103, US")).toBe(
+      "123 Main St, Philadelphia, PA 19103, US"
+    )
+    expect(formatVaBankAddress("WILMINGTON, DE, US")).toBe("Wilmington, DE, US")
+  })
 })

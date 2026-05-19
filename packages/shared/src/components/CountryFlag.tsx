@@ -7,7 +7,7 @@ import {
   FLAG_BORDER_RADIUS_PX,
   FLAG_FILL_CLASS,
   FLAG_FRAME_BG_CLASS,
-  FLAG_WEB_DECORATIVE_CLASS,
+  FLAG_WEB_FRAME_CLASS,
   flagFillsParentClass,
   resolveFlagBoxSizeFromStyle,
 } from "../flags/flag-styles"
@@ -54,23 +54,31 @@ export function CountryFlag({ code, size = 24, className, style, title }: Countr
     <span
       role="img"
       aria-label={label}
+      title={label}
       className={cn(
-        FLAG_WEB_DECORATIVE_CLASS,
+        FLAG_WEB_FRAME_CLASS,
         FLAG_FRAME_BG_CLASS,
         flagRadiusClass,
         fillParent && FLAG_FILL_CLASS,
+        !fillParent && "items-center justify-center",
         className
       )}
       style={{
         ...(fillParent ? {} : { width, height }),
         borderRadius: FLAG_BORDER_RADIUS_PX,
-        backgroundImage: `url(${JSON.stringify(src)})`,
-        backgroundSize: "contain",
         ...style,
       }}
       onContextMenu={(e) => e.preventDefault()}
-      onDragStart={(e) => e.preventDefault()}
-    />
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt=""
+        draggable={false}
+        className="block h-full w-full object-contain object-center"
+        onDragStart={(e) => e.preventDefault()}
+      />
+    </span>
   )
 }
 

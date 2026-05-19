@@ -19,9 +19,9 @@ export function flagWidthForHeight(height: number): number {
   return Math.max(1, Math.round((height * FLAG_ASPECT_WIDTH) / FLAG_ASPECT_HEIGHT))
 }
 
-/** Web: decorative flag (no img context menu / drag). */
-export const FLAG_WEB_DECORATIVE_CLASS =
-  "inline-block shrink-0 overflow-hidden select-none bg-contain bg-center bg-no-repeat [pointer-events:none] [-webkit-user-drag:none] [-webkit-touch-callout:none]"
+/** Web: flag frame shell (image inside uses object-contain). */
+export const FLAG_WEB_FRAME_CLASS =
+  "inline-flex shrink-0 overflow-hidden select-none [pointer-events:none]"
 
 /** Letterbox areas when PNG aspect ≠ 3:2 (subtle, matches UI chrome). */
 export const FLAG_FRAME_BG_CLASS = "bg-muted/30"

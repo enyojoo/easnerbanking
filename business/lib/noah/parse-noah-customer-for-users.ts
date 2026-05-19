@@ -49,6 +49,20 @@ function titleCaseWord(word: string): string {
   return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
 }
 
+const ADDRESS_TOKEN = /^([^\w]*)([\w]+)([^\w]*)$/
+
+/** Keep US state / country codes (PA, US, NY) and similar 2-letter caps tokens. */
+function titleCaseAddressToken(word: string): string {
+  const m = word.match(ADDRESS_TOKEN)
+  if (!m) return word
+  const [, lead, core, trail] = m
+  if (/^[A-Z]{2}$/.test(core)) return `${lead}${core}${trail}`
+  if (core !== core.toUpperCase() && core !== core.toLowerCase()) {
+    return `${lead}${core}${trail}`
+  }
+  return `${lead}${titleCaseWord(core)}${trail}`
+}
+
 export function titleCaseName(input: string | null | undefined): string {
   const raw = String(input ?? "").trim()
   if (!raw) return ""
@@ -72,7 +86,7 @@ export function titleCaseAddressPart(input: string | null | undefined): string {
       segment
         .trim()
         .split(/\s+/)
-        .map((w) => titleCaseWord(w))
+        .map((w) => titleCaseAddressToken(w))
         .join(" "),
     )
     .join(", ")

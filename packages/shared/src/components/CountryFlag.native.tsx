@@ -49,12 +49,11 @@ export function CountryFlag({ code, size = 20, style }: CountryFlagProps) {
       <Image
         source={source}
         recyclingKey={upper}
-        style={StyleSheet.absoluteFill}
+        style={{ width, height }}
         contentFit="contain"
         contentPosition="center"
         cachePolicy="memory-disk"
         transition={0}
-        allowDownscaling
       />
     </View>
   )
