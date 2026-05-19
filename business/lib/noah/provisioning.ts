@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { ensureFiatVirtualAccountsViaBankOnramp } from "@/lib/noah/bank-onramp-virtual-accounts"
 import { noahFetch } from "./http"
 import { fetchAllPaymentMethodsForCustomer } from "./list-payment-methods"
 import { hasPayinBank, matchesCurrency } from "./payment-method-map"
@@ -26,6 +27,10 @@ type ProvisionSummary = {
   gbpAccountId?: string
   usdcAddress?: string
   eurcAddress?: string
+  usdBankOnrampAttempted?: boolean
+  eurBankOnrampAttempted?: boolean
+  usdBankOnrampCreated?: boolean
+  eurBankOnrampCreated?: boolean
 }
 
 function parseLiquidationFromProvider(
@@ -81,8 +86,10 @@ export async function provisionNoahArtifactsForCustomer(opts: {
   subjectBusinessId?: string | null
   noahCustomerId: string
   scope: Scope
+  /** When set, runs bank-deposit-to-onchain workflow for missing USD/EUR VAs. */
+  admin?: SupabaseClient
 }): Promise<ProvisionSummary> {
-  const { subjectUserId, subjectBusinessId = null, noahCustomerId } = opts
+  const { subjectUserId, subjectBusinessId = null, noahCustomerId, admin } = opts
   const paymentMethods = await fetchAllPaymentMethodsForCustomer(noahCustomerId)
 
   if (paymentMethods.length === 0) {
@@ -146,6 +153,28 @@ export async function provisionNoahArtifactsForCustomer(opts: {
     )
   }
 
+  let usdAccountCreated = Boolean(usdPm)
+  let eurAccountCreated = Boolean(eurPm)
+  let bankOnrampSummary = {
+    usdBankOnrampAttempted: false,
+    eurBankOnrampAttempted: false,
+    usdBankOnrampCreated: false,
+    eurBankOnrampCreated: false,
+  }
+
+  if (admin && (!usdAccountCreated || !eurAccountCreated)) {
+    bankOnrampSummary = await ensureFiatVirtualAccountsViaBankOnramp(admin, {
+      scope: opts.scope,
+      subjectUserId,
+      subjectBusinessId,
+      noahCustomerId,
+      hasUsdPaymentMethod: usdAccountCreated,
+      hasEurPaymentMethod: eurAccountCreated,
+    })
+    usdAccountCreated = usdAccountCreated || bankOnrampSummary.usdBankOnrampCreated
+    eurAccountCreated = eurAccountCreated || bankOnrampSummary.eurBankOnrampCreated
+  }
+
   const usdc =
     (await tryFetchLiquidationAddress(noahCustomerId, "usdc")) ??
     (await tryCreateLiquidationAddress(noahCustomerId, "usdc"))
@@ -154,14 +183,15 @@ export async function provisionNoahArtifactsForCustomer(opts: {
     (await tryCreateLiquidationAddress(noahCustomerId, "eurc"))
 
   return {
-    usdAccountCreated: Boolean(usdPm),
-    eurAccountCreated: Boolean(eurPm),
+    usdAccountCreated,
+    eurAccountCreated,
     gbpAccountCreated: Boolean(gbpPm),
     usdAccountId: usdPm ? String(usdPm.ID ?? "") : undefined,
     eurAccountId: eurPm ? String(eurPm.ID ?? "") : undefined,
     gbpAccountId: gbpPm ? String(gbpPm.ID ?? "") : undefined,
     usdcAddress: usdc?.address,
     eurcAddress: eurc?.address,
+    ...bankOnrampSummary,
   }
 }
 

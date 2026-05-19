@@ -35,6 +35,7 @@ export async function GET(request: Request) {
         subjectBusinessId: acc.ctx.subjectBusinessId,
         noahCustomerId,
         scope: acc.ctx.scope,
+        admin,
       })
     } catch {
       /* virtual accounts / liquidation are best-effort */

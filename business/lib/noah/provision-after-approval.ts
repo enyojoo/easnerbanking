@@ -23,18 +23,19 @@ export async function provisionNoahAfterVerificationApproved(opts: {
     if (ownerId) subjectUserId = ownerId
   }
 
-  const provisioned = await provisionNoahArtifactsForCustomer({
-    subjectUserId,
-    subjectBusinessId,
-    noahCustomerId,
-    scope,
-  })
-
   await scheduleTurnkeyWalletsAfterKycApproved({
     scope,
     subjectUserId,
     subjectBusinessId,
     noahCustomerId,
+  })
+
+  const provisioned = await provisionNoahArtifactsForCustomer({
+    subjectUserId,
+    subjectBusinessId,
+    noahCustomerId,
+    scope,
+    admin,
   })
 
   return provisioned as Record<string, unknown>

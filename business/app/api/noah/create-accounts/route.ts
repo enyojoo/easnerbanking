@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { fetchNoahCustomerForScope } from "@/lib/noah/fetch-customer"
 import { noahFetch } from "@/lib/noah/http"
 import { buildHostedOnboardingBody } from "@/lib/noah/hosted-onboarding"
@@ -72,11 +73,13 @@ export async function POST(request: Request) {
       resolvedCustomerId,
     )
 
+    const admin = createSupabaseAdmin()
     const provisioned = await provisionNoahArtifactsForCustomer({
       subjectUserId,
       subjectBusinessId: acc.ctx.subjectBusinessId,
       noahCustomerId: resolvedCustomerId,
       scope,
+      admin,
     })
 
     return NextResponse.json({

@@ -90,6 +90,7 @@ export async function POST(request: Request) {
       subjectBusinessId: acc.ctx.subjectBusinessId,
       noahCustomerId: acc.ctx.noahCustomerId,
       scope: acc.ctx.scope,
+      admin,
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)

@@ -8,6 +8,7 @@ import {
 } from "@/lib/turnkey/config"
 import { deriveStablecoinAssociatedTokenAddress } from "@/lib/solana/ata"
 import { DEFAULT_INDIVIDUAL_VAULTS } from "@/lib/wallet/vault-spec"
+import { ensureFiatVirtualAccountForLedgerCurrency } from "@/lib/noah/bank-onramp-virtual-accounts"
 import { enqueueVaultProvisioningJobs, upsertWalletOwnerFromNoah } from "@/lib/wallet/turnkey-wallet-db"
 
 const MAX_ATTEMPTS = 5
@@ -72,6 +73,9 @@ export async function processNextWalletProvisioningJob(opts?: {
 
   const owner = job.wallet_owners as {
     id: string
+    owner_type: string
+    owner_ref: string
+    noah_customer_id: string | null
     turnkey_sub_organization_id: string | null
   } | null
   if (!owner?.id) {
@@ -154,6 +158,22 @@ export async function processNextWalletProvisioningJob(opts?: {
       .from("wallet_provisioning_jobs")
       .update({ state: "completed", error: null, updated_at: now })
       .eq("id", job.id)
+
+    const noahCustomerId = owner.noah_customer_id?.trim() || ""
+    const ledger = String(job.ledger_currency || "").toUpperCase()
+    if (noahCustomerId && (ledger === "USD" || ledger === "EUR")) {
+      try {
+        await ensureFiatVirtualAccountForLedgerCurrency(admin, {
+          ownerType: owner.owner_type === "business" ? "business" : "individual",
+          ownerRef: String(owner.owner_ref),
+          noahCustomerId,
+          ledgerCurrency: ledger,
+        })
+      } catch (e) {
+        console.warn("[turnkey-provisioning] bank onramp after vault:", e)
+      }
+    }
+
     return { processed: true, jobId: job.id, detail: "ok" }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
