@@ -1142,11 +1142,8 @@ function createDashboardStyles(c: Colors, scrollBottomPadding: number) {
   flagContainer: {
     width: 22,
     height: 22,
-    borderRadius: 11,
+    borderRadius: 2,
     overflow: 'hidden',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.85)',
   },
   flagImage: {
     width: 22,
@@ -1270,7 +1267,9 @@ function createDashboardStyles(c: Colors, scrollBottomPadding: number) {
     backgroundColor: c.background.primary,
   },
   flagContainerSmall: {
-    ...surfaceChromeCircleStyle(c, 24, { shadow: 'none' }),
+    width: 24,
+    height: 24,
+    borderRadius: 2,
     overflow: 'hidden',
   },
   flagImageSmall: {

@@ -3,7 +3,13 @@ import { cn } from "../utils/cn"
 import { getCountryCodeForCurrency } from "../flags/currency-mapping"
 import { getFlagBundledSrc } from "../flags/flag-assets.web.manifest"
 import { flagIsoForCurrency, getFlagPublicUrl, hasFlagAsset, normalizeFlagIso } from "../flags/flag-source"
-import { FLAG_BORDER_RADIUS_PX, FLAG_WEB_DECORATIVE_CLASS } from "../flags/flag-styles"
+import {
+  FLAG_BORDER_RADIUS_PX,
+  FLAG_FILL_CLASS,
+  FLAG_WEB_DECORATIVE_CLASS,
+  flagFillsParentClass,
+  resolveFlagBoxSizeFromStyle,
+} from "../flags/flag-styles"
 
 const flagRadiusClass = "rounded-[2px]"
 
@@ -16,24 +22,21 @@ export type CountryFlagProps = {
   title?: string
 }
 
-function flagDimensions(size: number | string | undefined): { width: number; height: number } {
-  const width = typeof size === "number" ? size : Number.parseInt(String(size), 10) || 24
-  return { width, height: Math.round(width * 0.75) }
-}
-
 export function CountryFlag({ code, size = 24, className, style, title }: CountryFlagProps) {
   const upper = normalizeFlagIso(code)
-  const { width, height } = flagDimensions(size)
+  const fillParent = flagFillsParentClass(className)
+  const { width, height } = resolveFlagBoxSizeFromStyle(size, style)
   const src = getFlagBundledSrc(upper) ?? getFlagPublicUrl(upper)
 
   if (!src) {
     return (
       <span
         className={cn(
-          `inline-flex shrink-0 items-center justify-center ${flagRadiusClass} bg-muted text-[10px] font-medium text-muted-foreground`,
+          `inline-flex shrink-0 items-center justify-center overflow-hidden ${flagRadiusClass} bg-muted text-[10px] font-medium text-muted-foreground`,
+          fillParent && FLAG_FILL_CLASS,
           className
         )}
-        style={{ width, height, ...style }}
+        style={fillParent ? style : { width, height, ...style }}
         title={title ?? upper}
         role="img"
         aria-label={title ?? upper}
@@ -49,12 +52,17 @@ export function CountryFlag({ code, size = 24, className, style, title }: Countr
     <span
       role="img"
       aria-label={label}
-      className={cn(FLAG_WEB_DECORATIVE_CLASS, flagRadiusClass, className)}
+      className={cn(
+        FLAG_WEB_DECORATIVE_CLASS,
+        flagRadiusClass,
+        fillParent && FLAG_FILL_CLASS,
+        className
+      )}
       style={{
-        width,
-        height,
+        ...(fillParent ? {} : { width, height }),
         borderRadius: FLAG_BORDER_RADIUS_PX,
         backgroundImage: `url(${JSON.stringify(src)})`,
+        backgroundSize: "cover",
         ...style,
       }}
       onContextMenu={(e) => e.preventDefault()}
@@ -83,31 +91,36 @@ export function CurrencyFlag({
 }: CurrencyFlagProps) {
   const code = currency.trim().toUpperCase()
   const iso = flagIsoForCurrency(code) || getCountryCodeForCurrency(code) || ""
+  const fillParent = flagFillsParentClass(className)
+  const { width, height } = resolveFlagBoxSizeFromStyle(size, style)
 
   if (iso && hasFlagAsset(iso)) {
     return <CountryFlag code={iso} size={size} className={className} style={style} title={title ?? code} />
   }
 
   if (fallbackSvg) {
-    const { width, height } = flagDimensions(size)
     return (
       <span
-        className={cn("inline-flex shrink-0 items-center [&_svg]:size-full", className)}
-        style={{ width, height, ...style }}
+        className={cn(
+          "inline-flex shrink-0 items-center overflow-hidden [&_svg]:size-full",
+          fillParent && FLAG_FILL_CLASS,
+          className
+        )}
+        style={fillParent ? style : { width, height, ...style }}
         title={title ?? code}
         dangerouslySetInnerHTML={{ __html: fallbackSvg }}
       />
     )
   }
 
-  const { width, height } = flagDimensions(size)
   return (
     <span
       className={cn(
-        `inline-flex shrink-0 items-center justify-center ${flagRadiusClass} bg-muted text-[10px] font-medium text-muted-foreground`,
+        `inline-flex shrink-0 items-center justify-center overflow-hidden ${flagRadiusClass} bg-muted text-[10px] font-medium text-muted-foreground`,
+        fillParent && FLAG_FILL_CLASS,
         className
       )}
-      style={{ width, height, ...style }}
+      style={fillParent ? style : { width, height, ...style }}
       title={title ?? code}
     >
       {code.slice(0, 2)}

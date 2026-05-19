@@ -1750,7 +1750,9 @@ const styles = StyleSheet.create({
     borderColor: colors.error.main,
   },
   flagContainer: {
-    ...surfaceChromeCircleStyle(colors, 24, { shadow: 'none' }),
+    width: 24,
+    height: 24,
+    borderRadius: 2,
     overflow: 'hidden',
   },
   flagImage: {
@@ -2003,7 +2005,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.primary,
   },
   flagContainerSmall: {
-    ...surfaceChromeCircleStyle(colors, 24, { shadow: 'none' }),
+    width: 24,
+    height: 24,
+    borderRadius: 2,
     overflow: 'hidden',
   },
   flagImageSmall: {
@@ -2091,7 +2095,7 @@ function PayoutSendRecipientAvatar({
         {isWalletRecipient && tokenIcon ? (
           <Image source={{ uri: tokenIcon }} style={styles.easenetMarkImgSmall} resizeMode="cover" />
         ) : (
-          <CountryFlag code={countryCode} size={14} />
+          <CountryFlag code={countryCode} size={14} style={styles.easenetMarkImgSmall} />
         )}
       </View>
     </View>

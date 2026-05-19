@@ -193,23 +193,11 @@ export function SendRecipientPicker({
                       <User className="h-5 w-5 text-primary" />
                     </div>
                   )}
-                  <div
-                    className={cn(
-                      "absolute -bottom-0.5 -right-0.5 h-5 w-5 overflow-hidden rounded-full border-2 border-background bg-background p-0.5",
-                    )}
-                  >
+                  <div className="absolute -bottom-0.5 -right-0.5 size-5 overflow-hidden rounded-full border-2 border-background">
                     {selected.countryCode ? (
-                      <CountryFlag
-                        code={selected.countryCode}
-                        size={24}
-                        className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-none"
-                      />
+                      <CountryFlag code={selected.countryCode} className="size-full rounded-none" />
                     ) : (
-                      <CurrencyFlag
-                        currency={selected.currency}
-                        size={24}
-                        className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-none"
-                      />
+                      <CurrencyFlag currency={selected.currency} className="size-full rounded-none" />
                     )}
                   </div>
                 </div>
@@ -301,23 +289,11 @@ export function SendRecipientPicker({
                             <User className="h-5 w-5 text-primary" />
                           </div>
                         )}
-                        <div
-                          className={cn(
-                            "absolute -bottom-0.5 -right-0.5 h-5 w-5 overflow-hidden rounded-full border-2 border-background bg-background p-0.5",
-                          )}
-                        >
+                        <div className="absolute -bottom-0.5 -right-0.5 size-5 overflow-hidden rounded-full border-2 border-background">
                           {b.countryCode ? (
-                            <CountryFlag
-                              code={b.countryCode}
-                              size={24}
-                              className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-none"
-                            />
+                            <CountryFlag code={b.countryCode} className="size-full rounded-none" />
                           ) : (
-                            <CurrencyFlag
-                              currency={b.currency}
-                              size={24}
-                              className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-none"
-                            />
+                            <CurrencyFlag currency={b.currency} className="size-full rounded-none" />
                           )}
                         </div>
                       </div>

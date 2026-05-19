@@ -230,23 +230,11 @@ export function SettingsRecipientsTab() {
                                 <User className="h-5 w-5 text-primary" />
                               </div>
                             )}
-                            <div
-                              className={cn(
-                                "absolute -bottom-0.5 -right-0.5 h-5 w-5 overflow-hidden rounded-full border-2 border-background bg-background p-0.5",
-                              )}
-                            >
+                            <div className="absolute -bottom-0.5 -right-0.5 size-5 overflow-hidden rounded-full border-2 border-background">
                               {recipient.countryCode ? (
-                                <CountryFlag
-                                  code={recipient.countryCode}
-                                  size={24}
-                                  className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-none"
-                                />
+                                <CountryFlag code={recipient.countryCode} className="size-full rounded-none" />
                               ) : (
-                                <CurrencyFlag
-                                  currency={recipient.currency}
-                                  size={24}
-                                  className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-none"
-                                />
+                                <CurrencyFlag currency={recipient.currency} className="size-full rounded-none" />
                               )}
                             </div>
                           </div>

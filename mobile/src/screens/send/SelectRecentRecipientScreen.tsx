@@ -2021,7 +2021,9 @@ const styles = StyleSheet.create({
     borderColor: colors.background.primary,
   },
   flagContainer: {
-    ...surfaceChromeCircleStyle(colors, 20, { shadow: 'none' }),
+    width: 20,
+    height: 20,
+    borderRadius: 2,
     overflow: 'hidden',
   },
   flagImage: {

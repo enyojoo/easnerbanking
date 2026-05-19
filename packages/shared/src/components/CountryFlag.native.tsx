@@ -5,7 +5,7 @@ import { StyleSheet, Text, View } from "react-native"
 import { getCountryCodeForCurrency } from "../flags/currency-mapping"
 import { FLAG_ASSETS } from "../flags/flag-assets.manifest"
 import { flagIsoForCurrency, normalizeFlagIso } from "../flags/flag-source"
-import { FLAG_BORDER_RADIUS_PX } from "../flags/flag-styles"
+import { FLAG_BORDER_RADIUS_PX, resolveFlagBoxSizeFromStyle } from "../flags/flag-styles"
 
 export type CountryFlagProps = {
   code: string
@@ -23,26 +23,35 @@ function flagSource(iso: string) {
 export function CountryFlag({ code, size = 20, style }: CountryFlagProps) {
   const upper = normalizeFlagIso(code)
   const source = flagSource(upper)
-  const height = Math.round(size * 0.75)
+  const flat = StyleSheet.flatten(style) ?? {}
+  const { width, height } = resolveFlagBoxSizeFromStyle(size, flat)
+  const shellStyle: ViewStyle = {
+    width,
+    height,
+    borderRadius: FLAG_BORDER_RADIUS_PX,
+    overflow: "hidden",
+  }
 
   if (!source) {
     return (
-      <View style={[styles.fallback, { width: size, height }, style as ViewStyle]}>
+      <View style={[styles.fallback, shellStyle, style as ViewStyle]}>
         <Text style={styles.fallbackText}>{upper.slice(0, 2) || "--"}</Text>
       </View>
     )
   }
 
   return (
-    <Image
-      source={source}
-      recyclingKey={upper}
-      style={[{ width: size, height, borderRadius: FLAG_BORDER_RADIUS_PX }, style]}
-      contentFit="cover"
-      cachePolicy="memory-disk"
-      transition={0}
-      allowDownscaling
-    />
+    <View style={[shellStyle, style as ViewStyle]}>
+      <Image
+        source={source}
+        recyclingKey={upper}
+        style={StyleSheet.absoluteFill}
+        contentFit="cover"
+        cachePolicy="memory-disk"
+        transition={0}
+        allowDownscaling
+      />
+    </View>
   )
 }
 
@@ -61,9 +70,10 @@ export function CurrencyFlag({ currency, size = 20, style }: CurrencyFlagProps) 
   if (iso && flagSource(iso)) {
     return <CountryFlag code={iso} size={size} style={style} />
   }
-  const height = Math.round(size * 0.75)
+  const flat = StyleSheet.flatten(style) ?? {}
+  const { width, height } = resolveFlagBoxSizeFromStyle(size, flat)
   return (
-    <View style={[styles.fallback, { width: size, height }, style as ViewStyle]}>
+    <View style={[styles.fallback, { width, height, borderRadius: FLAG_BORDER_RADIUS_PX }, style as ViewStyle]}>
       <Text style={styles.fallbackText}>{code.slice(0, 2) || "--"}</Text>
     </View>
   )
@@ -71,8 +81,6 @@ export function CurrencyFlag({ currency, size = 20, style }: CurrencyFlagProps) 
 
 const styles = StyleSheet.create({
   fallback: {
-    borderRadius: FLAG_BORDER_RADIUS_PX,
-    backgroundColor: "rgba(0,0,0,0.06)",
     alignItems: "center",
     justifyContent: "center",
   },
