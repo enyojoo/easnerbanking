@@ -43,6 +43,19 @@ const nextConfig = {
     }
     return config
   },
+  async headers() {
+    return [
+      {
+        source: "/flags/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+    ]
+  },
   async redirects() {
     return [
       { source: "/verification", destination: "/settings?tab=business", permanent: false },

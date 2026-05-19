@@ -36,8 +36,12 @@ export function CountryFlag({ code, size = 20, style }: CountryFlagProps) {
   return (
     <Image
       source={source}
+      recyclingKey={upper}
       style={[{ width: size, height, borderRadius: FLAG_BORDER_RADIUS_PX }, style]}
       contentFit="cover"
+      cachePolicy="memory-disk"
+      transition={0}
+      allowDownscaling
     />
   )
 }

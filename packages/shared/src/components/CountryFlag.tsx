@@ -1,8 +1,9 @@
 import type { CSSProperties } from "react"
 import { cn } from "../utils/cn"
 import { getCountryCodeForCurrency } from "../flags/currency-mapping"
+import { getFlagBundledSrc } from "../flags/flag-assets.web.manifest"
 import { flagIsoForCurrency, getFlagPublicUrl, hasFlagAsset, normalizeFlagIso } from "../flags/flag-source"
-import { FLAG_BORDER_RADIUS_PX } from "../flags/flag-styles"
+import { FLAG_BORDER_RADIUS_PX, FLAG_WEB_DECORATIVE_CLASS } from "../flags/flag-styles"
 
 const flagRadiusClass = "rounded-[2px]"
 
@@ -23,7 +24,7 @@ function flagDimensions(size: number | string | undefined): { width: number; hei
 export function CountryFlag({ code, size = 24, className, style, title }: CountryFlagProps) {
   const upper = normalizeFlagIso(code)
   const { width, height } = flagDimensions(size)
-  const src = getFlagPublicUrl(upper)
+  const src = getFlagBundledSrc(upper) ?? getFlagPublicUrl(upper)
 
   if (!src) {
     return (
@@ -42,13 +43,22 @@ export function CountryFlag({ code, size = 24, className, style, title }: Countr
     )
   }
 
+  const label = title ?? upper
+
   return (
-    <img
-      src={src}
-      alt={title ?? upper}
-      title={title ?? upper}
-      className={cn("shrink-0 overflow-hidden object-cover", flagRadiusClass, className)}
-      style={{ width, height, borderRadius: FLAG_BORDER_RADIUS_PX, ...style }}
+    <span
+      role="img"
+      aria-label={label}
+      className={cn(FLAG_WEB_DECORATIVE_CLASS, flagRadiusClass, className)}
+      style={{
+        width,
+        height,
+        borderRadius: FLAG_BORDER_RADIUS_PX,
+        backgroundImage: `url(${JSON.stringify(src)})`,
+        ...style,
+      }}
+      onContextMenu={(e) => e.preventDefault()}
+      onDragStart={(e) => e.preventDefault()}
     />
   )
 }
@@ -94,7 +104,7 @@ export function CurrencyFlag({
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-sm bg-muted text-[10px] font-medium text-muted-foreground",
+        `inline-flex shrink-0 items-center justify-center ${flagRadiusClass} bg-muted text-[10px] font-medium text-muted-foreground`,
         className
       )}
       style={{ width, height, ...style }}

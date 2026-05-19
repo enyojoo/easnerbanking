@@ -16,5 +16,11 @@
     "resolveJsonModule": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "src/**/*.native.tsx", "src/flags/flag-assets.manifest.ts"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/**/*.native.tsx",
+    "src/flags/flag-assets.manifest.ts",
+    "src/flags/flag-assets.web.manifest.ts"
+  ]
 }
