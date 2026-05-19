@@ -182,7 +182,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <CurrencyFlag currency={account.currency} size={28} className="rounded-md" />
+            <CurrencyFlag currency={account.currency} size={28} className="shrink-0" />
             {account.currency} Deposit
           </DialogTitle>
           <DialogDescription>

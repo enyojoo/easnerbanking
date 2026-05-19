@@ -95,7 +95,7 @@ export default function AccountsPage() {
                   <div className="flex-1 space-y-4">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
-                        <CurrencyFlag currency={account.currency} size={40} className="rounded-md" />
+                        <CurrencyFlag currency={account.currency} size={40} className="shrink-0" />
                         <div>
                           <h3 className="text-lg font-semibold">{account.currency}</h3>
                         </div>

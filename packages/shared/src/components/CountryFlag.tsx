@@ -2,6 +2,9 @@ import type { CSSProperties } from "react"
 import { cn } from "../utils/cn"
 import { getCountryCodeForCurrency } from "../flags/currency-mapping"
 import { flagIsoForCurrency, getFlagPublicUrl, hasFlagAsset, normalizeFlagIso } from "../flags/flag-source"
+import { FLAG_BORDER_RADIUS_PX } from "../flags/flag-styles"
+
+const flagRadiusClass = "rounded-[2px]"
 
 export type CountryFlagProps = {
   /** ISO 3166-1 alpha-2 */
@@ -26,7 +29,7 @@ export function CountryFlag({ code, size = 24, className, style, title }: Countr
     return (
       <span
         className={cn(
-          "inline-flex shrink-0 items-center justify-center rounded-sm bg-muted text-[10px] font-medium text-muted-foreground",
+          `inline-flex shrink-0 items-center justify-center ${flagRadiusClass} bg-muted text-[10px] font-medium text-muted-foreground`,
           className
         )}
         style={{ width, height, ...style }}
@@ -44,8 +47,8 @@ export function CountryFlag({ code, size = 24, className, style, title }: Countr
       src={src}
       alt={title ?? upper}
       title={title ?? upper}
-      className={cn("shrink-0 overflow-hidden rounded-sm object-cover", className)}
-      style={{ width, height, ...style }}
+      className={cn("shrink-0 overflow-hidden object-cover", flagRadiusClass, className)}
+      style={{ width, height, borderRadius: FLAG_BORDER_RADIUS_PX, ...style }}
     />
   )
 }

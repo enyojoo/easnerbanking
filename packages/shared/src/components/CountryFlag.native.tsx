@@ -5,6 +5,7 @@ import { StyleSheet, Text, View } from "react-native"
 import { getCountryCodeForCurrency } from "../flags/currency-mapping"
 import { FLAG_ASSETS } from "../flags/flag-assets.manifest"
 import { flagIsoForCurrency, normalizeFlagIso } from "../flags/flag-source"
+import { FLAG_BORDER_RADIUS_PX } from "../flags/flag-styles"
 
 export type CountryFlagProps = {
   code: string
@@ -35,7 +36,7 @@ export function CountryFlag({ code, size = 20, style }: CountryFlagProps) {
   return (
     <Image
       source={source}
-      style={[{ width: size, height, borderRadius: 4 }, style]}
+      style={[{ width: size, height, borderRadius: FLAG_BORDER_RADIUS_PX }, style]}
       contentFit="cover"
     />
   )
@@ -66,7 +67,7 @@ export function CurrencyFlag({ currency, size = 20, style }: CurrencyFlagProps) 
 
 const styles = StyleSheet.create({
   fallback: {
-    borderRadius: 4,
+    borderRadius: FLAG_BORDER_RADIUS_PX,
     backgroundColor: "rgba(0,0,0,0.06)",
     alignItems: "center",
     justifyContent: "center",

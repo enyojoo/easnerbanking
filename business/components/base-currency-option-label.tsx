@@ -17,7 +17,7 @@ export function BaseCurrencyOptionLabel({ code, size = 20, className, suffix }: 
   const upper = String(code || "").trim().toUpperCase()
   return (
     <span className={cn("flex min-w-0 items-center gap-2", className)}>
-      <CurrencyFlag currency={upper} size={size} className="shrink-0 rounded-sm" />
+      <CurrencyFlag currency={upper} size={size} className="shrink-0" />
       <span className="tabular-nums">{upper}</span>
       {suffix}
     </span>

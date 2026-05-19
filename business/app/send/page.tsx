@@ -420,13 +420,13 @@ export default function SendPage() {
             <div className="flex items-center gap-2">
               <span className="flex items-center">
                 {paymentMethod === "balance" && sourceAccount ? (
-                  <CurrencyFlag currency={sourceAccount.currency} size={22} className="rounded-sm" />
+                  <CurrencyFlag currency={sourceAccount.currency} size={22} className="shrink-0" />
                 ) : paymentMethod === "usdc" || paymentMethod === "usdt" ? (
                   <Coins className="h-5 w-5" />
                 ) : otherCurrency === "STABLECOIN" ? (
                   <Coins className="h-5 w-5" />
                 ) : otherCurrency ? (
-                  <CurrencyFlag currency={otherCurrency} size={22} className="rounded-sm" />
+                  <CurrencyFlag currency={otherCurrency} size={22} className="shrink-0" />
                 ) : (
                   <Landmark className="h-5 w-5 text-muted-foreground" />
                 )}
@@ -506,7 +506,7 @@ export default function SendPage() {
                           isSelected ? "bg-muted" : ""
                         }`}
                       >
-                        <CurrencyFlag currency={acc.currency} size={24} className="rounded-sm" />
+                        <CurrencyFlag currency={acc.currency} size={24} className="shrink-0" />
                         <div className="flex-1 min-w-0">
                           <p className="font-medium">{acc.currency} Balance</p>
                           <p className={`text-sm ${sufficient ? "text-muted-foreground" : "text-destructive"}`}>
@@ -557,7 +557,7 @@ export default function SendPage() {
                         className="flex w-full items-center justify-between rounded-lg px-4 py-3 text-left transition-colors hover:bg-muted/50"
                       >
                         <div className="flex items-center gap-3">
-                          <CurrencyFlag currency={currency.code} size={24} className="rounded-sm" />
+                          <CurrencyFlag currency={currency.code} size={24} className="shrink-0" />
                           <p className="font-medium">{currency.name}</p>
                         </div>
                         <ChevronRight className="h-4 w-4 text-muted-foreground" />
