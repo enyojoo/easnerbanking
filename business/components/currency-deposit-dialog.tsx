@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Copy, Check, Plus, Share2 } from "lucide-react"
 import type { Account } from "@/lib/finance-types"
 import { QRCodeSVG } from "qrcode.react"
-import { CurrencyFlag } from "@/components/flags"
+import { CurrencyFlagCircle } from "@/components/currency-flag-circle"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { TIER2_COMPLETE_PLACEHOLDER } from "@/lib/compliance-placeholders"
 
@@ -182,7 +182,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <CurrencyFlag currency={account.currency} size={28} className="shrink-0" />
+            <CurrencyFlagCircle currency={account.currency} size={28} />
             {account.currency} Deposit
           </DialogTitle>
           <DialogDescription>

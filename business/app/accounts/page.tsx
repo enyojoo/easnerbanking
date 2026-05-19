@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { CurrencyDepositDialog } from "@/components/currency-deposit-dialog"
 import { StatementDownloadDialog } from "@/components/statement-download-dialog"
-import { CurrencyFlag } from "@/components/flags"
+import { CurrencyFlagCircle } from "@/components/currency-flag-circle"
 import { MoreVertical, FileText, Ban, Trash2 } from "lucide-react"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 import { OpenCurrencyAccountDialog } from "@/components/accounts/open-currency-account-dialog"
@@ -57,12 +57,12 @@ export default function AccountsPage() {
             <Card>
               <CardContent className="space-y-6 p-6">
                 <div className="flex items-center gap-3">
-                  <Skeleton className="h-10 w-10 rounded-md" />
+                  <Skeleton className="h-[35px] w-[35px] rounded-full" />
                   <Skeleton className="h-6 w-16" />
                 </div>
                 <div className="space-y-2">
                   <Skeleton className="h-4 w-32" />
-                  <Skeleton className="h-10 w-40" />
+                  <Skeleton className="h-11 w-44" />
                 </div>
                 <div className="flex gap-2">
                   <Skeleton className="h-9 w-28" />
@@ -73,12 +73,12 @@ export default function AccountsPage() {
             <Card>
               <CardContent className="space-y-6 p-6">
                 <div className="flex items-center gap-3">
-                  <Skeleton className="h-10 w-10 rounded-md" />
+                  <Skeleton className="h-[35px] w-[35px] rounded-full" />
                   <Skeleton className="h-6 w-16" />
                 </div>
                 <div className="space-y-2">
                   <Skeleton className="h-4 w-32" />
-                  <Skeleton className="h-10 w-40" />
+                  <Skeleton className="h-11 w-44" />
                 </div>
                 <div className="flex gap-2">
                   <Skeleton className="h-9 w-28" />
@@ -94,8 +94,8 @@ export default function AccountsPage() {
                 <div className="flex h-full flex-col">
                   <div className="flex-1 space-y-4">
                     <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <CurrencyFlag currency={account.currency} size={40} className="shrink-0" />
+                      <div className="flex items-center gap-1.5">
+                        <CurrencyFlagCircle currency={account.currency} size={35} />
                         <div>
                           <h3 className="text-lg font-semibold">{account.currency}</h3>
                         </div>
@@ -104,7 +104,7 @@ export default function AccountsPage() {
 
                     <div className="mb-10">
                       <p className="mb-1 text-xs text-muted-foreground">Available Balance</p>
-                      <p className="text-3xl font-semibold">
+                      <p className="text-[2.125rem] font-semibold leading-tight tracking-tight">
                         {getCurrencySymbol(account.currency)}
                         {account.balance.toLocaleString("en-US", {
                           minimumFractionDigits: 2,
