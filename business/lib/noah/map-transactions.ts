@@ -74,6 +74,56 @@ export function mapNoahTransactionToMobileItem(tx: Record<string, unknown>): Rec
   }
 }
 
+/** Merge ledger metadata enrichment for bank onramp pay-ins into mobile detail shape. */
+export function enrichMobileDetailFromLedgerMetadata(
+  detail: Record<string, unknown>,
+  meta: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  if (!meta || typeof meta !== "object") return detail
+  const fee = meta.fee_amount
+  const settled = meta.settled_amount
+  const sourceType = meta.source_type
+  const reference = meta.reference
+  const sender =
+    typeof meta.sender_name === "string"
+      ? meta.sender_name
+      : typeof meta.remitter_name === "string"
+        ? meta.remitter_name
+        : undefined
+  return {
+    ...detail,
+    ...(sourceType != null ? { source_type: String(sourceType) } : {}),
+    ...(sender ? { sender_display_name: sender } : {}),
+    ...(reference != null && String(reference).trim() ? { reference: String(reference).trim() } : {}),
+    ...(typeof fee === "number" && Number.isFinite(fee) ? { fee_amount: fee } : {}),
+    ...(typeof settled === "number" && Number.isFinite(settled)
+      ? {
+          final_amount: settled,
+          receipt_final_amount: settled,
+          settled_amount: settled,
+          posted_amount: settled,
+          settled_currency:
+            meta.settled_currency != null
+              ? String(meta.settled_currency)
+              : meta.fiat_deposit_currency != null
+                ? String(meta.fiat_deposit_currency)
+                : detail.currency,
+          posted_currency:
+            meta.settled_currency != null
+              ? String(meta.settled_currency)
+              : meta.fiat_deposit_currency != null
+                ? String(meta.fiat_deposit_currency)
+                : detail.currency,
+        }
+      : {}),
+    ...(typeof meta.fiat_deposit_amount === "number"
+      ? { deposit_amount: meta.fiat_deposit_amount }
+      : typeof meta.deposit_amount === "number"
+        ? { deposit_amount: meta.deposit_amount }
+        : {}),
+  }
+}
+
 export function mapNoahTransactionToMobileDetail(tx: Record<string, unknown>): Record<string, unknown> {
   const base = mapNoahTransactionToMobileItem(tx)
   const id = String(tx.ID ?? "")

@@ -111,6 +111,17 @@ export function deriveEasnerInboundRemitterDisplayName(input: {
         )
       }
     }
+    const fpm = tx.FiatPaymentMethod as Record<string, unknown> | undefined
+    if (fpm) {
+      const holder = fpm.AccountHolderDetails as Record<string, unknown> | undefined
+      const name = holder?.Name as Record<string, unknown> | undefined
+      if (name && typeof name === "object") {
+        const parts = [name.FirstName, name.MiddleName, name.LastName]
+          .map((p) => (p != null ? String(p).trim() : ""))
+          .filter(Boolean)
+        if (parts.length) candidates.push(parts.join(" "))
+      }
+    }
   }
 
   return firstNonEmptyString(candidates)

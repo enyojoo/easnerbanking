@@ -12,6 +12,7 @@ import { downloadTransactionReceiptPdf } from "@/lib/use-transaction-receipt-pdf
 import { currentLocationPath, withReturnTo } from "@/lib/invoice-navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
+import { TransactionLifecycleTracker } from "@/components/transactions/transaction-lifecycle-tracker"
 
 export interface TransactionDetailsPanelProps {
   transaction: Transaction | null
@@ -64,6 +65,8 @@ export function TransactionDetailsPanel({
   }
 
   const etidForLink = transactionWebDetailPath(transaction.id)
+  const showBankDepositTracker = Boolean(transaction.lifecycle?.length)
+  const displayCurrency = transaction.postedCurrency || transaction.displayCurrency || "USD"
 
   return (
     <Card className="border-border shadow-sm">
@@ -91,6 +94,10 @@ export function TransactionDetailsPanel({
             {transaction.status}
           </Badge>
         </div>
+
+        {showBankDepositTracker && transaction.lifecycle ? (
+          <TransactionLifecycleTracker lifecycle={transaction.lifecycle} />
+        ) : null}
 
         <div className="space-y-3">
           <div className="flex justify-between text-sm gap-4">
@@ -164,6 +171,15 @@ export function TransactionDetailsPanel({
             </div>
           ) : null}
 
+          {showBankDepositTracker && transaction.depositAmount != null ? (
+            <div className="flex justify-between text-sm gap-4">
+              <span className="text-muted-foreground shrink-0">Deposit amount</span>
+              <span className="font-medium text-right">
+                {formatCurrency(transaction.depositAmount, transaction.displayCurrency || "USD")}
+              </span>
+            </div>
+          ) : null}
+
           {transaction.fee !== undefined && transaction.fee > 0 && (
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Fee</span>
@@ -172,6 +188,17 @@ export function TransactionDetailsPanel({
               </span>
             </div>
           )}
+
+          {showBankDepositTracker &&
+          transaction.postedAmount != null &&
+          transaction.postedAmount > 0 ? (
+            <div className="flex justify-between text-sm gap-4">
+              <span className="text-muted-foreground shrink-0">Amount credited</span>
+              <span className="font-medium text-right">
+                {formatCurrency(transaction.postedAmount, displayCurrency)}
+              </span>
+            </div>
+          ) : null}
         </div>
 
         {transaction.collectionChannel === "autopayout" && transaction.autopayoutConfigId ? (
@@ -199,6 +226,7 @@ export function TransactionDetailsPanel({
             </Button>
           )}
           {!omitTrackStatus &&
+            !showBankDepositTracker &&
             (transaction.transferId || transaction.id.startsWith("ETID")) &&
             (transaction.status === "pending" || transaction.status === "processing") && (
               <Button variant="outline" className="w-full gap-2 bg-transparent" asChild>

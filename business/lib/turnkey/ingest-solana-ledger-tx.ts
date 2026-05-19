@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import type { Connection } from "@solana/web3.js"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { findEasetagSettlementForChainSuppression } from "@/lib/ledger/easetag-settlement"
+import { findNoahBankOnrampChainSettlementForSuppression } from "@/lib/noah/noah-bank-onramp-chain-suppression"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 import { mintForStablecoinAsset } from "@/lib/solana/spl-mints"
 
@@ -95,6 +96,17 @@ export async function ingestTurnkeySolanaTxForOwnerVault(
   })
   if (easetagSuppressed) {
     return { upserts: 0, kind: "noop" }
+  }
+
+  if (direction === "in") {
+    const noahSuppressed = await findNoahBankOnrampChainSettlementForSuppression(admin, {
+      txHash: params.signature,
+      userId: params.ctx.userId,
+      businessId: params.ctx.businessId,
+    })
+    if (noahSuppressed) {
+      return { upserts: 0, kind: "noop" }
+    }
   }
 
   try {

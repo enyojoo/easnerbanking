@@ -29,6 +29,10 @@ import * as Haptics from 'expo-haptics'
 import { useQueryClient } from '@tanstack/react-query'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { TransactionDetailsBodySkeleton } from '../../components/skeletons'
+import {
+  TransactionLifecycleTracker,
+  type LifecycleStep,
+} from '../../components/TransactionLifecycleTracker'
 import { SectionCard, StatusPill } from '../../components/ui'
 import { NavigationProps } from '../../types'
 import {
@@ -56,6 +60,9 @@ interface LedgerTransaction {
   amount: number
   currency: string
   final_amount?: number
+  fee_amount?: number
+  settled_amount?: number
+  settled_currency?: string
   status: string
   source_type?: string
   source_payment_rail?: string
@@ -78,6 +85,10 @@ interface LedgerTransaction {
   transaction_product?: string
   /** Inbound bank: remitter / company / merchant (detail API). */
   sender_display_name?: string
+  lifecycle?: LifecycleStep[]
+  deposit_amount?: number
+  posted_amount?: number
+  posted_currency?: string
 }
 
 type StatusInfo = {
@@ -651,6 +662,10 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                    transaction.status.toLowerCase().includes('returned') ||
                    transaction.status.toLowerCase().includes('refunded')
   const isEasetagP2p = transaction.source_type === 'easetag_p2p'
+  const isBankOnrampReceive =
+    transaction.transaction_type === 'receive' &&
+    (transaction.metadata?.flow === 'bank_onramp' ||
+      transaction.source_type === 'virtual_account')
 
   const easetagWhenTs =
     transaction.completed_at ||
@@ -742,6 +757,12 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
               />
             </SectionCard>
           </Animated.View>
+
+          {isBankOnrampReceive && transaction.lifecycle && transaction.lifecycle.length > 0 ? (
+            <SectionCard style={styles.card}>
+              <TransactionLifecycleTracker steps={transaction.lifecycle} />
+            </SectionCard>
+          ) : null}
 
           <Animated.View
             style={{
@@ -836,6 +857,26 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                   transaction.transaction_type === 'receive' &&
                   transaction.source_type === 'virtual_account' && (
                   <>
+                    {transaction.fee_amount != null && transaction.fee_amount > 0 && (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Fee</Text>
+                        <Text style={styles.summaryValue}>
+                          {formatAmount(transaction.fee_amount, transaction.currency, false)}
+                        </Text>
+                      </View>
+                    )}
+                    {transaction.settled_amount != null && transaction.settled_amount > 0 && (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Amount credited</Text>
+                        <Text style={styles.summaryValue}>
+                          {formatAmount(
+                            transaction.settled_amount,
+                            transaction.settled_currency || transaction.currency,
+                            true,
+                          )}
+                        </Text>
+                      </View>
+                    )}
                     {/* Scheme */}
                     {transaction.source_payment_rail && (
                       <View style={styles.summaryRow}>

@@ -69,6 +69,17 @@ export interface Transaction {
   settledAt?: string
   /** Detail row label — e.g. Easetag P2P shows "Easetag". */
   paymentScheme?: string
+  /** Bank ACH pay-in detail only. */
+  lifecycle?: Array<{
+    id: string
+    title: string
+    description: string
+    state: string
+    occurredAt: string | null
+  }>
+  depositAmount?: number
+  postedAmount?: number
+  postedCurrency?: string
 }
 
 export interface StablecoinAccount {

@@ -1,4 +1,9 @@
-import { deriveEasnerInboundRemitterDisplayName, toEasnerTransactionProductCategory } from "@easner/shared"
+import {
+  deriveEasnerInboundRemitterDisplayName,
+  formatBankDepositPostedAmount,
+  isBankOnrampDepositFlow,
+  toEasnerTransactionProductCategory,
+} from "@easner/shared"
 import { formatCurrency } from "@/lib/utils"
 
 type LedgerDirection = "in" | "out"
@@ -120,6 +125,21 @@ export function buildTransactionSettledPushContent(input: TransactionSettledCont
   }
 
   if (direction === "in") {
+    if (isBankOnrampDepositFlow(meta)) {
+      const postedRaw = meta?.posted_amount ?? meta?.settled_amount
+      const posted =
+        typeof postedRaw === "number"
+          ? postedRaw
+          : Number(postedRaw)
+      const postedCurrency = String(meta?.settled_currency ?? input.currency ?? "USD")
+      if (Number.isFinite(posted) && posted > 0) {
+        const postedText = formatBankDepositPostedAmount(posted, postedCurrency)
+        return {
+          title: "Bank Deposit",
+          body: `${postedText} is now available in your account balance.`,
+        }
+      }
+    }
     const from = deriveEasnerInboundRemitterDisplayName({ metadata: meta, payload: input.payload ?? null })
     return {
       title: "Bank Deposit",

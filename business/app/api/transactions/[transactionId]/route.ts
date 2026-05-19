@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
-import { mapNoahTransactionToMobileDetail } from "@/lib/noah/map-transactions"
+import {
+  enrichMobileDetailFromLedgerMetadata,
+  mapNoahTransactionToMobileDetail,
+} from "@/lib/noah/map-transactions"
 import { resolveLedgerListScope } from "@/lib/transactions-ledger-scope"
 import {
   displayEasnerTransactionId,
@@ -8,7 +11,16 @@ import {
   normalizeEasnerTransactionIdForLookup,
 } from "@/lib/easner-transaction-id"
 import { mapRowToBusinessTransaction } from "@/lib/transactions/map-row-to-business"
-import { isTurnkeyTransactionHiddenFromFeed } from "@/lib/transactions/transaction-feed-filters"
+import {
+  attachBankDepositDetailFields,
+  isBankOnrampPayInRow,
+} from "@/lib/transactions/bank-deposit-detail"
+import {
+  isTurnkeyNoahBankOnrampChainMirror,
+  isTurnkeyTransactionHiddenFromFeed,
+} from "@/lib/transactions/transaction-feed-filters"
+import { collectNoahBankOnrampOnChainTxHashesForScope } from "@/lib/noah/noah-bank-onramp-chain-suppression"
+import { buildBankDepositLifecycle } from "@easner/shared"
 import {
   deriveEasnerInboundRemitterDisplayName,
   toEasnerTransactionPrimaryLabel,
@@ -89,6 +101,8 @@ function mapLedgerRowToMobileDetail(row: Record<string, unknown>): Record<string
       : provider === "turnkey"
         ? "liquidation_address"
         : String(meta?.source_type ?? meta?.collection_channel ?? "virtual_account")
+  const referenceFromMeta =
+    typeof meta?.reference === "string" && meta.reference.trim() ? meta.reference.trim() : undefined
   const sourcePaymentRail =
     isEasetagP2p
       ? "easetag"
@@ -100,7 +114,9 @@ function mapLedgerRowToMobileDetail(row: Record<string, unknown>): Record<string
   const recipientName =
     String(meta?.counterparty_name ?? (meta?.recipient_name as string | undefined) ?? "").trim() || undefined
   const reference =
-    String(meta?.reference ?? meta?.narration ?? providerTxId ?? "").trim() || undefined
+    referenceFromMeta ||
+    String(meta?.narration ?? "").trim() ||
+    undefined
   const payload = row.payload as Record<string, unknown> | null | undefined
   const transaction_product = toEasnerTransactionProductCategory({
     provider: String(row.provider ?? "noah"),
@@ -110,14 +126,36 @@ function mapLedgerRowToMobileDetail(row: Record<string, unknown>): Record<string
   })
   const sender_display_name =
     dirRaw === "in" && transaction_product === "Bank Deposit"
-      ? deriveEasnerInboundRemitterDisplayName({ metadata: meta, payload }) || undefined
+      ? deriveEasnerInboundRemitterDisplayName({ metadata: meta, payload }) ||
+        (typeof meta?.sender_name === "string" ? meta.sender_name.trim() : undefined) ||
+        undefined
       : undefined
+  const feeAmount =
+    typeof meta?.fee_amount === "number" && Number.isFinite(meta.fee_amount) ? meta.fee_amount : undefined
+  const settledAmount =
+    typeof meta?.settled_amount === "number" && Number.isFinite(meta.settled_amount)
+      ? meta.settled_amount
+      : undefined
+  const settledCurrency =
+    meta?.settled_currency != null
+      ? String(meta.settled_currency)
+      : meta?.fiat_deposit_currency != null
+        ? String(meta.fiat_deposit_currency)
+        : base.currency
   return {
     ...base,
     transaction_product,
     sender_display_name,
     noah_transaction_id: easnerId || undefined,
-    final_amount: base.amount,
+    final_amount: settledAmount ?? base.amount,
+    ...(feeAmount != null ? { fee_amount: feeAmount } : {}),
+    ...(settledAmount != null
+      ? {
+          settled_amount: settledAmount,
+          settled_currency: settledCurrency,
+          receipt_final_amount: settledAmount,
+        }
+      : {}),
     updated_at: row.updated_at != null ? String(row.updated_at) : created,
     completed_at: row.settled_at != null ? String(row.settled_at) : st === "settled" ? created : undefined,
     tx_hash: row.tx_hash != null ? String(row.tx_hash) : undefined,
@@ -211,20 +249,78 @@ export async function GET(request: Request, routeCtx: Props) {
   }
 
   const rec = row as Record<string, unknown>
-  if (isTurnkeyTransactionHiddenFromFeed(rec.metadata)) {
+  if (isTurnkeyTransactionHiddenFromFeed(rec.metadata, rec.payload)) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
 
-  const payload = rec.payload as Record<string, unknown> | null | undefined
-  let transaction: Record<string, unknown>
-  if (payload && typeof payload === "object" && (payload.ID != null || payload.id != null)) {
-    transaction = mapNoahTransactionToMobileDetail(payload)
-  } else {
-    transaction = mapLedgerRowToMobileDetail(rec)
+  const txHashForMirror = String(rec.tx_hash ?? "").trim()
+  if (
+    txHashForMirror &&
+    String(rec.provider ?? "").toLowerCase() === "turnkey" &&
+    String(rec.direction ?? "").toLowerCase() === "in"
+  ) {
+    const noahHashes = await collectNoahBankOnrampOnChainTxHashesForScope(admin, [txHashForMirror], {
+      userId,
+      businessId: scope === "business" ? (businessId as string) : null,
+    })
+    if (isTurnkeyNoahBankOnrampChainMirror(rec, noahHashes)) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 })
+    }
   }
 
+  const payload = rec.payload as Record<string, unknown> | null | undefined
+  const meta = rec.metadata as Record<string, unknown> | null | undefined
+  let transaction = mapLedgerRowToMobileDetail(rec)
+  if (payload && typeof payload === "object" && (payload.ID != null || payload.id != null)) {
+    const fromNoah = mapNoahTransactionToMobileDetail(payload)
+    transaction = enrichMobileDetailFromLedgerMetadata(
+      {
+        ...fromNoah,
+        id: transaction.id,
+        transaction_id: transaction.transaction_id,
+        ledger_row_id: transaction.ledger_row_id,
+      },
+      meta,
+    )
+  } else {
+    transaction = enrichMobileDetailFromLedgerMetadata(transaction, meta)
+  }
+
+  transaction = attachBankDepositDetailFields(rec, transaction)
+
   if (scope === "business") {
-    const businessTransaction = mapRowToBusinessTransaction(rec)
+    let businessTransaction = mapRowToBusinessTransaction(rec)
+    if (isBankOnrampPayInRow(rec)) {
+      const m = meta ?? {}
+      businessTransaction = {
+        ...businessTransaction,
+        lifecycle: buildBankDepositLifecycle({
+          status: String(rec.status ?? ""),
+          metadata: m,
+          occurredAt: rec.occurred_at != null ? String(rec.occurred_at) : null,
+          settledAt: rec.settled_at != null ? String(rec.settled_at) : null,
+          createdAt: rec.created_at != null ? String(rec.created_at) : null,
+        }),
+        fee:
+          typeof m.fee_amount === "number" && Number.isFinite(m.fee_amount)
+            ? m.fee_amount
+            : businessTransaction.fee,
+        depositAmount:
+          typeof m.fiat_deposit_amount === "number"
+            ? m.fiat_deposit_amount
+            : businessTransaction.amount,
+        postedAmount:
+          typeof m.posted_amount === "number"
+            ? m.posted_amount
+            : typeof m.settled_amount === "number"
+              ? m.settled_amount
+              : undefined,
+        postedCurrency:
+          m.settled_currency != null
+            ? String(m.settled_currency)
+            : businessTransaction.displayCurrency,
+      }
+    }
     return NextResponse.json({ transaction, businessTransaction })
   }
 

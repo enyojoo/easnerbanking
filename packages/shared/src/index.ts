@@ -88,6 +88,17 @@ export {
 } from "./transactions/product-label"
 export type { EasnerLedgerDirection } from "./transactions/product-label"
 export {
+  buildBankDepositLifecycle,
+  formatBankDepositPostedAmount,
+  isBankOnrampDepositFlow,
+} from "./transactions/bank-deposit-lifecycle"
+export type {
+  BankDepositLifecycleStep,
+  BankDepositLifecycleStepId,
+  BankDepositLifecycleStepState,
+  BuildBankDepositLifecycleInput,
+} from "./transactions/bank-deposit-lifecycle"
+export {
   buildVerifiedIdentityFromKycFields,
   countryDisplayName,
   formatMaskedIdForDisplay,

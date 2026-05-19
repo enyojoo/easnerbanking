@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { findEasetagSettlementForChainSuppression, updateEasetagSettlementSettled } from "@/lib/ledger/easetag-settlement"
+import { findNoahBankOnrampChainSettlementForSuppression } from "@/lib/noah/noah-bank-onramp-chain-suppression"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 import { enqueueLiquiditySweepJob } from "@/lib/liquidity/sweep-jobs"
 import { resolvePooledSolanaSourceAddress, ledgerCurrencyForStablecoinAsset } from "@/lib/liquidity/platform-pool"
@@ -272,6 +273,15 @@ export async function applyTurnkeyWebhookSideEffects(
   ).toLowerCase()
   const { amount, amountMinor } = parseAmountMajor(event)
   const currency = mapAssetToCurrency(asset)
+
+  if (direction === "in" && txHash) {
+    const noahSuppressed = await findNoahBankOnrampChainSettlementForSuppression(admin, {
+      txHash,
+      userId,
+      businessId,
+    })
+    if (noahSuppressed) return true
+  }
 
   const upsert = await upsertLedgerTransaction(admin, {
     userId,

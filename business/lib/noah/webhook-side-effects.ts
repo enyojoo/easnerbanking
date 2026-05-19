@@ -4,8 +4,20 @@ import { resolveNoahCustomerTarget } from "@/lib/noah/resolve-noah-customer-targ
 import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
 import { mapNoahVerificationToKycStatus } from "@/lib/noah/map-kyc"
 import { pickTxAmountAndCurrency } from "@/lib/noah/map-transactions"
+import {
+  buildNoahBankPayInLedgerMetadata,
+  buildNoahOrchestrationOutLegMetadata,
+  extractFiatDepositEnrichment,
+  extractNoahBankPayInEnrichment,
+  isNoahBankOnrampFiatPayIn,
+  isNoahBankOnrampOrchestrationOutLeg,
+  mergePayInMetadataWithLifecycle,
+  pickNoahOrchestrationRuleExecutionId,
+} from "@/lib/noah/bank-onramp-tx"
+import { findBankOnrampPayInTransaction } from "@/lib/noah/find-bank-onramp-pay-in-transaction"
 import { provisionNoahAfterVerificationApproved } from "@/lib/noah/provision-after-approval"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
+import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 
 function pickTxHash(tx: Record<string, unknown>): string | null {
   const h = tx.TxHash ?? tx.TransactionHash ?? tx.txHash ?? tx.Hash
@@ -46,6 +58,50 @@ export async function applyNoahWebhookSideEffects(
         })
         .eq("noah_workflow_id", workflowId)
         .eq("flow_type", "onramp")
+    }
+
+    const fiatCustomerId = data.CustomerID != null ? String(data.CustomerID) : customerId
+    const fiatParsed = fiatCustomerId
+      ? await resolveNoahCustomerTarget(admin, { customerId: fiatCustomerId, webhookData: data })
+      : null
+    if (fiatParsed) {
+      const fiatEnrichment = extractFiatDepositEnrichment(data)
+      if (fiatEnrichment) {
+        let fiatUserId: string
+        let fiatBusinessId: string | null
+        if (fiatParsed.kind === "individual") {
+          fiatUserId = fiatParsed.userId
+          fiatBusinessId = null
+        } else {
+          fiatBusinessId = fiatParsed.businessId
+          fiatUserId = (await resolveBusinessOrgOwnerUserId(admin, fiatParsed.businessId)) ?? ""
+        }
+        if (fiatUserId) {
+          const existing = await findBankOnrampPayInTransaction(admin, {
+            depositId: fiatEnrichment.depositId,
+            userId: fiatUserId,
+            businessId: fiatBusinessId,
+          })
+          if (existing) {
+            const patch: Record<string, unknown> = {}
+            if (fiatEnrichment.senderDisplayName) {
+              patch.sender_name = fiatEnrichment.senderDisplayName
+              patch.remitter_name = fiatEnrichment.senderDisplayName
+            }
+            if (fiatEnrichment.paymentReference) {
+              patch.reference = fiatEnrichment.paymentReference
+            }
+            const merged = mergePayInMetadataWithLifecycle(existing.metadata, patch, {
+              processing_at: fiatEnrichment.processingAt,
+              noah_fiat_deposit_id: fiatEnrichment.depositId,
+            })
+            await admin
+              .from("transactions")
+              .update({ metadata: merged, updated_at: new Date().toISOString() })
+              .eq("id", existing.id)
+          }
+        }
+      }
     }
   }
 
@@ -111,12 +167,32 @@ export async function applyNoahWebhookSideEffects(
       }
 
       if (userId && id) {
-        const metadata: Record<string, unknown> = { source: "webhook_transaction" }
+        const ruleExecutionId = pickNoahOrchestrationRuleExecutionId(txData)
+        const isOrchestrationOut = isNoahBankOnrampOrchestrationOutLeg(txData)
+        const payInEnrichment = extractNoahBankPayInEnrichment(txData)
+
+        let metadata: Record<string, unknown> = { source: "webhook_transaction" }
         if (autopayoutConfigId) {
           metadata.collection_channel = "autopayout"
           metadata.autopayout_config_id = autopayoutConfigId
         }
-        await upsertLedgerTransaction(admin, {
+        if (isOrchestrationOut) {
+          metadata = {
+            ...metadata,
+            ...buildNoahOrchestrationOutLegMetadata(txData, ruleExecutionId),
+          }
+        } else if (payInEnrichment) {
+          const occurredAt = String(txData.Created ?? txData.Updated ?? new Date().toISOString())
+          metadata = {
+            ...metadata,
+            ...buildNoahBankPayInLedgerMetadata(txData, payInEnrichment, {
+              status,
+              occurredAt,
+            }),
+          }
+        }
+
+        const upsert = await upsertLedgerTransaction(admin, {
           userId,
           businessId,
           provider: "noah",
@@ -127,11 +203,57 @@ export async function applyNoahWebhookSideEffects(
           direction,
           payload: txData,
           metadata,
-          txHash: pickTxHash(txData),
+          txHash: pickTxHash(txData) ?? payInEnrichment?.onChainTxHash ?? null,
           occurredAt: String(txData.Created ?? txData.Updated ?? new Date().toISOString()),
           settledAt: status === "settled" ? String(txData.Updated ?? txData.Created ?? new Date().toISOString()) : null,
           baseCurrency: currency,
         })
+
+        const shouldCreditWallet =
+          !isOrchestrationOut &&
+          isNoahBankOnrampFiatPayIn(txData) &&
+          status === "settled" &&
+          payInEnrichment != null &&
+          payInEnrichment.settledStablecoinAmount != null &&
+          payInEnrichment.settledStablecoinAmount > 0 &&
+          payInEnrichment.walletLedgerCurrency != null &&
+          (upsert.inserted || upsert.becameSettled)
+
+        if (shouldCreditWallet) {
+          const creditKey = ruleExecutionId ? `noah_bank_onramp:${ruleExecutionId}` : `noah_bank_onramp:${id}`
+          let chainAlreadyCredited = false
+          if (payInEnrichment.onChainTxHash) {
+            const { data: chainRow } = await admin
+              .from("transactions")
+              .select("id")
+              .eq("provider", "turnkey")
+              .eq("tx_hash", payInEnrichment.onChainTxHash)
+              .eq("status", "settled")
+              .maybeSingle()
+            chainAlreadyCredited = !!chainRow?.id
+          }
+          const { data: priorCredit } = await admin
+            .from("transactions")
+            .select("metadata")
+            .eq("id", upsert.transactionId)
+            .maybeSingle()
+          const priorMeta = (priorCredit?.metadata as Record<string, unknown> | undefined) ?? {}
+          if (!chainAlreadyCredited && priorMeta.wallet_balance_credit_key !== creditKey) {
+            await applyWalletBalanceDelta(admin, {
+              businessId: businessId ? businessId : null,
+              userId: businessId ? null : userId,
+              currency: payInEnrichment.walletLedgerCurrency!,
+              delta: payInEnrichment.settledStablecoinAmount!,
+            })
+            await admin
+              .from("transactions")
+              .update({
+                metadata: { ...priorMeta, ...metadata, wallet_balance_credit_key: creditKey },
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", upsert.transactionId)
+          }
+        }
       }
 
       const wf = workflowIdFromTx(txData)

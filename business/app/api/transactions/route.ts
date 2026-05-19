@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import type { TransactionWithSource } from "@/lib/transactions"
-import { mapNoahTransactionToMobileItem } from "@/lib/noah/map-transactions"
 import { resolveLedgerListScope } from "@/lib/transactions-ledger-scope"
 import { displayEasnerTransactionId } from "@/lib/easner-transaction-id"
 import { toEasnerTransactionPrimaryLabel } from "@easner/shared"
 import { mapRowToBusinessTransaction } from "@/lib/transactions/map-row-to-business"
-import { isTurnkeyTransactionHiddenFromFeed } from "@/lib/transactions/transaction-feed-filters"
+import {
+  isTurnkeyNoahBankOnrampChainMirror,
+  isTurnkeyTransactionHiddenFromFeed,
+} from "@/lib/transactions/transaction-feed-filters"
+import { collectNoahBankOnrampOnChainTxHashesForScope } from "@/lib/noah/noah-bank-onramp-chain-suppression"
 
 const LEDGER_SELECT =
   "id, easner_transaction_id, provider, provider_transaction_id, status, amount, currency, direction, metadata, payload, created_at, updated_at, occurred_at, settled_at, tx_hash, wallet_address, counterparty_address, asset, chain, base_currency, base_amount"
@@ -66,10 +69,6 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
 }
 
 function mapRowToMobileTransaction(row: Record<string, unknown>): Record<string, unknown> {
-  const payload = row.payload as Record<string, unknown> | null | undefined
-  if (payload && typeof payload === "object" && (payload.ID != null || payload.id != null)) {
-    return mapNoahTransactionToMobileItem(payload)
-  }
   return mapLedgerRowToMobileItem(row)
 }
 
@@ -107,7 +106,25 @@ export async function GET(request: Request) {
   }
 
   const rawRows = (rows ?? []) as Record<string, unknown>[]
-  const rowsFiltered = rawRows.filter((r) => !isTurnkeyTransactionHiddenFromFeed(r.metadata))
+  const rowsAfterMetadataFilter = rawRows.filter(
+    (r) => !isTurnkeyTransactionHiddenFromFeed(r.metadata, r.payload),
+  )
+
+  const turnkeyInboundHashes = rowsAfterMetadataFilter
+    .filter((r) => String(r.provider ?? "").toLowerCase() === "turnkey" && String(r.direction ?? "").toLowerCase() === "in")
+    .map((r) => String(r.tx_hash ?? "").trim())
+    .filter(Boolean)
+  const noahOnChainHashes =
+    turnkeyInboundHashes.length > 0
+      ? await collectNoahBankOnrampOnChainTxHashesForScope(admin, turnkeyInboundHashes, {
+          userId: user.id,
+          businessId: scope === "business" ? (businessId as string) : null,
+        })
+      : new Set<string>()
+
+  const rowsFiltered = rowsAfterMetadataFilter.filter(
+    (r) => !isTurnkeyNoahBankOnrampChainMirror(r, noahOnChainHashes),
+  )
 
   if (scope === "business") {
     const transactions = rowsFiltered.map((r) => mapRowToBusinessTransaction(r))

@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server"
 import { noahFetch } from "@/lib/noah/http"
+import {
+  buildNoahBankPayInLedgerMetadata,
+  buildNoahOrchestrationOutLegMetadata,
+  extractNoahBankPayInEnrichment,
+  isNoahBankOnrampOrchestrationOutLeg,
+  pickNoahOrchestrationRuleExecutionId,
+} from "@/lib/noah/bank-onramp-tx"
 import { pickTxAmountAndCurrency } from "@/lib/noah/map-transactions"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "../_helpers"
@@ -44,6 +51,19 @@ export async function POST(request: Request) {
         const directionRaw = String(tx.Direction ?? "").toLowerCase()
         const direction = directionRaw === "in" ? "in" : directionRaw === "out" ? "out" : null
         const status = String(tx.Status ?? "").toLowerCase() || "unknown"
+        const ruleExecutionId = pickNoahOrchestrationRuleExecutionId(tx)
+        const isOrchestrationOut = isNoahBankOnrampOrchestrationOutLeg(tx)
+        const payInEnrichment = extractNoahBankPayInEnrichment(tx)
+        let metadata: Record<string, unknown> = { source: "sync_transactions" }
+        if (isOrchestrationOut) {
+          metadata = { ...metadata, ...buildNoahOrchestrationOutLegMetadata(tx, ruleExecutionId) }
+        } else if (payInEnrichment) {
+          const occurredAt = String(tx.Created ?? tx.Updated ?? new Date().toISOString())
+          metadata = {
+            ...metadata,
+            ...buildNoahBankPayInLedgerMetadata(tx, payInEnrichment, { status, occurredAt }),
+          }
+        }
         await upsertLedgerTransaction(admin, {
           userId: txUserId,
           businessId,
@@ -54,10 +74,13 @@ export async function POST(request: Request) {
           currency,
           direction,
           payload: tx,
-          metadata: { source: "sync_transactions" },
+          metadata,
           occurredAt: String(tx.Created ?? tx.Updated ?? new Date().toISOString()),
           settledAt: status === "settled" ? String(tx.Updated ?? tx.Created ?? new Date().toISOString()) : null,
-          txHash: String(tx.TxHash ?? tx.TransactionHash ?? "").trim() || null,
+          txHash:
+            String(tx.TxHash ?? tx.TransactionHash ?? "").trim() ||
+            payInEnrichment?.onChainTxHash ||
+            null,
           baseCurrency: currency,
         })
         synced++
