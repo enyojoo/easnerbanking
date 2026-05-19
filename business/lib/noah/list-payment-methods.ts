@@ -53,11 +53,13 @@ function mergePaymentMethodsById(lists: Record<string, unknown>[][]): Record<str
  * Prefer `Capability=PayinTo` for fiat virtual account (deposit) rails, then merge any unfiltered items.
  */
 export async function fetchAllPaymentMethodsForCustomer(noahCustomerId: string): Promise<Record<string, unknown>[]> {
-  const payin = await fetchPaymentMethodsPaginated(noahCustomerId, "PayinTo")
-  if (payin.length > 0) return payin
-
-  const all = await fetchPaymentMethodsPaginated(noahCustomerId)
-  return all
+  const [payin, all] = await Promise.all([
+    fetchPaymentMethodsPaginated(noahCustomerId, "PayinTo"),
+    fetchPaymentMethodsPaginated(noahCustomerId),
+  ])
+  const merged = mergePaymentMethodsById([payin, all])
+  if (merged.length > 0) return merged
+  return payin.length > 0 ? payin : all
 }
 
 /** For diagnostics — counts by capability query. */

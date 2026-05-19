@@ -1,5 +1,11 @@
 /** Shared Noah payment-method → display + DB mapping (virtual-accounts, persist, create-accounts). */
 
+import {
+  formatVaAccountHolderName,
+  formatVaBankAddress,
+  formatVaBankName,
+} from "./format-display-text"
+
 export function isEurCountry(code: string): boolean {
   const eu = new Set([
     "AT",
@@ -45,7 +51,47 @@ function pmEntity(pm: Record<string, unknown>): string {
   return String(pm.Entity ?? pm.entity ?? "").toUpperCase()
 }
 
+function pmId(pm: Record<string, unknown>): string {
+  return String(pm.ID ?? pm.PaymentMethodID ?? "").trim()
+}
+
+/** Currency from Noah `PaymentMethodID` (`Bank/Ach/USD/...`) when `FiatCurrency` is omitted. */
+export function parseCurrencyFromNoahPaymentMethodId(
+  pm: Record<string, unknown>,
+): "usd" | "eur" | "gbp" | null {
+  const id = pmId(pm).toUpperCase()
+  const m = id.match(/\/(ACH|WIRE|FEDWIRE|SWIFT|SEPA)\/(USD|EUR|GBP)\//)
+  if (!m) return null
+  const cur = m[2]
+  if (cur === "USD") return "usd"
+  if (cur === "EUR") return "eur"
+  if (cur === "GBP") return "gbp"
+  return null
+}
+
+/** Bank deposit rail encoded in Noah payment method id (PayinTo fiat VAs). */
+export function isNoahBankPayinPaymentMethod(pm: Record<string, unknown>): boolean {
+  const id = pmId(pm).toLowerCase()
+  if (!id.startsWith("bank/")) return false
+  return (
+    id.includes("/ach/") ||
+    id.includes("/wire/") ||
+    id.includes("/fedwire/") ||
+    id.includes("/swift/") ||
+    id.includes("/sepa/")
+  ) && parseCurrencyFromNoahPaymentMethodId(pm) != null
+}
+
+function isPayinToExplicitlyDisabled(pm: Record<string, unknown>): boolean {
+  if (isNoahBankPayinPaymentMethod(pm)) return false
+  const caps = pm.Capabilities as Record<string, unknown> | undefined
+  return caps?.PayinTo === false || caps?.payinTo === false
+}
+
 export function matchesCurrency(pm: Record<string, unknown>, want: "usd" | "eur" | "gbp"): boolean {
+  const fromId = parseCurrencyFromNoahPaymentMethodId(pm)
+  if (fromId === want) return true
+
   const country = String(pm.Country ?? "").toUpperCase()
   const fiat = pmFiatCurrency(pm)
   const entity = pmEntity(pm)
@@ -63,9 +109,11 @@ export function matchesCurrency(pm: Record<string, unknown>, want: "usd" | "eur"
 }
 
 export function hasPayinBank(pm: Record<string, unknown>, country: string): boolean {
-  const caps = pm.Capabilities as Record<string, unknown> | undefined
-  if (caps && caps.PayinTo === false) return false
+  if (isPayinToExplicitlyDisabled(pm)) return false
   const want = country.toUpperCase()
+  const fromId = parseCurrencyFromNoahPaymentMethodId(pm)
+  if (want === "US" && fromId === "usd" && isNoahBankPayinPaymentMethod(pm)) return true
+  if (want === "GB" && fromId === "gbp" && isNoahBankPayinPaymentMethod(pm)) return true
   if (String(pm.Country ?? "").toUpperCase() === want) return true
   if (want === "US") return pmFiatCurrency(pm) === "USD" || pmEntity(pm) === "US"
   if (want === "GB") return pmFiatCurrency(pm) === "GBP"
@@ -173,21 +221,29 @@ export function mapNoahBankFieldsToColumns(
   }
 }
 
-/** Prefer ACH, then Wire; never use SWIFT for primary USD receive details. */
+/** Prefer ACH, then Wire/Fedwire; never use SWIFT for primary USD receive details. */
 export function selectPreferredUsdPayinPaymentMethod(
   paymentMethods: Record<string, unknown>[],
 ): Record<string, unknown> | undefined {
-  const usdPayin = paymentMethods.filter((pm) => hasPayinBank(pm, "US"))
+  const usdPayin = paymentMethods.filter(
+    (pm) => hasPayinBank(pm, "US") || parseCurrencyFromNoahPaymentMethodId(pm) === "usd",
+  )
   const pick = (rail: NoahBankRail) => usdPayin.find((pm) => parseNoahPaymentMethodRail(pm) === rail)
   return pick("ach") ?? pick("wire")
+}
+
+/** True when any USD PayinTo bank PM exists (ACH/Wire/SWIFT), for provisioning diagnostics. */
+export function hasUsdPayinBankMethods(paymentMethods: Record<string, unknown>[]): boolean {
+  return paymentMethods.some(
+    (pm) => hasPayinBank(pm, "US") || parseCurrencyFromNoahPaymentMethodId(pm) === "usd",
+  )
 }
 
 export function selectPreferredEurPayinPaymentMethod(
   paymentMethods: Record<string, unknown>[],
 ): Record<string, unknown> | undefined {
   const eurPayin = paymentMethods.filter((pm) => {
-    const caps = pm.Capabilities as Record<string, unknown> | undefined
-    if (caps && caps.PayinTo === false) return false
+    if (isPayinToExplicitlyDisabled(pm)) return false
     return matchesCurrency(pm, "eur")
   })
   const sepa = eurPayin.find((pm) => parseNoahPaymentMethodRail(pm) === "sepa")
@@ -218,10 +274,17 @@ export function mapPaymentMethodToVirtualAccountDisplay(
     bic = cols.bic ?? undefined
   }
 
-  const accountHolderName =
-    holder?.Name?.FirstName || holder?.Name?.LastName
-      ? `${holder?.Name?.FirstName ?? ""} ${holder?.Name?.LastName ?? ""}`.trim()
-      : undefined
+  const holderName = holder?.Name as
+    | { FirstName?: string; MiddleName?: string; LastName?: string }
+    | undefined
+  const holderParts = [
+    holderName?.FirstName,
+    holderName?.MiddleName,
+    holderName?.LastName,
+  ]
+    .map((p) => (p != null ? String(p).trim() : ""))
+    .filter(Boolean)
+  const accountHolderName = holderParts.length ? holderParts.join(" ") : undefined
 
   const sortCode = currency === "gbp" && routingNumber ? routingNumber : undefined
 
@@ -233,9 +296,9 @@ export function mapPaymentMethodToVirtualAccountDisplay(
     sortCode,
     iban,
     bic,
-    bankName: issuer?.Name,
-    bankAddress: issuer?.Address,
-    accountHolderName,
+    bankName: formatVaBankName(issuer?.Name) ?? undefined,
+    bankAddress: formatVaBankAddress(issuer?.Address) ?? undefined,
+    accountHolderName: formatVaAccountHolderName(accountHolderName) ?? undefined,
     status: "active",
   }
 }

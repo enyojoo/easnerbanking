@@ -2,9 +2,11 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { ensureFiatVirtualAccountsViaBankOnramp } from "@/lib/noah/bank-onramp-virtual-accounts"
 import { noahFetch } from "./http"
 import { fetchAllPaymentMethodsForCustomer } from "./list-payment-methods"
-import { hasPayinBank, matchesCurrency } from "./payment-method-map"
 import { persistAllPayinVirtualAccountsFromPaymentMethods } from "./persist-account-data"
 import {
+  hasPayinBank,
+  hasUsdPayinBankMethods,
+  matchesCurrency,
   selectPreferredEurPayinPaymentMethod,
   selectPreferredUsdPayinPaymentMethod,
 } from "./payment-method-map"
@@ -108,13 +110,16 @@ export async function provisionNoahArtifactsForCustomer(opts: {
   const eurPm = selectPreferredEurPayinPaymentMethod(paymentMethods)
   const gbpPm = paymentMethods.find((pm) => hasPayinBank(pm, "GB"))
 
-  if (!usdPm || !eurPm) {
+  const usdAny = hasUsdPayinBankMethods(paymentMethods)
+  const eurAny = paymentMethods.some((pm) => matchesCurrency(pm, "eur"))
+  if (!usdAny || !eurAny) {
     console.warn("[provisionNoahArtifactsForCustomer] missing fiat VA payment methods", {
       noahCustomerId,
       scope: opts.scope,
       paymentMethodCount: paymentMethods.length,
-      usdFound: Boolean(usdPm),
-      eurFound: Boolean(eurPm),
+      usdFound: usdAny,
+      usdPreferredAchOrWire: Boolean(usdPm),
+      eurFound: eurAny,
       sample: paymentMethods.slice(0, 3).map((pm) => ({
         id: pm.ID,
         country: pm.Country,

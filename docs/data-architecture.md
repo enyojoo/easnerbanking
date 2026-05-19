@@ -267,6 +267,8 @@ Dropped: `account_name`, `noah_payment_method_id`, `source_type`, `swift_bic` (�
 
 Receive/API reads prefer ACH → Wire rows for USD (routing number only; SWIFT/BIC rows stay in DB but are not returned for USD display).
 
+On write (`persist-account-data`, `payment-method-map`): `account_holder_name` and `bank_name` are title-cased; `bank_address` uses the same rules as KYC addresses. Short all-caps bank tokens (2–5 letters, e.g. SSB, HSBC) stay uppercase; words like BANK → Bank (`format-display-text.ts`).
+
 ## 15. Individual KYC on `users`
 
 On Noah **Customer** approval, `syncNoahCustomerToSupabase` writes normalized identity + address columns and sets `kyc_verified_at`. `GET /api/settings/personal` returns `profileLocked` and a `verifiedIdentity` block (masked ID number only).

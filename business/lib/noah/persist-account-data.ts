@@ -1,5 +1,10 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import {
+  formatVaAccountHolderName,
+  formatVaBankAddress,
+  formatVaBankName,
+} from "./format-display-text"
+import {
   hasPayinBank,
   mapNoahBankFieldsToColumns,
   mapPaymentMethodToVirtualAccountDisplay,
@@ -66,8 +71,6 @@ type VirtualAccountUpsert = {
 }
 
 function inferPayinCurrency(pm: Record<string, unknown>): "usd" | "eur" | "gbp" | null {
-  const caps = pm.Capabilities as Record<string, unknown> | undefined
-  if (caps && caps.PayinTo === false) return null
   if (hasPayinBank(pm, "US")) return "usd"
   if (matchesCurrency(pm, "eur")) return "eur"
   if (hasPayinBank(pm, "GB")) return "gbp"
@@ -96,9 +99,9 @@ function buildUpsertRow(input: {
     iban: input.cols.iban,
     bic: input.cols.bic,
     sort_code: input.cols.sortCode,
-    bank_name: input.bankName,
-    bank_address: input.bankAddress,
-    account_holder_name: input.accountHolderName,
+    bank_name: formatVaBankName(input.bankName),
+    bank_address: formatVaBankAddress(input.bankAddress),
+    account_holder_name: formatVaAccountHolderName(input.accountHolderName),
     updated_at: new Date().toISOString(),
   }
 }

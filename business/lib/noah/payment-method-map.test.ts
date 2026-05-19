@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest"
 import {
+  hasPayinBank,
+  hasUsdPayinBankMethods,
   isUsAbaRoutingNumber,
   looksLikeSwiftBic,
   mapNoahBankFieldsToColumns,
+  mapPaymentMethodToVirtualAccountDisplay,
+  parseCurrencyFromNoahPaymentMethodId,
   parseNoahPaymentMethodRail,
   selectPreferredUsdPayinPaymentMethod,
 } from "./payment-method-map"
@@ -50,6 +54,34 @@ describe("mapNoahBankFieldsToColumns", () => {
     )
     expect(cols.iban).toBe("MT13CFTE28004000000000006235761")
     expect(cols.bic).toBe("CFTEMTM1XXX")
+  })
+})
+
+describe("parseCurrencyFromNoahPaymentMethodId", () => {
+  it("reads USD from PaymentMethodID when FiatCurrency is missing", () => {
+    const pm = {
+      ID: "Bank/Ach/USD/043087080/659549996956/eind_test",
+      Country: "US",
+      Capabilities: { PayinTo: false },
+    }
+    expect(parseCurrencyFromNoahPaymentMethodId(pm)).toBe("usd")
+    expect(hasPayinBank(pm, "US")).toBe(true)
+    expect(hasUsdPayinBankMethods([pm])).toBe(true)
+  })
+
+  it("maps ACH routing from DisplayDetails", () => {
+    const pm = {
+      ID: "Bank/Ach/USD/043087080/659549996956/eind_test",
+      Country: "US",
+      DisplayDetails: {
+        Type: "FiatPaymentMethodBankDisplay",
+        AccountNumber: "659549996956",
+        BankCode: "043087080",
+      },
+    }
+    const display = mapPaymentMethodToVirtualAccountDisplay(pm, "usd")
+    expect(display.routingNumber).toBe("043087080")
+    expect(selectPreferredUsdPayinPaymentMethod([pm])?.ID).toBe(pm.ID)
   })
 })
 
