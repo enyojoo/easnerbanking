@@ -11,7 +11,10 @@ export function useExchangeRatesList(opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['exchange-rates', 'mobile'],
     queryFn: async () =>
-      buildExchangeRatesFromNoahQuotes((p) => noahService.getFxQuote(p)) as Promise<ExchangeRate[]>,
+      buildExchangeRatesFromNoahQuotes(
+        (p) => noahService.getFxQuote(p),
+        () => noahService.getNoahExchangeRates(),
+      ) as Promise<ExchangeRate[]>,
     staleTime: 10 * 60_000,
     gcTime: 60 * 60_000,
     meta: { safePersist: true, freshness: 'reference' },

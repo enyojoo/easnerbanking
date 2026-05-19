@@ -18,6 +18,20 @@ export interface SendFlowState {
   otherPaymentMethod?: string
   note: string
   transactionId: string
+  /** Executable Noah payout quote from confirm (prepare + Easner pricing). */
+  payoutQuote?: {
+    receiveAmount: number
+    sendAmount: number
+    sendCurrency: string
+    totalDebited: number
+    noahFee: number
+    easnerFee: number
+    formSessionId: string
+    cryptoAuthorizedAmount: string
+    cryptoCurrency: string
+    pricingQuoteId: string
+    expiresAt: string
+  }
 }
 
 /** Pre-fill send flow with a recipient (e.g. from Settings → Recipients); user finishes amount and source on /send. */

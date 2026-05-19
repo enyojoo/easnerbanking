@@ -14,6 +14,8 @@ export type PayoutCorridorPublic = {
    * Not necessarily payment-API identifiers; integrations map at quote/payout time.
    */
   providers: unknown
+  /** When true, Noah GET /channels/sell returns at least one channel for this corridor (executable payout). */
+  noah_sell_available?: boolean
 }
 
 export function corridorDisplayLabel(c: Pick<PayoutCorridorPublic, "country_name" | "currency_code" | "currency_name">): string {

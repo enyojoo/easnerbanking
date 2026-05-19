@@ -24,7 +24,10 @@ async function fetchRail(
   const headers: Record<string, string> = {}
   if (etag) headers['If-None-Match'] = etag
 
-  const res = await apiRequest(`/api/payout-corridors?rail=${encodeURIComponent(rail)}`, { headers })
+  const res = await apiRequest(
+    `/api/payout-corridors?rail=${encodeURIComponent(rail)}&annotateNoah=true`,
+    { headers },
+  )
   if (res.status === 304) {
     const raw = await AsyncStorage.getItem(STORAGE_BODY)
     if (!raw) return []
@@ -95,6 +98,18 @@ export function isRecipientPayoutCorridorActive(
   const cur = (r.currency || '').toUpperCase()
   if (!cc || !cur) return true
 
-  const hit = rail.some((c) => c.country_code.toUpperCase() === cc && c.currency_code.toUpperCase() === cur)
-  return hit
+  const hit = rail.find(
+    (c) => c.country_code.toUpperCase() === cc && c.currency_code.toUpperCase() === cur,
+  )
+  if (!hit) return false
+  if (typeof hit.noah_sell_available === 'boolean') return hit.noah_sell_available
+  return true
+}
+
+/** True when recipient corridor is in catalog and Noah has sell channels (executable payout). */
+export function isRecipientPayoutCorridorExecutable(
+  r: Pick<Recipient, 'bank_name' | 'mobile_provider' | 'country_code' | 'currency'>,
+  cache: CachedShape | null,
+): boolean {
+  return isRecipientPayoutCorridorActive(r, cache)
 }

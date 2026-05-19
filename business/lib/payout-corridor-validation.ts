@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { hasNoahSellChannel } from "@/lib/noah/channel-availability"
 import { isPayoutCorridorsCatalogEnabled } from "@/lib/payout-corridors-flag"
 
 type RecipientLike = {
@@ -63,5 +64,21 @@ export async function payoutCorridorGate(
       { status: 400 },
     )
   }
+
+  const sellOk = await hasNoahSellChannel({
+    country: cc,
+    fiatCurrency: String(row.currency || "").toUpperCase(),
+  })
+  if (!sellOk) {
+    return NextResponse.json(
+      {
+        error:
+          "Payouts to this country and currency are not available on your Noah program yet. Choose another corridor or contact support.",
+        code: "NOAH_SELL_CHANNEL_UNAVAILABLE",
+      },
+      { status: 400 },
+    )
+  }
+
   return null
 }

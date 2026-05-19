@@ -27,6 +27,7 @@ import { hasPin } from '../../lib/pinAuth'
 import { analytics } from '../../lib/analytics'
 import type { PricingQuote } from '../../lib/noahService'
 import { noahService } from '../../lib/noahService'
+import type { PayoutPrepareSession } from '../../hooks/executeBalanceSend'
 import { resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
 import { isEasnerClientTransactionIdFormat } from '../../lib/transactionId'
 
@@ -91,18 +92,28 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     calculatedSendingAmount: params.calculatedSendingAmount ?? 0,
     calculatedFeeAmount: params.calculatedFeeAmount ?? 0,
     calculatedTotalAmount: params.calculatedTotalAmount ?? 0,
+    noahFee: 0,
+    easnerFee: 0,
     pricingQuoteId: params.pricingQuoteId as string | undefined,
     pricingQuoteExpiry: params.pricingQuoteExpiry as string | undefined,
     pricingQuoteResult: (params.pricingQuoteResult ?? null) as PricingQuote | null,
+    payoutSession: undefined as PayoutPrepareSession | undefined,
+    quoteLoading: false,
+    quoteError: null as string | null,
   }))
 
   const {
     calculatedSendingAmount,
     calculatedFeeAmount,
     calculatedTotalAmount,
+    noahFee,
+    easnerFee,
     pricingQuoteId,
     pricingQuoteExpiry,
     pricingQuoteResult,
+    payoutSession,
+    quoteLoading,
+    quoteError,
   } = pricing
 
   const easetagUi = recipient ? resolveRecipientEasetagForUi(recipient) : ''
@@ -126,47 +137,52 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     analytics.trackScreenView('SendConfirm')
   }, [])
 
-  /** Noah wallet pricing — not used for Easetag P2P (internal ledger); amounts already finalized on the amount screen. */
+  /** Executable Noah payout quote at confirm (prepare + Easner pricing). Skipped for Easetag P2P. */
   useEffect(() => {
     if (!recipient || easetagUi) return
-    const sendAmt = pricing.calculatedSendingAmount
-    if (!(sendAmt > 0)) return
+    if (!recipient.id || !(receiveAmountValue > 0)) return
     let cancelled = false
+    setPricing((prev) => ({ ...prev, quoteLoading: true, quoteError: null }))
     void (async () => {
       try {
-        const quote = await noahService.createPricingQuote({
-          sourceCurrency: selectedBalanceCurrency,
-          destinationCurrency: recipient.currency,
-          sourceAmount: sendAmt,
-          rail: 'wallet',
-          countryCode: recipient.country_code,
-          payoutCountry: recipient.country_code || inferCountryFromRecipientCurrency(recipient.currency),
+        const pq = await noahService.createPayoutQuote({
+          recipientId: recipient.id,
+          receiveAmount: receiveAmountValue,
+          sourceBalanceCurrency: selectedBalanceCurrency,
         })
         if (cancelled) return
-        const feeFromQuote = quote.pricingTotals?.total_user_fee ?? quote.totalFeeAmount
+        const easnerFeeAmt =
+          pq.easner.pricingTotals?.total_easner_fee ??
+          pq.easner.totalFeeAmount ??
+          0
         setPricing((prev) => ({
           ...prev,
-          calculatedFeeAmount: feeFromQuote,
-          calculatedTotalAmount: sendAmt + feeFromQuote,
-          pricingQuoteId: quote.quoteId,
-          pricingQuoteExpiry: quote.expiresAt,
-          pricingQuoteResult: quote,
+          calculatedSendingAmount: pq.sendAmount,
+          noahFee: pq.noah.totalFee,
+          easnerFee: easnerFeeAmt,
+          calculatedFeeAmount: easnerFeeAmt,
+          calculatedTotalAmount: pq.totalDebited,
+          pricingQuoteId: pq.pricingQuoteId,
+          pricingQuoteExpiry: pq.expiresAt,
+          pricingQuoteResult: pq.easner,
+          payoutSession: {
+            formSessionId: pq.noah.formSessionId,
+            cryptoAuthorizedAmount: pq.noah.cryptoAuthorizedAmount,
+            cryptoCurrency: pq.noah.cryptoCurrency,
+          },
+          quoteLoading: false,
+          quoteError: null,
         }))
-      } catch {
-        // Keep FX-engine fallback from the amount screen
+      } catch (e) {
+        if (cancelled) return
+        const msg = e instanceof Error ? e.message : 'Could not load payout quote'
+        setPricing((prev) => ({ ...prev, quoteLoading: false, quoteError: msg }))
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [
-    easetagUi,
-    recipient?.id,
-    recipient?.currency,
-    recipient?.country_code,
-    selectedBalanceCurrency,
-    pricing.calculatedSendingAmount,
-  ])
+  }, [easetagUi, recipient?.id, recipient?.currency, selectedBalanceCurrency, receiveAmountValue])
 
   useFocusEffect(
     useCallback(() => {
@@ -187,6 +203,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
               pricingQuoteId,
               pricingQuoteExpiry,
               pricingQuoteResult,
+              ...(payoutSession ? { payoutSession } : {}),
               ...(ledgerReservedDebitEtid ? { reservedDebitEtid: ledgerReservedDebitEtid } : {}),
             },
             {
@@ -252,6 +269,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       pricingQuoteExpiry,
       pricingQuoteId,
       pricingQuoteResult,
+      payoutSession,
       qc,
       receiveAmountValue,
       recipient,
@@ -277,17 +295,28 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       showError('Set an app PIN in Settings before authorizing transfers.')
       return
     }
+    if (quoteLoading) {
+      showError('Loading payout quote…')
+      return
+    }
+    if (quoteError && !easetagUi) {
+      showError(quoteError)
+      return
+    }
     navigation.navigate('SendPin' as never, {
       recipient,
       calculatedSendingAmount: pricing.calculatedSendingAmount,
       calculatedFeeAmount: pricing.calculatedFeeAmount,
       calculatedTotalAmount: pricing.calculatedTotalAmount,
+      noahFee: pricing.noahFee,
+      easnerFee: pricing.easnerFee,
       receiveAmountValue,
       selectedBalanceCurrency,
       receiveCurrency,
       pricingQuoteId: pricing.pricingQuoteId,
       pricingQuoteExpiry: pricing.pricingQuoteExpiry,
       pricingQuoteResult: pricing.pricingQuoteResult,
+      payoutSession: pricing.payoutSession,
     } as never)
   }
 
@@ -355,7 +384,20 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             <View style={styles.card}>
               <Row label="You send" value={`${fmtMoney(calculatedSendingAmount, selectedBalanceCurrency)} ${selectedBalanceCurrency}`} />
-              <Row label="Fees" value={fmtMoney(calculatedFeeAmount, selectedBalanceCurrency)} />
+              {!easetagUi && (noahFee > 0 || quoteLoading) ? (
+                <Row
+                  label="Noah fee"
+                  value={quoteLoading ? '…' : fmtMoney(noahFee, selectedBalanceCurrency)}
+                />
+              ) : null}
+              {!easetagUi ? (
+                <Row
+                  label="Easner fee"
+                  value={quoteLoading ? '…' : fmtMoney(easnerFee || calculatedFeeAmount, selectedBalanceCurrency)}
+                />
+              ) : (
+                <Row label="Fees" value={fmtMoney(calculatedFeeAmount, selectedBalanceCurrency)} />
+              )}
               <Row label="Total debited" value={`${fmtMoney(calculatedTotalAmount, selectedBalanceCurrency)} ${selectedBalanceCurrency}`} bold />
               <Row label="Recipient gets" value={`${fmtMoney(receiveAmountValue, receiveCurrency)} ${receiveCurrency}`} />
               <Row
@@ -366,6 +408,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
               {displayTransactionId ? (
                 <Row label="Transaction ID" value={displayTransactionId} last={!pricingQuoteExpiry} />
               ) : null}
+              {quoteError ? <Text style={styles.quoteError}>{quoteError}</Text> : null}
               {pricingQuoteExpiry ? (
                 <Text style={styles.quoteHint}>Quote expires {new Date(pricingQuoteExpiry).toLocaleTimeString()}</Text>
               ) : null}
@@ -478,6 +521,11 @@ const styles = StyleSheet.create({
   quoteHint: {
     ...textStyles.caption,
     color: colors.text.tertiary,
+    marginTop: spacing[2],
+  },
+  quoteError: {
+    ...textStyles.caption,
+    color: colors.error.main,
     marginTop: spacing[2],
   },
   cta: {

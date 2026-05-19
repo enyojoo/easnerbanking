@@ -21,6 +21,9 @@ export type RecipientSellPrepareRow = {
   transfer_type?: "ACH" | "Wire" | null
   checking_or_savings?: "checking" | "savings" | null
   address_line1?: string | null
+  city?: string | null
+  state?: string | null
+  postal_code?: string | null
   mobile_provider?: string | null
 }
 
@@ -105,6 +108,9 @@ export async function prepareSellFromRecipientRow(input: {
     const accountNumber = String(row.account_number || "").trim()
     const routingNumber = String(row.routing_number || "").trim()
     const rawAddr = String(row.address_line1 || "").trim()
+    const cityCol = String(row.city || "").trim()
+    const stateCol = String(row.state || "").trim()
+    const postalCol = String(row.postal_code || "").trim()
     if (!accountNumber || !routingNumber) {
       throw new Error("US bank recipient requires account and routing numbers.")
     }
@@ -116,16 +122,20 @@ export async function prepareSellFromRecipientRow(input: {
     let city: string
     let state: string
     let postalCode: string
-    if (parts.length >= 4) {
+    if (cityCol && stateCol && postalCol) {
+      street = rawAddr
+      city = cityCol
+      state = stateCol
+      postalCode = postalCol
+    } else if (parts.length >= 4) {
       street = parts[0]!
       city = parts[1]!
       state = parts[2]!
       postalCode = parts[3]!
     } else {
-      street = rawAddr
-      city = "New York"
-      state = "NY"
-      postalCode = "10001"
+      throw new Error(
+        "US bank recipient requires street, city, state, and postal code (or comma-separated address).",
+      )
     }
     const preferAch = String(row.transfer_type || "ACH").toUpperCase() !== "WIRE"
     const channel = await findBankSellChannelId({

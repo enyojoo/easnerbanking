@@ -2,12 +2,16 @@ import { NextResponse } from "next/server"
 import { noahFetch } from "@/lib/noah/http"
 import { requireAuth, requireNoahEnv } from "../_helpers"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
-import { uiFiatToNoahPriceTicker } from "@/lib/noah/fx-tickers"
 import { isTerminalChargeFiatSupported } from "@/lib/noah/terminal-charge-fiats"
 import { resolveChargeForTerminalNoahPrices } from "@/lib/noah/terminal-charge-fx"
 import { TERMINAL_ALLOWED_PAIRS } from "@/lib/terminal-allowed-pairs"
+import { isNoahWalletSourceFiat, noahFiatPriceQuote } from "@/lib/noah/fx-prices"
 
 type PricesResponse = Record<string, unknown>
+
+function isIso4217(code: string): boolean {
+  return /^[A-Z]{3}$/.test(code)
+}
 
 export async function GET(request: Request) {
   const mis = requireNoahEnv()
@@ -78,12 +82,14 @@ export async function GET(request: Request) {
   const sourceCurrency = (url.searchParams.get("sourceCurrency") || "").toUpperCase()
   const destinationCurrency = (url.searchParams.get("destinationCurrency") || "").toUpperCase()
   const sourceAmount = url.searchParams.get("sourceAmount")?.trim()
+  const country = url.searchParams.get("country")?.trim()
+  const paymentMethodCategory = url.searchParams.get("paymentMethodCategory")?.trim()
 
-  if (sourceCurrency !== "USD" && sourceCurrency !== "EUR") {
-    return NextResponse.json({ error: "sourceCurrency must be USD or EUR" }, { status: 400 })
-  }
-  if (destinationCurrency !== "USD" && destinationCurrency !== "EUR") {
-    return NextResponse.json({ error: "destinationCurrency must be USD or EUR" }, { status: 400 })
+  if (!isIso4217(sourceCurrency) || !isIso4217(destinationCurrency)) {
+    return NextResponse.json(
+      { error: "sourceCurrency and destinationCurrency must be ISO 4217 codes (e.g. USD, NGN)." },
+      { status: 400 },
+    )
   }
   if (sourceCurrency === destinationCurrency) {
     return NextResponse.json({ error: "Source and destination must differ" }, { status: 400 })
@@ -92,36 +98,31 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "sourceAmount is required and must be positive" }, { status: 400 })
   }
 
+  const amount = Number.parseFloat(sourceAmount)
+  if (!isNoahWalletSourceFiat(sourceCurrency) && !isTerminalChargeFiatSupported(sourceCurrency)) {
+    return NextResponse.json(
+      { error: `Unsupported sourceCurrency for Noah /prices: ${sourceCurrency}` },
+      { status: 400 },
+    )
+  }
+
   try {
-    const SourceCurrency = uiFiatToNoahPriceTicker(sourceCurrency)
-    const DestinationCurrency = uiFiatToNoahPriceTicker(destinationCurrency)
-
-    const data = await noahFetch<PricesResponse>({
-      method: "GET",
-      path: "/prices",
-      query: {
-        SourceCurrency,
-        DestinationCurrency,
-        SourceAmount: sourceAmount,
-      },
-    })
-
-    const destAmt = data.DestinationAmount != null ? String(data.DestinationAmount) : ""
-    const srcAmt = data.SourceAmount != null ? String(data.SourceAmount) : sourceAmount
-    let impliedRate: number | undefined
-    const d = Number.parseFloat(destAmt)
-    const s = Number.parseFloat(srcAmt)
-    if (Number.isFinite(d) && Number.isFinite(s) && s > 0) {
-      impliedRate = d / s
-    }
-
-    return NextResponse.json({
+    const quote = await noahFiatPriceQuote({
       sourceCurrency,
       destinationCurrency,
-      sourceAmount: srcAmt,
-      destinationAmount: destAmt,
-      impliedRate,
-      noah: data,
+      sourceAmount: amount,
+      country: country || undefined,
+      paymentMethodCategory,
+    })
+
+    return NextResponse.json({
+      sourceCurrency: quote.sourceCurrency,
+      destinationCurrency: quote.destinationCurrency,
+      sourceAmount: String(quote.sourceAmount),
+      destinationAmount: String(quote.destinationAmount),
+      impliedRate: quote.impliedRate,
+      country: quote.country,
+      noah: quote.noah,
     })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)

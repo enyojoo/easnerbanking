@@ -1,53 +1,16 @@
 import { createQuote } from "@/lib/pricing/evaluator"
 import { uiFiatToNoahPriceTicker } from "@/lib/noah/fx-tickers"
-import { noahFetch } from "@/lib/noah/http"
+import { noahConvertFiatAmount } from "@/lib/noah/fx-prices"
 import { isNoahWalletLinkedFiat } from "@/lib/noah/terminal-pay-fiat"
-
-type PricesResponse = Record<string, unknown>
-
-function numFromNoah(v: unknown): number {
-  if (typeof v === "number" && Number.isFinite(v)) return v
-  return Number.parseFloat(String(v ?? ""))
-}
-
-async function noahConvertSourceAmount(input: {
-  sourceTicker: string
-  destTicker: string
-  sourceAmount: number
-}): Promise<number> {
-  const data = await noahFetch<PricesResponse>({
-    method: "GET",
-    path: "/prices",
-    query: {
-      SourceCurrency: input.sourceTicker,
-      DestinationCurrency: input.destTicker,
-      SourceAmount: input.sourceAmount.toFixed(8),
-    },
-  })
-  const d = numFromNoah(data.DestinationAmount)
-  if (!Number.isFinite(d) || d <= 0) {
-    throw new Error("Noah /prices returned no usable destination amount")
-  }
-  return d
-}
 
 /** Charge-face amount in `chargeFiat` → USD notional using Noah /prices (stablecoin tickers). */
 async function noahChargeFaceToUsdNotional(chargeFiat: string, chargeAmount: number): Promise<number> {
   const c = chargeFiat.trim().toUpperCase()
   if (c === "USD") return chargeAmount
-  const usdTicker = uiFiatToNoahPriceTicker("USD")
-  if (isNoahWalletLinkedFiat(c)) {
-    const src = uiFiatToNoahPriceTicker(c)
-    return noahConvertSourceAmount({
-      sourceTicker: src,
-      destTicker: usdTicker,
-      sourceAmount: chargeAmount,
-    })
-  }
   try {
-    return await noahConvertSourceAmount({
-      sourceTicker: c,
-      destTicker: usdTicker,
+    return await noahConvertFiatAmount({
+      sourceFiat: c,
+      destFiat: "USD",
       sourceAmount: chargeAmount,
     })
   } catch {
@@ -61,19 +24,10 @@ async function noahChargeFaceToUsdNotional(chargeFiat: string, chargeAmount: num
 async function noahUsdNotionalToPayoutFace(usd: number, payoutFiat: string): Promise<number> {
   const p = payoutFiat.trim().toUpperCase()
   if (p === "USD") return usd
-  const usdTicker = uiFiatToNoahPriceTicker("USD")
-  if (isNoahWalletLinkedFiat(p)) {
-    const dest = uiFiatToNoahPriceTicker(p)
-    return noahConvertSourceAmount({
-      sourceTicker: usdTicker,
-      destTicker: dest,
-      sourceAmount: usd,
-    })
-  }
   try {
-    return await noahConvertSourceAmount({
-      sourceTicker: usdTicker,
-      destTicker: p,
+    return await noahConvertFiatAmount({
+      sourceFiat: "USD",
+      destFiat: p,
       sourceAmount: usd,
     })
   } catch {

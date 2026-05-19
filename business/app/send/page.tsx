@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { SendRecipientPicker } from "@/components/send-recipient-picker"
 import { getCurrencySymbol } from "@/lib/utils"
 import { sendFlowReferenceUsdPerUnit } from "@/lib/send-flow-reference-rates"
+import { fetchWithSession } from "@/lib/fetch-with-session"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 import type { Beneficiary } from "@/lib/recipient-types"
 import {
@@ -49,20 +50,17 @@ import {
 } from "@/lib/send-flow-session"
 import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
 
-function getConversionRate(fromCurrency: string, toCurrency: string): number {
+function referenceConversionRate(fromCurrency: string, toCurrency: string): number {
   if (fromCurrency === toCurrency) return 1
   const fromPerUsd = 1 / (sendFlowReferenceUsdPerUnit[fromCurrency] ?? 1)
   const toPerUsd = 1 / (sendFlowReferenceUsdPerUnit[toCurrency] ?? 1)
   return toPerUsd / fromPerUsd
 }
 
-function convertAmount(
+function convertAmountWithRate(
   amount: number,
-  fromCurrency: string,
-  toCurrency: string
+  rate: number
 ): number {
-  if (fromCurrency === toCurrency) return amount
-  const rate = getConversionRate(fromCurrency, toCurrency)
   return amount * rate
 }
 
@@ -99,6 +97,7 @@ export default function SendPage() {
   const [otherPaymentMethod, setOtherPaymentMethod] = useState<string | null>(null)
   const [note, setNote] = useState("")
   const [sourceSheetOpen, setSourceSheetOpen] = useState(false)
+  const [noahFxRates, setNoahFxRates] = useState<Record<string, number>>({})
 
   useEffect(() => {
     const raw = sessionStorage.getItem(SEND_FLOW_STATE_KEY)
@@ -122,6 +121,48 @@ export default function SendPage() {
   const receiveCurrency = recipient?.currency ?? "USD"
   const sourceAccount = sourceAccounts.find((a) => a.id === sourceAccountId)
 
+  useEffect(() => {
+    const dest = (recipient?.currency || "").trim().toUpperCase()
+    if (!dest || dest.length !== 3) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await fetchWithSession(
+          `/api/noah/exchange-rates?destinations=${encodeURIComponent(dest)}`,
+        )
+        const data = (await res.json().catch(() => ({}))) as {
+          rates?: Array<{ from_currency: string; to_currency: string; rate: number }>
+        }
+        if (!res.ok || cancelled) return
+        const map: Record<string, number> = {}
+        for (const row of data.rates || []) {
+          const from = String(row.from_currency || "").toUpperCase()
+          const to = String(row.to_currency || "").toUpperCase()
+          if (from && to && Number.isFinite(row.rate) && row.rate > 0) {
+            map[`${from}_${to}`] = row.rate
+          }
+        }
+        setNoahFxRates(map)
+      } catch {
+        if (!cancelled) setNoahFxRates({})
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [recipient?.currency])
+
+  const getConversionRate = useCallback(
+    (fromCurrency: string, toCurrency: string): number => {
+      if (fromCurrency === toCurrency) return 1
+      const key = `${fromCurrency.toUpperCase()}_${toCurrency.toUpperCase()}`
+      const noah = noahFxRates[key]
+      if (noah && noah > 0) return noah
+      return referenceConversionRate(fromCurrency, toCurrency)
+    },
+    [noahFxRates],
+  )
+
   const sendCurrency = useMemo(() => {
     if (paymentMethod === "balance" && sourceAccount) return sourceAccount.currency
     if (paymentMethod === "usdc" || paymentMethod === "usdt" || otherCurrency === "STABLECOIN")
@@ -135,16 +176,22 @@ export default function SendPage() {
     if (receiveCurrency === sendCurrency) return enteredAmount
     return amountEntryMode === "receive"
       ? enteredAmount
-      : convertAmount(enteredAmount, sendCurrency, receiveCurrency)
-  }, [recipient, enteredAmount, receiveCurrency, sendCurrency, amountEntryMode])
+      : convertAmountWithRate(
+          enteredAmount,
+          getConversionRate(sendCurrency, receiveCurrency),
+        )
+  }, [recipient, enteredAmount, receiveCurrency, sendCurrency, amountEntryMode, getConversionRate])
 
   const sendAmount = useMemo(() => {
     if (!recipient || receiveAmount <= 0) return 0
     if (receiveCurrency === sendCurrency) return receiveAmount
     return amountEntryMode === "send"
       ? enteredAmount
-      : convertAmount(receiveAmount, receiveCurrency, sendCurrency)
-  }, [recipient, receiveAmount, receiveCurrency, sendCurrency, amountEntryMode, enteredAmount])
+      : convertAmountWithRate(
+          receiveAmount,
+          getConversionRate(receiveCurrency, sendCurrency),
+        )
+  }, [recipient, receiveAmount, receiveCurrency, sendCurrency, amountEntryMode, enteredAmount, getConversionRate])
 
   const hasFx = receiveCurrency !== sendCurrency && receiveAmount > 0
   const forwardRate = hasFx ? getConversionRate(sendCurrency, receiveCurrency) : 1

@@ -1,7 +1,37 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from './supabase'
 import { resolveRecipientEasetagForUi } from './easenetRecipientUi'
+import { getApiBaseUrl, getNoahScopeHeaders } from './apiClient'
+import { getSessionReliable } from './authSession'
 import type { Recipient } from '../types'
+
+function isNoahBankRecipientForExternalAccount(data: RecipientData): boolean {
+  const cc = String(data.countryCode || '').toUpperCase()
+  const cur = String(data.currency || '').toUpperCase()
+  if (cc === 'US' && cur === 'USD' && data.routingNumber?.trim() && data.addressLine1?.trim()) {
+    return true
+  }
+  return cur === 'EUR' && Boolean(data.iban?.trim())
+}
+
+async function tryRegisterNoahExternalAccount(recipientId: string): Promise<void> {
+  try {
+    const session = await getSessionReliable()
+    if (!session?.access_token) return
+    const scopeHeaders = await getNoahScopeHeaders()
+    await fetch(`${getApiBaseUrl()}/api/recipients/${encodeURIComponent(recipientId)}/noah-external-account`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+        ...scopeHeaders,
+      },
+      body: JSON.stringify({ fiatAmount: 1 }),
+    })
+  } catch {
+    // Optional — repeat sends can still use prepare at confirm
+  }
+}
 
 export type { Recipient }
 
@@ -187,7 +217,13 @@ export const recipientService = {
         .single()
 
       if (error) throw error
-      if (data) return normalizeRecipient(data as Recipient)
+      if (data) {
+        const saved = normalizeRecipient(data as Recipient)
+        if (isNoahBankRecipientForExternalAccount(recipientData) && !recipientData.noahExternalAccountId) {
+          void tryRegisterNoahExternalAccount(saved.id)
+        }
+        return saved
+      }
     } catch (e) {
       if (isMissingColumnError(e)) {
         const payload = {

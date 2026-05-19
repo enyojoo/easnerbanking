@@ -68,73 +68,91 @@ export function mapNoahDetailToTransactionData(
   }
 }
 
-/** Build minimal exchange-rate rows from Noah price quotes (no `exchange_rates` table). */
+type NoahRateRow = {
+  from_currency: string
+  to_currency: string
+  rate: number
+  as_of?: string
+}
+
+function mapNoahRateRows(rows: NoahRateRow[], fallbackTs: string): ExchangeRate[] {
+  return rows
+    .filter((r) => Number.isFinite(r.rate) && r.rate > 0)
+    .map((r) => {
+      const from = r.from_currency.toUpperCase()
+      const to = r.to_currency.toUpperCase()
+      const at = r.as_of ?? fallbackTs
+      return {
+        id: `noah-${from}-${to}`.toLowerCase(),
+        from_currency: from,
+        to_currency: to,
+        rate: r.rate,
+        fee_type: 'free' as const,
+        fee_amount: 0,
+        status: 'active',
+        created_at: at,
+        updated_at: at,
+      }
+    })
+}
+
+/** Build exchange-rate rows from Noah GET /prices (batch catalog or per-pair fallback). */
 export async function buildExchangeRatesFromNoahQuotes(
   getFxQuote: (p: {
     sourceCurrency: string
     destinationCurrency: string
     sourceAmount: string
   }) => Promise<{ destinationAmount?: string; impliedRate?: number }>,
+  getBatchRates?: () => Promise<NoahRateRow[]>,
 ): Promise<ExchangeRate[]> {
   const t = ts()
-  const out: ExchangeRate[] = []
 
-  try {
-    const usdToEur = await getFxQuote({
-      sourceCurrency: 'USD',
-      destinationCurrency: 'EUR',
-      sourceAmount: '100',
-    })
-    const rateUe =
-      typeof usdToEur.impliedRate === 'number' && usdToEur.impliedRate > 0
-        ? usdToEur.impliedRate
-        : usdToEur.destinationAmount
-          ? Number(usdToEur.destinationAmount) / 100
-          : 0
-    if (rateUe > 0) {
-      out.push({
-        id: 'noah-usd-eur',
-        from_currency: 'USD',
-        to_currency: 'EUR',
-        rate: rateUe,
-        fee_type: 'free',
-        fee_amount: 0,
-        status: 'active',
-        created_at: t,
-        updated_at: t,
-      })
+  if (getBatchRates) {
+    try {
+      const batch = await getBatchRates()
+      if (batch.length > 0) {
+        return mapNoahRateRows(batch, t)
+      }
+    } catch {
+      // fall through to per-pair quotes
     }
-  } catch {
-    // ignore — return partial or empty
   }
 
-  try {
-    const eurToUsd = await getFxQuote({
-      sourceCurrency: 'EUR',
-      destinationCurrency: 'USD',
-      sourceAmount: '100',
-    })
-    const rateEu =
-      typeof eurToUsd.impliedRate === 'number' && eurToUsd.impliedRate > 0
-        ? eurToUsd.impliedRate
-        : eurToUsd.destinationAmount
-          ? Number(eurToUsd.destinationAmount) / 100
-          : 0
-    if (rateEu > 0) {
-      out.push({
-        id: 'noah-eur-usd',
-        from_currency: 'EUR',
-        to_currency: 'USD',
-        rate: rateEu,
-        fee_type: 'free',
-        fee_amount: 0,
-        status: 'active',
-        created_at: t,
-        updated_at: t,
+  const out: ExchangeRate[] = []
+  const pairs: Array<[string, string]> = [
+    ['USD', 'EUR'],
+    ['EUR', 'USD'],
+  ]
+
+  for (const [from, to] of pairs) {
+    try {
+      const q = await getFxQuote({
+        sourceCurrency: from,
+        destinationCurrency: to,
+        sourceAmount: '100',
       })
+      const rate =
+        typeof q.impliedRate === 'number' && q.impliedRate > 0
+          ? q.impliedRate
+          : q.destinationAmount
+            ? Number(q.destinationAmount) / 100
+            : 0
+      if (rate > 0) {
+        out.push({
+          id: `noah-${from}-${to}`.toLowerCase(),
+          from_currency: from,
+          to_currency: to,
+          rate,
+          fee_type: 'free',
+          fee_amount: 0,
+          status: 'active',
+          created_at: t,
+          updated_at: t,
+        })
+      }
+    } catch {
+      // omit unsupported pair
     }
-  } catch {
-    // ignore
   }
 
   return out

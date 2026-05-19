@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { requirePricingAuth } from "../_helpers"
 import { createQuote } from "@/lib/pricing/evaluator"
 import type { ProviderCostsBreakdown } from "@/lib/pricing/provider-costs"
+import { noahImpliedProviderRate } from "@/lib/noah/fx-prices"
+import { requireNoahEnv } from "@/app/api/noah/_helpers"
 
 export async function POST(request: Request) {
   const auth = await requirePricingAuth(request)
@@ -42,15 +44,36 @@ export async function POST(request: Request) {
       }
     | null
 
-  const sourceCurrency = String(body?.sourceCurrency || "").trim()
-  const destinationCurrency = String(body?.destinationCurrency || "").trim()
+  const sourceCurrency = String(body?.sourceCurrency || "")
+    .trim()
+    .toUpperCase()
+  const destinationCurrency = String(body?.destinationCurrency || "")
+    .trim()
+    .toUpperCase()
   const sourceAmount = Number(body?.sourceAmount)
-  const providerRate = body?.providerRate != null ? Number(body.providerRate) : undefined
+  let providerRate = body?.providerRate != null ? Number(body.providerRate) : undefined
   if (!sourceCurrency || !destinationCurrency || !Number.isFinite(sourceAmount) || sourceAmount <= 0) {
     return NextResponse.json(
       { error: "Missing required fields: sourceCurrency, destinationCurrency, sourceAmount > 0" },
       { status: 400 }
     )
+  }
+
+  if (
+    (!providerRate || providerRate <= 0) &&
+    sourceCurrency !== destinationCurrency &&
+    !requireNoahEnv()
+  ) {
+    try {
+      providerRate = await noahImpliedProviderRate({
+        sourceCurrency,
+        destinationCurrency,
+        sourceAmount,
+        country: body?.payoutCountry ?? body?.countryCode,
+      })
+    } catch {
+      // createQuote falls back to 1:1 when Noah pair unavailable
+    }
   }
 
   try {

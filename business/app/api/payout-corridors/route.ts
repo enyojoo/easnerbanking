@@ -1,5 +1,6 @@
 import { createHash } from "crypto"
 import { NextResponse } from "next/server"
+import { annotateCorridorsWithNoahAvailability } from "@/lib/noah/channel-availability"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 
 export const runtime = "nodejs"
@@ -16,7 +17,7 @@ type PayoutCorridorRow = {
   updated_at: string
 }
 
-function publicCorridorPayload(row: PayoutCorridorRow) {
+function publicCorridorPayload(row: PayoutCorridorRow & { noah_sell_available?: boolean }) {
   return {
     id: row.id,
     rail: row.rail,
@@ -26,6 +27,9 @@ function publicCorridorPayload(row: PayoutCorridorRow) {
     currency_name: row.currency_name,
     sort_order: row.sort_order,
     providers: row.providers,
+    ...(typeof row.noah_sell_available === "boolean"
+      ? { noah_sell_available: row.noah_sell_available }
+      : {}),
   }
 }
 
@@ -53,6 +57,9 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const rail = searchParams.get("rail")
+  const executableOnly = searchParams.get("executable") === "true"
+  const annotateNoah =
+    searchParams.get("annotateNoah") === "true" || executableOnly
   const railFilter =
     rail === "bank_transfer" || rail === "mobile_money" ? rail : rail === "all" || rail == null ? null : "invalid"
 
@@ -78,7 +85,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  const rows = (data ?? []) as PayoutCorridorRow[]
+  let rows = (data ?? []) as PayoutCorridorRow[]
+  if (annotateNoah) {
+    rows = await annotateCorridorsWithNoahAvailability(rows)
+  }
+  if (executableOnly) {
+    rows = rows.filter((r) => (r as PayoutCorridorRow & { noah_sell_available?: boolean }).noah_sell_available)
+  }
   const etag = weakEtagFromRows(rows)
   const inm = request.headers.get("if-none-match")
   if (inm && inm === etag) {

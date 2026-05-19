@@ -21,6 +21,13 @@ type RecipientRow = {
   transfer_type?: "ACH" | "Wire" | null
   checking_or_savings?: "checking" | "savings" | null
   address_line1?: string | null
+  city?: string | null
+  state?: string | null
+  postal_code?: string | null
+  noah_external_account_id?: string | null
+  noah_form_session_id?: string | null
+  noah_sell_crypto_authorized?: string | null
+  noah_sell_crypto_currency?: string | null
   mobile_provider?: string | null
   wallet_network?: string | null
   wallet_memo_tag?: string | null
@@ -50,6 +57,13 @@ export type RecipientUpsertInput = {
   transferType?: "ACH" | "Wire"
   checkingOrSavings?: "checking" | "savings"
   addressLine1?: string
+  city?: string
+  state?: string
+  postalCode?: string
+  noahExternalAccountId?: string
+  noahFormSessionId?: string
+  noahSellCryptoAuthorized?: string
+  noahSellCryptoCurrency?: string
   /** Normalized easetag (no @); required for easenet */
   payeeEasetag?: string
   payeeAvatarUrl?: string | null
@@ -117,6 +131,13 @@ function toWritePayload(input: RecipientUpsertInput) {
     transfer_type: input.transferType || null,
     checking_or_savings: input.checkingOrSavings || null,
     address_line1: input.addressLine1 || null,
+    city: input.city || null,
+    state: input.state || null,
+    postal_code: input.postalCode || null,
+    noah_external_account_id: input.noahExternalAccountId || null,
+    noah_form_session_id: input.noahFormSessionId || null,
+    noah_sell_crypto_authorized: input.noahSellCryptoAuthorized || null,
+    noah_sell_crypto_currency: input.noahSellCryptoCurrency || null,
     mobile_provider: input.mobileProvider || null,
     wallet_network: input.walletNetwork || null,
     wallet_memo_tag: input.walletMemoTag || null,
@@ -228,6 +249,10 @@ export function toBeneficiary(row: RecipientRow): Beneficiary {
     transferType: row.transfer_type || undefined,
     checkingOrSavings: row.checking_or_savings || undefined,
     addressLine1: row.address_line1 || undefined,
+    city: row.city || undefined,
+    state: row.state || undefined,
+    postalCode: row.postal_code || undefined,
+    noahExternalAccountId: row.noah_external_account_id || undefined,
     mobileProvider: row.mobile_provider || mobileProvider || undefined,
     walletAsset: walletAssetFromLabel || undefined,
     walletNetwork: row.wallet_network || walletNetworkFromLabel || undefined,

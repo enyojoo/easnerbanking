@@ -113,6 +113,9 @@ export function RecipientForm({
     transferType: "ACH",
     checkingOrSavings: "",
     addressLine1: "",
+    city: "",
+    state: "",
+    postalCode: "",
     easenetTag: "",
   })
 
@@ -212,6 +215,9 @@ export function RecipientForm({
         transferType: bene.transferType || "ACH",
         checkingOrSavings: bene.checkingOrSavings || "",
         addressLine1: bene.addressLine1 || "",
+        city: bene.city || "",
+        state: bene.state || "",
+        postalCode: bene.postalCode || "",
         easenetTag: inferredType === "easenet" ? bene.payeeEasetag || bene.accountNumber || "" : "",
       })
     }
@@ -357,7 +363,16 @@ export function RecipientForm({
       newErrors.checkingOrSavings = "Account type is required for USD"
     }
     if (formData.recipientType === "bank" && currency === "USD" && !formData.addressLine1.trim()) {
-      newErrors.addressLine1 = "Address is required for USD"
+      newErrors.addressLine1 = "Street address is required for USD"
+    }
+    if (formData.recipientType === "bank" && currency === "USD" && !formData.city.trim()) {
+      newErrors.city = "City is required for USD"
+    }
+    if (formData.recipientType === "bank" && currency === "USD" && !formData.state.trim()) {
+      newErrors.state = "State is required for USD"
+    }
+    if (formData.recipientType === "bank" && currency === "USD" && !formData.postalCode.trim()) {
+      newErrors.postalCode = "ZIP code is required for USD"
     }
 
     if (formData.recipientType === "bank" && currency === "EUR") {
@@ -441,6 +456,9 @@ export function RecipientForm({
       transferType: isUsdBank ? (formData.transferType as "ACH" | "Wire") : undefined,
       checkingOrSavings: isUsdBank ? (formData.checkingOrSavings as "checking" | "savings") : undefined,
       addressLine1: isUsdBank ? formData.addressLine1.trim() : undefined,
+      city: isUsdBank ? formData.city.trim() : undefined,
+      state: isUsdBank ? formData.state.trim() : undefined,
+      postalCode: isUsdBank ? formData.postalCode.trim() : undefined,
     }
 
     try {
@@ -974,15 +992,48 @@ export function RecipientForm({
               {errors.checkingOrSavings && <p className="text-xs text-red-500">{errors.checkingOrSavings}</p>}
             </div>
             <div className="space-y-2 col-span-2">
-              <label className="text-xs text-muted-foreground">Address</label>
+              <label className="text-xs text-muted-foreground">Street address</label>
               <Input
                 value={formData.addressLine1}
                 onChange={(e) => handleInputChange("addressLine1", e.target.value)}
-                placeholder="Address"
+                placeholder="123 Main St"
                 className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.addressLine1 ? "border-red-500" : ""}`}
                 required
               />
               {errors.addressLine1 && <p className="text-xs text-red-500">{errors.addressLine1}</p>}
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs text-muted-foreground">City</label>
+              <Input
+                value={formData.city}
+                onChange={(e) => handleInputChange("city", e.target.value)}
+                placeholder="New York"
+                className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.city ? "border-red-500" : ""}`}
+                required
+              />
+              {errors.city && <p className="text-xs text-red-500">{errors.city}</p>}
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs text-muted-foreground">State</label>
+              <Input
+                value={formData.state}
+                onChange={(e) => handleInputChange("state", e.target.value)}
+                placeholder="NY"
+                className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.state ? "border-red-500" : ""}`}
+                required
+              />
+              {errors.state && <p className="text-xs text-red-500">{errors.state}</p>}
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs text-muted-foreground">ZIP code</label>
+              <Input
+                value={formData.postalCode}
+                onChange={(e) => handleInputChange("postalCode", e.target.value)}
+                placeholder="10001"
+                className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.postalCode ? "border-red-500" : ""}`}
+                required
+              />
+              {errors.postalCode && <p className="text-xs text-red-500">{errors.postalCode}</p>}
             </div>
             <div className="space-y-2">
               <label className="text-xs text-muted-foreground">Routing Number</label>

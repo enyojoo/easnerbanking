@@ -25,6 +25,10 @@ export interface Beneficiary {
   transferType?: "ACH" | "Wire"
   checkingOrSavings?: "checking" | "savings"
   addressLine1?: string
+  city?: string
+  state?: string
+  postalCode?: string
+  noahExternalAccountId?: string
   mobileProvider?: string
   walletAsset?: string
   walletNetwork?: string

@@ -35,6 +35,19 @@ interface SendFlowState {
   paymentMethod?: string
   note: string
   transactionId?: string
+  payoutQuote?: {
+    receiveAmount: number
+    sendAmount: number
+    sendCurrency: string
+    totalDebited: number
+    noahFee: number
+    easnerFee: number
+    formSessionId: string
+    cryptoAuthorizedAmount: string
+    cryptoCurrency: string
+    pricingQuoteId: string
+    expiresAt: string
+  }
   pricingQuote?: {
     transferFee?: number
     payoutFee?: number
@@ -83,6 +96,8 @@ export default function SendConfirmPage() {
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [isAuthorizing, setIsAuthorizing] = useState(false)
   const [authorizeError, setAuthorizeError] = useState<string | null>(null)
+  const [payoutQuoteLoading, setPayoutQuoteLoading] = useState(false)
+  const [payoutQuoteError, setPayoutQuoteError] = useState<string | null>(null)
   const displayIdFallbackRef = useRef<string | null>(null)
 
   const displayTransactionId = useMemo(() => {
@@ -136,6 +151,87 @@ export default function SendConfirmPage() {
       router.replace("/send")
     }
   }, [profileLoading, tier1Complete, state, router])
+
+  useEffect(() => {
+    if (!state || isEasenetRecipient(state.recipient) || !(state.amount > 0)) return
+    if (state.payoutQuote?.receiveAmount === state.amount) return
+    let cancelled = false
+    setPayoutQuoteLoading(true)
+    setPayoutQuoteError(null)
+    void (async () => {
+      try {
+        const headers: Record<string, string> = { "Content-Type": "application/json" }
+        if (businessId) headers["X-Easner-Noah-Scope"] = "business"
+        const res = await fetchWithSession("/api/noah/payouts/quote", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            recipientId: state.recipient.id,
+            receiveAmount: state.amount,
+            sourceBalanceCurrency: state.sendCurrency,
+          }),
+        })
+        const data = (await res.json().catch(() => ({}))) as {
+          ok?: boolean
+          error?: string
+          quote?: {
+            receiveAmount: number
+            sendAmount: number
+            sendCurrency: string
+            totalDebited: number
+            noah: { totalFee: number; formSessionId: string; cryptoAuthorizedAmount: string; cryptoCurrency: string; rate?: number }
+            easner: { quoteId: string; expiresAt: string; effectiveRate?: number }
+            pricingQuoteId: string
+            expiresAt: string
+          }
+        }
+        if (!res.ok || !data.ok || !data.quote) {
+          throw new Error(data.error || "Could not load payout quote")
+        }
+        if (cancelled) return
+        const q = data.quote
+        const easnerFee =
+          (q as { easner?: { pricingTotals?: { total_easner_fee?: number }; totalFeeAmount?: number } }).easner
+            ?.pricingTotals?.total_easner_fee ??
+          (q as { easner?: { totalFeeAmount?: number } }).easner?.totalFeeAmount ??
+          0
+        const next: SendFlowState = {
+          ...state,
+          sendAmount: q.sendAmount,
+          payoutQuote: {
+            receiveAmount: q.receiveAmount,
+            sendAmount: q.sendAmount,
+            sendCurrency: q.sendCurrency,
+            totalDebited: q.totalDebited,
+            noahFee: q.noah.totalFee,
+            easnerFee,
+            formSessionId: q.noah.formSessionId,
+            cryptoAuthorizedAmount: q.noah.cryptoAuthorizedAmount,
+            cryptoCurrency: q.noah.cryptoCurrency,
+            pricingQuoteId: q.pricingQuoteId,
+            expiresAt: q.expiresAt,
+          },
+          pricingQuote: {
+            transferFee: q.noah.totalFee,
+            payoutFee: easnerFee,
+            exchangeRate: q.noah.rate ?? q.easner.effectiveRate,
+            expiresAt: q.expiresAt,
+          },
+        }
+        setState(next)
+        sessionStorage.setItem(SEND_FLOW_STATE_KEY, JSON.stringify(next))
+      } catch (e) {
+        if (!cancelled) {
+          setPayoutQuoteError(e instanceof Error ? e.message : "Payout quote failed")
+        }
+      } finally {
+        if (!cancelled) setPayoutQuoteLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [state?.recipient.id, state?.amount, state?.sendCurrency, businessId])
 
   const finishSend = async (transactionId: string) => {
     if (!state) return
@@ -230,8 +326,91 @@ export default function SendConfirmPage() {
       return
     }
 
-    const transactionId = state.transactionId ?? generateTransactionId()
-    void finishSend(transactionId)
+    const pq = state.payoutQuote
+    if (!pq?.formSessionId) {
+      setAuthorizeError(payoutQuoteError || "Payout quote is not ready. Go back and try again.")
+      return
+    }
+
+    setIsAuthorizing(true)
+    try {
+      const scopeHeaders: Record<string, string> = {}
+      if (businessId) scopeHeaders["X-Easner-Noah-Scope"] = "business"
+
+      const walletsRes = await fetchWithSession("/api/noah/wallets", { headers: scopeHeaders })
+      const walletsData = (await walletsRes.json().catch(() => ({}))) as {
+        wallets?: Array<{ sourceWalletId?: string; walletId?: string }>
+      }
+      if (!walletsRes.ok) {
+        throw new Error("Failed to load wallet for payout.")
+      }
+      const wallet = walletsData.wallets?.[0]
+      const sourceWalletId = String(wallet?.sourceWalletId || wallet?.walletId || "").trim()
+      if (!sourceWalletId) {
+        throw new Error("No source wallet id from Noah.")
+      }
+
+      const externalId = state.recipient.noahExternalAccountId?.trim()
+      const transferBody = externalId
+        ? {
+            sourceWalletId,
+            destinationExternalAccountId: externalId,
+            amount: state.amount.toFixed(2),
+            currency: state.sendCurrency.toLowerCase(),
+          }
+        : {
+            sourceWalletId,
+            amount: state.amount.toFixed(2),
+            currency: state.receiveCurrency.toLowerCase(),
+            formSessionId: pq.formSessionId,
+            cryptoAuthorizedAmount: pq.cryptoAuthorizedAmount,
+            cryptoCurrency: pq.cryptoCurrency,
+          }
+
+      const transferRes = await fetchWithSession("/api/noah/transfers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...scopeHeaders },
+        body: JSON.stringify(transferBody),
+      })
+      const transferData = (await transferRes.json().catch(() => ({}))) as {
+        error?: string
+        easner_transaction_id?: string
+        transaction_id?: string
+        id?: string
+      }
+      if (!transferRes.ok) {
+        throw new Error(transferData.error || "Transfer failed")
+      }
+
+      const providerTxId = String(
+        transferData.easner_transaction_id ?? transferData.transaction_id ?? transferData.id ?? "",
+      ).trim()
+
+      if (pq.pricingQuoteId) {
+        await fetchWithSession("/api/pricing/apply", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            quoteId: pq.pricingQuoteId,
+            transactionId: providerTxId || undefined,
+          }),
+        })
+      }
+
+      const transactionId =
+        providerTxId ||
+        state.transactionId ||
+        generateTransactionId()
+      if (user?.id) {
+        dataCache.invalidate(CACHE_KEYS.TRANSACTIONS_LIST(user.id))
+      }
+      requestBusinessAccountsRefresh()
+      await finishSend(transactionId)
+    } catch (e) {
+      setAuthorizeError(e instanceof Error ? e.message : "Transfer failed")
+    } finally {
+      setIsAuthorizing(false)
+    }
   }
 
   const onAuthorizeClick = () => {
@@ -264,15 +443,15 @@ export default function SendConfirmPage() {
   const processingTime = getProcessingTime(transferMethod)
   const easenetSend = isEasenetRecipient(state.recipient)
   const hasFx = !easenetSend && state.receiveCurrency !== state.sendCurrency
-  const transferFee = easenetSend
-    ? 0
-    : state.pricingQuote?.transferFee ?? (transferMethod === "Wire Transfer" ? 25 : 0)
-  const payoutFee = easenetSend ? 0 : (state.pricingQuote?.payoutFee ?? 0)
+  const noahFee = easenetSend ? 0 : (state.payoutQuote?.noahFee ?? state.pricingQuote?.transferFee ?? 0)
+  const easnerFee = easenetSend ? 0 : (state.payoutQuote?.easnerFee ?? state.pricingQuote?.payoutFee ?? 0)
+  const transferFee = noahFee
+  const payoutFee = easnerFee
   const exchangeRate = easenetSend
     ? 1
     : state.pricingQuote?.exchangeRate ?? (hasFx && state.amount > 0 ? state.sendAmount / state.amount : 1)
 
-  const authorizeDisabled = isAuthorizing
+  const authorizeDisabled = isAuthorizing || payoutQuoteLoading || Boolean(payoutQuoteError && !easenetSend)
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -353,7 +532,7 @@ export default function SendConfirmPage() {
             <span className="font-medium">{processingTime}</span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Transfer fee</span>
+            <span className="text-sm text-muted-foreground">Noah fee</span>
             <span className="font-semibold">
               {getCurrencySymbol(state.sendCurrency)}
               {transferFee.toLocaleString("en-US", { minimumFractionDigits: 2 })}
@@ -364,9 +543,9 @@ export default function SendConfirmPage() {
             <span className="font-semibold">{exchangeRate.toFixed(6)}</span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Payout fee</span>
+            <span className="text-sm text-muted-foreground">Easner fee</span>
             <span className="font-semibold">
-              {getCurrencySymbol(state.receiveCurrency)}
+              {getCurrencySymbol(state.sendCurrency)}
               {payoutFee.toLocaleString("en-US", { minimumFractionDigits: 2 })}
             </span>
           </div>

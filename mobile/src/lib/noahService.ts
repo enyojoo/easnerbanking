@@ -86,6 +86,24 @@ export interface PricingQuoteTotals {
   reporting_currency: string
 }
 
+export interface PayoutQuote {
+  receiveAmount: number
+  receiveCurrency: string
+  sendAmount: number
+  sendCurrency: string
+  totalDebited: number
+  noah: {
+    totalFee: number
+    cryptoAuthorizedAmount: string
+    cryptoCurrency: string
+    formSessionId: string
+    rate?: number
+  }
+  easner: PricingQuote
+  pricingQuoteId: string
+  expiresAt: string
+}
+
 export interface PricingQuote {
   quoteId: string
   expiresAt: string
@@ -154,6 +172,33 @@ export const noahService = {
       throw new Error((data as any).error || 'Failed to create quote')
     }
     return (data as any).quote as PricingQuote
+  },
+
+  async createPayoutQuote(input: {
+    recipientId: string
+    receiveAmount: number
+    sourceBalanceCurrency: string
+  }): Promise<PayoutQuote> {
+    const session = await requireAuthSession()
+    const scopeHeaders = await getNoahScopeHeaders()
+    const response = await fetch(`${apiUrl()}/api/noah/payouts/quote`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+        ...scopeHeaders,
+      },
+      body: JSON.stringify({
+        recipientId: input.recipientId,
+        receiveAmount: input.receiveAmount,
+        sourceBalanceCurrency: input.sourceBalanceCurrency,
+      }),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok || !(data as { ok?: boolean }).ok) {
+      throw new Error((data as { error?: string }).error || 'Failed to create payout quote')
+    }
+    return (data as { quote: PayoutQuote }).quote
   },
 
   async validatePricingQuote(quoteId: string): Promise<{ reasonCode?: string | null }> {
@@ -1128,28 +1173,36 @@ export const noahService = {
   },
 
   /**
-   * Noah GET /prices (via Easner) — USD/EUR stablecoin conversion quote.
+   * Noah GET /prices (via Easner) — any supported fiat pair (USD/EUR wallet + payout fiats).
    */
   async getFxQuote(params: {
     sourceCurrency: string
     destinationCurrency: string
     sourceAmount: string
+    country?: string
+    paymentMethodCategory?: string
   }): Promise<{
     destinationAmount?: string
     impliedRate?: number
     error?: string
   }> {
     const session = await requireAuthSession()
+    const scopeHeaders = await getNoahScopeHeaders()
 
     const qs = new URLSearchParams({
       sourceCurrency: params.sourceCurrency,
       destinationCurrency: params.destinationCurrency,
       sourceAmount: params.sourceAmount,
     })
+    if (params.country?.trim()) qs.set('country', params.country.trim())
+    if (params.paymentMethodCategory?.trim()) {
+      qs.set('paymentMethodCategory', params.paymentMethodCategory.trim())
+    }
     const response = await fetch(`${apiUrl()}/api/noah/prices?${qs.toString()}`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${session.access_token}`,
+        Authorization: `Bearer ${session.access_token}`,
+        ...scopeHeaders,
       },
     })
     const data = await response.json().catch(() => ({}))
@@ -1157,6 +1210,31 @@ export const noahService = {
       throw new Error((data as { error?: string }).error || 'Failed to get quote')
     }
     return data as { destinationAmount?: string; impliedRate?: number }
+  },
+
+  /**
+   * Batch Noah /prices rates for wallet send (USD/EUR → payout currencies).
+   */
+  async getNoahExchangeRates(): Promise<
+    Array<{ from_currency: string; to_currency: string; rate: number; as_of?: string }>
+  > {
+    const session = await requireAuthSession()
+    const scopeHeaders = await getNoahScopeHeaders()
+    const response = await fetch(`${apiUrl()}/api/noah/exchange-rates`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        ...scopeHeaders,
+      },
+    })
+    const data = (await response.json().catch(() => ({}))) as {
+      rates?: Array<{ from_currency: string; to_currency: string; rate: number; as_of?: string }>
+      error?: string
+    }
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to load Noah exchange rates')
+    }
+    return data.rates ?? []
   },
 
   /**
