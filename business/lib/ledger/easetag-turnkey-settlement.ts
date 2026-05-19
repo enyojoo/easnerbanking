@@ -11,7 +11,7 @@ export function assetForEasetagCurrency(c: "USD" | "EUR"): "USDC" | "EURC" {
 export async function resolvePayeeSolanaVaultAta(
   admin: SupabaseClient,
   input: { payeeUserId: string; payeeBusinessId: string | null; currency: "USD" | "EUR" },
-): Promise<{ ata: string } | { error: string }> {
+): Promise<{ ata: string; ownerVault: string } | { error: string }> {
   const ownerType = input.payeeBusinessId ? "business" : "individual"
   const ownerRef = input.payeeBusinessId ?? input.payeeUserId
   const ownerId = await getWalletOwnerId(admin, ownerType, ownerRef)
@@ -32,7 +32,7 @@ export async function resolvePayeeSolanaVaultAta(
   const derived = deriveStablecoinAssociatedTokenAddress(vault, asset)
   const ata = (fromDb || derived || "").trim()
   if (!ata) return { error: "payee_wallet_not_provisioned" }
-  return { ata }
+  return { ata, ownerVault: vault }
 }
 
 export async function preflightSenderOnChainStablecoinBalance(

@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
+import { deriveStablecoinAssociatedTokenAddress } from "@/lib/solana/ata"
+import { verifyStablecoinTokenAccount } from "@/lib/solana/verify-token-account"
 import { getActiveWalletAddress } from "@/lib/wallet/turnkey-wallet-db"
 import { vaultSpecForNoahAssetNetwork } from "@/lib/wallet/noah-pair-to-vault"
 
@@ -96,7 +98,12 @@ export async function resolveWalletOwnerIdForEasnerContext(
   return String(legacy.id)
 }
 
-/** Active Turnkey receive address for Noah workflows when asset/network match a provisioned vault. */
+/**
+ * Active Turnkey **vault** (wallet signer) for Noah on-chain workflows.
+ * Noah/bridges must receive the vault pubkey so they create/fund the canonical SPL ATA
+ * (owner = vault). Do not pass the derived ATA address — custodians may treat it as a
+ * wallet owner and fund a nested token account Turnkey cannot sign.
+ */
 export async function resolveTurnkeyAddressForNoahPair(
   admin: SupabaseClient,
   ctx: NoahAccountContext,
@@ -108,4 +115,23 @@ export async function resolveTurnkeyAddressForNoahPair(
   const ownerId = await resolveWalletOwnerIdForEasnerContext(admin, ctx)
   if (!ownerId) return null
   return getActiveWalletAddress(admin, ownerId, spec.chain, spec.asset, spec.ledgerCurrency)
+}
+
+/** Canonical SPL ATA for deposits after on-chain verification (see `getTurnkeyDepositAddressesForContext`). */
+export async function resolveTurnkeySplAtaForNoahPair(
+  admin: SupabaseClient,
+  ctx: NoahAccountContext,
+  cryptoCurrency: string,
+  network: string,
+): Promise<string | null> {
+  const spec = vaultSpecForNoahAssetNetwork(cryptoCurrency, network)
+  if (!spec || spec.chain !== "solana") return null
+  const ownerId = await resolveWalletOwnerIdForEasnerContext(admin, ctx)
+  if (!ownerId) return null
+  const vault = await getActiveWalletAddress(admin, ownerId, spec.chain, spec.asset, spec.ledgerCurrency)
+  if (!vault) return null
+  const ata = deriveStablecoinAssociatedTokenAddress(vault, spec.asset)
+  if (!ata) return null
+  const verified = await verifyStablecoinTokenAccount(ata, vault, spec.asset as "USDC" | "EURC")
+  return verified.ok ? ata : null
 }

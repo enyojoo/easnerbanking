@@ -7,6 +7,7 @@ import {
   isTurnkeyWalletAutoprovisionEnabled,
 } from "@/lib/turnkey/config"
 import { deriveStablecoinAssociatedTokenAddress } from "@/lib/solana/ata"
+import { ensureStablecoinTokenAccountOnChain } from "@/lib/turnkey/ensure-spl-token-account"
 import { DEFAULT_INDIVIDUAL_VAULTS } from "@/lib/wallet/vault-spec"
 import { ensureFiatVirtualAccountForLedgerCurrency } from "@/lib/noah/bank-onramp-virtual-accounts"
 import { enqueueVaultProvisioningJobs, upsertWalletOwnerFromNoah } from "@/lib/wallet/turnkey-wallet-db"
@@ -153,6 +154,26 @@ export async function processNextWalletProvisioningJob(opts?: {
       },
       { onConflict: "wallet_owner_id,chain,asset,ledger_currency" },
     )
+
+    if (
+      job.chain === "solana" &&
+      (assetStr === "USDC" || assetStr === "EURC") &&
+      associatedTokenAccountAddress
+    ) {
+      const ataInit = await ensureStablecoinTokenAccountOnChain({
+        subOrgId,
+        vaultAddress: address,
+        asset: assetStr as "USDC" | "EURC",
+        expectedAta: associatedTokenAccountAddress,
+      })
+      if (!ataInit.ok) {
+        console.warn("[turnkey-provisioning] SPL ATA init failed", {
+          walletOwnerId: owner.id,
+          asset: assetStr,
+          error: ataInit.error,
+        })
+      }
+    }
 
     await admin
       .from("wallet_provisioning_jobs")

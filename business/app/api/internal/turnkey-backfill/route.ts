@@ -3,7 +3,10 @@ import { assertInternalCronAuthorized } from "@/lib/api/internal-auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { backfillTurnkeyHistoricalTransactions } from "@/lib/turnkey/backfill-transactions"
 import { backfillTurnkeyOnchainTransactions } from "@/lib/turnkey/onchain-backfill"
-import { fillMissingAssociatedTokenAddresses } from "@/lib/wallet/fill-wallet-account-ata"
+import {
+  ensureMissingOnChainSplTokenAccounts,
+  fillMissingAssociatedTokenAddresses,
+} from "@/lib/wallet/fill-wallet-account-ata"
 import { syncWalletBalancesFromSolanaAtaForOwners } from "@/lib/wallet/sync-wallet-balances-from-ata"
 
 export const runtime = "nodejs"
@@ -23,6 +26,7 @@ export async function POST(request: Request) {
   try {
     const admin = createSupabaseAdmin()
     const ataFill = await fillMissingAssociatedTokenAddresses(admin)
+    const ataOnChain = await ensureMissingOnChainSplTokenAccounts(admin)
     const [activities, onchain] = await Promise.all([
       backfillTurnkeyHistoricalTransactions(admin),
       backfillTurnkeyOnchainTransactions(admin, {
@@ -38,7 +42,7 @@ export async function POST(request: Request) {
       ]),
     ]
     const balanceSync = await syncWalletBalancesFromSolanaAtaForOwners(admin, ownerIds)
-    return NextResponse.json({ ok: true, result: { ataFill, activities, onchain, balanceSync } })
+    return NextResponse.json({ ok: true, result: { ataFill, ataOnChain, activities, onchain, balanceSync } })
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Backfill failed"
     const stack = e instanceof Error ? (e.stack || "").split("\n").slice(0, 4).join("\n") : undefined

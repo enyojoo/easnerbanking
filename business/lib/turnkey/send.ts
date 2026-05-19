@@ -21,6 +21,8 @@ export type TurnkeySendInput = {
    * When true, `destinationAddress` is already the recipient token account (Easetag settlement).
    */
   destinationIsTokenAccount?: boolean
+  /** Payee vault pubkey when `destinationIsTokenAccount` is true (for ATA creation if missing on-chain). */
+  destinationTokenAccountOwner?: string
   /** Tags turnkey ledger rows for Easetag chain settlement (hidden from activity feed). */
   easetagSettlement?: { transferGroupId: string }
 }
@@ -296,7 +298,7 @@ async function backoffRefetchActivityUntilSolSendStatusId(
   return snapshots
 }
 
-async function resolveSolSendParsedIds(
+export async function resolveSolSendParsedIds(
   client: TurnkeyClientLike,
   subOrgId: string,
   initialResponse: Record<string, unknown>,
@@ -428,6 +430,7 @@ export async function createTurnkeySend(
     ownerAddress: sender.sourceAddress,
     destinationAddress,
     destinationIsTokenAccount,
+    destinationTokenAccountOwner: input.destinationTokenAccountOwner,
     amountHuman: input.amount,
     sponsoredFlow: sponsor,
     recentBlockhash: blockhash,
@@ -632,7 +635,7 @@ export function interpretTurnkeyGetSendTransactionStatus(res: unknown): {
  * or timeout. Turnkey's SDK `pollTransactionStatus` skips ticks when `txStatus` is empty, which can
  * hang; we use our own loop and shared interpretation (incl. `solana.signature`).
  */
-async function pollUntilTurnkeySendTerminal(
+export async function pollUntilTurnkeySendTerminal(
   client: TurnkeyClientLike,
   organizationId: string,
   sendTransactionStatusId: string,

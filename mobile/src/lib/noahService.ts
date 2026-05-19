@@ -963,7 +963,9 @@ export const noahService = {
       })
       const data = (await response.json().catch(() => ({}))) as Record<string, unknown>
       if (!response.ok || !data.ok) {
-        throw new Error(typeof data.error === 'string' ? data.error : 'Wallet transfer failed')
+        const detail = typeof data.detail === 'string' ? data.detail.trim() : ''
+        const err = typeof data.error === 'string' ? data.error : 'Wallet transfer failed'
+        throw new Error(detail ? `${err}: ${detail}` : err)
       }
       const etid =
         typeof data.easner_transaction_id === 'string' ? data.easner_transaction_id.trim() : ''

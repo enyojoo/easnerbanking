@@ -43,7 +43,8 @@ export async function GET(request: Request) {
   }
 
   const deposits = await getTurnkeyDepositAddressesForContext(admin, acc.ctx)
-  const address = deposits.USD.address.trim()
+  /** Noah workflows expect the Turnkey vault signer; SPL deposits use `deposits.USD.address` (ATA). */
+  const address = deposits.USD.ownerAddress.trim() || deposits.USD.address.trim()
 
   return NextResponse.json({
     wallets: [
@@ -54,6 +55,8 @@ export async function GET(request: Request) {
         sourceWalletId: noahCustomerId,
         chain: "solana",
         address,
+        splTokenAccount: deposits.USD.address.trim() || null,
+        splTokenAccountReady: deposits.USD.ataReady === true,
         blockchain_memo: null,
       },
     ],

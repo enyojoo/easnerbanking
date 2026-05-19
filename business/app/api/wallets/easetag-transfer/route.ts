@@ -141,6 +141,7 @@ export async function POST(request: Request) {
   const transferGroupId = deterministicTransferGroupUuid(idempotencyKey)
   const chainSettle = isEasetagChainSettlementEnabled()
   let payeeAta: string | null = null
+  let payeeVault: string | null = null
 
   if (chainSettle) {
     let settlementRow = await getEasetagSettlementByIdempotencyKey(admin, idempotencyKey)
@@ -171,6 +172,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: payeeRes.error }, { status: 400 })
     }
     payeeAta = payeeRes.ata
+    payeeVault = payeeRes.ownerVault
 
     const pre = await preflightSenderOnChainStablecoinBalance(admin, acc.ctx, currencyRaw as "USD" | "EUR", ledgerAmount)
     if (!pre.ok) {
@@ -305,6 +307,7 @@ export async function POST(request: Request) {
         chain: "solana",
         destinationAddress: payeeAta,
         destinationIsTokenAccount: true,
+        destinationTokenAccountOwner: payeeVault ?? undefined,
         amount: amt,
         easetagSettlement: { transferGroupId },
       })

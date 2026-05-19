@@ -1,5 +1,10 @@
 import { Connection, PublicKey, SystemProgram, Transaction } from "@solana/web3.js"
-import { createTransferCheckedInstruction, getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token"
+import {
+  createAssociatedTokenAccountInstruction,
+  createTransferCheckedInstruction,
+  getAssociatedTokenAddressSync,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token"
 import { mintForStablecoinAsset } from "@/lib/solana/spl-mints"
 
 export function getSolanaRpcUrl(): string {
@@ -33,6 +38,12 @@ export async function buildStablecoinSplTransferUnsignedTxPayloadForTurnkey(inpu
    * `recentBlockhash` passed to Turnkey `solSendTransaction`, reducing expiry skew).
    */
   recentBlockhash?: string
+  /**
+   * Owner wallet for the destination ATA. When the destination token account does not exist
+   * on-chain yet, prepends `createAssociatedTokenAccount` (Turnkey rent sponsorship applies).
+   * Required when `destinationIsTokenAccount` is true and the payee ATA may be uninitialized.
+   */
+  destinationTokenAccountOwner?: string
 }): Promise<string> {
   const mintStr = mintForStablecoinAsset(input.asset)
   if (!mintStr) throw new Error("Unsupported asset for Solana SPL transfer")
@@ -45,6 +56,16 @@ export async function buildStablecoinSplTransferUnsignedTxPayloadForTurnkey(inpu
   const destAta = input.destinationIsTokenAccount
     ? dest
     : getAssociatedTokenAddressSync(mint, dest, false, TOKEN_PROGRAM_ID)
+  const destOwner = input.destinationIsTokenAccount
+    ? new PublicKey(String(input.destinationTokenAccountOwner || "").trim())
+    : dest
+  if (input.destinationIsTokenAccount && destOwner.equals(PublicKey.default)) {
+    throw new Error("destinationTokenAccountOwner is required when destination is a token account")
+  }
+
+  const rpc = new Connection(getSolanaRpcUrl(), "confirmed")
+  const destAtaInfo = await rpc.getAccountInfo(destAta)
+  const createDestAta = destAtaInfo == null
 
   const amountAtomic = BigInt(Math.round(input.amountHuman * 1_000_000))
   if (amountAtomic <= BigInt(0)) throw new Error("amount must be positive")
@@ -62,7 +83,7 @@ export async function buildStablecoinSplTransferUnsignedTxPayloadForTurnkey(inpu
 
   const blockhash =
     String(input.recentBlockhash || "").trim() ||
-    (await new Connection(getSolanaRpcUrl(), "confirmed").getLatestBlockhash("finalized")).blockhash
+    (await rpc.getLatestBlockhash("finalized")).blockhash
 
   const tx = new Transaction({
     feePayer: owner,
@@ -76,6 +97,17 @@ export async function buildStablecoinSplTransferUnsignedTxPayloadForTurnkey(inpu
         toPubkey: owner,
         lamports: 0,
       }),
+    )
+  }
+  if (createDestAta) {
+    tx.add(
+      createAssociatedTokenAccountInstruction(
+        owner,
+        destAta,
+        destOwner,
+        mint,
+        TOKEN_PROGRAM_ID,
+      ),
     )
   }
   tx.add(transferIx)

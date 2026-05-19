@@ -2,17 +2,21 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { noahCustomerIdFromBusinessId } from "@/lib/noah/customer-id"
 import { deriveStablecoinAssociatedTokenAddress } from "@/lib/solana/ata"
+import { verifyStablecoinTokenAccount } from "@/lib/solana/verify-token-account"
+import { ensureStablecoinTokenAccountOnChain } from "@/lib/turnkey/ensure-spl-token-account"
 import { resolveWalletOwnerIdForEasnerContext } from "@/lib/wallet/resolve-wallet-owner"
 import { DEFAULT_INDIVIDUAL_VAULTS, type WalletVaultSpec } from "@/lib/wallet/vault-spec"
 
 export type TurnkeyDepositLine = {
-  /** SPL token account (ATA) for deposits — from DB or derived from owner + mint. */
+  /** SPL token account (ATA) for USDC/EURC deposits — only returned after on-chain ATA is verified. */
   address: string
-  /** Turnkey wallet pubkey; same as `wallet_accounts.address`. Not for deposit UX — use `address` (ATA). */
+  /** Turnkey Solana vault (wallet signer). Use for Noah on-chain workflows, not raw SPL deposits. */
   ownerAddress: string
   stablecoin: string
   chain: string
   memo: string
+  /** True when ATA exists on-chain with owner = vault; false while initialization is pending. */
+  ataReady?: boolean
 }
 
 export type TurnkeyDepositAddressesResponse = {
@@ -36,7 +40,7 @@ async function depositLineForVault(
   const label = vault.asset === "EURC" ? "EURC" : "USDC"
   const { data } = await admin
     .from("wallet_accounts")
-    .select("id,address,associated_token_account_address")
+    .select("id,address,associated_token_account_address,turnkey_sub_organization_id,wallet_owner_id")
     .eq("wallet_owner_id", walletOwnerId)
     .eq("chain", vault.chain)
     .eq("asset", vault.asset)
@@ -50,9 +54,11 @@ async function depositLineForVault(
   }
   const ataStored = String(data?.associated_token_account_address || "").trim()
   const derivedAta = deriveStablecoinAssociatedTokenAddress(ownerAddr, vault.asset)
-  const ata = ataStored || derivedAta || ownerAddr
+  if (!derivedAta) {
+    return { ...emptyLine(label), ownerAddress: ownerAddr }
+  }
 
-  if (data?.id && !ataStored && derivedAta) {
+  if (data?.id && (!ataStored || ataStored !== derivedAta)) {
     const now = new Date().toISOString()
     await admin
       .from("wallet_accounts")
@@ -60,12 +66,47 @@ async function depositLineForVault(
       .eq("id", data.id)
   }
 
+  let subOrgId = String(data?.turnkey_sub_organization_id || "").trim()
+  if (!subOrgId && data?.wallet_owner_id) {
+    const { data: wo } = await admin
+      .from("wallet_owners")
+      .select("turnkey_sub_organization_id")
+      .eq("id", data.wallet_owner_id)
+      .maybeSingle()
+    subOrgId = String(wo?.turnkey_sub_organization_id || "").trim()
+  }
+
+  let ataReady = false
+  let depositAddress = ""
+
+  const verified = await verifyStablecoinTokenAccount(
+    derivedAta,
+    ownerAddr,
+    vault.asset as "USDC" | "EURC",
+  )
+  if (verified.ok) {
+    ataReady = true
+    depositAddress = derivedAta
+  } else if (subOrgId) {
+    const ensured = await ensureStablecoinTokenAccountOnChain({
+      subOrgId,
+      vaultAddress: ownerAddr,
+      asset: vault.asset as "USDC" | "EURC",
+      expectedAta: derivedAta,
+    })
+    if (ensured.ok) {
+      ataReady = true
+      depositAddress = ensured.ata
+    }
+  }
+
   return {
-    address: ata,
+    address: depositAddress,
     ownerAddress: ownerAddr,
     stablecoin: label,
     chain: "Solana",
     memo: "",
+    ataReady,
   }
 }
 
