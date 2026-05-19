@@ -857,14 +857,14 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
             >
               <View style={styles.modalContainer}>
                 <IframeWebViewModalHeader onClose={handleKycModalClose}>
-                  <View style={styles.modalKycTitleRow}>
-                    <Text style={[iframeModalTitleTextStyle, styles.modalKycTitleText]} numberOfLines={2}>
-                      Verification for global banking
-                    </Text>
-                    <View style={styles.tierPill}>
-                      <Text style={styles.tierPillText}>Tier 1</Text>
+                    <View style={styles.modalKycTitleRow}>
+                      <Text style={[iframeModalTitleTextStyle, styles.modalKycTitleText]} numberOfLines={2}>
+                        Verification for global banking
+                      </Text>
+                      <View style={styles.tierPill}>
+                        <Text style={styles.tierPillText}>Tier 1</Text>
+                      </View>
                     </View>
-                  </View>
                 </IframeWebViewModalHeader>
                 {kycLink && (
                   <WebView
