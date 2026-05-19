@@ -13,6 +13,10 @@ const nextConfig = {
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
       "@easner/shared": resolve(__dirname, "../packages/shared/src/index.ts"),
+      "@easner/shared/verified-identity": resolve(
+        __dirname,
+        "../packages/shared/src/verified-identity.ts"
+      ),
       "@easner/server": resolve(__dirname, "../packages/server/lib/index.ts"),
       "@radix-ui/react-slot": resolve(__dirname, "../node_modules/@radix-ui/react-slot"),
       "@noble/hashes": resolve(__dirname, "../node_modules/@turnkey/crypto/node_modules/@noble/hashes"),

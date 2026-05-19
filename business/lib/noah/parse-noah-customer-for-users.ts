@@ -2,7 +2,12 @@
  * Map Noah Customer payload → `public.users` profile + KYC columns (normalized on write).
  */
 
-import { normalizeCountryIso } from "@easner/shared/verified-identity"
+import {
+  countryDisplayName,
+  mapNoahIdTypeLabel,
+  maskIdNumber,
+  normalizeCountryIso,
+} from "@easner/shared"
 
 export type ParsedNoahCustomerForUsers = {
   full_name?: string
@@ -18,12 +23,7 @@ export type ParsedNoahCustomerForUsers = {
   kyc_verified_at?: string
 }
 
-export {
-  countryDisplayName,
-  mapNoahIdTypeLabel,
-  maskIdNumber,
-  normalizeCountryIso,
-} from "@easner/shared/verified-identity"
+export { countryDisplayName, mapNoahIdTypeLabel, maskIdNumber, normalizeCountryIso }
 
 function titleCaseWord(word: string): string {
   if (!word) return word

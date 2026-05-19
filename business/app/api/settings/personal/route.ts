@@ -3,7 +3,7 @@ import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin
 import {
   buildVerifiedIdentityFromKycFields,
   isProfileLockedFromKycFields,
-} from "@easner/shared/verified-identity"
+} from "@easner/shared"
 
 type PersonalUpdateBody = {
   fullName?: string
