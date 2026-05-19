@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /**
- * Download flag PNGs from flagcdn.com into packages/shared/assets/flags,
- * copy to business/public/flags, and regenerate Metro manifest + ISO list.
+ * Download flag PNGs from flagcdn.com, normalize to uniform 3:2 (country-flag-icons),
+ * copy to business/public/flags, and regenerate manifests.
  */
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import sharp from 'sharp'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const sharedRoot = path.resolve(__dirname, '..')
@@ -15,8 +16,11 @@ const manifestOut = path.join(sharedRoot, 'src', 'flags', 'flag-assets.manifest.
 const webManifestOut = path.join(sharedRoot, 'src', 'flags', 'flag-assets.web.manifest.ts')
 const businessFlagsDir = path.resolve(sharedRoot, '../../business/public/flags')
 
-/** flagcdn width (w320 is sharp on retina). Display flags at 3:2 (country-flag-icons convention). */
+/** flagcdn width (w320 is sharp on retina). */
 const FLAGCDN_WIDTH = Number.parseInt(process.env.FLAGCDN_WIDTH || '320', 10) || 320
+/** Uniform 3:2 output — matches country-flag-icons / UI frames. */
+const FLAG_OUT_WIDTH = FLAGCDN_WIDTH
+const FLAG_OUT_HEIGHT = Math.round((FLAGCDN_WIDTH * 2) / 3)
 const forceRedownload = process.argv.includes('--force')
 
 function extractIsoCodes() {
@@ -34,11 +38,26 @@ function extractIsoCodes() {
 async function downloadFlag(iso) {
   const lower = iso.toLowerCase()
   const url = `https://flagcdn.com/w${FLAGCDN_WIDTH}/${lower}.png`
-  const dest = path.join(assetsDir, `${lower}.png`)
   const res = await fetch(url)
   if (!res.ok) throw new Error(`${iso}: HTTP ${res.status}`)
-  const buf = Buffer.from(await res.arrayBuffer())
-  fs.writeFileSync(dest, buf)
+  return Buffer.from(await res.arrayBuffer())
+}
+
+/** Fit flag into fixed 3:2 canvas so every asset fills UI frames consistently. */
+async function normalizeFlagPng(input) {
+  return sharp(input)
+    .resize(FLAG_OUT_WIDTH, FLAG_OUT_HEIGHT, {
+      fit: 'cover',
+      position: 'centre',
+    })
+    .png({ compressionLevel: 9, adaptiveFiltering: true })
+    .toBuffer()
+}
+
+async function writeNormalizedFlag(iso, rawBuf) {
+  const dest = path.join(assetsDir, `${iso.toLowerCase()}.png`)
+  const normalized = await normalizeFlagPng(rawBuf)
+  fs.writeFileSync(dest, normalized)
   return dest
 }
 
@@ -109,21 +128,36 @@ function copyToBusiness(codes) {
   }
 }
 
+async function needsNormalize(iso) {
+  const dest = path.join(assetsDir, `${iso.toLowerCase()}.png`)
+  if (!fs.existsSync(dest) || fs.statSync(dest).size === 0) return true
+  if (forceRedownload) return true
+  try {
+    const meta = await sharp(dest).metadata()
+    if (meta.width !== FLAG_OUT_WIDTH || meta.height !== FLAG_OUT_HEIGHT) return true
+  } catch {
+    return true
+  }
+  return false
+}
+
 async function main() {
   const codes = extractIsoCodes()
   fs.mkdirSync(assetsDir, { recursive: true })
-  console.log(`Syncing ${codes.length} flags at w${FLAGCDN_WIDTH}${forceRedownload ? ' (force)' : ''}…`)
+  console.log(
+    `Syncing ${codes.length} flags → ${FLAG_OUT_WIDTH}×${FLAG_OUT_HEIGHT} (3:2)${forceRedownload ? ' (force)' : ''}…`
+  )
   let ok = 0
   for (const iso of codes) {
-    const dest = path.join(assetsDir, `${iso.toLowerCase()}.png`)
-    if (!forceRedownload && fs.existsSync(dest) && fs.statSync(dest).size > 0) {
-      ok++
-      continue
-    }
     try {
-      await downloadFlag(iso)
+      if (await needsNormalize(iso)) {
+        const raw = await downloadFlag(iso)
+        await writeNormalizedFlag(iso, raw)
+        process.stdout.write('.')
+      } else {
+        process.stdout.write('-')
+      }
       ok++
-      process.stdout.write('.')
     } catch (e) {
       console.error(`\nFailed ${iso}:`, e.message)
     }

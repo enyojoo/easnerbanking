@@ -31,9 +31,6 @@ export function CountryFlag({ code, size = 20, style }: CountryFlagProps) {
     height,
     borderRadius: FLAG_BORDER_RADIUS_PX,
     overflow: "hidden",
-    backgroundColor: "rgba(0,0,0,0.04)",
-    alignItems: "center",
-    justifyContent: "center",
   }
 
   if (!source) {
@@ -49,8 +46,8 @@ export function CountryFlag({ code, size = 20, style }: CountryFlagProps) {
       <Image
         source={source}
         recyclingKey={upper}
-        style={{ width, height }}
-        contentFit="contain"
+        style={StyleSheet.absoluteFill}
+        contentFit="cover"
         contentPosition="center"
         cachePolicy="memory-disk"
         transition={0}

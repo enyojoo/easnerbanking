@@ -1,5 +1,5 @@
 /**
- * Flag display follows country-flag-icons convention: 3:2 width:height, full flag visible (contain).
+ * Flag display: 3:2 frames (country-flag-icons). PNGs are normalized to 3:2 in sync-flags.mjs.
  * @see https://www.npmjs.com/package/country-flag-icons
  */
 
@@ -19,12 +19,9 @@ export function flagWidthForHeight(height: number): number {
   return Math.max(1, Math.round((height * FLAG_ASPECT_WIDTH) / FLAG_ASPECT_HEIGHT))
 }
 
-/** Web: flag frame shell (image inside uses object-contain). */
+/** Web: flag frame shell (assets are uniform 3:2; image uses object-cover). */
 export const FLAG_WEB_FRAME_CLASS =
   "inline-flex shrink-0 overflow-hidden select-none [pointer-events:none]"
-
-/** Letterbox areas when PNG aspect ≠ 3:2 (subtle, matches UI chrome). */
-export const FLAG_FRAME_BG_CLASS = "bg-muted/30"
 
 /** Use on web when the parent sets width/height (e.g. avatar badge). */
 export const FLAG_FILL_CLASS = "size-full min-h-0 min-w-0"

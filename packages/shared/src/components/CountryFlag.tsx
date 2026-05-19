@@ -6,7 +6,6 @@ import { flagIsoForCurrency, getFlagPublicUrl, hasFlagAsset, normalizeFlagIso } 
 import {
   FLAG_BORDER_RADIUS_PX,
   FLAG_FILL_CLASS,
-  FLAG_FRAME_BG_CLASS,
   FLAG_WEB_FRAME_CLASS,
   flagFillsParentClass,
   resolveFlagBoxSizeFromStyle,
@@ -57,10 +56,8 @@ export function CountryFlag({ code, size = 24, className, style, title }: Countr
       title={label}
       className={cn(
         FLAG_WEB_FRAME_CLASS,
-        FLAG_FRAME_BG_CLASS,
         flagRadiusClass,
         fillParent && FLAG_FILL_CLASS,
-        !fillParent && "items-center justify-center",
         className
       )}
       style={{
@@ -75,7 +72,7 @@ export function CountryFlag({ code, size = 24, className, style, title }: Countr
         src={src}
         alt=""
         draggable={false}
-        className="block h-full w-full object-contain object-center"
+        className="block h-full w-full object-cover object-center"
         onDragStart={(e) => e.preventDefault()}
       />
     </span>
