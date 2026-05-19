@@ -62,7 +62,7 @@ export default function AccountsPage() {
                 </div>
                 <div className="space-y-2">
                   <Skeleton className="h-4 w-32" />
-                  <Skeleton className="h-11 w-44" />
+                  <Skeleton className="h-10 w-40" />
                 </div>
                 <div className="flex gap-2">
                   <Skeleton className="h-9 w-28" />
@@ -78,7 +78,7 @@ export default function AccountsPage() {
                 </div>
                 <div className="space-y-2">
                   <Skeleton className="h-4 w-32" />
-                  <Skeleton className="h-11 w-44" />
+                  <Skeleton className="h-10 w-40" />
                 </div>
                 <div className="flex gap-2">
                   <Skeleton className="h-9 w-28" />
@@ -94,7 +94,7 @@ export default function AccountsPage() {
                 <div className="flex h-full flex-col">
                   <div className="flex-1 space-y-4">
                     <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-2">
                         <CurrencyFlagCircle currency={account.currency} size={35} />
                         <div>
                           <h3 className="text-lg font-semibold">{account.currency}</h3>
@@ -104,7 +104,7 @@ export default function AccountsPage() {
 
                     <div className="mb-10">
                       <p className="mb-1 text-xs text-muted-foreground">Available Balance</p>
-                      <p className="text-[2.125rem] font-semibold leading-tight tracking-tight">
+                      <p className="text-[2rem] font-semibold leading-tight tracking-tight">
                         {getCurrencySymbol(account.currency)}
                         {account.balance.toLocaleString("en-US", {
                           minimumFractionDigits: 2,

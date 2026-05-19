@@ -107,6 +107,7 @@ export async function applyTurnkeyWebhookSideEffects(
   admin: SupabaseClient,
   payload: unknown,
   eventId: string,
+  opts?: { skipBalanceDelta?: boolean },
 ): Promise<boolean> {
   const event = (payload || {}) as TurnkeyEvent
   const toCandidates = new Set<string>([
@@ -305,7 +306,12 @@ export async function applyTurnkeyWebhookSideEffects(
 
   // Update DB-backed balance snapshot for realtime dashboards.
   // For settled events we apply the delta; pending/failed should not move balances.
-  if (!easetagSuppressed && status === "settled" && (upsert.inserted || upsert.becameSettled)) {
+  if (
+    !opts?.skipBalanceDelta &&
+    !easetagSuppressed &&
+    status === "settled" &&
+    (upsert.inserted || upsert.becameSettled)
+  ) {
     const businessScopeId = businessId ? businessId : null
     const userScopeId = businessId ? null : userId
     const signed = direction === "in" ? amount : -amount

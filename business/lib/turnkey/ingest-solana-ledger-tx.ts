@@ -46,6 +46,8 @@ export async function ingestTurnkeySolanaTxForOwnerVault(
     signature: string
     blockTime: number | null
     connection: Connection
+    /** Backfill/repair: upsert ledger rows only; balances come from ATA snapshot. */
+    skipBalanceDelta?: boolean
   },
 ): Promise<
   | { upserts: number; kind: "applied" }
@@ -118,7 +120,7 @@ export async function ingestTurnkeySolanaTxForOwnerVault(
       baseCurrency: currency,
     })
 
-    if (upsert.inserted || upsert.becameSettled) {
+    if (!params.skipBalanceDelta && (upsert.inserted || upsert.becameSettled)) {
       const signed = direction === "in" ? amount : -amount
       await applyWalletBalanceDelta(admin, {
         businessId: params.ctx.businessId ? params.ctx.businessId : null,

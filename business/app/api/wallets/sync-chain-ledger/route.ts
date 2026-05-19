@@ -4,6 +4,7 @@ import { requireAuth } from "@/app/api/noah/_helpers"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { resolveWalletOwnerIdForEasnerContext } from "@/lib/wallet/resolve-wallet-owner"
 import { backfillTurnkeyOnchainTransactions } from "@/lib/turnkey/onchain-backfill"
+import { syncWalletBalancesFromSolanaAtaForOwner } from "@/lib/wallet/sync-wallet-balances-from-ata"
 
 export const runtime = "nodejs"
 
@@ -63,8 +64,9 @@ export async function POST(request: Request) {
     })
     inFlightByOwner.set(walletOwnerId, run)
     const result = await run
+    const balanceSync = await syncWalletBalancesFromSolanaAtaForOwner(admin, walletOwnerId)
     lastSyncAtByOwner.set(walletOwnerId, Date.now())
-    return NextResponse.json({ ok: true, result })
+    return NextResponse.json({ ok: true, result, balanceSync })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     return NextResponse.json({ ok: false, error: msg }, { status: 500 })

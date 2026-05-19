@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server"
 import { assertInternalCronAuthorized } from "@/lib/api/internal-auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { getTurnkeyDisplayBalancesUsdEur } from "@/lib/wallet/turnkey-chain-balances"
-import { upsertWalletBalanceSnapshot } from "@/lib/wallet/wallet-balances-db"
+import { syncWalletBalancesFromSolanaAtaForOwner } from "@/lib/wallet/sync-wallet-balances-from-ata"
 
 export const runtime = "nodejs"
 
@@ -32,10 +31,9 @@ async function mapLimit<T, R>(
 }
 
 /**
- * Internal: seed `public.wallet_balances` by snapshotting current Turnkey balances for all owners.
+ * Internal: seed `public.wallet_balances` from on-chain SPL ATA balances for all owners.
  *
- * This is meant to be run after deploying the `wallet_balances` table so the DB becomes the
- * primary source-of-truth immediately (even if Turnkey is rate-limiting during cold start).
+ * Use after ledger backfill or when balances drifted from replaying historical transactions.
  */
 export async function POST(request: Request) {
   try {
@@ -72,43 +70,12 @@ export async function POST(request: Request) {
 
     attempted += 1
 
-    const ctx =
-      ownerType === "business"
-        ? ({
-            scope: "business",
-            subjectBusinessId: ownerRef,
-            subjectUserId: ownerRef, // unused in business scope by our resolver; keep present for type-shape
-          } as any)
-        : ({
-            scope: "individual",
-            subjectUserId: ownerRef,
-            subjectBusinessId: null,
-          } as any)
-
     try {
-      const result = await getTurnkeyDisplayBalancesUsdEur(admin, ctx)
-      if (result.source !== "turnkey") {
+      const synced = await syncWalletBalancesFromSolanaAtaForOwner(admin, String(row.id))
+      if (!synced.ok) {
         skipped += 1
         return
       }
-
-      const businessId = ownerType === "business" ? ownerRef : null
-      const userId = ownerType === "individual" ? ownerRef : null
-
-      await Promise.all([
-        upsertWalletBalanceSnapshot(admin, {
-          businessId,
-          userId,
-          currency: "USD",
-          availableBalance: Number(result.USD) || 0,
-        }),
-        upsertWalletBalanceSnapshot(admin, {
-          businessId,
-          userId,
-          currency: "EUR",
-          availableBalance: Number(result.EUR) || 0,
-        }),
-      ])
       wrote += 1
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)

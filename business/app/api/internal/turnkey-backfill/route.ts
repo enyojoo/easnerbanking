@@ -4,6 +4,7 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { backfillTurnkeyHistoricalTransactions } from "@/lib/turnkey/backfill-transactions"
 import { backfillTurnkeyOnchainTransactions } from "@/lib/turnkey/onchain-backfill"
 import { fillMissingAssociatedTokenAddresses } from "@/lib/wallet/fill-wallet-account-ata"
+import { syncWalletBalancesFromSolanaAtaForOwners } from "@/lib/wallet/sync-wallet-balances-from-ata"
 
 export const runtime = "nodejs"
 
@@ -29,7 +30,15 @@ export async function POST(request: Request) {
         throttleMsBetweenIngests: 40,
       }),
     ])
-    return NextResponse.json({ ok: true, result: { ataFill, activities, onchain } })
+    const { data: ownerRows } = await admin.from("wallet_owners").select("id").limit(5000)
+    const ownerIds = [
+      ...new Set([
+        ...onchain.walletOwnerIds,
+        ...(ownerRows || []).map((r) => String(r.id)).filter(Boolean),
+      ]),
+    ]
+    const balanceSync = await syncWalletBalancesFromSolanaAtaForOwners(admin, ownerIds)
+    return NextResponse.json({ ok: true, result: { ataFill, activities, onchain, balanceSync } })
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Backfill failed"
     const stack = e instanceof Error ? (e.stack || "").split("\n").slice(0, 4).join("\n") : undefined

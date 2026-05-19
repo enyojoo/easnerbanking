@@ -109,6 +109,7 @@ export async function backfillTurnkeyOnchainTransactions(
   upserts: number
   skipped: number
   skipReasons: Record<string, number>
+  walletOwnerIds: string[]
 }> {
   const limit = Math.max(1, Math.min(200, Math.floor(input?.signaturesPerAddress ?? 120)))
   const throttleMs = Math.max(
@@ -138,6 +139,7 @@ export async function backfillTurnkeyOnchainTransactions(
   let upserts = 0
   let skipped = 0
   const skipReasons: Record<string, number> = {}
+  const walletOwnerIds = new Set<string>()
   const bump = (k: string) => {
     skipReasons[k] = (skipReasons[k] ?? 0) + 1
   }
@@ -151,6 +153,7 @@ export async function backfillTurnkeyOnchainTransactions(
       bump("missing_wallet_address_or_owner_or_asset")
       continue
     }
+    walletOwnerIds.add(walletOwnerId)
 
     const ctx = await resolveLedgerOwnerContext(admin, walletOwnerId, ownerCtxCache)
     if (!ctx) {
@@ -212,6 +215,7 @@ export async function backfillTurnkeyOnchainTransactions(
         signature: sig.signature,
         blockTime: sig.blockTime,
         connection,
+        skipBalanceDelta: true,
       })
       if (res.kind === "applied") upserts += res.upserts
       if (res.kind === "error") {
@@ -227,5 +231,6 @@ export async function backfillTurnkeyOnchainTransactions(
     upserts,
     skipped,
     skipReasons,
+    walletOwnerIds: [...walletOwnerIds],
   }
 }

@@ -81,7 +81,9 @@ export async function backfillTurnkeyHistoricalTransactions(admin: SupabaseClien
     for (const activity of activities) {
       const eventId = toEventId(activity)
       try {
-        const normalized = await applyTurnkeyWebhookSideEffects(admin, activity, eventId)
+        const normalized = await applyTurnkeyWebhookSideEffects(admin, activity, eventId, {
+          skipBalanceDelta: true,
+        })
         if (normalized) normalizedEvents += 1
       } catch {
         // Continue best-effort; upserts are idempotent by provider/provider_transaction_id.
