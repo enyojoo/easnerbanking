@@ -1141,13 +1141,17 @@ function createDashboardStyles(c: Colors, scrollBottomPadding: number) {
   },
   flagContainer: {
     width: 22,
-    height: 15,
-    borderRadius: 2,
+    height: 22,
+    borderRadius: 11,
     overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.85)',
   },
   flagImage: {
     width: 22,
-    height: 15,
+    height: 22,
+    borderRadius: 11,
   },
   currencyText: {
     fontSize: 14,
@@ -1267,14 +1271,13 @@ function createDashboardStyles(c: Colors, scrollBottomPadding: number) {
     backgroundColor: c.background.primary,
   },
   flagContainerSmall: {
-    width: 24,
-    height: 16,
-    borderRadius: 2,
+    ...surfaceChromeCircleStyle(c, 24, { shadow: 'none' }),
     overflow: 'hidden',
   },
   flagImageSmall: {
     width: 24,
-    height: 16,
+    height: 24,
+    borderRadius: 12,
   },
   currencyOptionText: {
     ...textStyles.bodyMedium,

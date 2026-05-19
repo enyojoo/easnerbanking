@@ -522,7 +522,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
             <View style={styles.headerContent}>
               <Text style={styles.title}>Receive Money</Text>
               <View style={styles.currencyDisplay}>
-                <CurrencyFlag currency={currency} size={28} style={styles.currencyFlag} />
+                <CurrencyFlag currency={currency} size={24} style={styles.currencyFlag} />
                 <Text style={styles.currencyText}>{currency}</Text>
               </View>
             </View>
@@ -888,9 +888,9 @@ const styles = StyleSheet.create({
     gap: spacing[2],
   },
   currencyFlag: {
-    width: 28,
-    height: 19,
-    borderRadius: 2,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
   },
   currencyText: {
     ...textStyles.bodyMedium,

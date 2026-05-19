@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import {
-  countryDisplayName,
-  mapNoahIdTypeLabel,
-  maskIdNumber,
-} from "@/lib/noah/parse-noah-customer-for-users"
+  buildVerifiedIdentityFromKycFields,
+  isProfileLockedFromKycFields,
+} from "@easner/shared/verified-identity"
 
 type PersonalUpdateBody = {
   fullName?: string
@@ -50,60 +49,6 @@ function fallbackNameFromMeta(user: { user_metadata?: Record<string, unknown> | 
   const meta = user.user_metadata ?? {}
   if (typeof meta.name === "string" && meta.name.trim()) return meta.name.trim()
   return user.email ?? "User"
-}
-
-function isProfileLocked(row: Record<string, unknown> | null | undefined): boolean {
-  if (!row) return false
-  const status = String(row.noah_kyc_status ?? "").toLowerCase()
-  return status === "approved" && row.kyc_verified_at != null
-}
-
-function buildVerifiedIdentity(row: Record<string, unknown> | null | undefined) {
-  if (!row || !isProfileLocked(row)) {
-    return { visible: false as const }
-  }
-  const hasId = Boolean(row.kyc_id_type || row.kyc_id_number)
-  const hasAddress = Boolean(row.kyc_address_street)
-  if (!hasId && !hasAddress) {
-    return { visible: false as const }
-  }
-
-  const issuingCode =
-    typeof row.kyc_id_issuing_country === "string" ? row.kyc_id_issuing_country.trim().toUpperCase() : ""
-  const addressCountryCode =
-    typeof row.kyc_address_country === "string" ? row.kyc_address_country.trim().toUpperCase() : ""
-
-  const addressLines: string[] = []
-  if (typeof row.kyc_address_street === "string" && row.kyc_address_street.trim()) {
-    addressLines.push(row.kyc_address_street.trim())
-  }
-  const cityLine = [
-    typeof row.kyc_address_city === "string" ? row.kyc_address_city.trim() : "",
-    typeof row.kyc_address_state === "string" ? row.kyc_address_state.trim() : "",
-    typeof row.kyc_address_post_code === "string" ? row.kyc_address_post_code.trim() : "",
-  ]
-    .filter(Boolean)
-    .join(", ")
-  if (cityLine) addressLines.push(cityLine)
-
-  const idTypeRaw = typeof row.kyc_id_type === "string" ? row.kyc_id_type : null
-
-  return {
-    visible: true as const,
-    idType: idTypeRaw ? mapNoahIdTypeLabel(idTypeRaw) : null,
-    idTypeRaw,
-    idNumberMasked:
-      typeof row.kyc_id_number === "string" && row.kyc_id_number.trim()
-        ? maskIdNumber(row.kyc_id_number)
-        : null,
-    issuingCountry: issuingCode
-      ? { code: issuingCode, name: countryDisplayName(issuingCode) }
-      : null,
-    addressLines,
-    addressCountry: addressCountryCode
-      ? { code: addressCountryCode, name: countryDisplayName(addressCountryCode) }
-      : null,
-  }
 }
 
 async function fetchUserRow(admin: ReturnType<typeof createSupabaseAdmin>, userId: string) {
@@ -160,7 +105,7 @@ export async function GET(request: Request) {
     }
   }
 
-  const profileLocked = isProfileLocked(data)
+  const profileLocked = isProfileLockedFromKycFields(data)
 
   return NextResponse.json({
     personal: {
@@ -171,7 +116,7 @@ export async function GET(request: Request) {
       avatarUrl,
       profileLocked,
     },
-    verifiedIdentity: buildVerifiedIdentity(data),
+    verifiedIdentity: buildVerifiedIdentityFromKycFields(data),
     sessionRefreshSuggested,
   })
 }
@@ -189,7 +134,7 @@ export async function PUT(request: Request) {
 
   const admin = createSupabaseAdmin()
   const { data: existing } = await fetchUserRow(admin, user.id)
-  const locked = isProfileLocked(existing)
+  const locked = isProfileLockedFromKycFields(existing)
 
   if (locked) {
     const wantsName =

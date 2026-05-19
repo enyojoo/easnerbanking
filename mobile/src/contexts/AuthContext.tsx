@@ -17,6 +17,7 @@ import {
   resolvePostSignInMfaRequirement,
   totpFactorsFromListResponse,
 } from '../lib/auth-mfa'
+import { buildVerifiedIdentityFromKycFields } from '@easner/shared'
 import { mapUsersRowToUser, splitFullNameForForm } from '../lib/userProfileHelpers'
 import type { PersonalSettingsPayload } from '../lib/userService'
 import { ensureConsumerMobileAccess } from '../lib/validateAppSurface'
@@ -413,6 +414,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           bridge_signed_agreement_id: row.bridge_signed_agreement_id as string | undefined,
           updated_at: profile.updated_at,
           profile,
+          verifiedIdentity: buildVerifiedIdentityFromKycFields(row),
         }
         setUserProfile(nextProfile)
         warmAvatarCache(nextProfile.profile.avatar_url)

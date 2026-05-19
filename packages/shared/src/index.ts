@@ -73,3 +73,17 @@ export {
   isEasnerProductSendTitle,
 } from "./transactions/product-label"
 export type { EasnerLedgerDirection } from "./transactions/product-label"
+export {
+  buildVerifiedIdentityFromKycFields,
+  countryDisplayName,
+  formatMaskedIdForDisplay,
+  formatVerifiedAddressDisplay,
+  isProfileLockedFromKycFields,
+  mapNoahIdTypeLabel,
+  maskIdNumber,
+  normalizeCountryIso,
+} from "./verified-identity"
+export type {
+  VerifiedCountryRef,
+  VerifiedIdentityPayload,
+} from "./verified-identity"

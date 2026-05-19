@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import {
   View,
   Text,
@@ -18,6 +18,14 @@ import DateTimePicker from '@react-native-community/datetimepicker'
 import { ArrowLeft, Calendar, Camera, CircleCheck, CircleX, Trash2 } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useFocusEffect } from '@react-navigation/native'
+import {
+  buildVerifiedIdentityFromKycFields,
+  formatMaskedIdForDisplay,
+  formatVerifiedAddressDisplay,
+  isProfileLockedFromKycFields,
+  type VerifiedIdentityPayload,
+} from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import KeyboardSafeContainer from '../../components/KeyboardSafeContainer'
 import { useAuth } from '../../contexts/AuthContext'
@@ -26,13 +34,11 @@ import {
   userService,
   personalFromUpdateProfileResult,
   fetchPersonalSettings,
-  parseVerifiedIdentity,
   UserProfileData,
   UserStats,
-  type VerifiedIdentityPayload,
 } from '../../lib/userService'
 import { CountryFlag } from '../../components/flags/CountryFlag'
-import { colors, shadows, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, userAvatarStyles, PROFILE_EDIT_AVATAR_SIZE, motion, fontFamily } from '../../theme'
+import { colors, shadows, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, userAvatarStyles, PROFILE_EDIT_AVATAR_SIZE, motion, fontFamily, fontSize } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { supabase } from '../../lib/supabase'
@@ -74,8 +80,18 @@ function ProfileEditContent({ navigation }: NavigationProps) {
    * before the parent re-renders with refreshed auth profile.
    */
   const skipNextProfileHydrateRef = useRef(false)
-  const [profileLocked, setProfileLocked] = useState(false)
-  const [verifiedIdentity, setVerifiedIdentity] = useState<VerifiedIdentityPayload>({ visible: false })
+
+  const profileLocked = useMemo(() => {
+    if (!userProfile?.profile) return false
+    return isProfileLockedFromKycFields(userProfile.profile as unknown as Record<string, unknown>)
+  }, [userProfile?.profile])
+
+  const verifiedIdentity = useMemo((): VerifiedIdentityPayload => {
+    if (userProfile?.verifiedIdentity) return userProfile.verifiedIdentity
+    if (!userProfile?.profile) return { visible: false }
+    return buildVerifiedIdentityFromKycFields(userProfile.profile as unknown as Record<string, unknown>)
+  }, [userProfile?.verifiedIdentity, userProfile?.profile])
+
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     // Initialize with existing date or default to 25 years ago
@@ -96,19 +112,12 @@ function ProfileEditContent({ navigation }: NavigationProps) {
   // Run entrance animations
   useCalmParallelEnterWhen(true, headerAnim, contentAnim)
 
-  useEffect(() => {
-    if (!user?.id) return
-    let cancelled = false
-    void (async () => {
-      const settings = await fetchPersonalSettings(user.id)
-      if (cancelled || !settings) return
-      setProfileLocked(settings.personal.profileLocked === true)
-      setVerifiedIdentity(settings.verifiedIdentity ?? { visible: false })
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [user?.id, userProfile?.profile?.noah_kyc_status])
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!user?.id || !refreshUserProfile) return
+      void refreshUserProfile()
+    }, [user?.id, refreshUserProfile]),
+  )
 
   useEffect(() => {
     if (!userProfile) return
@@ -198,26 +207,12 @@ function ProfileEditContent({ navigation }: NavigationProps) {
       }
 
       let fromServer = personalFromUpdateProfileResult(updateResult)
-      let verifiedFromServer: VerifiedIdentityPayload | null = null
       if (!fromServer) {
         const settings = await fetchPersonalSettings(user.id)
         fromServer = settings?.personal ?? null
-        verifiedFromServer = settings?.verifiedIdentity ?? null
-      } else {
-        const parsed = updateResult as Record<string, unknown> | null
-        if (parsed && typeof parsed === 'object' && parsed.verifiedIdentity) {
-          verifiedFromServer = parseVerifiedIdentity(parsed.verifiedIdentity)
-        }
       }
       if (fromServer) {
         applyPersonalSettingsFromServer(fromServer, easetagSaved ? { easetag: editProfileData.easetag } : undefined)
-        setProfileLocked(fromServer.profileLocked === true)
-      }
-      if (verifiedFromServer) {
-        setVerifiedIdentity(verifiedFromServer)
-      } else if (fromServer?.profileLocked) {
-        const settings = await fetchPersonalSettings(user.id)
-        if (settings?.verifiedIdentity) setVerifiedIdentity(settings.verifiedIdentity)
       }
       const updatedProfileData = fromServer
         ? (() => {
@@ -552,99 +547,93 @@ function ProfileEditContent({ navigation }: NavigationProps) {
   const renderProfileField = (label: string, value: string, onChangeText: (text: string) => void, disabled: boolean = false) => {
     const isEmailField = label.trim().toLowerCase() === 'email'
     const isNameField = label === 'Full Name'
+    const isPhoneField = label.trim().toLowerCase() === 'phone number'
     const trimmed = (value || '').trim()
-    const readOnlyText = trimmed || 'Not set'
+    const canEdit = isEditing && !disabled
     return (
       <View style={styles.fieldContainer}>
         <Text style={styles.fieldLabelEdit}>{label}</Text>
-        {isEditing ? (
-          <TextInput
-            style={[styles.fieldInput, disabled && styles.fieldInputReadOnly]}
-            value={value}
-            onChangeText={onChangeText}
-            placeholder={`Enter ${label.toLowerCase()}`}
-            placeholderTextColor={colors.text.tertiary}
-            returnKeyType="done"
-            onSubmitEditing={() => Keyboard.dismiss()}
-            editable={!disabled}
-            autoCapitalize={isEmailField ? 'none' : 'words'}
-            autoCorrect={isEmailField || isNameField ? false : true}
-            keyboardType={isEmailField ? 'email-address' : 'default'}
-          />
-        ) : (
-          <View style={[styles.fieldInput, styles.fieldInputReadOnly, styles.fieldReadOnlyInner]}>
-            <Text
-              style={[
-                styles.fieldReadOnlyText,
-                styles.fieldReadOnlyTextView,
-                !trimmed && styles.fieldReadOnlyPlaceholder,
-              ]}
-              numberOfLines={isEmailField ? 4 : 3}
-            >
-              {readOnlyText}
-            </Text>
+        <View
+          style={[
+            styles.profileFieldBox,
+            canEdit ? styles.profileFieldBoxEditable : styles.profileFieldBoxReadOnly,
+          ]}
+        >
+          <View style={styles.fieldBoxInner}>
+            <TextInput
+              style={[styles.fieldBoxInput, !canEdit && styles.fieldBoxInputReadOnly]}
+              value={canEdit ? value : trimmed}
+              onChangeText={onChangeText}
+              placeholder={canEdit ? `Enter ${label.toLowerCase()}` : 'Not set'}
+              placeholderTextColor={colors.text.tertiary}
+              editable={canEdit}
+              pointerEvents={canEdit ? 'auto' : 'none'}
+              showSoftInputOnFocus={canEdit}
+              caretHidden={!canEdit}
+              returnKeyType="done"
+              onSubmitEditing={() => Keyboard.dismiss()}
+              autoCapitalize={isEmailField ? 'none' : 'words'}
+              autoCorrect={isEmailField || isNameField ? false : true}
+              keyboardType={
+                isEmailField ? 'email-address' : isPhoneField ? 'phone-pad' : 'default'
+              }
+            />
           </View>
-        )}
+        </View>
       </View>
     )
   }
 
-  const renderCountryRow = (country: { code: string; name: string } | null | undefined) => {
-    if (!country?.code) return null
-    return (
-      <View style={styles.countryRow}>
-        <CountryFlag code={country.code} size={20} />
-        <Text style={styles.countryRowText}>{country.name || country.code}</Text>
-      </View>
-    )
-  }
+  const formattedIdNumber = useMemo(
+    () => formatMaskedIdForDisplay(verifiedIdentity.idNumberMasked),
+    [verifiedIdentity.idNumberMasked],
+  )
+
+  const formattedResidentialAddress = useMemo(
+    () => formatVerifiedAddressDisplay(verifiedIdentity),
+    [verifiedIdentity],
+  )
 
   const renderVerifiedIdentityCard = () => {
     if (!verifiedIdentity.visible) return null
     return (
       <View style={[styles.profileCard, styles.verifiedCard]}>
-        <Text style={styles.verifiedCardTitle}>Verified identity</Text>
         {verifiedIdentity.idType ? (
           <View style={styles.fieldContainer}>
             <Text style={styles.fieldLabelEdit}>ID type</Text>
-            <View style={[styles.fieldInput, styles.fieldInputReadOnly, styles.fieldReadOnlyInner]}>
-              <Text style={styles.fieldReadOnlyText}>{verifiedIdentity.idType}</Text>
+            <View style={[styles.profileFieldBox, styles.profileFieldBoxReadOnly]}>
+              <View style={[styles.fieldBoxInner, styles.fieldBoxInnerRow]}>
+                {verifiedIdentity.issuingCountry?.code ? (
+                  <CountryFlag code={verifiedIdentity.issuingCountry.code} size={20} />
+                ) : null}
+                <Text style={[styles.fieldBoxValueText, styles.fieldBoxValueTextFlex]} numberOfLines={1}>
+                  {verifiedIdentity.idType}
+                </Text>
+              </View>
             </View>
           </View>
         ) : null}
-        {verifiedIdentity.idNumberMasked ? (
+        {formattedIdNumber ? (
           <View style={styles.fieldContainer}>
             <Text style={styles.fieldLabelEdit}>ID number</Text>
-            <View style={[styles.fieldInput, styles.fieldInputReadOnly, styles.fieldReadOnlyInner]}>
-              <Text style={styles.fieldReadOnlyText}>{verifiedIdentity.idNumberMasked}</Text>
+            <View style={[styles.profileFieldBox, styles.profileFieldBoxReadOnly]}>
+              <View style={styles.fieldBoxInner}>
+                <Text style={[styles.fieldBoxValueText, styles.verifiedIdNumberText]} numberOfLines={1}>
+                  {formattedIdNumber}
+                </Text>
+              </View>
             </View>
           </View>
         ) : null}
-        {verifiedIdentity.issuingCountry ? (
-          <View style={styles.fieldContainer}>
-            <Text style={styles.fieldLabelEdit}>Issuing country</Text>
-            <View style={[styles.fieldInput, styles.fieldInputReadOnly, styles.fieldReadOnlyInner]}>
-              {renderCountryRow(verifiedIdentity.issuingCountry)}
-            </View>
-          </View>
-        ) : null}
-        {(verifiedIdentity.addressLines?.length ?? 0) > 0 ? (
+        {formattedResidentialAddress ? (
           <View style={styles.fieldContainer}>
             <Text style={styles.fieldLabelEdit}>Residential address</Text>
-            <View style={[styles.fieldInput, styles.fieldInputReadOnly, styles.fieldReadOnlyInner]}>
-              {verifiedIdentity.addressLines?.map((line, i) => (
-                <Text key={`addr-${i}`} style={[styles.fieldReadOnlyText, i > 0 && styles.addressLineGap]}>
-                  {line}
+            <View style={[styles.profileFieldBox, styles.profileFieldBoxReadOnly, styles.profileFieldBoxTall]}>
+              <View style={[styles.fieldBoxInner, styles.fieldBoxInnerTall]}>
+                <Text style={[styles.fieldBoxValueText, styles.verifiedAddressText]}>
+                  {formattedResidentialAddress}
                 </Text>
-              ))}
-            </View>
-          </View>
-        ) : null}
-        {verifiedIdentity.addressCountry ? (
-          <View style={styles.fieldContainer}>
-            <Text style={styles.fieldLabelEdit}>Country</Text>
-            <View style={[styles.fieldInput, styles.fieldInputReadOnly, styles.fieldReadOnlyInner]}>
-              {renderCountryRow(verifiedIdentity.addressCountry)}
+              </View>
             </View>
           </View>
         ) : null}
@@ -659,7 +648,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
         <>
           <Pressable
            android_ripple={ripple.neutral}
-            style={[styles.fieldInput, styles.dateInputContainer]}
+            style={[styles.profileFieldBox, styles.profileFieldBoxEditable]}
             onPress={() => {
               // Initialize selectedDate with current value when opening picker
               if (editProfileData.dateOfBirth) {
@@ -667,15 +656,22 @@ function ProfileEditContent({ navigation }: NavigationProps) {
               }
               setShowDatePicker(true)
             }} >
-            <Text style={[
-              styles.dateInputText,
-              !editProfileData.dateOfBirth && { color: colors.text.tertiary }
-            ]}>
-              {editProfileData.dateOfBirth 
-                ? formatDateOfBirth(editProfileData.dateOfBirth)
-                : 'Select date of birth'}
-            </Text>
-            <Calendar size={18} color={colors.text.secondary} strokeWidth={2} />
+            <View style={[styles.fieldBoxInner, styles.fieldBoxInnerRow]}>
+              <Text
+                style={[
+                  styles.fieldBoxValueText,
+                  styles.fieldBoxValueTextEditable,
+                  styles.fieldBoxValueTextFlex,
+                  !editProfileData.dateOfBirth && styles.fieldReadOnlyPlaceholder,
+                ]}
+                numberOfLines={1}
+              >
+                {editProfileData.dateOfBirth
+                  ? formatDateOfBirth(editProfileData.dateOfBirth)
+                  : 'Select date of birth'}
+              </Text>
+              <Calendar size={18} color={colors.text.secondary} strokeWidth={2} />
+            </View>
           </Pressable>
           {Platform.OS === 'android' && showDatePicker ? (
             <DateTimePicker
@@ -689,63 +685,38 @@ function ProfileEditContent({ navigation }: NavigationProps) {
           ) : null}
         </>
       ) : (
-        <View style={[styles.fieldInput, styles.fieldInputReadOnly, styles.fieldReadOnlyInner]}>
-          <Text
-            style={[
-              styles.fieldReadOnlyText,
-              styles.fieldReadOnlyTextView,
-              !profileData.dateOfBirth?.trim() && styles.fieldReadOnlyPlaceholder,
-            ]}
-            numberOfLines={2}
-          >
+        <View style={[styles.profileFieldBox, styles.profileFieldBoxReadOnly]}>
+          <View style={styles.fieldBoxInner}>
+            <Text
+              style={[
+                styles.fieldBoxValueText,
+                !profileData.dateOfBirth?.trim() && styles.fieldReadOnlyPlaceholder,
+              ]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
             {profileData.dateOfBirth?.trim()
               ? formatDateOfBirth(profileData.dateOfBirth)
               : 'Not set'}
-          </Text>
+            </Text>
+          </View>
         </View>
       )}
     </View>
   )
 
   const renderEasetagField = () => {
-    const easetagT = editProfileData.easetag.replace(/^@/, '').trim()
-    const easetagTLen = easetagT.length
-
-    if (!isEditing) {
-      const tag = (profileData.easetag || '').replace(/^@/, '').trim()
-      return (
-        <View style={styles.fieldContainer}>
-          <View style={styles.easetagLabelContainer}>
-            <Text style={[styles.fieldLabelEdit, styles.easetagFieldLabel]}>Easetag</Text>
-            <View style={styles.easetagStatusSlot} />
-          </View>
-          <View style={[styles.easetagInputContainer, styles.fieldInputReadOnly]}>
-            <Text style={styles.easetagPrefix}>@</Text>
-            <Text
-              style={[
-                styles.fieldReadOnlyText,
-                styles.fieldReadOnlyTextView,
-                styles.easetagReadOnlyValue,
-                !tag && styles.fieldReadOnlyPlaceholder,
-              ]}
-              numberOfLines={1}
-            >
-              {tag || 'Not set'}
-            </Text>
-          </View>
-          <Text style={[styles.easetagHelperText, { color: colors.text.tertiary }]}>
-            People can send you money for free using your Easetag.
-          </Text>
-        </View>
-      )
-    }
+    const canEdit = isEditing
+    const tagRaw = (canEdit ? editProfileData.easetag : profileData.easetag || '').replace(/^@/, '')
+    const tagView = tagRaw.trim()
+    const easetagTLen = tagView.length
 
     return (
       <View style={styles.fieldContainer}>
         <View style={styles.easetagLabelContainer}>
           <Text style={[styles.fieldLabelEdit, styles.easetagFieldLabel]}>Easetag</Text>
           <View style={styles.easetagStatusSlot}>
-            {easetagTLen > 0 ? (
+            {canEdit && easetagTLen > 0 ? (
               <View style={styles.easetagStatusContainer}>
                 {easetagTLen < 4 ? (
                   <Text style={[styles.easetagStatusTextInline, { color: colors.text.tertiary }]}>Min 4 characters</Text>
@@ -779,20 +750,36 @@ function ProfileEditContent({ navigation }: NavigationProps) {
           </View>
         </View>
         <View>
-          <View style={styles.easetagInputContainer}>
-            <Text style={styles.easetagPrefix}>@</Text>
-            <TextInput
-              style={styles.easetagInput}
-              value={editProfileData.easetag}
-              onChangeText={handleEasetagChange}
-              placeholder="youreasetag"
-              placeholderTextColor={colors.text.tertiary}
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="done"
-              onSubmitEditing={() => Keyboard.dismiss()}
-              maxLength={20}
-            />
+          <View
+            style={[
+              styles.profileFieldBox,
+              canEdit ? styles.profileFieldBoxEditable : styles.profileFieldBoxReadOnly,
+              styles.easetagFieldTopMargin,
+            ]}
+          >
+            <View style={[styles.fieldBoxInner, styles.fieldBoxInnerRow]}>
+              <Text style={styles.easetagPrefix}>@</Text>
+              <TextInput
+                style={[
+                  styles.fieldBoxInput,
+                  styles.fieldBoxInputInRow,
+                  !canEdit && styles.fieldBoxInputReadOnly,
+                ]}
+                value={canEdit ? tagRaw : tagView}
+                onChangeText={handleEasetagChange}
+                placeholder={canEdit ? 'youreasetag' : 'Not set'}
+                placeholderTextColor={colors.text.tertiary}
+                editable={canEdit}
+                pointerEvents={canEdit ? 'auto' : 'none'}
+                showSoftInputOnFocus={canEdit}
+                caretHidden={!canEdit}
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="done"
+                onSubmitEditing={() => Keyboard.dismiss()}
+                maxLength={20}
+              />
+            </View>
           </View>
           <Text style={[styles.easetagHelperText, { color: colors.text.tertiary }]}>
             People can send you money for free using your Easetag.
@@ -1145,23 +1132,102 @@ const styles = StyleSheet.create({
   verifiedCard: {
     marginTop: spacing.md,
   },
-  verifiedCardTitle: {
-    ...textStyles.headlineMedium,
-    color: colors.text.primary,
-    marginBottom: spacing.md,
+  /** Shared 40px field tray — edit mode, view mode, verified identity, easetag */
+  profileFieldBox: {
+    borderWidth: 0.5,
+    borderColor: colors.frame.border,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing[3],
+    height: 40,
+    minHeight: 40,
+    maxHeight: 40,
+    width: '100%',
+    overflow: 'hidden',
+    justifyContent: 'center',
+    ...Platform.select({
+      android: { includeFontPadding: false },
+    }),
   },
-  countryRow: {
+  profileFieldBoxTall: {
+    height: undefined,
+    minHeight: 40,
+    maxHeight: undefined,
+    justifyContent: 'flex-start',
+    paddingVertical: spacing[2],
+  },
+  profileFieldBoxEditable: {
+    backgroundColor: colors.background.primary,
+  },
+  profileFieldBoxReadOnly: {
+    backgroundColor: colors.frame.background,
+  },
+  fieldBoxInner: {
+    width: '100%',
+    height: 20,
+    justifyContent: 'center',
+    alignSelf: 'stretch',
+  },
+  fieldBoxInnerTall: {
+    height: undefined,
+    minHeight: 20,
+    justifyContent: 'flex-start',
+    alignSelf: 'stretch',
+  },
+  fieldBoxInnerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing[1],
   },
-  countryRowText: {
-    ...textStyles.body,
-    color: colors.text.primary,
+  fieldBoxValueText: {
+    ...textStyles.bodyLarge,
+    color: colors.text.secondary,
+    fontWeight: '500',
+    lineHeight: 20,
+    paddingVertical: 0,
+    ...Platform.select({
+      android: { includeFontPadding: false, textAlignVertical: 'center' },
+      ios: { lineHeight: 20 },
+    }),
+  },
+  fieldBoxValueTextFlex: {
     flex: 1,
+    minWidth: 0,
   },
-  addressLineGap: {
-    marginTop: 4,
+  fieldBoxValueTextEditable: {
+    color: colors.text.primary,
+  },
+  /** Borderless input — shell is `profileFieldBox`; matches `fieldBoxValueText` metrics */
+  fieldBoxInput: {
+    ...textStyles.bodyLarge,
+    width: '100%',
+    height: 20,
+    padding: 0,
+    margin: 0,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+    fontWeight: '500',
+    lineHeight: 20,
+    color: colors.text.primary,
+    ...Platform.select({
+      android: { includeFontPadding: false, textAlignVertical: 'center', paddingVertical: 0 },
+      ios: { paddingVertical: 0, marginTop: 0, marginBottom: 0 },
+    }),
+  },
+  fieldBoxInputInRow: {
+    flex: 1,
+    minWidth: 0,
+    width: undefined,
+  },
+  fieldBoxInputReadOnly: {
+    color: colors.text.secondary,
+  },
+  verifiedIdNumberText: {
+    fontVariant: ['tabular-nums'],
+    letterSpacing: 1.5,
+  },
+  verifiedAddressText: {
+    lineHeight: 22,
+    flexShrink: 1,
   },
   profileCard: {
     ...surfaceFrameStyle(colors),
@@ -1220,48 +1286,11 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  fieldInput: {
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[3],
-    minHeight: 48,
-    ...textStyles.textInputSingleLine,
-    color: colors.text.primary,
-    backgroundColor: colors.background.primary,
-    ...Platform.select({
-      android: { includeFontPadding: false, textAlignVertical: 'center' },
-      ios: { paddingVertical: 12 },
-    }),
-  },
-  /** Edit: editable fields use canvas primary; read-only (email) matches view “muted” boxes */
-  fieldInputReadOnly: {
-    backgroundColor: colors.frame.background,
-    color: colors.text.secondary,
-  },
-  fieldReadOnlyInner: {
-    justifyContent: 'center',
-  },
-  fieldReadOnlyText: {
-    ...textStyles.bodyLarge,
-    color: colors.text.primary,
-    fontWeight: '500',
-    ...Platform.select({
-      android: { includeFontPadding: false },
-      default: {},
-    }),
-  },
-  /** View mode: same typography as values on muted field (aligned with email read-only input) */
-  fieldReadOnlyTextView: {
-    color: colors.text.secondary,
-  },
   fieldReadOnlyPlaceholder: {
     color: colors.text.tertiary,
   },
-  easetagReadOnlyValue: {
-    flex: 1,
-    minWidth: 0,
+  easetagFieldTopMargin: {
+    marginTop: spacing[1],
   },
   /** Same top margin as other field hints; separate token for Easetag edit copy */
   easetagHelperText: {
@@ -1313,48 +1342,17 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '500',
   },
-  easetagInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 48,
-    minHeight: 48,
-    maxHeight: 48,
-    marginTop: spacing[1],
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.background.primary,
-    overflow: 'hidden',
-  },
   easetagPrefix: {
     ...textStyles.bodyLarge,
     color: colors.text.secondary,
-    paddingLeft: spacing[3],
-    paddingRight: spacing[2],
     fontWeight: '500',
-  },
-  easetagInput: {
-    flex: 1,
-    alignSelf: 'stretch',
-    paddingRight: spacing[3],
-    minHeight: 0,
-    ...textStyles.textInputSingleLine,
-    color: colors.text.primary,
+    lineHeight: 20,
+    height: 20,
+    flexShrink: 0,
     ...Platform.select({
-      android: { includeFontPadding: false, textAlignVertical: 'center', paddingVertical: 0 },
-      ios: { paddingVertical: 12 },
+      android: { includeFontPadding: false, textAlignVertical: 'center' },
+      ios: { lineHeight: 20 },
     }),
-  },
-  dateInputContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  dateInputText: {
-    ...textStyles.bodyLarge,
-    color: colors.text.primary,
-    fontFamily: fontFamily.regular,
-    flex: 1,
   },
   dateModalOverlay: {
     flex: 1,

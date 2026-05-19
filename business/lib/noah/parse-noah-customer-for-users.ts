@@ -2,6 +2,8 @@
  * Map Noah Customer payload → `public.users` profile + KYC columns (normalized on write).
  */
 
+import { normalizeCountryIso } from "@easner/shared/verified-identity"
+
 export type ParsedNoahCustomerForUsers = {
   full_name?: string
   date_of_birth?: string | null
@@ -16,33 +18,12 @@ export type ParsedNoahCustomerForUsers = {
   kyc_verified_at?: string
 }
 
-const ID_TYPE_LABELS: Record<string, string> = {
-  TaxID: "Tax ID",
-  SSN: "SSN",
-  SocialSecurityNumber: "SSN",
-  Passport: "Passport",
-  NationalID: "National ID",
-  NationalId: "National ID",
-  DriversLicense: "Driver's License",
-}
-
-export function mapNoahIdTypeLabel(raw: string | null | undefined): string {
-  if (!raw || !String(raw).trim()) return ""
-  const key = String(raw).trim()
-  if (ID_TYPE_LABELS[key]) return ID_TYPE_LABELS[key]
-  return key
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/_/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/\b\w/g, (c) => c.toUpperCase())
-}
-
-export function maskIdNumber(full: string | null | undefined): string {
-  const s = String(full ?? "").replace(/\s/g, "")
-  if (s.length <= 4) return "••••"
-  return `•••••${s.slice(-4)}`
-}
+export {
+  countryDisplayName,
+  mapNoahIdTypeLabel,
+  maskIdNumber,
+  normalizeCountryIso,
+} from "@easner/shared/verified-identity"
 
 function titleCaseWord(word: string): string {
   if (!word) return word
@@ -96,13 +77,6 @@ function formatAddressState(input: string): string {
   const raw = input.trim()
   if (raw.length <= 4 && raw === raw.toUpperCase()) return raw
   return titleCaseAddressPart(raw)
-}
-
-export function normalizeCountryIso(value: unknown): string | null {
-  if (value == null) return null
-  const s = String(value).trim().toUpperCase()
-  if (/^[A-Z]{2}$/.test(s)) return s
-  return null
 }
 
 function pickString(obj: Record<string, unknown>, ...keys: string[]): string | null {
@@ -167,18 +141,6 @@ function verificationOccurredAt(customer: Record<string, unknown>, fallback?: st
     if (!Number.isNaN(d.getTime())) return d.toISOString()
   }
   return new Date().toISOString()
-}
-
-/** Country display name for API (ISO-2 in DB). */
-export function countryDisplayName(iso: string | null | undefined, locale = "en"): string {
-  const code = normalizeCountryIso(iso)
-  if (!code) return ""
-  try {
-    const dn = new Intl.DisplayNames([locale], { type: "region" })
-    return dn.of(code) ?? code
-  } catch {
-    return code
-  }
 }
 
 /**

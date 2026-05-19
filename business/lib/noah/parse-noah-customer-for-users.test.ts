@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest"
 import {
+  buildVerifiedIdentityFromKycFields,
+  formatMaskedIdForDisplay,
+  formatVerifiedAddressDisplay,
+} from "../../../packages/shared/src/verified-identity"
+import {
   countryDisplayName,
   mapNoahIdTypeLabel,
   maskIdNumber,
@@ -43,7 +48,7 @@ describe("parse-noah-customer-for-users", () => {
   })
 
   it("masks id number", () => {
-    expect(maskIdNumber("22380755976")).toBe("•••••5976")
+    expect(maskIdNumber("22380755976")).toBe("2238•••5976")
   })
 
   it("maps id type labels", () => {
@@ -57,5 +62,41 @@ describe("parse-noah-customer-for-users", () => {
 
   it("titleCaseName handles empty", () => {
     expect(titleCaseName("")).toBe("")
+  })
+
+  it("buildVerifiedIdentityFromKycFields when approved with id", () => {
+    const v = buildVerifiedIdentityFromKycFields({
+      noah_kyc_status: "approved",
+      kyc_verified_at: "2025-01-01T00:00:00Z",
+      kyc_id_type: "Passport",
+      kyc_id_number: "22380755976",
+      kyc_id_issuing_country: "NG",
+    })
+    expect(v.visible).toBe(true)
+    expect(v.idType).toBe("Passport")
+    expect(v.idNumberMasked).toBe("2238•••5976")
+    expect(v.issuingCountry?.code).toBe("NG")
+  })
+
+  it("buildVerifiedIdentityFromKycFields hidden when not approved", () => {
+    expect(buildVerifiedIdentityFromKycFields({ noah_kyc_status: "pending" }).visible).toBe(false)
+  })
+
+  it("formatMaskedIdForDisplay adds spacing", () => {
+    expect(formatMaskedIdForDisplay("2238•••5976")).toBe("2238 • • • 5976")
+  })
+
+  it("formatVerifiedAddressDisplay is one comma-separated line", () => {
+    expect(
+      formatVerifiedAddressDisplay({
+        addressLines: [
+          "39 Plot, Apo Dutse, Before Cedar Crest Hospital, Gudu Service Centers",
+          "FCT, Abuja, 900108",
+        ],
+        addressCountry: { code: "NG", name: "Nigeria" },
+      }),
+    ).toBe(
+      "39 Plot, Apo Dutse, Before Cedar Crest Hospital, Gudu Service Centers, FCT, Abuja, 900108, Nigeria",
+    )
   })
 })

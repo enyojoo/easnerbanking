@@ -1,9 +1,29 @@
 import { Platform } from 'react-native'
 import Constants from 'expo-constants'
 import type { Session } from '@supabase/supabase-js'
-import Intercom, { Visibility } from '@intercom/intercom-react-native'
 import { supabase } from './supabase'
 import { getApiBaseUrl } from './apiClient'
+import { isExpoGo } from './expoGo'
+
+type IntercomModule = typeof import('@intercom/intercom-react-native')
+
+let intercomLazy: IntercomModule | null | undefined
+
+function getIntercom(): IntercomModule | null {
+  if (isExpoGo) return null
+
+  const extra = intercomExtra()
+  if (!extra?.intercomConfigured) return null
+
+  if (intercomLazy === undefined) {
+    try {
+      intercomLazy = require('@intercom/intercom-react-native') as IntercomModule
+    } catch {
+      intercomLazy = null
+    }
+  }
+  return intercomLazy
+}
 
 type IntercomExtra = {
   intercomConfigured?: boolean
@@ -17,6 +37,9 @@ function intercomExtra(): IntercomExtra | undefined {
 }
 
 export async function ensureIntercomInitialized(): Promise<boolean> {
+  const mod = getIntercom()
+  if (!mod) return false
+
   const extra = intercomExtra()
   if (!extra?.intercomConfigured || !extra.intercomAppId) return false
 
@@ -29,7 +52,7 @@ export async function ensureIntercomInitialized(): Promise<boolean> {
   if (!apiKey) return false
 
   try {
-    await Intercom.initialize(apiKey, extra.intercomAppId)
+    await mod.default.initialize(apiKey, extra.intercomAppId)
     return true
   } catch (e) {
     console.warn('[Intercom] initialize failed', e)
@@ -63,8 +86,13 @@ export async function syncIntercomSession(session: Session | null): Promise<void
   const extra = intercomExtra()
   if (!extra?.intercomConfigured) return
 
+  const mod = getIntercom()
+  if (!mod) return
+
   const ok = await ensureIntercomInitialized()
   if (!ok) return
+
+  const { default: Intercom, Visibility } = mod
 
   try {
     if (session?.user) {
@@ -97,8 +125,17 @@ export async function presentIntercomMessenger(): Promise<void> {
     throw new Error('INTERCOM_NOT_CONFIGURED')
   }
 
+  if (isExpoGo || !getIntercom()) {
+    throw new Error('INTERCOM_NOT_CONFIGURED')
+  }
+
   const ok = await ensureIntercomInitialized()
   if (!ok) throw new Error('INTERCOM_NOT_CONFIGURED')
+
+  const mod = getIntercom()
+  if (!mod) throw new Error('INTERCOM_NOT_CONFIGURED')
+
+  const { default: Intercom } = mod
 
   const {
     data: { session },

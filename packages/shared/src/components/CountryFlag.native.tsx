@@ -14,6 +14,8 @@ export type CountryFlagProps = {
   className?: string
   style?: StyleProp<ImageStyle>
   title?: string
+  /** `contain` fits full flag in badge circles; default `cover` fills currency circles. */
+  contentFit?: "cover" | "contain"
 }
 
 function flagSource(iso: string) {
@@ -21,7 +23,7 @@ function flagSource(iso: string) {
   return upper.length === 2 ? FLAG_ASSETS[upper] : undefined
 }
 
-export function CountryFlag({ code, size = 20, style }: CountryFlagProps) {
+export function CountryFlag({ code, size = 20, style, contentFit = "cover" }: CountryFlagProps) {
   const upper = normalizeFlagIso(code)
   const source = flagSource(upper)
   const flat = StyleSheet.flatten(style) ?? {}
@@ -47,7 +49,7 @@ export function CountryFlag({ code, size = 20, style }: CountryFlagProps) {
         source={source}
         recyclingKey={upper}
         style={StyleSheet.absoluteFill}
-        contentFit="cover"
+        contentFit={contentFit}
         contentPosition="center"
         cachePolicy="memory-disk"
         transition={0}
@@ -63,13 +65,14 @@ export type CurrencyFlagProps = {
   style?: StyleProp<ImageStyle>
   title?: string
   fallbackSvg?: string | null
+  contentFit?: "cover" | "contain"
 }
 
-export function CurrencyFlag({ currency, size = 20, style }: CurrencyFlagProps) {
+export function CurrencyFlag({ currency, size = 20, style, contentFit = "cover" }: CurrencyFlagProps) {
   const code = String(currency || "").trim().toUpperCase()
   const iso = flagIsoForCurrency(code) || getCountryCodeForCurrency(code) || ""
   if (iso && flagSource(iso)) {
-    return <CountryFlag code={iso} size={size} style={style} />
+    return <CountryFlag code={iso} size={size} style={style} contentFit={contentFit} />
   }
   const flat = StyleSheet.flatten(style) ?? {}
   const { width, height } = resolveFlagBoxSizeFromStyle(size, flat)

@@ -1554,23 +1554,25 @@ const styles = StyleSheet.create({
     right: -2,
     zIndex: 3,
     elevation: 3,
-    width: 14,
-    height: 9,
-    borderRadius: 2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     backgroundColor: colors.background.primary,
-    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 2,
     borderColor: colors.background.primary,
+    overflow: 'hidden',
   },
   easenetMarkImgSmall: {
-    width: 14,
-    height: 9,
-    borderRadius: 2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
   },
   /** Full-bleed inside circular clip (flag, token, or easetag photo) */
   recipientAvatarFill: {
     width: 36,
-    height: 24,
+    height: 36,
     borderRadius: 0,
   },
   recipientAvatarInitials: {
@@ -1748,14 +1750,13 @@ const styles = StyleSheet.create({
     borderColor: colors.error.main,
   },
   flagContainer: {
-    width: 24,
-    height: 16,
-    borderRadius: 2,
+    ...surfaceChromeCircleStyle(colors, 24, { shadow: 'none' }),
     overflow: 'hidden',
   },
   flagImage: {
     width: 24,
-    height: 16,
+    height: 24,
+    borderRadius: 12,
   },
   balanceSelectorText: {
     flex: 1,
@@ -2003,14 +2004,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.primary,
   },
   flagContainerSmall: {
-    width: 24,
-    height: 16,
-    borderRadius: 2,
+    ...surfaceChromeCircleStyle(colors, 24, { shadow: 'none' }),
     overflow: 'hidden',
   },
   flagImageSmall: {
     width: 24,
-    height: 16,
+    height: 24,
+    borderRadius: 12,
   },
 })
 
@@ -2072,7 +2072,7 @@ function PayoutSendRecipientAvatar({
         {isWalletRecipient && tokenIcon ? (
           <Image source={{ uri: tokenIcon }} style={styles.recipientAvatarFill} resizeMode="cover" />
         ) : (
-          <CountryFlag code={countryCode} size={36} style={styles.recipientAvatarFill} />
+          <CountryFlag code={countryCode} size={36} style={styles.recipientAvatarFill} contentFit="cover" />
         )}
       </View>
     )
@@ -2093,7 +2093,7 @@ function PayoutSendRecipientAvatar({
         {isWalletRecipient && tokenIcon ? (
           <Image source={{ uri: tokenIcon }} style={styles.easenetMarkImgSmall} resizeMode="cover" />
         ) : (
-          <CountryFlag code={countryCode} size={14} style={styles.easenetMarkImgSmall} />
+          <CountryFlag code={countryCode} size={16} style={styles.easenetMarkImgSmall} contentFit="contain" />
         )}
       </View>
     </View>

@@ -1,20 +1,8 @@
+import type { VerifiedCountryRef, VerifiedIdentityPayload } from '@easner/shared'
 import { supabase } from './supabase'
 import { getApiBaseUrl } from './apiClient'
 
-export type VerifiedCountryRef = {
-  code: string
-  name: string
-}
-
-export type VerifiedIdentityPayload = {
-  visible: boolean
-  idType?: string | null
-  idTypeRaw?: string | null
-  idNumberMasked?: string | null
-  issuingCountry?: VerifiedCountryRef | null
-  addressLines?: string[]
-  addressCountry?: VerifiedCountryRef | null
-}
+export type { VerifiedCountryRef, VerifiedIdentityPayload }
 
 /** Shape returned by `PUT /api/settings/personal` (and normalized Supabase fallback). */
 export type PersonalSettingsPayload = {

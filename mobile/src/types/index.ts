@@ -208,12 +208,16 @@ export interface User {
   updated_at: string
 }
 
+import type { VerifiedIdentityPayload } from '@easner/shared'
+
 // Mobile-specific types
 export interface AuthUser {
   id: string
   email: string
   isAdmin: boolean
   profile: User
+  /** Built from KYC columns when profile is locked; persisted in profile snapshot. */
+  verifiedIdentity?: VerifiedIdentityPayload
   /** Noah / org fields (duplicate `profile` for screens that read `userProfile.noah_*`) */
   noah_customer_id?: string | null
   noah_kyc_status?: string | null
