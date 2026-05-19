@@ -1215,12 +1215,19 @@ export const noahService = {
   /**
    * Batch Noah /prices rates for wallet send (USD/EUR → payout currencies).
    */
-  async getNoahExchangeRates(): Promise<
+  async getNoahExchangeRates(options?: {
+    destinations?: string
+  }): Promise<
     Array<{ from_currency: string; to_currency: string; rate: number; as_of?: string }>
   > {
     const session = await requireAuthSession()
     const scopeHeaders = await getNoahScopeHeaders()
-    const response = await fetch(`${apiUrl()}/api/noah/exchange-rates`, {
+    const dest = options?.destinations?.trim().toUpperCase()
+    const path =
+      dest && dest.length === 3
+        ? `/api/noah/exchange-rates?destinations=${encodeURIComponent(dest)}`
+        : "/api/noah/exchange-rates"
+    const response = await fetch(`${apiUrl()}${path}`, {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${session.access_token}`,

@@ -83,6 +83,7 @@
     "zod": "3.25.67"
   },
   "devDependencies": {
+    "@easner/rate-sync": "*",
     "@easner/server": "*",
     "@easner/shared": "*",
     "@tailwindcss/postcss": "^4.1.9",

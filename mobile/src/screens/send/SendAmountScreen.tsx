@@ -38,7 +38,7 @@ import {
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { useToast } from '../../components/ToastProvider'
-import { useExchangeRatesList } from '../../hooks/queries'
+import { useNoahSendExchangeRates } from '../../hooks/queries'
 import { useAuth } from '../../contexts/AuthContext'
 import { isTier1Complete, TIER2_COMPLETE_PLACEHOLDER } from '../../lib/compliance'
 import { mobileFxEngine } from '../../lib/fxEngine'
@@ -154,9 +154,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     isEasetagRecipient &&
     selectedPaymentMethod === 'balance' &&
     String(selectedBalanceCurrency).toUpperCase() === String((recipient?.currency || '').trim().toUpperCase())
-  const { data: exchangeRatesFromContext = [] } = useExchangeRatesList({
-    enabled: !skipNoahExchangeRatesForEasetagP2p,
-  })
+  const { data: exchangeRatesFromContext = [] } = useNoahSendExchangeRates(
+    recipient?.currency,
+    { enabled: !skipNoahExchangeRatesForEasetagP2p },
+  )
   const exchangeRates = exchangeRatesFromContext || []
 
   // Initialize sending balance currency once:

@@ -13,16 +13,14 @@ import {
 import { RecipientForm } from "@/components/recipient-form"
 import type { Beneficiary } from "@/lib/recipient-types"
 import { Label } from "@/components/ui/label"
-import { Search, Plus, User, ChevronDown, Loader2 } from "lucide-react"
-import { CountryFlag, CurrencyFlag } from "@/components/flags"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Search, Plus, ChevronDown, Loader2 } from "lucide-react"
+import { RecipientPayoutProfileRow } from "@/components/recipient-payout-profile-row"
 import { useRecipientsCached } from "@/hooks/use-recipients-cached"
 import { fetchEasenetProfileByTag } from "@/lib/easenet-profile"
 import { buildDraftEasetagBeneficiary } from "@/lib/draft-easetag-beneficiary"
 import { filterBeneficiariesBySearch } from "@/lib/send-hub-recipient-search"
 import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
 import { EasenetRecipientProfileRowHydrated } from "@/components/easenet-recipient-profile-row-hydrated"
-import { cn } from "@/lib/utils"
 
 interface SendRecipientPickerProps {
   selected: Beneficiary | null
@@ -152,15 +150,6 @@ export function SendRecipientPicker({
     setIsPickerOpen(false)
   }
 
-  const recipientInitials = (b: Beneficiary) =>
-    b.name
-      .split(/\s+/)
-      .filter(Boolean)
-      .map((p) => p[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase() || "?"
-
   return (
     <div className="space-y-2">
       <Label className="text-muted-foreground">{label}</Label>
@@ -181,33 +170,14 @@ export function SendRecipientPicker({
                 subtitleClassName="text-sm text-muted-foreground"
               />
             ) : (
-              <>
-                <div className="relative mr-1 shrink-0">
-                  {selected.avatarUrl ? (
-                    <Avatar className="h-10 w-10 border border-border">
-                      <AvatarImage src={selected.avatarUrl} alt="" />
-                      <AvatarFallback>{recipientInitials(selected)}</AvatarFallback>
-                    </Avatar>
-                  ) : (
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                      <User className="h-5 w-5 text-primary" />
-                    </div>
-                  )}
-                  <div className="absolute -bottom-0.5 -right-0.5 w-6 aspect-[3/2] overflow-hidden rounded-[2px] border-2 border-background">
-                    {selected.countryCode ? (
-                      <CountryFlag code={selected.countryCode} className="size-full rounded-none" />
-                    ) : (
-                      <CurrencyFlag currency={selected.currency} className="size-full rounded-none" />
-                    )}
-                  </div>
-                </div>
-                <div className="min-w-0">
-                  <p className="font-medium">{selected.name}</p>
-                  <p className="min-w-0 text-sm text-muted-foreground">
-                    <span className="truncate">{`${selected.currency} • ${selected.fullAccountNumber}`}</span>
-                  </p>
-                </div>
-              </>
+              <RecipientPayoutProfileRow
+                fullName={selected.name}
+                countryCode={selected.countryCode}
+                currency={selected.currency}
+                avatarUrl={selected.avatarUrl}
+                className="min-w-0 flex-1"
+                subtitle={`${selected.currency} • ${selected.fullAccountNumber}`}
+              />
             )}
           </div>
         ) : (
@@ -277,33 +247,15 @@ export function SendRecipientPicker({
                       subtitleClassName="text-xs text-muted-foreground"
                     />
                   ) : (
-                    <>
-                      <div className="relative mr-1 shrink-0">
-                        {b.avatarUrl ? (
-                          <Avatar className="h-10 w-10 border border-border">
-                            <AvatarImage src={b.avatarUrl} alt="" />
-                            <AvatarFallback>{recipientInitials(b)}</AvatarFallback>
-                          </Avatar>
-                        ) : (
-                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                            <User className="h-5 w-5 text-primary" />
-                          </div>
-                        )}
-                        <div className="absolute -bottom-0.5 -right-0.5 w-6 aspect-[3/2] overflow-hidden rounded-[2px] border-2 border-background">
-                          {b.countryCode ? (
-                            <CountryFlag code={b.countryCode} className="size-full rounded-none" />
-                          ) : (
-                            <CurrencyFlag currency={b.currency} className="size-full rounded-none" />
-                          )}
-                        </div>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-medium">{b.name}</p>
-                        <p className="min-w-0 text-sm text-muted-foreground">
-                          <span className="truncate">{`${b.bankName} • ${b.currency}`}</span>
-                        </p>
-                      </div>
-                    </>
+                    <RecipientPayoutProfileRow
+                      fullName={b.name}
+                      countryCode={b.countryCode}
+                      currency={b.currency}
+                      avatarUrl={b.avatarUrl}
+                      className="min-w-0 flex-1"
+                      subtitle={`${b.bankName} • ${b.currency}`}
+                      subtitleClassName="text-xs text-muted-foreground"
+                    />
                   )}
                 </button>
               ))}

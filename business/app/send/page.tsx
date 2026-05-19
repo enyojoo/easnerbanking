@@ -8,7 +8,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { SendRecipientPicker } from "@/components/send-recipient-picker"
 import { getCurrencySymbol } from "@/lib/utils"
-import { sendFlowReferenceUsdPerUnit } from "@/lib/send-flow-reference-rates"
+import {
+  getNoahSendConversionRate,
+  noahSendRatesQueryPath,
+  noahWalletRowsToRateMap,
+} from "@easner/shared"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 import type { Beneficiary } from "@/lib/recipient-types"
@@ -49,13 +53,6 @@ import {
   persistSendFlowState,
 } from "@/lib/send-flow-session"
 import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
-
-function referenceConversionRate(fromCurrency: string, toCurrency: string): number {
-  if (fromCurrency === toCurrency) return 1
-  const fromPerUsd = 1 / (sendFlowReferenceUsdPerUnit[fromCurrency] ?? 1)
-  const toPerUsd = 1 / (sendFlowReferenceUsdPerUnit[toCurrency] ?? 1)
-  return toPerUsd / fromPerUsd
-}
 
 function convertAmountWithRate(
   amount: number,
@@ -127,22 +124,12 @@ export default function SendPage() {
     let cancelled = false
     void (async () => {
       try {
-        const res = await fetchWithSession(
-          `/api/noah/exchange-rates?destinations=${encodeURIComponent(dest)}`,
-        )
+        const res = await fetchWithSession(noahSendRatesQueryPath(dest))
         const data = (await res.json().catch(() => ({}))) as {
           rates?: Array<{ from_currency: string; to_currency: string; rate: number }>
         }
         if (!res.ok || cancelled) return
-        const map: Record<string, number> = {}
-        for (const row of data.rates || []) {
-          const from = String(row.from_currency || "").toUpperCase()
-          const to = String(row.to_currency || "").toUpperCase()
-          if (from && to && Number.isFinite(row.rate) && row.rate > 0) {
-            map[`${from}_${to}`] = row.rate
-          }
-        }
-        setNoahFxRates(map)
+        setNoahFxRates(noahWalletRowsToRateMap(data.rates || []))
       } catch {
         if (!cancelled) setNoahFxRates({})
       }
@@ -153,13 +140,8 @@ export default function SendPage() {
   }, [recipient?.currency])
 
   const getConversionRate = useCallback(
-    (fromCurrency: string, toCurrency: string): number => {
-      if (fromCurrency === toCurrency) return 1
-      const key = `${fromCurrency.toUpperCase()}_${toCurrency.toUpperCase()}`
-      const noah = noahFxRates[key]
-      if (noah && noah > 0) return noah
-      return referenceConversionRate(fromCurrency, toCurrency)
-    },
+    (fromCurrency: string, toCurrency: string): number =>
+      getNoahSendConversionRate(noahFxRates, fromCurrency, toCurrency),
     [noahFxRates],
   )
 

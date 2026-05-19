@@ -23,9 +23,8 @@ import {
 } from "@/components/ui/dialog"
 import { RecipientForm } from "@/components/recipient-form"
 import type { Beneficiary } from "@/lib/recipient-types"
-import { CountryFlag, CurrencyFlag } from "@/components/flags"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { coerceBeneficiaryEasenetDisplay, deleteRecipient, listRecipients } from "@/lib/recipients-store"
+import { RecipientPayoutProfileRow } from "@/components/recipient-payout-profile-row"
 import { useAuth } from "@/lib/auth-context"
 import { useRecipientsCached } from "@/hooks/use-recipients-cached"
 import { createSendFlowSeedForRecipient, persistSendFlowState } from "@/lib/send-flow-session"
@@ -78,15 +77,6 @@ export function SettingsRecipientsTab() {
   const filteredBeneficiaries = beneficiaries.filter((recipient) =>
     recipientMatchesSearch(recipient, searchTerm)
   )
-
-  const recipientInitials = (r: Beneficiary) =>
-    r.name
-      .split(/\s+/)
-      .filter(Boolean)
-      .map((p) => p[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase() || "?"
 
   const handleEdit = (recipient: Beneficiary) => {
     setSelectedRecipient(recipient)
@@ -217,34 +207,17 @@ export function SettingsRecipientsTab() {
                           nameClassName="font-semibold text-sm"
                           subtitleClassName="text-xs text-muted-foreground"
                         />
-                      ) : (
-                        <>
-                          <div className="relative mr-1 shrink-0">
-                            {recipient.avatarUrl ? (
-                              <Avatar className="h-10 w-10 border border-border">
-                                <AvatarImage src={recipient.avatarUrl} alt="" />
-                                <AvatarFallback>{recipientInitials(recipient)}</AvatarFallback>
-                              </Avatar>
-                            ) : (
-                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                                <User className="h-5 w-5 text-primary" />
-                              </div>
-                            )}
-                            <div className="absolute -bottom-0.5 -right-0.5 w-6 aspect-[3/2] overflow-hidden rounded-[2px] border-2 border-background">
-                              {recipient.countryCode ? (
-                                <CountryFlag code={recipient.countryCode} className="size-full rounded-none" />
-                              ) : (
-                                <CurrencyFlag currency={recipient.currency} className="size-full rounded-none" />
-                              )}
-                            </div>
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <h3 className="text-sm font-semibold">{recipient.name}</h3>
-                            <p className="min-w-0 text-xs text-muted-foreground">
-                              {`${recipient.bankName} • ${recipient.fullAccountNumber} • ${recipient.currency}`}
-                            </p>
-                          </div>
-                        </>
+                                            ) : (
+                        <RecipientPayoutProfileRow
+                          fullName={recipient.name}
+                          countryCode={recipient.countryCode}
+                          currency={recipient.currency}
+                          avatarUrl={recipient.avatarUrl}
+                          className="min-w-0 flex-1"
+                          nameClassName="text-sm font-semibold"
+                          subtitle={`${recipient.bankName} • ${recipient.fullAccountNumber} • ${recipient.currency}`}
+                          subtitleClassName="text-xs text-muted-foreground"
+                        />
                       )}
                     </div>
                     <div className="flex items-center gap-2">

@@ -118,6 +118,7 @@ export async function syncOpenExchangeRates(
 
   const asOf = new Date((body.timestamp ?? Math.floor(Date.now() / 1000)) * 1000).toISOString()
   const nowIso = new Date().toISOString()
+  /** Rate-only upsert — do not overwrite admin fee/limit columns. */
   const updates = [
     {
       from_currency: "USD",
@@ -125,9 +126,6 @@ export async function syncOpenExchangeRates(
       rate: eur,
       source: "open_exchange_rates",
       as_of: asOf,
-      fee_type: "free",
-      fee_amount: 0,
-      status: "active",
       updated_at: nowIso,
     },
     {
@@ -136,14 +134,10 @@ export async function syncOpenExchangeRates(
       rate: 1 / eur,
       source: "open_exchange_rates",
       as_of: asOf,
-      fee_type: "free",
-      fee_amount: 0,
-      status: "active",
       updated_at: nowIso,
     },
   ]
 
-  // Safety: ensure one row per pair in-memory before upsert.
   const deduped = Array.from(
     new Map(updates.map((row) => [`${row.from_currency}:${row.to_currency}`, row])).values(),
   )

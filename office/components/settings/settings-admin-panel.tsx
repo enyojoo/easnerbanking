@@ -23,6 +23,7 @@ import {
   MoreHorizontal,
   X,
   Upload,
+  TrendingUp,
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
@@ -38,6 +39,7 @@ import {
 } from "@/lib/currency-account-types"
 import { CurrencyFlag } from "@/components/flags"
 import { parseJurisdictionCountryPolicyJson, serializeJurisdictionPolicy } from "@easner/shared"
+import { OfficeRatesPanel } from "@/components/settings/office-rates-panel"
 
 interface SystemSetting {
   id: string
@@ -744,10 +746,14 @@ export function SettingsAdminPanel() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="platform" className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
               Platform
+            </TabsTrigger>
+            <TabsTrigger value="rates" className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" />
+              Rates
             </TabsTrigger>
             <TabsTrigger value="payment" className="flex items-center gap-2">
               <CreditCard className="h-4 w-4" />
@@ -758,6 +764,10 @@ export function SettingsAdminPanel() {
               Security
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="rates">
+            <OfficeRatesPanel />
+          </TabsContent>
 
           {/* Platform Configuration */}
           <TabsContent value="platform">

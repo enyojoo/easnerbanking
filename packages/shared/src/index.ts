@@ -32,6 +32,18 @@ export { currencyToCountryCode, getCountryCodeForCurrency, normalizeCode } from 
 export { getCurrencyCatalog } from "./currencies/catalog"
 export type { CurrencyCatalogEntry } from "./currencies/catalog"
 export * from "./types"
+export { fxEngine, type OrderAmounts } from "./fx-engine"
+export {
+  sendFlowReferenceUsdPerUnit,
+  referenceConversionRate,
+} from "./send-flow-reference-rates"
+export {
+  type NoahWalletRateRow,
+  noahSendRatesQueryPath,
+  noahWalletRowsToRateMap,
+  mapNoahWalletRateRows,
+  getNoahSendConversionRate,
+} from "./noah-send-rates"
 export type { PayoutCorridorPublic, PayoutRail } from "./payout-corridor"
 export { corridorDisplayLabel, flagCodeFromCorridor } from "./payout-corridor"
 export {
