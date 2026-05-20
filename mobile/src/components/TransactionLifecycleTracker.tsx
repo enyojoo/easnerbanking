@@ -64,14 +64,18 @@ export function TransactionLifecycleTracker({ steps, title = 'Deposit status' }:
   if (!steps.length) return null
 
   return (
-    <View style={styles.container}>
+    <View>
       <Text style={styles.timelineTitle}>{title}</Text>
       {steps.map((stage, index) => {
         const isComplete = stage.state === 'complete'
         const isCurrent = stage.state === 'current'
         const showActive = isComplete || isCurrent
+        const isLast = index === steps.length - 1
         return (
-          <View key={stage.id} style={styles.stageContainer}>
+          <View
+            key={stage.id}
+            style={[styles.stageContainer, isLast ? styles.stageContainerLast : null]}
+          >
             <View style={styles.iconContainer}>
               {showActive ? (
                 <LinearGradient
@@ -127,18 +131,18 @@ export function TransactionLifecycleTracker({ steps, title = 'Deposit status' }:
 }
 
 const styles = StyleSheet.create({
-  container: {
-    paddingVertical: spacing[2],
-  },
   timelineTitle: {
     ...textStyles.titleMedium,
     color: colors.text.primary,
-    marginBottom: spacing[4],
+    marginBottom: spacing[3],
   },
   stageContainer: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: spacing[5],
+    alignItems: 'stretch',
+    marginBottom: spacing[4],
+  },
+  stageContainerLast: {
+    marginBottom: 0,
   },
   iconContainer: {
     alignItems: 'center',
@@ -163,7 +167,8 @@ const styles = StyleSheet.create({
   },
   connectingLine: {
     width: 2,
-    height: 56,
+    flex: 1,
+    minHeight: spacing[4],
     marginTop: spacing[2],
   },
   connectingLineCompleted: {
@@ -174,7 +179,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flex: 1,
-    paddingTop: spacing[1],
+    paddingTop: spacing[2],
   },
   title: {
     ...textStyles.titleSmall,

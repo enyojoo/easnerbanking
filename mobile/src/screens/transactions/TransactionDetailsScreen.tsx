@@ -762,12 +762,6 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
             </SectionCard>
           </Animated.View>
 
-          {isBankOnrampReceive && transaction.lifecycle && transaction.lifecycle.length > 0 ? (
-            <SectionCard style={styles.card}>
-              <TransactionLifecycleTracker steps={transaction.lifecycle} />
-            </SectionCard>
-          ) : null}
-
           <Animated.View
             style={{
               opacity: contentAnim,
@@ -858,14 +852,6 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
                 {!isEasetagP2p && isBankOnrampReceive ? (
                   <>
-                    {transaction.deposit_amount != null && transaction.deposit_amount > 0 ? (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Deposit amount</Text>
-                        <Text style={styles.summaryValue}>
-                          {formatAmount(transaction.deposit_amount, transaction.currency, true)}
-                        </Text>
-                      </View>
-                    ) : null}
                     {transaction.fee_amount != null && transaction.fee_amount > 0 ? (
                       <View style={styles.summaryRow}>
                         <Text style={styles.summaryLabel}>Fee</Text>
@@ -1015,6 +1001,12 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                 )}
               </View>
             </SectionCard>
+
+            {isBankOnrampReceive && transaction.lifecycle && transaction.lifecycle.length > 0 ? (
+              <SectionCard style={styles.card}>
+                <TransactionLifecycleTracker steps={transaction.lifecycle} />
+              </SectionCard>
+            ) : null}
           </Animated.View>
         </ScrollView>
 

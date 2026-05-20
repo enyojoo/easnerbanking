@@ -95,10 +95,6 @@ export function TransactionDetailsPanel({
           </Badge>
         </div>
 
-        {showBankDepositTracker && transaction.lifecycle ? (
-          <TransactionLifecycleTracker lifecycle={transaction.lifecycle} />
-        ) : null}
-
         <div className="space-y-3">
           <div className="flex justify-between text-sm gap-4">
             <span className="text-muted-foreground shrink-0">What</span>
@@ -173,15 +169,6 @@ export function TransactionDetailsPanel({
             </div>
           ) : null}
 
-          {showBankDepositTracker && transaction.depositAmount != null ? (
-            <div className="flex justify-between text-sm gap-4">
-              <span className="text-muted-foreground shrink-0">Deposit amount</span>
-              <span className="font-medium text-right">
-                {formatCurrency(transaction.depositAmount, transaction.displayCurrency || "USD")}
-              </span>
-            </div>
-          ) : null}
-
           {transaction.fee !== undefined && transaction.fee > 0 && (
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Fee</span>
@@ -209,6 +196,12 @@ export function TransactionDetailsPanel({
             </div>
           ) : null}
         </div>
+
+        {showBankDepositTracker && transaction.lifecycle ? (
+          <div className="border-t pt-4">
+            <TransactionLifecycleTracker lifecycle={transaction.lifecycle} />
+          </div>
+        ) : null}
 
         {transaction.collectionChannel === "autopayout" && transaction.autopayoutConfigId ? (
           <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-3 text-sm">
