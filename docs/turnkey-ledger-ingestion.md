@@ -57,6 +57,22 @@ ORDER BY created_at DESC LIMIT 20;
 1. Same Solana `tx_hash` on Noah pay-in and organic ingest → `business/scripts/suppress-noah-turnkey-mirror-rows.ts`.
 2. Noah Out `PublicID` must be linked before chain sync (see Noah on-ramp suppression).
 
+## Webhooks V2 delivery headers
+
+`POST /api/webhooks/turnkey` accepts Turnkey V2 headers (payload shapes unchanged):
+
+| Header | Use |
+|--------|-----|
+| `X-Turnkey-Signature` | HMAC-SHA256 verify (`TURNKEY_WEBHOOK_SECRET`) |
+| `X-Turnkey-Event-Id` | `event_inbox` dedupe (preferred over body) |
+| `X-Turnkey-Event-Type` | Inbox `event_type` |
+| `X-Turnkey-Organization-Id` | Must match `TURNKEY_ORGANIZATION_ID` when present |
+| `X-Turnkey-Timestamp` | Reject if &gt;5 min skew when present |
+
+V2 deliveries without a signature are rejected unless legacy unsigned activity is explicitly allowed (`TURNKEY_WEBHOOK_ALLOW_UNSIGNED=true`). After migration stabilizes, disable allow-unsigned in production.
+
+If verify fails with `X-Turnkey-Signature-Algorithm` / `Key-Id` set, upgrade to Turnkey SDK webhook verify (shared-secret HMAC may no longer apply).
+
 ## Webhook storage
 
 All providers use **`event_inbox`** (`provider`, `event_id`, payload, `status`, replay via `POST /api/admin/event-inbox/replay`).

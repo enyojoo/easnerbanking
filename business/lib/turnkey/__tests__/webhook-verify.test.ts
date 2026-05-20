@@ -32,6 +32,20 @@ describe("verifyTurnkeyWebhookSignature", () => {
     expect(verifyTurnkeyWebhookSignature(raw, wrong)).toBe(false)
   })
 
+  it("rejects non-HMAC algorithm when V2 metadata present", () => {
+    process.env.TURNKEY_WEBHOOK_SECRET = "testsecret"
+    process.env.NODE_ENV = "production"
+    const raw = Buffer.from("body", "utf8")
+    const expected = createHmac("sha256", "testsecret").update(raw).digest("hex")
+    expect(
+      verifyTurnkeyWebhookSignature(raw, expected, {
+        algorithm: "ed25519",
+        keyId: "key-1",
+        version: "1",
+      }),
+    ).toBe(false)
+  })
+
   afterAll(() => {
     process.env.TURNKEY_WEBHOOK_SECRET = prevSecret
     process.env.NODE_ENV = prevNode

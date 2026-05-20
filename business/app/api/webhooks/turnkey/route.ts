@@ -5,53 +5,67 @@ import { verifyTurnkeyWebhookSignature } from "@/lib/turnkey/webhook-verify"
 import { applyTurnkeyBalanceWebhookSideEffects } from "@/lib/turnkey/balance-webhook-sync"
 import { applyTurnkeyWebhookSideEffects } from "@/lib/turnkey/chain-sync"
 import { isTurnkeyBalanceConfirmedPayload } from "@/lib/turnkey/turnkey-webhook-classify"
+import { parseTurnkeyBalanceWebhookPayload } from "@/lib/turnkey/turnkey-balance-webhook-payload"
 import {
-  parseTurnkeyBalanceWebhookPayload,
-  turnkeyWebhookInboxIdentity,
-} from "@/lib/turnkey/turnkey-balance-webhook-payload"
+  isV2TurnkeyWebhookDelivery,
+  readTurnkeyWebhookHeaders,
+  resolveTurnkeyWebhookInboxIdentity,
+  turnkeySignatureMetaFromHeaders,
+  validateTurnkeyWebhookOrganizationId,
+  validateTurnkeyWebhookTimestamp,
+} from "@/lib/turnkey/turnkey-webhook-delivery"
 
 export const runtime = "nodejs"
 
 /**
- * Turnkey webhooks (activity FEATURE_NAME_WEBHOOK + BALANCE_CONFIRMED_UPDATES) — verify, dedupe via `event_inbox`.
+ * Turnkey webhooks (activity + BALANCE_CONFIRMED_UPDATES) — V2 headers, verify, `event_inbox`.
  */
 export async function POST(request: Request) {
+  const headers = readTurnkeyWebhookHeaders(request)
   const raw = Buffer.from(await request.arrayBuffer())
   const secretConfigured = Boolean(process.env.TURNKEY_WEBHOOK_SECRET?.trim())
   if (process.env.NODE_ENV === "production" && !secretConfigured) {
     console.error("turnkey_webhook_rejected: TURNKEY_WEBHOOK_SECRET is not set on this deployment")
     return NextResponse.json({ error: "webhook_secret_not_configured" }, { status: 503 })
   }
-  const sig =
-    request.headers.get("X-Turnkey-Signature") ||
-    request.headers.get("x-turnkey-signature") ||
-    request.headers.get("X-Webhook-Signature") ||
-    request.headers.get("webhook-signature") ||
-    request.headers.get("Webhook-Signature") ||
-    request.headers.get("svix-signature")
 
   const allowUnsigned =
     process.env.TURNKEY_WEBHOOK_ALLOW_UNSIGNED === "true" || process.env.TURNKEY_WEBHOOK_ALLOW_UNSIGNED === "1"
 
-  if (sig?.trim()) {
-    if (!verifyTurnkeyWebhookSignature(raw, sig)) {
+  const sig = headers.signature
+  const sigMeta = turnkeySignatureMetaFromHeaders(headers)
+
+  if (sig) {
+    if (!verifyTurnkeyWebhookSignature(raw, sig, sigMeta)) {
       return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 })
     }
   } else if (secretConfigured) {
-    if (allowUnsigned) {
+    if (allowUnsigned && !isV2TurnkeyWebhookDelivery(headers)) {
       console.warn(
-        "turnkey_webhook: unsigned delivery accepted (TURNKEY_WEBHOOK_ALLOW_UNSIGNED is set). Prefer verifying X-Turnkey-Signature when Turnkey sends it.",
+        "turnkey_webhook: unsigned legacy delivery accepted (TURNKEY_WEBHOOK_ALLOW_UNSIGNED). V2 deliveries must be signed.",
       )
     } else {
       return NextResponse.json(
         {
           error: "Missing webhook signature header",
-          hint:
-            "Turnkey organization activity webhooks (FEATURE_NAME_WEBHOOK) are not documented as signed. If your deliveries have no signature header, set TURNKEY_WEBHOOK_ALLOW_UNSIGNED=true after assessing risk, or verify using another mechanism.",
+          hint: "Webhooks V2 require X-Turnkey-Signature. Legacy unsigned activity webhooks need TURNKEY_WEBHOOK_ALLOW_UNSIGNED=true.",
         },
         { status: 401 },
       )
     }
+  }
+
+  const orgError = validateTurnkeyWebhookOrganizationId(headers.organizationId)
+  if (orgError === "organization_mismatch") {
+    return NextResponse.json({ error: "organization_mismatch" }, { status: 401 })
+  }
+  if (orgError === "organization_not_configured") {
+    console.warn("turnkey_webhook: X-Turnkey-Organization-Id present but TURNKEY_ORGANIZATION_ID is not set")
+  }
+
+  const tsError = validateTurnkeyWebhookTimestamp(headers.timestamp)
+  if (tsError) {
+    return NextResponse.json({ error: tsError }, { status: 401 })
   }
 
   let payload: unknown
@@ -61,9 +75,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
   }
 
-  const identity = turnkeyWebhookInboxIdentity(payload)
+  const identity = resolveTurnkeyWebhookInboxIdentity(payload, headers)
   if (!identity?.eventId) {
-    return NextResponse.json({ error: "Missing event id on payload" }, { status: 400 })
+    return NextResponse.json({ error: "Missing event id on payload or X-Turnkey-Event-Id" }, { status: 400 })
   }
 
   const { eventId, eventType } = identity
