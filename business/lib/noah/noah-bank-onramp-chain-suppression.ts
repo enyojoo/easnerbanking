@@ -2,8 +2,10 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   extractNoahBankPayInEnrichment,
   isNoahBankOnrampFiatPayIn,
+  isNoahBankOnrampLedgerPayload,
   isNoahBankOnrampOrchestrationOutLeg,
 } from "@/lib/noah/bank-onramp-tx"
+import { pickNoahOnChainTxHashFromLedgerRow } from "@/lib/noah/noah-on-chain-tx-hash"
 
 export type NoahBankOnrampChainSuppression = {
   linkedTransactionId: string
@@ -28,7 +30,13 @@ function classifyNoahBankOnrampChainLedgerRow(row: {
   const dir = String(row.direction ?? "").toLowerCase()
 
   if (dir === "in") {
-    if (meta.flow === "bank_onramp" || meta.noah_rule_execution_id || isNoahBankOnrampFiatPayIn(payload)) {
+    if (
+      meta.flow === "bank_onramp" ||
+      meta.noah_rule_execution_id ||
+      meta.noah_orchestration_settlement_in_leg === true ||
+      isNoahBankOnrampFiatPayIn(payload) ||
+      isNoahBankOnrampLedgerPayload(payload)
+    ) {
       return "pay_in"
     }
   }
@@ -77,6 +85,23 @@ export async function findNoahBankOnrampChainSettlementForSuppression(
   const { data: payInRow } = await byMeta.maybeSingle()
   if (payInRow?.id) {
     return { linkedTransactionId: String(payInRow.id), kind: "pay_in" }
+  }
+
+  const sinceIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+  let byOut = admin
+    .from("transactions")
+    .select(select)
+    .eq("provider", "noah")
+    .eq("direction", "out")
+    .gte("created_at", sinceIso)
+  byOut = applyLedgerScope(byOut, input)
+  const { data: outRows } = await byOut.limit(40)
+  for (const row of outRows ?? []) {
+    if (pickNoahOnChainTxHashFromLedgerRow(row) !== txHash) continue
+    const kind = classifyNoahBankOnrampChainLedgerRow(row)
+    if (kind) {
+      return { linkedTransactionId: String(row.id), kind }
+    }
   }
 
   return null
@@ -171,7 +196,7 @@ export async function collectNoahBankOnrampOnChainTxHashesForScope(
   byHash = applyLedgerScope(byHash, scope)
   const { data: rowsByHash } = await byHash
   for (const row of rowsByHash ?? []) {
-    const h = String(row.tx_hash || "").trim()
+    const h = pickNoahOnChainTxHashFromLedgerRow(row)
     if (!h || !wanted.has(h)) continue
     if (classifyNoahBankOnrampChainLedgerRow(row)) matched.add(h)
   }
@@ -187,6 +212,20 @@ export async function collectNoahBankOnrampOnChainTxHashesForScope(
     q = applyLedgerScope(q, scope)
     const { data } = await q.maybeSingle()
     if (data?.id) matched.add(h)
+  }
+
+  const sinceIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+  let recent = admin
+    .from("transactions")
+    .select("tx_hash, direction, metadata, payload")
+    .eq("provider", "noah")
+    .gte("created_at", sinceIso)
+  recent = applyLedgerScope(recent, scope)
+  const { data: recentRows } = await recent.limit(120)
+  for (const row of recentRows ?? []) {
+    const h = pickNoahOnChainTxHashFromLedgerRow(row)
+    if (!h || !wanted.has(h) || matched.has(h)) continue
+    if (classifyNoahBankOnrampChainLedgerRow(row)) matched.add(h)
   }
 
   return matched

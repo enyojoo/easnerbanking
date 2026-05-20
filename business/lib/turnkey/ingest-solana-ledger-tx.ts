@@ -3,6 +3,7 @@ import type { Connection } from "@solana/web3.js"
 import { applyTurnkeyInboundLedgerEvent } from "@/lib/turnkey/apply-turnkey-inbound-ledger"
 import { accountPubkeyAtIndex, type ParsedTx, resolvedAccountKeys } from "@/lib/turnkey/solana-parsed-tx-accounts"
 import { findEasetagSettlementForChainSuppression } from "@/lib/ledger/easetag-settlement"
+import { findNoahBankOnrampChainSettlementForSuppression } from "@/lib/noah/noah-bank-onramp-chain-suppression"
 import { mintForStablecoinAsset } from "@/lib/solana/spl-mints"
 
 type OwnerVaultCtx = { userId: string; businessId: string | null }
@@ -105,6 +106,15 @@ export async function ingestTurnkeySolanaTxForOwnerVault(
   const ownerLower = params.ownerAddress.toLowerCase()
   const mint = mintForStablecoinAsset(params.asset)
   if (!mint) return { upserts: 0, kind: "noop", reason: "unknown_mint" }
+
+  const noahMirror = await findNoahBankOnrampChainSettlementForSuppression(admin, {
+    txHash: params.signature,
+    userId: params.ctx.userId,
+    businessId: params.ctx.businessId,
+  })
+  if (noahMirror) {
+    return { upserts: 0, kind: "noop", reason: "noah_bank_onramp" }
+  }
 
   if (params.skipIfLedgerRowExists) {
     let existsQ = admin

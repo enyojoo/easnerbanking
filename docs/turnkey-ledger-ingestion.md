@@ -39,8 +39,9 @@ ORDER BY created_at DESC LIMIT 20;
 
 ## `sync-chain-ledger` (fallback)
 
-- Always: ATA balance snapshot + Noah reconcile.
-- Organic deposit **RPC scan** when balance webhooks are off or missed events.
+- Always: ATA balance snapshot + Noah reconcile + Noah hash link (`PublicID` → pay-in).
+- Organic deposit **RPC scan** only when `TURNKEY_BALANCE_WEBHOOKS_ENABLED` is off (or missed events).
+- When balance webhooks are on, sync skips ATA tx parse — deposits come from `balances:confirmed`.
 - Cooldown (within 10 min): ATA + Noah only — no tx parse (RPC 429 guard).
 
 ## Troubleshooting

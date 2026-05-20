@@ -50,6 +50,22 @@ export function isNoahBankOnrampOrchestrationOutLeg(tx: Record<string, unknown>)
   return crypto.includes("USDC") || crypto.includes("EURC")
 }
 
+/** Orchestrated stablecoin credit to the user's wallet (Transaction In + Orchestration). */
+export function isNoahBankOnrampOrchestrationInLeg(tx: Record<string, unknown>): boolean {
+  if (String(tx.Direction ?? "") !== "In") return false
+  if (!pickNoahOrchestrationRuleExecutionId(tx)) return false
+  const crypto = String(tx.CryptoCurrency ?? "").toUpperCase()
+  return crypto.includes("USDC") || crypto.includes("EURC")
+}
+
+export function isNoahBankOnrampLedgerPayload(tx: Record<string, unknown>): boolean {
+  return (
+    isNoahBankOnrampFiatPayIn(tx) ||
+    isNoahBankOnrampOrchestrationInLeg(tx) ||
+    isNoahBankOnrampOrchestrationOutLeg(tx)
+  )
+}
+
 export function formatNoahAccountHolderName(
   holder: Record<string, unknown> | undefined,
 ): string | null {

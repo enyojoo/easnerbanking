@@ -11,6 +11,7 @@ import {
   extractFiatDepositEnrichment,
   extractNoahBankPayInEnrichment,
   isNoahBankOnrampFiatPayIn,
+  isNoahBankOnrampOrchestrationInLeg,
   isNoahBankOnrampOrchestrationOutLeg,
   mergePayInMetadataWithLifecycle,
   pickNoahOrchestrationRuleExecutionId,
@@ -197,6 +198,13 @@ export async function applyNoahWebhookSideEffects(
           metadata = {
             ...metadata,
             ...buildNoahOrchestrationOutLegMetadata(txData, ruleExecutionId),
+          }
+        } else if (isNoahBankOnrampOrchestrationInLeg(txData) && ruleExecutionId) {
+          metadata = {
+            ...metadata,
+            flow: "bank_onramp",
+            noah_rule_execution_id: ruleExecutionId,
+            noah_orchestration_settlement_in_leg: true,
           }
         } else if (payInEnrichment) {
           const occurredAt = String(txData.Created ?? txData.Updated ?? new Date().toISOString())

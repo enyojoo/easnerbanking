@@ -10,6 +10,7 @@ import { resolveWalletOwnerIdForEasnerContext } from "@/lib/wallet/resolve-walle
 import { createSolanaRpcConnection } from "@/lib/solana/rpc-connection"
 import { syncWalletBalancesFromSolanaAtaForOwner } from "@/lib/wallet/sync-wallet-balances-from-ata"
 import { backfillTurnkeyOnchainTransactions } from "@/lib/turnkey/onchain-backfill"
+import { isTurnkeyBalanceWebhooksIngestEnabled } from "@/lib/turnkey/config"
 import { syncOrganicInboundDepositsForOwner } from "@/lib/turnkey/sync-organic-inbound-deposits"
 
 export const runtime = "nodejs"
@@ -62,6 +63,17 @@ async function runOwnerLedgerSync(
       result,
       organicInbound: null,
       chainIngest: { mode: "heavy" },
+    }
+  }
+
+  if (isTurnkeyBalanceWebhooksIngestEnabled()) {
+    return {
+      balanceSync,
+      noahHashPrime,
+      noahReconcile,
+      result: null,
+      organicInbound: { skipped: true, reason: "balance_webhooks_primary" },
+      chainIngest: { mode: "organic_ata_skipped" },
     }
   }
 

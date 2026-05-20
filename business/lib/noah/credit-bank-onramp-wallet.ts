@@ -5,6 +5,7 @@ import {
   type NoahBankPayInEnrichment,
 } from "@/lib/noah/bank-onramp-tx"
 import { findBankOnrampPayInTransaction } from "@/lib/noah/find-bank-onramp-pay-in-transaction"
+import { pickNoahOnChainTxHashFromLedgerRow } from "@/lib/noah/noah-on-chain-tx-hash"
 
 function applyLedgerScope<T extends { eq: (col: string, val: string) => T; is: (col: string, val: null) => T }>(
   query: T,
@@ -355,18 +356,17 @@ export async function linkNoahOrchestrationOutHashesForOwner(
 
   let q = admin
     .from("transactions")
-    .select("tx_hash, metadata")
+    .select("tx_hash, metadata, payload")
     .eq("provider", "noah")
     .eq("direction", "out")
     .eq("status", "settled")
-    .not("tx_hash", "is", null)
     .gte("created_at", sinceIso)
   q = applyLedgerScope(q, opts)
 
   const { data: rows } = await q.limit(100)
   let linked = 0
   for (const row of rows ?? []) {
-    const txHash = String(row.tx_hash ?? "").trim()
+    const txHash = pickNoahOnChainTxHashFromLedgerRow(row)
     const meta = (row.metadata as Record<string, unknown> | undefined) ?? {}
     const ruleId = String(meta.noah_rule_execution_id ?? "").trim()
     if (!txHash || !ruleId) continue
