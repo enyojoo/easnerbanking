@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { PinChallengeDialog } from "@/components/app-lock/pin-challenge-dialog"
 import { useAuth } from "@/lib/auth-context"
 import { hasPin, isLoginPinModuleAvailable } from "@/lib/login-pin"
+import { formatExchangeRate, formatSendRateLabel } from "@easner/shared"
 import { getCurrencySymbol } from "@/lib/utils"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 import type { Beneficiary } from "@/lib/recipient-types"
@@ -540,7 +541,11 @@ export default function SendConfirmPage() {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Exchange rate</span>
-            <span className="font-semibold">{exchangeRate.toFixed(6)}</span>
+            <span className="font-semibold">
+              {hasFx
+                ? formatSendRateLabel(state.sendCurrency, state.receiveCurrency, exchangeRate)
+                : formatExchangeRate(exchangeRate)}
+            </span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Easner fee</span>

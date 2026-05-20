@@ -49,7 +49,7 @@ describe("buildBankDepositLifecycle", () => {
     expect(steps[1].state).toBe("complete")
     expect(steps[1].occurredAt).toBe("2026-05-19T22:00:56Z")
     expect(steps[0].description).toBe(
-      "We've received your Wire deposit and are confirming it.",
+      "We've received your Wire deposit and confirming it.",
     )
     expect(steps[1].description).toBe("Funds are now available in your account balance.")
   })

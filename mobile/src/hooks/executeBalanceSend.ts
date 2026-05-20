@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics'
 import type { QueryClient } from '@tanstack/react-query'
-import type { Scope } from '@easner/shared'
+import { formatSendRateLabel, type Scope } from '@easner/shared'
 import { getApiBaseUrl, getNoahScopeHeaders } from '../lib/apiClient'
 import { supabase } from '../lib/supabase'
 import { noahService, type NoahTransfer, type PricingQuote } from '../lib/noahService'
@@ -307,7 +307,7 @@ export async function executeBalanceSend(
       pt != null && pricingQuoteResult
         ? [
             `Recipient gets: ${fmtMoney(pt.total_recipient_amount, recipient.currency)}`,
-            `Rate: 1 ${selectedBalanceCurrency} = ${Number(pricingQuoteResult.effectiveRate).toFixed(6)} ${recipient.currency}`,
+            `Rate: ${formatSendRateLabel(selectedBalanceCurrency, recipient.currency, Number(pricingQuoteResult.effectiveRate))}`,
             `Total fees: ${fmtMoney(pt.total_user_fee, selectedBalanceCurrency)}`,
           ].join('\n')
         : ''

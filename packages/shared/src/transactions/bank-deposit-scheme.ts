@@ -112,5 +112,5 @@ function paymentRailHint(meta: Record<string, unknown>): string {
 
 export function buildBankDepositProcessingDescription(schemeLabel: string): string {
   const scheme = String(schemeLabel || "").trim() || "Bank"
-  return `We've received your ${scheme} deposit and are confirming it.`
+  return `We've received your ${scheme} deposit and confirming it.`
 }

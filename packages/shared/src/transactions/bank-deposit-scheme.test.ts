@@ -44,7 +44,7 @@ describe("deriveBankDepositSchemeLabel", () => {
 describe("buildBankDepositProcessingDescription", () => {
   it("includes scheme in processing copy", () => {
     expect(buildBankDepositProcessingDescription("Wire")).toBe(
-      "We've received your Wire deposit and are confirming it.",
+      "We've received your Wire deposit and confirming it.",
     )
   })
 })

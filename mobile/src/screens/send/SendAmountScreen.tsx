@@ -48,7 +48,9 @@ import { CountryFlag } from '../../components/flags/CountryFlag'
 import {
   convertNoahSendFlowAmounts,
   exchangeRatesToRateMap,
+  formatSendRateLabel,
   getCountryCodeForCurrency,
+  getCurrencySymbol,
 } from '@easner/shared'
 import { noahService, type PricingQuote } from '../../lib/noahService'
 import { getWalletAssets } from '../../lib/recipientCatalog'
@@ -363,17 +365,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     const roundedAmount = Math.round((Number.isFinite(amount) ? amount : 0) * 100) / 100
     const fractionalPart = Math.abs(roundedAmount - Math.trunc(roundedAmount))
     return fractionalPart >= 0.01 ? roundedAmount.toFixed(2) : String(Math.trunc(roundedAmount))
-  }
-
-  const getCurrencySymbol = (currency: string): string => {
-    return currency === 'USD' ? '$' 
-      : currency === 'EUR' ? '€' 
-      : currency === 'NGN' ? '₦' 
-      : currency === 'KES' ? 'KSh' 
-      : currency === 'GHS' ? '₵' 
-      : currency === 'RUB' ? '₽' 
-      : currency === 'GBP' ? '£' 
-      : currency
   }
 
   const currentBalance = Number.parseFloat(
@@ -819,7 +810,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                         </Pressable>
                         <Text style={styles.exchangeInfoText}>
                           {' • '}
-                          {`Rate: 1 ${sendCurrency} = ${exchangeRate.toFixed(4)} ${receiveCurrency}`}
+                          {`Rate: ${formatSendRateLabel(sendCurrency, receiveCurrency, exchangeRate)}`}
                         </Text>
                       </View>
                       <View style={styles.exchangeQuoteLine}>
@@ -829,8 +820,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                             numberOfLines={2}
                             ellipsizeMode="tail"
                           >
-                            Live quote: 1 {sendCurrency} = {Number(pricingPreviewQuote.effectiveRate).toFixed(4)}{' '}
-                            {receiveCurrency} · Fees{' '}
+                            Live quote:{' '}
+                            {formatSendRateLabel(
+                              sendCurrency,
+                              receiveCurrency,
+                              Number(pricingPreviewQuote.effectiveRate),
+                            )}{' '}
+                            · Fees{' '}
                             {formatCurrency(pricingPreviewQuote.pricingTotals.total_user_fee, sendCurrency)} · Recipient{' '}
                             {formatCurrency(pricingPreviewQuote.pricingTotals.total_recipient_amount, receiveCurrency)}
                           </Text>

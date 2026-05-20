@@ -24,6 +24,8 @@ export {
 } from "./constants/login-pin"
 export { APP_URLS } from "./constants/urls"
 export { cn } from "./utils/cn"
+export { getCurrencySymbol } from "./currency-symbol"
+export { formatExchangeRate, formatSendRateLabel } from "./format-exchange-rate"
 export { BrandLogo } from "./components/BrandLogo"
 export type { BrandLogoProps } from "./components/BrandLogo"
 export { CountryFlag, CurrencyFlag } from "./components/CountryFlag"

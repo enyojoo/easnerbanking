@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { SendRecipientPicker } from "@/components/send-recipient-picker"
+import { formatSendRateLabel } from "@easner/shared"
 import { getCurrencySymbol } from "@/lib/utils"
 import {
   convertNoahSendFlowAmounts,
@@ -166,9 +167,7 @@ export default function SendPage() {
   const hasFx =
     receiveCurrency !== sendCurrency && receiveAmount > 0 && sendAmount > 0
   const forwardRate = flowAmounts.forwardRate
-  const rateDisplay = hasFx
-    ? `1 ${sendCurrency} = ${forwardRate.toFixed(4)} ${receiveCurrency}`
-    : null
+  const rateDisplay = hasFx ? formatSendRateLabel(sendCurrency, receiveCurrency, forwardRate) : null
 
   const displayBalanceForSource =
     sourceAccount && paymentMethod === "balance"
