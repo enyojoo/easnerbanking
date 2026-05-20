@@ -8,9 +8,12 @@ export function shouldRefreshAfterChainLedgerSync(payload: unknown): boolean {
   const credited = Number(noah?.credited ?? 0)
   const balanceSync = p.balanceSync as Record<string, unknown> | null | undefined
   const ataSynced = balanceSync?.ok === true
+  const organic = p.organicInbound as Record<string, unknown> | null | undefined
+  const organicIngested = Number(organic?.ingested ?? 0)
   return (
     ataSynced ||
     (Number.isFinite(upserts) && upserts > 0) ||
+    (Number.isFinite(organicIngested) && organicIngested > 0) ||
     (Number.isFinite(credited) && credited > 0)
   )
 }

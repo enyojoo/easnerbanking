@@ -10,6 +10,10 @@ describe("shouldRefreshAfterChainLedgerSync", () => {
     expect(shouldRefreshAfterChainLedgerSync({ result: { upserts: 2 } })).toBe(true)
   })
 
+  it("returns true when organic ATA ingest added rows", () => {
+    expect(shouldRefreshAfterChainLedgerSync({ organicInbound: { ingested: 1 } })).toBe(true)
+  })
+
   it("returns true when ATA balance sync succeeded (including cooldown)", () => {
     expect(
       shouldRefreshAfterChainLedgerSync({

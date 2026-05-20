@@ -56,5 +56,7 @@ export function isTurnkeyNoahBankOnrampChainMirror(
   if (!row.metadata || typeof row.metadata !== "object") return true
   const m = row.metadata as Record<string, unknown>
   if (m.suppress_in_feed === true || m.noah_bank_onramp_chain_mirror === true) return true
+  // User-visible organic deposits from chain sync (not Noah duplicates).
+  if (m.source === "turnkey_chain_sync" || m.source === "turnkey_balance_webhook") return false
   return m.source === "turnkey_onchain_backfill" || m.source === "turnkey_webhook"
 }

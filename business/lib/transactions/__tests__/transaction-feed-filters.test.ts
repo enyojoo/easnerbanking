@@ -58,6 +58,20 @@ describe("isTurnkeyNoahBankOnrampChainMirror", () => {
       ),
     ).toBe(false)
   })
+
+  it("shows turnkey_chain_sync even when hash matches Noah set", () => {
+    expect(
+      isTurnkeyNoahBankOnrampChainMirror(
+        {
+          provider: "turnkey",
+          direction: "in",
+          tx_hash: "sig-noah",
+          metadata: { source: "turnkey_chain_sync" },
+        },
+        noahHashes,
+      ),
+    ).toBe(false)
+  })
 })
 
 describe("isEasetagChainSettlementTransaction", () => {

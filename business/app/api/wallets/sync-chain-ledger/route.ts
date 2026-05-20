@@ -5,6 +5,7 @@ import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { reconcileNoahBankOnrampCreditsForOwner } from "@/lib/noah/credit-bank-onramp-wallet"
 import { resolveWalletOwnerIdForEasnerContext } from "@/lib/wallet/resolve-wallet-owner"
 import { backfillTurnkeyOnchainTransactions } from "@/lib/turnkey/onchain-backfill"
+import { syncOrganicInboundDepositsForOwner } from "@/lib/turnkey/sync-organic-inbound-deposits"
 import { syncWalletBalancesFromSolanaAtaForOwner } from "@/lib/wallet/sync-wallet-balances-from-ata"
 
 export const runtime = "nodejs"
@@ -30,16 +31,24 @@ async function runOwnerLedgerSync(
   const noahReconcile = await reconcileNoahBankOnrampCreditsForOwner(admin, ledgerScope)
 
   // Organic deposits: RPC ingest (Noah/Easetag suppressed). Turnkey balance webhooks are optional enhancement.
-  const result = await backfillTurnkeyOnchainTransactions(admin, {
-    walletOwnerId,
-    signaturesPerAddress: opts.signaturesPerAddress,
-    throttleMsBetweenIngests: opts.throttleMs,
-  })
+  const [result, organicInbound] = await Promise.all([
+    backfillTurnkeyOnchainTransactions(admin, {
+      walletOwnerId,
+      signaturesPerAddress: opts.signaturesPerAddress,
+      throttleMsBetweenIngests: opts.throttleMs,
+    }),
+    syncOrganicInboundDepositsForOwner(admin, {
+      walletOwnerId,
+      signaturesPerAta: Math.max(opts.signaturesPerAddress, 35),
+      throttleMs: opts.throttleMs,
+    }),
+  ])
 
   return {
     balanceSync,
     noahReconcile,
     result,
+    organicInbound,
     signaturesPerAddress: opts.signaturesPerAddress,
     heavyBackfill: heavyBackfillEnabled(),
   }

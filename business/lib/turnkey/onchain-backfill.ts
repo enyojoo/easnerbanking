@@ -122,7 +122,7 @@ export async function backfillTurnkeyOnchainTransactions(
 
   let accQuery = admin
     .from("wallet_accounts")
-    .select("wallet_owner_id,address,asset,chain,associated_token_account_address")
+    .select("id,wallet_owner_id,address,asset,chain,associated_token_account_address")
     .eq("status", "active")
     .eq("chain", "solana")
     .in("asset", ["USDC", "EURC"])
@@ -212,6 +212,7 @@ export async function backfillTurnkeyOnchainTransactions(
         ownerAddress: walletAddress,
         asset,
         ctx: { userId: ctx.userId, businessId: ctx.businessId },
+        walletAccountId: String(row.id ?? ""),
         signature: sig.signature,
         blockTime: sig.blockTime,
         connection,

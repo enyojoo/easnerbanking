@@ -22,7 +22,7 @@ curl -X POST "$BUSINESS_APP_URL/api/internal/turnkey-balance-webhook-endpoint" -
 
 ## `sync-chain-ledger` (mobile / dashboard)
 
-- Always: ATA balance snapshot + Noah reconcile + **inbound Solana RPC ingest** (last ~12–25 signatures per vault).
+- Always: ATA balance snapshot + Noah reconcile + inbound RPC ingest + **ATA-first organic deposit scan** (creates `transactions` rows with `metadata.source = turnkey_chain_sync` for the activity feed).
 - Product fallback when Turnkey balance webhooks are not registered or `TURNKEY_BALANCE_WEBHOOKS_ENABLED` is off.
 - `SYNC_CHAIN_LEDGER_TX_BACKFILL=1` — deeper repair scan (120 signatures, faster throttle) for support only.
 - Mobile/business call this on screen focus; server cooldown still runs ATA + light ingest every time.
