@@ -10,13 +10,13 @@ describe("shouldRefreshAfterChainLedgerSync", () => {
     expect(shouldRefreshAfterChainLedgerSync({ result: { upserts: 2 } })).toBe(true)
   })
 
-  it("returns false on cooldown-only ATA sync", () => {
+  it("returns true when ATA balance sync succeeded (including cooldown)", () => {
     expect(
       shouldRefreshAfterChainLedgerSync({
         skipped: true,
         balanceSync: { ok: true, USD: 10, EUR: 0 },
         noahReconcile: { attempted: 0, credited: 0 },
       }),
-    ).toBe(false)
+    ).toBe(true)
   })
 })

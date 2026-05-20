@@ -6,5 +6,11 @@ export function shouldRefreshAfterChainLedgerSync(payload: unknown): boolean {
   const upserts = Number(result?.upserts ?? result?.upserted ?? 0)
   const noah = p.noahReconcile as Record<string, unknown> | null | undefined
   const credited = Number(noah?.credited ?? 0)
-  return (Number.isFinite(upserts) && upserts > 0) || (Number.isFinite(credited) && credited > 0)
+  const balanceSync = p.balanceSync as Record<string, unknown> | null | undefined
+  const ataSynced = balanceSync?.ok === true
+  return (
+    ataSynced ||
+    (Number.isFinite(upserts) && upserts > 0) ||
+    (Number.isFinite(credited) && credited > 0)
+  )
 }

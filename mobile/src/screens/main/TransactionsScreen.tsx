@@ -509,9 +509,6 @@ function TransactionsContent({ navigation }: NavigationProps) {
 
   const syncChainLedgerIfDue = React.useCallback(
     async (force: boolean = false): Promise<boolean> => {
-      const now = Date.now()
-      const MIN_MS = 10 * 60_000
-      if (!force && now - lastChainLedgerSyncRef.current < MIN_MS) return false
       if (chainLedgerSyncInFlightRef.current) {
         return chainLedgerSyncInFlightRef.current
       }
@@ -522,13 +519,17 @@ function TransactionsContent({ navigation }: NavigationProps) {
             headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
           })
           if (!response.ok) return false
-          lastChainLedgerSyncRef.current = Date.now()
           const payload = await response.json().catch(() => null)
+          if (!(payload as { skipped?: boolean })?.skipped) {
+            lastChainLedgerSyncRef.current = Date.now()
+          }
           const upserts = Number(
             (payload as any)?.result?.upserts ?? (payload as any)?.result?.upserted ?? 0,
           )
           const noahCredited = Number((payload as any)?.noahReconcile?.credited ?? 0)
+          const ataSynced = (payload as any)?.balanceSync?.ok === true
           const inserted =
+            ataSynced ||
             (Number.isFinite(upserts) && upserts > 0) ||
             (Number.isFinite(noahCredited) && noahCredited > 0)
           if (inserted) markRecentMoneyActivity()

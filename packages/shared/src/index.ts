@@ -133,3 +133,9 @@ export type {
   VerifiedCountryRef,
   VerifiedIdentityPayload,
 } from "./verified-identity"
+export {
+  isValidSolanaAddressFormat,
+  normalizeSolanaAddress,
+  validateWalletAddressForNetwork,
+} from "./solana/address-format"
+export type { WalletAddressValidation } from "./solana/address-format"

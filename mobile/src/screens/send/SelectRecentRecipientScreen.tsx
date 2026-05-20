@@ -65,6 +65,7 @@ import { invalidateRecipientsFeed } from '../../query/refresh-user-feeds'
 import { recipientService } from '../../lib/recipientService'
 import { getAccountTypeConfigFromCurrency } from '../../lib/currencyAccountTypes'
 import { formatIBAN, formatSortCode, formatRoutingNumber, formatAccountNumber } from '../../utils/formatters'
+import { validateWalletAddress } from '../../utils/validators'
 import { CountryCurrency } from '../../lib/countryCurrencyMapping'
 import {
   getCatalogByRecipientTypeWithJurisdiction,
@@ -508,6 +509,17 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     if (!isFormValid()) {
       showError('Please fill in all required fields')
       return
+    }
+
+    if (selectedRecipientType === 'wallet') {
+      const walletCheck = validateWalletAddress(
+        newRecipient.walletAddress,
+        newRecipient.network,
+      )
+      if (!walletCheck.isValid) {
+        showError(walletCheck.error ?? 'Invalid wallet address')
+        return
+      }
     }
 
     try {

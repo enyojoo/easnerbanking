@@ -215,6 +215,7 @@ export async function backfillTurnkeyOnchainTransactions(
         signature: sig.signature,
         blockTime: sig.blockTime,
         connection,
+        tokenAccountAddress: ata || null,
         skipBalanceDelta: true,
       })
       if (res.kind === "applied") upserts += res.upserts

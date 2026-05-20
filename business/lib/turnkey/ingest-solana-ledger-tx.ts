@@ -39,6 +39,51 @@ function errorMessage(e: unknown): string {
  * Parses one confirmed Solana tx and applies ledger + balance delta for a single USDC/EURC vault
  * (matched by owner pubkey in token balances).
  */
+function accountPubkeyAtIndex(
+  tx: NonNullable<Awaited<ReturnType<Connection["getParsedTransaction"]>>>,
+  accountIndex: number,
+): string | null {
+  const msg = tx.transaction?.message
+  if (!msg || !("accountKeys" in msg)) return null
+  const keys = (msg as { accountKeys: Array<{ pubkey?: { toString(): string }; toString?: () => string } | string> })
+    .accountKeys
+  const key = keys[accountIndex]
+  if (!key) return null
+  if (typeof key === "string") return key
+  if (key.pubkey) return key.pubkey.toString()
+  if (typeof key.toString === "function") return key.toString()
+  return null
+}
+
+function tokenBalanceDeltaForVault(
+  tx: NonNullable<Awaited<ReturnType<Connection["getParsedTransaction"]>>>,
+  mint: string,
+  ownerLower: string,
+  ataLower: string | null,
+): { delta: bigint; decimals: number } | null {
+  const pre = tx.meta?.preTokenBalances || []
+  const post = tx.meta?.postTokenBalances || []
+
+  const matchRow = (row: (typeof pre)[number]) => {
+    if (row.mint !== mint) return false
+    if ((row.owner || "").toLowerCase() === ownerLower) return true
+    if (ataLower) {
+      const acct = accountPubkeyAtIndex(tx, row.accountIndex)
+      if (acct && acct.toLowerCase() === ataLower) return true
+    }
+    return false
+  }
+
+  const preRow = pre.find(matchRow)
+  const postRow = post.find(matchRow)
+  const preAmt = parseAtomic(preRow?.uiTokenAmount?.amount)
+  const postAmt = parseAtomic(postRow?.uiTokenAmount?.amount)
+  const decimals = Number(postRow?.uiTokenAmount?.decimals ?? preRow?.uiTokenAmount?.decimals ?? 6)
+  const delta = postAmt - preAmt
+  if (delta === BigInt(0)) return null
+  return { delta, decimals }
+}
+
 export async function ingestTurnkeySolanaTxForOwnerVault(
   admin: SupabaseClient,
   params: {
@@ -48,6 +93,8 @@ export async function ingestTurnkeySolanaTxForOwnerVault(
     signature: string
     blockTime: number | null
     connection: Connection
+    /** SPL ATA for this vault (improves matching when `owner` is absent on token balance rows). */
+    tokenAccountAddress?: string | null
     /** Backfill/repair: upsert ledger rows only; balances come from ATA snapshot. */
     skipBalanceDelta?: boolean
   },
@@ -70,15 +117,10 @@ export async function ingestTurnkeySolanaTxForOwnerVault(
   }
   if (!tx?.meta) return { upserts: 0, kind: "noop" }
 
-  const pre = tx.meta.preTokenBalances || []
-  const post = tx.meta.postTokenBalances || []
-  const preRow = pre.find((b) => (b.owner || "").toLowerCase() === ownerLower && b.mint === mint)
-  const postRow = post.find((b) => (b.owner || "").toLowerCase() === ownerLower && b.mint === mint)
-  const preAmt = parseAtomic(preRow?.uiTokenAmount?.amount)
-  const postAmt = parseAtomic(postRow?.uiTokenAmount?.amount)
-  const decimals = Number(postRow?.uiTokenAmount?.decimals ?? preRow?.uiTokenAmount?.decimals ?? 6)
-  const delta = postAmt - preAmt
-  if (delta === BigInt(0)) return { upserts: 0, kind: "noop" }
+  const ataLower = String(params.tokenAccountAddress || "").trim().toLowerCase() || null
+  const balanceDelta = tokenBalanceDeltaForVault(tx, mint, ownerLower, ataLower)
+  if (!balanceDelta) return { upserts: 0, kind: "noop" }
+  const { delta, decimals } = balanceDelta
 
   const direction = delta > BigInt(0) ? "in" : "out"
   const absAtomic = delta > BigInt(0) ? delta : -delta

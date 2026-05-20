@@ -146,11 +146,19 @@ export function useBusinessAccountRows() {
     () => ({
       USD: canDisplayFinancialData ? String(walletQuery.data?.deposits?.USD?.address ?? "") : "",
       EUR: canDisplayFinancialData ? String(walletQuery.data?.deposits?.EUR?.address ?? "") : "",
+      USD_OWNER: canDisplayFinancialData
+        ? String(walletQuery.data?.deposits?.USD?.ownerAddress ?? "")
+        : "",
+      EUR_OWNER: canDisplayFinancialData
+        ? String(walletQuery.data?.deposits?.EUR?.ownerAddress ?? "")
+        : "",
     }),
     [
       canDisplayFinancialData,
       walletQuery.data?.deposits?.EUR?.address,
+      walletQuery.data?.deposits?.EUR?.ownerAddress,
       walletQuery.data?.deposits?.USD?.address,
+      walletQuery.data?.deposits?.USD?.ownerAddress,
     ],
   )
 
@@ -213,6 +221,10 @@ export function useBusinessAccountRows() {
         currency === "EUR"
           ? stablecoinDeposit.EUR || undefined
           : stablecoinDeposit.USD || undefined
+      const stablecoinOwnerAddress =
+        currency === "EUR"
+          ? stablecoinDeposit.EUR_OWNER || undefined
+          : stablecoinDeposit.USD_OWNER || undefined
 
       return {
         id: `acc_${currency.toLowerCase()}`,
@@ -230,6 +242,7 @@ export function useBusinessAccountRows() {
         availableBalance: bal,
         status: tier1Complete ? "active" : "restricted",
         stablecoinAddress,
+        stablecoinOwnerAddress,
         stablecoinChain: "Solana",
         stablecoinToken: usdc ? "USDC" : eurc ? "EURC" : "USDC",
       }
@@ -242,7 +255,9 @@ export function useBusinessAccountRows() {
     enabledExtras,
     isAuthoritativeBalanceRead,
     stablecoinDeposit.EUR,
+    stablecoinDeposit.EUR_OWNER,
     stablecoinDeposit.USD,
+    stablecoinDeposit.USD_OWNER,
     tier1Complete,
     vaByCurrency,
   ])

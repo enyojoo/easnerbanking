@@ -14,6 +14,11 @@
       "import": "./src/verified-identity.ts",
       "require": "./src/verified-identity.ts",
       "types": "./src/verified-identity.ts"
+    },
+    "./solana/address-format": {
+      "import": "./src/solana/address-format.ts",
+      "require": "./src/solana/address-format.ts",
+      "types": "./src/solana/address-format.ts"
     }
   },
   "scripts": {

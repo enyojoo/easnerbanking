@@ -98,7 +98,12 @@ function PaymentInstructions({
       stablecoinToken ?? (currency === "USD" ? "USDC" : currency === "EUR" ? "EURC" : "USDC")
     return (
       <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-        <li>Only send {stablecoin} on the supported network to this address</li>
+        <li>Only send {stablecoin} on Solana to this address</li>
+        <li>
+          From an exchange (Bybit, etc.): use the Solana wallet address shown below, not the SPL
+          deposit address — exchanges validate SOL chain against the owner wallet
+        </li>
+        <li>From another wallet or app: use the SPL deposit address or scan the QR code</li>
         <li>Sending unsupported assets will be lost</li>
         <li>Processing time: within seconds</li>
       </ul>
@@ -122,10 +127,16 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
           currency: account.currency,
           stablecoin: account.stablecoinToken,
           chain: account.stablecoinChain ?? "Solana",
+          /** SPL token account (ATA) — use for wallet / QR deposits. */
           address: account.stablecoinAddress,
+          /** Solana vault owner — use on exchanges (Bybit, etc.) when chain is SOL. */
+          ownerAddress: account.stablecoinOwnerAddress?.trim() || "",
           memo: "",
         }
       : undefined
+  const showExchangeWalletAddress =
+    Boolean(stablecoinAccount?.ownerAddress) &&
+    stablecoinAccount!.ownerAddress !== stablecoinAccount!.address
   const hasStablecoin = stablecoinAccount !== undefined
 
   const isNgn = account.currency === "NGN"
@@ -320,12 +331,22 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
                 </div>
 
                 <CopyableField
-                  label="Address"
+                  label={`${stablecoinAccount.stablecoin} deposit address (SPL)`}
                   value={stablecoinAccount.address}
                   copiedField={copiedField}
                   fieldId={`stable-addr-${account.id}`}
                   onCopy={onCopy}
                 />
+
+                {showExchangeWalletAddress ? (
+                  <CopyableField
+                    label="Solana wallet address (for exchange withdrawals)"
+                    value={stablecoinAccount.ownerAddress}
+                    copiedField={copiedField}
+                    fieldId={`stable-owner-${account.id}`}
+                    onCopy={onCopy}
+                  />
+                ) : null}
 
                 <Button variant="outline" size="sm" className="w-full gap-2" onClick={() => handleShare("stablecoin")}>
                   <Share2 className="h-4 w-4" />

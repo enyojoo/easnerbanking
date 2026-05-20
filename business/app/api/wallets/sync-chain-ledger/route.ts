@@ -10,10 +10,13 @@ import { syncWalletBalancesFromSolanaAtaForOwner } from "@/lib/wallet/sync-walle
 export const runtime = "nodejs"
 
 const MIN_SYNC_INTERVAL_MS = 10 * 60_000
+const FULL_SCAN_SIGNATURES = 25
+const COOLDOWN_SCAN_SIGNATURES = 12
+
 const lastSyncAtByOwner = new Map<string, number>()
 const inFlightByOwner = new Map<string, Promise<unknown>>()
 
-function txBackfillEnabled(): boolean {
+function heavyBackfillEnabled(): boolean {
   return process.env.SYNC_CHAIN_LEDGER_TX_BACKFILL === "1" || process.env.SYNC_CHAIN_LEDGER_TX_BACKFILL === "true"
 }
 
@@ -21,27 +24,32 @@ async function runOwnerLedgerSync(
   admin: ReturnType<typeof createSupabaseAdmin>,
   walletOwnerId: string,
   ledgerScope: { userId: string; businessId: string | null },
+  opts: { signaturesPerAddress: number; throttleMs: number },
 ) {
   const balanceSync = await syncWalletBalancesFromSolanaAtaForOwner(admin, walletOwnerId)
   const noahReconcile = await reconcileNoahBankOnrampCreditsForOwner(admin, ledgerScope)
 
-  let result: Awaited<ReturnType<typeof backfillTurnkeyOnchainTransactions>> | null = null
-  if (txBackfillEnabled()) {
-    result = await backfillTurnkeyOnchainTransactions(admin, {
-      walletOwnerId,
-      signaturesPerAddress: 25,
-      throttleMsBetweenIngests: 120,
-    })
-  }
+  // Organic deposits: RPC ingest (Noah/Easetag suppressed). Turnkey balance webhooks are optional enhancement.
+  const result = await backfillTurnkeyOnchainTransactions(admin, {
+    walletOwnerId,
+    signaturesPerAddress: opts.signaturesPerAddress,
+    throttleMsBetweenIngests: opts.throttleMs,
+  })
 
-  return { balanceSync, noahReconcile, result, txBackfillEnabled: txBackfillEnabled() }
+  return {
+    balanceSync,
+    noahReconcile,
+    result,
+    signaturesPerAddress: opts.signaturesPerAddress,
+    heavyBackfill: heavyBackfillEnabled(),
+  }
 }
 
 /**
- * POST — align `wallet_balances` with on-chain ATA and reconcile Noah bank on-ramp credits.
+ * POST — ATA balance snapshot, Noah credit reconcile, and inbound Solana deposit ingest.
  *
- * Optional RPC transaction backfill when `SYNC_CHAIN_LEDGER_TX_BACKFILL=1` (admin/support only).
- * Organic stablecoin deposits are ingested via Turnkey balance webhooks, not this route.
+ * Turnkey `BALANCE_CONFIRMED` webhooks are optional; this route is the product fallback until they fire.
+ * `SYNC_CHAIN_LEDGER_TX_BACKFILL=1` only affects throttle/signature limits (full repair mode).
  */
 export async function POST(request: Request) {
   const auth = await requireAuth(request)
@@ -62,10 +70,20 @@ export async function POST(request: Request) {
     businessId: acc.ctx.subjectBusinessId,
   }
 
+  const heavy = heavyBackfillEnabled()
+  const scanOpts = heavy
+    ? { signaturesPerAddress: 120, throttleMs: 40 }
+    : { signaturesPerAddress: FULL_SCAN_SIGNATURES, throttleMs: 120 }
+
   const now = Date.now()
   const lastAt = lastSyncAtByOwner.get(walletOwnerId) ?? 0
-  if (now - lastAt < MIN_SYNC_INTERVAL_MS) {
-    const payload = await runOwnerLedgerSync(admin, walletOwnerId, ledgerScope)
+  const onCooldown = now - lastAt < MIN_SYNC_INTERVAL_MS
+
+  if (onCooldown) {
+    const payload = await runOwnerLedgerSync(admin, walletOwnerId, ledgerScope, {
+      signaturesPerAddress: COOLDOWN_SCAN_SIGNATURES,
+      throttleMs: 150,
+    })
     return NextResponse.json({
       ok: true,
       skipped: true,
@@ -87,7 +105,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const run = runOwnerLedgerSync(admin, walletOwnerId, ledgerScope)
+    const run = runOwnerLedgerSync(admin, walletOwnerId, ledgerScope, scanOpts)
     inFlightByOwner.set(walletOwnerId, run)
     const payload = await run
     lastSyncAtByOwner.set(walletOwnerId, Date.now())
