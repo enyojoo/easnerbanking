@@ -25,7 +25,7 @@ curl -X POST "$BUSINESS_APP_URL/api/internal/turnkey-balance-webhook-endpoint" -
 - Always: ATA balance snapshot + Noah reconcile + inbound RPC ingest + **ATA-first organic deposit scan** (creates `transactions` rows with `metadata.source = turnkey_chain_sync` for the activity feed).
 - Product fallback when Turnkey balance webhooks are not registered or `TURNKEY_BALANCE_WEBHOOKS_ENABLED` is off.
 - `SYNC_CHAIN_LEDGER_TX_BACKFILL=1` — deeper repair scan (120 signatures, faster throttle) for support only.
-- Mobile/business call this on screen focus; server cooldown still runs ATA + light ingest every time.
+- Mobile/business call this on screen focus. **Cooldown** (within 10 min of last full scan): ATA balance + Noah reconcile only — no tx parse (avoids Solana RPC 429). **Full scan**: lightweight ATA ingest (max ~10 RPC parses per run).
 
 ## Troubleshooting
 

@@ -1,14 +1,12 @@
-import { Connection, PublicKey } from "@solana/web3.js"
+import { PublicKey } from "@solana/web3.js"
+import type { Connection } from "@solana/web3.js"
 import { deriveStablecoinAssociatedTokenAddress } from "@/lib/solana/ata"
+import { createSolanaRpcConnection } from "@/lib/solana/rpc-connection"
 
 export type SolanaWalletAccountRow = {
   address: string
   asset: string
   associated_token_account_address?: string | null
-}
-
-function getRpcUrl(): string {
-  return (process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com").trim()
 }
 
 /**
@@ -18,7 +16,7 @@ export async function fetchStablecoinBalancesFromAta(
   accounts: SolanaWalletAccountRow[],
   connection?: Connection,
 ): Promise<{ USD: number; EUR: number }> {
-  const conn = connection ?? new Connection(getRpcUrl(), "confirmed")
+  const conn = connection ?? createSolanaRpcConnection()
   let usd = 0
   let eur = 0
 

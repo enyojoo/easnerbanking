@@ -1,11 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { Connection, PublicKey } from "@solana/web3.js"
+import type { Connection } from "@solana/web3.js"
+import { PublicKey } from "@solana/web3.js"
 import { deriveStablecoinAssociatedTokenAddress } from "@/lib/solana/ata"
+import { createSolanaRpcConnection } from "@/lib/solana/rpc-connection"
 import { ingestTurnkeySolanaTxForOwnerVault } from "@/lib/turnkey/ingest-solana-ledger-tx"
-
-function getRpcUrl(): string {
-  return (process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com").trim()
-}
 
 function errorMessage(e: unknown): string {
   if (e instanceof Error) return e.message
@@ -100,8 +98,10 @@ export async function backfillTurnkeyOnchainTransactions(
   input?: {
     signaturesPerAddress?: number
     walletOwnerId?: string
-    /** Pause between each signature ingest to avoid Supabase / Solana RPC 429 bursts (default 85ms). */
     throttleMsBetweenIngests?: number
+    connection?: Connection
+    /** When false (default), only scan SPL ATA — avoids duplicate owner+ATA RPC calls. */
+    scanOwnerAddress?: boolean
   },
 ): Promise<{
   addressesScanned: number
@@ -116,7 +116,8 @@ export async function backfillTurnkeyOnchainTransactions(
     0,
     Math.min(750, Math.floor(input?.throttleMsBetweenIngests ?? 85)),
   )
-  const connection = new Connection(getRpcUrl(), "confirmed")
+  const connection = input?.connection ?? createSolanaRpcConnection()
+  const scanOwner = input?.scanOwnerAddress === true
 
   const ownerCtxCache = new Map<string, LedgerOwnerCtx | null>()
 
@@ -186,11 +187,13 @@ export async function backfillTurnkeyOnchainTransactions(
     }
 
     const sigLists: { signature: string; blockTime?: number | null | undefined }[][] = []
-    try {
-      sigLists.push(await connection.getSignaturesForAddress(ownerPk, { limit }))
-    } catch (e) {
-      const msg = errorMessage(e)
-      bump(`rpc_get_signatures_owner:${msg.slice(0, 80)}`)
+    if (scanOwner) {
+      try {
+        sigLists.push(await connection.getSignaturesForAddress(ownerPk, { limit }))
+      } catch (e) {
+        const msg = errorMessage(e)
+        bump(`rpc_get_signatures_owner:${msg.slice(0, 80)}`)
+      }
     }
     if (ataPk) {
       try {

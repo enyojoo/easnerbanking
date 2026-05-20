@@ -4,61 +4,77 @@ import { requireAuth } from "@/app/api/noah/_helpers"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { reconcileNoahBankOnrampCreditsForOwner } from "@/lib/noah/credit-bank-onramp-wallet"
 import { resolveWalletOwnerIdForEasnerContext } from "@/lib/wallet/resolve-wallet-owner"
+import { createSolanaRpcConnection } from "@/lib/solana/rpc-connection"
+import { syncWalletBalancesFromSolanaAtaForOwner } from "@/lib/wallet/sync-wallet-balances-from-ata"
 import { backfillTurnkeyOnchainTransactions } from "@/lib/turnkey/onchain-backfill"
 import { syncOrganicInboundDepositsForOwner } from "@/lib/turnkey/sync-organic-inbound-deposits"
-import { syncWalletBalancesFromSolanaAtaForOwner } from "@/lib/wallet/sync-wallet-balances-from-ata"
 
 export const runtime = "nodejs"
 
-const MIN_SYNC_INTERVAL_MS = 10 * 60_000
-const FULL_SCAN_SIGNATURES = 25
-const COOLDOWN_SCAN_SIGNATURES = 12
+const MIN_FULL_SCAN_INTERVAL_MS = 10 * 60_000
 
-const lastSyncAtByOwner = new Map<string, number>()
+const lastFullScanAtByOwner = new Map<string, number>()
 const inFlightByOwner = new Map<string, Promise<unknown>>()
 
 function heavyBackfillEnabled(): boolean {
   return process.env.SYNC_CHAIN_LEDGER_TX_BACKFILL === "1" || process.env.SYNC_CHAIN_LEDGER_TX_BACKFILL === "true"
 }
 
+type SyncMode = "cooldown" | "full" | "heavy"
+
 async function runOwnerLedgerSync(
   admin: ReturnType<typeof createSupabaseAdmin>,
   walletOwnerId: string,
   ledgerScope: { userId: string; businessId: string | null },
-  opts: { signaturesPerAddress: number; throttleMs: number },
+  mode: SyncMode,
 ) {
-  const balanceSync = await syncWalletBalancesFromSolanaAtaForOwner(admin, walletOwnerId)
+  const connection = createSolanaRpcConnection()
+  const balanceSync = await syncWalletBalancesFromSolanaAtaForOwner(admin, walletOwnerId, connection)
   const noahReconcile = await reconcileNoahBankOnrampCreditsForOwner(admin, ledgerScope)
 
-  // Organic deposits: RPC ingest (Noah/Easetag suppressed). Turnkey balance webhooks are optional enhancement.
-  const [result, organicInbound] = await Promise.all([
-    backfillTurnkeyOnchainTransactions(admin, {
+  if (mode === "cooldown") {
+    return {
+      balanceSync,
+      noahReconcile,
+      chainIngest: { skipped: true, reason: "cooldown_rpc_conservation" },
+      result: null,
+      organicInbound: null,
+    }
+  }
+
+  if (mode === "heavy") {
+    const result = await backfillTurnkeyOnchainTransactions(admin, {
       walletOwnerId,
-      signaturesPerAddress: opts.signaturesPerAddress,
-      throttleMsBetweenIngests: opts.throttleMs,
-    }),
-    syncOrganicInboundDepositsForOwner(admin, {
-      walletOwnerId,
-      signaturesPerAta: Math.max(opts.signaturesPerAddress, 35),
-      throttleMs: opts.throttleMs,
-    }),
-  ])
+      connection,
+      signaturesPerAddress: 40,
+      throttleMsBetweenIngests: 200,
+      scanOwnerAddress: false,
+    })
+    return { balanceSync, noahReconcile, result, organicInbound: null, chainIngest: { mode: "heavy" } }
+  }
+
+  const organicInbound = await syncOrganicInboundDepositsForOwner(admin, {
+    walletOwnerId,
+    connection,
+    signaturesPerAta: 8,
+    throttleMs: 280,
+    maxParsePerAccount: 5,
+    maxIngestPerRun: 4,
+  })
 
   return {
     balanceSync,
     noahReconcile,
-    result,
+    result: null,
     organicInbound,
-    signaturesPerAddress: opts.signaturesPerAddress,
-    heavyBackfill: heavyBackfillEnabled(),
+    chainIngest: { mode: "organic_ata" },
   }
 }
 
 /**
- * POST — ATA balance snapshot, Noah credit reconcile, and inbound Solana deposit ingest.
+ * POST — ATA balance snapshot, Noah credit reconcile, and (on full scan) lightweight inbound ingest.
  *
- * Turnkey `BALANCE_CONFIRMED` webhooks are optional; this route is the product fallback until they fire.
- * `SYNC_CHAIN_LEDGER_TX_BACKFILL=1` only affects throttle/signature limits (full repair mode).
+ * Cooldown calls only refresh balances + Noah credits (no Solana tx parse) to avoid RPC 429s.
  */
 export async function POST(request: Request) {
   const auth = await requireAuth(request)
@@ -79,28 +95,11 @@ export async function POST(request: Request) {
     businessId: acc.ctx.subjectBusinessId,
   }
 
-  const heavy = heavyBackfillEnabled()
-  const scanOpts = heavy
-    ? { signaturesPerAddress: 120, throttleMs: 40 }
-    : { signaturesPerAddress: FULL_SCAN_SIGNATURES, throttleMs: 120 }
-
   const now = Date.now()
-  const lastAt = lastSyncAtByOwner.get(walletOwnerId) ?? 0
-  const onCooldown = now - lastAt < MIN_SYNC_INTERVAL_MS
+  const lastFull = lastFullScanAtByOwner.get(walletOwnerId) ?? 0
+  const onCooldown = now - lastFull < MIN_FULL_SCAN_INTERVAL_MS && !heavyBackfillEnabled()
 
-  if (onCooldown) {
-    const payload = await runOwnerLedgerSync(admin, walletOwnerId, ledgerScope, {
-      signaturesPerAddress: COOLDOWN_SCAN_SIGNATURES,
-      throttleMs: 150,
-    })
-    return NextResponse.json({
-      ok: true,
-      skipped: true,
-      reason: "cooldown",
-      retryAfterMs: Math.max(MIN_SYNC_INTERVAL_MS - (now - lastAt), 0),
-      ...payload,
-    })
-  }
+  const mode: SyncMode = heavyBackfillEnabled() ? "heavy" : onCooldown ? "cooldown" : "full"
 
   const inFlight = inFlightByOwner.get(walletOwnerId)
   if (inFlight) {
@@ -114,11 +113,18 @@ export async function POST(request: Request) {
   }
 
   try {
-    const run = runOwnerLedgerSync(admin, walletOwnerId, ledgerScope, scanOpts)
+    const run = runOwnerLedgerSync(admin, walletOwnerId, ledgerScope, mode)
     inFlightByOwner.set(walletOwnerId, run)
     const payload = await run
-    lastSyncAtByOwner.set(walletOwnerId, Date.now())
-    return NextResponse.json({ ok: true, ...payload })
+    if (mode === "full" || mode === "heavy") {
+      lastFullScanAtByOwner.set(walletOwnerId, Date.now())
+    }
+    return NextResponse.json({
+      ok: true,
+      mode,
+      ...(onCooldown ? { skipped: true, reason: "cooldown", retryAfterMs: Math.max(MIN_FULL_SCAN_INTERVAL_MS - (now - lastFull), 0) } : {}),
+      ...payload,
+    })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     return NextResponse.json({ ok: false, error: msg }, { status: 500 })

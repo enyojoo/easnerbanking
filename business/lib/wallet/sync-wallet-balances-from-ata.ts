@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import type { Connection } from "@solana/web3.js"
 import { fetchStablecoinBalancesFromAta } from "@/lib/solana/ata-balances"
 import { upsertWalletBalanceSnapshot } from "@/lib/wallet/wallet-balances-db"
 
@@ -38,6 +39,7 @@ async function resolveOwnerScope(
 export async function syncWalletBalancesFromSolanaAtaForOwner(
   admin: SupabaseClient,
   walletOwnerId: string,
+  connection?: Connection,
 ): Promise<{ ok: boolean; USD: number; EUR: number; reason?: string }> {
   const scope = await resolveOwnerScope(admin, walletOwnerId)
   if (!scope) return { ok: false, USD: 0, EUR: 0, reason: "missing_owner_scope" }
@@ -51,7 +53,7 @@ export async function syncWalletBalancesFromSolanaAtaForOwner(
     .in("asset", ["USDC", "EURC"])
 
   const rows = (accounts || []).filter((r) => String(r.address || "").trim())
-  const { USD, EUR } = await fetchStablecoinBalancesFromAta(rows)
+  const { USD, EUR } = await fetchStablecoinBalancesFromAta(rows, connection)
 
   await Promise.all([
     upsertWalletBalanceSnapshot(admin, {
