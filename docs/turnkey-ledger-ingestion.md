@@ -1,54 +1,69 @@
 # Turnkey ledger ingestion
 
+**Primary organic deposits:** Turnkey **balance** webhooks (`BALANCE_CONFIRMED_UPDATES` → `balances:confirmed`). Activity webhooks (`FEATURE_NAME_WEBHOOK`) do not carry inbound SPL deposits.
+
 ## User-facing rows (one per story)
 
 | Flow | Feed | Balance credit |
 |------|------|----------------|
 | Noah bank on-ramp | Bank Deposit | Noah pay-in settle + ATA sync |
-| External USDC/EURC to deposit ATA | Stablecoin Deposit | Turnkey `BALANCE_CONFIRMED_UPDATES` webhook |
+| External USDC/EURC to deposit ATA | Stablecoin Deposit | `POST /api/webhooks/turnkey` (`metadata.source = turnkey_balance_webhook`) |
 | Easetag P2P | Easetag Send / Received | Internal `easetag_p2p` ledger |
 | Easner outbound send | Stablecoin Transfer | Send API / outbound chain |
 
-## Webhook types
+## Webhook types (two separate registrations)
 
-1. **Activity** (`FEATURE_NAME_WEBHOOK` → `POST /api/webhooks/turnkey`) — audit/orchestration. Non-deposit activities are no-ops for the ledger.
-2. **Balance** (`BALANCE_CONFIRMED_UPDATES` on the same URL) — organic inbound stablecoin. Requires `TURNKEY_BALANCE_WEBHOOKS_ENABLED=1` after endpoint registration.
+1. **Activity** — `setOrganizationFeature(FEATURE_NAME_WEBHOOK)` → same URL. Wallet create, Sol send, etc. **No** organic deposit ingest.
+2. **Balance** — `createWebhookEndpoint` + subscription `BALANCE_CONFIRMED_UPDATES` → same URL. Payload `type: "balances:confirmed"` with `msg.operation`, `msg.txHash`, `msg.address`, `msg.idempotencyKey`, `msg.asset`.
 
-Register balance webhooks (internal cron auth):
+Register balance endpoint (internal cron auth):
 
 ```bash
-curl -X POST "$BUSINESS_APP_URL/api/internal/turnkey-balance-webhook-endpoint" -H "Authorization: Bearer $CRON_SECRET"
+curl -sS -X POST "$APP_URL/api/internal/turnkey-balance-webhook-endpoint" \
+  -H "Authorization: Bearer $INTERNAL_CRON_SECRET"
 ```
 
-## `sync-chain-ledger` (mobile / dashboard)
+Then set on the deployment:
 
-- Always: ATA balance snapshot + Noah reconcile + inbound RPC ingest + **ATA-first organic deposit scan** (creates `transactions` rows with `metadata.source = turnkey_chain_sync` for the activity feed).
-- Product fallback when Turnkey balance webhooks are not registered or `TURNKEY_BALANCE_WEBHOOKS_ENABLED` is off.
-- `SYNC_CHAIN_LEDGER_TX_BACKFILL=1` — deeper repair scan (120 signatures, faster throttle) for support only.
-- Mobile/business call this on screen focus. **Cooldown** (within 10 min of last full scan): ATA balance + Noah reconcile only — no tx parse (avoids Solana RPC 429). **Full scan**: lightweight ATA ingest (max ~10 RPC parses per run).
+- `TURNKEY_BALANCE_WEBHOOK_ENDPOINT_ID` — from POST response
+- `TURNKEY_BALANCE_WEBHOOKS_ENABLED=1`
+
+Verify inbox after a test deposit:
+
+```sql
+SELECT event_id, event_type, processed_at, error
+FROM event_inbox
+WHERE provider = 'turnkey' AND event_type ILIKE '%balance%'
+ORDER BY created_at DESC LIMIT 20;
+```
+
+## `sync-chain-ledger` (fallback)
+
+- Always: ATA balance snapshot + Noah reconcile.
+- Organic deposit **RPC scan** when balance webhooks are off or missed events.
+- Cooldown (within 10 min): ATA + Noah only — no tx parse (RPC 429 guard).
 
 ## Troubleshooting
 
 ### Missing Stablecoin Deposit
 
-1. Check `event_inbox` for `BALANCE%` event types (processed).
-2. Confirm `TURNKEY_BALANCE_WEBHOOKS_ENABLED=1`.
-3. Run user `POST /api/wallets/sync-chain-ledger` for ATA + Noah reconcile (not for organic deposit creation).
+1. `GET /api/internal/turnkey-balance-webhook-endpoint` — `create_webhook_endpoint_supported`, endpoint id.
+2. `event_inbox` for `balances:confirmed` (not only `ACTIVITY_TYPE_*`).
+3. `TURNKEY_BALANCE_WEBHOOKS_ENABLED=1`.
+4. Fallback: user `POST /api/wallets/sync-chain-ledger`.
 
 ### Duplicate deposit (Bank + Stablecoin)
 
-1. Same Solana `tx_hash` on Noah pay-in and Turnkey inbound → run `business/scripts/suppress-noah-turnkey-mirror-rows.ts`.
-2. Verify Noah credit: pay-in `metadata.wallet_balance_credit_key` set; Turnkey mirror must not have `balance_delta_applied` unless it actually credited.
+1. Same Solana `tx_hash` on Noah pay-in and organic ingest → `business/scripts/suppress-noah-turnkey-mirror-rows.ts`.
+2. Noah Out `PublicID` must be linked before chain sync (see Noah on-ramp suppression).
 
-### Bank on-ramp balance wrong
+## Webhook storage
 
-1. Noah webhook delivered FiatDeposit + orchestration Out.
-2. `reconcileNoahBankOnrampCreditForSolanaTx` on Solana hash.
-3. ATA sync via `sync-chain-ledger`.
+All providers use **`event_inbox`** (`provider`, `event_id`, payload, `status`, replay via `POST /api/admin/event-inbox/replay`).
 
 ## Ops health
 
-`GET /api/admin/ops/turnkey-webhook-health` (office admin) — inbox counts, balance webhook flags, route reachability.
+`GET /api/admin/ops/turnkey-webhook-health` — inbox counts, balance flags, setup route.
 
 ## One-time cleanup
 

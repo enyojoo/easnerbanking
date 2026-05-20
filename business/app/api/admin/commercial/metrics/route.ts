@@ -22,7 +22,7 @@ export async function GET(request: Request) {
         "id, status, created_at, pricing_strategy_mode, repricing_reason_code, margin_snapshot, quote_payload, total_provider_cost, pricing_totals, provider_costs"
       ),
     admin.from("transactions").select("id, status, created_at, metadata"),
-    admin.from("webhook_deliveries").select("id, processed, error, created_at"),
+    admin.from("event_inbox").select("id, status, error, received_at").eq("provider", "noah"),
   ])
 
   if (feesRes.error || quotesRes.error || txRes.error || webhookRes.error) {
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
   const fees = (feesRes.data || []).filter((f) => String(f.created_at) >= since)
   const quotes = (quotesRes.data || []).filter((q) => String(q.created_at) >= since)
   const txs = (txRes.data || []).filter((t) => String(t.created_at) >= since)
-  const webhooks = (webhookRes.data || []).filter((w) => String(w.created_at) >= since)
+  const webhooks = (webhookRes.data || []).filter((w) => String(w.received_at) >= since)
 
   const grossRevenue = fees.reduce((sum, row) => sum + Number(row.total_fee_amount || 0), 0)
   const volume = fees.reduce((sum, row) => sum + Number(row.source_amount || 0), 0)
@@ -44,7 +44,7 @@ export async function GET(request: Request) {
     quotes.filter((q) => q.status === "expired").length +
     txs.filter((t) => String(t.metadata || "").includes("requote")).length
   const failedTransfers = txs.filter((t) => String(t.status).toLowerCase() === "failed").length
-  const webhookFailures = webhooks.filter((w) => !w.processed && !!w.error).length
+  const webhookFailures = webhooks.filter((w) => w.status === "failed").length
   const webhookFailureRate = webhooks.length > 0 ? webhookFailures / webhooks.length : 0
   const strategyModeCounts = quotes.reduce<Record<string, number>>((acc, q) => {
     const key = String(q.pricing_strategy_mode || "unknown")

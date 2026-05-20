@@ -86,11 +86,6 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     depLine.address !== 'Wallet address not available'
       ? depLine.address.trim()
       : null
-  const turnkeyOwnerAddress = depLine?.ownerAddress?.trim() || null
-  const showExchangeWalletAddress =
-    Boolean(turnkeyOwnerAddress) &&
-    Boolean(turnkeyDepositAddress) &&
-    turnkeyOwnerAddress !== turnkeyDepositAddress
   const turnkeyDepositMemo = depLine?.memo?.trim() ? depLine.memo : null
 
   /** Gate empty-state cards so we never flash "setup in progress" before the query settled (cached data shows immediately). */
@@ -396,7 +391,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     return null
   }, [virtualAccount, currency])
 
-  /** Turnkey SPL deposit line for this currency tab. */
+  /** Turnkey Solana vault for this currency tab. */
   const getStablecoinAddress = () => {
     const raw = turnkeyDepositAddress || ''
     const memo = turnkeyDepositMemo || undefined
@@ -737,19 +732,9 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                       {/* Address */}
                       {stablecoinData.address && (
                         renderCopyableField(
-                          currency.toLowerCase() === 'usd'
-                            ? 'USDC deposit address (SPL)'
-                            : 'EURC deposit address (SPL)',
+                          currency.toLowerCase() === 'usd' ? 'USDC Address' : 'EURC Address',
                           stablecoinData.address,
                           'stablecoinAddress',
-                        )
-                      )}
-
-                      {showExchangeWalletAddress && turnkeyOwnerAddress && (
-                        renderCopyableField(
-                          'Solana wallet address (for exchange withdrawals)',
-                          turnkeyOwnerAddress,
-                          'stablecoinOwnerAddress',
                         )
                       )}
 
@@ -783,18 +768,14 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                       <Text style={styles.instructionsTitle}>Payment Instructions</Text>
                       {currency.toLowerCase() === 'usd' ? (
                         <Text style={styles.instructionsText}>
-                          • Only send USDC on Solana{'\n'}
-                          • From Bybit or other exchanges: use the Solana wallet address (not the SPL deposit address) with chain SOL{'\n'}
-                          • From another wallet: use the SPL deposit address or QR code{'\n'}
+                          • Only send USDC on Solana to this address{'\n'}
                           • Sending unsupported assets will be lost{'\n'}
                           • Ensure amount is above 1 USDC{'\n'}
                           • Processing time: within seconds
                         </Text>
                       ) : (
                         <Text style={styles.instructionsText}>
-                          • Only send EURC on Solana{'\n'}
-                          • From Bybit or other exchanges: use the Solana wallet address (not the SPL deposit address) with chain SOL{'\n'}
-                          • From another wallet: use the SPL deposit address or QR code{'\n'}
+                          • Only send EURC on Solana to this address{'\n'}
                           • Sending unsupported assets will be lost{'\n'}
                           • Ensure amount is above 1 EURC{'\n'}
                           • Processing time: within seconds

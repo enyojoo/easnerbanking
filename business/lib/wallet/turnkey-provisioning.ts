@@ -11,7 +11,6 @@ import { ensureStablecoinTokenAccountOnChain } from "@/lib/turnkey/ensure-spl-to
 import { DEFAULT_INDIVIDUAL_VAULTS } from "@/lib/wallet/vault-spec"
 import { ensureFiatVirtualAccountForLedgerCurrency } from "@/lib/noah/bank-onramp-virtual-accounts"
 import { enqueueVaultProvisioningJobs, upsertWalletOwnerFromNoah } from "@/lib/wallet/turnkey-wallet-db"
-
 const MAX_ATTEMPTS = 5
 const BACKOFF_MS = 5000
 

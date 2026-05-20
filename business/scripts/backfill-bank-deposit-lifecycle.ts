@@ -1,15 +1,15 @@
 /**
- * Backfill `metadata.processing_at` / `completed_at` on Noah bank pay-in rows from webhook_deliveries.
+ * Backfill `metadata.processing_at` / `completed_at` on Noah bank pay-in rows from `event_inbox` FiatDeposit webhooks.
  *
  * Usage: npx tsx business/scripts/backfill-bank-deposit-lifecycle.ts [--dry-run]
  */
 import { createClient } from "@supabase/supabase-js"
 import {
-  extractFiatDepositEnrichment,
   extractNoahBankPayInEnrichment,
   mergePayInMetadataWithLifecycle,
 } from "../lib/noah/bank-onramp-tx"
 import { isNoahBankOnrampFiatPayIn } from "../lib/noah/bank-onramp-tx"
+import { fetchFiatDepositWebhooksByDepositIds } from "../lib/noah/fiat-deposit-webhook-timestamps"
 
 const dryRun = process.argv.includes("--dry-run")
 
@@ -45,20 +45,10 @@ async function main() {
     let completedAt = meta.completed_at != null ? String(meta.completed_at) : null
 
     if (depositId) {
-      const { data: deliveries } = await admin
-        .from("webhook_deliveries")
-        .select("payload, received_at")
-        .eq("event_type", "FiatDeposit")
-        .order("received_at", { ascending: true })
-        .limit(20)
-
-      for (const d of deliveries ?? []) {
-        const p = d.payload as Record<string, unknown>
-        const data = p?.Data as Record<string, unknown> | undefined
-        if (!data || String(data.ID ?? "") !== depositId) continue
-        const fe = extractFiatDepositEnrichment(data)
-        if (fe?.processingAt) processingAt = fe.processingAt
-      }
+      const webhookMap = await fetchFiatDepositWebhooksByDepositIds(admin, [depositId])
+      const ts = webhookMap.get(depositId)
+      if (ts?.processingAt) processingAt = ts.processingAt
+      if (ts?.completedAt && !completedAt) completedAt = ts.completedAt
     }
 
     if (!processingAt) {

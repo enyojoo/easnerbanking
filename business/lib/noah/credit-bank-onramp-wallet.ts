@@ -337,3 +337,46 @@ export async function reconcileNoahBankOnrampCreditsForOwner(
 
   return { attempted, credited }
 }
+
+/**
+ * Copy `tx_hash` from settled Noah orchestration Out rows onto the matching pay-in.
+ * Run before chain ingest so `findNoahBankOnrampChainSettlementForSuppression` can match signatures.
+ */
+export async function linkNoahOrchestrationOutHashesForOwner(
+  admin: SupabaseClient,
+  opts: {
+    userId: string
+    businessId: string | null
+    sinceDays?: number
+  },
+): Promise<{ linked: number }> {
+  const sinceDays = opts.sinceDays ?? 14
+  const sinceIso = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000).toISOString()
+
+  let q = admin
+    .from("transactions")
+    .select("tx_hash, metadata")
+    .eq("provider", "noah")
+    .eq("direction", "out")
+    .eq("status", "settled")
+    .not("tx_hash", "is", null)
+    .gte("created_at", sinceIso)
+  q = applyLedgerScope(q, opts)
+
+  const { data: rows } = await q.limit(100)
+  let linked = 0
+  for (const row of rows ?? []) {
+    const txHash = String(row.tx_hash ?? "").trim()
+    const meta = (row.metadata as Record<string, unknown> | undefined) ?? {}
+    const ruleId = String(meta.noah_rule_execution_id ?? "").trim()
+    if (!txHash || !ruleId) continue
+    await linkBankOnrampPayInToSolanaTxHash(admin, {
+      ruleExecutionId: ruleId,
+      solanaTxHash: txHash,
+      userId: opts.userId,
+      businessId: opts.businessId,
+    })
+    linked += 1
+  }
+  return { linked }
+}

@@ -2,8 +2,6 @@
  * Validation utilities for forms
  */
 
-import { validateWalletAddressForNetwork } from '@easner/shared'
-
 export interface ValidationResult {
   isValid: boolean
   error?: string
@@ -99,17 +97,11 @@ export function validateRequired(value: string, fieldName: string): ValidationRe
   return { isValid: true }
 }
 
-export function validateWalletAddress(
-  address: string,
-  network?: string,
-): ValidationResult {
-  if (!network?.trim()) {
-    if (!address || address.trim().length < 16) {
-      return { isValid: false, error: 'Wallet address looks too short' }
-    }
-    return { isValid: true }
+export function validateWalletAddress(address: string): ValidationResult {
+  if (!address || address.trim().length < 16) {
+    return { isValid: false, error: 'Wallet address looks too short' }
   }
-  return validateWalletAddressForNetwork(address, network)
+  return { isValid: true }
 }
 
 export function validateMobileMoneyProvider(provider: string): ValidationResult {

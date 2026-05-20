@@ -59,6 +59,20 @@ describe("isTurnkeyNoahBankOnrampChainMirror", () => {
     ).toBe(false)
   })
 
+  it("shows helius_webhook even when hash matches Noah set", () => {
+    expect(
+      isTurnkeyNoahBankOnrampChainMirror(
+        {
+          provider: "turnkey",
+          direction: "in",
+          tx_hash: "abc",
+          metadata: { source: "helius_webhook" },
+        },
+        new Set(["abc"]),
+      ),
+    ).toBe(false)
+  })
+
   it("shows turnkey_chain_sync even when hash matches Noah set", () => {
     expect(
       isTurnkeyNoahBankOnrampChainMirror(

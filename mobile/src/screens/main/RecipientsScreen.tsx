@@ -50,12 +50,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { analytics } from '../../lib/analytics'
 import { useFocusRefresh } from '../../hooks/useFocusRefresh'
 import { getAccountTypeConfigFromCurrency, formatFieldValue } from '../../lib/currencyAccountTypes'
-import {
-  validateRequired,
-  validateAccountNumber,
-  validateIBAN,
-  validateWalletAddress,
-} from '../../utils/validators'
+import { validateRequired, validateAccountNumber, validateIBAN } from '../../utils/validators'
 import { formatIBAN, formatSortCode, formatRoutingNumber, formatAccountNumber } from '../../utils/formatters'
 import { colors, shadows, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
@@ -413,17 +408,6 @@ function RecipientsContent({ navigation }: NavigationProps) {
       return
     }
 
-    if (selectedRecipientType === 'wallet') {
-      const walletCheck = validateWalletAddress(
-        newRecipient.walletAddress,
-        newRecipient.network,
-      )
-      if (!walletCheck.isValid) {
-        showError(walletCheck.error ?? 'Invalid wallet address')
-        return
-      }
-    }
-
     try {
       setIsSubmitting(true)
       setError('')
@@ -607,17 +591,6 @@ function RecipientsContent({ navigation }: NavigationProps) {
     if (!isFormValid()) {
       showError('Please fill in all required fields')
       return
-    }
-
-    if (selectedRecipientType === 'wallet') {
-      const walletCheck = validateWalletAddress(
-        newRecipient.walletAddress,
-        newRecipient.network,
-      )
-      if (!walletCheck.isValid) {
-        showError(walletCheck.error ?? 'Invalid wallet address')
-        return
-      }
     }
 
     try {

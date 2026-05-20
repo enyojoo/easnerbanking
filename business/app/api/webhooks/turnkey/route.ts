@@ -5,6 +5,10 @@ import { verifyTurnkeyWebhookSignature } from "@/lib/turnkey/webhook-verify"
 import { applyTurnkeyBalanceWebhookSideEffects } from "@/lib/turnkey/balance-webhook-sync"
 import { applyTurnkeyWebhookSideEffects } from "@/lib/turnkey/chain-sync"
 import { isTurnkeyBalanceConfirmedPayload } from "@/lib/turnkey/turnkey-webhook-classify"
+import {
+  parseTurnkeyBalanceWebhookPayload,
+  turnkeyWebhookInboxIdentity,
+} from "@/lib/turnkey/turnkey-balance-webhook-payload"
 
 export const runtime = "nodejs"
 
@@ -57,17 +61,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
   }
 
-  const p = payload as Record<string, unknown>
-  const eventId = String(p.id ?? p.eventId ?? p.activityId ?? p.hash ?? "").trim()
-  if (!eventId) {
+  const identity = turnkeyWebhookInboxIdentity(payload)
+  if (!identity?.eventId) {
     return NextResponse.json({ error: "Missing event id on payload" }, { status: 400 })
   }
+
+  const { eventId, eventType } = identity
+  const p = payload as Record<string, unknown>
 
   const admin = createSupabaseAdmin()
   const { skipped } = await recordEventInbox(admin, {
     provider: "turnkey",
     eventId,
-    eventType: String(p.type ?? p.eventType ?? ""),
+    eventType,
     payload: p,
   })
   if (skipped) {
@@ -75,8 +81,13 @@ export async function POST(request: Request) {
   }
 
   try {
-    if (isTurnkeyBalanceConfirmedPayload(p)) {
-      await applyTurnkeyBalanceWebhookSideEffects(admin, p, eventId)
+    const balanceParsed = parseTurnkeyBalanceWebhookPayload(payload)
+    if (balanceParsed.kind === "deposit") {
+      await applyTurnkeyBalanceWebhookSideEffects(admin, balanceParsed.data, eventId)
+    } else if (balanceParsed.kind === "withdraw") {
+      /* withdraw confirmations are acknowledged but do not create ledger rows */
+    } else if (isTurnkeyBalanceConfirmedPayload(p)) {
+      console.warn("turnkey_webhook: balance-shaped payload could not be parsed for ingest", { eventId, eventType })
     } else {
       await applyTurnkeyWebhookSideEffects(admin, p, eventId)
     }

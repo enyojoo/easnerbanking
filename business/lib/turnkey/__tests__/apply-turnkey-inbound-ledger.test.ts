@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest"
 
 const mocks = vi.hoisted(() => ({
   findNoah: vi.fn(),
+  findPendingNoah: vi.fn(),
   reconcileNoah: vi.fn(),
   findEasetag: vi.fn(),
   updateEasetag: vi.fn(),
@@ -12,6 +13,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/noah/noah-bank-onramp-chain-suppression", () => ({
   findNoahBankOnrampChainSettlementForSuppression: mocks.findNoah,
+  findPendingNoahBankOnrampForInboundAmount: mocks.findPendingNoah,
 }))
 vi.mock("@/lib/noah/credit-bank-onramp-wallet", () => ({
   reconcileNoahBankOnrampCreditForSolanaTx: mocks.reconcileNoah,
@@ -68,6 +70,7 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.findNoah.mockResolvedValue(null)
+    mocks.findPendingNoah.mockResolvedValue(null)
     mocks.findEasetag.mockResolvedValue(null)
     mocks.updateEasetag.mockResolvedValue(undefined)
     mocks.upsertLedger.mockResolvedValue({
@@ -97,6 +100,19 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
       businessId: null,
     })
     expect(mocks.upsertLedger).not.toHaveBeenCalled()
+  })
+
+  it("suppresses pending Noah pay-in by amount before on-chain hash is linked", async () => {
+    mocks.findPendingNoah.mockResolvedValue({
+      payInTransactionId: "noah-pay-1",
+      ruleExecutionId: "rule-1",
+    })
+    const admin = { from: vi.fn() }
+
+    const result = await applyTurnkeyInboundLedgerEvent(admin as never, baseInput)
+    expect(result.kind).toBe("suppressed_noah")
+    expect(mocks.upsertLedger).not.toHaveBeenCalled()
+    expect(mocks.reconcileNoah).toHaveBeenCalled()
   })
 
   it("suppresses Easetag settlement without upsert", async () => {

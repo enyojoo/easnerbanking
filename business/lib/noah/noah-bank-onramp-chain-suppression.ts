@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
+  extractNoahBankPayInEnrichment,
   isNoahBankOnrampFiatPayIn,
   isNoahBankOnrampOrchestrationOutLeg,
 } from "@/lib/noah/bank-onramp-tx"
@@ -76,6 +77,76 @@ export async function findNoahBankOnrampChainSettlementForSuppression(
   const { data: payInRow } = await byMeta.maybeSingle()
   if (payInRow?.id) {
     return { linkedTransactionId: String(payInRow.id), kind: "pay_in" }
+  }
+
+  return null
+}
+
+function amountsRoughlyEqual(a: number, b: number): boolean {
+  if (!Number.isFinite(a) || !Number.isFinite(b) || a <= 0 || b <= 0) return false
+  return Math.abs(a - b) <= Math.max(0.01, a * 0.001)
+}
+
+/**
+ * Noah pay-in settled on fiat but Solana hash not linked yet (race before orchestration Out webhook).
+ * Suppresses duplicate stablecoin rows when chain/RPC/Helius sees the transfer first.
+ */
+export async function findPendingNoahBankOnrampForInboundAmount(
+  admin: SupabaseClient,
+  input: {
+    userId: string
+    businessId: string | null
+    amount: number
+    currency: string
+    withinHours?: number
+  },
+): Promise<{ payInTransactionId: string; ruleExecutionId: string | null } | null> {
+  const amount = input.amount
+  const currency = String(input.currency || "").trim().toUpperCase()
+  if (!Number.isFinite(amount) || amount <= 0 || !currency) return null
+
+  const hours = input.withinHours ?? 48
+  const sinceIso = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString()
+
+  let q = admin
+    .from("transactions")
+    .select("id, metadata, payload, tx_hash")
+    .eq("provider", "noah")
+    .eq("direction", "in")
+    .eq("status", "settled")
+    .gte("created_at", sinceIso)
+    .or("metadata->>flow.eq.bank_onramp,metadata->>noah_rule_execution_id.not.is.null")
+  q = applyLedgerScope(q, input)
+
+  const { data: rows } = await q.limit(20)
+  for (const row of rows ?? []) {
+    const meta = (row.metadata as Record<string, unknown> | undefined) ?? {}
+    const onChain =
+      String(row.tx_hash ?? "").trim() ||
+      (typeof meta.noah_on_chain_tx_hash === "string" ? meta.noah_on_chain_tx_hash.trim() : "")
+    if (onChain) continue
+
+    const payload = (row.payload as Record<string, unknown> | undefined) ?? {}
+    const enrichment = extractNoahBankPayInEnrichment(payload)
+    const settled =
+      enrichment?.settledStablecoinAmount ??
+      (typeof meta.settled_amount === "number" ? meta.settled_amount : Number(meta.settled_amount))
+    const ledgerCur =
+      enrichment?.walletLedgerCurrency ??
+      (typeof meta.settled_currency === "string" ? String(meta.settled_currency).toUpperCase() : null)
+
+    if (!ledgerCur || ledgerCur !== currency) continue
+    if (settled == null || !amountsRoughlyEqual(amount, Number(settled))) continue
+
+    const ruleExecutionId =
+      (typeof meta.noah_rule_execution_id === "string" && meta.noah_rule_execution_id.trim()) ||
+      enrichment?.ruleExecutionId ||
+      null
+
+    return {
+      payInTransactionId: String(row.id),
+      ruleExecutionId,
+    }
   }
 
   return null

@@ -23,7 +23,6 @@ import { fetchEasenetProfileByTag } from "@/lib/easenet-profile"
 import { EasenetRecipientProfileRow } from "@/components/easenet-recipient-profile-row"
 import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
-import { validateWalletAddressForNetwork } from "@easner/shared"
 
 const RECIPIENT_TYPE_TABS = [
   { id: "bank" as const, label: "Bank Account" },
@@ -350,13 +349,7 @@ export function RecipientForm({
     if (formData.recipientType === "wallet") {
       if (!formData.walletAsset.trim()) newErrors.walletAsset = "Asset is required"
       if (!formData.walletNetwork.trim()) newErrors.walletNetwork = "Network is required"
-      const walletCheck = validateWalletAddressForNetwork(
-        formData.walletAddress,
-        formData.walletNetwork,
-      )
-      if (!walletCheck.isValid) {
-        newErrors.walletAddress = walletCheck.error ?? "Wallet address is required"
-      }
+      if (!formData.walletAddress.trim()) newErrors.walletAddress = "Wallet address is required"
     }
 
     // Currency-specific validation

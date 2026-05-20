@@ -1,3 +1,5 @@
+import { isTurnkeyBalancesConfirmedWebhook } from "@/lib/turnkey/turnkey-balance-webhook-payload"
+
 type TurnkeyPayload = Record<string, unknown>
 
 function walkObject(value: unknown, visit: (obj: Record<string, unknown>) => void): void {
@@ -28,8 +30,9 @@ function collectActivityTypes(payload: TurnkeyPayload): string[] {
   return [...types]
 }
 
-/** Turnkey BALANCE_CONFIRMED_UPDATES — handled by balance webhook pipeline, not activity no-op. */
+/** Turnkey BALANCE_CONFIRMED_UPDATES (`balances:confirmed`) — balance pipeline, not activity no-op. */
 export function isTurnkeyBalanceConfirmedPayload(payload: unknown): boolean {
+  if (isTurnkeyBalancesConfirmedWebhook(payload)) return true
   if (!payload || typeof payload !== "object") return false
   const p = payload as TurnkeyPayload
   const types = collectActivityTypes(p)

@@ -14,8 +14,6 @@ export interface Account {
   availableBalance: number
   status: "active" | "pending" | "closed"
   stablecoinAddress?: string
-  /** Turnkey Solana vault (owner). Use for exchange withdrawals (Bybit, etc.), not the SPL ATA. */
-  stablecoinOwnerAddress?: string
   stablecoinChain?: string
   stablecoinToken?: "USDC" | "EURC"
 }

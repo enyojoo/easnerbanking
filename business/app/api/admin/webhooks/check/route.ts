@@ -5,7 +5,7 @@ import { noahFetch } from "@/lib/noah/http"
 import { isNoahConfigured } from "@/lib/noah/config"
 
 /**
- * Office compliance: compare Supabase user, stored webhook deliveries, and optional live Noah GET /customers.
+ * Office compliance: compare Supabase user, Noah webhooks in `event_inbox`, and optional live Noah GET /customers.
  */
 export async function GET(request: Request) {
   const auth = await requireOfficeAdmin(request)
@@ -24,24 +24,31 @@ export async function GET(request: Request) {
 
   let webhookEvents: { event_type: string | null; created_at: string; payload: unknown }[] = []
   if (customerId) {
-    const { data: deliveries } = await admin
-      .from("webhook_deliveries")
+    const { data: inboxRows } = await admin
+      .from("event_inbox")
       .select("payload, received_at, event_type")
-      .eq("noah_customer_id", customerId)
+      .eq("provider", "noah")
       .order("received_at", { ascending: false })
-      .limit(50)
+      .limit(200)
 
-    webhookEvents = (deliveries ?? []).map((d) => ({
-      event_type: d.event_type,
-      created_at: d.received_at as string,
-      payload: d.payload,
-    }))
+    webhookEvents = (inboxRows ?? [])
+      .filter((row) => {
+        const envelope = row.payload as Record<string, unknown> | undefined
+        const data = envelope?.Data as Record<string, unknown> | undefined
+        return data?.CustomerID != null && String(data.CustomerID) === customerId
+      })
+      .slice(0, 50)
+      .map((d) => ({
+        event_type: d.event_type,
+        created_at: d.received_at as string,
+        payload: d.payload,
+      }))
   }
 
   const kycEvents = webhookEvents.filter((e) =>
     String(e.event_type ?? "")
       .toLowerCase()
-      .includes("customer")
+      .includes("customer"),
   ).length
 
   let noahStatus: { kyc_status?: string } | null = null

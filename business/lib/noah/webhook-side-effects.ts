@@ -25,7 +25,7 @@ import { provisionNoahAfterVerificationApproved } from "@/lib/noah/provision-aft
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 
 function pickTxHash(tx: Record<string, unknown>): string | null {
-  const h = tx.TxHash ?? tx.TransactionHash ?? tx.txHash ?? tx.Hash
+  const h = tx.TxHash ?? tx.TransactionHash ?? tx.txHash ?? tx.Hash ?? tx.PublicID
   return h != null && String(h).trim() ? String(h).trim() : null
 }
 

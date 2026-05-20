@@ -73,16 +73,22 @@ async function main() {
         continue
       }
       try {
-        const { data: rows, error: whErr } = await admin
-          .from("webhook_deliveries")
+        const { data: inboxRows, error: whErr } = await admin
+          .from("event_inbox")
           .select("payload,received_at")
-          .eq("noah_customer_id", cid)
+          .eq("provider", "noah")
           .eq("event_type", "Customer")
           .order("received_at", { ascending: false })
-          .limit(1)
+          .limit(50)
         if (whErr) throw whErr
-        const p = rows?.[0]?.payload
-        if (!p || typeof p !== "object") throw new Error("no Customer webhook in webhook_deliveries")
+        const match = (inboxRows ?? []).find((row) => {
+          const envelope = row.payload
+          if (!envelope || typeof envelope !== "object") return false
+          const data = envelope.Data
+          return data && typeof data === "object" && String(data.CustomerID ?? "") === cid
+        })
+        const p = match?.payload
+        if (!p || typeof p !== "object") throw new Error("no Customer webhook in event_inbox")
         const data = p.Data
         if (!data || typeof data !== "object") throw new Error("webhook payload missing Data")
         const occurredAt =

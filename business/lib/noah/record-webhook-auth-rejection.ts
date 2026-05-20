@@ -1,4 +1,5 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { recordEventInbox, markEventInboxProcessed } from "@/lib/webhooks/event-inbox"
 import type { NoahWebhookVerifyFailureCode } from "./webhook-verify"
 
 /**
@@ -17,22 +18,19 @@ export async function recordNoahWebhookAuthRejection(opts: {
 
   try {
     const admin = createSupabaseAdmin()
-    const dedupeKey = `auth-reject-${opts.code}-${Date.now()}`
-    await admin.from("webhook_deliveries").insert({
-      dedupe_key: dedupeKey,
-      event_type: "AuthRejected",
-      noah_customer_id: null,
-      event_version: null,
+    const eventId = `noah:auth-reject:${opts.code}:${Date.now()}`
+    await recordEventInbox(admin, {
+      provider: "noah",
+      eventId,
+      eventType: "AuthRejected",
       payload: {
         code: opts.code,
         bodyBytes: opts.bodyBytes,
         signatureBytes: opts.signatureBytes,
         headerNames: opts.headerNames,
-      } as object,
-      provider: "noah",
-      processed: false,
-      error: opts.code,
+      },
     })
+    await markEventInboxProcessed(admin, "noah", eventId, opts.code)
   } catch (e) {
     console.error("[noah-webhook] failed to log auth rejection:", e)
   }

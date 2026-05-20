@@ -2,7 +2,10 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { findEasetagSettlementForChainSuppression, updateEasetagSettlementSettled } from "@/lib/ledger/easetag-settlement"
 import { reconcileNoahBankOnrampCreditForSolanaTx } from "@/lib/noah/credit-bank-onramp-wallet"
-import { findNoahBankOnrampChainSettlementForSuppression } from "@/lib/noah/noah-bank-onramp-chain-suppression"
+import {
+  findNoahBankOnrampChainSettlementForSuppression,
+  findPendingNoahBankOnrampForInboundAmount,
+} from "@/lib/noah/noah-bank-onramp-chain-suppression"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 import { enqueueLiquiditySweepJob } from "@/lib/liquidity/sweep-jobs"
 import { resolvePooledSolanaSourceAddress, ledgerCurrencyForStablecoinAsset } from "@/lib/liquidity/platform-pool"
@@ -54,18 +57,37 @@ export async function applyTurnkeyInboundLedgerEvent(
   const status = input.status
   const direction = input.direction
 
-  if (direction === "in" && txHash) {
-    const noahSuppressed = await findNoahBankOnrampChainSettlementForSuppression(admin, {
-      txHash,
-      userId,
-      businessId,
-    })
-    if (noahSuppressed) {
-      await reconcileNoahBankOnrampCreditForSolanaTx(admin, {
-        solanaTxHash: txHash,
+  if (direction === "in") {
+    if (txHash) {
+      const noahSuppressed = await findNoahBankOnrampChainSettlementForSuppression(admin, {
+        txHash,
         userId,
         businessId,
-      }).catch(() => {})
+      })
+      if (noahSuppressed) {
+        await reconcileNoahBankOnrampCreditForSolanaTx(admin, {
+          solanaTxHash: txHash,
+          userId,
+          businessId,
+        }).catch(() => {})
+        return { kind: "suppressed_noah" }
+      }
+    }
+
+    const pendingPayIn = await findPendingNoahBankOnrampForInboundAmount(admin, {
+      userId,
+      businessId,
+      amount: input.amount,
+      currency: input.currency,
+    })
+    if (pendingPayIn) {
+      if (txHash) {
+        await reconcileNoahBankOnrampCreditForSolanaTx(admin, {
+          solanaTxHash: txHash,
+          userId,
+          businessId,
+        }).catch(() => {})
+      }
       return { kind: "suppressed_noah" }
     }
   }

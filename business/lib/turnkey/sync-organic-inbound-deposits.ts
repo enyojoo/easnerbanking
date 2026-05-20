@@ -3,6 +3,7 @@ import type { Connection } from "@solana/web3.js"
 import { PublicKey } from "@solana/web3.js"
 import { deriveStablecoinAssociatedTokenAddress } from "@/lib/solana/ata"
 import { createSolanaRpcConnection, isSolanaRpcRateLimitedError } from "@/lib/solana/rpc-connection"
+import { collectNoahBankOnrampOnChainTxHashesForScope } from "@/lib/noah/noah-bank-onramp-chain-suppression"
 import { turnkeyInboundLedgerRowExists } from "@/lib/turnkey/ledger-inbound-exists"
 import { ingestTurnkeySolanaTxForOwnerVault } from "@/lib/turnkey/ingest-solana-ledger-tx"
 
@@ -126,6 +127,11 @@ export async function syncOrganicInboundDepositsForOwner(
     }
 
     signaturesListed += sigs.length
+    const noahHashes = await collectNoahBankOnrampOnChainTxHashesForScope(
+      admin,
+      sigs.map((s) => s.signature),
+      ctx,
+    )
     let parsedThisAccount = 0
 
     for (const sig of sigs) {
@@ -138,6 +144,10 @@ export async function syncOrganicInboundDepositsForOwner(
       })
       if (exists) {
         bumpNoop("already_in_ledger")
+        continue
+      }
+      if (noahHashes.has(sig.signature)) {
+        bumpNoop("noah_bank_onramp")
         continue
       }
 

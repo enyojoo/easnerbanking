@@ -76,8 +76,9 @@ export async function fetchFiatDepositWebhooksByDepositIds(
   if (wanted.size === 0) return result
 
   const { data, error } = await admin
-    .from("webhook_deliveries")
+    .from("event_inbox")
     .select("payload, received_at")
+    .eq("provider", "noah")
     .eq("event_type", "FiatDeposit")
     .order("received_at", { ascending: true })
     .limit(FIAT_DEPOSIT_WEBHOOK_SCAN_LIMIT)

@@ -2,7 +2,10 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireAuth } from "@/app/api/noah/_helpers"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
-import { reconcileNoahBankOnrampCreditsForOwner } from "@/lib/noah/credit-bank-onramp-wallet"
+import {
+  linkNoahOrchestrationOutHashesForOwner,
+  reconcileNoahBankOnrampCreditsForOwner,
+} from "@/lib/noah/credit-bank-onramp-wallet"
 import { resolveWalletOwnerIdForEasnerContext } from "@/lib/wallet/resolve-wallet-owner"
 import { createSolanaRpcConnection } from "@/lib/solana/rpc-connection"
 import { syncWalletBalancesFromSolanaAtaForOwner } from "@/lib/wallet/sync-wallet-balances-from-ata"
@@ -30,11 +33,13 @@ async function runOwnerLedgerSync(
 ) {
   const connection = createSolanaRpcConnection()
   const balanceSync = await syncWalletBalancesFromSolanaAtaForOwner(admin, walletOwnerId, connection)
+  const noahHashPrime = await linkNoahOrchestrationOutHashesForOwner(admin, ledgerScope)
   const noahReconcile = await reconcileNoahBankOnrampCreditsForOwner(admin, ledgerScope)
 
   if (mode === "cooldown") {
     return {
       balanceSync,
+      noahHashPrime,
       noahReconcile,
       chainIngest: { skipped: true, reason: "cooldown_rpc_conservation" },
       result: null,
@@ -50,7 +55,14 @@ async function runOwnerLedgerSync(
       throttleMsBetweenIngests: 200,
       scanOwnerAddress: false,
     })
-    return { balanceSync, noahReconcile, result, organicInbound: null, chainIngest: { mode: "heavy" } }
+    return {
+      balanceSync,
+      noahHashPrime,
+      noahReconcile,
+      result,
+      organicInbound: null,
+      chainIngest: { mode: "heavy" },
+    }
   }
 
   const organicInbound = await syncOrganicInboundDepositsForOwner(admin, {
@@ -64,6 +76,7 @@ async function runOwnerLedgerSync(
 
   return {
     balanceSync,
+    noahHashPrime,
     noahReconcile,
     result: null,
     organicInbound,
