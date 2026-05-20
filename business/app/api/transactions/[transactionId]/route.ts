@@ -12,7 +12,7 @@ import {
 } from "@/lib/easner-transaction-id"
 import { mapRowToBusinessTransaction } from "@/lib/transactions/map-row-to-business"
 import {
-  attachBankDepositDetailFields,
+  attachBankDepositDetailFieldsAsync,
   isBankOnrampPayInRow,
 } from "@/lib/transactions/bank-deposit-detail"
 import {
@@ -20,12 +20,13 @@ import {
   isTurnkeyTransactionHiddenFromFeed,
 } from "@/lib/transactions/transaction-feed-filters"
 import { collectNoahBankOnrampOnChainTxHashesForScope } from "@/lib/noah/noah-bank-onramp-chain-suppression"
-import { buildBankDepositLifecycle } from "@easner/shared"
 import {
   deriveEasnerInboundRemitterDisplayName,
+  isEasnerProductReceiveTitle,
   toEasnerTransactionPrimaryLabel,
   toEasnerTransactionProductCategory,
 } from "@easner/shared"
+import { enrichBankDepositLedgerRows } from "@/lib/transactions/enrich-bank-deposit-ledger-rows"
 
 const LEDGER_SELECT =
   "id, easner_transaction_id, provider, provider_transaction_id, status, amount, currency, direction, metadata, payload, created_at, updated_at, occurred_at, settled_at, tx_hash, wallet_address, counterparty_address, asset, chain, base_currency, base_amount"
@@ -55,12 +56,19 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
   const amount = typeof row.amount === "number" ? row.amount : Number(row.amount) || 0
   const currency = String(row.currency ?? "USD")
   const ledger_row_id = ledgerId || undefined
-  const name = toEasnerTransactionPrimaryLabel({
-    provider: String(row.provider ?? "noah"),
-    direction: dirRaw === "in" ? "in" : "out",
-    metadata: (row.metadata as Record<string, unknown> | null | undefined) ?? null,
-    payload: row.payload as Record<string, unknown> | null | undefined,
-  })
+  const metaForName = row.metadata as Record<string, unknown> | null | undefined
+  const payloadForName = row.payload as Record<string, unknown> | null | undefined
+  const name =
+    deriveEasnerInboundRemitterDisplayName({
+      metadata: metaForName,
+      payload: payloadForName,
+    }) ??
+    toEasnerTransactionPrimaryLabel({
+      provider: String(row.provider ?? "noah"),
+      direction: dirRaw === "in" ? "in" : "out",
+      metadata: metaForName ?? null,
+      payload: payloadForName,
+    })
   return {
     id: idForUi,
     transaction_id: idForUi,
@@ -286,39 +294,69 @@ export async function GET(request: Request, routeCtx: Props) {
     transaction = enrichMobileDetailFromLedgerMetadata(transaction, meta)
   }
 
-  transaction = attachBankDepositDetailFields(rec, transaction)
+  transaction = await attachBankDepositDetailFieldsAsync(admin, rec, transaction)
 
   if (scope === "business") {
-    let businessTransaction = mapRowToBusinessTransaction(rec)
+    const [enrichedRec] = await enrichBankDepositLedgerRows(admin, [rec])
+    const rowForBusiness = enrichedRec ?? rec
+    const enrichedMeta = rowForBusiness.metadata as Record<string, unknown> | undefined
+    let businessTransaction = mapRowToBusinessTransaction(rowForBusiness)
     if (isBankOnrampPayInRow(rec)) {
-      const m = meta ?? {}
+      const senderLabel =
+        (typeof transaction.name === "string" && transaction.name.trim()) ||
+        (typeof transaction.sender_display_name === "string" &&
+          transaction.sender_display_name.trim()) ||
+        (typeof enrichedMeta?.sender_name === "string" && enrichedMeta.sender_name.trim()) ||
+        ""
+      const narrationLabel =
+        (typeof transaction.narration === "string" && transaction.narration.trim()) ||
+        (typeof enrichedMeta?.deposit_narration === "string" &&
+          enrichedMeta.deposit_narration.trim()) ||
+        (typeof transaction.reference === "string" &&
+        /^sent from /i.test(transaction.reference)
+          ? transaction.reference.trim()
+          : "") ||
+        ""
+      const displayDescription =
+        senderLabel && !isEasnerProductReceiveTitle(senderLabel)
+          ? senderLabel
+          : businessTransaction.description
       businessTransaction = {
         ...businessTransaction,
-        lifecycle: buildBankDepositLifecycle({
-          status: String(rec.status ?? ""),
-          metadata: m,
-          occurredAt: rec.occurred_at != null ? String(rec.occurred_at) : null,
-          settledAt: rec.settled_at != null ? String(rec.settled_at) : null,
-          createdAt: rec.created_at != null ? String(rec.created_at) : null,
-        }),
+        description: displayDescription,
+        ...(narrationLabel ? { narration: narrationLabel } : {}),
+        ...(displayDescription && displayDescription !== businessTransaction.description
+          ? { counterpartyName: displayDescription }
+          : {}),
+        lifecycle: (transaction.lifecycle as typeof businessTransaction.lifecycle) ?? undefined,
         fee:
-          typeof m.fee_amount === "number" && Number.isFinite(m.fee_amount)
-            ? m.fee_amount
+          typeof transaction.fee_amount === "number"
+            ? transaction.fee_amount
             : businessTransaction.fee,
         depositAmount:
-          typeof m.fiat_deposit_amount === "number"
-            ? m.fiat_deposit_amount
+          typeof transaction.deposit_amount === "number"
+            ? transaction.deposit_amount
             : businessTransaction.amount,
         postedAmount:
-          typeof m.posted_amount === "number"
-            ? m.posted_amount
-            : typeof m.settled_amount === "number"
-              ? m.settled_amount
+          typeof transaction.posted_amount === "number"
+            ? transaction.posted_amount
+            : typeof transaction.settled_amount === "number"
+              ? transaction.settled_amount
               : undefined,
         postedCurrency:
-          m.settled_currency != null
-            ? String(m.settled_currency)
+          transaction.posted_currency != null
+            ? String(transaction.posted_currency)
             : businessTransaction.displayCurrency,
+        reference: businessTransaction.reference,
+        paymentScheme:
+          typeof transaction.payment_scheme === "string"
+            ? transaction.payment_scheme
+            : typeof (transaction.metadata as Record<string, unknown> | undefined)
+                  ?.deposit_scheme_label === "string"
+              ? String(
+                  (transaction.metadata as Record<string, unknown>).deposit_scheme_label,
+                )
+              : "ACH",
       }
     }
     return NextResponse.json({ transaction, businessTransaction })

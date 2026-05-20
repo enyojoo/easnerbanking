@@ -53,7 +53,14 @@ import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { buildGroupedActivityItems } from '../../lib/transactionListGrouping'
 import { getTransactionStatusDisplay } from '../../utils/formatters'
-import { isEasnerProductReceiveTitle, isEasnerProductSendTitle, markRecentMoneyActivity, qk } from '@easner/shared'
+import {
+  markRecentMoneyActivity,
+  qk,
+  isEasnerProductReceiveTitle,
+  resolveInboundTransactionListLabel,
+  resolveOutboundTransactionListLabel,
+  resolveTransactionListLabel,
+} from '@easner/shared'
 import { useFocusEffect } from '@react-navigation/native'
 import { apiPost } from '../../lib/apiClient'
 import { useAuth } from '../../contexts/AuthContext'
@@ -175,54 +182,26 @@ function formatRangeLabel(from: Date | null, to: Date | null): string {
   return ''
 }
 
-// Helper function to get transaction name (defined outside component so it can be used in TransactionItem)
 function getTransactionName(item: CombinedTransaction, transactionType: string): string {
   if (transactionType === 'card_funding') {
     return 'Card Top-Up'
   }
-
   if (transactionType === 'receive') {
-    if (item.source_type === 'liquidation_address' || item.source_liquidation_address_id) {
-      return 'Stablecoin Deposit'
-    }
-
-    const display = String(item.name || '').trim()
-    if (display === 'Stablecoin Deposit') {
-      return display
-    }
-
-    if (item.source_type === 'virtual_account') {
-      const senderName =
-        item.metadata?.source?.sender_name ||
-        item.metadata?.source?.originator_name ||
-        item.name
-      if (senderName) {
-        return String(senderName).trim()
-      }
-      return 'Bank Deposit'
-    }
-
-    if (display && !isEasnerProductReceiveTitle(display)) {
-      return display
-    }
-
-    if (isEasnerProductReceiveTitle(display)) {
-      return display
-    }
-
-    const fromRecipient = item.recipient?.full_name
-    return fromRecipient ? `Received from ${fromRecipient}` : 'Received'
+    const senderDisplay = String(
+      (item as { sender_display_name?: string }).sender_display_name ?? '',
+    ).trim()
+    const apiName = String(item.name ?? '').trim()
+    if (senderDisplay && !isEasnerProductReceiveTitle(senderDisplay)) return senderDisplay
+    if (apiName && !isEasnerProductReceiveTitle(apiName)) return apiName
   }
-
-  if (transactionType === 'send') {
-    if (isEasnerProductSendTitle(item.name)) {
-      return String(item.name).trim()
-    }
-    const toName = item.recipient?.full_name
-    return toName ? `Sent to ${toName}` : 'Sent'
-  }
-
-  return 'Card Top-Up'
+  return resolveTransactionListLabel(transactionType, {
+    name: item.name,
+    source_type: item.source_type,
+    source_liquidation_address_id: item.source_liquidation_address_id,
+    metadata: item.metadata,
+    payload: (item as { payload?: Record<string, unknown> }).payload,
+    recipient_full_name: item.recipient?.full_name,
+  })
 }
 
 // Animated Transaction Item Component

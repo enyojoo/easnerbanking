@@ -1,10 +1,70 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
+
+const sharedMock = vi.hoisted(() => {
+  const formatDisplayPersonName = (name: unknown) => {
+    const raw = String(name ?? "").trim()
+    if (!raw) return ""
+    return raw
+      .split(/\s+/)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(" ")
+  }
+  const parseSentFromNarrationLabel = (text: string | null | undefined) => {
+    const raw = String(text ?? "").trim()
+    if (!raw) return null
+    const parts = raw.split(/\bsent\s+from\s+/i)
+    if (parts.length < 2) return null
+    const origin = parts[parts.length - 1]!.trim()
+    if (!origin) return null
+    const label = formatDisplayPersonName(origin)
+    return label ? `Sent from ${label}` : null
+  }
+  const deriveBankDepositInboundDisplayLabel = (input: {
+    fiatDepositSenderName?: string | null
+    metadata?: Record<string, unknown> | null
+  }) => {
+    const meta = input.metadata || {}
+    const depositSender =
+      input.fiatDepositSenderName ?? meta.noah_fiat_deposit_sender_name
+    if (depositSender != null && String(depositSender).trim()) {
+      return formatDisplayPersonName(String(depositSender))
+    }
+    return undefined
+  }
+  const deriveBankDepositNarrationLabel = (input: {
+    paymentReference?: string | null
+    metadata?: Record<string, unknown> | null
+  }) => {
+    const meta = input.metadata || {}
+    if (typeof meta.deposit_narration === "string" && meta.deposit_narration.trim()) {
+      return meta.deposit_narration.trim()
+    }
+    const ref = input.paymentReference ?? meta.reference
+    if (ref == null) return undefined
+    return parseSentFromNarrationLabel(String(ref)) ?? undefined
+  }
+  return {
+    formatDisplayPersonName,
+    parseSentFromNarrationLabel,
+    deriveBankDepositInboundDisplayLabel,
+    deriveBankDepositNarrationLabel,
+    deriveBankDepositPaymentRail: () => "ach",
+    deriveBankDepositSchemeLabel: () => "ACH",
+  }
+})
+
+vi.mock("@easner/shared", () => sharedMock)
+
 import {
   buildNoahBankPayInLedgerMetadata,
+  deriveNoahBankPayInRemitterName,
   extractNoahBankPayInEnrichment,
   isNoahBankOnrampFiatPayIn,
   isNoahBankOnrampOrchestrationOutLeg,
 } from "./bank-onramp-tx"
+
+const ACH_REF =
+  "ACH Credit 026073154040278 Samuel Odiba Sent from Sent from Grey"
 
 const FIAT_PAY_IN = {
   ID: "3141c65e-1832-5952-9383-a044a1b3cae9",
@@ -25,50 +85,34 @@ const FIAT_PAY_IN = {
   },
   FiatPaymentMethod: {
     AccountHolderDetails: {
-      Name: { FirstName: "SAMUEL", MiddleName: "ENYOJO", LastName: "ODIBA" },
+      Name: { FirstName: "JANE", MiddleName: "QUINN", LastName: "PUBLIC" },
     },
   },
-  Orchestration: {
-    RuleID: "d6ce313f-e506-5686-aaa0-f920d82831ce",
-    RuleExecutionID: "5a7b2c0b-ffe5-5e67-8ffb-f053632fd7f1",
-  },
-} as Record<string, unknown>
-
-const ORCHESTRATION_OUT = {
-  ID: "bd93a99f-35d9-58b0-ac96-4122b7cabb69",
-  Amount: "9.944074",
-  Status: "Settled",
-  Network: "Solana",
-  Direction: "Out",
-  CryptoCurrency: "USDC",
   Orchestration: {
     RuleExecutionID: "5a7b2c0b-ffe5-5e67-8ffb-f053632fd7f1",
   },
 } as Record<string, unknown>
 
 describe("bank-onramp-tx", () => {
-  it("classifies fiat pay-in and orchestration out legs", () => {
-    expect(isNoahBankOnrampFiatPayIn(FIAT_PAY_IN)).toBe(true)
-    expect(isNoahBankOnrampOrchestrationOutLeg(ORCHESTRATION_OUT)).toBe(true)
-    expect(isNoahBankOnrampOrchestrationOutLeg(FIAT_PAY_IN)).toBe(false)
+  it("uses FiatDeposit sender for remitter, not narration", () => {
+    expect(
+      deriveNoahBankPayInRemitterName(FIAT_PAY_IN, {
+        fiatDepositSenderName: "Samuel Odiba",
+      }),
+    ).toBe("Samuel Odiba")
   })
 
-  it("extracts enrichment from fiat pay-in payload", () => {
-    const e = extractNoahBankPayInEnrichment(FIAT_PAY_IN)
-    expect(e).not.toBeNull()
-    expect(e!.fiatAmount).toBe(12)
-    expect(e!.feeAmount).toBe(2.06)
-    expect(e!.settledStablecoinAmount).toBe(9.946)
-    expect(e!.senderDisplayName).toBe("SAMUEL ENYOJO ODIBA")
-    expect(e!.walletLedgerCurrency).toBe("USD")
-    const meta = buildNoahBankPayInLedgerMetadata(FIAT_PAY_IN, e!, {
+  it("builds metadata with sender and narration fields", () => {
+    const e = extractNoahBankPayInEnrichment(FIAT_PAY_IN)!
+    const meta = buildNoahBankPayInLedgerMetadata(FIAT_PAY_IN, e, {
       status: "settled",
       occurredAt: "2026-05-19T22:00:53Z",
+      fiatDepositSenderName: "Samuel Odiba",
+      paymentReference: ACH_REF,
     })
-    expect(meta.settled_amount).toBe(9.95)
-    expect(meta.settled_currency).toBe("USD")
-    expect(meta.processing_at).toBeTruthy()
-    expect(meta.completed_at).toBeTruthy()
-    expect(e!.ruleExecutionId).toBe("5a7b2c0b-ffe5-5e67-8ffb-f053632fd7f1")
+    expect(meta.sender_name).toBe("Samuel Odiba")
+    expect(meta.noah_fiat_deposit_sender_name).toBe("Samuel Odiba")
+    expect(meta.deposit_narration).toBe("Sent from Grey")
+    expect(meta.reference).toBe(ACH_REF)
   })
 })

@@ -3,7 +3,13 @@ import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin
 import type { TransactionWithSource } from "@/lib/transactions"
 import { resolveLedgerListScope } from "@/lib/transactions-ledger-scope"
 import { displayEasnerTransactionId } from "@/lib/easner-transaction-id"
-import { toEasnerTransactionPrimaryLabel } from "@easner/shared"
+import {
+  deriveBankDepositInboundDisplayLabel,
+  isEasnerProductReceiveTitle,
+  toEasnerTransactionPrimaryLabel,
+} from "@easner/shared"
+import { isNoahBankOnrampFiatPayIn } from "@/lib/noah/bank-onramp-tx"
+import { enrichBankDepositLedgerRows } from "@/lib/transactions/enrich-bank-deposit-ledger-rows"
 import { mapRowToBusinessTransaction } from "@/lib/transactions/map-row-to-business"
 import {
   isTurnkeyNoahBankOnrampChainMirror,
@@ -32,6 +38,7 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
     row.occurred_at != null ? String(row.occurred_at) : row.created_at != null ? String(row.created_at) : new Date().toISOString()
   const providerTxId = row.provider_transaction_id != null ? String(row.provider_transaction_id) : ""
   const meta = row.metadata as Record<string, unknown> | null | undefined
+  const payload = row.payload as Record<string, unknown> | null | undefined
   const easnerId = displayEasnerTransactionId({
     easnerTransactionId: row.easner_transaction_id != null ? String(row.easner_transaction_id) : null,
     metadata: meta,
@@ -44,12 +51,33 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
   const currency = String(row.currency ?? "USD")
   /** Supabase row id — use for `/api/transactions/[id]` when `id` / `transaction_id` are display-only (e.g. ETID…). */
   const ledger_row_id = ledgerId || undefined
-  const name = toEasnerTransactionPrimaryLabel({
-    provider: String(row.provider ?? "noah"),
-    direction: dirRaw === "in" ? "in" : "out",
-    metadata: (row.metadata as Record<string, unknown> | null | undefined) ?? null,
-    payload: row.payload as Record<string, unknown> | null | undefined,
-  })
+  const bankLabel =
+    payload && isNoahBankOnrampFiatPayIn(payload)
+      ? deriveBankDepositInboundDisplayLabel({ metadata: meta })
+      : undefined
+  const name =
+    bankLabel ??
+    toEasnerTransactionPrimaryLabel({
+      provider: String(row.provider ?? "noah"),
+      direction: dirRaw === "in" ? "in" : "out",
+      metadata: meta ?? null,
+      payload,
+    })
+  const listSenderName =
+    bankLabel && !isEasnerProductReceiveTitle(bankLabel) ? bankLabel : undefined
+  const isEasetagP2p = String(meta?.source ?? "").toLowerCase() === "easetag_p2p"
+  const sourceType =
+    isEasetagP2p
+      ? "easetag_p2p"
+      : String(meta?.source_type ?? "").trim() ||
+        (payload && String(payload.Direction ?? "") === "In" && String(payload.Network ?? "") === "OffNetwork"
+          ? "virtual_account"
+          : payload &&
+              String(payload.Direction ?? "") === "In" &&
+              String(payload.Network ?? "") !== "OffNetwork"
+            ? "liquidation_address"
+            : undefined)
+
   return {
     id: idForUi,
     transaction_id: idForUi,
@@ -62,9 +90,11 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
     created_at: created,
     noah_created_at: created,
     name,
+    ...(listSenderName ? { sender_display_name: listSenderName } : {}),
     direction: dirRaw === "in" ? "credit" : "debit",
-    source_type: undefined,
+    source_type: sourceType,
     metadata: row.metadata,
+    payload,
   }
 }
 
@@ -126,11 +156,13 @@ export async function GET(request: Request) {
     (r) => !isTurnkeyNoahBankOnrampChainMirror(r, noahOnChainHashes),
   )
 
+  const rowsEnriched = await enrichBankDepositLedgerRows(admin, rowsFiltered)
+
   if (scope === "business") {
-    const transactions = rowsFiltered.map((r) => mapRowToBusinessTransaction(r))
+    const transactions = rowsEnriched.map((r) => mapRowToBusinessTransaction(r))
     return NextResponse.json({ transactions })
   }
 
-  const transactions = rowsFiltered.map((r) => mapRowToMobileTransaction(r))
+  const transactions = rowsEnriched.map((r) => mapRowToMobileTransaction(r))
   return NextResponse.json({ transactions })
 }

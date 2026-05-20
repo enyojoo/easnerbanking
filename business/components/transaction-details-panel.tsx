@@ -164,7 +164,9 @@ export function TransactionDetailsPanel({
             </div>
           ) : null}
 
-          {(isBank || isStablecoin || isCard) && transaction.counterpartyName ? (
+          {(isBank || isStablecoin || isCard) &&
+          transaction.counterpartyName &&
+          !showBankDepositTracker ? (
             <div className="flex justify-between text-sm gap-4">
               <span className="text-muted-foreground shrink-0">{partyLabel}</span>
               <span className="font-medium text-right">{transaction.counterpartyName}</span>
@@ -188,6 +190,13 @@ export function TransactionDetailsPanel({
               </span>
             </div>
           )}
+
+          {showBankDepositTracker && transaction.narration ? (
+            <div className="flex justify-between text-sm gap-4">
+              <span className="text-muted-foreground shrink-0">Narration</span>
+              <span className="font-medium text-right">{transaction.narration}</span>
+            </div>
+          ) : null}
 
           {showBankDepositTracker &&
           transaction.postedAmount != null &&

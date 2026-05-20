@@ -97,3 +97,28 @@ for (const name of names) {
   }
   linkDep(name)
 }
+
+/** npm workspaces may link @expo/cli as expo-internal but not `expo`. */
+function linkExpoBin(dir) {
+  const binDir = path.join(dir, 'node_modules', '.bin')
+  const expoCli = path.join(dir, 'node_modules', 'expo', 'bin', 'cli')
+  if (!fs.existsSync(expoCli)) return
+
+  try {
+    if (!fs.existsSync(binDir)) fs.mkdirSync(binDir, { recursive: true })
+  } catch {
+    return
+  }
+
+  const dest = path.join(binDir, 'expo')
+  if (fs.existsSync(dest)) return
+
+  try {
+    fs.symlinkSync(path.relative(binDir, expoCli), dest)
+  } catch (e) {
+    console.warn('[linkWorkspaceDeps] expo bin:', e.message)
+  }
+}
+
+linkExpoBin(rootDir)
+linkExpoBin(mobileDir)

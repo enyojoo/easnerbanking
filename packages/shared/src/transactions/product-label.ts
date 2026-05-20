@@ -2,6 +2,9 @@
  * Product-facing transaction titles for ledger rows (matches business `/api/transactions` mapping).
  */
 
+import { formatDisplayPersonName } from "../format-display-name"
+import { deriveBankDepositInboundDisplayLabel } from "./bank-deposit-inbound-label"
+
 export type EasnerLedgerDirection = "in" | "out"
 
 function firstNonEmptyString(values: readonly unknown[]): string | undefined {
@@ -38,6 +41,15 @@ export function deriveEasnerInboundRemitterDisplayName(input: {
 }): string | undefined {
   const meta = input.metadata || {}
   const payload = input.payload || {}
+
+  const bankSender = deriveBankDepositInboundDisplayLabel({
+    metadata: meta,
+    fiatDepositSenderName:
+      typeof meta.noah_fiat_deposit_sender_name === "string"
+        ? meta.noah_fiat_deposit_sender_name
+        : null,
+  })
+  if (bankSender) return bankSender
   const noahWrapped = meta.noah
   const noahTx =
     noahWrapped && typeof noahWrapped === "object" && !Array.isArray(noahWrapped)
@@ -47,9 +59,16 @@ export function deriveEasnerInboundRemitterDisplayName(input: {
     noahTx ||
     (payload && typeof payload === "object" && (payload.ID != null || payload.id != null)
       ? (payload as Record<string, unknown>)
+      : null) ||
+    (payload &&
+    typeof payload === "object" &&
+    String(payload.Direction ?? "") === "In" &&
+    payload.FiatPayment
+      ? (payload as Record<string, unknown>)
       : null)
 
   const candidates: unknown[] = [
+    meta.noah_fiat_deposit_sender_name,
     meta.remitter_name,
     meta.sender_name,
     meta.originator_name,
@@ -111,20 +130,12 @@ export function deriveEasnerInboundRemitterDisplayName(input: {
         )
       }
     }
-    const fpm = tx.FiatPaymentMethod as Record<string, unknown> | undefined
-    if (fpm) {
-      const holder = fpm.AccountHolderDetails as Record<string, unknown> | undefined
-      const name = holder?.Name as Record<string, unknown> | undefined
-      if (name && typeof name === "object") {
-        const parts = [name.FirstName, name.MiddleName, name.LastName]
-          .map((p) => (p != null ? String(p).trim() : ""))
-          .filter(Boolean)
-        if (parts.length) candidates.push(parts.join(" "))
-      }
-    }
   }
 
-  return firstNonEmptyString(candidates)
+  const raw = firstNonEmptyString(candidates)
+  if (!raw) return undefined
+  const formatted = formatDisplayPersonName(raw)
+  return formatted || undefined
 }
 
 /**

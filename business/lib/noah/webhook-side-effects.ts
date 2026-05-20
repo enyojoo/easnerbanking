@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { deriveBankDepositNarrationLabel } from "@easner/shared"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { resolveNoahCustomerTarget } from "@/lib/noah/resolve-noah-customer-target"
 import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
@@ -87,9 +88,21 @@ export async function applyNoahWebhookSideEffects(
             if (fiatEnrichment.senderDisplayName) {
               patch.sender_name = fiatEnrichment.senderDisplayName
               patch.remitter_name = fiatEnrichment.senderDisplayName
+              patch.noah_fiat_deposit_sender_name = fiatEnrichment.senderDisplayName
             }
             if (fiatEnrichment.paymentReference) {
+              patch.payment_reference = fiatEnrichment.paymentReference
               patch.reference = fiatEnrichment.paymentReference
+              const depositNarration = deriveBankDepositNarrationLabel({
+                paymentReference: fiatEnrichment.paymentReference,
+              })
+              if (depositNarration) {
+                patch.deposit_narration = depositNarration
+                patch.narration = depositNarration
+              }
+            }
+            if (fiatEnrichment.paymentMethodType) {
+              patch.noah_payment_method_type = fiatEnrichment.paymentMethodType
             }
             const merged = mergePayInMetadataWithLifecycle(existing.metadata, patch, {
               processing_at: fiatEnrichment.processingAt,
@@ -183,11 +196,34 @@ export async function applyNoahWebhookSideEffects(
           }
         } else if (payInEnrichment) {
           const occurredAt = String(txData.Created ?? txData.Updated ?? new Date().toISOString())
+          const depositId =
+            payInEnrichment.ruleExecutionId ??
+            pickNoahOrchestrationRuleExecutionId(txData) ??
+            null
+          let fiatDepositSenderName: string | null = null
+          let paymentReference: string | null = null
+          if (depositId) {
+            const existingPayIn = await findBankOnrampPayInTransaction(admin, {
+              depositId,
+              userId,
+              businessId,
+            })
+            const prior = existingPayIn?.metadata ?? {}
+            fiatDepositSenderName =
+              (typeof prior.noah_fiat_deposit_sender_name === "string" &&
+                prior.noah_fiat_deposit_sender_name.trim()) ||
+              (typeof prior.sender_name === "string" && prior.sender_name.trim()) ||
+              null
+            paymentReference =
+              (typeof prior.reference === "string" && prior.reference.trim()) || null
+          }
           metadata = {
             ...metadata,
             ...buildNoahBankPayInLedgerMetadata(txData, payInEnrichment, {
               status,
               occurredAt,
+              fiatDepositSenderName,
+              paymentReference,
             }),
           }
         }

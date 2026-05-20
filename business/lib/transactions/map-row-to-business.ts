@@ -1,6 +1,11 @@
 import type { TransactionWithSource } from "@/lib/transactions"
 import { displayEasnerTransactionId } from "@/lib/easner-transaction-id"
-import { toEasnerTransactionPrimaryLabel } from "@easner/shared"
+import {
+  deriveBankDepositInboundDisplayLabel,
+  formatDisplayPersonName,
+  toEasnerTransactionPrimaryLabel,
+} from "@easner/shared"
+import { isNoahBankOnrampFiatPayIn } from "@/lib/noah/bank-onramp-tx"
 
 function deriveCounterpartyName(input: {
   metadata?: Record<string, unknown> | null
@@ -26,7 +31,10 @@ function deriveCounterpartyName(input: {
   ]
   for (const value of candidates) {
     const text = typeof value === "string" ? value.trim() : ""
-    if (text) return text
+    if (text) {
+      const formatted = formatDisplayPersonName(text)
+      return formatted || text
+    }
   }
   return undefined
 }
@@ -50,12 +58,18 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
             ? "pending"
             : (st as "completed" | "pending" | "processing" | "failed")
 
-  const description = toEasnerTransactionPrimaryLabel({
-    provider,
-    direction: dirRaw === "in" ? "in" : "out",
-    metadata: meta,
-    payload,
-  })
+  const bankLabel =
+    payload && isNoahBankOnrampFiatPayIn(payload)
+      ? deriveBankDepositInboundDisplayLabel({ metadata: meta })
+      : undefined
+  const description =
+    bankLabel ??
+    toEasnerTransactionPrimaryLabel({
+      provider,
+      direction: dirRaw === "in" ? "in" : "out",
+      metadata: meta,
+      payload,
+    })
 
   const created =
     row.occurred_at != null

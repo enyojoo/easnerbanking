@@ -4,6 +4,7 @@
 
 import {
   countryDisplayName,
+  formatDisplayPersonName,
   mapNoahIdTypeLabel,
   maskIdNumber,
   normalizeCountryIso,
@@ -25,6 +26,9 @@ export type ParsedNoahCustomerForUsers = {
 
 export { countryDisplayName, mapNoahIdTypeLabel, maskIdNumber, normalizeCountryIso }
 
+/** @deprecated Use {@link formatDisplayPersonName} from `@easner/shared`. */
+export const titleCaseName = formatDisplayPersonName
+
 function titleCaseWord(word: string): string {
   if (!word) return word
   return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
@@ -42,20 +46,6 @@ function titleCaseAddressToken(word: string): string {
     return `${lead}${core}${trail}`
   }
   return `${lead}${titleCaseWord(core)}${trail}`
-}
-
-export function titleCaseName(input: string | null | undefined): string {
-  const raw = String(input ?? "").trim()
-  if (!raw) return ""
-  return raw
-    .split(/\s+/)
-    .map((part) =>
-      part
-        .split(/([-'])/)
-        .map((seg) => (seg === "-" || seg === "'" ? seg : titleCaseWord(seg)))
-        .join("")
-    )
-    .join(" ")
 }
 
 export function titleCaseAddressPart(input: string | null | undefined): string {
@@ -159,7 +149,7 @@ export function parseNoahCustomerForUsers(
   }
 
   const fullName = parseNoahFullName(customer)
-  if (fullName) out.full_name = titleCaseName(fullName)
+  if (fullName) out.full_name = formatDisplayPersonName(fullName)
 
   const dob = parseDateOfBirth(customer)
   if (dob) out.date_of_birth = dob

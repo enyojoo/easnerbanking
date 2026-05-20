@@ -1,7 +1,12 @@
 /**
- * Two-step bank deposit lifecycle for Noah ACH pay-in (Processing → Completed).
+ * Two-step bank deposit lifecycle for Noah fiat pay-in (Processing → Completed).
  * Bank voice: account balance, no wallet/crypto terminology.
  */
+
+import {
+  buildBankDepositProcessingDescription,
+  deriveBankDepositSchemeLabel,
+} from "./bank-deposit-scheme"
 
 export type BankDepositLifecycleStepId = "processing" | "completed" | "failed"
 export type BankDepositLifecycleStepState = "complete" | "current" | "upcoming"
@@ -14,8 +19,9 @@ export type BankDepositLifecycleStep = {
   occurredAt: string | null
 }
 
-const PROCESSING_DESCRIPTION =
-  "We've received your ACH deposit and are confirming the payment."
+/** Completed-step copy for bank deposit lifecycle and settled push (no amount). */
+export const BANK_DEPOSIT_COMPLETED_DESCRIPTION =
+  "Funds are now available in your account balance."
 
 export function formatBankDepositPostedAmount(amount: number, currency: string): string {
   const c = String(currency || "USD").trim().toUpperCase()
@@ -25,9 +31,8 @@ export function formatBankDepositPostedAmount(amount: number, currency: string):
   return `$${n.toFixed(2)}`
 }
 
-function completedDescription(amount: number, currency: string): string {
-  const formatted = formatBankDepositPostedAmount(amount, currency)
-  return `${formatted} is now available in your account balance.`
+function completedDescription(): string {
+  return BANK_DEPOSIT_COMPLETED_DESCRIPTION
 }
 
 function readIso(meta: Record<string, unknown>, key: string): string | null {
@@ -59,6 +64,7 @@ function readPostedAmount(meta: Record<string, unknown>): { amount: number; curr
 export type BuildBankDepositLifecycleInput = {
   status: string
   metadata?: Record<string, unknown> | null
+  payload?: Record<string, unknown> | null
   occurredAt?: string | null
   settledAt?: string | null
   createdAt?: string | null
@@ -77,13 +83,18 @@ export function buildBankDepositLifecycle(
   const completedAt =
     readIso(meta, "completed_at") ?? input.settledAt ?? null
   const { amount: postedAmount, currency: postedCurrency } = readPostedAmount(meta)
+  const schemeLabel = deriveBankDepositSchemeLabel({
+    metadata: meta,
+    payload: input.payload ?? null,
+  })
+  const processingDescription = buildBankDepositProcessingDescription(schemeLabel)
 
   if (ledgerStatus === "failed") {
     return [
       {
         id: "processing",
         title: "Processing",
-        description: PROCESSING_DESCRIPTION,
+        description: processingDescription,
         state: "complete",
         occurredAt: processingAt,
       },
@@ -110,14 +121,14 @@ export function buildBankDepositLifecycle(
     {
       id: "processing",
       title: "Processing",
-      description: PROCESSING_DESCRIPTION,
+      description: processingDescription,
       state: processingState,
       occurredAt: processingAt,
     },
     {
       id: "completed",
       title: "Completed",
-      description: completedDescription(postedAmount, postedCurrency),
+      description: completedDescription(),
       state: completedState,
       occurredAt: isSettled ? completedAt : null,
     },

@@ -15,16 +15,16 @@ import {
 describe("parse-noah-customer-for-users", () => {
   it("parses FullName object from Noah webhooks", () => {
     const parsed = parseNoahCustomerForUsers({
-      FullName: { FirstName: "SAMUEL", MiddleName: "ENYOJO", LastName: "ODIBA" },
+      FullName: { FirstName: "JANE", MiddleName: "QUINN", LastName: "PUBLIC" },
       DateOfBirth: "1996-11-06",
       Verifications: { Status: "Approved" },
     })
-    expect(parsed.full_name).toBe("Samuel Enyojo Odiba")
+    expect(parsed.full_name).toBe("Jane Quinn Public")
   })
 
   it("title-cases name and maps identity + address", () => {
     const parsed = parseNoahCustomerForUsers({
-      FullName: "SAMUEL ENYOJO ODIBA",
+      FullName: "JANE Q PUBLIC",
       DateOfBirth: "1996-11-06",
       Identities: [{ IDType: "TaxID", IDNumber: "22380755976", IssuingCountry: "NG" }],
       PrimaryResidence: {
@@ -37,7 +37,7 @@ describe("parse-noah-customer-for-users", () => {
       Verifications: { Status: "Approved" },
       Occurred: "2025-01-15T10:00:00Z",
     })
-    expect(parsed.full_name).toBe("Samuel Enyojo Odiba")
+    expect(parsed.full_name).toBe("Jane Quinn Public")
     expect(parsed.date_of_birth).toBe("1996-11-06")
     expect(parsed.kyc_id_type).toBe("TaxID")
     expect(parsed.kyc_id_number).toBe("22380755976")

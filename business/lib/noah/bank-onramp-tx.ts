@@ -3,6 +3,15 @@
  * Fiat pay-in (OffNetwork + FiatPayment) is user-facing; orchestrated on-chain Out is internal.
  */
 
+import {
+  deriveBankDepositInboundDisplayLabel,
+  deriveBankDepositNarrationLabel,
+  deriveBankDepositPaymentRail,
+  deriveBankDepositSchemeLabel,
+  formatDisplayPersonName,
+  parseSentFromNarrationLabel,
+} from "@easner/shared"
+
 function breakdownAmount(tx: Record<string, unknown>, type: string): number | null {
   const items = tx.Breakdown
   if (!Array.isArray(items)) return null
@@ -48,31 +57,46 @@ export function formatNoahAccountHolderName(
   const name = holder.Name as Record<string, unknown> | undefined
   if (!name || typeof name !== "object") return null
   const parts = [name.FirstName, name.MiddleName, name.LastName]
-    .map((p) => (p != null ? String(p).trim() : ""))
+    .map((p) => formatDisplayPersonName(p != null ? String(p) : ""))
     .filter(Boolean)
   return parts.length ? parts.join(" ") : null
 }
 
-export function deriveNoahBankPayInSenderName(tx: Record<string, unknown>): string | null {
-  const fpm = tx.FiatPaymentMethod as Record<string, unknown> | undefined
-  if (fpm) {
-    const fromHolder = formatNoahAccountHolderName(
-      fpm.AccountHolderDetails as Record<string, unknown> | undefined,
-    )
-    if (fromHolder) return fromHolder
-  }
+/** @deprecated Prefer {@link parseSentFromNarrationLabel}. */
+export function parseLastSentFromInNarration(text: string | null | undefined): string | null {
+  const label = parseSentFromNarrationLabel(text)
+  if (!label) return null
+  return label.replace(/^Sent from\s+/i, "").trim() || null
+}
+
+/**
+ * FiatDeposit remitter for hero/list — not VA account holder, not ACH narration.
+ */
+export function deriveNoahBankPayInRemitterName(
+  tx: Record<string, unknown>,
+  opts?: {
+    fiatDepositSenderName?: string | null
+  },
+): string | null {
   const fp = tx.FiatPayment as Record<string, unknown> | undefined
   const fpSource = fp?.Source as Record<string, unknown> | undefined
-  if (fpSource) {
-    const n =
-      fpSource.SenderName ??
+  const fpSourceName =
+    fpSource &&
+    (fpSource.SenderName ??
       fpSource.Name ??
       fpSource.CompanyName ??
-      fpSource.MerchantName
-    if (n != null && String(n).trim()) return String(n).trim()
-  }
-  return null
+      fpSource.MerchantName)
+
+  const label = deriveBankDepositInboundDisplayLabel({
+    fiatDepositSenderName:
+      opts?.fiatDepositSenderName ??
+      (fpSourceName != null && String(fpSourceName).trim() ? String(fpSourceName) : null),
+  })
+  return label ?? null
 }
+
+/** @deprecated Use {@link deriveNoahBankPayInRemitterName}. */
+export const deriveNoahBankPayInSenderName = deriveNoahBankPayInRemitterName
 
 export type NoahBankPayInEnrichment = {
   fiatAmount: number
@@ -124,14 +148,9 @@ export function extractNoahBankPayInEnrichment(tx: Record<string, unknown>): Noa
     settledStablecoinAmount,
     settledStablecoinAsset,
     walletLedgerCurrency,
-    senderDisplayName: deriveNoahBankPayInSenderName(tx),
+    senderDisplayName: null,
     ruleExecutionId: pickNoahOrchestrationRuleExecutionId(tx),
-    paymentReference:
-      fp?.PaymentSystemID != null && String(fp.PaymentSystemID).trim()
-        ? String(fp.PaymentSystemID).trim()
-        : fp?.FiatDepositID != null && String(fp.FiatDepositID).trim()
-          ? String(fp.FiatDepositID).trim()
-          : null,
+    paymentReference: null,
     onChainTxHash,
   }
 }
@@ -183,6 +202,7 @@ export type FiatDepositEnrichment = {
   fiatCurrency: string
   senderDisplayName: string | null
   paymentReference: string | null
+  paymentMethodType: string | null
   processingAt: string | null
   status: string
 }
@@ -193,7 +213,7 @@ export function extractFiatDepositEnrichment(data: Record<string, unknown>): Fia
   const sender = data.Sender as Record<string, unknown> | undefined
   const fullName =
     sender?.FullName != null && String(sender.FullName).trim()
-      ? String(sender.FullName).trim()
+      ? formatDisplayPersonName(String(sender.FullName))
       : null
   const fiatAmount = Number.parseFloat(String(data.FiatAmount ?? "0"))
   return {
@@ -207,6 +227,10 @@ export function extractFiatDepositEnrichment(data: Record<string, unknown>): Fia
         : data.Reference != null && String(data.Reference).trim()
           ? String(data.Reference).trim()
           : null,
+    paymentMethodType:
+      data.PaymentMethodType != null && String(data.PaymentMethodType).trim()
+        ? String(data.PaymentMethodType).trim()
+        : null,
     processingAt: pickIsoTimestamp(data.Created, data.Occurred),
     status: String(data.Status ?? "").toLowerCase(),
   }
@@ -215,7 +239,14 @@ export function extractFiatDepositEnrichment(data: Record<string, unknown>): Fia
 export function buildNoahBankPayInLedgerMetadata(
   tx: Record<string, unknown>,
   enrichment: NoahBankPayInEnrichment,
-  opts?: { status?: string; occurredAt?: string | null },
+  opts?: {
+    status?: string
+    occurredAt?: string | null
+    /** From FiatDeposit webhook — must win over settlement VA account holder name. */
+    fiatDepositSenderName?: string | null
+    /** ACH/wire narration (Reference / Description from FiatDeposit). */
+    paymentReference?: string | null
+  },
 ): Record<string, unknown> {
   const settledWalletAmount = roundFiatDisplayAmount(enrichment.settledStablecoinAmount)
   const st = String(opts?.status ?? tx.Status ?? "").toLowerCase()
@@ -224,6 +255,24 @@ export function buildNoahBankPayInLedgerMetadata(
     st === "settled"
       ? pickIsoTimestamp(tx.Updated, tx.Occurred, opts?.occurredAt)
       : null
+  const schemeCtx = {
+    metadata: {
+      fiat_deposit_currency: enrichment.fiatCurrency,
+    },
+    payload: tx,
+  }
+  const sourcePaymentRail = deriveBankDepositPaymentRail(schemeCtx)
+  const depositSchemeLabel = deriveBankDepositSchemeLabel({
+    metadata: { ...schemeCtx.metadata, source_payment_rail: sourcePaymentRail },
+    payload: tx,
+  })
+
+  const paymentReference = opts?.paymentReference ?? enrichment.paymentReference
+  const remitterName = deriveNoahBankPayInRemitterName(tx, {
+    fiatDepositSenderName: opts?.fiatDepositSenderName ?? enrichment.senderDisplayName,
+  })
+  const depositNarration = deriveBankDepositNarrationLabel({ paymentReference })
+
   const base: Record<string, unknown> = {
     source: "webhook_transaction",
     source_type: "virtual_account",
@@ -235,13 +284,17 @@ export function buildNoahBankPayInLedgerMetadata(
     posted_amount: settledWalletAmount,
     settled_currency: enrichment.walletLedgerCurrency,
     settled_asset: enrichment.settledStablecoinAsset,
-    sender_name: enrichment.senderDisplayName,
-    remitter_name: enrichment.senderDisplayName,
-    reference: enrichment.paymentReference,
+    sender_name: remitterName,
+    remitter_name: remitterName,
+    noah_fiat_deposit_sender_name: opts?.fiatDepositSenderName ?? null,
+    payment_reference: paymentReference,
+    reference: paymentReference,
+    ...(depositNarration ? { deposit_narration: depositNarration, narration: depositNarration } : {}),
     noah_rule_execution_id: enrichment.ruleExecutionId,
     noah_fiat_deposit_id: enrichment.ruleExecutionId,
     noah_on_chain_tx_hash: enrichment.onChainTxHash,
-    source_payment_rail: "ach",
+    source_payment_rail: sourcePaymentRail,
+    deposit_scheme_label: depositSchemeLabel,
     destination_payment_rail: "crypto",
     processing_at: processingAt,
     completed_at: completedAt,

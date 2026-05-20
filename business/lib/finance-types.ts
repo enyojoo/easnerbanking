@@ -54,6 +54,8 @@ export interface Transaction {
   category?: string
   fee?: number
   reference?: string
+  /** Bank deposit ACH narration (e.g. "Sent from Grey") — separate from transaction id. */
+  narration?: string
   transferId?: string
   invoiceId?: string
   collectionChannel?: string

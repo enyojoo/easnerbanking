@@ -88,16 +88,35 @@ export {
 } from "./transactions/product-label"
 export type { EasnerLedgerDirection } from "./transactions/product-label"
 export {
+  BANK_DEPOSIT_COMPLETED_DESCRIPTION,
   buildBankDepositLifecycle,
   formatBankDepositPostedAmount,
   isBankOnrampDepositFlow,
 } from "./transactions/bank-deposit-lifecycle"
+export {
+  buildBankDepositProcessingDescription,
+  deriveBankDepositPaymentRail,
+  deriveBankDepositSchemeLabel,
+} from "./transactions/bank-deposit-scheme"
+export type { BankDepositSchemeContext } from "./transactions/bank-deposit-scheme"
+export {
+  deriveBankDepositInboundDisplayLabel,
+  deriveBankDepositNarrationLabel,
+  parseSentFromNarrationLabel,
+} from "./transactions/bank-deposit-inbound-label"
+export {
+  resolveInboundTransactionListLabel,
+  resolveOutboundTransactionListLabel,
+  resolveTransactionListLabel,
+} from "./transactions/transaction-list-label"
+export type { TransactionListLabelInput } from "./transactions/transaction-list-label"
 export type {
   BankDepositLifecycleStep,
   BankDepositLifecycleStepId,
   BankDepositLifecycleStepState,
   BuildBankDepositLifecycleInput,
 } from "./transactions/bank-deposit-lifecycle"
+export { formatDisplayPersonName } from "./format-display-name"
 export {
   buildVerifiedIdentityFromKycFields,
   countryDisplayName,

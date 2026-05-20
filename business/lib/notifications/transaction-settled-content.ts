@@ -1,6 +1,7 @@
 import {
+  BANK_DEPOSIT_COMPLETED_DESCRIPTION,
   deriveEasnerInboundRemitterDisplayName,
-  formatBankDepositPostedAmount,
+  formatDisplayPersonName,
   isBankOnrampDepositFlow,
   toEasnerTransactionProductCategory,
 } from "@easner/shared"
@@ -33,7 +34,7 @@ function deriveOutboundCounterpartyName(input: {
 }): string | undefined {
   const meta = input.metadata || {}
   const payload = input.payload || {}
-  return firstNonEmptyString([
+  const raw = firstNonEmptyString([
     meta.recipient_name,
     meta.destination_name,
     meta.counterparty_name,
@@ -44,6 +45,9 @@ function deriveOutboundCounterpartyName(input: {
     payload.merchantName,
     payload.beneficiaryName,
   ])
+  if (!raw) return undefined
+  const formatted = formatDisplayPersonName(raw)
+  return formatted || undefined
 }
 
 export function buildTransactionSettledPushContent(input: TransactionSettledContentInput): {
@@ -126,18 +130,9 @@ export function buildTransactionSettledPushContent(input: TransactionSettledCont
 
   if (direction === "in") {
     if (isBankOnrampDepositFlow(meta)) {
-      const postedRaw = meta?.posted_amount ?? meta?.settled_amount
-      const posted =
-        typeof postedRaw === "number"
-          ? postedRaw
-          : Number(postedRaw)
-      const postedCurrency = String(meta?.settled_currency ?? input.currency ?? "USD")
-      if (Number.isFinite(posted) && posted > 0) {
-        const postedText = formatBankDepositPostedAmount(posted, postedCurrency)
-        return {
-          title: "Bank Deposit",
-          body: `${postedText} is now available in your account balance.`,
-        }
+      return {
+        title: "Bank Deposit",
+        body: BANK_DEPOSIT_COMPLETED_DESCRIPTION,
       }
     }
     const from = deriveEasnerInboundRemitterDisplayName({ metadata: meta, payload: input.payload ?? null })

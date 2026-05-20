@@ -24,7 +24,7 @@ describe("titleCaseBankName", () => {
 
 describe("formatVaAccountHolderName", () => {
   it("title-cases holder names", () => {
-    expect(formatVaAccountHolderName("SAMUEL ENYOJO ODIBA")).toBe("Samuel Enyojo Odiba")
+    expect(formatVaAccountHolderName("JANE Q PUBLIC")).toBe("Jane Q Public")
   })
 })
 

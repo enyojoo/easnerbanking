@@ -32,7 +32,7 @@ const MOCK_CARDS = [
     id: '2',
     form: 'physical' as const,
     last4: '1234',
-    cardholderName: 'Samuel Adeyemi',
+    cardholderName: 'Jane Public',
   },
 ]
 

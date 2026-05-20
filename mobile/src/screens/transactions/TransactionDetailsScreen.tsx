@@ -411,7 +411,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
       if (transaction.source_type === 'liquidation_address') {
         return 'Stablecoin Deposit'
       }
-      const n = String(transaction.name || '').trim()
+      const n = String(transaction.sender_display_name || transaction.name || '').trim()
       if (n) return n
       return 'Bank Deposit'
     }
@@ -491,10 +491,13 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
       if (transaction.source_type === 'virtual_account') {
         const senderName =
+          transaction.sender_display_name ||
+          transaction.metadata?.sender_name ||
+          transaction.metadata?.remitter_name ||
           transaction.metadata?.source?.sender_name ||
           transaction.metadata?.source?.originator_name ||
           transaction.name
-        if (senderName) {
+        if (senderName && !isEasnerProductReceiveTitle(String(senderName))) {
           return String(senderName).trim()
         }
         return 'Bank Deposit'
@@ -664,7 +667,8 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   const isEasetagP2p = transaction.source_type === 'easetag_p2p'
   const isBankOnrampReceive =
     transaction.transaction_type === 'receive' &&
-    (transaction.metadata?.flow === 'bank_onramp' ||
+    (Boolean(transaction.lifecycle?.length) ||
+      transaction.metadata?.flow === 'bank_onramp' ||
       transaction.source_type === 'virtual_account')
 
   const easetagWhenTs =
@@ -845,15 +849,65 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                   </>
                 ) : null}
 
-                {!isEasetagP2p && transaction.sender_display_name ? (
+                {!isEasetagP2p && !isBankOnrampReceive && transaction.sender_display_name ? (
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Sender</Text>
                     <Text style={styles.summaryValue}>{transaction.sender_display_name}</Text>
                   </View>
                 ) : null}
 
-                {/* For ACH/Wire deposits (virtual account) — not Easetag */}
+                {!isEasetagP2p && isBankOnrampReceive ? (
+                  <>
+                    {transaction.deposit_amount != null && transaction.deposit_amount > 0 ? (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Deposit amount</Text>
+                        <Text style={styles.summaryValue}>
+                          {formatAmount(transaction.deposit_amount, transaction.currency, true)}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {transaction.fee_amount != null && transaction.fee_amount > 0 ? (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Fee</Text>
+                        <Text style={styles.summaryValue}>
+                          {formatAmount(transaction.fee_amount, transaction.currency, false)}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {(transaction.posted_amount ?? transaction.settled_amount) != null &&
+                    (transaction.posted_amount ?? transaction.settled_amount)! > 0 ? (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Amount credited</Text>
+                        <Text style={styles.summaryValue}>
+                          {formatAmount(
+                            transaction.posted_amount ?? transaction.settled_amount!,
+                            transaction.posted_currency ||
+                              transaction.settled_currency ||
+                              transaction.currency,
+                            true,
+                          )}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {transaction.source_payment_rail ? (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Scheme</Text>
+                        <Text style={styles.summaryValue}>
+                          {formatScheme(transaction, transaction.source_payment_rail)}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {transaction.reference ? (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Narration</Text>
+                        <Text style={styles.summaryValue}>{transaction.reference}</Text>
+                      </View>
+                    ) : null}
+                  </>
+                ) : null}
+
                 {!isEasetagP2p &&
+                  !isBankOnrampReceive &&
                   transaction.transaction_type === 'receive' &&
                   transaction.source_type === 'virtual_account' && (
                   <>
@@ -877,7 +931,6 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                         </Text>
                       </View>
                     )}
-                    {/* Scheme */}
                     {transaction.source_payment_rail && (
                       <View style={styles.summaryRow}>
                         <Text style={styles.summaryLabel}>Scheme</Text>
@@ -886,18 +939,12 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                         </Text>
                       </View>
                     )}
-
-                    {/* Narration */}
                     {transaction.reference && (
                       <View style={styles.summaryRow}>
                         <Text style={styles.summaryLabel}>Narration</Text>
-                        <Text style={styles.summaryValue}>
-                          {transaction.reference}
-                        </Text>
+                        <Text style={styles.summaryValue}>{transaction.reference}</Text>
                       </View>
                     )}
-
-                    {/* When */}
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>When</Text>
                       <Text style={styles.summaryValue}>

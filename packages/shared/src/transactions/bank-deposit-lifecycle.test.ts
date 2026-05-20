@@ -18,6 +18,7 @@ describe("buildBankDepositLifecycle", () => {
         processing_at: "2026-05-19T22:00:46Z",
         settled_amount: 9.95,
         settled_currency: "USD",
+        source_payment_rail: "ach",
       },
       createdAt: "2026-05-19T22:00:53Z",
     })
@@ -27,8 +28,7 @@ describe("buildBankDepositLifecycle", () => {
     expect(steps[1].id).toBe("completed")
     expect(steps[1].state).toBe("upcoming")
     expect(steps[1].occurredAt).toBeNull()
-    expect(steps[1].description).toContain("$9.95")
-    expect(steps[1].description).toContain("account balance")
+    expect(steps[1].description).toBe("Funds are now available in your account balance.")
   })
 
   it("returns both steps complete when settled", () => {
@@ -40,6 +40,8 @@ describe("buildBankDepositLifecycle", () => {
         settled_amount: 9.95,
         settled_currency: "USD",
         fiat_deposit_amount: 12,
+        source_payment_rail: "wire",
+        deposit_scheme_label: "Wire",
       },
       settledAt: "2026-05-19T22:00:56Z",
     })
@@ -47,8 +49,9 @@ describe("buildBankDepositLifecycle", () => {
     expect(steps[1].state).toBe("complete")
     expect(steps[1].occurredAt).toBe("2026-05-19T22:00:56Z")
     expect(steps[0].description).toBe(
-      "We've received your ACH deposit and are confirming the payment.",
+      "We've received your Wire deposit and are confirming it.",
     )
+    expect(steps[1].description).toBe("Funds are now available in your account balance.")
   })
 
   it("returns failed terminal step when cancelled", () => {

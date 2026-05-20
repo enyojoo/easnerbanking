@@ -62,7 +62,13 @@ import { isTier1Complete } from '../../lib/compliance'
 import { noahService } from '../../lib/noahService'
 import { useTransactionsList, TRANSACTIONS_LEDGER_PAGE_SIZE } from '../../hooks/queries'
 import { prefetchReceiveDepositQueries } from '../../hooks/queries/use-receive-deposit-queries'
-import { isEasnerProductReceiveTitle, isEasnerProductSendTitle, markRecentMoneyActivity, qk } from '@easner/shared'
+import {
+  markRecentMoneyActivity,
+  qk,
+  isEasnerProductReceiveTitle,
+  resolveInboundTransactionListLabel,
+  resolveOutboundTransactionListLabel,
+} from '@easner/shared'
 import { avatarImageSource, normalizeAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
 import { buildGroupedActivityItems } from '../../lib/transactionListGrouping'
 
@@ -477,41 +483,24 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
 
   const getTransactionName = (transaction: DashboardTransaction): string => {
     if (transaction.type === 'receive') {
-      if (transaction.source_type === 'liquidation_address' || transaction.source_liquidation_address_id) {
-        return 'Stablecoin Deposit'
-      }
-
-      const display = String(transaction.name || '').trim()
-      if (display === 'Stablecoin Deposit') {
-        return display
-      }
-
-      if (transaction.source_type === 'virtual_account') {
-        const senderName =
-          transaction.metadata?.source?.sender_name ||
-          transaction.metadata?.source?.originator_name ||
-          transaction.name
-        if (senderName) {
-          return String(senderName).trim()
-        }
-        return 'Bank Deposit'
-      }
-
-      if (display && !isEasnerProductReceiveTitle(display)) {
-        return display
-      }
-
-      if (isEasnerProductReceiveTitle(display)) {
-        return display
-      }
-
-      return transaction.name ? `Received from ${transaction.name}` : 'Received'
-    } else {
-      if (isEasnerProductSendTitle(transaction.name)) {
-        return String(transaction.name).trim()
-      }
-      return transaction.name ? `Sent to ${transaction.name}` : 'Sent'
+      const senderDisplay = String(
+        (transaction as { sender_display_name?: string }).sender_display_name ?? '',
+      ).trim()
+      const apiName = String(transaction.name ?? '').trim()
+      if (senderDisplay && !isEasnerProductReceiveTitle(senderDisplay)) return senderDisplay
+      if (apiName && !isEasnerProductReceiveTitle(apiName)) return apiName
+      return resolveInboundTransactionListLabel({
+        name: transaction.name,
+        source_type: transaction.source_type,
+        source_liquidation_address_id: transaction.source_liquidation_address_id,
+        metadata: transaction.metadata,
+        payload: (transaction as { payload?: Record<string, unknown> }).payload,
+      })
     }
+    return resolveOutboundTransactionListLabel({
+      name: transaction.name,
+      recipient_full_name: transaction.recipient?.full_name,
+    })
   }
 
   const getTransactionIconType = (transaction: DashboardTransaction): string => {
