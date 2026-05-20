@@ -12,8 +12,9 @@ import { syncWalletBalancesFromSolanaAtaForOwners } from "@/lib/wallet/sync-wall
 export const runtime = "nodejs"
 
 /**
- * Internal one-off repair endpoint to re-ingest historical Turnkey activity
- * into the unified transactions ledger after webhook delivery outages.
+ * Internal ops-only repair: historical Turnkey activity + on-chain RPC backfill.
+ * Product paths (`sync-chain-ledger`, mobile repair hooks) do not call activity backfill;
+ * use this route with cron/internal auth for support incidents.
  */
 export async function POST(request: Request) {
   try {

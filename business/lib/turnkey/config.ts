@@ -53,6 +53,17 @@ export function getTurnkeyWebhookSecret(): string {
   return (process.env.TURNKEY_WEBHOOK_SECRET || "").trim()
 }
 
+export function isTurnkeyBalanceWebhooksIngestEnabled(): boolean {
+  return (
+    process.env.TURNKEY_BALANCE_WEBHOOKS_ENABLED === "1" ||
+    process.env.TURNKEY_BALANCE_WEBHOOKS_ENABLED === "true"
+  )
+}
+
+export function getTurnkeyBalanceWebhookEndpointId(): string {
+  return (process.env.TURNKEY_BALANCE_WEBHOOK_ENDPOINT_ID || "").trim()
+}
+
 /** Organization-level Turnkey activity webhook destination. */
 export function getTurnkeyWebhookFeatureUrl(): string {
   const explicit = (process.env.TURNKEY_WEBHOOK_URL || "").trim()

@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireOfficeAdmin } from "@/lib/api/admin-auth"
-import { validateTurnkeyEnvForProduction } from "@/lib/turnkey/config"
+import {
+  getTurnkeyBalanceWebhookEndpointId,
+  isTurnkeyBalanceWebhooksIngestEnabled,
+  validateTurnkeyEnvForProduction,
+} from "@/lib/turnkey/config"
 
 export const runtime = "nodejs"
 
@@ -38,7 +42,20 @@ export async function GET(request: Request) {
     return count ?? 0
   }
 
-  const [{ data: latestEvent, error: latestEventError }, received24h, processed24h, failed24h] = await Promise.all([
+  const countByEventTypePrefix = async (prefix: string) => {
+    const { count, error } = await admin
+      .from("event_inbox")
+      .select("id", { count: "exact", head: true })
+      .eq("provider", "turnkey")
+      .eq("status", "processed")
+      .gte("created_at", sinceIso)
+      .ilike("event_type", `${prefix}%`)
+    if (error) return null
+    return count ?? 0
+  }
+
+  const [{ data: latestEvent, error: latestEventError }, received24h, processed24h, failed24h, balanceEvents24h] =
+    await Promise.all([
     admin
       .from("event_inbox")
       .select("event_id, event_type, status, error, created_at, processed_at")
@@ -49,6 +66,7 @@ export async function GET(request: Request) {
     countWhere("received"),
     countWhere("processed"),
     countWhere("failed"),
+    countByEventTypePrefix("BALANCE"),
   ])
 
   let routeProbeStatus: number | null = null
@@ -67,6 +85,12 @@ export async function GET(request: Request) {
   return NextResponse.json({
     ok: true,
     turnkey: validateTurnkeyEnvForProduction(),
+    balance_webhooks: {
+      ingest_enabled: isTurnkeyBalanceWebhooksIngestEnabled(),
+      endpoint_id_configured: Boolean(getTurnkeyBalanceWebhookEndpointId()),
+      balance_confirmed_processed_24h: balanceEvents24h,
+      setup_route: "/api/internal/turnkey-balance-webhook-endpoint",
+    },
     webhook_secret_configured: Boolean(process.env.TURNKEY_WEBHOOK_SECRET?.trim()),
     webhook_route: {
       url: "/api/webhooks/turnkey",

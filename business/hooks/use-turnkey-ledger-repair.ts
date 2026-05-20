@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { markRecentMoneyActivity, qk } from "@easner/shared"
 import { apiFetch } from "@/lib/query/api-client"
 import { useScope } from "@/lib/query/scope"
+import { shouldRefreshAfterChainLedgerSync } from "@/lib/turnkey/sync-chain-ledger-response"
 
 const LEDGER_SCOPE_HEADERS = { "X-Easner-Noah-Scope": "business" } as const
 const MIN_REPAIR_INTERVAL_MS = 10 * 60_000
@@ -25,13 +26,12 @@ export function useTurnkeyLedgerRepair() {
 
       const run = (async () => {
         try {
-          const body = await apiFetch<{ result?: { upserted?: number } }>(
+          const body = await apiFetch<Record<string, unknown>>(
             "/api/wallets/sync-chain-ledger",
             { method: "POST", headers: LEDGER_SCOPE_HEADERS },
           )
           lastLedgerRepairAt = Date.now()
-          const upserted = Number(body?.result?.upserted ?? 0)
-          const inserted = Number.isFinite(upserted) && upserted > 0
+          const inserted = shouldRefreshAfterChainLedgerSync(body)
           if (inserted) {
             markRecentMoneyActivity()
             await Promise.all([

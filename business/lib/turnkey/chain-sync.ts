@@ -1,10 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
-import { findEasetagSettlementForChainSuppression, updateEasetagSettlementSettled } from "@/lib/ledger/easetag-settlement"
-import { findNoahBankOnrampChainSettlementForSuppression } from "@/lib/noah/noah-bank-onramp-chain-suppression"
-import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
-import { enqueueLiquiditySweepJob } from "@/lib/liquidity/sweep-jobs"
-import { resolvePooledSolanaSourceAddress, ledgerCurrencyForStablecoinAsset } from "@/lib/liquidity/platform-pool"
+import { applyTurnkeyInboundLedgerEvent } from "@/lib/turnkey/apply-turnkey-inbound-ledger"
+import { isTurnkeyActivityNonLedgerEvent } from "@/lib/turnkey/turnkey-webhook-classify"
 
 type TurnkeyEvent = Record<string, unknown>
 
@@ -111,6 +107,8 @@ export async function applyTurnkeyWebhookSideEffects(
   opts?: { skipBalanceDelta?: boolean },
 ): Promise<boolean> {
   const event = (payload || {}) as TurnkeyEvent
+  if (isTurnkeyActivityNonLedgerEvent(event)) return false
+
   const toCandidates = new Set<string>([
     ...collectNestedStrings(event, ["toAddress", "destinationAddress", "recipientAddress", "accountAddress"]),
     ...(() => {
@@ -274,78 +272,40 @@ export async function applyTurnkeyWebhookSideEffects(
   const { amount, amountMinor } = parseAmountMajor(event)
   const currency = mapAssetToCurrency(asset)
 
-  if (direction === "in" && txHash) {
-    const noahSuppressed = await findNoahBankOnrampChainSettlementForSuppression(admin, {
-      txHash,
+  const ledgerStatus =
+    status === "failed" ? "failed" : status === "pending" ? "pending" : "settled"
+
+  const result = await applyTurnkeyInboundLedgerEvent(
+    admin,
+    {
       userId,
       businessId,
-    })
-    if (noahSuppressed) return true
-  }
-
-  const upsert = await upsertLedgerTransaction(admin, {
-    userId,
-    businessId,
-    provider: "turnkey",
-    providerTransactionId,
-    providerEventId,
-    status,
-    amount,
-    currency,
-    direction,
-    payload: event,
-    metadata: { source: "turnkey_webhook" },
-    txHash,
-    walletAddress,
-    counterpartyAddress,
-    occurredAt,
-    settledAt,
-    asset,
-    chain,
-    amountMinor,
-    baseCurrency: currency,
-  })
-
-  const easetagSuppressed = await findEasetagSettlementForChainSuppression(admin, {
-    turnkeySendStatusId: providerTransactionId,
-    txHash,
-  })
-  if (easetagSuppressed && status === "settled") {
-    await updateEasetagSettlementSettled(admin, easetagSuppressed.transfer_group_id, txHash).catch(() => {})
-  }
-
-  // Update DB-backed balance snapshot for realtime dashboards.
-  // For settled events we apply the delta; pending/failed should not move balances.
-  if (
-    !opts?.skipBalanceDelta &&
-    !easetagSuppressed &&
-    status === "settled" &&
-    (upsert.inserted || upsert.becameSettled)
-  ) {
-    const businessScopeId = businessId ? businessId : null
-    const userScopeId = businessId ? null : userId
-    const signed = direction === "in" ? amount : -amount
-    await applyWalletBalanceDelta(admin, {
-      businessId: businessScopeId,
-      userId: userScopeId,
+      walletAccount: {
+        id: String(walletAccount.id),
+        address: walletAddress,
+        asset,
+        chain,
+        associated_token_account_address: tokenAccountAddress || null,
+      },
+      providerTransactionId,
+      providerEventId,
+      status: ledgerStatus,
+      amount,
       currency,
-      delta: signed,
-    })
+      direction,
+      payload: event,
+      metadata: { source: "turnkey_webhook" },
+      txHash: txHash ? String(txHash) : null,
+      walletAddress,
+      counterpartyAddress: counterpartyAddress ?? null,
+      occurredAt,
+      settledAt,
+      asset,
+      chain,
+      amountMinor,
+    },
+    opts,
+  )
 
-    if (direction === "in" && amount > 0 && walletAccount.id) {
-      const lc = ledgerCurrencyForStablecoinAsset(asset)
-      const poolAddr = lc ? await resolvePooledSolanaSourceAddress(admin, { ledgerCurrency: lc }) : null
-      const userAddr = String(walletAddress || "").trim()
-      if (poolAddr && userAddr && poolAddr.trim() !== userAddr.trim()) {
-        const idem = `sweep:${providerTransactionId}:${String(walletAccount.id)}`
-        await enqueueLiquiditySweepJob(admin, {
-          walletAccountId: String(walletAccount.id),
-          asset,
-          amount,
-          idempotencyKey: idem,
-        }).catch((e) => console.warn("enqueueLiquiditySweepJob (non-fatal):", e))
-      }
-    }
-  }
-  return true
+  return result.kind !== "skipped"
 }

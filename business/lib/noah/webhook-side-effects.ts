@@ -16,9 +16,13 @@ import {
   pickNoahOrchestrationRuleExecutionId,
 } from "@/lib/noah/bank-onramp-tx"
 import { findBankOnrampPayInTransaction } from "@/lib/noah/find-bank-onramp-pay-in-transaction"
+import {
+  linkBankOnrampPayInToSolanaTxHash,
+  reconcileNoahBankOnrampCreditForSolanaTx,
+  tryCreditNoahBankOnrampPayInWallet,
+} from "@/lib/noah/credit-bank-onramp-wallet"
 import { provisionNoahAfterVerificationApproved } from "@/lib/noah/provision-after-approval"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
-import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 
 function pickTxHash(tx: Record<string, unknown>): string | null {
   const h = tx.TxHash ?? tx.TransactionHash ?? tx.txHash ?? tx.Hash
@@ -255,39 +259,33 @@ export async function applyNoahWebhookSideEffects(
           payInEnrichment.walletLedgerCurrency != null &&
           (upsert.inserted || upsert.becameSettled)
 
-        if (shouldCreditWallet) {
-          const creditKey = ruleExecutionId ? `noah_bank_onramp:${ruleExecutionId}` : `noah_bank_onramp:${id}`
-          let chainAlreadyCredited = false
-          if (payInEnrichment.onChainTxHash) {
-            const { data: chainRow } = await admin
-              .from("transactions")
-              .select("id")
-              .eq("provider", "turnkey")
-              .eq("tx_hash", payInEnrichment.onChainTxHash)
-              .eq("status", "settled")
-              .maybeSingle()
-            chainAlreadyCredited = !!chainRow?.id
-          }
-          const { data: priorCredit } = await admin
-            .from("transactions")
-            .select("metadata")
-            .eq("id", upsert.transactionId)
-            .maybeSingle()
-          const priorMeta = (priorCredit?.metadata as Record<string, unknown> | undefined) ?? {}
-          if (!chainAlreadyCredited && priorMeta.wallet_balance_credit_key !== creditKey) {
-            await applyWalletBalanceDelta(admin, {
-              businessId: businessId ? businessId : null,
-              userId: businessId ? null : userId,
-              currency: payInEnrichment.walletLedgerCurrency!,
-              delta: payInEnrichment.settledStablecoinAmount!,
+        if (shouldCreditWallet && payInEnrichment) {
+          await tryCreditNoahBankOnrampPayInWallet(admin, {
+            transactionId: upsert.transactionId,
+            userId,
+            businessId,
+            noahTransactionId: id,
+            ruleExecutionId,
+            payInEnrichment,
+            metadata,
+            solanaTxHash: pickTxHash(txData),
+          })
+        }
+
+        if (isOrchestrationOut && status === "settled" && ruleExecutionId) {
+          const solanaTxHash = pickTxHash(txData)
+          if (solanaTxHash) {
+            await linkBankOnrampPayInToSolanaTxHash(admin, {
+              ruleExecutionId,
+              solanaTxHash,
+              userId,
+              businessId,
             })
-            await admin
-              .from("transactions")
-              .update({
-                metadata: { ...priorMeta, ...metadata, wallet_balance_credit_key: creditKey },
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", upsert.transactionId)
+            await reconcileNoahBankOnrampCreditForSolanaTx(admin, {
+              solanaTxHash,
+              userId,
+              businessId,
+            })
           }
         }
       }

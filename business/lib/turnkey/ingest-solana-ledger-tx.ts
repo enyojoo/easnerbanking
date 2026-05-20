@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import type { Connection } from "@solana/web3.js"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { findEasetagSettlementForChainSuppression } from "@/lib/ledger/easetag-settlement"
+import { reconcileNoahBankOnrampCreditForSolanaTx } from "@/lib/noah/credit-bank-onramp-wallet"
 import { findNoahBankOnrampChainSettlementForSuppression } from "@/lib/noah/noah-bank-onramp-chain-suppression"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 import { mintForStablecoinAsset } from "@/lib/solana/spl-mints"
@@ -105,6 +106,11 @@ export async function ingestTurnkeySolanaTxForOwnerVault(
       businessId: params.ctx.businessId,
     })
     if (noahSuppressed) {
+      await reconcileNoahBankOnrampCreditForSolanaTx(admin, {
+        solanaTxHash: params.signature,
+        userId: params.ctx.userId,
+        businessId: params.ctx.businessId,
+      }).catch(() => {})
       return { upserts: 0, kind: "noop" }
     }
   }
@@ -141,6 +147,34 @@ export async function ingestTurnkeySolanaTxForOwnerVault(
         delta: signed,
       })
     }
+
+    if (params.skipBalanceDelta && direction === "in" && upsert.transactionId) {
+      const { credited } = await reconcileNoahBankOnrampCreditForSolanaTx(admin, {
+        solanaTxHash: params.signature,
+        userId: params.ctx.userId,
+        businessId: params.ctx.businessId,
+      }).catch(() => ({ credited: false }))
+      if (credited) {
+        const { data: row } = await admin
+          .from("transactions")
+          .select("metadata")
+          .eq("id", upsert.transactionId)
+          .maybeSingle()
+        const prior = (row?.metadata as Record<string, unknown> | undefined) ?? {}
+        await admin
+          .from("transactions")
+          .update({
+            metadata: {
+              ...prior,
+              noah_bank_onramp_chain_mirror: true,
+              suppress_in_feed: true,
+            },
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", upsert.transactionId)
+      }
+    }
+
     return { upserts: 1, kind: "applied" }
   } catch (e) {
     return {

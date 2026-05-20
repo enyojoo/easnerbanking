@@ -2,12 +2,14 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { recordEventInbox, markEventInboxProcessed } from "@/lib/webhooks/event-inbox"
 import { verifyTurnkeyWebhookSignature } from "@/lib/turnkey/webhook-verify"
+import { applyTurnkeyBalanceWebhookSideEffects } from "@/lib/turnkey/balance-webhook-sync"
 import { applyTurnkeyWebhookSideEffects } from "@/lib/turnkey/chain-sync"
+import { isTurnkeyBalanceConfirmedPayload } from "@/lib/turnkey/turnkey-webhook-classify"
 
 export const runtime = "nodejs"
 
 /**
- * Turnkey activity webhooks — verify signature, dedupe via `event_inbox`.
+ * Turnkey webhooks (activity FEATURE_NAME_WEBHOOK + BALANCE_CONFIRMED_UPDATES) — verify, dedupe via `event_inbox`.
  */
 export async function POST(request: Request) {
   const raw = Buffer.from(await request.arrayBuffer())
@@ -73,7 +75,11 @@ export async function POST(request: Request) {
   }
 
   try {
-    await applyTurnkeyWebhookSideEffects(admin, p, eventId)
+    if (isTurnkeyBalanceConfirmedPayload(p)) {
+      await applyTurnkeyBalanceWebhookSideEffects(admin, p, eventId)
+    } else {
+      await applyTurnkeyWebhookSideEffects(admin, p, eventId)
+    }
     await markEventInboxProcessed(admin, "turnkey", eventId, null)
     return NextResponse.json({ ok: true })
   } catch (e) {

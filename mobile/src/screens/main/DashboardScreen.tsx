@@ -157,7 +157,10 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
           const upserts = Number(
             (payload as any)?.result?.upserts ?? (payload as any)?.result?.upserted ?? 0,
           )
-          const inserted = Number.isFinite(upserts) && upserts > 0
+          const noahCredited = Number((payload as any)?.noahReconcile?.credited ?? 0)
+          const inserted =
+            (Number.isFinite(upserts) && upserts > 0) ||
+            (Number.isFinite(noahCredited) && noahCredited > 0)
           if (inserted) markRecentMoneyActivity()
           return inserted
         } catch {
