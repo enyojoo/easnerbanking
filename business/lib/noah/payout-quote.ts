@@ -1,11 +1,31 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { createQuote, type QuoteResult } from "@/lib/pricing/evaluator"
 import { getNoahEurCryptoTicker, getNoahUsdCryptoTicker } from "@/lib/noah/config"
 import { noahImpliedProviderRate } from "@/lib/noah/fx-prices"
 import {
   prepareSellFromRecipientRow,
   type RecipientSellPrepareRow,
 } from "@/lib/terminal/recipient-sell-prepare"
+
+/** Easner fee slice on payout quotes (Noah prepare is authoritative; no DB pricing engine). */
+export type EasnerPayoutQuoteSlice = {
+  quoteId: string
+  expiresAt: string
+  providerRate: number
+  effectiveRate: number
+  destinationAmount: number
+  fxMarkupBps: number
+  payinFeeAmount: number
+  payoutFeeAmount: number
+  totalFeeAmount: number
+  sourceAmount: number
+  sourceCurrency: string
+  destinationCurrency: string
+  pricingTotals: {
+    total_easner_fee: number
+    total_user_fee: number
+    total_recipient_amount: number
+  }
+}
 
 export type PayoutQuoteResult = {
   receiveAmount: number
@@ -20,22 +40,49 @@ export type PayoutQuoteResult = {
     formSessionId: string
     rate?: number
   }
-  easner: QuoteResult
+  easner: EasnerPayoutQuoteSlice
+  /** Empty when no persisted Easner quote (apply/validate not used). */
   pricingQuoteId: string
   expiresAt: string
+}
+
+const QUOTE_TTL_MS = 15 * 60 * 1000
+
+function buildEasnerSlice(params: {
+  sourceAmount: number
+  sourceCurrency: string
+  destinationCurrency: string
+  receiveAmount: number
+  providerRate: number
+}): EasnerPayoutQuoteSlice {
+  const { sourceAmount, sourceCurrency, destinationCurrency, receiveAmount, providerRate } = params
+  const effectiveRate = providerRate > 0 ? providerRate : 1
+  const expiresAt = new Date(Date.now() + QUOTE_TTL_MS).toISOString()
+  return {
+    quoteId: "",
+    expiresAt,
+    providerRate: effectiveRate,
+    effectiveRate,
+    destinationAmount: sourceAmount * effectiveRate,
+    fxMarkupBps: 0,
+    payinFeeAmount: 0,
+    payoutFeeAmount: 0,
+    totalFeeAmount: 0,
+    sourceAmount,
+    sourceCurrency,
+    destinationCurrency,
+    pricingTotals: {
+      total_easner_fee: 0,
+      total_user_fee: 0,
+      total_recipient_amount: receiveAmount,
+    },
+  }
 }
 
 function settlementCryptoForBalance(balanceCurrency: string): string {
   return balanceCurrency.trim().toUpperCase() === "EUR"
     ? getNoahEurCryptoTicker()
     : getNoahUsdCryptoTicker()
-}
-
-function inferPayoutMethod(row: RecipientSellPrepareRow): string {
-  if (row.mobile_provider?.trim() || /^mobile money/i.test(row.bank_name || "")) {
-    return "mobile_money"
-  }
-  return "bank_transfer"
 }
 
 export async function buildPayoutQuote(input: {
@@ -98,7 +145,7 @@ export async function buildPayoutQuote(input: {
   const noahFee = Number.parseFloat(String(prep.totalFee || "0")) || 0
   const country = String(row.country_code || "").trim().toUpperCase() || undefined
 
-  let providerRate: number | undefined
+  let providerRate = 1
   try {
     providerRate = await noahImpliedProviderRate({
       sourceCurrency: sourceBalanceCurrency,
@@ -107,35 +154,23 @@ export async function buildPayoutQuote(input: {
       country,
     })
   } catch {
-    providerRate = undefined
+    providerRate = sourceBalanceCurrency === receiveCurrency ? 1 : 1
   }
 
-  const easner = await createQuote({
-    userId: input.userId,
+  const easner = buildEasnerSlice({
+    sourceAmount: sendAmount,
     sourceCurrency: sourceBalanceCurrency,
     destinationCurrency: receiveCurrency,
-    sourceAmount: sendAmount,
-    rail: "wallet",
-    countryCode: country,
-    payoutCountry: country,
-    payoutMethod: inferPayoutMethod(row),
+    receiveAmount,
     providerRate,
-    routeType: "fiat",
-    provider: "noah",
   })
-
-  const easnerFee =
-    easner.pricingTotals?.total_easner_fee ??
-    easner.layeredFees?.easner_core_transfer_fee ??
-    easner.totalFeeAmount
-  const totalDebited = sendAmount + easnerFee
 
   return {
     receiveAmount,
     receiveCurrency,
     sendAmount,
     sendCurrency: sourceBalanceCurrency,
-    totalDebited,
+    totalDebited: sendAmount,
     noah: {
       totalFee: noahFee,
       cryptoAuthorizedAmount,
@@ -144,7 +179,7 @@ export async function buildPayoutQuote(input: {
       rate: providerRate,
     },
     easner,
-    pricingQuoteId: easner.quoteId,
+    pricingQuoteId: "",
     expiresAt: easner.expiresAt,
   }
 }

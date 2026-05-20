@@ -50,7 +50,6 @@ function getInitialOpenGroups(pathname: string | null): Set<string> {
   ) {
     next.add("business")
   }
-  if (pathname.startsWith("/monetization") || pathname.startsWith("/pricing-fx")) next.add("revenue")
   return next
 }
 

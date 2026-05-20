@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { officeFetch } from "@/lib/api-client"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { officeFetch } from "@/lib/api-client"
 import { CurrenciesAdminPanel } from "@/components/currencies/currencies-admin-panel"
 import { SettingsAdminPanel } from "@/components/settings/settings-admin-panel"
 import { PayoutCorridorsAdminPanel } from "@/components/platform-control/payout-corridors-admin-panel"
@@ -68,7 +68,68 @@ export function IntegrationsHealthPanel() {
           </Button>
         </CardContent>
       </Card>
+
+      <WebhookReplayPanel />
     </div>
+  )
+}
+
+export function WebhookReplayPanel() {
+  const [limit, setLimit] = useState("25")
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState<{ ok: boolean; replayed: number; failed: number } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const onReplay = async () => {
+    setLoading(true)
+    setError(null)
+    setResult(null)
+    try {
+      const res = await officeFetch("/api/admin/webhooks/replay-failed", {
+        method: "POST",
+        body: JSON.stringify({ limit: Number(limit || 25) }),
+      })
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean
+        replayed?: number
+        failed?: number
+        error?: string
+      }
+      if (!res.ok) throw new Error(data.error || "Replay failed")
+      setResult({
+        ok: Boolean(data.ok),
+        replayed: Number(data.replayed ?? 0),
+        failed: Number(data.failed ?? 0),
+      })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Replay failed")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Replay failed Noah webhooks</CardTitle>
+        <CardDescription>Re-process rows in event_inbox that failed delivery.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="max-w-xs space-y-2">
+          <Label htmlFor="webhook-replay-limit">Replay limit</Label>
+          <Input id="webhook-replay-limit" value={limit} onChange={(e) => setLimit(e.target.value)} />
+        </div>
+        <Button onClick={onReplay} disabled={loading}>
+          {loading ? "Replaying…" : "Replay failed webhooks"}
+        </Button>
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        {result ? (
+          <p className="text-sm text-muted-foreground">
+            ok: {String(result.ok)} · replayed: {result.replayed} · failed: {result.failed}
+          </p>
+        ) : null}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -207,7 +268,7 @@ const industryRows = [
   { area: "Customer / user ops", status: "Partial — users & compliance; notes/history when audit matures" },
   { area: "Payments / money movement", status: "Partial — transactions; exports/search TBD" },
   { area: "Compliance & identity", status: "In progress — KYC & Compliance tabs, Noah ops page" },
-  { area: "B2B / commercial", status: "In progress — businesses, customers, invoices (Supabase)" },
+  { area: "B2B / merchant", status: "In progress — businesses, customers, invoices (Supabase)" },
   { area: "Treasury / product config", status: "Partial — rates & settings under Platform" },
   { area: "Integrations", status: "Partial — health page; webhook drill-down from Compliance" },
   { area: "Governance", status: "Started — audit log; admin_users.role column" },

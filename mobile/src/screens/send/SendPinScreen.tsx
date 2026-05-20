@@ -25,7 +25,6 @@ import {
 import { ripple } from '../../lib/androidRipple'
 import { useAuth } from '../../contexts/AuthContext'
 import { analytics } from '../../lib/analytics'
-import type { PricingQuote } from '../../lib/noahService'
 import type { PayoutPrepareSession } from '../../hooks/executeBalanceSend'
 import { appPinStrings } from '../../constants/app-pin-en'
 import { getLockoutState, verifyPin } from '../../lib/pinAuth'
@@ -58,15 +57,8 @@ export default function SendPinScreen({ navigation, route }: NavigationProps) {
     receiveAmountValue?: number
     selectedBalanceCurrency?: string
     receiveCurrency?: string
-    pricingQuoteId?: string
-    pricingQuoteExpiry?: string
-    pricingQuoteResult?: PricingQuote | null
     noahFee?: number
     easnerFee?: number
-    calculatedTotalAmount?: number
-    selectedBalanceCurrency?: string
-    receiveCurrency?: string
-    receiveAmountValue?: number
     payoutSession?: PayoutPrepareSession
   }
 

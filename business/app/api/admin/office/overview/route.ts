@@ -86,7 +86,7 @@ export async function GET(request: Request) {
       platformHealth: "/platform-control?tab=health",
       currencies: "/platform-control?tab=currencies",
       transactions: "/transactions",
-      pricingFx: "/pricing-fx",
+      platformControl: "/platform-control",
     },
   })
 }

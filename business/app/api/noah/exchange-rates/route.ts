@@ -7,7 +7,7 @@ export const runtime = "nodejs"
 
 /**
  * Noah GET /prices–backed FX rows for wallet send sources (USD, EUR) → payout fiats.
- * Used by mobile send preview and pricing; replaces static reference rates where Noah supports the pair.
+ * Used by mobile/business send preview; replaces static reference rates where Noah supports the pair.
  */
 export async function GET(request: Request) {
   const mis = requireNoahEnv()

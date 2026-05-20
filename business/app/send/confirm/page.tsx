@@ -387,17 +387,6 @@ export default function SendConfirmPage() {
         transferData.easner_transaction_id ?? transferData.transaction_id ?? transferData.id ?? "",
       ).trim()
 
-      if (pq.pricingQuoteId) {
-        await fetchWithSession("/api/pricing/apply", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            quoteId: pq.pricingQuoteId,
-            transactionId: providerTxId || undefined,
-          }),
-        })
-      }
-
       const transactionId =
         providerTxId ||
         state.transactionId ||

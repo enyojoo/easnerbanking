@@ -51,6 +51,6 @@ export type OfficeOverviewResponse = {
     platformHealth: string
     currencies: string
     transactions: string
-    pricingFx: string
+    platformControl: string
   }
 }

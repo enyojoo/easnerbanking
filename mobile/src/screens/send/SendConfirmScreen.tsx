@@ -137,7 +137,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     analytics.trackScreenView('SendConfirm')
   }, [])
 
-  /** Executable Noah payout quote at confirm (prepare + Easner pricing). Skipped for Easetag P2P. */
+  /** Executable Noah payout quote at confirm (Noah sell/prepare). Skipped for Easetag P2P. */
   useEffect(() => {
     if (!recipient || easetagUi) return
     if (!recipient.id || !(receiveAmountValue > 0)) return
@@ -200,9 +200,6 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
               calculatedTotalAmount,
               receiveAmountValue,
               selectedBalanceCurrency,
-              pricingQuoteId,
-              pricingQuoteExpiry,
-              pricingQuoteResult,
               ...(payoutSession ? { payoutSession } : {}),
               ...(ledgerReservedDebitEtid ? { reservedDebitEtid: ledgerReservedDebitEtid } : {}),
             },
@@ -266,9 +263,6 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     }, [
       calculatedTotalAmount,
       navigation,
-      pricingQuoteExpiry,
-      pricingQuoteId,
-      pricingQuoteResult,
       payoutSession,
       qc,
       receiveAmountValue,
@@ -313,9 +307,6 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       receiveAmountValue,
       selectedBalanceCurrency,
       receiveCurrency,
-      pricingQuoteId: pricing.pricingQuoteId,
-      pricingQuoteExpiry: pricing.pricingQuoteExpiry,
-      pricingQuoteResult: pricing.pricingQuoteResult,
       payoutSession: pricing.payoutSession,
     } as never)
   }

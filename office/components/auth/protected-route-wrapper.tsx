@@ -11,8 +11,6 @@ const PROTECTED_PATHS = [
   "/customers",
   "/invoices",
   "/terminal",
-  "/monetization",
-  "/pricing-fx",
   "/platform-control",
 ]
 

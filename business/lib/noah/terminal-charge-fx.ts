@@ -1,4 +1,3 @@
-import { createQuote } from "@/lib/pricing/evaluator"
 import { uiFiatToNoahPriceTicker } from "@/lib/noah/fx-tickers"
 import { noahConvertFiatAmount } from "@/lib/noah/fx-prices"
 import { isNoahWalletLinkedFiat } from "@/lib/noah/terminal-pay-fiat"
@@ -37,35 +36,19 @@ async function noahUsdNotionalToPayoutFace(usd: number, payoutFiat: string): Pro
   }
 }
 
-/**
- * Charge amount in `chargeFiat` → USD notional: Noah mid, then Easner markup/rules via createQuote when possible.
- */
+/** Charge amount in `chargeFiat` → USD notional via Noah mid. */
 export async function chargeAmountToUsdNotional(input: {
   userId: string
   chargeFiat: string
   chargeAmount: number
 }): Promise<number> {
-  const { userId, chargeFiat, chargeAmount } = input
+  void input.userId
+  const { chargeFiat, chargeAmount } = input
   const c = chargeFiat.trim().toUpperCase()
   if (!Number.isFinite(chargeAmount) || chargeAmount <= 0) {
     throw new Error("chargeAmount must be positive")
   }
-  const usdMid = await noahChargeFaceToUsdNotional(c, chargeAmount)
-  const providerRate = chargeAmount > 0 ? usdMid / chargeAmount : 1
-  try {
-    const q = await createQuote({
-      userId,
-      sourceCurrency: c,
-      destinationCurrency: "USD",
-      sourceAmount: chargeAmount,
-      providerRate,
-      routeType: "stablecoin",
-      rail: "terminal_pay",
-    })
-    return q.destinationAmount
-  } catch {
-    return usdMid
-  }
+  return noahChargeFaceToUsdNotional(c, chargeAmount)
 }
 
 /**

@@ -7,10 +7,7 @@ import {
   Landmark,
   UsersRound,
   Receipt,
-  HandCoins,
-  LineChart,
   PanelsTopLeft,
-  TrendingUp,
   SmartphoneNfc,
 } from "lucide-react"
 
@@ -21,7 +18,7 @@ export type NavItem = {
 }
 
 export type NavCollapsibleSection = {
-  id: "business" | "revenue"
+  id: "business"
   label: string
   icon: LucideIcon
   items: NavItem[]
@@ -46,15 +43,6 @@ export const officeNavCollapsibleSections: NavCollapsibleSection[] = [
       { name: "Terminal", href: "/terminal", icon: SmartphoneNfc },
     ],
   },
-  {
-    id: "revenue",
-    label: "Revenue",
-    icon: TrendingUp,
-    items: [
-      { name: "Monetization", href: "/monetization", icon: HandCoins },
-      { name: "Pricing & FX", href: "/pricing-fx", icon: LineChart },
-    ],
-  },
 ]
 
 export const officeNavPlatformLink: NavItem = {
@@ -63,7 +51,7 @@ export const officeNavPlatformLink: NavItem = {
   icon: PanelsTopLeft,
 }
 
-const hubExactOnly = ["/monetization", "/pricing-fx", "/platform-control"] as const
+const hubExactOnly = ["/platform-control"] as const
 
 /** Match pathname to active nav item (including prefix routes). */
 export function isNavItemActive(pathname: string | null, href: string): boolean {
@@ -88,14 +76,6 @@ export function isCollapsibleSectionActive(sectionId: NavCollapsibleSection["id"
       pathname.startsWith("/invoices/") ||
       pathname === "/terminal" ||
       pathname.startsWith("/terminal/")
-    )
-  }
-  if (sectionId === "revenue") {
-    return (
-      pathname === "/monetization" ||
-      pathname.startsWith("/monetization/") ||
-      pathname === "/pricing-fx" ||
-      pathname.startsWith("/pricing-fx/")
     )
   }
   return false

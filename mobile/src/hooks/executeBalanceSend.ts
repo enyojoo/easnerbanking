@@ -1,9 +1,9 @@
 import * as Haptics from 'expo-haptics'
 import type { QueryClient } from '@tanstack/react-query'
-import { formatSendRateLabel, type Scope } from '@easner/shared'
+import type { Scope } from '@easner/shared'
 import { getApiBaseUrl, getNoahScopeHeaders } from '../lib/apiClient'
 import { supabase } from '../lib/supabase'
-import { noahService, type NoahTransfer, type PricingQuote } from '../lib/noahService'
+import { noahService, type NoahTransfer } from '../lib/noahService'
 import type { Recipient, User } from '../types'
 import { recipientService } from '../lib/recipientService'
 import { isDraftEasenetRecipient } from '../lib/draftEasenetRecipient'
@@ -29,32 +29,6 @@ function mobileMoneyPrepareHints(r: Pick<Recipient, 'mobile_provider'>): string[
   return undefined
 }
 
-function repricingReasonLabel(reasonCode: string): string {
-  const map: Record<string, string> = {
-    fx_moved: 'FX market moved',
-    provider_fee_changed: 'Provider fee changed',
-    route_unavailable: 'Selected route became unavailable',
-    compliance_status_changed: 'Compliance status changed',
-    subscription_changed: 'Subscription changed',
-    quote_expired: 'Quote expired',
-  }
-  return map[reasonCode] || reasonCode.replaceAll('_', ' ')
-}
-
-function fmtMoney(amount: number, currency: string): string {
-  const sym =
-    currency === 'USD'
-      ? '$'
-      : currency === 'EUR'
-        ? '€'
-        : currency === 'KES'
-          ? 'KSh '
-          : currency === 'GHS'
-            ? '₵ '
-            : ''
-  return `${sym}${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
 export function detailIdFromTransfer(transfer: NoahTransfer): string {
   const etid = transfer.easner_transaction_id?.trim()
   if (etid) return etid
@@ -72,9 +46,6 @@ export type ExecuteBalanceSendInput = {
   calculatedTotalAmount: number
   receiveAmountValue: number
   selectedBalanceCurrency: string
-  pricingQuoteId?: string
-  pricingQuoteExpiry?: string
-  pricingQuoteResult?: PricingQuote | null
   /** When set, skip Noah prepare at execute (already done on confirm). */
   payoutSession?: PayoutPrepareSession
   /** Ledger Easetag P2P: same ETID as confirm review (`reserved_debit_etid`). */
@@ -111,9 +82,6 @@ export async function executeBalanceSend(
     calculatedTotalAmount,
     receiveAmountValue,
     selectedBalanceCurrency,
-    pricingQuoteId,
-    pricingQuoteExpiry,
-    pricingQuoteResult,
     payoutSession,
     reservedDebitEtid,
   } = input
@@ -296,37 +264,6 @@ export async function executeBalanceSend(
       throw new Error(
         'Noah balance send needs: Easetag, saved payout id, mobile money with country, EUR IBAN, or US ACH with full address.',
       )
-    }
-  }
-
-  if (pricingQuoteId) {
-    const validation = await noahService.validatePricingQuote(pricingQuoteId)
-    await noahService.applyPricingQuote(pricingQuoteId, transfer.transaction_id || transfer.id)
-    const pt = pricingQuoteResult?.pricingTotals
-    const summaryLines =
-      pt != null && pricingQuoteResult
-        ? [
-            `Recipient gets: ${fmtMoney(pt.total_recipient_amount, recipient.currency)}`,
-            `Rate: ${formatSendRateLabel(selectedBalanceCurrency, recipient.currency, Number(pricingQuoteResult.effectiveRate))}`,
-            `Total fees: ${fmtMoney(pt.total_user_fee, selectedBalanceCurrency)}`,
-          ].join('\n')
-        : ''
-    if (validation.reasonCode) {
-      ctx.showInfo(
-        summaryLines
-          ? `Pricing was revalidated (${repricingReasonLabel(validation.reasonCode)}).\n\n${summaryLines}`
-          : `Pricing was revalidated: ${repricingReasonLabel(validation.reasonCode)}`,
-        5500,
-      )
-    } else if (pricingQuoteExpiry) {
-      ctx.showInfo(
-        summaryLines
-          ? `Quote locked. Expires ${new Date(pricingQuoteExpiry).toLocaleTimeString()}.\n\n${summaryLines}`
-          : `Quote locked. Expires ${new Date(pricingQuoteExpiry).toLocaleTimeString()}.`,
-        5500,
-      )
-    } else if (summaryLines) {
-      ctx.showInfo(summaryLines, 5000)
     }
   }
 

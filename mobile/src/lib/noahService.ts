@@ -77,7 +77,6 @@ export interface NoahTransfer {
   easner_transaction_id?: string
 }
 
-/** Aligns with business/lib/pricing/provider-costs PricingTotals when PRICING_PROVIDER_DECOMPOSED=true */
 export interface PricingQuoteTotals {
   total_provider_cost: number
   total_easner_fee: number
@@ -132,48 +131,6 @@ interface NoahKycLink {
 }
 
 export const noahService = {
-  async createPricingQuote(input: {
-    sourceCurrency: string
-    destinationCurrency: string
-    sourceAmount: number
-    rail?: string
-    countryCode?: string
-    payoutCountry?: string
-    payoutMethod?: string
-    fundingRail?: string
-    fundingDirection?: 'inbound' | 'outbound'
-    fundingRailOutbound?: string
-    fundingDirectionOutbound?: 'inbound' | 'outbound'
-  }): Promise<PricingQuote> {
-    const session = await requireAuthSession()
-
-    const response = await fetch(`${apiUrl()}/api/pricing/quote`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({
-        sourceCurrency: input.sourceCurrency,
-        destinationCurrency: input.destinationCurrency,
-        sourceAmount: input.sourceAmount,
-        rail: input.rail,
-        countryCode: input.countryCode,
-        payoutCountry: input.payoutCountry,
-        payoutMethod: input.payoutMethod,
-        fundingRail: input.fundingRail,
-        fundingDirection: input.fundingDirection,
-        fundingRailOutbound: input.fundingRailOutbound,
-        fundingDirectionOutbound: input.fundingDirectionOutbound,
-      }),
-    })
-    const data = await response.json().catch(() => ({}))
-    if (!response.ok || !(data as any).ok) {
-      throw new Error((data as any).error || 'Failed to create quote')
-    }
-    return (data as any).quote as PricingQuote
-  },
-
   async createPayoutQuote(input: {
     recipientId: string
     receiveAmount: number
@@ -199,42 +156,6 @@ export const noahService = {
       throw new Error((data as { error?: string }).error || 'Failed to create payout quote')
     }
     return (data as { quote: PayoutQuote }).quote
-  },
-
-  async validatePricingQuote(quoteId: string): Promise<{ reasonCode?: string | null }> {
-    const session = await requireAuthSession()
-
-    const response = await fetch(`${apiUrl()}/api/pricing/validate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ quoteId }),
-    })
-    const data = await response.json().catch(() => ({}))
-    if (!response.ok || !(data as any).ok) {
-      throw new Error((data as any).error || 'Quote validation failed')
-    }
-    return { reasonCode: (data as any)?.repricing?.reasonCode ?? null }
-  },
-
-  async applyPricingQuote(quoteId: string, transactionId?: string): Promise<{ reasonCode?: string | null }> {
-    const session = await requireAuthSession()
-
-    const response = await fetch(`${apiUrl()}/api/pricing/apply`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ quoteId, transactionId }),
-    })
-    const data = await response.json().catch(() => ({}))
-    if (!response.ok || !(data as any).ok) {
-      throw new Error((data as any).error || 'Failed to apply quote')
-    }
-    return { reasonCode: (data as any)?.repricing?.reasonCode ?? null }
   },
 
   /**

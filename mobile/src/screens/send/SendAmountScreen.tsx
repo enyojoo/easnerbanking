@@ -52,7 +52,6 @@ import {
   getCountryCodeForCurrency,
   getCurrencySymbol,
 } from '@easner/shared'
-import { noahService, type PricingQuote } from '../../lib/noahService'
 import { getWalletAssets } from '../../lib/recipientCatalog'
 import { getPayoutCorridorCache, isRecipientPayoutCorridorActive, refreshPayoutCorridors } from '../../lib/payoutCorridors'
 import { getTokenIconUrl } from '../../lib/cryptoIcons'
@@ -67,26 +66,6 @@ import { getPayoutRecipientSubtitleParts, isMobileMoneyRecipient } from '../../l
 import { useEasenetRecipientHydration, type HydratedEasenetProfile } from '../../hooks/useEasenetRecipientHydration'
 import { navigateToSendRecipientHub } from '../../lib/sendFlowNavigation'
 import { avatarImageSource } from '../../lib/avatarCache'
-
-function inferCountryFromRecipientCurrency(currency: string): string | undefined {
-  const m: Record<string, string> = {
-    KES: 'KE',
-    GHS: 'GH',
-    NGN: 'NG',
-    ZAR: 'ZA',
-  }
-  return m[currency.toUpperCase()]
-}
-
-function normalizePayoutMethodForPricing(methodCode: string | undefined | null): string | undefined {
-  if (!methodCode) return undefined
-  const x = methodCode.toLowerCase()
-  if (x === 'mpesa' || x === 'm-pesa') return 'mobile_money_mpesa'
-  if (x === 'banktransfer' || x === 'bank_transfer') return 'bank_transfer'
-  if (x === 'mtnmomo' || x === 'mtn_momo') return 'mobile_money_mtn'
-  if (x === 'sbp') return 'sbp'
-  return methodCode
-}
 
 // Landmark/Bank Icon Component
 function LandmarkIcon({ size = 24, color = colors.text.primary }: { size?: number; color?: string }) {
@@ -152,7 +131,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     selectedOtherPaymentMethodFromRoute ?? null
   )
   const [amountEntryMode, setAmountEntryMode] = useState<'receive' | 'send'>('receive')
-  const [pricingPreviewQuote, setPricingPreviewQuote] = useState<PricingQuote | null>(null)
 
   /** Same-currency Easetag P2P never uses Noah `/prices` (two FX quotes); skip the query to speed the send flow. */
   const skipNoahExchangeRatesForEasetagP2p =
@@ -512,79 +490,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     verificationBlocksSend ||
     hasInsufficientBalance
 
-  useEffect(() => {
-    let cancelled = false
-    const entered = Number.parseFloat(sendAmount.replace(/,/g, '') || '0')
-    if (
-      !tier1Ok ||
-      !recipient ||
-      entered <= 0 ||
-      !selectedPaymentMethod ||
-      (selectedPaymentMethod === 'otherCurrency' && (!selectedOtherCurrency || !selectedOtherPaymentMethod)) ||
-      receiveAmount <= 0 ||
-      sendingAmount <= 0
-    ) {
-      setPricingPreviewQuote(null)
-      return
-    }
-    if (!showCrossCurrencyExchangeUi) {
-      setPricingPreviewQuote(null)
-      return
-    }
-    if (!exchangeRates || exchangeRates.length === 0) {
-      setPricingPreviewQuote(null)
-      return
-    }
-
-    const t = setTimeout(() => {
-      void (async () => {
-        try {
-          const payoutMethodForQuote =
-            selectedPaymentMethod === 'otherCurrency'
-              ? normalizePayoutMethodForPricing(selectedOtherPaymentMethod)
-              : undefined
-          const quote = await noahService.createPricingQuote({
-            sourceCurrency: sendCurrency,
-            destinationCurrency: recipient.currency,
-            sourceAmount: sendingAmount,
-            rail:
-              selectedPaymentMethod === 'balance'
-                ? 'wallet'
-                : selectedPaymentMethod === 'otherCurrency'
-                  ? selectedOtherPaymentMethod || undefined
-                  : selectedPaymentMethod,
-            countryCode: recipient.country_code,
-            payoutCountry: recipient.country_code || inferCountryFromRecipientCurrency(recipient.currency),
-            payoutMethod: payoutMethodForQuote,
-          })
-          if (!cancelled) setPricingPreviewQuote(quote)
-        } catch {
-          if (!cancelled) setPricingPreviewQuote(null)
-        }
-      })()
-    }, 500)
-
-    return () => {
-      cancelled = true
-      clearTimeout(t)
-    }
-  }, [
-    tier1Ok,
-    recipient?.id,
-    recipient?.currency,
-    recipient?.country_code,
-    sendAmount,
-    sendCurrency,
-    receiveCurrency,
-    selectedPaymentMethod,
-    selectedOtherCurrency,
-    selectedOtherPaymentMethod,
-    sendingAmount,
-    receiveAmount,
-    exchangeRates,
-    showCrossCurrencyExchangeUi,
-  ])
-
   const exchangeInfoAmountPositive =
     !!(recipient && sendAmount && Number.parseFloat(sendAmount.replace(/,/g, '')) > 0)
 
@@ -812,25 +717,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                           {' • '}
                           {`Rate: ${formatSendRateLabel(sendCurrency, receiveCurrency, exchangeRate)}`}
                         </Text>
-                      </View>
-                      <View style={styles.exchangeQuoteLine}>
-                        {pricingPreviewQuote?.pricingTotals ? (
-                          <Text
-                            style={[styles.exchangeInfoText, styles.exchangeQuoteText]}
-                            numberOfLines={2}
-                            ellipsizeMode="tail"
-                          >
-                            Live quote:{' '}
-                            {formatSendRateLabel(
-                              sendCurrency,
-                              receiveCurrency,
-                              Number(pricingPreviewQuote.effectiveRate),
-                            )}{' '}
-                            · Fees{' '}
-                            {formatCurrency(pricingPreviewQuote.pricingTotals.total_user_fee, sendCurrency)} · Recipient{' '}
-                            {formatCurrency(pricingPreviewQuote.pricingTotals.total_recipient_amount, receiveCurrency)}
-                          </Text>
-                        ) : null}
                       </View>
                     </View>
                   ) : null}
@@ -1061,36 +947,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   transactionId,
                 } as never)
                 return
-              }
-
-              let pricingQuoteId: string | undefined
-              let pricingQuoteExpiry: string | undefined
-              let pricingQuoteResult: PricingQuote | null = null
-              try {
-                const payoutMethodForQuote =
-                  selectedPaymentMethod === 'otherCurrency'
-                    ? normalizePayoutMethodForPricing(selectedOtherPaymentMethod)
-                    : undefined
-                const quote = await noahService.createPricingQuote({
-                  sourceCurrency: sendCurrency,
-                  destinationCurrency: recipient.currency,
-                  sourceAmount: calculatedSendingAmount,
-                  rail:
-                    selectedPaymentMethod === 'otherCurrency'
-                      ? selectedOtherPaymentMethod || undefined
-                      : selectedPaymentMethod,
-                  countryCode: recipient.country_code,
-                  payoutCountry: recipient.country_code || inferCountryFromRecipientCurrency(recipient.currency),
-                  payoutMethod: payoutMethodForQuote,
-                })
-                pricingQuoteResult = quote
-                pricingQuoteId = quote.quoteId
-                pricingQuoteExpiry = quote.expiresAt
-                const feeFromQuote = quote.pricingTotals?.total_user_fee ?? quote.totalFeeAmount
-                calculatedFeeAmount = feeFromQuote
-                calculatedTotalAmount = calculatedSendingAmount + feeFromQuote
-              } catch (quoteError) {
-                console.warn('Pricing quote unavailable, falling back to local calculation:', quoteError)
               }
 
               if (selectedPaymentMethod === 'linkBank') {

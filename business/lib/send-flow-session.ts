@@ -18,7 +18,7 @@ export interface SendFlowState {
   otherPaymentMethod?: string
   note: string
   transactionId: string
-  /** Executable Noah payout quote from confirm (prepare + Easner pricing). */
+  /** Executable Noah payout quote from confirm (Noah sell/prepare). */
   payoutQuote?: {
     receiveAmount: number
     sendAmount: number
@@ -29,7 +29,7 @@ export interface SendFlowState {
     formSessionId: string
     cryptoAuthorizedAmount: string
     cryptoCurrency: string
-    pricingQuoteId: string
+    pricingQuoteId?: string
     expiresAt: string
   }
 }
