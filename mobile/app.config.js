@@ -163,6 +163,7 @@ module.exports = ({ config }) => {
     plugins: [
       ...(config.plugins || []),
       './plugins/withHermesCompilerPath.js',
+      './plugins/withInternalExpoImport.js',
       ...intercomPlugins,
     ],
     extra: {
