@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { recordEventInbox, markEventInboxProcessed } from "@/lib/webhooks/event-inbox"
-import { verifyTurnkeyWebhookSignature } from "@/lib/turnkey/webhook-verify"
+import { isTurnkeyWebhookEd25519SigningConfigured } from "@/lib/turnkey/turnkey-webhook-signing-keys"
+import {
+  turnkeyWebhookVerifyInputFromHeaders,
+  verifyTurnkeyWebhookSignature,
+} from "@/lib/turnkey/webhook-verify"
 import { applyTurnkeyBalanceWebhookSideEffects } from "@/lib/turnkey/balance-webhook-sync"
 import { applyTurnkeyWebhookSideEffects } from "@/lib/turnkey/chain-sync"
 import { isTurnkeyBalanceConfirmedPayload } from "@/lib/turnkey/turnkey-webhook-classify"
@@ -24,9 +28,12 @@ export async function POST(request: Request) {
   const headers = readTurnkeyWebhookHeaders(request)
   const raw = Buffer.from(await request.arrayBuffer())
   const secretConfigured = Boolean(process.env.TURNKEY_WEBHOOK_SECRET?.trim())
-  if (process.env.NODE_ENV === "production" && !secretConfigured) {
-    console.error("turnkey_webhook_rejected: TURNKEY_WEBHOOK_SECRET is not set on this deployment")
-    return NextResponse.json({ error: "webhook_secret_not_configured" }, { status: 503 })
+  const ed25519Configured = isTurnkeyWebhookEd25519SigningConfigured()
+  if (process.env.NODE_ENV === "production" && !secretConfigured && !ed25519Configured) {
+    console.error(
+      "turnkey_webhook_rejected: configure TURNKEY_WEBHOOK_SIGNING_PUBLIC_KEY (V2 ed25519) or TURNKEY_WEBHOOK_SECRET (legacy HMAC)",
+    )
+    return NextResponse.json({ error: "webhook_verify_not_configured" }, { status: 503 })
   }
 
   const allowUnsigned =
@@ -36,10 +43,11 @@ export async function POST(request: Request) {
   const sigMeta = turnkeySignatureMetaFromHeaders(headers)
 
   if (sig) {
-    if (!verifyTurnkeyWebhookSignature(raw, sig, sigMeta)) {
+    const verifyInput = turnkeyWebhookVerifyInputFromHeaders(raw, headers, sigMeta)
+    if (!verifyTurnkeyWebhookSignature(verifyInput)) {
       return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 })
     }
-  } else if (secretConfigured) {
+  } else if (secretConfigured || ed25519Configured) {
     if (allowUnsigned && !isV2TurnkeyWebhookDelivery(headers)) {
       console.warn(
         "turnkey_webhook: unsigned legacy delivery accepted (TURNKEY_WEBHOOK_ALLOW_UNSIGNED). V2 deliveries must be signed.",

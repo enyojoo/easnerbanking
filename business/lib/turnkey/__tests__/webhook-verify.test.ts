@@ -32,7 +32,7 @@ describe("verifyTurnkeyWebhookSignature", () => {
     expect(verifyTurnkeyWebhookSignature(raw, wrong)).toBe(false)
   })
 
-  it("rejects non-HMAC algorithm when V2 metadata present", () => {
+  it("rejects ed25519 when platform public key is not configured", () => {
     process.env.TURNKEY_WEBHOOK_SECRET = "testsecret"
     process.env.NODE_ENV = "production"
     const raw = Buffer.from("body", "utf8")

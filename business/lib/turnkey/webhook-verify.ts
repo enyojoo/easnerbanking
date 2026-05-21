@@ -1,5 +1,20 @@
-import { createHmac, timingSafeEqual } from "node:crypto"
+import { createHmac, createPublicKey, timingSafeEqual, verify as cryptoVerify } from "node:crypto"
+import type { TurnkeyWebhookHeaders } from "@/lib/turnkey/turnkey-webhook-delivery"
 import type { TurnkeyWebhookSignatureMeta } from "@/lib/turnkey/turnkey-webhook-delivery"
+import {
+  buildTurnkeyWebhookV1SignedMessage,
+  parseTurnkeyWebhookTimestampMs,
+} from "@/lib/turnkey/turnkey-webhook-signed-payload"
+import { resolveTurnkeyWebhookEd25519PublicKey } from "@/lib/turnkey/turnkey-webhook-signing-keys"
+
+export type TurnkeyWebhookVerifyInput = {
+  rawBody: Buffer
+  signatureHeader: string | null
+  meta?: TurnkeyWebhookSignatureMeta
+  /** V2 delivery headers used to build the signed payload string. */
+  eventId?: string | null
+  timestamp?: string | null
+}
 
 function timingSafeEqualBuf(a: Buffer, b: Buffer): boolean {
   try {
@@ -16,28 +31,112 @@ function isHmacSha256Algorithm(algorithm: string | null | undefined): boolean {
   return a.includes("hmac") || a.includes("sha256") || a === "hs256"
 }
 
-/**
- * Verifies `X-Turnkey-Signature` as HMAC-SHA256 of the raw body with `TURNKEY_WEBHOOK_SECRET`.
- * V2 may send `X-Turnkey-Signature-Algorithm` / `Key-Id` — logged on failure for SDK migration.
- */
-export function verifyTurnkeyWebhookSignature(
-  rawBody: Buffer,
-  signatureHeader: string | null,
-  meta?: TurnkeyWebhookSignatureMeta,
-): boolean {
+function isEd25519Algorithm(algorithm: string | null | undefined): boolean {
+  if (!algorithm?.trim()) return false
+  const a = algorithm.trim().toLowerCase()
+  return a.includes("ed25519") || a === "eddsa" || a.includes("eddsa")
+}
+
+function ed25519PublicKeyObject(raw32: Buffer) {
+  const prefix = Buffer.from("302a300506032b6570032100", "hex")
+  const der = Buffer.concat([prefix, raw32])
+  return createPublicKey({ key: der, format: "der", type: "spki" })
+}
+
+/** Turnkey V2 sends hex-encoded Ed25519 signatures in `X-Turnkey-Signature`. */
+function decodeEd25519SignatureBytes(signatureHeader: string): Buffer[] {
+  const out: Buffer[] = []
+  let part = signatureHeader.trim()
+  if (!part) return out
+
+  const v1 = /^v1[=:,]/i.exec(part)
+  if (v1) part = part.slice(v1[0].length).trim()
+
+  const hex = part.replace(/^0x/i, "").trim()
+  if (/^[0-9a-fA-F]+$/.test(hex) && hex.length === 128) {
+    try {
+      out.push(Buffer.from(hex, "hex"))
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // Legacy / mistaken encodings
+  try {
+    const norm = part.replace(/-/g, "+").replace(/_/g, "/")
+    const padLen = (4 - (norm.length % 4)) % 4
+    const buf = Buffer.from(norm + "=".repeat(padLen), "base64")
+    if (buf.length === 64) out.push(buf)
+  } catch {
+    /* ignore */
+  }
+
+  return out
+}
+
+function verifyEd25519TurnkeyWebhook(input: TurnkeyWebhookVerifyInput): boolean {
+  const sigHeader = input.signatureHeader?.trim()
+  if (!sigHeader) return false
+
+  const keyMaterial = resolveTurnkeyWebhookEd25519PublicKey(input.meta?.keyId)
+  if (!keyMaterial) {
+    console.warn("[turnkey-webhook] ed25519 signature present but no public key configured", {
+      keyId: input.meta?.keyId ?? "turnkey_webhook_signing_key_001",
+      hint: "Set TURNKEY_WEBHOOK_SIGNING_PUBLIC_KEY or TURNKEY_WEBHOOK_SIGNING_PUBLIC_KEYS_JSON (hex/base64/PEM). Request key from Turnkey support if needed.",
+    })
+    return false
+  }
+
+  const signatures = decodeEd25519SignatureBytes(sigHeader)
+  if (!signatures.length) {
+    console.warn("[turnkey-webhook] could not decode ed25519 signature bytes", {
+      keyId: input.meta?.keyId,
+    })
+    return false
+  }
+
+  const eventId = input.eventId?.trim()
+  const timestampMs = parseTurnkeyWebhookTimestampMs(input.timestamp)
+  if (!eventId || !timestampMs) {
+    console.warn("[turnkey-webhook] ed25519 verify requires X-Turnkey-Event-Id and X-Turnkey-Timestamp", {
+      hasEventId: Boolean(eventId),
+      hasTimestamp: Boolean(input.timestamp),
+    })
+    return false
+  }
+
+  const message = buildTurnkeyWebhookV1SignedMessage({
+    rawBody: input.rawBody,
+    eventId,
+    timestampMs,
+    signingKeyId: input.meta?.keyId,
+    signatureVersion: input.meta?.version,
+    algorithm: input.meta?.algorithm,
+  })
+  if (!message) return false
+
+  const publicKey = ed25519PublicKeyObject(keyMaterial.publicKey)
+  for (const sig of signatures) {
+    try {
+      if (cryptoVerify(null, message, publicKey, sig)) return true
+    } catch {
+      /* try next */
+    }
+  }
+
+  console.warn("[turnkey-webhook] ed25519 signature verify failed", {
+    keyId: input.meta?.keyId,
+    algorithm: input.meta?.algorithm,
+    version: input.meta?.version,
+    signatureCandidates: signatures.length,
+  })
+  return false
+}
+
+function verifyHmacTurnkeyWebhook(rawBody: Buffer, signatureHeader: string): boolean {
   const secret = process.env.TURNKEY_WEBHOOK_SECRET?.trim()
   if (!secret) {
     return process.env.NODE_ENV !== "production"
-  }
-  if (!signatureHeader?.trim()) return false
-
-  if (meta?.algorithm && !isHmacSha256Algorithm(meta.algorithm)) {
-    console.warn("[turnkey-webhook] signature algorithm not supported by shared-secret HMAC verifier", {
-      algorithm: meta.algorithm,
-      keyId: meta.keyId,
-      version: meta.version,
-    })
-    return false
   }
 
   let sig = signatureHeader.trim()
@@ -66,13 +165,71 @@ export function verifyTurnkeyWebhookSignature(
     /* ignore */
   }
 
-  if (meta?.algorithm || meta?.keyId) {
-    console.warn("[turnkey-webhook] signature verify failed (V2 metadata present)", {
-      algorithm: meta.algorithm,
-      keyId: meta.keyId,
-      version: meta.version,
-    })
+  return false
+}
+
+/**
+ * Verifies Turnkey webhook `X-Turnkey-Signature`.
+ * - Legacy / org-feature: HMAC-SHA256 of raw body (`TURNKEY_WEBHOOK_SECRET`).
+ * - Webhooks V2: Ed25519 over `v1.ed25519.<keyId>.<timestampMs>.<eventId>.<rawBody>` per Turnkey docs.
+ */
+export function verifyTurnkeyWebhookSignature(
+  rawBodyOrInput: Buffer | TurnkeyWebhookVerifyInput,
+  signatureHeader?: string | null,
+  meta?: TurnkeyWebhookSignatureMeta,
+): boolean {
+  const input: TurnkeyWebhookVerifyInput =
+    Buffer.isBuffer(rawBodyOrInput) ?
+      {
+        rawBody: rawBodyOrInput,
+        signatureHeader: signatureHeader ?? null,
+        meta,
+      }
+    : rawBodyOrInput
+
+  if (!input.signatureHeader?.trim()) return false
+
+  const useEd25519 =
+    isEd25519Algorithm(input.meta?.algorithm) ||
+    (input.meta?.signatureVersion?.trim().toLowerCase() === "v1" &&
+      input.meta?.keyId?.trim() &&
+      !isHmacSha256Algorithm(input.meta?.algorithm))
+
+  if (useEd25519) {
+    return verifyEd25519TurnkeyWebhook(input)
   }
 
-  return false
+  if (input.meta?.algorithm && !isHmacSha256Algorithm(input.meta.algorithm)) {
+    console.warn("[turnkey-webhook] unknown signature algorithm", {
+      algorithm: input.meta.algorithm,
+      keyId: input.meta.keyId,
+      version: input.meta.version,
+    })
+    return false
+  }
+
+  const ok = verifyHmacTurnkeyWebhook(input.rawBody, input.signatureHeader)
+  if (!ok && (input.meta?.algorithm || input.meta?.keyId)) {
+    console.warn("[turnkey-webhook] HMAC signature verify failed (V2 metadata present)", {
+      algorithm: input.meta?.algorithm,
+      keyId: input.meta?.keyId,
+      version: input.meta?.version,
+    })
+  }
+  return ok
+}
+
+/** Convenience: build verify input from parsed V2 headers. */
+export function turnkeyWebhookVerifyInputFromHeaders(
+  rawBody: Buffer,
+  headers: TurnkeyWebhookHeaders,
+  meta: TurnkeyWebhookSignatureMeta,
+): TurnkeyWebhookVerifyInput {
+  return {
+    rawBody,
+    signatureHeader: headers.signature,
+    meta,
+    eventId: headers.eventId,
+    timestamp: headers.timestamp,
+  }
 }

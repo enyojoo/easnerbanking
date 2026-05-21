@@ -64,7 +64,7 @@ ORDER BY created_at DESC LIMIT 20;
 
 | Header | Use |
 |--------|-----|
-| `X-Turnkey-Signature` | HMAC-SHA256 verify (`TURNKEY_WEBHOOK_SECRET`) |
+| `X-Turnkey-Signature` | V2: Ed25519 verify (`TURNKEY_WEBHOOK_SIGNING_PUBLIC_KEY`). Legacy: HMAC-SHA256 (`TURNKEY_WEBHOOK_SECRET`) |
 | `X-Turnkey-Event-Id` | `event_inbox` dedupe (preferred over body) |
 | `X-Turnkey-Event-Type` | Inbox `event_type` |
 | `X-Turnkey-Organization-Id` | Must match `TURNKEY_ORGANIZATION_ID` when present |
@@ -72,7 +72,11 @@ ORDER BY created_at DESC LIMIT 20;
 
 V2 deliveries without a signature are rejected unless legacy unsigned activity is explicitly allowed (`TURNKEY_WEBHOOK_ALLOW_UNSIGNED=true`). After migration stabilizes, disable allow-unsigned in production.
 
-If verify fails with `X-Turnkey-Signature-Algorithm` / `Key-Id` set, upgrade to Turnkey SDK webhook verify (shared-secret HMAC may no longer apply).
+After Webhooks V2 migration, set `TURNKEY_WEBHOOK_SIGNING_PUBLIC_KEY` (hex/base64/PEM for `turnkey_webhook_signing_key_001`) from Turnkey. Signed message (exact body bytes appended):
+
+`v1.ed25519.<signing_key_id>.<timestamp_ms>.<event_id>.<raw_body>`
+
+See [Turnkey Webhooks](https://docs.turnkey.com/developer-reference/webhooks) (preview: [Webhooks V2 docs](https://turnkey-0e7c1f5b-taylor-eng-4112-webhooks-v2-docs.mintlify.app/developer-reference/webhooks)). `X-Turnkey-Signature` is **hex-encoded** Ed25519. Legacy HMAC (`TURNKEY_WEBHOOK_SECRET`) remains supported for older activity deliveries.
 
 ## Webhook storage
 

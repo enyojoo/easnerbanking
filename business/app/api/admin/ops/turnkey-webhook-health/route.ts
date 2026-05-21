@@ -6,6 +6,7 @@ import {
   isTurnkeyBalanceWebhooksIngestEnabled,
   validateTurnkeyEnvForProduction,
 } from "@/lib/turnkey/config"
+import { isTurnkeyWebhookEd25519SigningConfigured } from "@/lib/turnkey/turnkey-webhook-signing-keys"
 
 export const runtime = "nodejs"
 
@@ -92,6 +93,7 @@ export async function GET(request: Request) {
       setup_route: "/api/internal/turnkey-balance-webhook-endpoint",
     },
     webhook_secret_configured: Boolean(process.env.TURNKEY_WEBHOOK_SECRET?.trim()),
+    webhook_ed25519_public_key_configured: isTurnkeyWebhookEd25519SigningConfigured(),
     webhook_route: {
       url: "/api/webhooks/turnkey",
       status: routeReachableStatus(routeProbeStatus),
