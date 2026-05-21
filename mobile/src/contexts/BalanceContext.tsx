@@ -1,8 +1,20 @@
 import React, { createContext, useContext, useCallback, useMemo, ReactNode, useEffect, useRef, useState } from 'react'
+import { AppState } from 'react-native'
 import { useQueryClient } from '@tanstack/react-query'
 import { qk } from '@easner/shared'
 import { useWalletBalances } from '../hooks/queries/use-wallets'
 import { isDefinitiveEmptyBalanceResponse } from '../lib/wallet-balance-display'
+import { registerAppLockListener } from '../lib/app-lock-bus'
+import {
+  balanceSnapshotStorageKey,
+  getMemoryBalanceSnapshot,
+  hasMeaningfulBalanceSnapshot,
+  parseBalanceSnapshot,
+  refreshMemoryBalanceSnapshotFromDisk,
+  setMemoryBalanceSnapshot,
+  writeBalanceSnapshotToDisk,
+  type WalletBalanceSnapshot,
+} from '../lib/wallet-balance-snapshot'
 import { useMaybeScope } from '../query/scope'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
@@ -26,14 +38,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
  * refetch overwrites the optimistic value with server truth.
  */
 
-interface Balances {
-  USD: string
-  EUR: string
-}
+type Balances = WalletBalanceSnapshot
 
 interface BalanceContextType {
   balances: Balances
-  /** True once we have query data or a disk snapshot read completed (legacy UX flag). */
+  /** True once we have wallet API data or a persisted snapshot (not merely "disk read finished"). */
   hasResolvedBalance: boolean
   /** True when the latest wallet query returned an authoritative on-chain/DB balance (`source !== 'none'`). */
   hasAuthoritativeBalance: boolean
@@ -53,8 +62,7 @@ interface BalanceContextType {
 
 const BalanceContext = createContext<BalanceContextType | undefined>(undefined)
 
-const EMPTY_BALANCES: Balances = { USD: '0', EUR: '0' }
-const BALANCE_SNAPSHOT_KEY_PREFIX = 'easner_wallet_balances_snapshot_v1_'
+const EMPTY_BALANCES: Balances = { USD: '', EUR: '' }
 
 export function useBalance() {
   const ctx = useContext(BalanceContext)
@@ -70,76 +78,91 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
   const qc = useQueryClient()
   const scope = useMaybeScope()
   const query = useWalletBalances()
-  const lastKnownBalancesRef = useRef<Balances>(EMPTY_BALANCES)
-  const [hydratedFromDisk, setHydratedFromDisk] = useState(false)
+  const snapshotKey = scope ? balanceSnapshotStorageKey(scope) : null
+  const memoryPrime = snapshotKey ? getMemoryBalanceSnapshot(snapshotKey) : null
+  const lastKnownBalancesRef = useRef<Balances>(memoryPrime ?? EMPTY_BALANCES)
+  const [snapshotVersion, setSnapshotVersion] = useState(0)
+  const applySnapshot = useCallback((next: Balances) => {
+    lastKnownBalancesRef.current = next
+    if (snapshotKey) setMemoryBalanceSnapshot(snapshotKey, next)
+    setSnapshotVersion((v) => v + 1)
+  }, [snapshotKey])
   const isAuthoritativeBalanceRead = Boolean(query.data && query.data.source !== 'none')
   const hasDefinitiveEmptyBalance = isDefinitiveEmptyBalanceResponse(
     query.data?.source,
     query.data?.detail,
   )
 
-  // Hydrate last-known authoritative snapshot for instant cold-start UX.
+  // Hydrate last-known snapshot for instant dashboard UX (memory + disk).
   useEffect(() => {
     if (!scope) return
     let cancelled = false
-    const key = `${BALANCE_SNAPSHOT_KEY_PREFIX}${scope.kind === 'business' ? scope.orgId : scope.userId}`
+    const key = balanceSnapshotStorageKey(scope)
     void AsyncStorage.getItem(key)
       .then((raw) => {
         if (cancelled) return
-        if (!raw) return
-        const parsed = JSON.parse(raw) as { USD?: string; EUR?: string; ts?: number }
-        const next: Balances = {
-          USD: typeof parsed?.USD === 'string' ? parsed.USD : '0',
-          EUR: typeof parsed?.EUR === 'string' ? parsed.EUR : '0',
-        }
-        // Only accept if at least one currency is present (avoid overwriting defaults with junk).
-        if (next.USD.trim().length > 0 || next.EUR.trim().length > 0) {
-          lastKnownBalancesRef.current = next
-        }
+        const parsed = parseBalanceSnapshot(raw)
+        if (parsed) applySnapshot(parsed)
       })
       .catch(() => {
         // ignore
       })
-      .finally(() => {
-        if (!cancelled) setHydratedFromDisk(true)
-      })
     return () => {
       cancelled = true
     }
-  }, [scope])
+  }, [applySnapshot, scope])
+
+  // After PIN unlock / foreground: background task may have refreshed disk snapshots.
+  useEffect(() => {
+    if (!scope) return
+    const syncFromDisk = () => {
+      void refreshMemoryBalanceSnapshotFromDisk(scope).then((parsed) => {
+        if (parsed) applySnapshot(parsed)
+      })
+    }
+    const appSub = AppState.addEventListener('change', (status) => {
+      if (status === 'active') syncFromDisk()
+    })
+    const offLock = registerAppLockListener((event) => {
+      if (event === 'unlocked') syncFromDisk()
+    })
+    return () => {
+      appSub.remove()
+      offLock()
+    }
+  }, [applySnapshot, scope])
 
   useEffect(() => {
     if (!query.data) return
-    if (!isAuthoritativeBalanceRead) return
+    if (!isAuthoritativeBalanceRead && !hasDefinitiveEmptyBalance) return
     const next: Balances = {
       USD: String(query.data.USD ?? '0'),
       EUR: String(query.data.EUR ?? '0'),
     }
-    lastKnownBalancesRef.current = next
+    applySnapshot(next)
     if (!scope) return
-    const key = `${BALANCE_SNAPSHOT_KEY_PREFIX}${scope.kind === 'business' ? scope.orgId : scope.userId}`
-    AsyncStorage.setItem(key, JSON.stringify({ ...next, ts: Date.now() })).catch(() => {
-      // ignore
-    })
-  }, [isAuthoritativeBalanceRead, query.data])
+    void writeBalanceSnapshotToDisk(scope, next)
+  }, [applySnapshot, hasDefinitiveEmptyBalance, isAuthoritativeBalanceRead, query.data, scope])
 
   const balances: Balances = useMemo(() => {
     if (!query.data) return lastKnownBalancesRef.current
-    if (!isAuthoritativeBalanceRead) return lastKnownBalancesRef.current
-    return {
-      USD: String(query.data.USD ?? '0'),
-      EUR: String(query.data.EUR ?? '0'),
+    if (hasDefinitiveEmptyBalance || isAuthoritativeBalanceRead) {
+      return {
+        USD: String(query.data.USD ?? '0'),
+        EUR: String(query.data.EUR ?? '0'),
+      }
     }
-  }, [isAuthoritativeBalanceRead, query.data])
+    return lastKnownBalancesRef.current
+  }, [hasDefinitiveEmptyBalance, isAuthoritativeBalanceRead, query.data, snapshotVersion])
 
-  const hasResolvedBalance = Boolean(query.data) || hydratedFromDisk
+  const hasResolvedBalance =
+    Boolean(query.data) || hasMeaningfulBalanceSnapshot(lastKnownBalancesRef.current)
 
   const refreshBalances = useCallback(
     async (force: boolean = false) => {
       if (!scope) return
       if (force) {
-        // Prefix matches `qk.wallets.list` and any wallet sub-keys (same as foreground resume).
-        await qc.invalidateQueries({ queryKey: qk.wallets.root(scope) })
+        await qc.refetchQueries({ queryKey: qk.wallets.root(scope), type: 'active' })
         return
       }
       await query.refetch()

@@ -115,13 +115,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const { scope } = useScope()
   const qc = useQueryClient()
   const txQuery = useTransactionsList({}, TRANSACTIONS_LEDGER_PAGE_SIZE)
-  const {
-    balances,
-    hasResolvedBalance,
-    hasAuthoritativeBalance,
-    hasDefinitiveEmptyBalance,
-    refreshBalances,
-  } = useBalance()
+  const { balances, hasResolvedBalance, hasDefinitiveEmptyBalance, refreshBalances } = useBalance()
   const [selectedCurrency, setSelectedCurrency] = useState<'USD' | 'EUR' | 'GBP'>('USD')
   const [balanceVisible, setBalanceVisible] = useState(true)
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false)
@@ -236,9 +230,11 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     return (firstPage as DashboardTransaction[]).slice(0, DASHBOARD_RECENT_TX_LIMIT)
   }, [txQuery.data])
   const [cachedRecentTransactions, setCachedRecentTransactions] = useState<DashboardTransaction[]>([])
+  const [txCacheHydrated, setTxCacheHydrated] = useState(false)
   const recentTransactions = queryRecent.length > 0 ? queryRecent : cachedRecentTransactions
   const hasAnyTransactionData = recentTransactions.length > 0
-  const loadingTransactions = txQuery.isPending && !hasAnyTransactionData
+  const loadingTransactions =
+    txQuery.isPending && !hasAnyTransactionData && txCacheHydrated
   const hasAttemptedLoad = txQuery.isFetched || recentTransactions.length > 0
   const lastStableBalanceTextRef = useRef<Record<string, string>>({})
   /** Recent list + "All" row: reduce scroll end padding so the card sits closer to the tab bar. */
@@ -265,7 +261,9 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
         // Ignore malformed/expired cache.
       }
     }
-    void loadCachedRecent()
+    void loadCachedRecent().finally(() => {
+      if (mounted) setTxCacheHydrated(true)
+    })
     return () => {
       mounted = false
     }
@@ -363,10 +361,12 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const balanceRaw = (balances as Record<string, string | undefined>)[selectedCurrency]
   const hasBalanceForSelectedCurrency = typeof balanceRaw === 'string' && balanceRaw.trim().length > 0
   const balance = hasBalanceForSelectedCurrency ? parseFloat(balanceRaw as string) : 0
+  const isWalletBalanceCurrency = selectedCurrency === 'USD' || selectedCurrency === 'EUR'
+  // Snapshot first; $0.00 when balance is truly zero or server says wallet is empty (new user).
   const canRenderNumericBalance =
     hasResolvedBalance &&
-    hasBalanceForSelectedCurrency &&
-    (hasAuthoritativeBalance || hasDefinitiveEmptyBalance || Math.abs(balance) > 1e-9)
+    (hasBalanceForSelectedCurrency ||
+      (hasDefinitiveEmptyBalance && isWalletBalanceCurrency))
   const resolvedBalanceText = canRenderNumericBalance
     ? formatBalanceDisplay(balance, selectedCurrency)
     : null
@@ -379,7 +379,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
       lastStableBalanceTextRef.current[selectedCurrency] ??
       null
 
-  const shouldShowBalanceSkeleton = balanceVisible && !visibleBalanceText
+  const shouldShowBalanceSkeleton = balanceVisible && !hasResolvedBalance
 
   /** Only after `userProfile` is loaded: `isTier1Complete(undefined)` is false and would flash the banner. */
   const showVerifyIdentityBanner =
@@ -746,7 +746,10 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                 void syncChainLedgerIfDue(true).then((inserted) => {
                   if (inserted) void txQuery.refetch()
                 })
-                await Promise.all([refreshBalances(true), txQuery.refetch()])
+                await Promise.all([
+                  refreshBalances(true),
+                  txQuery.refetch(),
+                ])
               } catch (error) {
                 console.error('Error refreshing dashboard:', error)
               } finally {

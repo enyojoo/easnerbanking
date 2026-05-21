@@ -90,7 +90,11 @@ const names = new Set([
   ...Object.keys(pkg.devDependencies || {}),
 ])
 
+/** Keep mobile on SDK-pinned React; do not symlink the root workspace copies. */
+const SKIP_LINK = new Set(['react', 'react-dom', 'react-native'])
+
 for (const name of names) {
+  if (SKIP_LINK.has(name)) continue
   if (name.startsWith('@')) {
     const scope = name.split('/')[0]
     linkDep(scope)

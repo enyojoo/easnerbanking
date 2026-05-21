@@ -8,13 +8,17 @@ import { NOAH_SCOPE_INDIVIDUAL_HEADERS } from './apiClient'
 
 export const BACKGROUND_TASK_IDENTIFIER = 'background-task'
 
-const BALANCE_SNAPSHOT_KEY_PREFIX = 'easner_wallet_balances_snapshot_v1_'
+import { isDefinitiveEmptyBalanceResponse } from './wallet-balance-display'
+import { BALANCE_SNAPSHOT_KEY_PREFIX } from './wallet-balance-snapshot'
+
 const DASHBOARD_RECENT_TX_CACHE_KEY_PREFIX = 'easner_dashboard_recent_tx_'
 const TRANSACTIONS_CACHE_KEY_PREFIX = 'easner_transactions_screen_list_'
 
 type BalanceEnvelope = {
   USD?: string
   EUR?: string
+  source?: string
+  detail?: string
 }
 
 type TransactionsEnvelope = {
@@ -40,14 +44,21 @@ async function refreshBackgroundSnapshots(): Promise<boolean> {
   const now = Date.now()
 
   if (balancesResult.status === 'fulfilled') {
-    writes.push([
-      `${BALANCE_SNAPSHOT_KEY_PREFIX}${userId}`,
-      JSON.stringify({
-        USD: String(balancesResult.value?.USD ?? '0'),
-        EUR: String(balancesResult.value?.EUR ?? '0'),
-        ts: now,
-      }),
-    ])
+    const body = balancesResult.value
+    const source = body?.source
+    const detail = body?.detail
+    const authoritative = Boolean(source && source !== 'none')
+    const definitiveEmpty = isDefinitiveEmptyBalanceResponse(source, detail)
+    if (authoritative || definitiveEmpty) {
+      writes.push([
+        `${BALANCE_SNAPSHOT_KEY_PREFIX}${userId}`,
+        JSON.stringify({
+          USD: String(body?.USD ?? '0'),
+          EUR: String(body?.EUR ?? '0'),
+          ts: now,
+        }),
+      ])
+    }
   }
 
   if (transactionsResult.status === 'fulfilled') {

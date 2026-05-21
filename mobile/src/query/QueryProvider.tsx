@@ -105,16 +105,9 @@ function ForegroundResumeRefresher({ children }: { children: React.ReactNode }) 
       if (now - lastRefreshAtRef.current < MIN_INTERVAL_MS) return
       lastRefreshAtRef.current = now
 
-      // Keep home data fresh after long idle: force a background refresh pass
-      // for wallets + transactions right when the app becomes active/unlocked.
-      void qc.invalidateQueries({
-        queryKey: qk.wallets.root(scope),
-        refetchType: 'all',
-      })
-      void qc.invalidateQueries({
-        queryKey: qk.transactions.root(scope),
-        refetchType: 'all',
-      })
+      // Soft refresh: keep showing cached balances/transactions while refetching.
+      void qc.refetchQueries({ queryKey: qk.wallets.root(scope), type: 'active' })
+      void qc.refetchQueries({ queryKey: qk.transactions.root(scope), type: 'active' })
     }, [isReady, scope, user?.id])
 
   React.useEffect(() => {

@@ -7,7 +7,6 @@
     "orientation": "portrait",
     "icon": "./assets/icons/ios-light.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.easner.mobile",
@@ -42,7 +41,6 @@
         "backgroundColor": "#007ACC",
         "monochromeImage": "./assets/icons/adaptive-icon.png"
       },
-      "edgeToEdgeEnabled": true,
       "package": "com.easner.mobile",
       "permissions": [
         "android.permission.POST_NOTIFICATIONS",
