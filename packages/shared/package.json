@@ -14,6 +14,11 @@
       "import": "./src/verified-identity.ts",
       "require": "./src/verified-identity.ts",
       "types": "./src/verified-identity.ts"
+    },
+    "./warm-flags": {
+      "import": "./src/flags/warm-flags.native.ts",
+      "require": "./src/flags/warm-flags.native.ts",
+      "types": "./src/flags/warm-flags.native.ts"
     }
   },
   "scripts": {

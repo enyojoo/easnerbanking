@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
-    "postinstall": "node scripts/linkWorkspaceDeps.js",
-    "eas-build-pre-install": "cd .. && npm install && cd mobile && node scripts/linkWorkspaceDeps.js",
+    "postinstall": "node -e \"if(process.env.EAS_BUILD!=='true'){require('child_process').execSync('node scripts/linkWorkspaceDeps.js',{stdio:'inherit'})}\"",
+    "eas-build-pre-install": "cd .. && npm ci --ignore-scripts",
     "eas-build-post-install": "node scripts/linkWorkspaceDeps.js && node scripts/syncHoistedScope.js @supabase",
     "start": "node scripts/expo-cli.cjs start",
     "android": "node scripts/expo-cli.cjs run:android",
