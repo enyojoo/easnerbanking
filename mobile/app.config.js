@@ -160,7 +160,11 @@ module.exports = ({ config }) => {
           'Easner uses the microphone when you record or send audio.',
       },
     },
-    plugins: [...(config.plugins || []), ...intercomPlugins],
+    plugins: [
+      ...(config.plugins || []),
+      './plugins/withHermesCompilerPath.js',
+      ...intercomPlugins,
+    ],
     extra: {
       ...config.extra,
       supabaseUrl,
