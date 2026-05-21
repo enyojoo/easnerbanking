@@ -108,7 +108,7 @@ export async function resolvePayInForBusiness(
   const turnkey = await getTurnkeyDepositAddressesForBusiness(admin, businessId)
   const walletForInvoice =
     code === "EUR" ? turnkey.EUR : code === "USD" || code === "GBP" ? turnkey.USD : turnkey.USD
-  const walletAddress = walletForInvoice.address
+  const walletAddress = walletForInvoice.ownerAddress
   const walletMemo = walletForInvoice.memo
 
   return buildPayInAccountsFromSources({

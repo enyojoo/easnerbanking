@@ -1,4 +1,7 @@
 import Expo
+// @generated begin Intercom header - expo prebuild (DO NOT MODIFY) sync-f6fd06e08d30c2c66260b72f45072d393b20a2dc
+import intercom_react_native
+// @generated end Intercom header
 import React
 import ReactAppDependencyProvider
 

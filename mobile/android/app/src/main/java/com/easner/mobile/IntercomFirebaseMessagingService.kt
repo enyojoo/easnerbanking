@@ -1,10 +1,10 @@
 package com.easner.mobile
 
-import com.google.firebase.messaging.FirebaseMessagingService
+import expo.modules.notifications.service.ExpoFirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.intercom.reactnative.IntercomModule
 
-class IntercomFirebaseMessagingService : FirebaseMessagingService() {
+class IntercomFirebaseMessagingService : ExpoFirebaseMessagingService() {
 
     override fun onNewToken(refreshedToken: String) {
         IntercomModule.sendTokenToIntercom(application, refreshedToken)

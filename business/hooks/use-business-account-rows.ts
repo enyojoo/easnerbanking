@@ -70,7 +70,8 @@ export function useBusinessAccountRows() {
   )
 
   const hasStablecoinDeposits = Boolean(
-    walletQuery.data?.deposits?.USD?.address?.trim() || walletQuery.data?.deposits?.EUR?.address?.trim(),
+    walletQuery.data?.deposits?.USD?.ownerAddress?.trim() ||
+      walletQuery.data?.deposits?.EUR?.ownerAddress?.trim(),
   )
 
   const vaCurrencies = useMemo(() => {
@@ -144,13 +145,13 @@ export function useBusinessAccountRows() {
 
   const stablecoinDeposit = useMemo(
     () => ({
-      USD: canDisplayFinancialData ? String(walletQuery.data?.deposits?.USD?.address ?? "") : "",
-      EUR: canDisplayFinancialData ? String(walletQuery.data?.deposits?.EUR?.address ?? "") : "",
+      USD: canDisplayFinancialData ? String(walletQuery.data?.deposits?.USD?.ownerAddress ?? "") : "",
+      EUR: canDisplayFinancialData ? String(walletQuery.data?.deposits?.EUR?.ownerAddress ?? "") : "",
     }),
     [
       canDisplayFinancialData,
-      walletQuery.data?.deposits?.EUR?.address,
-      walletQuery.data?.deposits?.USD?.address,
+      walletQuery.data?.deposits?.EUR?.ownerAddress,
+      walletQuery.data?.deposits?.USD?.ownerAddress,
     ],
   )
 

@@ -10,6 +10,7 @@
     "android": "node scripts/expo-cli.cjs run:android",
     "ios": "node scripts/expo-cli.cjs run:ios",
     "web": "node scripts/expo-cli.cjs start --web",
+    "prebuild": "node scripts/expo-cli.cjs prebuild",
     "build:android": "npx eas-cli build --platform android",
     "build:android:dev": "npx eas-cli build --profile development --platform android",
     "build:ios": "npx eas-cli build --platform ios",

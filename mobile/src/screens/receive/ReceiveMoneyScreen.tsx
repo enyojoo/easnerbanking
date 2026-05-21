@@ -81,10 +81,10 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
 
   const depLine = currency === 'USD' ? depositQuery.data?.USD : depositQuery.data?.EUR
   const turnkeyDepositAddress =
-    depLine?.address &&
-    depLine.address !== 'Loading...' &&
-    depLine.address !== 'Wallet address not available'
-      ? depLine.address.trim()
+    depLine?.ownerAddress &&
+    depLine.ownerAddress !== 'Loading...' &&
+    depLine.ownerAddress !== 'Wallet address not available'
+      ? depLine.ownerAddress.trim()
       : null
   const turnkeyDepositMemo = depLine?.memo?.trim() ? depLine.memo : null
 

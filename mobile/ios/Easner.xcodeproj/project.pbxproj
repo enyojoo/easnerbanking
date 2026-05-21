@@ -147,6 +147,7 @@
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
 				3E73D4F9E6057791A04646FA /* [CP] Embed Pods Frameworks */,
+				3AEA09A234FF405DBDD38DBB /* [Expo Dev Launcher] Strip Local Network Keys for Release */,
 			);
 			buildRules = (
 			);
@@ -342,6 +343,54 @@
 			shellPath = /bin/sh;
 			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-Easner/expo-configure-project.sh\"\n";
 		};
+		3AEA09A234FF405DBDD38DBB /* [Expo Dev Launcher] Strip Local Network Keys for Release */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			name = "[Expo Dev Launcher] Strip Local Network Keys for Release";
+			inputPaths = (
+			);
+			outputPaths = (
+			);
+			shellPath = /bin/sh;
+			shellScript = "# Strip dev-launcher-specific local network permission keys from non-Debug builds
+# This only removes _expo._tcp Bonjour services and the dev-launcher usage description.
+# Other Bonjour services and custom descriptions are preserved for production use.
+
+if [ \"$CONFIGURATION\" != \"Debug\" ]; then
+  PLIST_PATH=\"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"
+  if [ -f \"$PLIST_PATH\" ]; then
+    # Check if NSBonjourServices exists
+    if /usr/libexec/PlistBuddy -c \"Print :NSBonjourServices\" \"$PLIST_PATH\" >/dev/null 2>&1; then
+      # Get the count of services
+      COUNT=$(/usr/libexec/PlistBuddy -c \"Print :NSBonjourServices\" \"$PLIST_PATH\" 2>/dev/null | grep \"^    \" | wc -l | tr -d ' ')
+
+      # Remove _expo._tcp
+      for ((i=COUNT-1; i>=0; i--)); do
+        SERVICE=$(/usr/libexec/PlistBuddy -c \"Print :NSBonjourServices:$i\" \"$PLIST_PATH\" 2>/dev/null || echo \"\")
+        if echo \"$SERVICE\" | grep -q \"_expo._tcp\"; then
+          /usr/libexec/PlistBuddy -c \"Delete :NSBonjourServices:$i\" \"$PLIST_PATH\" 2>/dev/null || true
+        fi
+      done
+
+      # If the array is now empty, remove it entirely
+      REMAINING=$(/usr/libexec/PlistBuddy -c \"Print :NSBonjourServices\" \"$PLIST_PATH\" 2>/dev/null | grep \"^    \" | wc -l | tr -d ' ')
+      if [ \"$REMAINING\" -eq \"0\" ]; then
+        /usr/libexec/PlistBuddy -c \"Delete :NSBonjourServices\" \"$PLIST_PATH\" 2>/dev/null || true
+      fi
+    fi
+
+    # Only delete the description if it matches the dev-launcher default text
+    DESC=$(/usr/libexec/PlistBuddy -c \"Print :NSLocalNetworkUsageDescription\" \"$PLIST_PATH\" 2>/dev/null || echo \"\")
+    if echo \"$DESC\" | grep -q \"Expo Dev Launcher\"; then
+      /usr/libexec/PlistBuddy -c \"Delete :NSLocalNetworkUsageDescription\" \"$PLIST_PATH\" 2>/dev/null || true
+    fi
+  fi
+fi
+";
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -384,11 +433,11 @@
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = com.easner.mobile;
-				PRODUCT_NAME = Easner;
+				PRODUCT_NAME = "Easner";
 				SWIFT_OBJC_BRIDGING_HEADER = "Easner/Easner-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1";
 				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Debug;
@@ -415,10 +464,10 @@
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
 				PRODUCT_BUNDLE_IDENTIFIER = com.easner.mobile;
-				PRODUCT_NAME = Easner;
+				PRODUCT_NAME = "Easner";
 				SWIFT_OBJC_BRIDGING_HEADER = "Easner/Easner-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1";
 				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Release;
