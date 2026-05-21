@@ -9,6 +9,7 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": false,
+      "deploymentTarget": "16.4",
       "bundleIdentifier": "com.easner.mobile",
       "icon": {
         "light": "./assets/icons/ios-light.png",

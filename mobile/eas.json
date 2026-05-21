@@ -7,11 +7,15 @@
     "base": {
       "node": "22.14.0",
       "env": {
-        "NPM_CONFIG_IGNORE_SCRIPTS": "true"
+        "NPM_CONFIG_IGNORE_SCRIPTS": "true",
+        "EAS_BUILD": "true"
       }
     },
     "development": {
       "extends": "base",
+      "env": {
+        "NODE_ENV": "development"
+      },
       "developmentClient": true,
       "distribution": "internal",
       "android": {
@@ -20,6 +24,9 @@
     },
     "preview": {
       "extends": "base",
+      "env": {
+        "NODE_ENV": "production"
+      },
       "distribution": "internal",
       "android": {
         "buildType": "apk"
@@ -27,6 +34,9 @@
     },
     "production": {
       "extends": "base",
+      "env": {
+        "NODE_ENV": "production"
+      },
       "android": {
         "buildType": "app-bundle",
         "autoIncrement": true
