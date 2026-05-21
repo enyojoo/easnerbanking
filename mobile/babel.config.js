@@ -12,10 +12,6 @@ module.exports = function (api) {
           alias: {
             // Monorepo: shared package source (not only root node_modules).
             '@easner/shared': path.resolve(__dirname, '../packages/shared'),
-            '@easner/shared/warm-flags': path.resolve(
-              __dirname,
-              '../packages/shared/src/flags/warm-flags.native.ts',
-            ),
             // @noble/hashes: do not alias here — subpath imports like `@noble/hashes/pbkdf2.js`
             // must resolve via package `exports` (see mobile/metro.config.js extraNodeModules).
           },

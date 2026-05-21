@@ -4,8 +4,8 @@
   "main": "index.ts",
   "scripts": {
     "postinstall": "node -e \"if(process.env.EAS_BUILD!=='true'){require('child_process').execSync('node scripts/linkWorkspaceDeps.js',{stdio:'inherit'})}\"",
-    "eas-build-pre-install": "cd .. && npm ci --ignore-scripts",
-    "eas-build-post-install": "node scripts/linkWorkspaceDeps.js && node scripts/syncHoistedScope.js @supabase",
+    "eas-build-pre-install": "cd .. && npm ci --ignore-scripts --workspace=easner-mobile --workspace=@easner/shared --include-workspace-root",
+    "eas-build-post-install": "cd .. && npx patch-package && cd mobile && node scripts/linkWorkspaceDeps.js && node scripts/syncHoistedScope.js @supabase",
     "start": "node scripts/expo-cli.cjs start",
     "android": "node scripts/expo-cli.cjs run:android",
     "ios": "node scripts/expo-cli.cjs run:ios",

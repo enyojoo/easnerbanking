@@ -34,8 +34,11 @@ config.resolver.nodeModulesPaths = [
   path.resolve(monorepoRoot, 'node_modules'),
 ]
 
+const sharedRoot = path.resolve(monorepoRoot, 'packages/shared')
 const extraNodeModules = {
-  '@easner/shared': path.resolve(monorepoRoot, 'packages/shared'),
+  '@easner/shared': sharedRoot,
+  // Metro extraNodeModules points at the package dir, not package.json exports subpaths.
+  '@easner/shared/warm-flags': path.join(sharedRoot, 'src/flags/warm-flags.native.ts'),
 }
 
 // EAS monorepo: hoisted deps may only exist under ../node_modules; force resolution if present.

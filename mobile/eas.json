@@ -4,8 +4,14 @@
     "appVersionSource": "remote"
   },
   "build": {
-    "development": {
+    "base": {
       "node": "22.14.0",
+      "env": {
+        "NPM_CONFIG_IGNORE_SCRIPTS": "true"
+      }
+    },
+    "development": {
+      "extends": "base",
       "developmentClient": true,
       "distribution": "internal",
       "android": {
@@ -13,14 +19,14 @@
       }
     },
     "preview": {
-      "node": "22.14.0",
+      "extends": "base",
       "distribution": "internal",
       "android": {
         "buildType": "apk"
       }
     },
     "production": {
-      "node": "22.14.0",
+      "extends": "base",
       "android": {
         "buildType": "app-bundle",
         "autoIncrement": true

@@ -31,12 +31,12 @@ function ensureRootInstall() {
   console.warn('[syncHoistedScope] missing', src, '— running npm install at repo root')
   try {
     if (fs.existsSync(lock)) {
-      execSync('npm ci', { cwd: rootDir, stdio: 'inherit' })
+      execSync('npm ci --ignore-scripts', { cwd: rootDir, stdio: 'inherit' })
     } else {
-      execSync('npm install', { cwd: rootDir, stdio: 'inherit' })
+      execSync('npm install --ignore-scripts', { cwd: rootDir, stdio: 'inherit' })
     }
   } catch {
-    execSync('npm install', { cwd: rootDir, stdio: 'inherit' })
+    execSync('npm install --ignore-scripts', { cwd: rootDir, stdio: 'inherit' })
   }
 }
 
@@ -78,7 +78,7 @@ if (scope === '@supabase') {
   const marker = path.join(dest, 'supabase-js', 'package.json')
   if (!fs.existsSync(marker)) {
     console.warn('[syncHoistedScope] supabase-js missing after copy; refreshing root install')
-    execSync('npm install', { cwd: rootDir, stdio: 'inherit' })
+    execSync('npm install --ignore-scripts', { cwd: rootDir, stdio: 'inherit' })
     const fromJs = path.join(rootDir, 'node_modules', '@supabase', 'supabase-js')
     if (fs.existsSync(fromJs)) {
       let realJs = fromJs

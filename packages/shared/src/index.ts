@@ -133,3 +133,4 @@ export type {
   VerifiedCountryRef,
   VerifiedIdentityPayload,
 } from "./verified-identity"
+export { warmBundledFlagCache } from "./flags/warm-flags.native"
