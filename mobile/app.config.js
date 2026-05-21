@@ -164,6 +164,7 @@ module.exports = ({ config }) => {
       ...(config.plugins || []),
       './plugins/withHermesCompilerPath.js',
       './plugins/withInternalExpoImport.js',
+      './plugins/withWriteExternalStorageMaxSdk.js',
       ...intercomPlugins,
     ],
     extra: {
