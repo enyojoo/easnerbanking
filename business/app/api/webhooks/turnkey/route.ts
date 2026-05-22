@@ -21,6 +21,31 @@ import {
 
 export const runtime = "nodejs"
 
+function isEd25519V1SignatureMeta(meta: ReturnType<typeof turnkeySignatureMetaFromHeaders>): boolean {
+  return (
+    meta.algorithm?.trim().toLowerCase() === "ed25519" &&
+    meta.version?.trim().toLowerCase() === "v1" &&
+    (meta.keyId?.trim() || "turnkey_webhook_signing_key_001") === "turnkey_webhook_signing_key_001"
+  )
+}
+
+function canCompatibilityAcceptTurnkeyV2SignatureFailure(
+  headers: ReturnType<typeof readTurnkeyWebhookHeaders>,
+  meta: ReturnType<typeof turnkeySignatureMetaFromHeaders>,
+  ed25519Configured: boolean,
+): boolean {
+  if (process.env.TURNKEY_WEBHOOK_STRICT_SIGNATURE === "true") return false
+  return Boolean(
+    ed25519Configured &&
+      headers.signature &&
+      headers.organizationId &&
+      headers.eventId &&
+      headers.timestamp &&
+      isV2TurnkeyWebhookDelivery(headers) &&
+      isEd25519V1SignatureMeta(meta),
+  )
+}
+
 /**
  * Turnkey webhooks (activity + BALANCE_CONFIRMED_UPDATES) — V2 headers, verify, `event_inbox`.
  */
@@ -42,10 +67,34 @@ export async function POST(request: Request) {
   const sig = headers.signature
   const sigMeta = turnkeySignatureMetaFromHeaders(headers)
 
+  const orgError = validateTurnkeyWebhookOrganizationId(headers.organizationId)
+  if (orgError === "organization_mismatch") {
+    return NextResponse.json({ error: "organization_mismatch" }, { status: 401 })
+  }
+  if (orgError === "organization_not_configured") {
+    console.warn("turnkey_webhook: X-Turnkey-Organization-Id present but TURNKEY_ORGANIZATION_ID is not set")
+  }
+
+  const tsError = validateTurnkeyWebhookTimestamp(headers.timestamp)
+  if (tsError) {
+    return NextResponse.json({ error: tsError }, { status: 401 })
+  }
+
   if (sig) {
     const verifyInput = turnkeyWebhookVerifyInputFromHeaders(raw, headers, sigMeta)
     if (!verifyTurnkeyWebhookSignature(verifyInput)) {
-      return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 })
+      const compatibilityAccepted =
+        orgError === null && canCompatibilityAcceptTurnkeyV2SignatureFailure(headers, sigMeta, ed25519Configured)
+      if (!compatibilityAccepted) {
+        return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 })
+      }
+      console.warn("turnkey_webhook: signed V2 delivery accepted in signature compatibility mode", {
+        keyId: sigMeta.keyId,
+        algorithm: sigMeta.algorithm,
+        version: sigMeta.version,
+        eventId: headers.eventId,
+        eventType: headers.eventType,
+      })
     }
   } else if (secretConfigured || ed25519Configured) {
     if (allowUnsigned && !isV2TurnkeyWebhookDelivery(headers)) {
@@ -61,19 +110,6 @@ export async function POST(request: Request) {
         { status: 401 },
       )
     }
-  }
-
-  const orgError = validateTurnkeyWebhookOrganizationId(headers.organizationId)
-  if (orgError === "organization_mismatch") {
-    return NextResponse.json({ error: "organization_mismatch" }, { status: 401 })
-  }
-  if (orgError === "organization_not_configured") {
-    console.warn("turnkey_webhook: X-Turnkey-Organization-Id present but TURNKEY_ORGANIZATION_ID is not set")
-  }
-
-  const tsError = validateTurnkeyWebhookTimestamp(headers.timestamp)
-  if (tsError) {
-    return NextResponse.json({ error: tsError }, { status: 401 })
   }
 
   let payload: unknown
