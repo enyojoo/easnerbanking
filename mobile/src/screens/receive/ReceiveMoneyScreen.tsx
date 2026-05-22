@@ -13,14 +13,16 @@ import {
 } from 'react-native'
 import {
   AlertTriangle,
+  Landmark,
   ArrowLeft,
   ArrowRight,
   Check,
   Copy,
+  Info,
   Share2,
   ShieldCheck,
+  Wallet,
 } from 'lucide-react-native'
-import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -30,7 +32,7 @@ import { colors, shadows, surfaceFrameStyle, surfaceChromeCircleStyle, textStyle
 import { ripple } from '../../lib/androidRipple'
 import { useToast } from '../../components/ToastProvider'
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
-import { EasnerAlertSheet } from '../../components/premium'
+import { EasnerAlertSheet, PremiumModalSheet } from '../../components/premium'
 import { getApiBaseUrl } from '../../lib/apiClient'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -58,6 +60,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const [creatingAccounts, setCreatingAccounts] = useState(false)
   const [accountCreationError, setAccountCreationError] = useState<string | null>(null)
   const [tosTermsSheetMessage, setTosTermsSheetMessage] = useState<string | null>(null)
+  const [aboutSheetOpen, setAboutSheetOpen] = useState(false)
 
   const currency = ((route.params as any)?.currency || 'USD') as 'USD' | 'EUR'
   const supportsStablecoins = currency === 'USD' || currency === 'EUR'
@@ -408,6 +411,38 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   }
 
   const stablecoinData = getStablecoinAddress()
+  const stablecoinName = currency.toLowerCase() === 'usd' ? 'USDC' : 'EURC'
+  const activePaymentKind = activeTab === 'bank' ? 'account' : 'address'
+
+  const aboutSheetTitle =
+    activeTab === 'bank'
+      ? `About your ${currency} Account`
+      : `About your ${stablecoinName} Address`
+  const aboutSheetIntro =
+    activeTab === 'bank'
+      ? `Please, take note of the following when sending money to your ${currency} account:`
+      : `Please, take note of the following when sending ${stablecoinName} to your address:`
+
+  const aboutPaymentNotes = useMemo(() => {
+    if (activeTab === 'bank') {
+      return currency === 'USD'
+        ? [
+            'Only send ACH or Fedwire.',
+            'SWIFT is not supported.',
+            'Processing time: within a few minutes and up to 48 hours.',
+          ]
+        : [
+            'Only send SEPA and SEPA Instant.',
+            'Processing time: within a few minutes and up to 48 hours.',
+          ]
+    }
+
+    return [
+      `Only send ${stablecoinName} on Solana to this address.`,
+      'Sending other assets or networks may result in permanent loss.',
+      'Processing time: within seconds.',
+    ]
+  }, [activeTab, currency, stablecoinName])
 
   // Handle manual account creation (fallback if automatic creation didn't trigger)
   const handleCreateAccounts = async () => {
@@ -502,6 +537,37 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
             <Copy size={18} color={colors.text.secondary} strokeWidth={2} />
           )}
         </View>
+      </Pressable>
+    </View>
+  )
+
+  const renderDetailActions = () => (
+    <View style={styles.detailActionsRow}>
+      <Pressable
+        android_ripple={ripple.neutral}
+        style={styles.detailActionButton}
+        onPress={handleShare}
+        accessibilityRole="button"
+        accessibilityLabel={`Share ${activePaymentKind} detail`}
+      >
+        <Share2 size={20} color={colors.primary.main} strokeWidth={2} />
+        <Text style={styles.detailActionText}>Share Detail</Text>
+      </Pressable>
+
+      <Pressable
+        android_ripple={ripple.neutral}
+        style={styles.detailActionButton}
+        onPress={async () => {
+          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+          setAboutSheetOpen(true)
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={`About ${activePaymentKind}`}
+      >
+        <Info size={20} color={colors.primary.main} strokeWidth={2} />
+        <Text style={styles.detailActionText}>
+          {activeTab === 'bank' ? 'About Account' : 'About Address'}
+        </Text>
       </Pressable>
     </View>
   )
@@ -615,38 +681,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                       </>
                     </View>
 
-                    {/* Share Button */}
-                    <Pressable
-                     android_ripple={ripple.neutral}
-                      style={styles.shareButton}
-                      onPress={handleShare} >
-                      <Share2 size={20} color={colors.primary.main} strokeWidth={2} />
-                      <Text style={styles.shareButtonText}>Share Account Details</Text>
-                    </Pressable>
-
-                    {/* Payment Instructions */}
-                    <View style={styles.instructionsContainer}>
-                      <Text style={styles.instructionsTitle}>Payment Instructions</Text>
-                      {currency === 'USD' ? (
-                        <Text style={styles.instructionsText}>
-                          • Only send ACH or domestic US Wire{'\n'}
-                          • SWIFT is NOT supported{'\n'}
-                          • Receive USD from your own bank app or any business{'\n'}
-                          • Non-US residents: P2P payments must be under $4,000{'\n'}
-                          • Unlimited transactions for US residents{'\n'}
-                          • Processing time: within 12 - 48 hours
-                        </Text>
-                      ) : (
-                        <Text style={styles.instructionsText}>
-                          • Only send SEPA transfers{'\n'}
-                          • SWIFT is NOT supported{'\n'}
-                          • Receive EUR from your own bank app or any business{'\n'}
-                          • SEPA zone only (Single Euro Payments Area){'\n'}
-                          • Include your name or reference in the transfer note{'\n'}
-                          • Processing time: 1-3 business days
-                        </Text>
-                      )}
-                    </View>
+                    {renderDetailActions()}
                   </>
                 ) : vaFetched ? (
                   /* Show KYC notice only when:
@@ -752,36 +787,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                       )}
                     </View>
 
-                    {/* Share Button */}
-                    <Pressable
-                     android_ripple={ripple.neutral}
-                      style={styles.shareButton}
-                      onPress={handleShare} >
-                      <Share2 size={20} color={colors.primary.main} strokeWidth={2} />
-                      <Text style={styles.shareButtonText}>
-                        Share {currency.toLowerCase() === 'usd' ? 'USDC' : 'EURC'} Details
-                      </Text>
-                    </Pressable>
-
-                    {/* Instructions */}
-                    <View style={styles.instructionsContainer}>
-                      <Text style={styles.instructionsTitle}>Payment Instructions</Text>
-                      {currency.toLowerCase() === 'usd' ? (
-                        <Text style={styles.instructionsText}>
-                          • Only send USDC on Solana to this address{'\n'}
-                          • Sending unsupported assets will be lost{'\n'}
-                          • Ensure amount is above 1 USDC{'\n'}
-                          • Processing time: within seconds
-                        </Text>
-                      ) : (
-                        <Text style={styles.instructionsText}>
-                          • Only send EURC on Solana to this address{'\n'}
-                          • Sending unsupported assets will be lost{'\n'}
-                          • Ensure amount is above 1 EURC{'\n'}
-                          • Processing time: within seconds
-                        </Text>
-                      )}
-                    </View>
+                    {renderDetailActions()}
                   </>
                 ) : depositFetched ? (
                   /* Show KYC notice only when:
@@ -832,6 +838,38 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
           </View>
         </ScrollView>
       </View>
+
+      <PremiumModalSheet
+        visible={aboutSheetOpen}
+        onRequestClose={() => setAboutSheetOpen(false)}
+      >
+        <View style={styles.aboutSheetContent}>
+          <View style={styles.aboutSheetHeader}>
+            <View style={styles.aboutSheetIcon}>
+              {activeTab === 'bank' ? (
+                <Landmark size={22} color={colors.primary.main} strokeWidth={2} />
+              ) : (
+                <Wallet size={22} color={colors.primary.main} strokeWidth={2} />
+              )}
+            </View>
+            <Text style={styles.aboutSheetTitle}>{aboutSheetTitle}</Text>
+          </View>
+          <Text style={styles.aboutSheetIntro}>{aboutSheetIntro}</Text>
+
+          <ScrollView
+            style={styles.aboutSheetScroll}
+            contentContainerStyle={styles.aboutSheetScrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {aboutPaymentNotes.map((note) => (
+              <View key={note} style={styles.aboutNoteRow}>
+                <View style={styles.aboutNoteDot} />
+                <Text style={styles.aboutNoteText}>{note}</Text>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      </PremiumModalSheet>
 
       <EasnerAlertSheet
         visible={tosTermsSheetMessage !== null}
@@ -969,43 +1007,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginLeft: spacing[2],
   },
-  shareButton: {
+  detailActionsRow: {
+    flexDirection: 'row',
+    gap: spacing[3],
+    marginTop: spacing[2],
+    marginBottom: spacing[4],
+  },
+  detailActionButton: {
+    flex: 1,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing[2],
     backgroundColor: colors.primary.main + '10',
     borderRadius: borderRadius.full,
-    padding: spacing[3],
-    marginBottom: spacing[4],
-    marginTop: spacing[2],
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[3],
     borderWidth: 1,
     borderColor: colors.primary.main + '30',
   },
-  shareButtonText: {
-    ...textStyles.bodyMedium,
+  detailActionText: {
+    ...textStyles.bodySmall,
     color: colors.primary.main,
     fontFamily: fontFamily.semibold,
-    marginLeft: spacing[2],
-  },
-  instructionsContainer: {
-    backgroundColor: colors.primary.main + '10',
-    borderRadius: borderRadius.xl,
-    padding: spacing[4],
-    marginBottom: spacing[5],
-    borderWidth: 0.5,
-    borderColor: colors.primary.main + '30',
-  },
-  instructionsTitle: {
-    ...textStyles.titleMedium,
-    color: colors.primary.main,
-    fontFamily: fontFamily.semibold,
-    marginBottom: spacing[2],
-  },
-  instructionsText: {
-    ...textStyles.bodyMedium,
-    color: colors.text.primary,
-    fontFamily: fontFamily.regular,
-    lineHeight: 22,
+    textAlign: 'center',
   },
   networkValueContainer: {
     flexDirection: 'row',
@@ -1167,5 +1193,61 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.regular,
     marginTop: spacing[2],
     textAlign: 'center',
+  },
+  aboutSheetContent: {
+    gap: spacing[3],
+  },
+  aboutSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+  },
+  aboutSheetIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary.main + '10',
+    borderWidth: 0.5,
+    borderColor: colors.primary.main + '30',
+  },
+  aboutSheetTitle: {
+    flex: 1,
+    ...textStyles.titleMedium,
+    color: colors.text.primary,
+    fontFamily: fontFamily.semibold,
+  },
+  aboutSheetIntro: {
+    ...textStyles.bodyMedium,
+    color: colors.text.primary,
+    lineHeight: 22,
+  },
+  aboutSheetScroll: {
+    maxHeight: 420,
+  },
+  aboutSheetScrollContent: {
+    gap: spacing[3],
+    paddingHorizontal: spacing[3],
+    paddingBottom: spacing[6],
+  },
+  aboutNoteRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing[2],
+    marginTop: spacing[1],
+  },
+  aboutNoteDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.primary.main,
+    marginTop: 8,
+  },
+  aboutNoteText: {
+    flex: 1,
+    ...textStyles.bodyMedium,
+    color: colors.text.primary,
+    lineHeight: 22,
   },
 })

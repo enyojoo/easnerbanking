@@ -12,11 +12,10 @@ import {
   ActivityIndicator,
   Keyboard,
   Platform,
+  Image,
 } from 'react-native'
-import { AvatarImage } from '../../components/AvatarImage'
 import DateTimePicker from '@react-native-community/datetimepicker'
-import { Ionicons } from '@expo/vector-icons'
-import { ArrowLeft, Calendar, CircleCheck, CircleX, Trash2 } from 'lucide-react-native'
+import { ArrowLeft, Calendar, Camera, CircleCheck, CircleX, Trash2 } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect } from '@react-navigation/native'
@@ -47,7 +46,7 @@ import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import * as ImagePicker from 'expo-image-picker'
 import { uploadProfileAvatar, PROFILE_AVATAR_MAX_BYTES } from '../../lib/profileAvatarUpload'
 import { getApiBaseUrl } from '../../lib/apiClient'
-import { avatarImageUri, bustAvatarUrl, normalizeAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
+import { avatarImageSource, bustAvatarUrl, normalizeAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { EasnerAlertSheet } from '../../components/premium'
 
@@ -103,8 +102,8 @@ function ProfileEditContent({ navigation }: NavigationProps) {
     date.setFullYear(date.getFullYear() - 25)
     return date
   })
-  const editAvatarUri = avatarImageUri(editProfileData.avatarUrl)
-  const profileAvatarUri = avatarImageUri(profileData.avatarUrl)
+  const editAvatarSource = avatarImageSource(editProfileData.avatarUrl)
+  const profileAvatarSource = avatarImageSource(profileData.avatarUrl)
 
   // Animation refs
   const headerAnim = useRef(new Animated.Value(0)).current
@@ -863,30 +862,29 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                     >
                       <View
                         style={[
-                          userAvatarStyles.circle,
                           styles.profileAvatarCircle,
                           styles.avatarEditCircle,
                           !editProfileData.avatarUrl?.trim() && styles.avatarEditCircleEmpty,
                         ]}
                       >
-                      {editAvatarUri ? (
-                          <>
-                            <AvatarImage
-                              avatarUrl={editProfileData.avatarUrl}
-                              style={userAvatarStyles.image}
-                            />
-                            <View style={styles.avatarEditPhotoOverlay} pointerEvents="none">
-                              <Ionicons name="camera" size={22} color={colors.neutral.white} />
-                            </View>
-                          </>
+                        {editAvatarSource ? (
+                          <Image
+                            source={editAvatarSource}
+                            style={styles.avatarEditImage}
+                            resizeMode="cover"
+                          />
                         ) : (
-                          <>
-                            <Text style={userAvatarStyles.initials}>{profilePhotoInitials()}</Text>
-                            <View style={styles.avatarEditPhotoOverlay} pointerEvents="none">
-                              <Ionicons name="camera" size={22} color={colors.neutral.white} />
-                            </View>
-                          </>
+                          <Text style={[userAvatarStyles.initials, styles.avatarEditInitials]}>
+                            {profilePhotoInitials()}
+                          </Text>
                         )}
+                        <View style={styles.avatarEditCameraLayer} pointerEvents="none">
+                          <Camera
+                            size={22}
+                            color={colors.neutral.white}
+                            strokeWidth={2}
+                          />
+                        </View>
                         {uploadingAvatar ? (
                           <View style={styles.avatarUploading}>
                             <ActivityIndicator color={colors.text.inverse} size="small" />
@@ -894,24 +892,19 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                         ) : null}
                       </View>
                     </Pressable>
-                  ) : null}
-                  {isEditing ? (
-                    <Text style={styles.avatarEditHint}>
-                      {editAvatarUri ? 'Tap to change photo' : 'Tap to add photo'}
-                    </Text>
-                  ) : null}
-                  {!isEditing ? (
-                    <View style={[userAvatarStyles.circle, styles.profileAvatarCircle]}>
-                      {profileAvatarUri ? (
-                        <AvatarImage
-                          avatarUrl={profileData.avatarUrl}
-                          style={userAvatarStyles.image}
+                  ) : (
+                    <View style={[styles.profileAvatarCircle, styles.avatarViewCircle]}>
+                      {profileAvatarSource ? (
+                        <Image
+                          source={profileAvatarSource}
+                          style={styles.avatarViewImage}
+                          resizeMode="cover"
                         />
                       ) : (
                         <Text style={userAvatarStyles.initials}>{profilePhotoInitials()}</Text>
                       )}
                     </View>
-                  ) : null}
+                  )}
                   <View style={styles.avatarRemoveSlot}>
                     {isEditing && editProfileData.avatarUrl?.trim() ? (
                       <Pressable
@@ -1249,30 +1242,59 @@ const styles = StyleSheet.create({
     height: PROFILE_EDIT_AVATAR_SIZE,
     borderRadius: PROFILE_EDIT_AVATAR_SIZE / 2,
   },
+  avatarViewCircle: {
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.frame.background,
+    borderWidth: 1,
+    borderColor: colors.frame.border,
+  },
+  avatarViewImage: {
+    width: '100%',
+    height: '100%',
+  },
   avatarEditTouchable: {
+    width: PROFILE_EDIT_AVATAR_SIZE,
+    height: PROFILE_EDIT_AVATAR_SIZE,
     borderRadius: PROFILE_EDIT_AVATAR_SIZE / 2,
+    overflow: 'hidden',
   },
   avatarEditCircle: {
     position: 'relative',
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.primary.main,
     borderWidth: 1,
     borderColor: colors.frame.border,
+  },
+  avatarEditImage: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 1,
+  },
+  avatarEditInitials: {
+    color: colors.neutral.white,
   },
   avatarEditCircleEmpty: {
     borderStyle: 'dashed',
     borderColor: colors.primary.main + '66',
-    backgroundColor: colors.primary.main + '0a',
+    backgroundColor: colors.primary.main,
   },
-  avatarEditPhotoOverlay: {
-    ...StyleSheet.absoluteFillObject,
+  /** Camera only — no dim layer; sits centered over the photo preview */
+  avatarEditCameraLayer: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     zIndex: 2,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    alignItems: 'center',
     justifyContent: 'center',
-  },
-  avatarEditHint: {
-    ...textStyles.labelSmall,
-    color: colors.text.secondary,
-    marginTop: spacing[1],
+    alignItems: 'center',
   },
   avatarUploading: {
     ...StyleSheet.absoluteFillObject,

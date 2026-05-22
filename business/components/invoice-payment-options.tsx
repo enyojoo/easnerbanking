@@ -11,6 +11,7 @@ import type { Invoice } from "@/lib/b2b/types"
 import { cn, formatCurrency } from "@/lib/utils"
 import { businessInfo } from "@/lib/business-info"
 import { invoicePublicViewPath } from "@/lib/invoice-public-url"
+import { getPaymentInstructions } from "@/lib/payment-instructions"
 
 interface StablecoinAccount {
   currency: string
@@ -60,52 +61,16 @@ function PaymentInstructions({
   currency: string
   type: "bank" | "stablecoin"
 }) {
-  if (type === "bank") {
-    if (currency === "USD") {
-      return (
-        <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-          <li>Only send ACH or domestic US Wire</li>
-          <li>SWIFT is NOT supported</li>
-          <li>Processing time: within 12–48 hours</li>
-        </ul>
-      )
-    }
-    if (currency === "EUR") {
-      return (
-        <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-          <li>Only send SEPA transfers</li>
-          <li>SWIFT is NOT supported</li>
-          <li>Processing time: 1–3 business days</li>
-        </ul>
-      )
-    }
-    if (currency === "GBP") {
-      return (
-        <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-          <li>Only send Faster Payments or BACS</li>
-          <li>Processing time: same day or 1–2 business days</li>
-        </ul>
-      )
-    }
-    if (currency === "NGN") {
-      return (
-        <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-          <li>Processing time: within 24 hours</li>
-        </ul>
-      )
-    }
-  }
-  if (type === "stablecoin") {
-    const stablecoin = currency === "USD" ? "USDC" : "EURC"
-    return (
-      <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-        <li>Only send {stablecoin} on the supported network to this address</li>
-        <li>Sending unsupported assets will be lost</li>
-        <li>Processing time: within seconds</li>
-      </ul>
-    )
-  }
-  return null
+  const lines = getPaymentInstructions(currency, type)
+  if (!lines.length) return null
+
+  return (
+    <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+      {lines.map((line) => (
+        <li key={line}>{line}</li>
+      ))}
+    </ul>
+  )
 }
 
 interface InvoicePaymentOptionsProps {

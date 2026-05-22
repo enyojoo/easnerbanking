@@ -6,16 +6,15 @@ export function getPaymentInstructions(
   if (type === "bank") {
     if (currency === "USD") {
       return [
-        "Only send ACH or domestic US Wire",
-        "SWIFT is NOT supported",
-        "Processing time: within 12–48 hours",
+        "Only send ACH or Fedwire.",
+        "SWIFT is not supported.",
+        "Processing time: within a few minutes and up to 48 hours.",
       ]
     }
     if (currency === "EUR") {
       return [
-        "Only send SEPA transfers",
-        "SWIFT is NOT supported",
-        "Processing time: 1–3 business days",
+        "Only send SEPA and SEPA Instant.",
+        "Processing time: within a few minutes and up to 48 hours.",
       ]
     }
     if (currency === "GBP") {
@@ -36,9 +35,9 @@ export function getPaymentInstructions(
           ? "EURC"
           : "USDC"
     return [
-      `Only send ${stablecoin} on the supported network to this address`,
-      "Sending unsupported assets will be lost",
-      "Processing time: within seconds",
+      `Only send ${stablecoin} on Solana to this address.`,
+      "Sending other assets or networks may result in permanent loss.",
+      "Processing time: within seconds.",
     ]
   }
   return []
@@ -47,8 +46,8 @@ export function getPaymentInstructions(
 /** Pass stablecoin name explicitly for send flow */
 export function getStablecoinPaymentInstructions(stablecoin: "USDC" | "USDT"): string[] {
   return [
-    `Only send ${stablecoin} on the supported network to this address`,
-    "Sending unsupported assets will be lost",
-    "Processing time: within seconds",
+    `Only send ${stablecoin} on Solana to this address.`,
+    "Sending other assets or networks may result in permanent loss.",
+    "Processing time: within seconds.",
   ]
 }

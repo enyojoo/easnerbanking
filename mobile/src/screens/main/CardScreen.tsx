@@ -8,13 +8,12 @@ import {
   Platform,
   Animated,
   useWindowDimensions,
+  Image,
 } from 'react-native'
-import { BundledImage } from '../../components/BundledImage'
 import { LinearGradient } from 'expo-linear-gradient'
-import { BlurView } from 'expo-blur'
 import * as Haptics from 'expo-haptics'
 import { Plus, Snowflake, Settings, Eye } from 'lucide-react-native'
-import Svg, { Circle } from 'react-native-svg'
+import Svg, { Circle, Path } from 'react-native-svg'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
@@ -26,13 +25,22 @@ const CARD_SPACING = spacing[1]
 
 const COMING_SOON_COPY = 'Easner Card is coming soon'
 
+type PreviewCard = {
+  id: string
+  form: 'virtual' | 'physical'
+  last4: string
+  cardholderName: string
+  expiryDate: string
+}
+
 /** Preview — single placeholder until API-backed carousel; layout stays multi-card ready. */
-const MOCK_CARDS = [
+const MOCK_CARDS: PreviewCard[] = [
   {
     id: '2',
-    form: 'physical' as const,
+    form: 'physical',
     last4: '1234',
     cardholderName: 'Jane Public',
+    expiryDate: '••/••',
   },
 ]
 
@@ -42,18 +50,33 @@ function gradientForForm(form: 'virtual' | 'physical'): [string, string, string]
     : ['#050606', '#0F1110', '#1C201E']
 }
 
-/** Light mesh — keep node count low for Fabric/Android release builds. */
 function CardPattern({ width, height }: { width: number; height: number }) {
   const dots: React.ReactNode[] = []
-  const step = 48
-  for (let y = step / 2; y < height; y += step) {
-    for (let x = step / 2; x < width; x += step) {
-      dots.push(<Circle key={`d-${x}-${y}`} cx={x} cy={y} r={1.25} fill="#FFFFFF" opacity={0.35} />)
+  const lines: React.ReactNode[] = []
+  const dotStep = 40
+  const lineStep = 60
+
+  for (let y = 2; y < height; y += dotStep) {
+    for (let x = 2; x < width; x += dotStep) {
+      dots.push(<Circle key={`d-${x}-${y}`} cx={x} cy={y} r={1.5} fill="white" />)
     }
   }
+
+  for (let x = -height; x < width; x += lineStep) {
+    lines.push(
+      <Path
+        key={`l-${x}`}
+        d={`M${x} ${height} L${x + height} 0`}
+        stroke="white"
+        strokeWidth={0.5}
+      />,
+    )
+  }
+
   return (
     <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={styles.cardPatternSvg}>
       {dots}
+      {lines}
     </Svg>
   )
 }
@@ -78,7 +101,9 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
 
   const scrollX = useRef(new Animated.Value(0)).current
   const headerAnim = useRef(new Animated.Value(0)).current
-  useCalmParallelEnterWhen(true, headerAnim)
+  const contentAnim = useRef(new Animated.Value(0)).current
+
+  useCalmParallelEnterWhen(true, headerAnim, contentAnim)
 
   const actionsComingSoon = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -130,7 +155,22 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
           ]}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.scrollInner}>
+          <Animated.View
+            style={[
+              styles.scrollInner,
+              {
+                opacity: contentAnim,
+                transform: [
+                  {
+                    translateY: contentAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [motion.screenEnterTranslateY, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
           <View style={[styles.carouselContainer, { height: CARD_HEIGHT + spacing[8] }]}>
             <Animated.ScrollView
               horizontal
@@ -168,8 +208,8 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
                       {
                         width: CARD_WIDTH,
                         marginRight: CARD_SPACING,
-                        height: CARD_HEIGHT,
                         transform: [{ scale }],
+                        height: CARD_HEIGHT,
                         opacity,
                       },
                     ]}
@@ -180,6 +220,7 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
                       end={{ x: 1, y: 1 }}
                       style={[styles.card, { width: CARD_WIDTH, height: CARD_HEIGHT }]}
                     >
+                      {card.form === 'physical' ? <View style={styles.physicalAccent} /> : null}
                       <View style={styles.patternLayer}>
                         <CardPattern width={CARD_WIDTH} height={CARD_HEIGHT} />
                       </View>
@@ -187,7 +228,7 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
                       <View style={styles.cardInner}>
                         <View style={styles.cardTopRow}>
                           <View style={styles.brandRow}>
-                            <BundledImage
+                            <Image
                               source={EASNER_CARD_ICON_SOURCE}
                               style={styles.brandIcon}
                               resizeMode="contain"
@@ -215,28 +256,15 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
                           </View>
                           <View style={[styles.metaCol, styles.metaColEnd]}>
                             <Text style={styles.metaLabel}>Expires</Text>
-                            <Text style={styles.metaValue}>••/••</Text>
+                            <Text style={styles.metaValue}>{card.expiryDate}</Text>
                           </View>
                         </View>
                       </View>
                     </LinearGradient>
 
-                    <View style={styles.comingSoonWrap} pointerEvents="auto">
-                      {Platform.OS === 'ios' ? (
-                        <BlurView
-                          intensity={8}
-                          tint="dark"
-                          style={StyleSheet.absoluteFill}
-                        />
-                      ) : null}
-                      <View
-                        style={[
-                          styles.comingSoonScrim,
-                          Platform.OS === 'android' && styles.comingSoonScrimAndroid,
-                        ]}
-                        pointerEvents="none"
-                      />
-                      <View style={styles.comingSoonTextCol} pointerEvents="none">
+                    <View style={styles.comingSoonWrap} pointerEvents="none">
+                      <View style={styles.comingSoonScrim} />
+                      <View style={styles.comingSoonTextCol}>
                         <Text style={styles.comingSoonText}>{COMING_SOON_COPY}</Text>
                       </View>
                     </View>
@@ -277,7 +305,7 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
               </Text>
             </View>
           </View>
-          </View>
+          </Animated.View>
         </ScrollView>
       </View>
     </ScreenWrapper>
@@ -333,13 +361,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cardWrapper: {
+    position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 24,
     overflow: 'hidden',
   },
   card: {
+    backgroundColor: '#0F1110',
     borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(246, 243, 235, 0.06)',
     overflow: 'hidden',
     ...Platform.select({
       ios: {
@@ -356,8 +388,21 @@ const styles = StyleSheet.create({
   cardPatternSvg: {
     opacity: 1,
   },
+  physicalAccent: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: 'rgba(15, 138, 95, 0.9)',
+    zIndex: 3,
+  },
   patternLayer: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     zIndex: 1,
     opacity: 0.1,
   },
@@ -383,7 +428,7 @@ const styles = StyleSheet.create({
   brandIcon: {
     height: 40,
     width: 40,
-    opacity: 0.95,
+    opacity: 0.9,
   },
   formBadge: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
@@ -437,24 +482,29 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
   comingSoonWrap: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     zIndex: 10,
     borderRadius: 24,
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: spacing[5],
   },
+  /** Business-style coming-soon layer: light tint so the card face remains visible. */
   comingSoonScrim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
-  },
-  /** Android BlurView often renders opaque in release — scrim only so card art stays visible. */
-  comingSoonScrimAndroid: {
-    backgroundColor: 'rgba(0, 0, 0, 0.28)',
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.78)',
   },
   comingSoonTextCol: {
     maxWidth: 280,
-    paddingHorizontal: spacing[5],
     zIndex: 2,
   },
   comingSoonText: {

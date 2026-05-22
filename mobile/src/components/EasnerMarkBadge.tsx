@@ -1,7 +1,7 @@
-import { View, StyleSheet } from 'react-native'
-import { EASNER_MARK_SOURCE } from '../lib/easnerBrand'
+import { View, StyleSheet, Image } from 'react-native'
 import { colors } from '../theme'
-import { BundledImage } from './BundledImage'
+
+const EASNER_MARK_BADGE = require('../../assets/easner-mark.png')
 
 const BADGE_SIZE = 20
 
@@ -9,7 +9,7 @@ type Props = {
   size?: number
 }
 
-/** Easetag / in-network avatar corner mark (bundled PNG, explicit size). */
+/** Corner badge on Easetag recipient avatars (bundled easner-mark.png). */
 export function EasnerMarkBadge({ size = BADGE_SIZE }: Props) {
   const radius = size / 2
   return (
@@ -23,8 +23,8 @@ export function EasnerMarkBadge({ size = BADGE_SIZE }: Props) {
         },
       ]}
     >
-      <BundledImage
-        source={EASNER_MARK_SOURCE}
+      <Image
+        source={EASNER_MARK_BADGE}
         style={{ width: size, height: size, borderRadius: radius }}
         resizeMode="cover"
       />
@@ -38,5 +38,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.primary,
     borderWidth: 2,
     borderColor: colors.background.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 })

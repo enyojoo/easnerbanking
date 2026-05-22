@@ -17,6 +17,10 @@ import { QRCodeSVG } from "qrcode.react"
 import { CurrencyFlagCircle } from "@/components/currency-flag-circle"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { TIER2_COMPLETE_PLACEHOLDER } from "@/lib/compliance-placeholders"
+import {
+  getPaymentInstructions,
+  getStablecoinPaymentInstructions,
+} from "@/lib/payment-instructions"
 
 interface CopyableFieldProps {
   label: string
@@ -57,55 +61,22 @@ function PaymentInstructions({
   /** When set (e.g. live Noah wallet), overrides USD→USDC / EUR→EURC default. */
   stablecoinToken?: string
 }) {
-  if (type === "bank") {
-    if (currency === "USD") {
-      return (
-        <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-          <li>Only send ACH or domestic US Wire</li>
-          <li>SWIFT is NOT supported</li>
-          <li>Processing time: within 12–48 hours</li>
-        </ul>
-      )
-    }
-    if (currency === "EUR") {
-      return (
-        <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-          <li>Only send SEPA transfers</li>
-          <li>SWIFT is NOT supported</li>
-          <li>Processing time: 1–3 business days</li>
-        </ul>
-      )
-    }
-    if (currency === "GBP") {
-      return (
-        <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-          <li>Only send Faster Payments or BACS</li>
-          <li>Processing time: same day or 1–2 business days</li>
-        </ul>
-      )
-    }
-    if (currency === "NGN") {
-      return (
-        <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-          <li>Processing time: within 24 hours</li>
-        </ul>
-      )
-    }
-  }
+  const lines =
+    type === "bank"
+      ? getPaymentInstructions(currency, "bank")
+      : stablecoinToken === "USDT"
+        ? getStablecoinPaymentInstructions("USDT")
+        : getPaymentInstructions(currency, "stablecoin")
 
-  if (type === "stablecoin") {
-    const stablecoin =
-      stablecoinToken ?? (currency === "USD" ? "USDC" : currency === "EUR" ? "EURC" : "USDC")
-    return (
-      <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-        <li>Only send {stablecoin} on the supported network to this address</li>
-        <li>Sending unsupported assets will be lost</li>
-        <li>Processing time: within seconds</li>
-      </ul>
-    )
-  }
+  if (!lines.length) return null
 
-  return null
+  return (
+    <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+      {lines.map((line) => (
+        <li key={line}>{line}</li>
+      ))}
+    </ul>
+  )
 }
 
 interface CurrencyDepositDialogProps {

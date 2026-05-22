@@ -27,6 +27,7 @@ function CardFace({
   const cardGradient = isPhysical
     ? "linear-gradient(140deg, #0F1110 0%, #151817 55%, #1C201E 100%)"
     : "linear-gradient(140deg, #0A0B0B 0%, #0F1110 55%, #151817 100%)"
+  const comingSoonCopy = "Easner Business Card is coming soon"
 
   return (
     <div
@@ -68,9 +69,12 @@ function CardFace({
       </div>
 
       {comingSoonOverlay && (
-        <div className="absolute inset-0 z-[6] flex flex-col items-center justify-center rounded-3xl bg-black/45 backdrop-blur-[2px] px-5 text-center">
-          <p className="max-w-[280px] text-sm font-medium leading-snug text-white sm:text-base">
-            Corporate cards will be available soon on Easner.
+        <div
+          className="pointer-events-none absolute inset-0 z-[6] flex flex-col items-center justify-center rounded-3xl bg-black/[0.78] px-5 text-center"
+          aria-hidden
+        >
+          <p className="relative z-[1] max-w-[280px] text-sm font-medium leading-snug text-white sm:text-base">
+            {comingSoonCopy}
           </p>
         </div>
       )}
@@ -134,8 +138,8 @@ function CardFace({
 const PREVIEW_PLACEHOLDER_CARD: Card = {
   id: "preview_placeholder",
   type: "debit",
-  form: "virtual",
-  last4: "0000",
+  form: "physical",
+  last4: "1234",
   fullCardNumber: "",
   cvv: "",
   status: "inactive",

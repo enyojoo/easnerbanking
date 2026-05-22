@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
-import { View, Text, StyleSheet } from 'react-native'
+import { View, Text, StyleSheet, Image as RNImage } from 'react-native'
+import { Image } from 'expo-image'
 import { EasenetSubtitleRow } from '../lib/easenetRecipientUi'
-import { normalizeAvatarUrl } from '../lib/avatarCache'
-import { CachedImage } from './CachedImage'
-import { EasnerMarkBadge } from './EasnerMarkBadge'
 import { colors, spacing, borderRadius, textStyles, fontFamily, surfaceFrameStyle } from '../theme'
+
+/** Resolved from this file so Metro always bundles the asset (same pattern as flag badges). */
+const EASNER_MARK_BADGE = require('../../assets/easner-mark.png')
 
 export type EasenetLookupProfile = {
   fullName: string
@@ -32,7 +33,7 @@ export function EasenetLookupPreview({
   titleEndAccessory,
 }: Props) {
   const row = variant === 'row'
-  const uri = normalizeAvatarUrl(profile.avatarUrl)
+  const uri = String(profile.avatarUrl || '').trim()
   const [imageFailed, setImageFailed] = useState(false)
   useEffect(() => {
     setImageFailed(false)
@@ -42,10 +43,13 @@ export function EasenetLookupPreview({
     <View style={[styles.wrap, row && styles.wrapRow]}>
       <View style={styles.avatarWrap}>
         {uri && !imageFailed ? (
-          <CachedImage
-            uri={uri}
+          <Image
+            source={{ uri }}
             style={styles.avatarImg}
             contentFit="cover"
+            cachePolicy="memory-disk"
+            recyclingKey={uri}
+            transition={0}
             onError={() => setImageFailed(true)}
           />
         ) : (
@@ -54,7 +58,7 @@ export function EasenetLookupPreview({
           </View>
         )}
         <View style={styles.markBadge}>
-          <EasnerMarkBadge />
+          <RNImage source={EASNER_MARK_BADGE} style={styles.markFill} resizeMode="cover" />
         </View>
       </View>
       <View style={styles.textCol}>
@@ -137,6 +141,20 @@ const styles = StyleSheet.create({
     right: -2,
     zIndex: 3,
     elevation: 3,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.background.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.background.primary,
+    overflow: 'hidden',
+  },
+  markFill: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
   },
   textCol: {
     flex: 1,
