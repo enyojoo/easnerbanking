@@ -1,13 +1,13 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "cd .. && NODE_OPTIONS='--disable-warning=DEP0040' npm ci --workspace=easner-business --workspace=@easner/shared --workspace=@easner/server --workspace=@easner/rate-sync --include-workspace-root",
+  "installCommand": "cd .. && NODE_OPTIONS='--no-deprecation' npm ci --workspace=easner-business --workspace=@easner/shared --workspace=@easner/server --workspace=@easner/rate-sync --include-workspace-root",
   "build": {
     "env": {
-      "NODE_OPTIONS": "--disable-warning=DEP0040"
+      "NODE_OPTIONS": "--no-deprecation"
     }
   },
   "env": {
-    "NODE_OPTIONS": "--disable-warning=DEP0040 --max-http-header-size=1048576"
+    "NODE_OPTIONS": "--no-deprecation --max-http-header-size=1048576"
   },
   "crons": [
     {
