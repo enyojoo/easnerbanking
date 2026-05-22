@@ -37,7 +37,7 @@ import {
 import { lightColors } from './src/theme/colors'
 import { isIosOnMac, MAC_INSTALLED_MOBILE_DESIGN_POINTS } from './src/lib/effective-window'
 import { supabaseConfigError } from './src/lib/supabase'
-import { warmBundledFlagCache } from '@easner/shared/warm-flags'
+import { warmBundledFlagCache } from './src/lib/warmBundledFlagCache'
 
 // Keep the splash screen visible while we load fonts
 SplashScreen.preventAutoHideAsync()
