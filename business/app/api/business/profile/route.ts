@@ -8,7 +8,6 @@ import { isEasetagGloballyAvailable } from "@/lib/easetag-global"
 import { isValidIndustryId } from "@/lib/business-industries"
 import { isAllowedBaseCurrency } from "@/lib/accounts/currency-controls"
 import { isCountryAllowedForSurface } from "@/lib/jurisdiction-country-policy"
-import { removeAllOrganizationLogoObjects } from "@/lib/organization-logo-storage"
 
 type UpdateBody = {
   businessName?: string
