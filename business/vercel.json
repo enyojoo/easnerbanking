@@ -3,11 +3,15 @@
   "installCommand": "cd .. && NODE_OPTIONS='--no-deprecation' npm ci --registry=https://registry.npmjs.org/ --no-audit --no-fund --workspace=easner-business --workspace=@easner/shared --workspace=@easner/server --workspace=@easner/rate-sync --include-workspace-root",
   "build": {
     "env": {
-      "NODE_OPTIONS": "--no-deprecation"
+      "NODE_OPTIONS": "--no-deprecation",
+      "VERCEL_PREVIEW_COMMENTS_ENABLED": "0",
+      "VERCEL_PREVIEW_COMMENTS_OPT_IN": "0"
     }
   },
   "env": {
-    "NODE_OPTIONS": "--no-deprecation --max-http-header-size=1048576"
+    "NODE_OPTIONS": "--no-deprecation --max-http-header-size=1048576",
+    "VERCEL_PREVIEW_COMMENTS_ENABLED": "0",
+    "VERCEL_PREVIEW_COMMENTS_OPT_IN": "0"
   },
   "crons": [
     {
