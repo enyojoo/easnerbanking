@@ -555,6 +555,8 @@ function TransactionsContent({ navigation }: NavigationProps) {
           await txQuery.refetch()
         }
       })()
+      // Match dashboard: refetch ledger on every focus so balance-only updates still show new rows.
+      void txQuery.refetch()
     }, [syncChainLedgerIfDue, txQuery]),
   )
 

@@ -20,6 +20,7 @@
 
 import type { QueryClient, QueryKey } from "@tanstack/react-query"
 import { qk } from "./keys"
+import { markRecentMoneyActivity } from "./polling-fallback"
 import { scopeId, type Scope } from "./scope"
 
 // Minimal Supabase client shape we rely on. Using a structural type avoids
@@ -143,6 +144,20 @@ function transactionsTableFilter(scope: Scope): string {
   return `user_id=eq.${scope.userId}`
 }
 
+/** Balance and ledger are written separately; keep transaction lists in sync when balances move. */
+function scheduleTransactionsFeedRefresh(
+  qc: QueryClient,
+  scope: Scope,
+  batcher: Batcher,
+): void {
+  const key = qk.transactions.root(scope)
+  batcher.schedule(key, () => {
+    markRecentMoneyActivity()
+    qc.invalidateQueries({ queryKey: key, refetchType: "active" })
+    qc.invalidateQueries({ queryKey: key, refetchType: "inactive" })
+  })
+}
+
 /**
  * Subscribes one multiplexed channel per scope. Returns a cleanup fn.
  * Safe to call repeatedly; callers should keep one subscription active
@@ -217,6 +232,7 @@ export function attachRealtime({
             },
           }
         })
+        scheduleTransactionsFeedRefresh(qc, scope, batcher)
       })
     },
   )
@@ -234,20 +250,7 @@ export function attachRealtime({
     () => {
       health.lastEventAt = Date.now()
       emit()
-      const key = qk.transactions.root(scope)
-      batcher.schedule(key, () => {
-        // Revalidate all active transaction consumers immediately so
-        // dashboard money in/out, recent activity, and /transactions
-        // stay in lock-step with the latest ledger write.
-        qc.invalidateQueries({
-          queryKey: key,
-          refetchType: "active",
-        })
-        qc.invalidateQueries({
-          queryKey: key,
-          refetchType: "inactive",
-        })
-      })
+      scheduleTransactionsFeedRefresh(qc, scope, batcher)
     },
   )
 
@@ -262,17 +265,7 @@ export function attachRealtime({
     () => {
       health.lastEventAt = Date.now()
       emit()
-      const key = qk.transactions.root(scope)
-      batcher.schedule(key, () => {
-        qc.invalidateQueries({
-          queryKey: key,
-          refetchType: "active",
-        })
-        qc.invalidateQueries({
-          queryKey: key,
-          refetchType: "inactive",
-        })
-      })
+      scheduleTransactionsFeedRefresh(qc, scope, batcher)
     },
   )
 

@@ -10,8 +10,8 @@ import type { Transaction } from '../../types'
  *
  * - `safePersist: true` so the last page shows immediately on cold launch
  *   (non-sensitive list metadata only; not balances).
- * - SWR window is 45s; the realtime bridge prepends new rows without a
- *   refetch, so normal browsing rarely hits the network.
+ * - SWR window is 45s; the realtime bridge invalidates this cache when
+ *   `transactions` or `wallet_balances` change so lists stay aligned with balance.
  */
 
 export type MobileTransactionRow = {

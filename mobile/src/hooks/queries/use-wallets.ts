@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { AppState, type AppStateStatus } from 'react-native'
-import { useEffect, useState } from 'react'
-import { pollingIntervalFor, qk } from '@easner/shared'
+import { useEffect, useRef, useState } from 'react'
+import { markRecentMoneyActivity, pollingIntervalFor, qk } from '@easner/shared'
 import { apiFetch } from '../../query/api-client'
 import { useScope } from '../../query/scope'
 import { NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
@@ -36,7 +36,9 @@ export function useWalletBalances() {
   }, [])
   const inForeground = appState === 'active'
   const queryKey = scope ? qk.wallets.list(scope) : (['wallets', 'disabled'] as const)
-  return useQuery({
+  const balanceSigRef = useRef<string | null>(null)
+
+  const query = useQuery({
     queryKey,
     enabled: Boolean(scope),
     queryFn: async () => {
@@ -73,4 +75,19 @@ export function useWalletBalances() {
     // Balances are sensitive — NEVER persist to disk.
     meta: { safePersist: false, freshness: 'critical' },
   })
+
+  // When balance changes from API/polling (not only Supabase realtime), refresh ledger too.
+  useEffect(() => {
+    if (!scope || !query.data) return
+    const sig = `${query.data.USD}|${query.data.EUR}`
+    const prev = balanceSigRef.current
+    balanceSigRef.current = sig
+    if (prev != null && prev !== sig) {
+      markRecentMoneyActivity()
+      void qc.invalidateQueries({ queryKey: qk.transactions.root(scope), refetchType: 'active' })
+      void qc.invalidateQueries({ queryKey: qk.transactions.root(scope), refetchType: 'inactive' })
+    }
+  }, [query.data, scope, qc])
+
+  return query
 }

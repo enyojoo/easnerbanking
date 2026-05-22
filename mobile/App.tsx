@@ -24,6 +24,11 @@ import {
   flushPendingPushNavigation,
   stashPendingPushFromNotificationData,
 } from './src/lib/pendingPushNavigation'
+import { supabase } from './src/lib/supabase'
+import {
+  isMoneyMovementPush,
+  refreshMoneyFeedsForUser,
+} from './src/query/refresh-money-feeds'
 import AppNavigator from './src/navigation/AppNavigator'
 import { PushNotificationBootstrap } from './src/components/PushNotificationBootstrap'
 import {
@@ -235,6 +240,14 @@ export default function App() {
       const receivedSubscription = pushNotificationService.addNotificationReceivedListener(
         async (notification) => {
           console.log('Notification received:', notification)
+          const data = notification.request.content.data as Record<string, unknown> | undefined
+          if (!isMoneyMovementPush(data)) return
+          const {
+            data: { session },
+          } = await supabase.auth.getSession()
+          if (session?.user?.id) {
+            void refreshMoneyFeedsForUser(session.user.id)
+          }
         }
       )
 
@@ -242,9 +255,18 @@ export default function App() {
         (response) => {
           console.log('Notification tapped:', response)
           const data = response.notification.request.content.data as Record<string, unknown> | undefined
-          void stashPendingPushFromNotificationData(data).then(() =>
-            flushPendingPushNavigation((global as any).rootNavigationRef?.current),
-          )
+          void (async () => {
+            if (isMoneyMovementPush(data)) {
+              const {
+                data: { session },
+              } = await supabase.auth.getSession()
+              if (session?.user?.id) {
+                await refreshMoneyFeedsForUser(session.user.id)
+              }
+            }
+            await stashPendingPushFromNotificationData(data)
+            flushPendingPushNavigation((global as any).rootNavigationRef?.current)
+          })()
         },
       )
 
