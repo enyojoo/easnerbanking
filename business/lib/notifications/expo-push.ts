@@ -1,5 +1,6 @@
 import { parseCommunicationPreferences } from "@easner/shared"
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { resolvePendingPushRecipients } from "@/lib/notifications/expo-push-recipients"
 
 type ExpoPushMessage = {
   to: string
@@ -13,6 +14,8 @@ type ExpoPushMessage = {
 type ExpoPushTicket =
   | { status: "ok"; id: string }
   | { status: "error"; message: string; details?: Record<string, unknown> }
+
+const EVENT_TYPE_TRANSACTION_SETTLED = "transaction_settled"
 
 async function postExpoPush(messages: ExpoPushMessage[]): Promise<ExpoPushTicket[]> {
   const res = await fetch("https://exp.host/--/api/v2/push/send", {
@@ -31,7 +34,7 @@ async function postExpoPush(messages: ExpoPushMessage[]): Promise<ExpoPushTicket
   }
 
   const json = (await res.json()) as unknown
-  const data = (json as any)?.data
+  const data = (json as { data?: unknown })?.data
   if (!Array.isArray(data)) {
     throw new Error("Expo push response missing data[]")
   }
@@ -48,13 +51,14 @@ export type SendTransactionSettledPushInput = {
 
 export type SendTransactionSettledPushResult =
   | { skipped: true; reason: "no_token" | "push_disabled" | "already_sent" }
-  | { skipped: false; status: "sent"; ticketId?: string }
+  | { skipped: false; status: "sent"; ticketId?: string; recipientCount: number }
   | { skipped: false; status: "failed"; error: string }
 
 /**
  * Sends Expo push for a settled transaction to every registered device token.
  *
- * Idempotency: `push_notification_deliveries` is unique per (user, transaction, event, expo_push_token).
+ * Idempotency: `push_notification_deliveries` must be unique per
+ * (user_id, transaction_id, event_type, expo_push_token).
  * Preference gating uses `user_preferences.communication_preferences`; tokens come from `user_push_devices`.
  */
 export async function sendTransactionSettledPush(
@@ -96,36 +100,15 @@ export async function sendTransactionSettledPush(
 
   if (tokens.length === 0) return { skipped: true, reason: "no_token" }
 
-  const eventType = "transaction_settled"
-  const nowIso = new Date().toISOString()
+  const eventType = EVENT_TYPE_TRANSACTION_SETTLED
+  const { pending, tableMissing } = await resolvePendingPushRecipients(
+    admin,
+    { userId: input.userId, transactionId: input.transactionId, eventType },
+    tokens,
+  )
 
-  type Pending = { token: string }
-  const pending: Pending[] = []
-
-  for (const token of tokens) {
-    const deliveryInsert = await admin
-      .from("push_notification_deliveries")
-      .insert({
-        user_id: input.userId,
-        transaction_id: input.transactionId,
-        event_type: eventType,
-        expo_push_token: token,
-        provider: "expo",
-        status: "queued",
-        created_at: nowIso,
-        updated_at: nowIso,
-      })
-      .select("id")
-      .maybeSingle()
-
-    if (deliveryInsert.error?.code === "23505") continue
-    if (deliveryInsert.error?.code === "42P01") {
-      return { skipped: false, status: "failed", error: "push_notification_deliveries table missing" }
-    }
-    if (deliveryInsert.error) {
-      return { skipped: false, status: "failed", error: deliveryInsert.error.message }
-    }
-    pending.push({ token })
+  if (tableMissing) {
+    return { skipped: false, status: "failed", error: "push_notification_deliveries table missing" }
   }
 
   if (pending.length === 0) return { skipped: true, reason: "already_sent" }
@@ -141,7 +124,17 @@ export async function sendTransactionSettledPush(
 
   try {
     const tickets = await postExpoPush(messages)
+    if (tickets.length !== pending.length) {
+      console.warn("[expo-push] Expo ticket count mismatch", {
+        expected: pending.length,
+        got: tickets.length,
+        userId: input.userId,
+        transactionId: input.transactionId,
+      })
+    }
+
     let firstTicketId: string | undefined
+    let sentCount = 0
 
     for (let i = 0; i < pending.length; i++) {
       const p = pending[i]
@@ -149,6 +142,7 @@ export async function sendTransactionSettledPush(
       if (!p || !ticket) continue
 
       if (ticket.status === "ok") {
+        sentCount += 1
         if (!firstTicketId) firstTicketId = ticket.id
         await admin
           .from("push_notification_deliveries")
@@ -165,7 +159,7 @@ export async function sendTransactionSettledPush(
         const details = ticket.details ?? {}
         const errorMessage = ticket.message || "Expo push error"
 
-        if ((details as any)?.error === "DeviceNotRegistered") {
+        if ((details as { error?: string }).error === "DeviceNotRegistered") {
           await admin.from("user_push_devices").delete().eq("user_id", input.userId).eq("expo_push_token", p.token)
         }
 
@@ -183,7 +177,7 @@ export async function sendTransactionSettledPush(
       }
     }
 
-    return { skipped: false, status: "sent", ticketId: firstTicketId }
+    return { skipped: false, status: "sent", ticketId: firstTicketId, recipientCount: sentCount }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     for (const p of pending) {
@@ -202,3 +196,5 @@ export async function sendTransactionSettledPush(
     return { skipped: false, status: "failed", error: msg }
   }
 }
+
+export { resolvePendingPushRecipients } from "@/lib/notifications/expo-push-recipients"
