@@ -28,8 +28,8 @@ export { getCurrencySymbol } from "./currency-symbol"
 export { formatExchangeRate, formatSendRateLabel } from "./format-exchange-rate"
 export { BrandLogo } from "./components/BrandLogo"
 export type { BrandLogoProps } from "./components/BrandLogo"
-export { CountryFlag, CurrencyFlag } from "./components/CountryFlag"
-export type { CountryFlagProps, CurrencyFlagProps } from "./components/CountryFlag"
+export { CountryFlag, CurrencyFlag } from "./components/CountryFlag.tsx"
+export type { CountryFlagProps, CurrencyFlagProps } from "./components/CountryFlag.tsx"
 export { currencyToCountryCode, getCountryCodeForCurrency, normalizeCode } from "./flags/currency-mapping"
 export { getCurrencyCatalog } from "./currencies/catalog"
 export type { CurrencyCatalogEntry } from "./currencies/catalog"
@@ -133,4 +133,4 @@ export type {
   VerifiedCountryRef,
   VerifiedIdentityPayload,
 } from "./verified-identity"
-export { warmBundledFlagCache } from "./flags/warm-flags.native"
+/** Mobile-only: import from `@easner/shared/warm-flags` (uses expo-image; not for Next.js). */
