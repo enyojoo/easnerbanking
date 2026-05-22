@@ -80,6 +80,7 @@ export {
 } from "./business-industries"
 export type { BusinessIndustryItem, BusinessIndustryGroup } from "./business-industries"
 export * from "./query"
+export { isSuspiciousAuthoritativeZeroRegression } from "./wallet/balance-regression"
 export {
   toEasnerTransactionPrimaryLabel,
   toEasnerTransactionProductCategory,

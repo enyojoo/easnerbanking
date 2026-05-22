@@ -3,7 +3,10 @@ import { AppState } from 'react-native'
 import { useQueryClient } from '@tanstack/react-query'
 import { qk } from '@easner/shared'
 import { useWalletBalances } from '../hooks/queries/use-wallets'
-import { isDefinitiveEmptyBalanceResponse } from '../lib/wallet-balance-display'
+import {
+  isDefinitiveEmptyBalanceResponse,
+  isSuspiciousAuthoritativeZeroRegression,
+} from '../lib/wallet-balance-display'
 import { registerAppLockListener } from '../lib/app-lock-bus'
 import {
   balanceSnapshotStorageKey,
@@ -92,6 +95,13 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
     query.data?.source,
     query.data?.detail,
   )
+  const suspiciousZeroRegression = isSuspiciousAuthoritativeZeroRegression(
+    query.data?.source,
+    query.data?.USD,
+    query.data?.EUR,
+    lastKnownBalancesRef.current,
+  )
+  const effectiveAuthoritativeRead = isAuthoritativeBalanceRead && !suspiciousZeroRegression
 
   // Hydrate last-known snapshot for instant dashboard UX (memory + disk).
   useEffect(() => {
@@ -134,7 +144,7 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
 
   useEffect(() => {
     if (!query.data) return
-    if (!isAuthoritativeBalanceRead && !hasDefinitiveEmptyBalance) return
+    if (!effectiveAuthoritativeRead && !hasDefinitiveEmptyBalance) return
     const next: Balances = {
       USD: String(query.data.USD ?? '0'),
       EUR: String(query.data.EUR ?? '0'),
@@ -142,18 +152,18 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
     applySnapshot(next)
     if (!scope) return
     void writeBalanceSnapshotToDisk(scope, next)
-  }, [applySnapshot, hasDefinitiveEmptyBalance, isAuthoritativeBalanceRead, query.data, scope])
+  }, [applySnapshot, effectiveAuthoritativeRead, hasDefinitiveEmptyBalance, query.data, scope])
 
   const balances: Balances = useMemo(() => {
     if (!query.data) return lastKnownBalancesRef.current
-    if (hasDefinitiveEmptyBalance || isAuthoritativeBalanceRead) {
+    if (hasDefinitiveEmptyBalance || effectiveAuthoritativeRead) {
       return {
         USD: String(query.data.USD ?? '0'),
         EUR: String(query.data.EUR ?? '0'),
       }
     }
     return lastKnownBalancesRef.current
-  }, [hasDefinitiveEmptyBalance, isAuthoritativeBalanceRead, query.data, snapshotVersion])
+  }, [effectiveAuthoritativeRead, hasDefinitiveEmptyBalance, query.data, snapshotVersion])
 
   const hasResolvedBalance =
     Boolean(query.data) || hasMeaningfulBalanceSnapshot(lastKnownBalancesRef.current)
@@ -199,7 +209,7 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
     () => ({
       balances,
       hasResolvedBalance,
-      hasAuthoritativeBalance: isAuthoritativeBalanceRead,
+      hasAuthoritativeBalance: effectiveAuthoritativeRead,
       hasDefinitiveEmptyBalance,
       refreshBalances,
       updateBalanceOptimistically,
@@ -207,7 +217,7 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
     [
       balances,
       hasResolvedBalance,
-      isAuthoritativeBalanceRead,
+      effectiveAuthoritativeRead,
       hasDefinitiveEmptyBalance,
       refreshBalances,
       updateBalanceOptimistically,

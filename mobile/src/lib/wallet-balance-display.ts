@@ -1,3 +1,5 @@
+export { isSuspiciousAuthoritativeZeroRegression } from '@easner/shared'
+
 /**
  * When `/api/wallets/on-chain-balances` returns `source: "none"`, some `detail`
  * values mean "we know the balance is zero" (no wallet yet) vs transient Turnkey

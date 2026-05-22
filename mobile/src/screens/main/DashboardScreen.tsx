@@ -741,9 +741,8 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
             onRefresh={async () => {
               setRefreshing(true)
               try {
-                void syncChainLedgerIfDue(true).then((inserted) => {
-                  if (inserted) void txQuery.refetch()
-                })
+                const inserted = await syncChainLedgerIfDue(true)
+                if (inserted) void txQuery.refetch()
                 await Promise.all([
                   refreshBalances(true),
                   txQuery.refetch(),

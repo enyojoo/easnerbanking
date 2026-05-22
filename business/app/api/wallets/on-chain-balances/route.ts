@@ -3,9 +3,25 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireAuth } from "@/app/api/noah/_helpers"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { getTurnkeyDisplayBalancesUsdEur } from "@/lib/wallet/turnkey-chain-balances"
+import { resolveWalletOwnerIdForEasnerContext } from "@/lib/wallet/resolve-wallet-owner"
 import { upsertWalletBalanceSnapshot } from "@/lib/wallet/wallet-balances-db"
 
 export const runtime = "nodejs"
+
+async function ownerHasActiveSolanaWallets(
+  admin: ReturnType<typeof createSupabaseAdmin>,
+  walletOwnerId: string,
+): Promise<boolean> {
+  const { data } = await admin
+    .from("wallet_accounts")
+    .select("id")
+    .eq("wallet_owner_id", walletOwnerId)
+    .eq("status", "active")
+    .eq("chain", "solana")
+    .in("asset", ["USDC", "EURC"])
+    .limit(1)
+  return (data?.length ?? 0) > 0
+}
 
 /**
  * GET — Solana USDC/EURC balances at Turnkey-mapped `wallet_accounts` (chain truth for BYOW).
@@ -42,13 +58,30 @@ export async function GET(request: Request) {
       for (const r of rows as any[]) {
         map.set(String(r.currency).toUpperCase(), Number(r.available_balance ?? 0))
       }
-      return NextResponse.json({
-        USD: String(map.get("USD") ?? 0),
-        EUR: String(map.get("EUR") ?? 0),
-        source: "db",
-        balanceCaip2: "solana:mainnet",
-        detail: "wallet_balances_snapshot",
-      })
+      const usd = map.get("USD") ?? 0
+      const eur = map.get("EUR") ?? 0
+      const dbAllZero = usd === 0 && eur === 0
+      if (!dbAllZero) {
+        return NextResponse.json({
+          USD: String(usd),
+          EUR: String(eur),
+          source: "db",
+          balanceCaip2: "solana:mainnet",
+          detail: "wallet_balances_snapshot",
+        })
+      }
+      // Stale ATA zeros can land in wallet_balances when RPC reads fail. Re-verify with
+      // Turnkey for provisioned owners instead of serving authoritative $0.00.
+      const walletOwnerId = await resolveWalletOwnerIdForEasnerContext(admin, acc.ctx)
+      if (!walletOwnerId || !(await ownerHasActiveSolanaWallets(admin, walletOwnerId))) {
+        return NextResponse.json({
+          USD: "0",
+          EUR: "0",
+          source: "db",
+          balanceCaip2: "solana:mainnet",
+          detail: "wallet_balances_snapshot",
+        })
+      }
     }
   } catch {
     // If the table doesn't exist yet (migration not applied), fall back to Turnkey.

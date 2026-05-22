@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { pollingIntervalFor, qk, scopeKey } from "@easner/shared"
+import { isSuspiciousAuthoritativeZeroRegression, pollingIntervalFor, qk, scopeKey } from "@easner/shared"
 import { apiFetch } from "@/lib/query/api-client"
 import { useDocumentVisibility } from "@/lib/query/use-document-visibility"
 import { useScope } from "@/lib/query/scope"
@@ -78,6 +78,20 @@ export function useWalletBalances() {
         // No cached data yet — treat as transient load failure so UI can keep
         // a loading/skeleton state rather than rendering a fake 0.00.
         throw new Error("Transient Turnkey balance lookup failure")
+      }
+      const prev = qc.getQueryData<{ balances: OnChainBalances; available: AvailableCurrencies; deposits: DepositAddresses }>(
+        queryKey as unknown as any,
+      )
+      if (
+        isSuspiciousAuthoritativeZeroRegression(
+          balances?.source,
+          balances?.USD,
+          balances?.EUR,
+          prev?.balances,
+        )
+      ) {
+        if (prev) return prev
+        throw new Error("Suspicious authoritative zero balance regression")
       }
       return { balances, available, deposits }
     },

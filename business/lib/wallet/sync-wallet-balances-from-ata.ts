@@ -53,7 +53,10 @@ export async function syncWalletBalancesFromSolanaAtaForOwner(
     .in("asset", ["USDC", "EURC"])
 
   const rows = (accounts || []).filter((r) => String(r.address || "").trim())
-  const { USD, EUR } = await fetchStablecoinBalancesFromAta(rows, connection)
+  const { USD, EUR, readOk } = await fetchStablecoinBalancesFromAta(rows, connection)
+  if (!readOk) {
+    return { ok: false, USD: 0, EUR: 0, reason: "ata_balance_read_failed" }
+  }
 
   await Promise.all([
     upsertWalletBalanceSnapshot(admin, {

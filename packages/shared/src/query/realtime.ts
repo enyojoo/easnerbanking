@@ -205,8 +205,6 @@ export function attachRealtime({
         qc.setQueryData(qk.wallets.list(scope), (prev: unknown) => {
           if (!prev || typeof prev !== "object") return prev
           const base = prev as Record<string, any>
-          const balances = (base as any).balances
-          if (!balances || typeof balances !== "object") return prev
 
           const currencyRaw = (row as any).currency ?? (row as any).code
           const currency = typeof currencyRaw === "string" ? currencyRaw.toUpperCase() : null
@@ -222,14 +220,25 @@ export function attachRealtime({
           const n = Number.parseFloat(String(nextVal))
           if (!Number.isFinite(n)) return prev
 
+          const balances = base.balances
+          if (balances && typeof balances === "object") {
+            return {
+              ...base,
+              balances: {
+                ...balances,
+                [currency]: String(n),
+                source: "realtime",
+                detail: "wallet_balances_realtime",
+              },
+            }
+          }
+
+          // Mobile personal scope: flat `{ USD, EUR, source }` envelope.
           return {
             ...base,
-            balances: {
-              ...balances,
-              [currency]: String(n),
-              source: "realtime",
-              detail: "wallet_balances_realtime",
-            },
+            [currency]: String(n),
+            source: "realtime",
+            detail: "wallet_balances_realtime",
           }
         })
         scheduleTransactionsFeedRefresh(qc, scope, batcher)

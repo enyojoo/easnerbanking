@@ -6,6 +6,7 @@ import { apiFetch } from '../../query/api-client'
 import { useScope } from '../../query/scope'
 import { NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
 import { useRealtimeHealth } from '../../query/realtime-health-context'
+import { isSuspiciousAuthoritativeZeroRegression } from '../../lib/wallet-balance-display'
 
 /**
  * Mobile wallet balances for the authenticated Personal scope.
@@ -56,6 +57,13 @@ export function useWalletBalances() {
         const prev = qc.getQueryData<WalletBalancesEnvelope>(queryKey as unknown as any)
         if (prev) return prev
         throw new Error('Transient Turnkey balance lookup failure')
+      }
+      const prev = qc.getQueryData<WalletBalancesEnvelope>(queryKey as unknown as any)
+      if (
+        isSuspiciousAuthoritativeZeroRegression(source, body?.USD, body?.EUR, prev ?? undefined)
+      ) {
+        if (prev) return prev
+        throw new Error('Suspicious authoritative zero balance regression')
       }
       return {
         USD: String(body?.USD ?? '0'),
