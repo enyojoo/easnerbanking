@@ -41,13 +41,27 @@ describe("buildTurnkeyWebhookV1SignedMessage", () => {
     expect(candidates.map((c) => c.name)).toEqual([
       "turnkey-v1-full-prefix",
       "turnkey-v1-no-key",
+      "turnkey-v1-timestamp-event",
+      "turnkey-v1-event-timestamp",
+      "turnkey-v1-timestamp",
       "svix-style",
       "timestamp-event",
       "turnkey-key-timestamp-event",
+      "timestamp-body",
+      "event-body",
+      "timestamp-pipe-body",
+      "event-pipe-timestamp-pipe-body",
+      "timestamp-newline-body",
+      "timestamp-concat-body",
+      "event-concat-body",
+      "event-timestamp-concat-body",
+      "timestamp-event-concat-body",
       "raw-body",
     ])
     expect(candidates.map((c) => c.message.toString("utf8"))).toContain(
       "v1.ed25519.1747772156000.e1.x",
     )
+    expect(candidates.map((c) => c.message.toString("utf8"))).toContain("1747772156000.x")
+    expect(candidates.map((c) => c.message.toString("utf8"))).toContain("1747772156000x")
   })
 })

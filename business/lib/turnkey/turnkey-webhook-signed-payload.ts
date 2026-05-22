@@ -88,13 +88,34 @@ export function buildTurnkeyWebhookV1SignedMessageCandidates(
     const stringPrefixes = [
       [`turnkey-v1-full-prefix${suffix}`, `${version}.${algorithm}.${signingKeyId}.${timestamp}.${eventId}.`],
       [`turnkey-v1-no-key${suffix}`, `${version}.${algorithm}.${timestamp}.${eventId}.`],
+      [`turnkey-v1-timestamp-event${suffix}`, `${version}.${timestamp}.${eventId}.`],
+      [`turnkey-v1-event-timestamp${suffix}`, `${version}.${eventId}.${timestamp}.`],
+      [`turnkey-v1-timestamp${suffix}`, `${version}.${timestamp}.`],
       [`svix-style${suffix}`, `${eventId}.${timestamp}.`],
       [`timestamp-event${suffix}`, `${timestamp}.${eventId}.`],
       [`turnkey-key-timestamp-event${suffix}`, `${signingKeyId}.${timestamp}.${eventId}.`],
+      [`timestamp-body${suffix}`, `${timestamp}.`],
+      [`event-body${suffix}`, `${eventId}.`],
+      [`timestamp-pipe-body${suffix}`, `${timestamp}|`],
+      [`event-pipe-timestamp-pipe-body${suffix}`, `${eventId}|${timestamp}|`],
+      [`timestamp-newline-body${suffix}`, `${timestamp}\n`],
     ] as const
 
     for (const [name, prefix] of stringPrefixes) {
       if (!suffix && name === "turnkey-v1-full-prefix") continue
+      candidates.push({
+        name,
+        message: Buffer.concat([Buffer.from(prefix, "utf8"), input.rawBody]),
+      })
+    }
+
+    const concatMessages = [
+      [`timestamp-concat-body${suffix}`, timestamp],
+      [`event-concat-body${suffix}`, eventId],
+      [`event-timestamp-concat-body${suffix}`, `${eventId}${timestamp}`],
+      [`timestamp-event-concat-body${suffix}`, `${timestamp}${eventId}`],
+    ] as const
+    for (const [name, prefix] of concatMessages) {
       candidates.push({
         name,
         message: Buffer.concat([Buffer.from(prefix, "utf8"), input.rawBody]),

@@ -104,6 +104,40 @@ describe("verifyTurnkeyWebhookSignature ed25519", () => {
     expect(ok).toBe(true)
   })
 
+  it("accepts timestamp + raw body signatures", () => {
+    const rawBody = Buffer.from('{"type":"balances:confirmed"}', "utf8")
+    const eventId = "evt-live-timestamp-body"
+    const timestampMs = "1779465426522"
+    const message = Buffer.concat([Buffer.from(`${timestampMs}.`, "utf8"), rawBody])
+    const sig = sign(null, message, testPrivateKey)
+
+    const ok = verifyTurnkeyWebhookSignature({
+      rawBody,
+      signatureHeader: sig.toString("hex"),
+      meta: { algorithm: "ed25519", keyId: "turnkey_webhook_signing_key_001", version: "v1" },
+      eventId,
+      timestamp: timestampMs,
+    })
+    expect(ok).toBe(true)
+  })
+
+  it("accepts Discord-style timestamp concat body signatures", () => {
+    const rawBody = Buffer.from('{"type":"balances:confirmed"}', "utf8")
+    const eventId = "evt-live-timestamp-concat"
+    const timestampMs = "1779465426522"
+    const message = Buffer.concat([Buffer.from(timestampMs, "utf8"), rawBody])
+    const sig = sign(null, message, testPrivateKey)
+
+    const ok = verifyTurnkeyWebhookSignature({
+      rawBody,
+      signatureHeader: sig.toString("hex"),
+      meta: { algorithm: "ed25519", keyId: "turnkey_webhook_signing_key_001", version: "v1" },
+      eventId,
+      timestamp: timestampMs,
+    })
+    expect(ok).toBe(true)
+  })
+
   it("accepts v1 ed25519 signature over raw body", () => {
     const rawBody = Buffer.from('{"type":"balances:confirmed","eventId":"evt-body"}', "utf8")
     const eventId = "evt-body"
