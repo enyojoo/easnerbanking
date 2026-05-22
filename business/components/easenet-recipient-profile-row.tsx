@@ -64,7 +64,7 @@ export function EasenetRecipientProfileRow({
             <User className="h-5 w-5 text-primary" />
           </div>
         )}
-        <div className="absolute -bottom-0.5 -right-0.5 h-5 w-5 overflow-hidden rounded-full border-2 border-background bg-background p-0">
+        <div className="absolute -bottom-0.5 -right-0.5 h-5 w-5 overflow-hidden rounded-full border-2 border-background bg-background">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={EASNER_MARK_URL}
@@ -74,7 +74,7 @@ export function EasenetRecipientProfileRow({
             loading="eager"
             decoding="async"
             fetchPriority="high"
-            className="size-full object-cover"
+            className="size-full object-contain"
           />
         </div>
       </div>

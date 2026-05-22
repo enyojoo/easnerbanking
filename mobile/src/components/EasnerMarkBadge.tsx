@@ -1,7 +1,6 @@
 import { View, StyleSheet, Image } from 'react-native'
 import { colors } from '../theme'
-
-const EASNER_MARK_BADGE = require('../../assets/easner-mark.png')
+import { EASNER_MARK_SOURCE } from '../lib/easnerBrand'
 
 const BADGE_SIZE = 20
 
@@ -24,9 +23,9 @@ export function EasnerMarkBadge({ size = BADGE_SIZE }: Props) {
       ]}
     >
       <Image
-        source={EASNER_MARK_BADGE}
-        style={{ width: size, height: size, borderRadius: radius }}
-        resizeMode="cover"
+        source={EASNER_MARK_SOURCE}
+        style={{ width: size, height: size }}
+        resizeMode="contain"
       />
     </View>
   )
