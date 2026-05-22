@@ -5,7 +5,6 @@ import {
   Pressable,
   StyleSheet,
   Animated,
-  Image,
   ScrollView,
   TextInput,
   Modal,
@@ -56,6 +55,7 @@ import { colors, shadows, surfaceFrameStyle, surfaceChromeCircleStyle, textStyle
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import ScreenWrapper from '../../components/ScreenWrapper'
+import { CachedImage } from '../../components/CachedImage'
 import KeyboardSafeContainer from '../../components/KeyboardSafeContainer'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../contexts/AuthContext'
@@ -1321,7 +1321,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                       }} disabled={isSubmitting}
                     >
                       <View style={styles.currencySelectorContent}>
-                        {getTokenIconUrl(newRecipient.currency) ? <Image source={{ uri: getTokenIconUrl(newRecipient.currency)! }} style={styles.cryptoIcon} /> : null}
+                        {getTokenIconUrl(newRecipient.currency) ? <CachedImage uri={getTokenIconUrl(newRecipient.currency)!} style={styles.cryptoIcon} contentFit="cover" /> : null}
                         <Text style={styles.currencySelectorText}>
                           {newRecipient.currency || 'Select asset'}
                         </Text>
@@ -1375,7 +1375,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                                 }}
                               >
                                 {getTokenIconUrl(asset) ? (
-                                  <Image source={{ uri: getTokenIconUrl(asset)! }} style={styles.cryptoIcon} />
+                                  <CachedImage uri={getTokenIconUrl(asset)!} style={styles.cryptoIcon} contentFit="cover" />
                                 ) : null}
                                 <View style={styles.currencyInfo}>
                                   <Text style={styles.currencyCode}>{asset}</Text>
@@ -1401,7 +1401,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                       }} disabled={isSubmitting}
                     >
                       <View style={styles.currencySelectorContent}>
-                        {getNetworkIconUrl(newRecipient.network) ? <Image source={{ uri: getNetworkIconUrl(newRecipient.network)! }} style={styles.cryptoIcon} /> : null}
+                        {getNetworkIconUrl(newRecipient.network) ? <CachedImage uri={getNetworkIconUrl(newRecipient.network)!} style={styles.cryptoIcon} contentFit="cover" /> : null}
                         <Text style={styles.currencySelectorText}>
                           {newRecipient.network || 'Select network'}
                         </Text>
@@ -1450,7 +1450,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                                 }}
                               >
                                 {getNetworkIconUrl(network) ? (
-                                  <Image source={{ uri: getNetworkIconUrl(network)! }} style={styles.cryptoIcon} />
+                                  <CachedImage uri={getNetworkIconUrl(network)!} style={styles.cryptoIcon} contentFit="cover" />
                                 ) : null}
                                 <View style={styles.currencyInfo}>
                                   <Text style={styles.currencyCode}>{network}</Text>

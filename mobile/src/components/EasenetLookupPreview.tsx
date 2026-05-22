@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
-import { Image } from 'expo-image'
 import { EasenetSubtitleRow } from '../lib/easenetRecipientUi'
-import { EASNER_MARK_URL } from '../lib/easnerBrand'
+import { EASNER_MARK_SOURCE } from '../lib/easnerBrand'
+import { normalizeAvatarUrl } from '../lib/avatarCache'
+import { CachedImage } from './CachedImage'
 import { colors, spacing, borderRadius, textStyles, fontFamily, surfaceFrameStyle } from '../theme'
 
 export type EasenetLookupProfile = {
@@ -31,7 +32,7 @@ export function EasenetLookupPreview({
   titleEndAccessory,
 }: Props) {
   const row = variant === 'row'
-  const uri = String(profile.avatarUrl || '').trim()
+  const uri = normalizeAvatarUrl(profile.avatarUrl)
   const [imageFailed, setImageFailed] = useState(false)
   useEffect(() => {
     setImageFailed(false)
@@ -41,13 +42,10 @@ export function EasenetLookupPreview({
     <View style={[styles.wrap, row && styles.wrapRow]}>
       <View style={styles.avatarWrap}>
         {uri && !imageFailed ? (
-          <Image
-            source={{ uri }}
+          <CachedImage
+            uri={uri}
             style={styles.avatarImg}
             contentFit="cover"
-            cachePolicy="memory-disk"
-            recyclingKey={uri}
-            transition={0}
             onError={() => setImageFailed(true)}
           />
         ) : (
@@ -56,12 +54,11 @@ export function EasenetLookupPreview({
           </View>
         )}
         <View style={styles.markBadge}>
-          <Image
-            source={{ uri: EASNER_MARK_URL }}
+          <CachedImage
+            source={EASNER_MARK_SOURCE}
             style={styles.markImg}
             contentFit="cover"
-            cachePolicy="memory-disk"
-            transition={0}
+            prefetch={false}
           />
         </View>
       </View>

@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react'
 import {
   View,
   Text,
-  Image,
   StyleSheet,
   Pressable,
   KeyboardAvoidingView,
@@ -24,7 +23,8 @@ import { displayFirstNameFromFullName, initialsFromFullName } from '../../lib/us
 import { useDeferredLoading } from '../../hooks/useDeferredLoading'
 import { PinKeypad, PinLockedHintText } from '../../components/pin'
 import { EasnerAlertSheet } from '../../components/premium'
-import { avatarImageSource, normalizeAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
+import { AvatarImage } from '../../components/AvatarImage'
+import { avatarImageUri, warmAvatarCache } from '../../lib/avatarCache'
 
 export default function PinEntryScreen({ navigation: navigationProp }: NavigationProps) {
   const palette = useThemeColors()
@@ -48,16 +48,15 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
     user?.email ||
     ''
 
-  const headerAvatarUrl = normalizeAvatarUrl(userProfile?.profile?.avatar_url)
-  const headerAvatarSource = avatarImageSource(userProfile?.profile?.avatar_url)
+  const headerAvatarUri = avatarImageUri(userProfile?.profile?.avatar_url)
 
   useEffect(() => {
     setAvatarLoadFailed(false)
-  }, [headerAvatarUrl])
+  }, [headerAvatarUri])
 
   useEffect(() => {
-    warmAvatarCache(headerAvatarUrl)
-  }, [headerAvatarUrl])
+    warmAvatarCache(headerAvatarUri)
+  }, [headerAvatarUri])
 
   useEffect(() => {
     checkLockStatus()
@@ -198,11 +197,10 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
 
           <View style={styles.topBlock}>
             <View style={userAvatarStyles.pinEntryCircle}>
-              {headerAvatarSource && !avatarLoadFailed ? (
-                <Image
-                  source={headerAvatarSource}
+              {headerAvatarUri && !avatarLoadFailed ? (
+                <AvatarImage
+                  avatarUrl={userProfile?.profile?.avatar_url}
                   style={userAvatarStyles.image}
-                  resizeMode="cover"
                   onError={() => setAvatarLoadFailed(true)}
                 />
               ) : (

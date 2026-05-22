@@ -6,7 +6,6 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  Image,
 } from 'react-native'
 import type { LucideIcon } from 'lucide-react-native'
 import {
@@ -43,7 +42,8 @@ import { ripple } from '../../lib/androidRipple'
 import { EasnerAlertSheet } from '../../components/premium'
 import { SectionCard } from '../../components/ui'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
-import { avatarImageSource, normalizeAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
+import { AvatarImage } from '../../components/AvatarImage'
+import { avatarImageUri, warmAvatarCache } from '../../lib/avatarCache'
 import { useToast } from '../../components/ToastProvider'
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
 import { supabase } from '../../lib/supabase'
@@ -355,11 +355,10 @@ function MoreContent({ navigation }: NavigationProps) {
     [copyToClipboard, easetagRaw],
   )
 
-  const headerAvatarUrl = normalizeAvatarUrl(userProfile?.profile?.avatar_url)
-  const headerAvatarSource = avatarImageSource(userProfile?.profile?.avatar_url)
+  const headerAvatarUri = avatarImageUri(userProfile?.profile?.avatar_url)
   useEffect(() => {
-    warmAvatarCache(headerAvatarUrl)
-  }, [headerAvatarUrl])
+    warmAvatarCache(headerAvatarUri)
+  }, [headerAvatarUri])
 
   // Conditional gradient banner — verify identity OR set up MFA when applicable.
   const showVerifyBanner = !isTier1Complete(userProfile) && verificationStatus !== 'in_review'
@@ -412,11 +411,10 @@ function MoreContent({ navigation }: NavigationProps) {
                 accessibilityLabel="Open your profile"
               >
                 <View style={styles.profileAvatar}>
-                  {headerAvatarSource ? (
-                    <Image
-                      source={headerAvatarSource}
+                  {headerAvatarUri ? (
+                    <AvatarImage
+                      avatarUrl={userProfile?.profile?.avatar_url}
                       style={userAvatarStyles.image}
-                      resizeMode="cover"
                     />
                   ) : (
                     <Text style={userAvatarStyles.initials}>{initialsFromFullName(fullName)}</Text>

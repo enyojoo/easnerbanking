@@ -8,7 +8,6 @@ import {
   Modal,
   Platform,
   RefreshControl,
-  Image,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -69,7 +68,8 @@ import {
   resolveInboundTransactionListLabel,
   resolveOutboundTransactionListLabel,
 } from '@easner/shared'
-import { avatarImageSource, normalizeAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
+import { AvatarImage } from '../../components/AvatarImage'
+import { avatarImageUri, warmAvatarCache } from '../../lib/avatarCache'
 import { buildGroupedActivityItems } from '../../lib/transactionListGrouping'
 
 const DASHBOARD_SELECTED_CURRENCY_KEY_PREFIX = 'easner_dashboard_selected_currency_'
@@ -393,12 +393,11 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     [user?.first_name, user?.last_name].filter(Boolean).join(' ') ||
     ''
 
-  const headerAvatarUrl = normalizeAvatarUrl(userProfile?.profile?.avatar_url)
-  const headerAvatarSource = avatarImageSource(userProfile?.profile?.avatar_url)
+  const headerAvatarUri = avatarImageUri(userProfile?.profile?.avatar_url)
 
   useEffect(() => {
-    warmAvatarCache(headerAvatarUrl)
-  }, [headerAvatarUrl])
+    warmAvatarCache(headerAvatarUri)
+  }, [headerAvatarUri])
 
   const handleCurrencyChange = (currency: 'USD' | 'EUR' | 'GBP') => {
     setSelectedCurrency(currency)
@@ -679,11 +678,10 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                   navigation.navigate('Profile' as any)
                 }} >
-                {headerAvatarSource ? (
-                  <Image
-                    source={headerAvatarSource}
+                {headerAvatarUri ? (
+                  <AvatarImage
+                    avatarUrl={userProfile?.profile?.avatar_url}
                     style={userAvatarStyles.image}
-                    resizeMode="cover"
                   />
                 ) : (
                   <Text style={userAvatarStyles.initials}>

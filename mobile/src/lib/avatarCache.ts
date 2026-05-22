@@ -1,4 +1,4 @@
-import { Image } from 'react-native'
+import { prefetchImageUri, prefetchImageUris, warmImageCache } from './imageCache'
 
 const AVATAR_CACHE_TTL_DAYS = 30
 const AVATAR_CACHE_TTL_MS = AVATAR_CACHE_TTL_DAYS * 24 * 60 * 60 * 1000
@@ -29,6 +29,18 @@ export function normalizeAvatarUrl(value: unknown): string | null {
   return applyAvatarVersionParam(trimmed, avatarCacheBucket())
 }
 
+/** Normalized avatar URI for expo-image / prefetch. */
+export function avatarImageUri(value: unknown): string | null {
+  return normalizeAvatarUrl(value)
+}
+
+/** @deprecated Prefer {@link avatarImageUri} + {@link AvatarImage} / {@link CachedImage}. */
+export function avatarImageSource(value: unknown): { uri: string } | null {
+  const uri = avatarImageUri(value)
+  if (!uri) return null
+  return { uri }
+}
+
 /** Force refresh immediately after user changes profile photo. */
 export function bustAvatarUrl(value: unknown, version: string = String(Date.now())): string | null {
   if (typeof value !== 'string') return null
@@ -37,16 +49,17 @@ export function bustAvatarUrl(value: unknown, version: string = String(Date.now(
   return applyAvatarVersionParam(trimmed, version)
 }
 
-export function avatarImageSource(
-  value: unknown,
-): { uri: string; cache: 'force-cache' } | null {
-  const uri = normalizeAvatarUrl(value)
-  if (!uri) return null
-  return { uri, cache: 'force-cache' }
+/** Prefetch into expo-image disk cache (PIN, dashboard, More, etc.). */
+export function warmAvatarCache(value: unknown): void {
+  warmImageCache(avatarImageUri(value))
 }
 
-export function warmAvatarCache(value: unknown): void {
-  const url = normalizeAvatarUrl(value)
-  if (!url) return
-  Image.prefetch(url).catch(() => undefined)
+export async function warmAvatarCacheAsync(value: unknown): Promise<void> {
+  await prefetchImageUri(avatarImageUri(value))
+}
+
+export async function warmAvatarCaches(values: Iterable<unknown>): Promise<void> {
+  await prefetchImageUris(
+    [...values].map((v) => avatarImageUri(v)).filter((u): u is string => Boolean(u)),
+  )
 }

@@ -9,7 +9,6 @@ import {
   RefreshControl,
   Modal,
   Animated,
-  Image,
   ActivityIndicator,
   ScrollView,
   Platform,
@@ -37,6 +36,7 @@ import {
   ChevronDown,
 } from 'lucide-react-native'
 import ScreenWrapper from '../../components/ScreenWrapper'
+import { CachedImage } from '../../components/CachedImage'
 import KeyboardSafeContainer from '../../components/KeyboardSafeContainer'
 import { useToast } from '../../components/ToastProvider'
 import { EasnerAlertSheet } from '../../components/premium'
@@ -1597,7 +1597,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                       }} disabled={isSubmitting}
                     >
                       <View style={styles.currencySelectorContent}>
-                        {getTokenIconUrl(newRecipient.currency) ? <Image source={{ uri: getTokenIconUrl(newRecipient.currency)! }} style={styles.cryptoIcon} /> : null}
+                        {getTokenIconUrl(newRecipient.currency) ? <CachedImage uri={getTokenIconUrl(newRecipient.currency)!} style={styles.cryptoIcon} contentFit="cover" /> : null}
                         <Text style={styles.currencySelectorText}>
                           {newRecipient.currency || 'Select asset'}
                         </Text>
@@ -1647,7 +1647,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                               }}
                             >
                               {getTokenIconUrl(asset) ? (
-                                <Image source={{ uri: getTokenIconUrl(asset)! }} style={styles.cryptoIcon} />
+                                <CachedImage uri={getTokenIconUrl(asset)!} style={styles.cryptoIcon} contentFit="cover" />
                               ) : null}
                               <View style={styles.currencyInfo}>
                                 <Text style={styles.currencyCode}>{asset}</Text>
@@ -1673,7 +1673,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                       }} disabled={isSubmitting}
                     >
                       <View style={styles.currencySelectorContent}>
-                        {getNetworkIconUrl(newRecipient.network) ? <Image source={{ uri: getNetworkIconUrl(newRecipient.network)! }} style={styles.cryptoIcon} /> : null}
+                        {getNetworkIconUrl(newRecipient.network) ? <CachedImage uri={getNetworkIconUrl(newRecipient.network)!} style={styles.cryptoIcon} contentFit="cover" /> : null}
                         <Text style={styles.currencySelectorText}>
                           {newRecipient.network || 'Select network'}
                         </Text>
@@ -1718,7 +1718,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                               }}
                             >
                               {getNetworkIconUrl(network) ? (
-                                <Image source={{ uri: getNetworkIconUrl(network)! }} style={styles.cryptoIcon} />
+                                <CachedImage uri={getNetworkIconUrl(network)!} style={styles.cryptoIcon} contentFit="cover" />
                               ) : null}
                               <View style={styles.currencyInfo}>
                                 <Text style={styles.currencyCode}>{network}</Text>

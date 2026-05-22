@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
-import { Image } from 'expo-image'
 import type { Recipient } from '../types'
 import { getPayoutRecipientSubtitleParts } from '../lib/recipientPayoutPreview'
 import { getTokenIconUrl } from '../lib/cryptoIcons'
 import { PayoutSubtitleRow } from '../lib/easenetRecipientUi'
-import { avatarImageSource } from '../lib/avatarCache'
+import { avatarImageUri } from '../lib/avatarCache'
+import { CachedImage } from './CachedImage'
 import { CountryFlag } from './flags/CountryFlag'
 import { getCountryCodeForCurrency } from '@easner/shared'
 import { colors, spacing, borderRadius, textStyles, fontFamily, surfaceFrameStyle } from '../theme'
@@ -30,8 +30,7 @@ export function RecipientPayoutPreview({ recipient, getInitials, variant = 'card
     recipient.country_code ||
     (recipient.currency === 'EUR' ? 'EU' : getCountryCodeForCurrency(recipient.currency) || 'US')
 
-  const uri = String(recipient.payee_avatar_url || '').trim()
-  const avatarSource = avatarImageSource(uri)
+  const uri = avatarImageUri(recipient.payee_avatar_url)
   const [imageFailed, setImageFailed] = useState(false)
   useEffect(() => {
     setImageFailed(false)
@@ -42,13 +41,11 @@ export function RecipientPayoutPreview({ recipient, getInitials, variant = 'card
   return (
     <View style={[styles.wrap, row && styles.wrapRow]}>
       <View style={styles.avatarWrap}>
-        {avatarSource && !imageFailed ? (
-          <Image
-            source={{ uri: avatarSource.uri }}
+        {uri && !imageFailed ? (
+          <CachedImage
+            uri={uri}
             style={styles.avatarImg}
             contentFit="cover"
-            cachePolicy="disk"
-            transition={0}
             onError={() => setImageFailed(true)}
           />
         ) : (
@@ -58,7 +55,7 @@ export function RecipientPayoutPreview({ recipient, getInitials, variant = 'card
         )}
         <View style={styles.cornerBadge}>
           {isWalletRecipient && tokenIcon ? (
-            <Image source={{ uri: tokenIcon }} style={styles.badgeFill} contentFit="cover" />
+            <CachedImage uri={tokenIcon} style={styles.badgeFill} contentFit="cover" />
           ) : (
             <CountryFlag code={countryCode} size={20} style={styles.badgeFill} contentFit="contain" />
           )}

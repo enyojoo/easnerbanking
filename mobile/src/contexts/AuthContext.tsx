@@ -660,6 +660,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [user?.id])
 
+  /** Keep profile avatar in expo-image disk cache (PIN, dashboard, More). */
+  useEffect(() => {
+    warmAvatarCache(userProfile?.profile?.avatar_url)
+  }, [userProfile?.profile?.avatar_url])
+
   const signIn = async (email: string, password: string, rememberMe: boolean = false) => {
     try {
       console.log('AuthContext: Attempting sign in for:', email)

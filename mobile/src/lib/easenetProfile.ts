@@ -2,7 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { getApiBaseUrl } from './apiClient'
 import { supabase } from './supabase'
 import type { PayeeAccountKind } from './easnerBrand'
-import { Image as ExpoImage } from 'expo-image'
+import { normalizeAvatarUrl } from './avatarCache'
+import { prefetchImageUri } from './imageCache'
 
 export type EasenetPublicProfile =
   | { found: true; easetag: string; fullName: string; avatarUrl: string | null; accountKind: PayeeAccountKind }
@@ -53,15 +54,7 @@ export async function fetchEasenetPublicProfile(rawTag: string): Promise<Easenet
     accountKind,
   }
   // Warm image cache to avoid avatar "misses" between screens.
-  if (profile.avatarUrl) {
-    try {
-      // `expo-image` prefetch is best-effort; ignore failures.
-      // @ts-expect-error -- expo-image typings vary; both string + string[] are accepted across versions.
-      await ExpoImage.prefetch(profile.avatarUrl)
-    } catch {
-      // ignore
-    }
-  }
+  await prefetchImageUri(normalizeAvatarUrl(profile.avatarUrl))
   return profile
 }
 
@@ -151,14 +144,7 @@ export async function primeEasenetPublicProfileCache(
   }
   cachedProfiles.set(key, { at: Date.now(), value })
   await writePersistedEasenetProfile(key, value)
-  if (value.avatarUrl) {
-    try {
-      // @ts-expect-error see note above
-      await ExpoImage.prefetch(value.avatarUrl)
-    } catch {
-      // ignore
-    }
-  }
+  await prefetchImageUri(normalizeAvatarUrl(value.avatarUrl))
 }
 
 /**
@@ -223,14 +209,7 @@ export async function fetchEasenetPublicProfileCached(rawTag: string): Promise<E
       inflightProfiles.delete(key)
       if (v.found) {
         await writePersistedEasenetProfile(key, v)
-        if (v.avatarUrl) {
-          try {
-            // @ts-expect-error see note above
-            await ExpoImage.prefetch(v.avatarUrl)
-          } catch {
-            // ignore
-          }
-        }
+        await prefetchImageUri(normalizeAvatarUrl(v.avatarUrl))
       }
       return v
     })

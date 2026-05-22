@@ -7,20 +7,20 @@ import {
   Pressable,
   Platform,
   Animated,
-  Image,
   useWindowDimensions,
 } from 'react-native'
+import { CachedImage } from '../../components/CachedImage'
 import { LinearGradient } from 'expo-linear-gradient'
 import { BlurView } from 'expo-blur'
 import * as Haptics from 'expo-haptics'
 import { Plus, Snowflake, Settings, Eye } from 'lucide-react-native'
-import Svg, { Circle, Defs, Path, Pattern, Rect } from 'react-native-svg'
+import Svg, { Circle, Path } from 'react-native-svg'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
-import { EASNER_CARD_ICON_URL } from '../../lib/easnerBrand'
+import { EASNER_CARD_ICON_SOURCE } from '../../lib/easnerBrand'
 
 const CARD_SPACING = spacing[1]
 
@@ -42,20 +42,30 @@ function gradientForForm(form: 'virtual' | 'physical'): [string, string, string]
     : ['#050606', '#0F1110', '#1C201E']
 }
 
-function CardPattern({ cardId, width, height }: { cardId: string; width: number; height: number }) {
-  const sid = cardId.replace(/\W/g, '') || 'c'
+/** Dot + line texture without SVG `<Pattern>` — Pattern fills break on RN New Architecture. */
+function CardPattern({ width, height }: { width: number; height: number }) {
+  const dots: React.ReactNode[] = []
+  for (let y = 2; y < height; y += 40) {
+    for (let x = 2; x < width; x += 40) {
+      dots.push(<Circle key={`d-${x}-${y}`} cx={x} cy={y} r={1.5} fill="#FFFFFF" />)
+    }
+  }
+  const lines: React.ReactNode[] = []
+  for (let i = -height; i < width + height; i += 60) {
+    lines.push(
+      <Path
+        key={`l-${i}`}
+        d={`M${i} ${height} L${i + height} 0`}
+        stroke="#FFFFFF"
+        strokeWidth={0.5}
+        fill="none"
+      />,
+    )
+  }
   return (
     <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={styles.cardPatternSvg}>
-      <Defs>
-        <Pattern id={`dots-${sid}`} x={0} y={0} width={40} height={40} patternUnits="userSpaceOnUse">
-          <Circle cx={2} cy={2} r={1.5} fill="white" />
-        </Pattern>
-        <Pattern id={`lines-${sid}`} x={0} y={0} width={60} height={60} patternUnits="userSpaceOnUse">
-          <Path d="M0 60 L60 0" stroke="white" strokeWidth={0.5} />
-        </Pattern>
-      </Defs>
-      <Rect width={width} height={height} fill={`url(#dots-${sid})`} />
-      <Rect width={width} height={height} fill={`url(#lines-${sid})`} />
+      {dots}
+      {lines}
     </Svg>
   )
 }
@@ -205,16 +215,17 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
                       style={[styles.card, { width: CARD_WIDTH, height: CARD_HEIGHT }]}
                     >
                       <View style={styles.patternLayer}>
-                        <CardPattern cardId={card.id} width={CARD_WIDTH} height={CARD_HEIGHT} />
+                        <CardPattern width={CARD_WIDTH} height={CARD_HEIGHT} />
                       </View>
 
                       <View style={styles.cardInner}>
                         <View style={styles.cardTopRow}>
                           <View style={styles.brandRow}>
-                            <Image
-                              source={{ uri: EASNER_CARD_ICON_URL }}
+                            <CachedImage
+                              source={EASNER_CARD_ICON_SOURCE}
                               style={styles.brandIcon}
-                              resizeMode="contain"
+                              contentFit="contain"
+                              prefetch={false}
                               accessibilityIgnoresInvertColors
                             />
                             <View style={styles.formBadge}>
@@ -402,8 +413,7 @@ const styles = StyleSheet.create({
   brandIcon: {
     height: 40,
     width: 40,
-    opacity: 0.9,
-    tintColor: colors.neutral.white,
+    opacity: 0.95,
   },
   formBadge: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',

@@ -11,7 +11,6 @@ import {
   Platform,
   Animated,
   Modal,
-  Image,
   Keyboard,
   useWindowDimensions,
 } from 'react-native'
@@ -65,7 +64,8 @@ import {
 import { getPayoutRecipientSubtitleParts, isMobileMoneyRecipient } from '../../lib/recipientPayoutPreview'
 import { useEasenetRecipientHydration, type HydratedEasenetProfile } from '../../hooks/useEasenetRecipientHydration'
 import { navigateToSendRecipientHub } from '../../lib/sendFlowNavigation'
-import { avatarImageSource } from '../../lib/avatarCache'
+import { AvatarImage } from '../../components/AvatarImage'
+import { CachedImage } from '../../components/CachedImage'
 
 // Landmark/Bank Icon Component
 function LandmarkIcon({ size = 24, color = colors.text.primary }: { size?: number; color?: string }) {
@@ -657,10 +657,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                         {recipient &&
                           (showAmountAssetIcon ? (
                             <View style={styles.amountAssetIconWrap}>
-                              <Image
-                                source={{ uri: amountAssetIconUrl! }}
+                              <CachedImage
+                                uri={amountAssetIconUrl!}
                                 style={styles.amountAssetIcon}
-                                resizeMode="cover"
+                                contentFit="cover"
                               />
                             </View>
                           ) : (
@@ -751,10 +751,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       selectedOtherCurrency === 'STABLE'
                         ? (
                           selectedOtherPaymentMethod && getTokenIconUrl(selectedOtherPaymentMethod) ? (
-                            <Image
-                              source={{ uri: getTokenIconUrl(selectedOtherPaymentMethod)! }}
+                            <CachedImage
+                              uri={getTokenIconUrl(selectedOtherPaymentMethod)!}
                               style={styles.flagImage}
-                              resizeMode="cover"
+                              contentFit="cover"
                             />
                           ) : (
                             <Coins size={20} color={colors.text.primary} strokeWidth={2} />
@@ -1224,19 +1224,20 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                             <View style={styles.flagContainerSmall}>
                               {selectedOtherCurrency === 'STABLE' ? (
                                 getTokenIconUrl(method.code) ? (
-                                  <Image
-                                    source={{ uri: getTokenIconUrl(method.code)! }}
+                                  <CachedImage
+                                    uri={getTokenIconUrl(method.code)!}
                                     style={styles.flagImageSmall}
-                                    resizeMode="cover"
+                                    contentFit="cover"
                                   />
                                 ) : (
                                   <Coins size={16} color={colors.text.primary} strokeWidth={2} />
                                 )
                               ) : method.icon && paymentMethodIcons[method.icon] ? (
-                                <Image 
+                                <CachedImage
                                   source={paymentMethodIcons[method.icon]}
                                   style={styles.flagImageSmall}
-                                  resizeMode="cover"
+                                  contentFit="cover"
+                                  prefetch={false}
                                 />
                               ) : (
                                 <LandmarkIcon size={16} color={colors.text.primary} />
@@ -1845,18 +1846,16 @@ function EasenetSendRecipientAvatar({
 }) {
   const displayName = (easenetPreview?.fullName || recipient.full_name).trim()
   const uri = String(easenetPreview?.avatarUrl || recipient.payee_avatar_url || '').trim()
-  const avatarSource = avatarImageSource(uri)
   const [imgFailed, setImgFailed] = useState(false)
   useEffect(() => {
     setImgFailed(false)
   }, [uri])
   return (
     <View style={styles.recipientAvatarCircle}>
-      {avatarSource && !imgFailed ? (
-        <Image
-          source={avatarSource}
+      {uri && !imgFailed ? (
+        <AvatarImage
+          avatarUrl={uri}
           style={styles.recipientAvatarFill}
-          resizeMode="cover"
           onError={() => setImgFailed(true)}
         />
       ) : (
@@ -1877,20 +1876,19 @@ function PayoutSendRecipientAvatar({
     recipient.country_code ||
     (recipient.currency === 'EUR' ? 'EU' : getCountryCodeForCurrency(recipient.currency) || 'US')
   const uri = String(recipient.payee_avatar_url || '').trim()
-  const avatarSource = avatarImageSource(uri)
   const [imgFailed, setImgFailed] = useState(false)
   useEffect(() => {
     setImgFailed(false)
   }, [uri])
 
-  const hasPhoto = Boolean(avatarSource && !imgFailed)
+  const hasPhoto = Boolean(uri && !imgFailed)
 
   /** No photo: full-bleed flag or token in the circle (same visual weight as Easenet’s full-bleed photo). */
   if (!hasPhoto) {
     return (
       <View style={styles.recipientAvatarCircle}>
         {isWalletRecipient && tokenIcon ? (
-          <Image source={{ uri: tokenIcon }} style={styles.recipientAvatarFill} resizeMode="cover" />
+          <CachedImage uri={tokenIcon} style={styles.recipientAvatarFill} contentFit="cover" />
         ) : (
           <CountryFlag code={countryCode} size={36} style={styles.recipientAvatarFill} contentFit="cover" />
         )}
@@ -1902,16 +1900,15 @@ function PayoutSendRecipientAvatar({
   return (
     <View style={styles.recipientAvatarCircleWrap}>
       <View style={styles.recipientAvatarCircle}>
-        <Image
-          source={avatarSource!}
+        <AvatarImage
+          avatarUrl={uri}
           style={styles.recipientAvatarFill}
-          resizeMode="cover"
           onError={() => setImgFailed(true)}
         />
       </View>
       <View style={styles.easenetMarkBadgeSmall}>
         {isWalletRecipient && tokenIcon ? (
-          <Image source={{ uri: tokenIcon }} style={styles.easenetMarkImgSmall} resizeMode="cover" />
+          <CachedImage uri={tokenIcon} style={styles.easenetMarkImgSmall} contentFit="cover" />
         ) : (
           <CountryFlag code={countryCode} size={16} style={styles.easenetMarkImgSmall} contentFit="contain" />
         )}
