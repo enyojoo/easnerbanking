@@ -38,33 +38,7 @@ Can you provide **one** of the following so we can close strict verify?
 2. Confirmation whether Vercel (or any proxy in front of our Next.js route) might alter the body (whitespace, key order, decompression), or  
 3. A Node.js snippet from your side that verifies a real production signature against the raw body.
 
-Our verifier snippet:
-
-```ts
-import { verify as cryptoVerify, createPublicKey } from "node:crypto"
-
-function verifyTurnkeyV2Webhook(params: {
-  rawBody: Buffer
-  signatureHex: string
-  version: string       // X-Turnkey-Signature-Version
-  algorithm: string     // X-Turnkey-Signature-Algorithm
-  keyId: string         // X-Turnkey-Signature-Key-Id
-  timestamp: string     // X-Turnkey-Timestamp (exact header value)
-  eventId: string       // X-Turnkey-Event-Id
-  publicKeyHex32: string
-}): boolean {
-  const prefix = `${params.version}.${params.algorithm}.${params.keyId}.${params.timestamp}.${params.eventId}.`
-  const message = Buffer.concat([Buffer.from(prefix, "utf8"), params.rawBody])
-  const sig = Buffer.from(params.signatureHex.replace(/^0x/i, ""), "hex")
-  const derPrefix = Buffer.from("302a300506032b6570032100", "hex")
-  const publicKey = createPublicKey({
-    key: Buffer.concat([derPrefix, Buffer.from(params.publicKeyHex32, "hex")]),
-    format: "der",
-    type: "spki",
-  })
-  return cryptoVerify(null, message, publicKey, sig)
-}
-```
+We now verify with your `@noble/curves/ed25519` snippet (same prefix + raw body) in `business/lib/turnkey/turnkey-webhook-ed25519-verify.ts`.
 
 We are also ready for the upcoming payload change (`organizationId` / `parentOrganizationId` at top level).
 

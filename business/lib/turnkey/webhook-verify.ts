@@ -1,8 +1,12 @@
-import { createHash, createHmac, createPublicKey, timingSafeEqual, verify as cryptoVerify } from "node:crypto"
+import { createHash, createHmac, timingSafeEqual } from "node:crypto"
+import { ed25519 } from "@noble/curves/ed25519"
 import type { TurnkeyWebhookHeaders } from "@/lib/turnkey/turnkey-webhook-delivery"
 import type { TurnkeyWebhookSignatureMeta } from "@/lib/turnkey/turnkey-webhook-delivery"
 import {
-  buildTurnkeyWebhookV1SignedMessage,
+  turnkeyEd25519FieldsFromVerifyInput,
+  verifyTurnkeyWebhookEd25519Noble,
+} from "@/lib/turnkey/turnkey-webhook-ed25519-verify"
+import {
   buildTurnkeyWebhookV1SignedMessageCandidates,
   turnkeyWebhookSignatureTimestamp,
 } from "@/lib/turnkey/turnkey-webhook-signed-payload"
@@ -41,10 +45,13 @@ function isEd25519Algorithm(algorithm: string | null | undefined): boolean {
   return a.includes("ed25519") || a === "eddsa" || a.includes("eddsa")
 }
 
-function ed25519PublicKeyObject(raw32: Buffer) {
-  const prefix = Buffer.from("302a300506032b6570032100", "hex")
-  const der = Buffer.concat([prefix, raw32])
-  return createPublicKey({ key: der, format: "der", type: "spki" })
+function verifyEd25519Noble(publicKey32: Buffer, message: Buffer, signature: Buffer): boolean {
+  if (publicKey32.length !== 32 || signature.length !== 64) return false
+  try {
+    return ed25519.verify(signature, message, publicKey32)
+  } catch {
+    return false
+  }
 }
 
 /** Turnkey V2 sends hex-encoded Ed25519 signatures in `X-Turnkey-Signature`. */
@@ -127,33 +134,29 @@ function verifyEd25519TurnkeyWebhook(input: TurnkeyWebhookVerifyInput): boolean 
     signingKeyId: input.meta?.keyId,
     signatureVersion: input.meta?.version,
     algorithm: input.meta?.algorithm,
+    signatureHeader: sigHeader,
   }
   const strictSignature = process.env.TURNKEY_WEBHOOK_STRICT_SIGNATURE === "true"
-  const messages = strictSignature
-    ? (() => {
-        const canonical = buildTurnkeyWebhookV1SignedMessage(signedMessageInput)
-        return canonical ? [{ name: "turnkey-v1-full-prefix", message: canonical }] : []
-      })()
-    : buildTurnkeyWebhookV1SignedMessageCandidates(signedMessageInput)
-  if (!messages.length) return false
 
-  const publicKey = ed25519PublicKeyObject(keyMaterial.publicKey)
+  const nobleFields = turnkeyEd25519FieldsFromVerifyInput(signedMessageInput)
+  if (nobleFields && verifyTurnkeyWebhookEd25519Noble(nobleFields, input.rawBody, keyMaterial.publicKey)) {
+    return true
+  }
+
+  const messages = strictSignature
+    ? []
+    : buildTurnkeyWebhookV1SignedMessageCandidates(signedMessageInput)
+  const publicKey32 = keyMaterial.publicKey
   for (const sig of signatures) {
     for (const candidate of messages) {
-      try {
-        if (cryptoVerify(null, candidate.message, publicKey, sig)) {
-          if (candidate.name !== "turnkey-v1-full-prefix") {
-            console.info("[turnkey-webhook] ed25519 signature verified with compatibility payload", {
-              keyId: input.meta?.keyId,
-              algorithm: input.meta?.algorithm,
-              version: input.meta?.version,
-              signedPayload: candidate.name,
-            })
-          }
-          return true
-        }
-      } catch {
-        /* try next */
+      if (verifyEd25519Noble(publicKey32, candidate.message, sig)) {
+        console.info("[turnkey-webhook] ed25519 signature verified with compatibility payload", {
+          keyId: input.meta?.keyId,
+          algorithm: input.meta?.algorithm,
+          version: input.meta?.version,
+          signedPayload: candidate.name,
+        })
+        return true
       }
     }
   }
