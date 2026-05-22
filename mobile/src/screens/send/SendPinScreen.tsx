@@ -13,26 +13,23 @@ import { ArrowLeft } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { NavigationProps } from '../../types'
-import type { Recipient } from '../../types'
 import {
   colors,
   surfaceChromeCircleStyle,
   textStyles,
   spacing,
-  fontFamily,
   useThemeColors,
 } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { useAuth } from '../../contexts/AuthContext'
 import { analytics } from '../../lib/analytics'
-import type { PayoutPrepareSession } from '../../hooks/executeBalanceSend'
 import { appPinStrings } from '../../constants/app-pin-en'
 import { getLockoutState, verifyPin } from '../../lib/pinAuth'
 import { PinKeypad } from '../../components/pin'
 import { PinLockedHintText } from '../../components/pin/PinLockedHintText'
 import { markBalanceSendPinVerified } from '../../lib/sendFlowPostPinGate'
 
-export default function SendPinScreen({ navigation, route }: NavigationProps) {
+export default function SendPinScreen({ navigation }: NavigationProps) {
   const palette = useThemeColors()
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
@@ -49,30 +46,7 @@ export default function SendPinScreen({ navigation, route }: NavigationProps) {
   const shakeAnim = useRef(new Animated.Value(0)).current
   const verifySpinnerDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const params = route.params as {
-    recipient?: Recipient
-    calculatedSendingAmount?: number
-    calculatedFeeAmount?: number
-    calculatedTotalAmount?: number
-    receiveAmountValue?: number
-    selectedBalanceCurrency?: string
-    receiveCurrency?: string
-    noahFee?: number
-    easnerFee?: number
-    payoutSession?: PayoutPrepareSession
-  }
-
-  const recipient = params.recipient
-  const sendCur = params.selectedBalanceCurrency ?? 'USD'
-  const showFeeSummary =
-    (params.noahFee != null && params.noahFee > 0) ||
-    (params.easnerFee != null && params.easnerFee > 0) ||
-    (params.calculatedTotalAmount != null && params.calculatedTotalAmount > 0)
-
-  const fmt = (n: number) =>
-    n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-
-  const canVerifyPin = Boolean(recipient && user?.id) && !lockedOut
+  const canVerifyPin = Boolean(user?.id) && !lockedOut
 
   const refreshLock = useCallback(async () => {
     if (!user?.id) return
@@ -173,7 +147,7 @@ export default function SendPinScreen({ navigation, route }: NavigationProps) {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
   }
 
-  if (!recipient || !user?.id) {
+  if (!user?.id) {
     return (
       <View
         style={[
@@ -238,26 +212,6 @@ export default function SendPinScreen({ navigation, route }: NavigationProps) {
 
         <View style={styles.content}>
           <View style={styles.topBlock}>
-            {showFeeSummary ? (
-              <View style={styles.feeSummary}>
-                {params.receiveAmountValue != null && params.receiveCurrency ? (
-                  <Text style={styles.feeLine}>
-                    Recipient gets {fmt(params.receiveAmountValue)} {params.receiveCurrency}
-                  </Text>
-                ) : null}
-                {params.noahFee != null && params.noahFee > 0 ? (
-                  <Text style={styles.feeLine}>Noah fee {fmt(params.noahFee)} {sendCur}</Text>
-                ) : null}
-                {params.easnerFee != null && params.easnerFee > 0 ? (
-                  <Text style={styles.feeLine}>Easner fee {fmt(params.easnerFee)} {sendCur}</Text>
-                ) : null}
-                {params.calculatedTotalAmount != null ? (
-                  <Text style={styles.feeLineBold}>
-                    Total debited {fmt(params.calculatedTotalAmount)} {sendCur}
-                  </Text>
-                ) : null}
-              </View>
-            ) : null}
             <View style={styles.pinDotsWrapper}>
               {showDotsSpinner ? (
                 <View style={styles.pinDotsLoadingOnly}>
@@ -334,23 +288,6 @@ const styles = StyleSheet.create({
   topBlock: {
     alignItems: 'center',
     width: '100%',
-  },
-  feeSummary: {
-    width: '100%',
-    marginBottom: spacing[4],
-    paddingHorizontal: spacing[2],
-  },
-  feeLine: {
-    ...textStyles.caption,
-    color: colors.text.secondary,
-    textAlign: 'center',
-    marginBottom: spacing[1],
-  },
-  feeLineBold: {
-    ...textStyles.bodyMedium,
-    color: colors.text.primary,
-    textAlign: 'center',
-    fontFamily: fontFamily.semibold,
   },
   subtitle: {
     ...textStyles.bodyMedium,

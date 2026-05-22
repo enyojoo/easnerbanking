@@ -1,7 +1,11 @@
-import { randomUUID } from "node:crypto"
 import { NextResponse } from "next/server"
 import { getUserFromApiRequest } from "@/lib/supabase/admin"
-import { extensionForMime, uploadPublicImage, validateImageFile } from "@/lib/supabase/storage-server"
+import { validateImageFile } from "@/lib/supabase/storage-server"
+import {
+  parseProfileAvatarFormFile,
+  parseProfileAvatarJsonBody,
+} from "@/lib/profile-avatar-upload-body"
+import { storeProfileAvatarForUser } from "@/lib/profile-avatar-storage"
 
 export const runtime = "nodejs"
 
@@ -9,36 +13,37 @@ export async function POST(request: Request) {
   const user = await getUserFromApiRequest(request)
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  let form: FormData
-  try {
-    form = await request.formData()
-  } catch {
-    return NextResponse.json({ error: "Invalid form data." }, { status: 400 })
+  const contentType = request.headers.get("content-type") ?? ""
+
+  const parsed = contentType.includes("application/json")
+    ? await parseProfileAvatarJsonBody(request)
+    : await (async () => {
+        let form: FormData
+        try {
+          form = await request.formData()
+        } catch {
+          return { ok: false as const, error: "Invalid form data.", status: 400 }
+        }
+        const raw = form.get("file")
+        if (!raw || typeof raw === "string") {
+          return await parseProfileAvatarFormFile(null)
+        }
+        const file = raw as File
+        const v = validateImageFile(file)
+        if (!v.ok) {
+          return { ok: false as const, error: v.error, status: 400 }
+        }
+        return parseProfileAvatarFormFile(raw)
+      })()
+
+  if (!parsed.ok) {
+    return NextResponse.json({ error: parsed.error }, { status: parsed.status })
   }
 
-  const raw = form.get("file")
-  if (!raw || typeof raw === "string") {
-    return NextResponse.json({ error: "Missing file." }, { status: 400 })
+  const stored = await storeProfileAvatarForUser(user.id, parsed)
+  if ("error" in stored) {
+    return NextResponse.json({ error: stored.error }, { status: 400 })
   }
 
-  const file = raw as File
-  const v = validateImageFile(file)
-  if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })
-
-  const buf = Buffer.from(await file.arrayBuffer())
-  const ext = extensionForMime(file.type)
-  const path = `${user.id}/${randomUUID()}.${ext}`
-
-  const result = await uploadPublicImage({
-    bucket: "avatars",
-    path,
-    bytes: buf,
-    contentType: file.type,
-  })
-
-  if ("error" in result) {
-    return NextResponse.json({ error: result.error }, { status: 400 })
-  }
-
-  return NextResponse.json({ url: result.url, path: result.path })
+  return NextResponse.json({ url: stored.url, path: stored.path })
 }

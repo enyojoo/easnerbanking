@@ -312,7 +312,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   }
 
   const formatAmount = (amount: number, currency: string, isReceived: boolean) => {
-    const sign = isReceived ? '' : '-'
+    const sign = isReceived ? '+' : '-'
     // Normalize currency to uppercase
     const normalizedCurrency = (currency || 'USD').toUpperCase()
     const currencyData = currencies.find((c) => c && c.code === normalizedCurrency)

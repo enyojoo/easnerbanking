@@ -1,7 +1,7 @@
-import { randomUUID } from "node:crypto"
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
-import { extensionForMime, uploadPublicImage, validateImageFile } from "@/lib/supabase/storage-server"
+import { validateImageFile } from "@/lib/supabase/storage-server"
+import { storeOrganizationLogo } from "@/lib/organization-logo-storage"
 
 export const runtime = "nodejs"
 
@@ -38,19 +38,10 @@ export async function POST(request: Request) {
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })
 
   const buf = Buffer.from(await file.arrayBuffer())
-  const ext = extensionForMime(file.type)
-  const path = `${organizationId}/${randomUUID()}.${ext}`
-
-  const result = await uploadPublicImage({
-    bucket: "org-logos",
-    path,
-    bytes: buf,
-    contentType: file.type,
-  })
-
-  if ("error" in result) {
-    return NextResponse.json({ error: result.error }, { status: 400 })
+  const stored = await storeOrganizationLogo(organizationId, buf, file.type)
+  if ("error" in stored) {
+    return NextResponse.json({ error: stored.error }, { status: 400 })
   }
 
-  return NextResponse.json({ url: result.url, path: result.path })
+  return NextResponse.json({ url: stored.url, path: stored.path })
 }

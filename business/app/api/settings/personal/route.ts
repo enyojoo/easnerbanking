@@ -4,6 +4,7 @@ import {
   buildVerifiedIdentityFromKycFields,
   isProfileLockedFromKycFields,
 } from "@easner/shared"
+import { removeAllProfileAvatarObjects } from "@/lib/profile-avatar-storage"
 
 type PersonalUpdateBody = {
   fullName?: string
@@ -175,14 +176,21 @@ export async function PUT(request: Request) {
     updatePayload.email = body.email?.trim() || user.email || null
   }
 
+  let clearingAvatar = false
   if ("avatarUrl" in body) {
     const v = body.avatarUrl
+    clearingAvatar =
+      v === null || v === "" || (typeof v === "string" && !v.trim())
     updatePayload.avatar_url =
-      v === null || v === "" ? null : typeof v === "string" ? v.trim() || null : null
+      clearingAvatar ? null : typeof v === "string" ? v.trim() || null : null
   }
 
   const { error } = await admin.from("users").upsert(updatePayload, { onConflict: "id" })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  if (clearingAvatar) {
+    await removeAllProfileAvatarObjects(user.id)
+  }
 
   const shouldSyncAuthMetadata = "avatarUrl" in body || resolvedFullName !== undefined
   if (shouldSyncAuthMetadata) {

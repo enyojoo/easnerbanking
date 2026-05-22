@@ -311,6 +311,11 @@ function ProfileEditContent({ navigation }: NavigationProps) {
       const bustedUrl = bustAvatarUrl(up.url)
       setEditProfileData((prev) => ({ ...prev, avatarUrl: bustedUrl }))
       warmAvatarCache(bustedUrl)
+    } catch (e) {
+      setNoticeSheet({
+        title: 'Upload failed',
+        message: e instanceof Error ? e.message : 'Something went wrong. Try again.',
+      })
     } finally {
       setUploadingAvatar(false)
     }
@@ -878,11 +883,12 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                             {profilePhotoInitials()}
                           </Text>
                         )}
+                        <View style={styles.avatarEditDimOverlay} pointerEvents="none" />
                         <View style={styles.avatarEditCameraLayer} pointerEvents="none">
                           <Camera
                             size={22}
                             color={colors.neutral.white}
-                            strokeWidth={2}
+                            strokeWidth={2.25}
                           />
                         </View>
                         {uploadingAvatar ? (
@@ -1285,20 +1291,25 @@ const styles = StyleSheet.create({
     borderColor: colors.primary.main + '66',
     backgroundColor: colors.primary.main,
   },
-  /** Camera only — no dim layer; sits centered over the photo preview */
+  avatarEditDimOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 2,
+    backgroundColor: 'rgba(0, 0, 0, 0.42)',
+  },
   avatarEditCameraLayer: {
     position: 'absolute',
     top: 0,
     right: 0,
     bottom: 0,
     left: 0,
-    zIndex: 2,
+    zIndex: 3,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarUploading: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    zIndex: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
     alignItems: 'center',
     justifyContent: 'center',
   },

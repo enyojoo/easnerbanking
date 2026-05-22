@@ -297,18 +297,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       showError(quoteError)
       return
     }
-    navigation.navigate('SendPin' as never, {
-      recipient,
-      calculatedSendingAmount: pricing.calculatedSendingAmount,
-      calculatedFeeAmount: pricing.calculatedFeeAmount,
-      calculatedTotalAmount: pricing.calculatedTotalAmount,
-      noahFee: pricing.noahFee,
-      easnerFee: pricing.easnerFee,
-      receiveAmountValue,
-      selectedBalanceCurrency,
-      receiveCurrency,
-      payoutSession: pricing.payoutSession,
-    } as never)
+    navigation.navigate('SendPin' as never)
   }
 
   if (!recipient) {

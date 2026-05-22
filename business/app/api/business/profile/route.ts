@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { removeAllOrganizationLogoObjects } from "@/lib/organization-logo-storage"
 import { countries, displayCountryFromBusinessSetting } from "@/lib/countries"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
@@ -7,6 +8,7 @@ import { isEasetagGloballyAvailable } from "@/lib/easetag-global"
 import { isValidIndustryId } from "@/lib/business-industries"
 import { isAllowedBaseCurrency } from "@/lib/accounts/currency-controls"
 import { isCountryAllowedForSurface } from "@/lib/jurisdiction-country-policy"
+import { removeAllOrganizationLogoObjects } from "@/lib/organization-logo-storage"
 
 type UpdateBody = {
   businessName?: string
@@ -359,7 +361,16 @@ export async function PUT(request: Request) {
   }
 
   if (body.businessName !== undefined) updates.name = body.businessName?.trim() || null
-  if (body.businessLogo !== undefined) updates.logo_url = body.businessLogo
+
+  let clearingLogo = false
+  if (body.businessLogo !== undefined) {
+    const v = body.businessLogo
+    clearingLogo =
+      v === null || v === "" || (typeof v === "string" && !v.trim())
+    updates.logo_url =
+      clearingLogo ? null : typeof v === "string" ? v.trim() || null : null
+  }
+
   if (body.businessType !== undefined) updates.business_type = body.businessType?.trim() || null
   if (body.registrationNumber !== undefined) updates.registration_number = body.registrationNumber?.trim() || null
   if (body.taxId !== undefined) updates.tax_id = body.taxId?.trim() || null
@@ -377,6 +388,9 @@ export async function PUT(request: Request) {
   if (body.postalCode !== undefined) updates.postal_code = body.postalCode?.trim() || null
 
   const { error } = await admin.from("businesses").update(updates).eq("id", businessId)
+  if (!error && clearingLogo) {
+    await removeAllOrganizationLogoObjects(businessId)
+  }
   if (error) {
     // Fallback for older schemas that don't yet include all optional settings columns.
     const minimalUpdates: Record<string, unknown> = {
@@ -392,6 +406,9 @@ export async function PUT(request: Request) {
 
     const retry = await admin.from("businesses").update(minimalUpdates).eq("id", businessId)
     if (retry.error) return NextResponse.json({ error: retry.error.message }, { status: 500 })
+    if (clearingLogo) {
+      await removeAllOrganizationLogoObjects(businessId)
+    }
   }
 
   return GET(request)
