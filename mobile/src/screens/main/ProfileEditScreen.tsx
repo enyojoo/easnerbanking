@@ -15,7 +15,8 @@ import {
 } from 'react-native'
 import { AvatarImage } from '../../components/AvatarImage'
 import DateTimePicker from '@react-native-community/datetimepicker'
-import { ArrowLeft, Calendar, Camera, CircleCheck, CircleX, Trash2 } from 'lucide-react-native'
+import { Ionicons } from '@expo/vector-icons'
+import { ArrowLeft, Calendar, CircleCheck, CircleX, Trash2 } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect } from '@react-navigation/native'
@@ -874,21 +875,15 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                               avatarUrl={editProfileData.avatarUrl}
                               style={userAvatarStyles.image}
                             />
-                            <View
-                              style={[styles.avatarEditPhotoOverlay, styles.avatarEditPhotoOverlayFilled]}
-                              pointerEvents="none"
-                            >
-                              <Camera size={22} color={colors.neutral.white} strokeWidth={2} />
+                            <View style={styles.avatarEditPhotoOverlay} pointerEvents="none">
+                              <Ionicons name="camera" size={22} color={colors.neutral.white} />
                             </View>
                           </>
                         ) : (
                           <>
                             <Text style={userAvatarStyles.initials}>{profilePhotoInitials()}</Text>
-                            <View
-                              style={[styles.avatarEditPhotoOverlay, styles.avatarEditPhotoOverlayEmpty]}
-                              pointerEvents="none"
-                            >
-                              <Camera size={24} color={colors.primary.main} strokeWidth={2} />
+                            <View style={styles.avatarEditPhotoOverlay} pointerEvents="none">
+                              <Ionicons name="camera" size={22} color={colors.neutral.white} />
                             </View>
                           </>
                         )}
@@ -899,7 +894,13 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                         ) : null}
                       </View>
                     </Pressable>
-                  ) : (
+                  ) : null}
+                  {isEditing ? (
+                    <Text style={styles.avatarEditHint}>
+                      {editAvatarUri ? 'Tap to change photo' : 'Tap to add photo'}
+                    </Text>
+                  ) : null}
+                  {!isEditing ? (
                     <View style={[userAvatarStyles.circle, styles.profileAvatarCircle]}>
                       {profileAvatarUri ? (
                         <AvatarImage
@@ -910,7 +911,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                         <Text style={userAvatarStyles.initials}>{profilePhotoInitials()}</Text>
                       )}
                     </View>
-                  )}
+                  ) : null}
                   <View style={styles.avatarRemoveSlot}>
                     {isEditing && editProfileData.avatarUrl?.trim() ? (
                       <Pressable
@@ -1264,16 +1265,14 @@ const styles = StyleSheet.create({
   avatarEditPhotoOverlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 2,
+    backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  /** Dim veil over an existing photo so the camera reads as “tap to change”. */
-  avatarEditPhotoOverlayFilled: {
-    backgroundColor: 'rgba(0,0,0,0.35)',
-  },
-  /** Empty state: primary camera on dashed circle (no dark wash). */
-  avatarEditPhotoOverlayEmpty: {
-    backgroundColor: 'transparent',
+  avatarEditHint: {
+    ...textStyles.labelSmall,
+    color: colors.text.secondary,
+    marginTop: spacing[1],
   },
   avatarUploading: {
     ...StyleSheet.absoluteFillObject,

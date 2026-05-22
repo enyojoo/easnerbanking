@@ -2,9 +2,9 @@ import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import { EasenetSubtitleRow } from '../lib/easenetRecipientUi'
-import { EASNER_MARK_SOURCE } from '../lib/easnerBrand'
 import { normalizeAvatarUrl } from '../lib/avatarCache'
 import { CachedImage } from './CachedImage'
+import { EasnerMarkBadge } from './EasnerMarkBadge'
 import { colors, spacing, borderRadius, textStyles, fontFamily, surfaceFrameStyle } from '../theme'
 
 export type EasenetLookupProfile = {
@@ -54,12 +54,7 @@ export function EasenetLookupPreview({
           </View>
         )}
         <View style={styles.markBadge}>
-          <CachedImage
-            source={EASNER_MARK_SOURCE}
-            style={styles.markImg}
-            contentFit="cover"
-            prefetch={false}
-          />
+          <EasnerMarkBadge />
         </View>
       </View>
       <View style={styles.textCol}>
@@ -142,19 +137,6 @@ const styles = StyleSheet.create({
     right: -2,
     zIndex: 3,
     elevation: 3,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.background.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.background.primary,
-    overflow: 'hidden',
-  },
-  markImg: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 10,
   },
   textCol: {
     flex: 1,
