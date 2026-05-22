@@ -32,6 +32,7 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
   const { showWarning } = useToast()
   const qc = useQueryClient()
   const commQuery = useCommunicationPreferences()
+  const [devicePushEnabled, setDevicePushEnabled] = useState(false)
   const communicationPreferences =
     commQuery.data ?? {
       ...DEFAULT_COMMUNICATION_PREFERENCES,
@@ -51,6 +52,13 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
     useCallback(() => {
       if (commQuery.isStale) {
         void commQuery.refetch()
+      }
+      let active = true
+      void pushNotificationService.getCachedPushToken().then((token) => {
+        if (active) setDevicePushEnabled(Boolean(token))
+      })
+      return () => {
+        active = false
       }
     }, [commQuery.isStale, commQuery.refetch]),
   )
@@ -116,6 +124,7 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
           expoPushToken: reg.token,
           platform: Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : undefined,
         })
+        setDevicePushEnabled(true)
         await patchPrefs({
           ...optimistic,
           channels: { ...optimistic.channels, push: true },
@@ -124,15 +133,21 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
         // Keep chosen state in UI.
       }
     } else {
-      const optimistic: CommunicationPreferences = {
-        ...prefs,
-        channels: { ...prefs.channels, push: false },
-      }
-      await commitCommunicationPreferences(optimistic)
+      const token = await pushNotificationService.getCachedPushToken()
+      setDevicePushEnabled(false)
       try {
-        await patchPrefs(optimistic)
         await pushNotificationService.clearLocalPushToken()
-        await apiPost('/api/settings/push-token', { expoPushToken: null })
+        const res = await apiPost('/api/settings/push-token', {
+          expoPushToken: null,
+          removeExpoPushToken: token,
+        })
+        const data = (await res.json().catch(() => ({}))) as { deviceCount?: number }
+        if (!data.deviceCount) {
+          await patchPrefs({
+            ...prefs,
+            channels: { ...prefs.channels, push: false },
+          })
+        }
       } catch {
         // Keep chosen state in UI.
       }
@@ -234,7 +249,7 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
                     {renderToggleItem(
                       'Push notifications',
                       'Alerts on this device when enabled',
-                      prefs.channels.push,
+                      devicePushEnabled,
                       (v) => void handlePushToggle(v),
                       true,
                     )}

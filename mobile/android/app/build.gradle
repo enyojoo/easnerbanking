@@ -2,6 +2,18 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+def googleServicesFromMobileRoot = file("../../google-services.json")
+def googleServicesInApp = file("google-services.json")
+if (!googleServicesInApp.exists() && googleServicesFromMobileRoot.exists()) {
+    copy {
+        from googleServicesFromMobileRoot
+        into projectDir
+    }
+}
+if (googleServicesInApp.exists()) {
+    apply plugin: "com.google.gms.google-services"
+}
+
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 
 /**

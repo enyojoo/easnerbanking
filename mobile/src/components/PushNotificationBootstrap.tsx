@@ -38,9 +38,13 @@ export function PushNotificationBootstrap() {
             })
           }
         } else {
+          const token = await pushNotificationService.getCachedPushToken()
           await pushNotificationService.clearLocalPushToken()
           if (!cancelled) {
-            await apiPost('/api/settings/push-token', { expoPushToken: null })
+            await apiPost('/api/settings/push-token', {
+              expoPushToken: null,
+              removeExpoPushToken: token,
+            })
           }
         }
       } catch (e) {

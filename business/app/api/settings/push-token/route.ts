@@ -9,9 +9,13 @@ export async function POST(request: Request) {
   const user = await getUserFromApiRequest(request)
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  let body: { expoPushToken?: string | null; platform?: string | null } = {}
+  let body: { expoPushToken?: string | null; removeExpoPushToken?: string | null; platform?: string | null } = {}
   try {
-    body = (await request.json()) as { expoPushToken?: string | null; platform?: string | null }
+    body = (await request.json()) as {
+      expoPushToken?: string | null
+      removeExpoPushToken?: string | null
+      platform?: string | null
+    }
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
   }
@@ -32,13 +36,30 @@ export async function POST(request: Request) {
   const now = new Date().toISOString()
 
   if (token === null) {
-    const del = await admin.from("user_push_devices").delete().eq("user_id", user.id)
-    if (del.error && del.error.code !== "42P01") {
-      console.warn("push-token delete user_push_devices:", del.error)
-      return NextResponse.json({ error: del.error.message }, { status: 500 })
+    const removeRaw = body.removeExpoPushToken
+    const removeToken = typeof removeRaw === "string" ? removeRaw.trim() || null : null
+    if (removeToken) {
+      const del = await admin
+        .from("user_push_devices")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("expo_push_token", removeToken)
+      if (del.error && del.error.code !== "42P01") {
+        console.warn("push-token delete user_push_devices:", del.error)
+        return NextResponse.json({ error: del.error.message }, { status: 500 })
+      }
     }
 
-    return NextResponse.json({ ok: true, hasExpoPushToken: false, deviceCount: 0 })
+    const { count } = await admin
+      .from("user_push_devices")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+
+    return NextResponse.json({
+      ok: true,
+      hasExpoPushToken: false,
+      deviceCount: typeof count === "number" ? count : undefined,
+    })
   }
 
   const upsertDevice = await admin.from("user_push_devices").upsert(

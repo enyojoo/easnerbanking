@@ -124,6 +124,11 @@ module.exports = ({ config }) => {
 
   const intercomKeysReady =
     Boolean(intercomAppId && intercomIosApiKey && intercomAndroidApiKey)
+  const googleServicesFile =
+    process.env.EXPO_ANDROID_GOOGLE_SERVICES_FILE?.trim() ||
+    (fs.existsSync(path.join(__dirname, 'google-services.json'))
+      ? './google-services.json'
+      : '')
 
   const intercomPlugins = intercomKeysReady
     ? [
@@ -148,8 +153,18 @@ module.exports = ({ config }) => {
     )
   }
 
+  if (process.env.EAS_BUILD && !googleServicesFile) {
+    console.warn(
+      '[easner-mobile] Android push needs Firebase google-services.json. Add mobile/google-services.json or set EXPO_ANDROID_GOOGLE_SERVICES_FILE, then rebuild Android.'
+    )
+  }
+
   const merged = {
     ...config,
+    android: {
+      ...(config.android || {}),
+      ...(googleServicesFile ? { googleServicesFile } : {}),
+    },
     ios: {
       ...(config.ios || {}),
       infoPlist: {

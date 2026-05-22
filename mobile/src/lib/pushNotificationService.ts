@@ -1,6 +1,7 @@
 import * as Device from 'expo-device'
 import Constants from 'expo-constants'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Platform } from 'react-native'
 import type {
   Notification,
   NotificationResponse,
@@ -20,6 +21,8 @@ function getNotifications(): NotificationsModule | null {
     notificationsLazy.setNotificationHandler({
       handleNotification: async () => ({
         shouldShowAlert: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
         shouldPlaySound: true,
         shouldSetBadge: true,
       }),
@@ -108,6 +111,15 @@ class PushNotificationService {
         }
       }
 
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'Default',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#007ACC',
+        })
+      }
+
       const projectId = getExpoProjectId()
       const token = (
         projectId
@@ -129,6 +141,17 @@ class PushNotificationService {
 
   getPushToken(): string | null {
     return this.expoPushToken
+  }
+
+  async getCachedPushToken(): Promise<string | null> {
+    if (this.expoPushToken) return this.expoPushToken
+    try {
+      const storedToken = await AsyncStorage.getItem('expoPushToken')
+      this.expoPushToken = storedToken
+      return storedToken
+    } catch {
+      return null
+    }
   }
 
   /** Clear cached Expo token (e.g. user disabled push). Does not revoke OS permission. */
