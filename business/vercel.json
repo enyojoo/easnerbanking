@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "cd .. && NODE_OPTIONS='--no-deprecation' npm ci --workspace=easner-business --workspace=@easner/shared --workspace=@easner/server --workspace=@easner/rate-sync --include-workspace-root",
+  "installCommand": "cd .. && NODE_OPTIONS='--no-deprecation' npm ci --registry=https://registry.npmjs.org/ --no-audit --no-fund --workspace=easner-business --workspace=@easner/shared --workspace=@easner/server --workspace=@easner/rate-sync --include-workspace-root",
   "build": {
     "env": {
       "NODE_OPTIONS": "--no-deprecation"
