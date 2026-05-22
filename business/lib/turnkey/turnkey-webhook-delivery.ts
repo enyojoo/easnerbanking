@@ -31,6 +31,11 @@ function header(request: Request, name: string): string | null {
   return trimHeader(request.headers.get(name) ?? request.headers.get(name.toLowerCase()))
 }
 
+/** Read the exact webhook body bytes Turnkey signed (never call `request.json()` before verify). */
+export async function readTurnkeyWebhookRawBody(request: Request): Promise<Buffer> {
+  return Buffer.from(await request.arrayBuffer())
+}
+
 export function readTurnkeyWebhookHeaders(request: Request): TurnkeyWebhookHeaders {
   const signature =
     header(request, "X-Turnkey-Signature") ||

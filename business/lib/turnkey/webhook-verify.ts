@@ -2,8 +2,9 @@ import { createHash, createHmac, createPublicKey, timingSafeEqual, verify as cry
 import type { TurnkeyWebhookHeaders } from "@/lib/turnkey/turnkey-webhook-delivery"
 import type { TurnkeyWebhookSignatureMeta } from "@/lib/turnkey/turnkey-webhook-delivery"
 import {
+  buildTurnkeyWebhookV1SignedMessage,
   buildTurnkeyWebhookV1SignedMessageCandidates,
-  parseTurnkeyWebhookTimestampMs,
+  turnkeyWebhookSignatureTimestamp,
 } from "@/lib/turnkey/turnkey-webhook-signed-payload"
 import {
   resolveTurnkeyWebhookEd25519PublicKey,
@@ -110,8 +111,8 @@ function verifyEd25519TurnkeyWebhook(input: TurnkeyWebhookVerifyInput): boolean 
   }
 
   const eventId = input.eventId?.trim()
-  const timestampMs = parseTurnkeyWebhookTimestampMs(input.timestamp)
-  if (!eventId || !timestampMs) {
+  const timestampForSigning = turnkeyWebhookSignatureTimestamp(input.timestamp)
+  if (!eventId || !timestampForSigning) {
     console.warn("[turnkey-webhook] ed25519 verify requires X-Turnkey-Event-Id and X-Turnkey-Timestamp", {
       hasEventId: Boolean(eventId),
       hasTimestamp: Boolean(input.timestamp),
@@ -119,15 +120,21 @@ function verifyEd25519TurnkeyWebhook(input: TurnkeyWebhookVerifyInput): boolean 
     return false
   }
 
-  const messages = buildTurnkeyWebhookV1SignedMessageCandidates({
+  const signedMessageInput = {
     rawBody: input.rawBody,
     eventId,
-    timestampMs,
-    timestampRaw: input.timestamp,
+    timestampForSigning,
     signingKeyId: input.meta?.keyId,
     signatureVersion: input.meta?.version,
     algorithm: input.meta?.algorithm,
-  })
+  }
+  const strictSignature = process.env.TURNKEY_WEBHOOK_STRICT_SIGNATURE === "true"
+  const messages = strictSignature
+    ? (() => {
+        const canonical = buildTurnkeyWebhookV1SignedMessage(signedMessageInput)
+        return canonical ? [{ name: "turnkey-v1-full-prefix", message: canonical }] : []
+      })()
+    : buildTurnkeyWebhookV1SignedMessageCandidates(signedMessageInput)
   if (!messages.length) return false
 
   const publicKey = ed25519PublicKeyObject(keyMaterial.publicKey)
@@ -151,15 +158,16 @@ function verifyEd25519TurnkeyWebhook(input: TurnkeyWebhookVerifyInput): boolean 
     }
   }
 
-  console.warn("[turnkey-webhook] ed25519 signature verify failed", {
+  const logFailure = strictSignature ? console.warn : console.info
+  logFailure("[turnkey-webhook] ed25519 signature verify failed", {
     keyId: input.meta?.keyId,
     algorithm: input.meta?.algorithm,
     version: input.meta?.version,
     publicKeySource: keyMaterial.source,
     publicKeyFingerprint: turnkeyWebhookSigningPublicKeyFingerprint(keyMaterial.publicKey),
     eventId,
-    timestampRaw: input.timestamp,
-    timestampMs,
+    timestampForSigning,
+    strictSignature,
     rawBodyBytes: input.rawBody.length,
     rawBodySha256: createHash("sha256").update(input.rawBody).digest("hex").slice(0, 16),
     signatureCandidates: signatures.length,

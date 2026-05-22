@@ -62,6 +62,26 @@ describe("parseTurnkeyBalanceWebhookPayload", () => {
     })
   })
 
+  it("parses balances:confirmed with top-level organizationId fields", () => {
+    const payload = {
+      type: "balances:confirmed",
+      organizationId: "org-top",
+      parentOrganizationId: "parent-top",
+      msg: {
+        operation: "deposit",
+        txHash: "5abc123def456",
+        address: "DepositAta1111111111111111111111111111111111",
+        idempotencyKey: "idem-top-level-org",
+        asset: { symbol: "USDC", decimals: 6, amount: "1000000" },
+        block: { timestamp: "2026-05-20T12:00:00.000Z" },
+      },
+    }
+    const parsed = parseTurnkeyBalanceWebhookPayload(payload)
+    expect(parsed.kind).toBe("deposit")
+    if (parsed.kind !== "deposit") return
+    expect(parsed.data.eventId).toBe("idem-top-level-org")
+  })
+
   it("detects balance webhooks without activity id", () => {
     expect(isTurnkeyBalancesConfirmedWebhook(BALANCES_CONFIRMED_DEPOSIT)).toBe(true)
     expect(isTurnkeyBalancesConfirmedWebhook({ type: "ACTIVITY_TYPE_CREATE_WALLET", id: "x" })).toBe(false)

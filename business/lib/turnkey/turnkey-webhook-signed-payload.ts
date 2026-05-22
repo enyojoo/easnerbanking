@@ -3,11 +3,18 @@
  * @see https://docs.turnkey.com/developer-reference/webhooks — Verify signatures
  *
  * Canonical form:
- *   v1.ed25519.<signing_key_id>.<timestamp_ms>.<event_id>.<raw_body>
- * where <raw_body> is the exact request body bytes (not re-serialized JSON).
+ *   v1.ed25519.<signing_key_id>.<timestamp>.<event_id>.<raw_body>
+ * where <timestamp> is the exact `X-Turnkey-Timestamp` header string and <raw_body> is the
+ * exact request body bytes (not re-serialized JSON).
  */
 
-/** Parse `X-Turnkey-Timestamp` to Unix milliseconds string. */
+/** Exact `X-Turnkey-Timestamp` header value used in the signed message (trimmed only). */
+export function turnkeyWebhookSignatureTimestamp(timestamp: string | null | undefined): string | null {
+  if (!timestamp?.trim()) return null
+  return timestamp.trim()
+}
+
+/** Parse `X-Turnkey-Timestamp` to Unix milliseconds for replay/skew checks only (not for signing). */
 export function parseTurnkeyWebhookTimestampMs(timestamp: string | null | undefined): string | null {
   if (!timestamp?.trim()) return null
   const raw = timestamp.trim()
@@ -21,9 +28,8 @@ export function parseTurnkeyWebhookTimestampMs(timestamp: string | null | undefi
 export type TurnkeyWebhookV1SignedMessageInput = {
   rawBody: Buffer
   eventId: string
-  timestampMs: string
-  /** Exact `X-Turnkey-Timestamp` header value, when it differs from normalized ms. */
-  timestampRaw?: string | null
+  /** Exact `X-Turnkey-Timestamp` header string included in the signed prefix. */
+  timestampForSigning: string
   signingKeyId?: string | null
   signatureVersion?: string | null
   algorithm?: string | null
@@ -42,14 +48,14 @@ export function buildTurnkeyWebhookV1SignedMessage(
   input: TurnkeyWebhookV1SignedMessageInput,
 ): Buffer | null {
   const eventId = input.eventId.trim()
-  const timestampMs = input.timestampMs.trim()
-  if (!eventId || !timestampMs) return null
+  const timestampForSigning = input.timestampForSigning.trim()
+  if (!eventId || !timestampForSigning) return null
 
-  const version = (input.signatureVersion?.trim() || "v1").toLowerCase()
-  const algorithm = (input.algorithm?.trim() || "ed25519").toLowerCase()
+  const version = input.signatureVersion?.trim() || "v1"
+  const algorithm = input.algorithm?.trim() || "ed25519"
   const signingKeyId = input.signingKeyId?.trim() || "turnkey_webhook_signing_key_001"
 
-  const prefix = `${version}.${algorithm}.${signingKeyId}.${timestampMs}.${eventId}.`
+  const prefix = `${version}.${algorithm}.${signingKeyId}.${timestampForSigning}.${eventId}.`
   return Buffer.concat([Buffer.from(prefix, "utf8"), input.rawBody])
 }
 
@@ -65,12 +71,13 @@ export function buildTurnkeyWebhookV1SignedMessageCandidates(
   input: TurnkeyWebhookV1SignedMessageInput,
 ): TurnkeyWebhookSignedMessageCandidate[] {
   const eventId = input.eventId.trim()
-  const timestampMs = input.timestampMs.trim()
-  if (!eventId || !timestampMs) return []
-  const timestampRaw = input.timestampRaw?.trim()
-  const timestamps = [timestampMs]
-  if (timestampRaw && timestampRaw !== timestampMs) {
-    timestamps.push(timestampRaw)
+  const timestampForSigning = input.timestampForSigning.trim()
+  if (!eventId || !timestampForSigning) return []
+
+  const timestampMs = parseTurnkeyWebhookTimestampMs(timestampForSigning)
+  const timestamps = [timestampForSigning]
+  if (timestampMs && timestampMs !== timestampForSigning) {
+    timestamps.push(timestampMs)
   }
 
   const version = (input.signatureVersion?.trim() || "v1").toLowerCase()
@@ -84,7 +91,7 @@ export function buildTurnkeyWebhookV1SignedMessageCandidates(
   }
 
   for (const timestamp of timestamps) {
-    const suffix = timestamp === timestampMs ? "" : "-raw-ts"
+    const suffix = timestamp === timestampForSigning ? "" : "-normalized-ts"
     const stringPrefixes = [
       [`turnkey-v1-full-prefix${suffix}`, `${version}.${algorithm}.${signingKeyId}.${timestamp}.${eventId}.`],
       [`turnkey-v1-no-key${suffix}`, `${version}.${algorithm}.${timestamp}.${eventId}.`],

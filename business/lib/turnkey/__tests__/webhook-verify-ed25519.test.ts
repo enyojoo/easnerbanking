@@ -28,7 +28,7 @@ describe("verifyTurnkeyWebhookSignature ed25519", () => {
     const message = buildTurnkeyWebhookV1SignedMessage({
       rawBody,
       eventId,
-      timestampMs,
+      timestampForSigning: timestampMs,
       signingKeyId: "turnkey_webhook_signing_key_001",
     })!
     const sig = sign(null, message, testPrivateKey)
@@ -50,7 +50,7 @@ describe("verifyTurnkeyWebhookSignature ed25519", () => {
     const message = buildTurnkeyWebhookV1SignedMessage({
       rawBody,
       eventId,
-      timestampMs,
+      timestampForSigning: timestampMs,
     })!
     const sig = sign(null, message, testPrivateKey)
 
@@ -136,6 +136,51 @@ describe("verifyTurnkeyWebhookSignature ed25519", () => {
       timestamp: timestampMs,
     })
     expect(ok).toBe(true)
+  })
+
+  it("honors TURNKEY_WEBHOOK_STRICT_SIGNATURE with canonical payload only", () => {
+    const prevStrict = process.env.TURNKEY_WEBHOOK_STRICT_SIGNATURE
+    process.env.TURNKEY_WEBHOOK_STRICT_SIGNATURE = "true"
+    try {
+      const rawBody = Buffer.from('{"type":"balances:confirmed"}', "utf8")
+      const eventId = "evt-strict"
+      const timestampMs = "1747772156000"
+      const message = buildTurnkeyWebhookV1SignedMessage({
+        rawBody,
+        eventId,
+        timestampForSigning: timestampMs,
+        signingKeyId: "turnkey_webhook_signing_key_001",
+      })!
+      const sig = sign(null, message, testPrivateKey)
+
+      expect(
+        verifyTurnkeyWebhookSignature({
+          rawBody,
+          signatureHeader: sig.toString("hex"),
+          meta: { algorithm: "ed25519", keyId: "turnkey_webhook_signing_key_001", version: "v1" },
+          eventId,
+          timestamp: timestampMs,
+        }),
+      ).toBe(true)
+
+      const shorter = Buffer.concat([
+        Buffer.from(`v1.ed25519.${timestampMs}.${eventId}.`, "utf8"),
+        rawBody,
+      ])
+      const compatSig = sign(null, shorter, testPrivateKey)
+      expect(
+        verifyTurnkeyWebhookSignature({
+          rawBody,
+          signatureHeader: compatSig.toString("hex"),
+          meta: { algorithm: "ed25519", keyId: "turnkey_webhook_signing_key_001", version: "v1" },
+          eventId,
+          timestamp: timestampMs,
+        }),
+      ).toBe(false)
+    } finally {
+      if (prevStrict === undefined) delete process.env.TURNKEY_WEBHOOK_STRICT_SIGNATURE
+      else process.env.TURNKEY_WEBHOOK_STRICT_SIGNATURE = prevStrict
+    }
   })
 
   it("accepts v1 ed25519 signature over raw body", () => {

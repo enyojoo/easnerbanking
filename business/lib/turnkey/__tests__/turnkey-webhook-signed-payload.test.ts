@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest"
 import {
   buildTurnkeyWebhookV1SignedMessage,
   buildTurnkeyWebhookV1SignedMessageCandidates,
+  parseTurnkeyWebhookTimestampMs,
+  turnkeyWebhookSignatureTimestamp,
 } from "@/lib/turnkey/turnkey-webhook-signed-payload"
 
 describe("buildTurnkeyWebhookV1SignedMessage", () => {
@@ -11,7 +13,7 @@ describe("buildTurnkeyWebhookV1SignedMessage", () => {
     const message = buildTurnkeyWebhookV1SignedMessage({
       rawBody: body,
       eventId: "evt-1",
-      timestampMs: tsMs,
+      timestampForSigning: tsMs,
       signingKeyId: "turnkey_webhook_signing_key_001",
     })
     expect(message?.toString("utf8")).toBe(
@@ -24,7 +26,7 @@ describe("buildTurnkeyWebhookV1SignedMessage", () => {
     const message = buildTurnkeyWebhookV1SignedMessage({
       rawBody: body,
       eventId: "e1",
-      timestampMs: "1747772156000",
+      timestampForSigning: "1747772156000",
     })
     expect(message?.toString("utf8")).toBe(
       "v1.ed25519.turnkey_webhook_signing_key_001.1747772156000.e1.x",
@@ -36,7 +38,7 @@ describe("buildTurnkeyWebhookV1SignedMessage", () => {
     const candidates = buildTurnkeyWebhookV1SignedMessageCandidates({
       rawBody: body,
       eventId: "e1",
-      timestampMs: "1747772156000",
+      timestampForSigning: "1747772156000",
     })
     expect(candidates.map((c) => c.name)).toEqual([
       "turnkey-v1-full-prefix",
@@ -63,5 +65,20 @@ describe("buildTurnkeyWebhookV1SignedMessage", () => {
     )
     expect(candidates.map((c) => c.message.toString("utf8"))).toContain("1747772156000.x")
     expect(candidates.map((c) => c.message.toString("utf8"))).toContain("1747772156000x")
+  })
+
+  it("uses the raw X-Turnkey-Timestamp header in the canonical prefix", () => {
+    const body = Buffer.from("{}", "utf8")
+    const iso = "2026-05-22T14:30:00.000Z"
+    const message = buildTurnkeyWebhookV1SignedMessage({
+      rawBody: body,
+      eventId: "evt-iso",
+      timestampForSigning: iso,
+    })
+    expect(message?.toString("utf8")).toBe(
+      `v1.ed25519.turnkey_webhook_signing_key_001.${iso}.evt-iso.{}`,
+    )
+    expect(turnkeyWebhookSignatureTimestamp(iso)).toBe(iso)
+    expect(parseTurnkeyWebhookTimestampMs(iso)).not.toBe(iso)
   })
 })

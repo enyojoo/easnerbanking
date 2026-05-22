@@ -13,6 +13,7 @@ import { parseTurnkeyBalanceWebhookPayload } from "@/lib/turnkey/turnkey-balance
 import {
   isV2TurnkeyWebhookDelivery,
   readTurnkeyWebhookHeaders,
+  readTurnkeyWebhookRawBody,
   resolveTurnkeyWebhookInboxIdentity,
   turnkeySignatureMetaFromHeaders,
   validateTurnkeyWebhookOrganizationId,
@@ -51,7 +52,7 @@ function canCompatibilityAcceptTurnkeyV2SignatureFailure(
  */
 export async function POST(request: Request) {
   const headers = readTurnkeyWebhookHeaders(request)
-  const raw = Buffer.from(await request.arrayBuffer())
+  const raw = await readTurnkeyWebhookRawBody(request)
   const secretConfigured = Boolean(process.env.TURNKEY_WEBHOOK_SECRET?.trim())
   const ed25519Configured = isTurnkeyWebhookEd25519SigningConfigured()
   if (process.env.NODE_ENV === "production" && !secretConfigured && !ed25519Configured) {
@@ -88,7 +89,7 @@ export async function POST(request: Request) {
       if (!compatibilityAccepted) {
         return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 })
       }
-      console.warn("turnkey_webhook: signed V2 delivery accepted in signature compatibility mode", {
+      console.info("turnkey_webhook: signed V2 delivery accepted in signature compatibility mode", {
         keyId: sigMeta.keyId,
         algorithm: sigMeta.algorithm,
         version: sigMeta.version,
