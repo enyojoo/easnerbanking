@@ -21,16 +21,17 @@ With `TURNKEY_WEBHOOK_STRICT_SIGNATURE=true`, we only accept the canonical prefi
 
 **Current result:** strict verify still fails on live `BALANCE_CONFIRMED_UPDATES` deliveries, while the same requests succeed when we allow compatibility mode (headers + org + timestamp checks only). `event_inbox` processes correctly in compatibility mode.
 
-**Example from our logs (strict verify failed):**
+**Latest example from our logs (strict verify failed, `@noble/curves` canonical path):**
 
 - `X-Turnkey-Signature-Key-Id`: `turnkey_webhook_signing_key_001`
 - `X-Turnkey-Signature-Algorithm`: `ed25519`
 - `X-Turnkey-Signature-Version`: `v1`
-- `X-Turnkey-Event-Id`: `d0615573e020ae26f1470fba250da566da75a76bc12f922489166fd518826770`
-- `X-Turnkey-Timestamp`: `1779468508633`
+- `X-Turnkey-Event-Id`: `bbadb4135019fa7a367ae7c1cee3173f87b5589932870a7cb8b38ccf4a4a166d`
+- `X-Turnkey-Timestamp`: `1779476726902`
 - Public key fingerprint (sha256 prefix): `48b1d94ddaaa602d` (matches key you provided)
 - Raw body length: **741** bytes
-- Raw body sha256 (first 16 hex): `254966dfd59c161d`
+- Raw body sha256 (full): `acc5641ee92bfef3…` (see Vercel log field `rawBodySha256` after next deploy)
+- Canonical prefix we verify: `v1.ed25519.turnkey_webhook_signing_key_001.1779476726902.bbadb4135019fa7a367ae7c1cee3173f87b5589932870a7cb8b38ccf4a4a166d.` + raw body bytes
 
 Can you provide **one** of the following so we can close strict verify?
 

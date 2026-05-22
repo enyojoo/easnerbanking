@@ -21,6 +21,8 @@ import {
 } from "@/lib/turnkey/turnkey-webhook-delivery"
 
 export const runtime = "nodejs"
+/** Webhook signature is over exact request bytes; never statically optimize this route. */
+export const dynamic = "force-dynamic"
 
 function isEd25519V1SignatureMeta(meta: ReturnType<typeof turnkeySignatureMetaFromHeaders>): boolean {
   return (
@@ -87,6 +89,13 @@ export async function POST(request: Request) {
       const compatibilityAccepted =
         orgError === null && canCompatibilityAcceptTurnkeyV2SignatureFailure(headers, sigMeta, ed25519Configured)
       if (!compatibilityAccepted) {
+        if (process.env.TURNKEY_WEBHOOK_STRICT_SIGNATURE === "true") {
+          console.warn("turnkey_webhook: strict signature rejected (401). Remove TURNKEY_WEBHOOK_STRICT_SIGNATURE to use compatibility mode.", {
+            eventId: headers.eventId,
+            contentType: request.headers.get("content-type"),
+            contentEncoding: request.headers.get("content-encoding"),
+          })
+        }
         return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 })
       }
       console.info("turnkey_webhook: signed V2 delivery accepted in signature compatibility mode", {

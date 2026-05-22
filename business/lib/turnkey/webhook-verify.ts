@@ -1,12 +1,13 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto"
-import { ed25519 } from "@noble/curves/ed25519"
 import type { TurnkeyWebhookHeaders } from "@/lib/turnkey/turnkey-webhook-delivery"
 import type { TurnkeyWebhookSignatureMeta } from "@/lib/turnkey/turnkey-webhook-delivery"
 import {
-  turnkeyEd25519FieldsFromVerifyInput,
+  turnkeyWebhookEd25519FailureDiagnostics,
+  verifyTurnkeyCanonicalEd25519Noble,
   verifyTurnkeyWebhookEd25519Noble,
 } from "@/lib/turnkey/turnkey-webhook-ed25519-verify"
 import {
+  buildTurnkeyWebhookV1SignedMessage,
   buildTurnkeyWebhookV1SignedMessageCandidates,
   turnkeyWebhookSignatureTimestamp,
 } from "@/lib/turnkey/turnkey-webhook-signed-payload"
@@ -43,15 +44,6 @@ function isEd25519Algorithm(algorithm: string | null | undefined): boolean {
   if (!algorithm?.trim()) return false
   const a = algorithm.trim().toLowerCase()
   return a.includes("ed25519") || a === "eddsa" || a.includes("eddsa")
-}
-
-function verifyEd25519Noble(publicKey32: Buffer, message: Buffer, signature: Buffer): boolean {
-  if (publicKey32.length !== 32 || signature.length !== 64) return false
-  try {
-    return ed25519.verify(signature, message, publicKey32)
-  } catch {
-    return false
-  }
 }
 
 /** Turnkey V2 sends hex-encoded Ed25519 signatures in `X-Turnkey-Signature`. */
@@ -127,29 +119,47 @@ function verifyEd25519TurnkeyWebhook(input: TurnkeyWebhookVerifyInput): boolean 
     return false
   }
 
-  const signedMessageInput = {
+  const canonicalInput = {
     rawBody: input.rawBody,
     eventId,
     timestampForSigning,
     signingKeyId: input.meta?.keyId,
     signatureVersion: input.meta?.version,
     algorithm: input.meta?.algorithm,
-    signatureHeader: sigHeader,
   }
   const strictSignature = process.env.TURNKEY_WEBHOOK_STRICT_SIGNATURE === "true"
+  const publicKey32 = keyMaterial.publicKey
 
-  const nobleFields = turnkeyEd25519FieldsFromVerifyInput(signedMessageInput)
-  if (nobleFields && verifyTurnkeyWebhookEd25519Noble(nobleFields, input.rawBody, keyMaterial.publicKey)) {
+  const canonicalSignedInput = buildTurnkeyWebhookV1SignedMessage(canonicalInput)
+  if (canonicalSignedInput) {
+    for (const sig of signatures) {
+      if (verifyTurnkeyCanonicalEd25519Noble(canonicalSignedInput, sig, publicKey32)) {
+        return true
+      }
+    }
+  }
+
+  if (
+    verifyTurnkeyWebhookEd25519Noble(
+      {
+        version: canonicalInput.signatureVersion?.trim() || "v1",
+        algorithm: canonicalInput.algorithm?.trim() || "ed25519",
+        keyId: canonicalInput.signingKeyId?.trim() || "turnkey_webhook_signing_key_001",
+        timestamp: timestampForSigning,
+        eventId,
+        signatureHex: sigHeader,
+      },
+      input.rawBody,
+      publicKey32,
+    )
+  ) {
     return true
   }
 
-  const messages = strictSignature
-    ? []
-    : buildTurnkeyWebhookV1SignedMessageCandidates(signedMessageInput)
-  const publicKey32 = keyMaterial.publicKey
+  const messages = strictSignature ? [] : buildTurnkeyWebhookV1SignedMessageCandidates(canonicalInput)
   for (const sig of signatures) {
     for (const candidate of messages) {
-      if (verifyEd25519Noble(publicKey32, candidate.message, sig)) {
+      if (verifyTurnkeyCanonicalEd25519Noble(candidate.message, sig, publicKey32)) {
         console.info("[turnkey-webhook] ed25519 signature verified with compatibility payload", {
           keyId: input.meta?.keyId,
           algorithm: input.meta?.algorithm,
@@ -162,6 +172,7 @@ function verifyEd25519TurnkeyWebhook(input: TurnkeyWebhookVerifyInput): boolean 
   }
 
   const logFailure = strictSignature ? console.warn : console.info
+  const diagnostics = turnkeyWebhookEd25519FailureDiagnostics(canonicalInput, input.rawBody)
   logFailure("[turnkey-webhook] ed25519 signature verify failed", {
     keyId: input.meta?.keyId,
     algorithm: input.meta?.algorithm,
@@ -171,10 +182,14 @@ function verifyEd25519TurnkeyWebhook(input: TurnkeyWebhookVerifyInput): boolean 
     eventId,
     timestampForSigning,
     strictSignature,
-    rawBodyBytes: input.rawBody.length,
-    rawBodySha256: createHash("sha256").update(input.rawBody).digest("hex").slice(0, 16),
     signatureCandidates: signatures.length,
     signedPayloadCandidates: messages.map((m) => m.name),
+    ...diagnostics,
+    ...(strictSignature
+      ? {
+          hint: "Unset TURNKEY_WEBHOOK_STRICT_SIGNATURE in Vercel to restore compatibility mode until Turnkey confirms raw body bytes.",
+        }
+      : {}),
   })
   return false
 }
