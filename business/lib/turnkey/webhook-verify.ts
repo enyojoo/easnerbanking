@@ -2,7 +2,7 @@ import { createHmac, createPublicKey, timingSafeEqual, verify as cryptoVerify } 
 import type { TurnkeyWebhookHeaders } from "@/lib/turnkey/turnkey-webhook-delivery"
 import type { TurnkeyWebhookSignatureMeta } from "@/lib/turnkey/turnkey-webhook-delivery"
 import {
-  buildTurnkeyWebhookV1SignedMessage,
+  buildTurnkeyWebhookV1SignedMessageCandidates,
   parseTurnkeyWebhookTimestampMs,
 } from "@/lib/turnkey/turnkey-webhook-signed-payload"
 import { resolveTurnkeyWebhookEd25519PublicKey } from "@/lib/turnkey/turnkey-webhook-signing-keys"
@@ -105,7 +105,7 @@ function verifyEd25519TurnkeyWebhook(input: TurnkeyWebhookVerifyInput): boolean 
     return false
   }
 
-  const message = buildTurnkeyWebhookV1SignedMessage({
+  const messages = buildTurnkeyWebhookV1SignedMessageCandidates({
     rawBody: input.rawBody,
     eventId,
     timestampMs,
@@ -113,14 +113,26 @@ function verifyEd25519TurnkeyWebhook(input: TurnkeyWebhookVerifyInput): boolean 
     signatureVersion: input.meta?.version,
     algorithm: input.meta?.algorithm,
   })
-  if (!message) return false
+  if (!messages.length) return false
 
   const publicKey = ed25519PublicKeyObject(keyMaterial.publicKey)
   for (const sig of signatures) {
-    try {
-      if (cryptoVerify(null, message, publicKey, sig)) return true
-    } catch {
-      /* try next */
+    for (const candidate of messages) {
+      try {
+        if (cryptoVerify(null, candidate.message, publicKey, sig)) {
+          if (candidate.name !== "turnkey-v1-full-prefix") {
+            console.info("[turnkey-webhook] ed25519 signature verified with compatibility payload", {
+              keyId: input.meta?.keyId,
+              algorithm: input.meta?.algorithm,
+              version: input.meta?.version,
+              signedPayload: candidate.name,
+            })
+          }
+          return true
+        }
+      } catch {
+        /* try next */
+      }
     }
   }
 
@@ -129,6 +141,7 @@ function verifyEd25519TurnkeyWebhook(input: TurnkeyWebhookVerifyInput): boolean 
     algorithm: input.meta?.algorithm,
     version: input.meta?.version,
     signatureCandidates: signatures.length,
+    signedPayloadCandidates: messages.map((m) => m.name),
   })
   return false
 }

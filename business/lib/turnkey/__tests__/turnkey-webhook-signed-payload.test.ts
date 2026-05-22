@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest"
-import { buildTurnkeyWebhookV1SignedMessage } from "@/lib/turnkey/turnkey-webhook-signed-payload"
+import {
+  buildTurnkeyWebhookV1SignedMessage,
+  buildTurnkeyWebhookV1SignedMessageCandidates,
+} from "@/lib/turnkey/turnkey-webhook-signed-payload"
 
 describe("buildTurnkeyWebhookV1SignedMessage", () => {
   it("matches Turnkey v1.ed25519 canonical prefix + raw body", () => {
@@ -25,6 +28,26 @@ describe("buildTurnkeyWebhookV1SignedMessage", () => {
     })
     expect(message?.toString("utf8")).toBe(
       "v1.ed25519.turnkey_webhook_signing_key_001.1747772156000.e1.x",
+    )
+  })
+
+  it("builds compatibility candidates for Turnkey preview header variants", () => {
+    const body = Buffer.from("x", "utf8")
+    const candidates = buildTurnkeyWebhookV1SignedMessageCandidates({
+      rawBody: body,
+      eventId: "e1",
+      timestampMs: "1747772156000",
+    })
+    expect(candidates.map((c) => c.name)).toEqual([
+      "turnkey-v1-full-prefix",
+      "turnkey-v1-no-key",
+      "svix-style",
+      "timestamp-event",
+      "turnkey-key-timestamp-event",
+      "raw-body",
+    ])
+    expect(candidates.map((c) => c.message.toString("utf8"))).toContain(
+      "v1.ed25519.1747772156000.e1.x",
     )
   })
 })

@@ -46,14 +46,15 @@ export const RECEIVE_VA_CURRENCIES = ['USD', 'EUR'] as const
 export const RECEIVE_DEPOSIT_STALE_MS = 3 * 60_000
 
 /**
- * Inactive query data is kept in memory this long after the last screen unmounts. Shorter than the
- * old 24h value to match business-scale retention; does not block “instant” display while the app
- * session is active and the user navigates.
+ * Inactive query data is kept for a long window because receive instructions are stable account
+ * artifacts. The persisted cache is cleared on sign-out/account switch, and stale data still
+ * refreshes in the background after login/resume, so returning users should not see a blank
+ * account/address table just because these rarely-changing details aged out locally.
  */
-export const RECEIVE_DEPOSIT_GC_MS = 15 * 60_000
+export const RECEIVE_DEPOSIT_GC_MS = 365 * 24 * 60 * 60_000
 
 const RECEIVE_QUERY_META = {
-  safePersist: false,
+  safePersist: true,
   freshness: 'operational' as const,
 }
 
@@ -63,15 +64,11 @@ async function fetchConsumerVirtualAccountsMap(): Promise<
   const entries = await Promise.all(
     RECEIVE_VA_CURRENCIES.map(async (code) => {
       const cur = code.toLowerCase()
-      try {
-        const value = await apiFetch<NoahVirtualAccountDisplayJson>(`/api/noah/virtual-accounts`, {
-          query: { currency: cur },
-          headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
-        })
-        return [code, value] as const
-      } catch {
-        return [code, null] as const
-      }
+      const value = await apiFetch<NoahVirtualAccountDisplayJson>(`/api/noah/virtual-accounts`, {
+        query: { currency: cur },
+        headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
+      })
+      return [code, value] as const
     }),
   )
   return Object.fromEntries(entries) as Record<string, NoahVirtualAccountDisplayJson | null>
