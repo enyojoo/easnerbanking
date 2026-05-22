@@ -84,6 +84,26 @@ describe("verifyTurnkeyWebhookSignature ed25519", () => {
     expect(ok).toBe(true)
   })
 
+  it("accepts signatures that use the exact ISO timestamp header", () => {
+    const rawBody = Buffer.from('{"type":"balances:confirmed"}', "utf8")
+    const eventId = "evt-live-iso-timestamp"
+    const timestamp = "2026-05-22T14:30:00.000Z"
+    const message = Buffer.concat([
+      Buffer.from(`v1.ed25519.turnkey_webhook_signing_key_001.${timestamp}.${eventId}.`, "utf8"),
+      rawBody,
+    ])
+    const sig = sign(null, message, testPrivateKey)
+
+    const ok = verifyTurnkeyWebhookSignature({
+      rawBody,
+      signatureHeader: sig.toString("hex"),
+      meta: { algorithm: "ed25519", keyId: "turnkey_webhook_signing_key_001", version: "v1" },
+      eventId,
+      timestamp,
+    })
+    expect(ok).toBe(true)
+  })
+
   it("accepts v1 ed25519 signature over raw body", () => {
     const rawBody = Buffer.from('{"type":"balances:confirmed","eventId":"evt-body"}', "utf8")
     const eventId = "evt-body"

@@ -1,11 +1,14 @@
-import { createHmac, createPublicKey, timingSafeEqual, verify as cryptoVerify } from "node:crypto"
+import { createHash, createHmac, createPublicKey, timingSafeEqual, verify as cryptoVerify } from "node:crypto"
 import type { TurnkeyWebhookHeaders } from "@/lib/turnkey/turnkey-webhook-delivery"
 import type { TurnkeyWebhookSignatureMeta } from "@/lib/turnkey/turnkey-webhook-delivery"
 import {
   buildTurnkeyWebhookV1SignedMessageCandidates,
   parseTurnkeyWebhookTimestampMs,
 } from "@/lib/turnkey/turnkey-webhook-signed-payload"
-import { resolveTurnkeyWebhookEd25519PublicKey } from "@/lib/turnkey/turnkey-webhook-signing-keys"
+import {
+  resolveTurnkeyWebhookEd25519PublicKey,
+  turnkeyWebhookSigningPublicKeyFingerprint,
+} from "@/lib/turnkey/turnkey-webhook-signing-keys"
 
 export type TurnkeyWebhookVerifyInput = {
   rawBody: Buffer
@@ -46,29 +49,40 @@ function ed25519PublicKeyObject(raw32: Buffer) {
 /** Turnkey V2 sends hex-encoded Ed25519 signatures in `X-Turnkey-Signature`. */
 function decodeEd25519SignatureBytes(signatureHeader: string): Buffer[] {
   const out: Buffer[] = []
-  let part = signatureHeader.trim()
-  if (!part) return out
+  const raw = signatureHeader.trim()
+  if (!raw) return out
 
-  const v1 = /^v1[=:,]/i.exec(part)
-  if (v1) part = part.slice(v1[0].length).trim()
+  const parts = [raw]
+  for (const part of raw.split(/[,\s]+/)) {
+    const trimmed = part.trim()
+    if (trimmed) parts.push(trimmed)
+    const kv = /^v\d+=(.+)$/i.exec(trimmed) || /^signature=(.+)$/i.exec(trimmed)
+    if (kv?.[1]) parts.push(kv[1].trim())
+  }
 
-  const hex = part.replace(/^0x/i, "").trim()
-  if (/^[0-9a-fA-F]+$/.test(hex) && hex.length === 128) {
+  for (let part of parts) {
+    const v1 = /^v1[=:,]/i.exec(part)
+    if (v1) part = part.slice(v1[0].length).trim()
+
+    const hex = part.replace(/^0x/i, "").trim()
+    if (/^[0-9a-fA-F]+$/.test(hex) && hex.length === 128) {
+      try {
+        const buf = Buffer.from(hex, "hex")
+        if (!out.some((existing) => existing.equals(buf))) out.push(buf)
+      } catch {
+        /* ignore */
+      }
+    }
+
+    // Legacy / mistaken encodings
     try {
-      out.push(Buffer.from(hex, "hex"))
+      const norm = part.replace(/-/g, "+").replace(/_/g, "/")
+      const padLen = (4 - (norm.length % 4)) % 4
+      const buf = Buffer.from(norm + "=".repeat(padLen), "base64")
+      if (buf.length === 64 && !out.some((existing) => existing.equals(buf))) out.push(buf)
     } catch {
       /* ignore */
     }
-  }
-
-  // Legacy / mistaken encodings
-  try {
-    const norm = part.replace(/-/g, "+").replace(/_/g, "/")
-    const padLen = (4 - (norm.length % 4)) % 4
-    const buf = Buffer.from(norm + "=".repeat(padLen), "base64")
-    if (buf.length === 64) out.push(buf)
-  } catch {
-    /* ignore */
   }
 
   return out
@@ -109,6 +123,7 @@ function verifyEd25519TurnkeyWebhook(input: TurnkeyWebhookVerifyInput): boolean 
     rawBody: input.rawBody,
     eventId,
     timestampMs,
+    timestampRaw: input.timestamp,
     signingKeyId: input.meta?.keyId,
     signatureVersion: input.meta?.version,
     algorithm: input.meta?.algorithm,
@@ -140,6 +155,13 @@ function verifyEd25519TurnkeyWebhook(input: TurnkeyWebhookVerifyInput): boolean 
     keyId: input.meta?.keyId,
     algorithm: input.meta?.algorithm,
     version: input.meta?.version,
+    publicKeySource: keyMaterial.source,
+    publicKeyFingerprint: turnkeyWebhookSigningPublicKeyFingerprint(keyMaterial.publicKey),
+    eventId,
+    timestampRaw: input.timestamp,
+    timestampMs,
+    rawBodyBytes: input.rawBody.length,
+    rawBodySha256: createHash("sha256").update(input.rawBody).digest("hex").slice(0, 16),
     signatureCandidates: signatures.length,
     signedPayloadCandidates: messages.map((m) => m.name),
   })
@@ -204,7 +226,7 @@ export function verifyTurnkeyWebhookSignature(
 
   const useEd25519 =
     isEd25519Algorithm(input.meta?.algorithm) ||
-    (input.meta?.signatureVersion?.trim().toLowerCase() === "v1" &&
+    (input.meta?.version?.trim().toLowerCase() === "v1" &&
       input.meta?.keyId?.trim() &&
       !isHmacSha256Algorithm(input.meta?.algorithm))
 

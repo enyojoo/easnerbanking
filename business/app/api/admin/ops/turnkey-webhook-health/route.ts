@@ -6,7 +6,10 @@ import {
   isTurnkeyBalanceWebhooksIngestEnabled,
   validateTurnkeyEnvForProduction,
 } from "@/lib/turnkey/config"
-import { isTurnkeyWebhookEd25519SigningConfigured } from "@/lib/turnkey/turnkey-webhook-signing-keys"
+import {
+  resolveTurnkeyWebhookEd25519PublicKey,
+  turnkeyWebhookSigningPublicKeyFingerprint,
+} from "@/lib/turnkey/turnkey-webhook-signing-keys"
 
 export const runtime = "nodejs"
 
@@ -82,6 +85,7 @@ export async function GET(request: Request) {
   } catch (e) {
     routeProbeError = e instanceof Error ? e.message : String(e)
   }
+  const ed25519Key = resolveTurnkeyWebhookEd25519PublicKey("turnkey_webhook_signing_key_001")
 
   return NextResponse.json({
     ok: true,
@@ -93,7 +97,11 @@ export async function GET(request: Request) {
       setup_route: "/api/internal/turnkey-balance-webhook-endpoint",
     },
     webhook_secret_configured: Boolean(process.env.TURNKEY_WEBHOOK_SECRET?.trim()),
-    webhook_ed25519_public_key_configured: isTurnkeyWebhookEd25519SigningConfigured(),
+    webhook_ed25519_public_key: {
+      configured: Boolean(ed25519Key),
+      source: ed25519Key?.source ?? null,
+      fingerprint: ed25519Key ? turnkeyWebhookSigningPublicKeyFingerprint(ed25519Key.publicKey) : null,
+    },
     webhook_route: {
       url: "/api/webhooks/turnkey",
       status: routeReachableStatus(routeProbeStatus),

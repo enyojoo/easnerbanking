@@ -1,4 +1,4 @@
-import { createPublicKey } from "node:crypto"
+import { createHash, createPublicKey } from "node:crypto"
 
 /**
  * Turnkey Webhooks V2 platform signing keys (`X-Turnkey-Signature-Key-Id`).
@@ -99,4 +99,8 @@ export function resolveTurnkeyWebhookEd25519PublicKey(
 
 export function isTurnkeyWebhookEd25519SigningConfigured(): boolean {
   return resolveTurnkeyWebhookEd25519PublicKey("turnkey_webhook_signing_key_001") != null
+}
+
+export function turnkeyWebhookSigningPublicKeyFingerprint(key: Buffer): string {
+  return createHash("sha256").update(key).digest("hex").slice(0, 16)
 }
