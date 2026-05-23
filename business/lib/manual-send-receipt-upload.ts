@@ -1,7 +1,7 @@
 "use client"
 
 import { fetchWithSession } from "@/lib/fetch-with-session"
-import { MANUAL_SEND_RECEIPT_MAX_BYTES } from "@/lib/manual-send/receipt-storage"
+import { MANUAL_SEND_RECEIPT_MAX_BYTES } from "@/lib/manual-send/receipt-storage-shared"
 
 export type UploadManualSendReceiptResult =
   | { path: string; filename: string }

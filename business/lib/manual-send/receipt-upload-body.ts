@@ -2,7 +2,7 @@ import {
   MANUAL_SEND_RECEIPT_ALLOWED_MIME,
   validateManualSendReceiptBytes,
   validateManualSendReferenceCode,
-} from "@/lib/manual-send/receipt-storage"
+} from "@/lib/manual-send/receipt-storage-shared"
 
 export type ParsedReceiptUpload =
   | {
