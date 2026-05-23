@@ -15,6 +15,11 @@ const NON_ISO_ASSETS: Array<{ code: string; name: string; symbol: string | null 
   { code: "PYUSD", name: "PayPal USD", symbol: null },
 ]
 
+/** English display name for a currency code (Intl + known non-ISO assets). */
+export function currencyDisplayName(code: string): string {
+  return safeCurrencyName(code)
+}
+
 function safeCurrencyName(code: string): string {
   const upper = code.trim().toUpperCase()
   const manual = NON_ISO_ASSETS.find((a) => a.code === upper)

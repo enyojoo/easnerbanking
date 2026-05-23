@@ -40,6 +40,7 @@ export function useManualSendFlow(input: {
   }, [input.enabled])
 
   const sendCurrencies = catalog?.sendCurrencies ?? []
+  const sendCurrencyOptions = catalog?.sendCurrencyOptions ?? []
   const paymentMethodsByCurrency = catalog?.paymentMethodsByCurrency ?? {}
 
   const payInOptions: ManualPayInPaymentMethodOption[] = useMemo(() => {
@@ -110,6 +111,7 @@ export function useManualSendFlow(input: {
   return {
     catalog,
     sendCurrencies,
+    sendCurrencyOptions,
     paymentMethodsByCurrency,
     payInOptions,
     quote,

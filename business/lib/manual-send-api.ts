@@ -1,8 +1,13 @@
-import type { ExchangeRate, ManualPayInPaymentMethodOption } from "@easner/shared"
+import type {
+  ExchangeRate,
+  ManualPayInPaymentMethodOption,
+  ManualSendCurrencyOption,
+} from "@easner/shared"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 
 export type ManualSendCatalogResponse = {
   sendCurrencies: string[]
+  sendCurrencyOptions: ManualSendCurrencyOption[]
   exchangeRates: ExchangeRate[]
   paymentMethodsByCurrency: Record<string, ManualPayInPaymentMethodOption[]>
 }

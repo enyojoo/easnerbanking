@@ -32,12 +32,13 @@ export type { BrandLogoProps } from "./components/BrandLogo"
 export { CountryFlag, CurrencyFlag } from "./components/CountryFlag"
 export type { CountryFlagProps, CurrencyFlagProps } from "./components/CountryFlag"
 export { currencyToCountryCode, getCountryCodeForCurrency, normalizeCode } from "./flags/currency-mapping"
-export { getCurrencyCatalog } from "./currencies/catalog"
+export { getCurrencyCatalog, currencyDisplayName } from "./currencies/catalog"
 export type { CurrencyCatalogEntry } from "./currencies/catalog"
 export * from "./types"
 export { fxEngine, type OrderAmounts } from "./fx-engine"
 export {
   buildManualSendPayInCurrencies,
+  buildManualSendPayInCurrencyOptions,
   listManualPayInOptionsForCurrency,
   pickDefaultManualPayInOption,
   routeManualPayInScreen,
@@ -45,6 +46,8 @@ export {
   type ManualPayInPaymentMethodOption,
   type ManualPayInPaymentMethodRow,
   type ManualPayInScreenRoute,
+  type ManualSendCurrencyOption,
+  type CurrencyNameRow,
 } from "./manual-send-catalog"
 export {
   sendFlowReferenceUsdPerUnit,

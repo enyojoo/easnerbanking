@@ -116,13 +116,8 @@ export default function SendPage() {
   const manualSendAvailable = manualSend.sendCurrencies.length > 0
 
   const otherCurrencies = useMemo(
-    () =>
-      manualSend.sendCurrencies.map((code) => ({
-        code,
-        name: code,
-        symbol: "",
-      })),
-    [manualSend.sendCurrencies],
+    () => manualSend.sendCurrencyOptions,
+    [manualSend.sendCurrencyOptions],
   )
 
   const currencyPaymentMethods = useMemo(() => {

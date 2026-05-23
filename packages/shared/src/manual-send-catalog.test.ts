@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import type { ExchangeRate } from "./types"
 import {
   buildManualSendPayInCurrencies,
+  buildManualSendPayInCurrencyOptions,
   listManualPayInOptionsForCurrency,
   pickDefaultManualPayInOption,
   routeManualPayInScreen,
@@ -31,6 +32,15 @@ describe("manual-send-catalog", () => {
       ],
     })
     expect(codes).toEqual(["USD"])
+  })
+
+  it("buildManualSendPayInCurrencyOptions uses catalog names", () => {
+    const options = buildManualSendPayInCurrencyOptions(["NGN", "KES"], [
+      { code: "KES", name: "Kenyan Shilling", symbol: "KSh" },
+      { code: "NGN", name: "Nigerian Naira", symbol: "₦" },
+    ])
+    expect(options.map((o) => o.name)).toEqual(["Kenyan Shilling", "Nigerian Naira"])
+    expect(options[0]?.code).toBe("KES")
   })
 
   it("lists multiple PM options per currency", () => {

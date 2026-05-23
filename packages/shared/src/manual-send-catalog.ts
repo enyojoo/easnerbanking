@@ -1,4 +1,18 @@
 import type { ExchangeRate } from "./types"
+import { currencyDisplayName } from "./currencies/catalog"
+import { getCurrencySymbol } from "./currency-symbol"
+
+export type ManualSendCurrencyOption = {
+  code: string
+  name: string
+  symbol: string
+}
+
+export type CurrencyNameRow = {
+  code: string
+  name: string
+  symbol?: string | null
+}
 
 export type ManualPayInPaymentMethodOption = {
   id: string
@@ -50,6 +64,23 @@ export function buildManualSendPayInCurrencies(input: {
     if (pmCurrencies.has(code)) codes.push(code)
   }
   return codes.sort()
+}
+
+/** Pay-in currency picker rows (full name + symbol) for manual “Through another currency”. */
+export function buildManualSendPayInCurrencyOptions(
+  codes: string[],
+  catalog: CurrencyNameRow[],
+): ManualSendCurrencyOption[] {
+  const byCode = new Map(catalog.map((row) => [norm(row.code), row]))
+  return codes
+    .map((raw) => {
+      const code = norm(raw)
+      const row = byCode.get(code)
+      const name = row?.name?.trim() || currencyDisplayName(code)
+      const symbol = row?.symbol?.trim() || getCurrencySymbol(code, code)
+      return { code, name, symbol }
+    })
+    .sort((a, b) => a.name.localeCompare(b.name))
 }
 
 /** All active payment methods for a send currency (default first, then name). */

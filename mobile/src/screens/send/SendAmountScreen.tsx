@@ -181,8 +181,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const manualSendAvailable = (manualCatalog?.sendCurrencies?.length ?? 0) > 0
 
   const otherCurrencies = useMemo(() => {
-    return (manualCatalog?.sendCurrencies ?? []).map((code) => ({ code, name: code, symbol: '' }))
-  }, [manualCatalog?.sendCurrencies])
+    return manualCatalog?.sendCurrencyOptions ?? []
+  }, [manualCatalog?.sendCurrencyOptions])
 
   const paymentMethodIcons: { [key: string]: any } = {
     mtn: require('../../../assets/flags/mtn.png'),
