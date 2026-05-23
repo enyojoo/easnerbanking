@@ -35,7 +35,7 @@
     "start:business": "turbo run start --filter=easner-business",
     "test:login-pin-vectors": "node scripts/login-pin-test-vectors.mjs",
     "sync:flags": "npm run sync:flags --workspace=@easner/shared",
-    "postinstall": "patch-package"
+    "postinstall": "node scripts/postinstall-patch-package.mjs"
   },
   "devDependencies": {
     "turbo": "^2.8.12"

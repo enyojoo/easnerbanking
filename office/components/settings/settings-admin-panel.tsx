@@ -100,24 +100,6 @@ export function SettingsAdminPanel({ section }: { section?: SettingsAdminSection
     NGN: { available: false, active: true },
   })
 
-  useEffect(() => {
-    void loadAllData()
-  }, [section])
-
-  const loadAllData = async () => {
-    try {
-      const tasks: Promise<void>[] = [loadSystemSettings()]
-      if (!section || section === "platform") {
-        tasks.push(loadCurrencies())
-      }
-      await Promise.all(tasks)
-    } catch (error) {
-      console.error("Error loading data:", error)
-    }
-  }
-
-
-
   const loadSystemSettings = async () => {
     try {
       const { data, error } = await supabase
@@ -209,6 +191,23 @@ export function SettingsAdminPanel({ section }: { section?: SettingsAdminSection
       console.error("Error loading currencies:", message)
     }
   }
+
+  const loadAllData = async () => {
+    try {
+      const tasks: Promise<void>[] = [loadSystemSettings()]
+      if (!section || section === "platform") {
+        tasks.push(loadCurrencies())
+      }
+      await Promise.all(tasks)
+    } catch (error) {
+      console.error("Error loading data:", error)
+    }
+  }
+
+  useEffect(() => {
+    void loadAllData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch when platform tab changes
+  }, [section])
 
   const updateSystemSetting = async (key: string, value: any, dataType = "string", category = "platform") => {
     try {

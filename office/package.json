@@ -3,6 +3,9 @@
   "description": "Easner Office admin dashboard (Next.js) — manages mobile and business banking",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "build": "next build --webpack",
     "dev": "next dev --port 3001 --turbo",

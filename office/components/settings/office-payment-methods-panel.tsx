@@ -261,12 +261,14 @@ export function OfficePaymentMethodsPanel() {
         {(opts.file || opts.currentUrl) && (
           <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-md border bg-muted/30">
             {opts.file ? (
+              // eslint-disable-next-line @next/next/no-img-element -- blob preview before upload
               <img
                 src={URL.createObjectURL(opts.file)}
                 alt=""
                 className="h-full w-full object-contain"
               />
             ) : opts.currentUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element -- arbitrary admin-uploaded logo URL
               <img src={opts.currentUrl} alt="" className="h-full w-full object-contain" />
             ) : null}
           </div>
@@ -1727,6 +1729,7 @@ export function OfficePaymentMethodsPanel() {
             <TableCell>
               <div className="flex items-center gap-2 font-medium">
                 {method.display_logo_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- arbitrary admin-uploaded logo URL
                   <img
                     src={method.display_logo_url}
                     alt=""
