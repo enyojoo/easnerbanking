@@ -18,12 +18,12 @@ import { fetchWithSession } from "@/lib/fetch-with-session"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 import type { Beneficiary } from "@/lib/recipient-types"
 import {
-  otherCurrencies,
-  currencyPaymentMethods,
+  otherCurrenciesFromCatalog,
+  paymentMethodsFromCatalog,
   stablecoinOptions,
-  type OtherCurrencyCode,
   type PaymentMethodCode,
 } from "@/lib/send-payment-methods"
+import { useSendDestinations } from "@/lib/use-send-destinations"
 import {
   ChevronDown,
   Check,
@@ -46,13 +46,12 @@ import { CurrencyFlag } from "@/components/flags"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { isEasetagLedgerP2PEnabled } from "@/lib/ledger/easetag-transfer"
 import {
-  TIER2_COMPLETE_PLACEHOLDER,
-} from "@/lib/compliance-placeholders"
-import {
   type SendFlowState,
   SEND_FLOW_STATE_KEY,
   persistSendFlowState,
 } from "@/lib/send-flow-session"
+import { useManualSendFlow } from "@/hooks/use-manual-send-flow"
+import { pickDefaultManualPayInOption } from "@easner/shared"
 import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
 
 function formatAmountForDisplay(raw: string): string {
@@ -79,13 +78,15 @@ export default function SendPage() {
   const router = useRouter()
   const { tier1Complete, hasData, isLoading: profileLoading } = useBusinessProfile()
   const { accountRows: sourceAccounts } = useBusinessAccountRows()
+  const { data: sendDestinations } = useSendDestinations()
   const [recipient, setRecipient] = useState<Beneficiary | null>(null)
   const [amountStr, setAmountStr] = useState("")
   const [amountEntryMode, setAmountEntryMode] = useState<"receive" | "send">("receive")
   const [sourceAccountId, setSourceAccountId] = useState<string | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>("balance")
-  const [otherCurrency, setOtherCurrency] = useState<OtherCurrencyCode | "STABLECOIN" | null>(null)
+  const [otherCurrency, setOtherCurrency] = useState<string | "STABLECOIN" | null>(null)
   const [otherPaymentMethod, setOtherPaymentMethod] = useState<string | null>(null)
+  const [manualPaymentMethodId, setManualPaymentMethodId] = useState<string | null>(null)
   const [note, setNote] = useState("")
   const [sourceSheetOpen, setSourceSheetOpen] = useState(false)
   const [noahFxRates, setNoahFxRates] = useState<Record<string, number>>({})
@@ -111,6 +112,51 @@ export default function SendPage() {
   const enteredAmount = parseAmountFromDisplay(amountStr)
   const receiveCurrency = recipient?.currency ?? "USD"
   const sourceAccount = sourceAccounts.find((a) => a.id === sourceAccountId)
+
+  const manualSend = useManualSendFlow({
+    enabled: true,
+    otherCurrency: otherCurrency && otherCurrency !== "STABLECOIN" ? otherCurrency : null,
+    receiveCurrency,
+    amountEntryMode,
+    enteredAmount,
+  })
+
+  const otherCurrencies = useMemo(() => {
+    if (manualSend.sendCurrencies.length > 0) {
+      return manualSend.sendCurrencies.map((code) => ({
+        code,
+        name: code,
+        symbol: "",
+      }))
+    }
+    return otherCurrenciesFromCatalog(sendDestinations)
+  }, [manualSend.sendCurrencies, sendDestinations])
+
+  const currencyPaymentMethods = useMemo(() => {
+    const by = manualSend.paymentMethodsByCurrency
+    if (Object.keys(by).length > 0) {
+      const out: Record<string, Array<{ code: string; name: string }>> = {}
+      for (const [cur, opts] of Object.entries(by)) {
+        out[cur] = opts.map((o) => ({ code: o.id, name: o.name }))
+      }
+      return out
+    }
+    return paymentMethodsFromCatalog(sendDestinations)
+  }, [manualSend.paymentMethodsByCurrency, sendDestinations])
+
+  useEffect(() => {
+    if (!otherCurrency || otherCurrency === "STABLECOIN") return
+    const opts = currencyPaymentMethods[otherCurrency] ?? []
+    if (!manualPaymentMethodId && opts.length > 0) {
+      const def = pickDefaultManualPayInOption(
+        manualSend.paymentMethodsByCurrency[otherCurrency] ?? [],
+      )
+      if (def) {
+        setManualPaymentMethodId(def.id)
+        setOtherPaymentMethod(def.id)
+      }
+    }
+  }, [otherCurrency, currencyPaymentMethods, manualPaymentMethodId, manualSend.paymentMethodsByCurrency])
 
   useEffect(() => {
     const dest = (recipient?.currency || "").trim().toUpperCase()
@@ -145,6 +191,18 @@ export default function SendPage() {
     if (!recipient || enteredAmount <= 0) {
       return { sendAmount: 0, receiveAmount: 0, forwardRate: 1 }
     }
+    if (
+      otherCurrency &&
+      otherCurrency !== "STABLECOIN" &&
+      manualSend.quote &&
+      sendCurrency !== receiveCurrency
+    ) {
+      return {
+        sendAmount: manualSend.quote.sendAmount,
+        receiveAmount: manualSend.quote.receiveAmount,
+        forwardRate: manualSend.quote.exchangeRate,
+      }
+    }
     return convertNoahSendFlowAmounts({
       direction: amountEntryMode,
       amount: enteredAmount,
@@ -159,6 +217,8 @@ export default function SendPage() {
     sendCurrency,
     receiveCurrency,
     noahFxRates,
+    otherCurrency,
+    manualSend.quote,
   ])
 
   const sendAmount = flowAmounts.sendAmount
@@ -201,12 +261,16 @@ export default function SendPage() {
   const isStablecoinSource = paymentMethod === "usdc" || paymentMethod === "usdt"
   const hasValidOtherCurrencySelection =
     (otherCurrency &&
+      otherCurrency !== "STABLECOIN" &&
+      paymentMethod === "otherCurrency" &&
+      Boolean(manualPaymentMethodId || otherPaymentMethod)) ||
+    (otherCurrency === "STABLECOIN" && (paymentMethod === "usdc" || paymentMethod === "usdt")) ||
+    (otherCurrency &&
       otherPaymentMethod &&
       (paymentMethod === "bankTransfer" ||
         paymentMethod === "mpesa" ||
         paymentMethod === "mtnMomo" ||
-        paymentMethod === "sbp")) ||
-    (otherCurrency === "STABLECOIN" && (paymentMethod === "usdc" || paymentMethod === "usdt"))
+        paymentMethod === "sbp"))
   const hasValidStablecoinSelection = isStablecoinSource
 
   const canContinueBalance =
@@ -222,11 +286,21 @@ export default function SendPage() {
   const canContinueStablecoin =
     recipient !== null && receiveAmount > 0 && hasValidStablecoinSelection && tier1Complete
 
+  const manualAmountOutOfRange =
+    Boolean(
+      otherCurrency &&
+        otherCurrency !== "STABLECOIN" &&
+        manualSend.quote &&
+        ((manualSend.quote.minAmount != null && sendAmount < manualSend.quote.minAmount) ||
+          (manualSend.quote.maxAmount != null && sendAmount > manualSend.quote.maxAmount)),
+    )
+
   const canContinueOtherCurrency =
     recipient !== null &&
     receiveAmount > 0 &&
     hasValidOtherCurrencySelection &&
-    TIER2_COMPLETE_PLACEHOLDER
+    tier1Complete &&
+    !manualAmountOutOfRange
 
   const canContinue =
     isBalanceSource
@@ -292,6 +366,15 @@ export default function SendPage() {
     if (!canContinue || !recipient) return
     const transactionId = generateTransactionId()
 
+    const feeAmount =
+      otherCurrency && otherCurrency !== "STABLECOIN" && manualSend.quote
+        ? manualSend.quote.feeAmount
+        : 0
+    const totalAmount =
+      otherCurrency && otherCurrency !== "STABLECOIN" && manualSend.quote
+        ? manualSend.quote.totalAmount
+        : sendAmount
+
     const state: SendFlowState = {
       recipient: coerceBeneficiaryEasenetDisplay(recipient),
       amount: receiveAmount,
@@ -302,6 +385,10 @@ export default function SendPage() {
       paymentMethod,
       otherCurrency: otherCurrency ?? undefined,
       otherPaymentMethod: otherPaymentMethod ?? undefined,
+      manualPaymentMethodId: manualPaymentMethodId ?? undefined,
+      manualQuote: manualSend.quote ?? undefined,
+      feeAmount,
+      totalAmount,
       note: note.trim(),
       transactionId,
     }
@@ -309,6 +396,11 @@ export default function SendPage() {
 
     if (isBalanceSource) {
       router.push("/send/confirm")
+      return
+    }
+
+    if (paymentMethod === "otherCurrency" && manualPaymentMethodId) {
+      router.push(manualSend.authorizePathForPaymentMethodId(manualPaymentMethodId))
       return
     }
 
@@ -640,7 +732,7 @@ export default function SendPage() {
                         {otherCurrencies.find((c) => c.code === otherCurrency)?.name}
                       </p>
                     </button>
-                    {currencyPaymentMethods[otherCurrency as OtherCurrencyCode]?.map((method) => {
+                    {currencyPaymentMethods[otherCurrency]?.map((method) => {
                       const isSelected = otherPaymentMethod === method.code
                       const icon =
                         method.code === "bankTransfer" ? (
@@ -655,9 +747,10 @@ export default function SendPage() {
                           key={method.code}
                           type="button"
                           onClick={() => {
-                            setPaymentMethod(method.code as PaymentMethodCode)
+                            setPaymentMethod("otherCurrency")
                             setSourceAccountId(null)
                             setOtherPaymentMethod(method.code)
+                            setManualPaymentMethodId(method.code)
                             setSourceSheetOpen(false)
                           }}
                           className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors hover:bg-muted/50 ${

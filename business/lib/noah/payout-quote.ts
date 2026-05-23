@@ -5,6 +5,7 @@ import {
   prepareSellFromRecipientRow,
   type RecipientSellPrepareRow,
 } from "@/lib/terminal/recipient-sell-prepare"
+import { NoProviderForCorridorError, selectProviderForCorridor } from "@/lib/payout-providers"
 
 /** Easner fee slice on payout quotes (Noah prepare is authoritative; no DB pricing engine). */
 export type EasnerPayoutQuoteSlice = {
@@ -103,9 +104,9 @@ export async function buildPayoutQuote(input: {
     throw new Error("sourceBalanceCurrency must be USD or EUR.")
   }
 
+  const admin = createSupabaseAdmin()
   let row = input.recipient
   if (input.recipientId) {
-    const admin = createSupabaseAdmin()
     const { data, error } = await admin
       .from("recipients")
       .select("*")
@@ -123,6 +124,28 @@ export async function buildPayoutQuote(input: {
 
   const receiveCurrency = String(row.currency || "").trim().toUpperCase()
   const cryptoCurrency = settlementCryptoForBalance(sourceBalanceCurrency)
+
+  const countryCode = String(row.country_code || "").trim().toUpperCase()
+  if (countryCode) {
+    try {
+      const provider = await selectProviderForCorridor(admin, {
+        countryCode,
+        currencyCode: receiveCurrency,
+        mobileProvider: row.mobile_provider,
+        bankName: row.bank_name,
+      })
+      if (provider.id !== "noah") {
+        throw new Error(`Payout provider "${provider.id}" is not wired for quotes yet.`)
+      }
+    } catch (e) {
+      if (e instanceof NoProviderForCorridorError) {
+        throw new Error(
+          "Payouts to this country and currency are not available on configured providers yet.",
+        )
+      }
+      throw e
+    }
+  }
 
   const { prep } = await prepareSellFromRecipientRow({
     row,

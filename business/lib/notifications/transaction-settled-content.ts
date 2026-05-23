@@ -1,8 +1,10 @@
 import {
   BANK_DEPOSIT_COMPLETED_DESCRIPTION,
   deriveEasnerInboundRemitterDisplayName,
+  deriveVerificationBankName,
   formatDisplayPersonName,
   isBankOnrampDepositFlow,
+  isVerificationDepositMetadata,
   toEasnerTransactionProductCategory,
 } from "@easner/shared"
 import { formatCurrency } from "@/lib/utils"
@@ -129,6 +131,16 @@ export function buildTransactionSettledPushContent(input: TransactionSettledCont
   }
 
   if (direction === "in") {
+    if (isVerificationDepositMetadata(meta)) {
+      const bank = deriveVerificationBankName({
+        metadata: meta,
+        payload: input.payload ?? null,
+      })
+      return {
+        title: "Bank verification credit",
+        body: `Received ${amountText} from ${bank} — not added to your balance. Confirm in your bank app if required.`,
+      }
+    }
     if (isBankOnrampDepositFlow(meta)) {
       return {
         title: "Bank Deposit",

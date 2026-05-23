@@ -1,45 +1,20 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import {
-  Settings,
-  Shield,
-  Save,
-  Edit,
-  Plus,
-  Trash2,
-  CreditCard,
-  QrCode,
-  Building2,
-  Server,
-  MoreHorizontal,
-  X,
-  Upload,
-  TrendingUp,
-} from "lucide-react"
+import { Save, Edit, X } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { supabase } from "@/lib/supabase"
-import {
-  getAccountTypeConfigFromCurrency,
-  getAccountTypeFromCurrency,
-  validateField,
-  formatFieldValue,
-} from "@/lib/currency-account-types"
+import { currenciesApi } from "@/lib/currencies-api"
 import { CurrencyFlag } from "@/components/flags"
-import { parseJurisdictionCountryPolicyJson, serializeJurisdictionPolicy } from "@easner/shared"
 import { OfficeRatesPanel } from "@/components/settings/office-rates-panel"
+import { OfficePaymentMethodsPanel } from "@/components/settings/office-payment-methods-panel"
+import { PlatformControlTabShell } from "@/components/platform-control/platform-tab-shell"
 
 interface SystemSetting {
   id: string
@@ -64,84 +39,32 @@ interface Currency {
   updated_at: string
 }
 
-interface PaymentMethod {
-  id: string
-  currency: string
-  type: string
-  name: string
-  account_name?: string
-  account_number?: string
-  bank_name?: string
-  routing_number?: string
-  sort_code?: string
-  iban?: string
-  swift_bic?: string
-  mobile_money_provider?: string
-  phone_number?: string
-  qr_code_data?: string
-  instructions?: string
-  is_default: boolean
-  status: string
-  completion_timer_seconds?: number
-  created_at: string
-  updated_at: string
+export type SettingsAdminSection = "platform" | "rates" | "payment-methods"
+
+const SECTION_COPY: Record<
+  SettingsAdminSection,
+  { title: string; description: string }
+> = {
+  platform: {
+    title: "Platform",
+    description: "Maintenance, registration, reporting defaults, and security parameters.",
+  },
+  rates: {
+    title: "Rates",
+    description: "Used for manual payout quotes when automated provider routing is not selected.",
+  },
+  "payment-methods": {
+    title: "Payment methods",
+    description:
+      "Instructions shown for manual / ops-assisted payouts. Automated send uses provider routing on Fiat and Crypto tabs.",
+  },
 }
 
-
-export function SettingsAdminPanel() {
+export function SettingsAdminPanel({ section }: { section?: SettingsAdminSection }) {
   const [systemSettings, setSystemSettings] = useState<SystemSetting[]>([])
   const [currencies, setCurrencies] = useState<Currency[]>([])
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
-  const [activeTab, setActiveTab] = useState("platform")
   const [saving, setSaving] = useState(false)
-  const [isAddPaymentMethodOpen, setIsAddPaymentMethodOpen] = useState(false)
-  const [isEditPaymentMethodOpen, setIsEditPaymentMethodOpen] = useState(false)
-  const [editingPaymentMethod, setEditingPaymentMethod] = useState<PaymentMethod | null>(null)
-  const [editingTimer, setEditingTimer] = useState({ hours: 1, minutes: 0, seconds: 0 })
   const [isEditingSecuritySettings, setIsEditingSecuritySettings] = useState(false)
-  const [newPaymentMethod, setNewPaymentMethod] = useState({
-    currency: "",
-    type: "bank_account",
-    name: "",
-    account_name: "",
-    account_number: "",
-    bank_name: "",
-    routing_number: "",
-    sort_code: "",
-    iban: "",
-    swift_bic: "",
-    mobile_money_provider: "",
-    phone_number: "",
-    qr_code_data: "",
-    instructions: "",
-    provider_key: "noah",
-    timerHours: 1,
-    timerMinutes: 0,
-    timerSeconds: 0,
-    is_default: false,
-  })
-
-  const [editingProviderKey, setEditingProviderKey] = useState("noah")
-
-  const parseProviderKey = (instructions?: string | null): string => {
-    if (!instructions) return "noah"
-    try {
-      const j = JSON.parse(instructions)
-      if (j && typeof j === "object" && typeof (j as any).provider_key === "string") {
-        return String((j as any).provider_key)
-      }
-    } catch {
-      // ignore
-    }
-    return "noah"
-  }
-
-  // Add these state variables after the existing state declarations
-  const [qrCodeFile, setQrCodeFile] = useState<File | null>(null)
-  const [editingQrCodeFile, setEditingQrCodeFile] = useState<File | null>(null)
-  const [uploadingQrCode, setUploadingQrCode] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const editFileInputRef = useRef<HTMLInputElement>(null)
 
   // Platform configuration derived from system settings
   const [platformConfig, setPlatformConfig] = useState({
@@ -172,21 +95,17 @@ export function SettingsAdminPanel() {
     NGN: { available: false, active: true },
   })
 
-  /** Office JSON for `system_settings.jurisdiction_country_policy` — see @easner/shared parse/serialize. */
-  const [jurisdictionPolicyText, setJurisdictionPolicyText] = useState('{"v":1}')
-  const [jurisdictionSaving, setJurisdictionSaving] = useState(false)
-
   useEffect(() => {
-    loadAllData()
-  }, [])
+    void loadAllData()
+  }, [section])
 
   const loadAllData = async () => {
     try {
-      await Promise.all([
-        loadSystemSettings(),
-        loadCurrencies(),
-        loadPaymentMethods(),
-      ])
+      const tasks: Promise<void>[] = [loadSystemSettings()]
+      if (!section || section === "platform") {
+        tasks.push(loadCurrencies())
+      }
+      await Promise.all(tasks)
     } catch (error) {
       console.error("Error loading data:", error)
     }
@@ -267,11 +186,6 @@ export function SettingsAdminPanel() {
           case "currency_active_NGN":
             newCurrencyControls.NGN.active = setting.value === "true"
             break
-          case "jurisdiction_country_policy":
-            if (setting.value != null && String(setting.value).trim() !== "") {
-              setJurisdictionPolicyText(String(setting.value))
-            }
-            break
         }
       })
 
@@ -286,30 +200,13 @@ export function SettingsAdminPanel() {
 
   const loadCurrencies = async () => {
     try {
-      const { data, error } = await supabase.from("currencies").select("*").order("code", { ascending: true })
-
-      if (error) throw error
-      setCurrencies(data || [])
+      const list = await currenciesApi.list({ scope: "fiat" })
+      setCurrencies(list)
     } catch (error) {
-      console.error("Error loading currencies:", error)
+      const message = error instanceof Error ? error.message : String(error)
+      console.error("Error loading currencies:", message)
     }
   }
-
-  const loadPaymentMethods = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("payment_methods")
-        .select("*")
-        .order("currency", { ascending: true })
-        .order("is_default", { ascending: false })
-
-      if (error) throw error
-      setPaymentMethods(data || [])
-    } catch (error) {
-      console.error("Error loading payment methods:", error)
-    }
-  }
-
 
   const updateSystemSetting = async (key: string, value: any, dataType = "string", category = "platform") => {
     try {
@@ -335,38 +232,6 @@ export function SettingsAdminPanel() {
     }
   }
 
-  const handleSaveJurisdictionPolicy = async () => {
-    const trimmed = jurisdictionPolicyText.trim()
-    const fallback = '{"v":1}'
-    if (!trimmed) {
-      setJurisdictionSaving(true)
-      try {
-        await updateSystemSetting("jurisdiction_country_policy", fallback, "json", "platform")
-        setJurisdictionPolicyText(fallback)
-      } catch {
-        console.error("Failed to save jurisdiction policy")
-      } finally {
-        setJurisdictionSaving(false)
-      }
-      return
-    }
-    const parsed = parseJurisdictionCountryPolicyJson(trimmed)
-    if (parsed.error === "invalid_json") {
-      console.error("Invalid jurisdiction JSON")
-      return
-    }
-    const normalized = parsed.policy ? serializeJurisdictionPolicy(parsed.policy) : fallback
-    setJurisdictionSaving(true)
-    try {
-      await updateSystemSetting("jurisdiction_country_policy", normalized, "json", "platform")
-      setJurisdictionPolicyText(normalized)
-    } catch {
-      console.error("Failed to save jurisdiction policy")
-    } finally {
-      setJurisdictionSaving(false)
-    }
-  }
-
   const handlePlatformConfigChange = async (key: string, value: any) => {
     try {
       setPlatformConfig({ ...platformConfig, [key]: value })
@@ -376,8 +241,7 @@ export function SettingsAdminPanel() {
 
       // If base currency changed, refresh data
       if (key === "baseCurrency") {
-        // Refresh currencies and payment methods when base currency changes
-        await Promise.all([loadCurrencies(), loadPaymentMethods()])
+        await loadCurrencies()
       }
     } catch (error) {
       console.error("Error updating platform config:", error)
@@ -443,287 +307,6 @@ export function SettingsAdminPanel() {
     setIsEditingSecuritySettings(false)
   }
 
-  const handleQrCodeFileSelect = (file: File, isEditing = false) => {
-    const allowedTypes = ["image/svg+xml", "image/png", "image/jpeg"]
-    if (!allowedTypes.includes(file.type)) {
-      console.error("Only SVG, PNG, and JPEG, files are allowed for QR codes")
-      return
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      console.error("File size must be less than 5MB")
-      return
-    }
-
-    if (isEditing) {
-      setEditingQrCodeFile(file)
-    } else {
-      setQrCodeFile(file)
-    }
-  }
-
-  const uploadQrCodeFile = async (file: File): Promise<string> => {
-    const fileExt = file.name.split(".").pop()
-    const fileName = `qr_${Date.now()}.${fileExt}`
-    const filePath = `qr-codes/${fileName}`
-
-    const { data, error } = await supabase.storage.from("payment-qr-codes").upload(filePath, file, {
-      cacheControl: "3600",
-      upsert: false,
-    })
-
-    if (error) throw error
-
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from("payment-qr-codes").getPublicUrl(filePath)
-
-    return publicUrl
-  }
-
-  const handleAddPaymentMethod = async () => {
-    setSaving(true)
-    try {
-      // If setting as default, unset other defaults for the same currency
-      if (newPaymentMethod.is_default) {
-        await supabase.from("payment_methods").update({ is_default: false }).eq("currency", newPaymentMethod.currency)
-      }
-
-      let qrCodeData = newPaymentMethod.qr_code_data
-
-      // Upload QR code file if provided
-      if (newPaymentMethod.type === "qr_code" && qrCodeFile) {
-        setUploadingQrCode(true)
-        qrCodeData = await uploadQrCodeFile(qrCodeFile)
-      }
-
-      const instructions =
-        newPaymentMethod.type === "provider"
-          ? JSON.stringify({ provider_key: newPaymentMethod.provider_key })
-          : newPaymentMethod.instructions
-
-      const completionTimerSeconds = timeToSeconds(
-        newPaymentMethod.timerHours,
-        newPaymentMethod.timerMinutes,
-        newPaymentMethod.timerSeconds,
-      )
-
-      const { data, error } = await supabase
-        .from("payment_methods")
-        .insert({
-          currency: newPaymentMethod.currency,
-          type: newPaymentMethod.type,
-          name: newPaymentMethod.name,
-          account_name: newPaymentMethod.type === "bank_account" ? newPaymentMethod.account_name || null : null,
-          account_number: newPaymentMethod.type === "bank_account" ? newPaymentMethod.account_number || null : null,
-          bank_name: newPaymentMethod.type === "bank_account" ? newPaymentMethod.bank_name || null : null,
-          routing_number: newPaymentMethod.type === "bank_account" ? newPaymentMethod.routing_number || null : null,
-          sort_code: newPaymentMethod.type === "bank_account" ? newPaymentMethod.sort_code || null : null,
-          iban: newPaymentMethod.type === "bank_account" ? newPaymentMethod.iban || null : null,
-          swift_bic: newPaymentMethod.type === "bank_account" ? newPaymentMethod.swift_bic || null : null,
-          mobile_money_provider: newPaymentMethod.type === "mobile_money" ? newPaymentMethod.mobile_money_provider || null : null,
-          phone_number: newPaymentMethod.type === "mobile_money" ? newPaymentMethod.phone_number || null : null,
-          qr_code_data: newPaymentMethod.type === "qr_code" ? qrCodeData || null : null,
-          instructions: instructions || null,
-          completion_timer_seconds: completionTimerSeconds,
-          is_default: newPaymentMethod.is_default,
-          status: "active",
-        })
-        .select()
-        .single()
-
-      if (error) throw error
-
-      setPaymentMethods([...paymentMethods, data])
-      setNewPaymentMethod({
-        currency: "",
-        type: "bank_account",
-        name: "",
-        account_name: "",
-        account_number: "",
-        bank_name: "",
-        routing_number: "",
-        sort_code: "",
-        iban: "",
-        swift_bic: "",
-        mobile_money_provider: "",
-        phone_number: "",
-        qr_code_data: "",
-        instructions: "",
-        provider_key: "noah",
-        timerHours: 1,
-        timerMinutes: 0,
-        timerSeconds: 0,
-        is_default: false,
-      })
-      setQrCodeFile(null)
-      setIsAddPaymentMethodOpen(false)
-      console.log("Payment method added successfully")
-    } catch (error) {
-      console.error("Error adding payment method:", error)
-    } finally {
-      setSaving(false)
-      setUploadingQrCode(false)
-    }
-  }
-
-  const handleEditPaymentMethod = async () => {
-    if (!editingPaymentMethod) return
-
-    setSaving(true)
-    try {
-      // If setting as default, unset other defaults for the same currency
-      if (editingPaymentMethod.is_default) {
-        await supabase
-          .from("payment_methods")
-          .update({ is_default: false })
-          .eq("currency", editingPaymentMethod.currency)
-          .neq("id", editingPaymentMethod.id)
-      }
-
-      let qrCodeData = editingPaymentMethod.qr_code_data
-
-      // Upload new QR code file if provided
-      if (editingPaymentMethod.type === "qr_code" && editingQrCodeFile) {
-        setUploadingQrCode(true)
-        qrCodeData = await uploadQrCodeFile(editingQrCodeFile)
-      }
-
-      const completionTimerSeconds = timeToSeconds(editingTimer.hours, editingTimer.minutes, editingTimer.seconds)
-      const instructions =
-        editingPaymentMethod.type === "provider"
-          ? JSON.stringify({ provider_key: editingProviderKey })
-          : editingPaymentMethod.instructions
-
-      const { data, error } = await supabase
-        .from("payment_methods")
-        .update({
-          currency: editingPaymentMethod.currency,
-          type: editingPaymentMethod.type,
-          name: editingPaymentMethod.name,
-          account_name: editingPaymentMethod.type === "bank_account" ? editingPaymentMethod.account_name || null : null,
-          account_number: editingPaymentMethod.type === "bank_account" ? editingPaymentMethod.account_number || null : null,
-          bank_name: editingPaymentMethod.type === "bank_account" ? editingPaymentMethod.bank_name || null : null,
-          routing_number: editingPaymentMethod.type === "bank_account" ? editingPaymentMethod.routing_number || null : null,
-          sort_code: editingPaymentMethod.type === "bank_account" ? editingPaymentMethod.sort_code || null : null,
-          iban: editingPaymentMethod.type === "bank_account" ? editingPaymentMethod.iban || null : null,
-          swift_bic: editingPaymentMethod.type === "bank_account" ? editingPaymentMethod.swift_bic || null : null,
-          mobile_money_provider: editingPaymentMethod.type === "mobile_money" ? editingPaymentMethod.mobile_money_provider || null : null,
-          phone_number: editingPaymentMethod.type === "mobile_money" ? editingPaymentMethod.phone_number || null : null,
-          qr_code_data: editingPaymentMethod.type === "qr_code" ? qrCodeData || null : null,
-          instructions: instructions || null,
-          completion_timer_seconds: completionTimerSeconds,
-          is_default: editingPaymentMethod.is_default,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", editingPaymentMethod.id)
-        .select()
-        .single()
-
-      if (error) throw error
-
-      setPaymentMethods(paymentMethods.map((pm) => (pm.id === editingPaymentMethod.id ? data : pm)))
-      setEditingPaymentMethod(null)
-      setEditingQrCodeFile(null)
-      setIsEditPaymentMethodOpen(false)
-      console.log("Payment method updated successfully")
-    } catch (error) {
-      console.error("Error updating payment method:", error)
-    } finally {
-      setSaving(false)
-      setUploadingQrCode(false)
-    }
-  }
-
-  const handleTogglePaymentMethodStatus = async (id: string) => {
-    const method = paymentMethods.find((pm) => pm.id === id)
-    if (!method) return
-
-    const newStatus = method.status === "active" ? "inactive" : "active"
-
-    try {
-      const { error } = await supabase
-        .from("payment_methods")
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
-        .eq("id", id)
-
-      if (error) throw error
-
-      setPaymentMethods(paymentMethods.map((pm) => (pm.id === id ? { ...pm, status: newStatus } : pm)))
-      console.log("Payment method status updated successfully")
-    } catch (error) {
-      console.error("Error updating payment method status:", error)
-    }
-  }
-
-  const handleSetDefaultPaymentMethod = async (id: string) => {
-    const targetMethod = paymentMethods.find((pm) => pm.id === id)
-    if (!targetMethod) return
-
-    try {
-      // Unset other defaults for the same currency
-      await supabase.from("payment_methods").update({ is_default: false }).eq("currency", targetMethod.currency)
-
-      // Set this one as default
-      const { error } = await supabase
-        .from("payment_methods")
-        .update({ is_default: true, updated_at: new Date().toISOString() })
-        .eq("id", id)
-
-      if (error) throw error
-
-      setPaymentMethods(
-        paymentMethods.map((pm) => ({
-          ...pm,
-          is_default: pm.currency === targetMethod.currency ? pm.id === id : pm.is_default,
-        })),
-      )
-      console.log("Default payment method updated successfully")
-    } catch (error) {
-      console.error("Error setting default payment method:", error)
-    }
-  }
-
-  const handleDeletePaymentMethod = async (id: string) => {
-    try {
-      const { error } = await supabase.from("payment_methods").delete().eq("id", id)
-
-      if (error) throw error
-
-      setPaymentMethods(paymentMethods.filter((pm) => pm.id !== id))
-      console.log("Payment method deleted successfully")
-    } catch (error) {
-      console.error("Error deleting payment method:", error)
-    }
-  }
-
-
-  // Helper functions to convert between seconds and hours/minutes/seconds
-  const secondsToTime = (totalSeconds: number) => {
-    const hours = Math.floor(totalSeconds / 3600)
-    const minutes = Math.floor((totalSeconds % 3600) / 60)
-    const seconds = totalSeconds % 60
-    return { hours, minutes, seconds }
-  }
-
-  const timeToSeconds = (hours: number, minutes: number, seconds: number) => {
-    return hours * 3600 + minutes * 60 + seconds
-  }
-
-  const handleEditClick = (method: PaymentMethod) => {
-    setEditingPaymentMethod({ ...method })
-    setEditingProviderKey(method.type === "provider" ? parseProviderKey(method.instructions) : "noah")
-    const timerSeconds = method.completion_timer_seconds ?? 3600
-    setEditingTimer(secondsToTime(timerSeconds))
-    setIsEditPaymentMethodOpen(true)
-  }
-
-
-  const getPaymentMethodIcon = (type: string) => {
-    if (type === "provider") return <Server className="h-4 w-4" />
-    return type === "qr_code" ? <QrCode className="h-4 w-4" /> : <Building2 className="h-4 w-4" />
-  }
-
   const renderCurrencyFlag = (currencyCode: string) => {
     const currency = currencies.find((c) => c.code === currencyCode)
     return (
@@ -735,155 +318,41 @@ export function SettingsAdminPanel() {
     )
   }
 
+  const headerCopy = section
+    ? SECTION_COPY[section]
+    : { title: "System Settings", description: "Configure platform settings and system parameters" }
 
-  return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">System Settings</h1>
-            <p className="text-gray-600">Configure platform settings and system parameters</p>
-          </div>
-        </div>
-
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="platform" className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              Platform
-            </TabsTrigger>
-            <TabsTrigger value="rates" className="flex items-center gap-2">
-              <TrendingUp className="h-4 w-4" />
-              Rates
-            </TabsTrigger>
-            <TabsTrigger value="payment" className="flex items-center gap-2">
-              <CreditCard className="h-4 w-4" />
-              Payment Methods
-            </TabsTrigger>
-            <TabsTrigger value="security" className="flex items-center gap-2">
-              <Shield className="h-4 w-4" />
-              Security
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="rates">
-            <OfficeRatesPanel />
-          </TabsContent>
-
-          {/* Platform Configuration */}
-          <TabsContent value="platform">
+  const balanceCurrencyControls = (
             <Card>
               <CardHeader>
-                <CardTitle>Platform Configuration</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="maintenance">Maintenance Mode</Label>
-                      <p className="text-sm text-gray-500">Enable to temporarily disable user access</p>
-                    </div>
-                    <Switch
-                      id="maintenance"
-                      checked={platformConfig.maintenanceMode}
-                      onCheckedChange={(checked) => handlePlatformConfigChange("maintenanceMode", checked)}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="registration">Registration Enabled</Label>
-                      <p className="text-sm text-gray-500">Allow new user registrations</p>
-                    </div>
-                    <Switch
-                      id="registration"
-                      checked={platformConfig.registrationEnabled}
-                      onCheckedChange={(checked) => handlePlatformConfigChange("registrationEnabled", checked)}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="emailVerification">Email Verification Required</Label>
-                      <p className="text-sm text-gray-500">Require email verification for new accounts</p>
-                    </div>
-                    <Switch
-                      id="emailVerification"
-                      checked={platformConfig.emailVerificationRequired}
-                      onCheckedChange={(checked) => handlePlatformConfigChange("emailVerificationRequired", checked)}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="baseCurrency">Base Currency for Reporting</Label>
-                      <p className="text-sm text-gray-500">
-                        Default currency for displaying transaction amounts and reports
-                      </p>
-                    </div>
-                    <Select
-                      value={platformConfig.baseCurrency}
-                      onValueChange={(value) => handlePlatformConfigChange("baseCurrency", value)}
-                    >
-                      <SelectTrigger className="w-48">
-                        <SelectValue placeholder="Select base currency" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {currencies
-                          .filter((c) => c.status === "active")
-                          .map((currency) => (
-                            <SelectItem key={currency.code} value={currency.code}>
-                              <div className="flex items-center gap-3">
-                                <CurrencyFlag
-                                  currency={currency.code}
-                                  size={20}
-                                  fallbackSvg={currency.flag_svg?.trim() ? currency.flag_svg : undefined}
-                                />
-                                <div className="font-medium">{currency.code}</div>
-                              </div>
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2 pt-2">
-                    <Label htmlFor="jurisdiction_country_policy">Jurisdiction country policy (JSON)</Label>
-                    <p className="text-sm text-gray-500">
-                      Optional ISO2 allowlists for business signup (<code className="text-xs">allowedSignup</code>) and
-                      legal-entity country in settings (<code className="text-xs">allowedKybEntity</code>, omit or{" "}
-                      <code className="text-xs">null</code> to mirror signup). Omit lists or use{" "}
-                      <code className="text-xs">{`{"v":1}`}</code> for no restriction. Example:{" "}
-                      <code className="text-xs break-all">{`{"v":2,"allowedSignup":["US","NG","GB"]}`}</code>
-                    </p>
-                    <Textarea
-                      id="jurisdiction_country_policy"
-                      className="min-h-[120px] font-mono text-xs"
-                      value={jurisdictionPolicyText}
-                      onChange={(e) => setJurisdictionPolicyText(e.target.value)}
-                      spellCheck={false}
-                    />
-                    <Button type="button" variant="secondary" disabled={jurisdictionSaving} onClick={() => void handleSaveJurisdictionPolicy()}>
-                      {jurisdictionSaving ? "Saving…" : "Save jurisdiction policy"}
-                    </Button>
-                  </div>
-                </div>
-                <div className="border-t pt-6 space-y-4">
-                  <div>
-                    <h3 className="text-sm font-semibold">Global Currency Controls</h3>
-                    <p className="text-sm text-gray-500">
-                      USD/EUR stay visible in products but can be deactivated to limit actions. Other currencies must be
-                      made available first.
-                    </p>
-                  </div>
+        <CardTitle>Global Currency Controls</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          USD/EUR stay visible in products but can be deactivated to limit actions. Other currencies must be made
+          available first.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-4">
                   {(["USD", "EUR", "GBP", "NGN"] as const).map((code) => {
                     const control = currencyControls[code]
                     const isDefault = code === "USD" || code === "EUR"
+          const currencyRow = currencies.find((c) => c.code.toUpperCase() === code)
+          const displayName = currencyRow?.name?.trim() || code
                     return (
                       <div key={code} className="rounded-lg border p-3">
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-1">
-                            <p className="text-sm font-medium">{code}</p>
-                            <p className="text-xs text-gray-500">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  {renderCurrencyFlag(code)}
+                  <div className="space-y-1 min-w-0">
+                    <p className="text-sm font-medium truncate">
+                      {displayName}{" "}
+                      <span className="text-muted-foreground text-xs font-mono">({code})</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground">
                               {isDefault
                                 ? "Default currency. Visibility remains on."
                                 : "Non-default currency. Availability controls visibility/access."}
                             </p>
+                  </div>
                           </div>
                           <div className="flex items-center gap-6">
                             <div className="flex items-center gap-2">
@@ -907,552 +376,56 @@ export function SettingsAdminPanel() {
                       </div>
                     )
                   })}
-                </div>
               </CardContent>
             </Card>
+  )
 
-
-          </TabsContent>
-
-          {/* Payment Methods */}
-          <TabsContent value="payment">
-            <Card>
-              <CardHeader>
+  const platformConfigBody = (
+    <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle>Payment Methods</CardTitle>
-                    <p className="text-sm text-gray-600 mt-1">
-                      Configure payment methods that users will see when sending money
-                    </p>
+          <Label htmlFor="maintenance">Maintenance Mode</Label>
+          <p className="text-sm text-gray-500">Enable to temporarily disable user access</p>
                   </div>
-                  <Dialog open={isAddPaymentMethodOpen} onOpenChange={setIsAddPaymentMethodOpen}>
-                    <DialogTrigger asChild>
-                      <Button className="bg-primary hover:bg-primary/90">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Payment Method
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
-                      <DialogHeader>
-                        <DialogTitle>Add New Payment Method</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4 overflow-y-auto flex-1 pr-2">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="currency">Currency *</Label>
-                            <Select
-                              value={newPaymentMethod.currency}
-                              onValueChange={(value) => setNewPaymentMethod({ ...newPaymentMethod, currency: value })}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select currency" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {currencies
-                                  .filter((c) => c.status === "active")
-                                  .map((currency) => (
-                                    <SelectItem key={currency.code} value={currency.code}>
-                                      <div className="flex items-center gap-3">
-                                        <CurrencyFlag
-                                          currency={currency.code}
-                                          size={20}
-                                          fallbackSvg={currency.flag_svg?.trim() ? currency.flag_svg : undefined}
-                                        />
-                                        <div className="font-medium">
-                                          {currency.code} - {currency.name}
+        <Switch
+          id="maintenance"
+          checked={platformConfig.maintenanceMode}
+          onCheckedChange={(checked) => handlePlatformConfigChange("maintenanceMode", checked)}
+        />
                                         </div>
+      <div className="flex items-center justify-between">
+        <div>
+          <Label htmlFor="registration">Registration Enabled</Label>
+          <p className="text-sm text-gray-500">Allow new user registrations</p>
                                       </div>
-                                    </SelectItem>
-                                  ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="type">Type *</Label>
-                            <Select
-                              value={newPaymentMethod.type}
-                              onValueChange={(value) => setNewPaymentMethod({ ...newPaymentMethod, type: value })}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="bank_account">
-                                  <div className="flex items-center gap-2">
-                                    <Building2 className="h-4 w-4" />
-                                    Bank Account
-                                  </div>
-                                </SelectItem>
-                                <SelectItem value="mobile_money">
-                                  <div className="flex items-center gap-2">
-                                    <CreditCard className="h-4 w-4" />
-                                    Mobile Money
-                                  </div>
-                                </SelectItem>
-                                <SelectItem value="qr_code">
-                                  <div className="flex items-center gap-2">
-                                    <QrCode className="h-4 w-4" />
-                                    QR Code
-                                  </div>
-                                </SelectItem>
-                                <SelectItem value="provider">
-                                  <div className="flex items-center gap-2">
-                                    <Server className="h-4 w-4" />
-                                    Provider (Integrated)
-                                  </div>
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="name">Display Name *</Label>
-                          <Input
-                            id="name"
-                            value={newPaymentMethod.name}
-                            onChange={(e) => setNewPaymentMethod({ ...newPaymentMethod, name: e.target.value })}
-                            placeholder="e.g., Sberbank Russia, SberPay QR"
+        <Switch
+          id="registration"
+          checked={platformConfig.registrationEnabled}
+          onCheckedChange={(checked) => handlePlatformConfigChange("registrationEnabled", checked)}
                           />
                         </div>
-
-                        {newPaymentMethod.type === "bank_account" && (() => {
-                          const accountConfig = newPaymentMethod.currency
-                            ? getAccountTypeConfigFromCurrency(newPaymentMethod.currency)
-                            : null
-
-                          if (!accountConfig) {
-                            return (
-                              <div className="text-sm text-gray-500 p-4 bg-gray-50 rounded-lg">
-                                Please select a currency first to see the required fields
+      <div className="flex items-center justify-between">
+        <div>
+          <Label htmlFor="emailVerification">Email Verification Required</Label>
+          <p className="text-sm text-gray-500">Require email verification for new accounts</p>
                               </div>
-                            )
-                          }
-
-                          return (
-                            <>
-                              {/* Account Name - Always required */}
-                              <div className="space-y-2">
-                                <Label htmlFor="accountName">
-                                  {accountConfig.fieldLabels.account_name} *
-                                </Label>
-                                <Input
-                                  id="accountName"
-                                  value={newPaymentMethod.account_name}
-                                  onChange={(e) =>
-                                    setNewPaymentMethod({ ...newPaymentMethod, account_name: e.target.value })
-                                  }
-                                  placeholder={accountConfig.fieldPlaceholders.account_name}
+        <Switch
+          id="emailVerification"
+          checked={platformConfig.emailVerificationRequired}
+          onCheckedChange={(checked) => handlePlatformConfigChange("emailVerificationRequired", checked)}
                                 />
                               </div>
-
-                              {/* Bank Name - Always required */}
-                              <div className="space-y-2">
-                                <Label htmlFor="bankName">
-                                  {accountConfig.fieldLabels.bank_name} *
-                                </Label>
-                                <Input
-                                  id="bankName"
-                                  value={newPaymentMethod.bank_name}
-                                  onChange={(e) =>
-                                    setNewPaymentMethod({ ...newPaymentMethod, bank_name: e.target.value })
-                                  }
-                                  placeholder={accountConfig.fieldPlaceholders.bank_name}
-                                />
+      <div className="flex items-center justify-between">
+        <div>
+          <Label htmlFor="baseCurrency">Base Currency for Reporting</Label>
+          <p className="text-sm text-gray-500">Default currency for displaying transaction amounts and reports</p>
                               </div>
-
-                              {/* US Account Fields */}
-                              {accountConfig.accountType === "us" && (
-                                <>
-                                  <div className="space-y-2">
-                                    <Label htmlFor="routingNumber">
-                                      {accountConfig.fieldLabels.routing_number} *
-                                    </Label>
-                                    <Input
-                                      id="routingNumber"
-                                      value={newPaymentMethod.routing_number}
-                                      onChange={(e) => {
-                                        const value = e.target.value.replace(/\D/g, "").slice(0, 9)
-                                        setNewPaymentMethod({ ...newPaymentMethod, routing_number: value })
-                                      }}
-                                      placeholder={accountConfig.fieldPlaceholders.routing_number}
-                                      maxLength={9}
-                                    />
-                                  </div>
-                                  <div className="space-y-2">
-                                    <Label htmlFor="accountNumber">
-                                      {accountConfig.fieldLabels.account_number} *
-                                    </Label>
-                                    <Input
-                                      id="accountNumber"
-                                      value={newPaymentMethod.account_number}
-                                      onChange={(e) =>
-                                        setNewPaymentMethod({ ...newPaymentMethod, account_number: e.target.value })
-                                      }
-                                      placeholder={accountConfig.fieldPlaceholders.account_number}
-                                    />
-                                  </div>
-                                </>
-                              )}
-
-                              {/* UK Account Fields */}
-                              {accountConfig.accountType === "uk" && (
-                                <>
-                                  <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                      <Label htmlFor="sortCode">
-                                        {accountConfig.fieldLabels.sort_code} *
-                                      </Label>
-                                      <Input
-                                        id="sortCode"
-                                        value={newPaymentMethod.sort_code}
-                                        onChange={(e) => {
-                                          const value = e.target.value.replace(/\D/g, "").slice(0, 6)
-                                          setNewPaymentMethod({ ...newPaymentMethod, sort_code: value })
-                                        }}
-                                        placeholder={accountConfig.fieldPlaceholders.sort_code}
-                                        maxLength={6}
-                                      />
-                                    </div>
-                                    <div className="space-y-2">
-                                      <Label htmlFor="accountNumber">
-                                        {accountConfig.fieldLabels.account_number} *
-                                      </Label>
-                                      <Input
-                                        id="accountNumber"
-                                        value={newPaymentMethod.account_number}
-                                        onChange={(e) =>
-                                          setNewPaymentMethod({ ...newPaymentMethod, account_number: e.target.value })
-                                        }
-                                        placeholder={accountConfig.fieldPlaceholders.account_number}
-                                      />
-                                    </div>
-                                  </div>
-                                  <div className="space-y-2">
-                                    <Label htmlFor="iban">
-                                      {accountConfig.fieldLabels.iban} (Optional)
-                                    </Label>
-                                    <Input
-                                      id="iban"
-                                      value={newPaymentMethod.iban}
-                                      onChange={(e) =>
-                                        setNewPaymentMethod({ ...newPaymentMethod, iban: e.target.value.toUpperCase() })
-                                      }
-                                      placeholder={accountConfig.fieldPlaceholders.iban}
-                                    />
-                                  </div>
-                                  <div className="space-y-2">
-                                    <Label htmlFor="swiftBic">
-                                      {accountConfig.fieldLabels.swift_bic} (Optional)
-                                    </Label>
-                                    <Input
-                                      id="swiftBic"
-                                      value={newPaymentMethod.swift_bic}
-                                      onChange={(e) =>
-                                        setNewPaymentMethod({ ...newPaymentMethod, swift_bic: e.target.value.toUpperCase() })
-                                      }
-                                      placeholder={accountConfig.fieldPlaceholders.swift_bic}
-                                    />
-                                  </div>
-                                </>
-                              )}
-
-                              {/* EURO Account Fields */}
-                              {accountConfig.accountType === "euro" && (
-                                <>
-                                  <div className="space-y-2">
-                                    <Label htmlFor="iban">
-                                      {accountConfig.fieldLabels.iban} *
-                                    </Label>
-                                    <Input
-                                      id="iban"
-                                      value={newPaymentMethod.iban}
-                                      onChange={(e) =>
-                                        setNewPaymentMethod({ ...newPaymentMethod, iban: e.target.value.toUpperCase() })
-                                      }
-                                      placeholder={accountConfig.fieldPlaceholders.iban}
-                                    />
-                                  </div>
-                                  <div className="space-y-2">
-                                    <Label htmlFor="swiftBic">
-                                      {accountConfig.fieldLabels.swift_bic} (Optional)
-                                    </Label>
-                                    <Input
-                                      id="swiftBic"
-                                      value={newPaymentMethod.swift_bic}
-                                      onChange={(e) =>
-                                        setNewPaymentMethod({ ...newPaymentMethod, swift_bic: e.target.value.toUpperCase() })
-                                      }
-                                      placeholder={accountConfig.fieldPlaceholders.swift_bic}
-                                    />
-                                  </div>
-                                </>
-                              )}
-
-                              {/* Generic Account Fields */}
-                              {accountConfig.accountType === "generic" && (
-                                <div className="space-y-2">
-                                  <Label htmlFor="accountNumber">
-                                    {accountConfig.fieldLabels.account_number} *
-                                  </Label>
-                                  <Input
-                                    id="accountNumber"
-                                    value={newPaymentMethod.account_number}
-                                    onChange={(e) =>
-                                      setNewPaymentMethod({ ...newPaymentMethod, account_number: e.target.value })
-                                    }
-                                    placeholder={accountConfig.fieldPlaceholders.account_number}
-                                  />
-                                </div>
-                              )}
-                            </>
-                          )
-                        })()}
-
-                        {newPaymentMethod.type === "mobile_money" && (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="mmAccountName">Account name *</Label>
-                              <Input
-                                id="mmAccountName"
-                                value={newPaymentMethod.account_name}
-                                onChange={(e) => setNewPaymentMethod({ ...newPaymentMethod, account_name: e.target.value })}
-                                placeholder="Recipient account name"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="mmProvider">Network / Provider *</Label>
-                              <Input
-                                id="mmProvider"
-                                value={newPaymentMethod.mobile_money_provider}
-                                onChange={(e) =>
-                                  setNewPaymentMethod({ ...newPaymentMethod, mobile_money_provider: e.target.value })
-                                }
-                                placeholder="e.g., MTN, Airtel, M-PESA"
-                              />
-                            </div>
-                            <div className="space-y-2 md:col-span-2">
-                              <Label htmlFor="mmPhone">Phone number *</Label>
-                              <Input
-                                id="mmPhone"
-                                value={newPaymentMethod.phone_number}
-                                onChange={(e) => setNewPaymentMethod({ ...newPaymentMethod, phone_number: e.target.value })}
-                                placeholder="+2348012345678"
-                              />
-                            </div>
-                          </div>
-                        )}
-
-                        {newPaymentMethod.type === "provider" && (
-                          <div className="space-y-2">
-                            <Label>Provider *</Label>
                             <Select
-                              value={newPaymentMethod.provider_key}
-                              onValueChange={(value) =>
-                                setNewPaymentMethod({ ...newPaymentMethod, provider_key: value })
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select provider" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="noah">Noah</SelectItem>
-                                <SelectItem value="custom">Custom (not implemented)</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <p className="text-xs text-gray-500">
-                              Provider methods are used to initiate payouts via API. Configuration is stored in the
-                              Payment Method instructions as JSON.
-                            </p>
-                          </div>
-                        )}
-
-                        {newPaymentMethod.type === "qr_code" && (
-                          <>
-                            <div className="space-y-2">
-                              <Label htmlFor="qrCodeFile">Upload QR Code *</Label>
-                              <input
-                                type="file"
-                                ref={fileInputRef}
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0]
-                                  if (file) handleQrCodeFileSelect(file)
-                                }}
-                                accept=".svg,.png,.jpg,.jpeg,.pdf"
-                                className="hidden"
-                              />
-                              <div className="flex items-center gap-4">
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  onClick={() => fileInputRef.current?.click()}
-                                  className="flex items-center gap-2"
-                                >
-                                  <Upload className="h-4 w-4" />
-                                  {qrCodeFile ? "Change File" : "Select File"}
-                                </Button>
-                                {qrCodeFile && (
-                                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                                    <span>{qrCodeFile.name}</span>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => setQrCodeFile(null)}
-                                      className="h-6 w-6 p-0"
-                                    >
-                                      <X className="h-3 w-3" />
-                                    </Button>
-                                  </div>
-                                )}
-                              </div>
-                              <p className="text-xs text-gray-500">Supported formats: SVG, PNG, JPEG (Max 5MB)</p>
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="instructions">Instructions</Label>
-                              <Textarea
-                                id="instructions"
-                                value={newPaymentMethod.instructions}
-                                onChange={(e) =>
-                                  setNewPaymentMethod({ ...newPaymentMethod, instructions: e.target.value })
-                                }
-                                placeholder="Instructions for users on how to use this QR code"
-                                rows={3}
-                              />
-                            </div>
-                          </>
-                        )}
-
-                        <div className="space-y-4 border-t pt-4">
-                          <Label className="text-sm font-semibold">Completion Timer</Label>
-                          <div className="grid grid-cols-3 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="timerHours">Hours</Label>
-                              <Input
-                                id="timerHours"
-                                type="number"
-                                min="0"
-                                value={newPaymentMethod.timerHours}
-                                onChange={(e) =>
-                                  setNewPaymentMethod({
-                                    ...newPaymentMethod,
-                                    timerHours: Math.max(0, Number.parseInt(e.target.value) || 0),
-                                  })
-                                }
-                                placeholder="0"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="timerMinutes">Minutes</Label>
-                              <Input
-                                id="timerMinutes"
-                                type="number"
-                                min="0"
-                                max="59"
-                                value={newPaymentMethod.timerMinutes}
-                                onChange={(e) =>
-                                  setNewPaymentMethod({
-                                    ...newPaymentMethod,
-                                    timerMinutes: Math.max(0, Math.min(59, Number.parseInt(e.target.value) || 0)),
-                                  })
-                                }
-                                placeholder="0"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="timerSeconds">Seconds</Label>
-                              <Input
-                                id="timerSeconds"
-                                type="number"
-                                min="0"
-                                max="59"
-                                value={newPaymentMethod.timerSeconds}
-                                onChange={(e) =>
-                                  setNewPaymentMethod({
-                                    ...newPaymentMethod,
-                                    timerSeconds: Math.max(0, Math.min(59, Number.parseInt(e.target.value) || 0)),
-                                  })
-                                }
-                                placeholder="0"
-                              />
-                            </div>
-                          </div>
-                          <p className="text-xs text-gray-500">
-                            Time limit for users to complete the payment (default: 1 hour)
-                          </p>
-                        </div>
-
-                        <div className="flex items-center space-x-2">
-                          <Checkbox
-                            id="isDefault"
-                            checked={newPaymentMethod.is_default}
-                            onCheckedChange={(checked) =>
-                              setNewPaymentMethod({ ...newPaymentMethod, is_default: checked as boolean })
-                            }
-                          />
-                          <Label htmlFor="isDefault" className="text-sm font-medium">
-                            Set as default payment method for this currency
-                          </Label>
-                        </div>
-
-                      </div>
-                      <div className="flex gap-4 pt-4 border-t mt-4">
-                        <Button variant="outline" onClick={() => setIsAddPaymentMethodOpen(false)} className="flex-1">
-                          Cancel
-                        </Button>
-                        <Button
-                          onClick={handleAddPaymentMethod}
-                          disabled={(() => {
-                            if (saving || uploadingQrCode || !newPaymentMethod.currency || !newPaymentMethod.name) {
-                              return true
-                            }
-
-                            if (newPaymentMethod.type === "qr_code") {
-                              return !qrCodeFile && !newPaymentMethod.qr_code_data
-                            }
-
-                            if (newPaymentMethod.type === "bank_account") {
-                              const accountConfig = getAccountTypeConfigFromCurrency(newPaymentMethod.currency)
-                              const requiredFields = accountConfig.requiredFields
-
-                              for (const field of requiredFields) {
-                                const fieldValue = newPaymentMethod[field as keyof typeof newPaymentMethod]
-                                if (!fieldValue || (typeof fieldValue === "string" && !fieldValue.trim())) {
-                                  return true
-                                }
-                              }
-                            }
-
-                            return false
-                          })()}
-                          className="flex-1 bg-primary hover:bg-primary/90"
-                        >
-                          {saving ? "Adding..." : "Add Payment Method"}
-                        </Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-
-                  {/* Edit Payment Method Dialog */}
-                  <Dialog open={isEditPaymentMethodOpen} onOpenChange={setIsEditPaymentMethodOpen}>
-                    <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
-                      <DialogHeader>
-                        <DialogTitle>Edit Payment Method</DialogTitle>
-                      </DialogHeader>
-                      {editingPaymentMethod && (
-                        <>
-                          <div className="space-y-4 overflow-y-auto flex-1 pr-2">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="editCurrency">Currency *</Label>
-                              <Select
-                                value={editingPaymentMethod.currency}
-                                onValueChange={(value) =>
-                                  setEditingPaymentMethod({ ...editingPaymentMethod, currency: value })
-                                }
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select currency" />
+          value={platformConfig.baseCurrency}
+          onValueChange={(value) => handlePlatformConfigChange("baseCurrency", value)}
+        >
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Select base currency" />
                                 </SelectTrigger>
                                 <SelectContent>
                                   {currencies
@@ -1465,672 +438,23 @@ export function SettingsAdminPanel() {
                                             size={20}
                                             fallbackSvg={currency.flag_svg?.trim() ? currency.flag_svg : undefined}
                                           />
-                                          <div className="font-medium">
-                                            {currency.code} - {currency.name}
-                                          </div>
+                    <div className="font-medium">{currency.code}</div>
                                         </div>
                                       </SelectItem>
                                     ))}
                                 </SelectContent>
                               </Select>
                             </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="editType">Type *</Label>
-                              <Select
-                                value={editingPaymentMethod.type}
-                                onValueChange={(value) =>
-                                  setEditingPaymentMethod({ ...editingPaymentMethod, type: value })
-                                }
-                              >
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="bank_account">
-                                    <div className="flex items-center gap-2">
-                                      <Building2 className="h-4 w-4" />
-                                      Bank Account
-                                    </div>
-                                  </SelectItem>
-                                    <SelectItem value="mobile_money">
-                                      <div className="flex items-center gap-2">
-                                        <CreditCard className="h-4 w-4" />
-                                        Mobile Money
-                                      </div>
-                                    </SelectItem>
-                                  <SelectItem value="qr_code">
-                                    <div className="flex items-center gap-2">
-                                      <QrCode className="h-4 w-4" />
-                                      QR Code
-                                    </div>
-                                  </SelectItem>
-                                    <SelectItem value="provider">
-                                      <div className="flex items-center gap-2">
-                                        <Server className="h-4 w-4" />
-                                        Provider (Integrated)
-                                      </div>
-                                    </SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="editName">Display Name *</Label>
-                            <Input
-                              id="editName"
-                              value={editingPaymentMethod.name}
-                              onChange={(e) =>
-                                setEditingPaymentMethod({ ...editingPaymentMethod, name: e.target.value })
-                              }
-                              placeholder="e.g., Sberbank Russia, SberPay QR"
-                            />
-                          </div>
-
-                            {editingPaymentMethod.type === "bank_account" && (() => {
-                            const accountConfig = editingPaymentMethod.currency
-                              ? getAccountTypeConfigFromCurrency(editingPaymentMethod.currency)
-                              : null
-
-                            if (!accountConfig) {
-                              return (
-                                <div className="text-sm text-gray-500 p-4 bg-gray-50 rounded-lg">
-                                  Please select a currency first to see the required fields
                                 </div>
                               )
-                            }
 
-                            return (
-                              <>
-                                {/* Account Name - Always required */}
-                                <div className="space-y-2">
-                                  <Label htmlFor="editAccountName">
-                                    {accountConfig.fieldLabels.account_name} *
-                                  </Label>
-                                  <Input
-                                    id="editAccountName"
-                                    value={editingPaymentMethod.account_name || ""}
-                                    onChange={(e) =>
-                                      setEditingPaymentMethod({ ...editingPaymentMethod, account_name: e.target.value })
-                                    }
-                                    placeholder={accountConfig.fieldPlaceholders.account_name}
-                                  />
-                                </div>
-
-                                {/* Bank Name - Always required */}
-                                <div className="space-y-2">
-                                  <Label htmlFor="editBankName">
-                                    {accountConfig.fieldLabels.bank_name} *
-                                  </Label>
-                                  <Input
-                                    id="editBankName"
-                                    value={editingPaymentMethod.bank_name || ""}
-                                    onChange={(e) =>
-                                      setEditingPaymentMethod({ ...editingPaymentMethod, bank_name: e.target.value })
-                                    }
-                                    placeholder={accountConfig.fieldPlaceholders.bank_name}
-                                  />
-                                </div>
-
-                                {/* US Account Fields */}
-                                {accountConfig.accountType === "us" && (
-                                  <>
-                                    <div className="space-y-2">
-                                      <Label htmlFor="editRoutingNumber">
-                                        {accountConfig.fieldLabels.routing_number} *
-                                      </Label>
-                                      <Input
-                                        id="editRoutingNumber"
-                                        value={editingPaymentMethod.routing_number || ""}
-                                        onChange={(e) => {
-                                          const value = e.target.value.replace(/\D/g, "").slice(0, 9)
-                                          setEditingPaymentMethod({ ...editingPaymentMethod, routing_number: value })
-                                        }}
-                                        placeholder={accountConfig.fieldPlaceholders.routing_number}
-                                        maxLength={9}
-                                      />
-                                    </div>
-                                    <div className="space-y-2">
-                                      <Label htmlFor="editAccountNumber">
-                                        {accountConfig.fieldLabels.account_number} *
-                                      </Label>
-                                      <Input
-                                        id="editAccountNumber"
-                                        value={editingPaymentMethod.account_number || ""}
-                                        onChange={(e) =>
-                                          setEditingPaymentMethod({
-                                            ...editingPaymentMethod,
-                                            account_number: e.target.value,
-                                          })
-                                        }
-                                        placeholder={accountConfig.fieldPlaceholders.account_number}
-                                      />
-                                    </div>
-                                  </>
-                                )}
-
-                                {/* UK Account Fields */}
-                                {accountConfig.accountType === "uk" && (
-                                  <>
-                                    <div className="grid grid-cols-2 gap-4">
-                                      <div className="space-y-2">
-                                        <Label htmlFor="editSortCode">
-                                          {accountConfig.fieldLabels.sort_code} *
-                                        </Label>
-                                        <Input
-                                          id="editSortCode"
-                                          value={editingPaymentMethod.sort_code || ""}
-                                          onChange={(e) => {
-                                            const value = e.target.value.replace(/\D/g, "").slice(0, 6)
-                                            setEditingPaymentMethod({ ...editingPaymentMethod, sort_code: value })
-                                          }}
-                                          placeholder={accountConfig.fieldPlaceholders.sort_code}
-                                          maxLength={6}
-                                        />
-                                      </div>
-                                      <div className="space-y-2">
-                                        <Label htmlFor="editAccountNumber">
-                                          {accountConfig.fieldLabels.account_number} *
-                                        </Label>
-                                        <Input
-                                          id="editAccountNumber"
-                                          value={editingPaymentMethod.account_number || ""}
-                                          onChange={(e) =>
-                                            setEditingPaymentMethod({
-                                              ...editingPaymentMethod,
-                                              account_number: e.target.value,
-                                            })
-                                          }
-                                          placeholder={accountConfig.fieldPlaceholders.account_number}
-                                        />
-                                      </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                      <Label htmlFor="editIban">
-                                        {accountConfig.fieldLabels.iban} (Optional)
-                                      </Label>
-                                      <Input
-                                        id="editIban"
-                                        value={editingPaymentMethod.iban || ""}
-                                        onChange={(e) =>
-                                          setEditingPaymentMethod({
-                                            ...editingPaymentMethod,
-                                            iban: e.target.value.toUpperCase(),
-                                          })
-                                        }
-                                        placeholder={accountConfig.fieldPlaceholders.iban}
-                                      />
-                                    </div>
-                                    <div className="space-y-2">
-                                      <Label htmlFor="editSwiftBic">
-                                        {accountConfig.fieldLabels.swift_bic} (Optional)
-                                      </Label>
-                                      <Input
-                                        id="editSwiftBic"
-                                        value={editingPaymentMethod.swift_bic || ""}
-                                        onChange={(e) =>
-                                          setEditingPaymentMethod({
-                                            ...editingPaymentMethod,
-                                            swift_bic: e.target.value.toUpperCase(),
-                                          })
-                                        }
-                                        placeholder={accountConfig.fieldPlaceholders.swift_bic}
-                                      />
-                                    </div>
-                                  </>
-                                )}
-
-                                {/* EURO Account Fields */}
-                                {accountConfig.accountType === "euro" && (
-                                  <>
-                                    <div className="space-y-2">
-                                      <Label htmlFor="editIban">
-                                        {accountConfig.fieldLabels.iban} *
-                                      </Label>
-                                      <Input
-                                        id="editIban"
-                                        value={editingPaymentMethod.iban || ""}
-                                        onChange={(e) =>
-                                          setEditingPaymentMethod({
-                                            ...editingPaymentMethod,
-                                            iban: e.target.value.toUpperCase(),
-                                          })
-                                        }
-                                        placeholder={accountConfig.fieldPlaceholders.iban}
-                                      />
-                                    </div>
-                                    <div className="space-y-2">
-                                      <Label htmlFor="editSwiftBic">
-                                        {accountConfig.fieldLabels.swift_bic} (Optional)
-                                      </Label>
-                                      <Input
-                                        id="editSwiftBic"
-                                        value={editingPaymentMethod.swift_bic || ""}
-                                        onChange={(e) =>
-                                          setEditingPaymentMethod({
-                                            ...editingPaymentMethod,
-                                            swift_bic: e.target.value.toUpperCase(),
-                                          })
-                                        }
-                                        placeholder={accountConfig.fieldPlaceholders.swift_bic}
-                                      />
-                                    </div>
-                                  </>
-                                )}
-
-                                {/* Generic Account Fields */}
-                                {accountConfig.accountType === "generic" && (
-                                  <div className="space-y-2">
-                                    <Label htmlFor="editAccountNumber">
-                                      {accountConfig.fieldLabels.account_number} *
-                                    </Label>
-                                    <Input
-                                      id="editAccountNumber"
-                                      value={editingPaymentMethod.account_number || ""}
-                                      onChange={(e) =>
-                                        setEditingPaymentMethod({
-                                          ...editingPaymentMethod,
-                                          account_number: e.target.value,
-                                        })
-                                      }
-                                      placeholder={accountConfig.fieldPlaceholders.account_number}
-                                    />
-                                  </div>
-                                )}
-                              </>
-                            )
-                          })()}
-
-                            {editingPaymentMethod.type === "mobile_money" && (
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                  <Label>Account name *</Label>
-                                  <Input
-                                    value={editingPaymentMethod.account_name || ""}
-                                    onChange={(e) =>
-                                      setEditingPaymentMethod({ ...editingPaymentMethod, account_name: e.target.value })
-                                    }
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <Label>Network / Provider *</Label>
-                                  <Input
-                                    value={editingPaymentMethod.mobile_money_provider || ""}
-                                    onChange={(e) =>
-                                      setEditingPaymentMethod({
-                                        ...editingPaymentMethod,
-                                        mobile_money_provider: e.target.value,
-                                      })
-                                    }
-                                  />
-                                </div>
-                                <div className="space-y-2 md:col-span-2">
-                                  <Label>Phone number *</Label>
-                                  <Input
-                                    value={editingPaymentMethod.phone_number || ""}
-                                    onChange={(e) =>
-                                      setEditingPaymentMethod({ ...editingPaymentMethod, phone_number: e.target.value })
-                                    }
-                                  />
-                                </div>
-                              </div>
-                            )}
-
-                            {editingPaymentMethod.type === "provider" && (
-                              <div className="space-y-2">
-                                <Label>Provider *</Label>
-                                <Select
-                                  value={editingProviderKey}
-                                  onValueChange={(value) => {
-                                    setEditingProviderKey(value)
-                                    setEditingPaymentMethod({
-                                      ...editingPaymentMethod,
-                                      instructions: JSON.stringify({ provider_key: value }),
-                                    })
-                                  }}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select provider" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="noah">Noah</SelectItem>
-                                    <SelectItem value="custom">Custom (not implemented)</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <p className="text-xs text-gray-500">
-                                  Provider configuration is stored in instructions as JSON (e.g.{" "}
-                                  {`{"provider_key":"noah"}`}).
-                                </p>
-                              </div>
-                            )}
-
-                          {editingPaymentMethod.type === "qr_code" && (
-                            <>
-                              <div className="space-y-2">
-                                <Label htmlFor="editQrCodeFile">Upload QR Code *</Label>
-                                <input
-                                  type="file"
-                                  ref={editFileInputRef}
-                                  onChange={(e) => {
-                                    const file = e.target.files?.[0]
-                                    if (file) handleQrCodeFileSelect(file, true)
-                                  }}
-                                  accept=".svg,.png,.jpg,.jpeg,.pdf"
-                                  className="hidden"
-                                />
-                                <div className="flex items-center gap-4">
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => editFileInputRef.current?.click()}
-                                    className="flex items-center gap-2"
-                                  >
-                                    <Upload className="h-4 w-4" />
-                                    {editingQrCodeFile
-                                      ? "Change File"
-                                      : editingPaymentMethod.qr_code_data
-                                        ? "Replace File"
-                                        : "Select File"}
-                                  </Button>
-                                  {editingQrCodeFile && (
-                                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                                      <span>{editingQrCodeFile.name}</span>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => setEditingQrCodeFile(null)}
-                                        className="h-6 w-6 p-0"
-                                      >
-                                        <X className="h-3 w-3" />
-                                      </Button>
-                                    </div>
-                                  )}
-                                  {!editingQrCodeFile && editingPaymentMethod.qr_code_data && (
-                                    <span className="text-sm text-gray-600">Current file uploaded</span>
-                                  )}
-                                </div>
-                                <p className="text-xs text-gray-500">
-                                  Supported formats: SVG, PNG, JPEG (Max 5MB)
-                                </p>
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor="editInstructions">Instructions</Label>
-                                <Textarea
-                                  id="editInstructions"
-                                  value={editingPaymentMethod.instructions || ""}
-                                  onChange={(e) =>
-                                    setEditingPaymentMethod({ ...editingPaymentMethod, instructions: e.target.value })
-                                  }
-                                  placeholder="Instructions for users on how to use this QR code"
-                                  rows={3}
-                                />
-                              </div>
-                            </>
-                          )}
-
-                          <div className="space-y-4 border-t pt-4">
-                            <Label className="text-sm font-semibold">Completion Timer</Label>
-                            <div className="grid grid-cols-3 gap-4">
-                              <div className="space-y-2">
-                                <Label htmlFor="editTimerHours">Hours</Label>
-                                <Input
-                                  id="editTimerHours"
-                                  type="number"
-                                  min="0"
-                                  value={editingTimer.hours}
-                                  onChange={(e) =>
-                                    setEditingTimer({
-                                      ...editingTimer,
-                                      hours: Math.max(0, Number.parseInt(e.target.value) || 0),
-                                    })
-                                  }
-                                  placeholder="0"
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor="editTimerMinutes">Minutes</Label>
-                                <Input
-                                  id="editTimerMinutes"
-                                  type="number"
-                                  min="0"
-                                  max="59"
-                                  value={editingTimer.minutes}
-                                  onChange={(e) =>
-                                    setEditingTimer({
-                                      ...editingTimer,
-                                      minutes: Math.max(0, Math.min(59, Number.parseInt(e.target.value) || 0)),
-                                    })
-                                  }
-                                  placeholder="0"
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor="editTimerSeconds">Seconds</Label>
-                                <Input
-                                  id="editTimerSeconds"
-                                  type="number"
-                                  min="0"
-                                  max="59"
-                                  value={editingTimer.seconds}
-                                  onChange={(e) =>
-                                    setEditingTimer({
-                                      ...editingTimer,
-                                      seconds: Math.max(0, Math.min(59, Number.parseInt(e.target.value) || 0)),
-                                    })
-                                  }
-                                  placeholder="0"
-                                />
-                              </div>
-                            </div>
-                            <p className="text-xs text-gray-500">
-                              Time limit for users to complete the payment (default: 1 hour)
-                            </p>
-                          </div>
-
-                          <div className="flex items-center space-x-2">
-                            <Checkbox
-                              id="editIsDefault"
-                              checked={editingPaymentMethod.is_default}
-                              onCheckedChange={(checked) =>
-                                setEditingPaymentMethod({ ...editingPaymentMethod, is_default: checked as boolean })
-                              }
-                            />
-                            <Label htmlFor="editIsDefault" className="text-sm font-medium">
-                              Set as default payment method for this currency
-                            </Label>
-                          </div>
-
-                          </div>
-                          <div className="flex gap-4 pt-4 border-t mt-4">
-                            <Button
-                              variant="outline"
-                              onClick={() => setIsEditPaymentMethodOpen(false)}
-                              className="flex-1"
-                            >
-                              Cancel
-                            </Button>
-                            <Button
-                              onClick={handleEditPaymentMethod}
-                              disabled={(() => {
-                                if (
-                                  saving ||
-                                  uploadingQrCode ||
-                                  !editingPaymentMethod.currency ||
-                                  !editingPaymentMethod.name
-                                ) {
-                                  return true
-                                }
-
-                                if (editingPaymentMethod.type === "qr_code") {
-                                  return !editingQrCodeFile && !editingPaymentMethod.qr_code_data
-                                }
-
-                                if (editingPaymentMethod.type === "bank_account") {
-                                  const accountConfig = getAccountTypeConfigFromCurrency(
-                                    editingPaymentMethod.currency
-                                  )
-                                  const requiredFields = accountConfig.requiredFields
-
-                                  for (const field of requiredFields) {
-                                    const fieldValue = editingPaymentMethod[field as keyof typeof editingPaymentMethod]
-                                    if (!fieldValue || (typeof fieldValue === "string" && !fieldValue.trim())) {
-                                      return true
-                                    }
-                                  }
-                                }
-
-                                return false
-                              })()}
-                              className="flex-1 bg-primary hover:bg-primary/90"
-                            >
-                              {saving ? "Saving..." : "Save Changes"}
-                            </Button>
-                          </div>
-                        </>
-                      )}
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Currency</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Details</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Default</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paymentMethods.map((method) => (
-                      <TableRow key={method.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {renderCurrencyFlag(method.currency)}
-                            <span className="font-medium">{method.currency}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {getPaymentMethodIcon(method.type)}
-                            <span className="capitalize">{method.type.replace("_", " ")}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-medium">{method.name}</TableCell>
-                        <TableCell>
-                          {method.type === "bank_account" ? (() => {
-                            const accountConfig = getAccountTypeConfigFromCurrency(method.currency)
-                            const accountType = accountConfig.accountType
-
-                            return (
-                              <div className="text-sm text-gray-600 space-y-1">
-                                <div>{method.account_name}</div>
-                                {accountType === "us" && method.routing_number && (
-                                  <div className="font-mono text-xs">
-                                    Routing: {formatFieldValue(accountType, "routing_number", method.routing_number)}
-                                  </div>
-                                )}
-                                {accountType === "uk" && method.sort_code && (
-                                  <div className="font-mono text-xs">
-                                    Sort Code: {formatFieldValue(accountType, "sort_code", method.sort_code)}
-                                  </div>
-                                )}
-                                {method.account_number && (
-                                  <div className="font-mono text-xs">
-                                    {accountConfig.fieldLabels.account_number}: {method.account_number}
-                                  </div>
-                                )}
-                                {method.iban && (
-                                  <div className="font-mono text-xs">
-                                    IBAN: {formatFieldValue(accountType, "iban", method.iban)}
-                                  </div>
-                                )}
-                                {method.swift_bic && (
-                                  <div className="font-mono text-xs">SWIFT/BIC: {method.swift_bic}</div>
-                                )}
-                                <div>{method.bank_name}</div>
-                              </div>
-                            )
-                          })() : (
-                            <div className="text-sm text-gray-600">
-                              <div className="font-mono text-xs">{method.qr_code_data}</div>
-                              {method.instructions && (
-                                <div className="mt-1 text-xs">{method.instructions.substring(0, 50)}...</div>
-                              )}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={method.status === "active" ? "emerald" : "slate"}>
-                            {method.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {method.is_default && <Badge variant="outline">Default</Badge>}
-                        </TableCell>
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleEditClick(method)}>
-                                <Edit className="h-4 w-4 mr-2" />
-                                Edit
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleTogglePaymentMethodStatus(method.id)}>
-                                {method.status === "active" ? "Disable" : "Enable"}
-                              </DropdownMenuItem>
-                              {method.status === "active" && !method.is_default && (
-                                <DropdownMenuItem onClick={() => handleSetDefaultPaymentMethod(method.id)}>
-                                  Make Default
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuItem
-                                onClick={() => handleDeletePaymentMethod(method.id)}
-                                className="text-destructive focus:text-destructive"
-                              >
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-
-                {paymentMethods.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    <CreditCard className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                    <p>No payment methods configured yet</p>
-                    <p className="text-sm">Add payment methods to enable user transactions</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-
-          {/* Security Settings */}
-          <TabsContent value="security">
+  const securityCard = (
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>Security Settings</CardTitle>
                   {!isEditingSecuritySettings && (
-                    <Button
-                      onClick={() => setIsEditingSecuritySettings(true)}
-                      className="bg-primary hover:bg-primary/90"
-                    >
+            <Button onClick={() => setIsEditingSecuritySettings(true)} className="bg-primary hover:bg-primary/90">
                       <Edit className="h-4 w-4 mr-2" />
                       Edit Settings
                     </Button>
@@ -2192,11 +516,7 @@ export function SettingsAdminPanel() {
                       <X className="h-4 w-4 mr-2" />
                       Cancel
                     </Button>
-                    <Button
-                      onClick={handleSaveSecuritySettings}
-                      disabled={saving}
-                      className="flex-1 bg-primary hover:bg-primary/90"
-                    >
+            <Button onClick={handleSaveSecuritySettings} disabled={saving} className="flex-1 bg-primary hover:bg-primary/90">
                       <Save className="h-4 w-4 mr-2" />
                       {saving ? "Saving..." : "Save Security Settings"}
                     </Button>
@@ -2204,8 +524,30 @@ export function SettingsAdminPanel() {
                 )}
               </CardContent>
             </Card>
-          </TabsContent>
-        </Tabs>
-      </div>
   )
+
+  if (section === "platform") {
+    return (
+      <PlatformControlTabShell title={headerCopy.title} description={headerCopy.description}>
+        <Card>
+          <CardHeader>
+            <CardTitle>Platform Configuration</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">{platformConfigBody}</CardContent>
+        </Card>
+        {balanceCurrencyControls}
+        {securityCard}
+      </PlatformControlTabShell>
+    )
+  }
+
+  if (section === "rates") {
+    return <OfficeRatesPanel />
+  }
+
+  if (section === "payment-methods") {
+    return <OfficePaymentMethodsPanel />
+  }
+
+  return null
 }

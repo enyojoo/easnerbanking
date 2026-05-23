@@ -39,10 +39,13 @@ export async function syncExchangeRatesFromModel(options: {
 
   const legs = await buildEasnerLegs([...codes])
 
+  const nowIso = new Date().toISOString()
   const updates: Array<{
     from_currency: string
     to_currency: string
     rate: number
+    source: string
+    as_of: string
     updated_at: string
   }> = []
   const skippedPairs: Array<{ from_currency: string; to_currency: string; reason: string }> = []
@@ -67,7 +70,9 @@ export async function syncExchangeRatesFromModel(options: {
       from_currency: from,
       to_currency: to,
       rate: Number(rate.toPrecision(14)),
-      updated_at: new Date().toISOString(),
+      source: "p2p_sync",
+      as_of: nowIso,
+      updated_at: nowIso,
     })
   }
 

@@ -8,25 +8,16 @@ import { getCurrencySymbol } from "@/lib/utils"
 import { generateTransactionId } from "@/lib/transaction-id"
 import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { ArrowLeft, Link2, Loader2, Copy, Check } from "lucide-react"
-
-const SEND_FLOW_STATE_KEY = "send_flow_state"
-
-interface SendFlowState {
-  recipient: { name: string }
-  amount: number
-  receiveCurrency: string
-  sendAmount: number
-  sendCurrency: string
-  paymentMethod?: string
-  otherCurrency?: string
-  transactionId?: string
-}
+import { SEND_FLOW_STATE_KEY, type SendFlowState } from "@/lib/send-flow-session"
+import { completeManualSendFromSession } from "@/lib/manual-send-complete"
+import { ManualSendReceiptUpload } from "@/components/send/manual-send-receipt-upload"
 
 export default function OpenBankingPage() {
   const router = useRouter()
   const [state, setState] = useState<SendFlowState | null>(null)
   const [loading, setLoading] = useState(false)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
+  const [receiptPath, setReceiptPath] = useState<string | null>(null)
 
   const handleCopy = async (text: string, key: string) => {
     try {
@@ -56,10 +47,17 @@ export default function OpenBankingPage() {
   const handleConnect = async () => {
     setLoading(true)
     await new Promise((r) => setTimeout(r, 2000))
-    setLoading(false)
-    const transactionId = state?.transactionId ?? generateTransactionId()
-    sessionStorage.removeItem(SEND_FLOW_STATE_KEY)
-    router.push(transactionWebDetailPath(transactionId))
+    try {
+      let transactionId = state?.transactionId ?? generateTransactionId()
+      if (state?.manualPaymentMethodId && state.manualQuote) {
+        const created = await completeManualSendFromSession(state, { receiptUrl: receiptPath })
+        transactionId = created.transactionId
+      }
+      sessionStorage.removeItem(SEND_FLOW_STATE_KEY)
+      router.push(transactionWebDetailPath(transactionId))
+    } finally {
+      setLoading(false)
+    }
   }
 
   if (!state) {
@@ -136,6 +134,14 @@ export default function OpenBankingPage() {
             : "You will be redirected to your bank to authorize the payment."}
         </p>
       </div>
+
+      {state.manualPaymentMethodId && (
+        <ManualSendReceiptUpload
+          referenceCode={state.transactionId ?? generateTransactionId()}
+          onPathChange={setReceiptPath}
+          disabled={loading}
+        />
+      )}
 
       <div className="flex gap-3">
         <Button variant="outline" size="lg" className="h-11" onClick={() => router.back()}>

@@ -8,19 +8,14 @@ import { getCurrencySymbol } from "@/lib/utils"
 import { generateTransactionId } from "@/lib/transaction-id"
 import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { ArrowLeft, Copy, Check, Landmark } from "lucide-react"
-
-const SEND_FLOW_STATE_KEY = "send_flow_state"
-
-interface SendFlowState {
-  recipient: { name: string }
-  amount: number
-  receiveCurrency: string
-  sendAmount: number
-  sendCurrency: string
-  paymentMethod?: string
-  otherCurrency?: string
-  transactionId?: string
-}
+import {
+  SEND_FLOW_STATE_KEY,
+  type SendFlowState,
+} from "@/lib/send-flow-session"
+import { fetchManualPaymentMethod } from "@/lib/manual-send-api"
+import { completeManualSendFromSession } from "@/lib/manual-send-complete"
+import type { PublicPaymentMethodDetail } from "@/lib/manual-send-api"
+import { ManualSendReceiptUpload } from "@/components/send/manual-send-receipt-upload"
 
 function getBankDetails(sendCurrency: string) {
   const baseDetails = {
@@ -87,6 +82,8 @@ export default function BankTransferPage() {
   const [state, setState] = useState<SendFlowState | null>(null)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [paymentConfirmed, setPaymentConfirmed] = useState(false)
+  const [pm, setPm] = useState<PublicPaymentMethodDetail | null>(null)
+  const [receiptPath, setReceiptPath] = useState<string | null>(null)
 
   useEffect(() => {
     const raw = sessionStorage.getItem(SEND_FLOW_STATE_KEY)
@@ -101,6 +98,22 @@ export default function BankTransferPage() {
     }
   }, [router])
 
+  useEffect(() => {
+    const id = state?.manualPaymentMethodId
+    if (!id) return
+    let cancelled = false
+    void fetchManualPaymentMethod(id)
+      .then((row) => {
+        if (!cancelled) setPm(row)
+      })
+      .catch(() => {
+        if (!cancelled) setPm(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [state?.manualPaymentMethodId])
+
   const handleCopy = async (text: string, key: string) => {
     try {
       await navigator.clipboard.writeText(text)
@@ -113,9 +126,19 @@ export default function BankTransferPage() {
 
   const handleConfirmPayment = () => {
     setPaymentConfirmed(true)
-    const transactionId = state?.transactionId ?? generateTransactionId()
-    sessionStorage.removeItem(SEND_FLOW_STATE_KEY)
-    router.push(transactionWebDetailPath(transactionId))
+    void (async () => {
+      try {
+        let transactionId = state?.transactionId ?? generateTransactionId()
+        if (state?.manualPaymentMethodId && state.manualQuote) {
+          const created = await completeManualSendFromSession(state, { receiptUrl: receiptPath })
+          transactionId = created.transactionId
+        }
+        sessionStorage.removeItem(SEND_FLOW_STATE_KEY)
+        router.push(transactionWebDetailPath(transactionId))
+      } catch {
+        setPaymentConfirmed(false)
+      }
+    })()
   }
 
   if (!state) {
@@ -129,7 +152,16 @@ export default function BankTransferPage() {
     )
   }
 
-  const bankDetails = getBankDetails(state.sendCurrency)
+  const bankDetails = pm
+    ? {
+        accountName: pm.account_name || pm.name,
+        accountNumber: pm.account_number || "",
+        routingNumber: pm.routing_number || undefined,
+        iban: pm.iban || undefined,
+        swiftBic: pm.swift_bic || undefined,
+        bankName: pm.bank_name || pm.name,
+      }
+    : getBankDetails(state.sendCurrency)
   const transactionId = state?.transactionId ?? generateTransactionId()
 
   const CopyableField = ({
@@ -239,6 +271,14 @@ export default function BankTransferPage() {
           </ol>
         </CardContent>
       </Card>
+
+      {state.manualPaymentMethodId && (
+        <ManualSendReceiptUpload
+          referenceCode={transactionId}
+          onPathChange={setReceiptPath}
+          disabled={paymentConfirmed}
+        />
+      )}
 
       <div className="flex gap-3">
         <Button variant="outline" size="lg" className="h-11" onClick={() => router.back()}>

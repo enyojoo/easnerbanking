@@ -3,6 +3,7 @@
  */
 
 import { formatDisplayPersonName } from "../format-display-name"
+import { isVerificationDepositMetadata } from "./verification-deposit"
 
 /** e.g. "ACH … Sent from Sent from Grey" → "Sent from Grey" */
 export function parseSentFromNarrationLabel(text: string | null | undefined): string | null {
@@ -22,6 +23,7 @@ export function deriveBankDepositInboundDisplayLabel(input: {
   fiatDepositSenderName?: string | null
 }): string | undefined {
   const meta = input.metadata || {}
+  if (isVerificationDepositMetadata(meta)) return undefined
   const depositSender =
     input.fiatDepositSenderName ??
     meta.noah_fiat_deposit_sender_name ??

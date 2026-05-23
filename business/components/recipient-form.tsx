@@ -10,9 +10,13 @@ import { Loader2, User, Phone, CreditCard, MapPin, ChevronDown } from "lucide-re
 import { sortByEasnerCountryPickerOrder } from "@easner/shared"
 import type { Beneficiary } from "@/lib/recipient-types"
 import { CountryFlag } from "@/components/flags"
-import { usePayoutCorridors } from "@/lib/use-payout-corridors"
+import { useSendDestinations } from "@/lib/use-send-destinations"
 import { getNetworkIconUrl, getTokenIconUrl } from "@/lib/crypto-icons"
-import { WALLET_ASSET_NETWORKS, DEFAULT_WALLET_ASSET } from "@/lib/wallet-asset-networks"
+import {
+  WALLET_ASSET_NETWORKS,
+  DEFAULT_WALLET_ASSET,
+  walletAssetNetworksFromCatalog,
+} from "@/lib/wallet-asset-networks"
 import {
   coerceBeneficiaryEasenetDisplay,
   createRecipient,
@@ -134,9 +138,18 @@ export function RecipientForm({
   const [easenetLookupLoading, setEasenetLookupLoading] = useState(false)
   const [easenetLookupError, setEasenetLookupError] = useState<string | null>(null)
 
-  const { corridors: bankCorridors, enabled: corridorCatalogEnabled, loading: bankCorridorsLoading } =
-    usePayoutCorridors("bank_transfer")
-  const { corridors: mobileCorridors, loading: mobileCorridorsLoading } = usePayoutCorridors("mobile_money")
+  const {
+    bankCorridors,
+    mobileCorridors,
+    cryptoDestinations,
+    enabled: corridorCatalogEnabled,
+    loading: bankCorridorsLoading,
+  } = useSendDestinations()
+  const mobileCorridorsLoading = bankCorridorsLoading
+  const walletAssetNetworks = useMemo(() => {
+    const fromApi = walletAssetNetworksFromCatalog(cryptoDestinations)
+    return Object.keys(fromApi).length ? fromApi : WALLET_ASSET_NETWORKS
+  }, [cryptoDestinations])
 
   /** When corridors are empty, infer a single row from saved recipient fields (edit mode). */
   const resolveCountryByRecipient = (r: Beneficiary): RailCountryOption | undefined => {
@@ -855,12 +868,12 @@ export function RecipientForm({
                     <CommandList className="max-h-[260px] overflow-y-auto overscroll-contain">
                       <CommandEmpty>No asset found.</CommandEmpty>
                       <CommandGroup>
-                        {Object.keys(WALLET_ASSET_NETWORKS).map((asset) => (
+                        {Object.keys(walletAssetNetworks).map((asset) => (
                           <CommandItem
                             key={asset}
                             value={asset}
                             onSelect={() => {
-                              const networks = WALLET_ASSET_NETWORKS[asset] || []
+                              const networks = walletAssetNetworks[asset] || []
                               handleInputChange("walletAsset", asset)
                               handleInputChange("walletNetwork", networks[0] || "")
                               setWalletAssetOpen(false)
@@ -905,7 +918,7 @@ export function RecipientForm({
                     <CommandList className="max-h-[260px] overflow-y-auto overscroll-contain">
                       <CommandEmpty>No network found.</CommandEmpty>
                       <CommandGroup>
-                        {(WALLET_ASSET_NETWORKS[formData.walletAsset] || []).map((network) => (
+                        {(walletAssetNetworks[formData.walletAsset] || []).map((network) => (
                           <CommandItem
                             key={network}
                             value={network}

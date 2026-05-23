@@ -7,6 +7,7 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { getNoahSettlementCryptoCurrency } from "@/lib/noah/config"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
+import { payoutCorridorGate, requireExecutableProviderChannel } from "@/lib/payout-corridor-validation"
 
 export async function POST(request: Request) {
   const mis = requireNoahEnv()
@@ -26,6 +27,7 @@ export async function POST(request: Request) {
         formSessionId?: string
         cryptoAuthorizedAmount?: string
         cryptoCurrency?: string
+        countryCode?: string
       }
     | null
 
@@ -49,6 +51,21 @@ export async function POST(request: Request) {
     Boolean(fiatCurrency) &&
     Number.isFinite(amount) &&
     amount > 0
+
+  const countryCode = String(body?.countryCode || "").trim().toUpperCase()
+  if (isFormSessionSell && countryCode) {
+    const admin = createSupabaseAdmin()
+    const gate = await payoutCorridorGate(
+      admin,
+      {
+        country_code: countryCode,
+        currency: fiatCurrency,
+        bank_name: "Bank transfer",
+      },
+      { requireExecutableNoahChannel: requireExecutableProviderChannel() },
+    )
+    if (gate) return gate
+  }
 
   if (
     !isFormSessionSell &&

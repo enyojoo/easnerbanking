@@ -12,18 +12,10 @@ import { fetchWithSession } from "@/lib/fetch-with-session"
 import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { ArrowLeft, Copy, Check } from "lucide-react"
 import { QRCodeSVG } from "qrcode.react"
-
-const SEND_FLOW_STATE_KEY = "send_flow_state"
-
-interface SendFlowState {
-  recipient: { name: string }
-  amount: number
-  receiveCurrency: string
-  sendAmount: number
-  sendCurrency: string
-  paymentMethod?: string
-  transactionId?: string
-}
+import { SEND_FLOW_STATE_KEY, type SendFlowState } from "@/lib/send-flow-session"
+import { fetchManualPaymentMethod } from "@/lib/manual-send-api"
+import { completeManualSendFromSession } from "@/lib/manual-send-complete"
+import { ManualSendReceiptUpload } from "@/components/send/manual-send-receipt-upload"
 
 export default function StablecoinAuthorizePage() {
   const router = useRouter()
@@ -32,13 +24,18 @@ export default function StablecoinAuthorizePage() {
   const [paymentConfirmed, setPaymentConfirmed] = useState(false)
   const [stablecoinAccount, setStablecoinAccount] = useState<StablecoinAccount | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [receiptPath, setReceiptPath] = useState<string | null>(null)
 
   useEffect(() => {
     const raw = sessionStorage.getItem(SEND_FLOW_STATE_KEY)
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as SendFlowState
-        if (parsed.paymentMethod !== "usdc" && parsed.paymentMethod !== "usdt") {
+        if (
+          parsed.paymentMethod !== "usdc" &&
+          parsed.paymentMethod !== "usdt" &&
+          !parsed.manualPaymentMethodId
+        ) {
           router.replace("/send")
           return
         }
@@ -53,6 +50,29 @@ export default function StablecoinAuthorizePage() {
 
   useEffect(() => {
     if (!state) return
+    if (state.manualPaymentMethodId) {
+      let cancelled = false
+      void fetchManualPaymentMethod(state.manualPaymentMethodId)
+        .then((pm) => {
+          if (cancelled) return
+          const addr = pm.stablecoin?.wallet_address?.trim()
+          if (!addr) throw new Error("No deposit address configured")
+          setStablecoinAccount({
+            currency: pm.currency,
+            stablecoin: pm.currency,
+            chain: pm.stablecoin?.network || "Solana",
+            address: addr,
+            memo: pm.stablecoin?.memo || "",
+          })
+          setLoadError(null)
+        })
+        .catch((e) => {
+          if (!cancelled) setLoadError(e instanceof Error ? e.message : "Could not load wallet")
+        })
+      return () => {
+        cancelled = true
+      }
+    }
     let cancelled = false
     ;(async () => {
       setLoadError(null)
@@ -104,9 +124,19 @@ export default function StablecoinAuthorizePage() {
 
   const handleConfirmPayment = () => {
     setPaymentConfirmed(true)
-    const transactionId = state?.transactionId ?? generateTransactionId()
-    sessionStorage.removeItem(SEND_FLOW_STATE_KEY)
-    router.push(transactionWebDetailPath(transactionId))
+    void (async () => {
+      try {
+        let transactionId = state?.transactionId ?? generateTransactionId()
+        if (state?.manualPaymentMethodId && state.manualQuote) {
+          const created = await completeManualSendFromSession(state, { receiptUrl: receiptPath })
+          transactionId = created.transactionId
+        }
+        sessionStorage.removeItem(SEND_FLOW_STATE_KEY)
+        router.push(transactionWebDetailPath(transactionId))
+      } catch {
+        setPaymentConfirmed(false)
+      }
+    })()
   }
 
   const stablecoinType =
@@ -235,6 +265,14 @@ export default function StablecoinAuthorizePage() {
           </ul>
         </CardContent>
       </Card>
+
+      {state.manualPaymentMethodId && (
+        <ManualSendReceiptUpload
+          referenceCode={state.transactionId ?? generateTransactionId()}
+          onPathChange={setReceiptPath}
+          disabled={paymentConfirmed}
+        />
+      )}
 
       <div className="flex gap-3">
         <Button variant="outline" size="lg" className="h-11" onClick={() => router.back()}>

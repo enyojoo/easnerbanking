@@ -16,3 +16,23 @@ export const WALLET_ASSET_NETWORKS: Record<string, string[]> = {
 }
 
 export const DEFAULT_WALLET_ASSET = "USDT"
+
+type CryptoDestinationLike = { asset_code: string; networks: string[] }
+
+/** Build asset→networks map from send-destinations crypto catalog. */
+export function walletAssetNetworksFromCatalog(
+  destinations: CryptoDestinationLike[],
+): Record<string, string[]> {
+  const out: Record<string, string[]> = {}
+  for (const d of destinations) {
+    const code = String(d.asset_code || "").toUpperCase()
+    if (!code) continue
+    const nets = out[code] ?? []
+    for (const n of d.networks) {
+      const net = String(n || "").trim()
+      if (net && !nets.includes(net)) nets.push(net)
+    }
+    out[code] = nets
+  }
+  return out
+}

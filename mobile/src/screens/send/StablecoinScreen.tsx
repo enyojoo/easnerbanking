@@ -14,6 +14,10 @@ import { analytics } from '../../lib/analytics'
 import { getApiBaseUrl, getNoahScopeHeaders } from '../../lib/apiClient'
 import { supabase } from '../../lib/supabase'
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
+import { useToast } from '../../components/ToastProvider'
+import { completeManualSendOrder, useManualPayInScreen } from '../../hooks/use-manual-pay-in-screen'
+import { ManualSendReceiptUpload } from '../../components/send/ManualSendReceiptUpload'
+import type { ManualQuoteResponse } from '../../lib/manual-send-api'
 
 function stablecoinLabel(pm: string | undefined): string {
   const u = String(pm || '').toUpperCase()
@@ -23,6 +27,7 @@ function stablecoinLabel(pm: string | undefined): string {
 
 export default function StablecoinScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
+  const { showError } = useToast()
   const copyToClipboard = useCopyToClipboard()
   const headerAnim = useRef(new Animated.Value(0)).current
   const contentAnim = useRef(new Animated.Value(0)).current
@@ -38,25 +43,37 @@ export default function StablecoinScreen({ navigation, route }: NavigationProps)
     feeAmount?: number
     totalAmount?: number
     paymentMethod?: string
+    paymentMethodId?: string
+    manualQuote?: ManualQuoteResponse | null
   }
 
   const transactionId = params.transactionId ?? ''
   const sendAmount = params.sendAmount ?? 0
   const receiveAmount = params.receiveAmount ?? 0
+  const sendCurrency = params.sendCurrency ?? ''
   const receiveCurrency = params.receiveCurrency ?? ''
   const recipient = params.recipient
   const paymentMethod = params.paymentMethod
-  const stableType = stablecoinLabel(paymentMethod)
+  const paymentMethodId = params.paymentMethodId
+  const manualQuote = params.manualQuote
+  const { pm, isManual } = useManualPayInScreen(paymentMethodId)
+  const stableType = isManual ? sendCurrency || pm?.currency || 'USDC' : stablecoinLabel(paymentMethod)
 
   const [address, setAddress] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [receiptPath, setReceiptPath] = useState<string | null>(null)
 
   useEffect(() => {
     analytics.trackScreenView('StablecoinSend')
   }, [])
 
   useEffect(() => {
+    if (isManual && pm?.stablecoin?.wallet_address) {
+      setAddress(pm.stablecoin.wallet_address)
+      setLoadError(null)
+      return
+    }
     let cancelled = false
     ;(async () => {
       setLoadError(null)
@@ -79,7 +96,7 @@ export default function StablecoinScreen({ navigation, route }: NavigationProps)
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [isManual, pm])
 
   const onCopyAddress = async () => {
     if (!address) return
@@ -93,10 +110,27 @@ export default function StablecoinScreen({ navigation, route }: NavigationProps)
 
   const onContinue = () => {
     if (!transactionId) return
-    navigation.replace('TransactionDetails' as never, {
-      transactionId,
-      fromScreen: 'SendFlow',
-    } as never)
+    void (async () => {
+      try {
+        let txId = transactionId
+        if (isManual && paymentMethodId && recipient?.id && manualQuote) {
+          const created = await completeManualSendOrder({
+            recipientId: recipient.id,
+            paymentMethodId,
+            manualQuote,
+            referenceCode: transactionId,
+            receiptUrl: receiptPath,
+          })
+          txId = created.transactionId
+        }
+        navigation.replace('TransactionDetails' as never, {
+          transactionId: txId,
+          fromScreen: 'SendFlow',
+        } as never)
+      } catch (e) {
+        showError(e instanceof Error ? e.message : 'Failed to submit payment')
+      }
+    })()
   }
 
   return (
@@ -154,6 +188,13 @@ export default function StablecoinScreen({ navigation, route }: NavigationProps)
                 </Pressable>
 
                 <Text style={styles.networkHint}>Network: Solana (matches Easner wallet funding)</Text>
+
+                {isManual && transactionId ? (
+                  <ManualSendReceiptUpload
+                    referenceCode={transactionId}
+                    onPathChange={setReceiptPath}
+                  />
+                ) : null}
               </>
             )}
           </ScrollView>

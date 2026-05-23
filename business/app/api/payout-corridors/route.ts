@@ -1,6 +1,7 @@
 import { createHash } from "crypto"
 import { NextResponse } from "next/server"
 import { annotateCorridorsWithNoahAvailability } from "@/lib/noah/channel-availability"
+import { isExcludedPayoutCorridorCountry } from "@/lib/payout-corridors-exclusions"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 
 export const runtime = "nodejs"
@@ -85,7 +86,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  let rows = (data ?? []) as PayoutCorridorRow[]
+  let rows = ((data ?? []) as PayoutCorridorRow[]).filter((r) => !isExcludedPayoutCorridorCountry(r.country_code))
   if (annotateNoah) {
     rows = await annotateCorridorsWithNoahAvailability(rows)
   }

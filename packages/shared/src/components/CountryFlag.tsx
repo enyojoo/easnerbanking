@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react"
+import { getTokenIconUrl } from "../crypto-icons"
 import { cn } from "../utils/cn"
 import { getCountryCodeForCurrency } from "../flags/currency-mapping"
 import { getFlagBundledSrc } from "../flags/flag-assets.web.manifest"
@@ -104,6 +105,37 @@ export function CurrencyFlag({
 
   if (iso && hasFlagAsset(iso)) {
     return <CountryFlag code={iso} size={size} className={className} style={style} title={title ?? code} />
+  }
+
+  const tokenIconUrl = getTokenIconUrl(code)
+  if (tokenIconUrl) {
+    const label = title ?? code
+    const tokenSide =
+      typeof size === "number" ? size : Number.parseInt(String(size), 10) || width
+    const tokenBox = { width: tokenSide, height: tokenSide }
+    return (
+      <span
+        role="img"
+        aria-label={label}
+        title={label}
+        className={cn(
+          "inline-flex shrink-0 items-center justify-center overflow-hidden rounded-none",
+          fillParent && FLAG_FILL_CLASS,
+          className,
+        )}
+        style={fillParent ? style : { ...tokenBox, borderRadius: 0, ...style }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={tokenIconUrl}
+          alt=""
+          draggable={false}
+          className="block h-full w-full object-cover object-center"
+          loading="lazy"
+          onDragStart={(e) => e.preventDefault()}
+        />
+      </span>
+    )
   }
 
   if (fallbackSvg) {

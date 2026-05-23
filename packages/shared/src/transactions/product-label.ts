@@ -4,6 +4,13 @@
 
 import { formatDisplayPersonName } from "../format-display-name"
 import { deriveBankDepositInboundDisplayLabel } from "./bank-deposit-inbound-label"
+import {
+  ACCOUNT_VERIFICATION_LIST_LABEL,
+  VERIFICATION_DEPOSIT_PRODUCT_LABEL,
+  deriveVerificationBankName,
+  isVerificationDeposit,
+  isVerificationDepositMetadata,
+} from "./verification-deposit"
 
 export type EasnerLedgerDirection = "in" | "out"
 
@@ -41,6 +48,10 @@ export function deriveEasnerInboundRemitterDisplayName(input: {
 }): string | undefined {
   const meta = input.metadata || {}
   const payload = input.payload || {}
+
+  if (isVerificationDeposit({ metadata: meta, payload })) {
+    return deriveVerificationBankName({ metadata: meta, payload })
+  }
 
   const bankSender = deriveBankDepositInboundDisplayLabel({
     metadata: meta,
@@ -164,6 +175,9 @@ export function toEasnerTransactionProductCategory(input: {
   if (isStablecoin) {
     return direction === "in" ? "Stablecoin Deposit" : "Stablecoin Transfer"
   }
+  if (direction === "in" && isVerificationDepositMetadata(meta)) {
+    return VERIFICATION_DEPOSIT_PRODUCT_LABEL
+  }
   if (direction === "in") return "Bank Deposit"
   return "Bank Transfer"
 }
@@ -200,6 +214,9 @@ export function toEasnerTransactionPrimaryLabel(input: {
   if (isStablecoin) {
     return direction === "in" ? "Stablecoin Deposit" : "Stablecoin Transfer"
   }
+  if (direction === "in" && isVerificationDepositMetadata(meta)) {
+    return ACCOUNT_VERIFICATION_LIST_LABEL
+  }
   if (direction === "in") {
     return deriveEasnerInboundRemitterDisplayName({
       metadata: input.metadata,
@@ -224,7 +241,12 @@ export function toEasnerProductTransactionLabel(input: {
 /** Inbound titles when no remitter was resolved (generic product labels). */
 export function isEasnerProductReceiveTitle(name: string | null | undefined): boolean {
   const n = String(name ?? "").trim()
-  return n === "Stablecoin Deposit" || n === "Bank Deposit"
+  return (
+    n === "Stablecoin Deposit" ||
+    n === "Bank Deposit" ||
+    n === ACCOUNT_VERIFICATION_LIST_LABEL ||
+    n === VERIFICATION_DEPOSIT_PRODUCT_LABEL
+  )
 }
 
 /** Outbound titles from {@link toEasnerTransactionPrimaryLabel}. */

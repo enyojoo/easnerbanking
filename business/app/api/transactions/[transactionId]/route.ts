@@ -133,9 +133,14 @@ function mapLedgerRowToMobileDetail(row: Record<string, unknown>): Record<string
     payload,
   })
   const sender_display_name =
-    dirRaw === "in" && transaction_product === "Bank Deposit"
+    dirRaw === "in" &&
+    (transaction_product === "Bank Deposit" || transaction_product === "Verification deposit")
       ? deriveEasnerInboundRemitterDisplayName({ metadata: meta, payload }) ||
-        (typeof meta?.sender_name === "string" ? meta.sender_name.trim() : undefined) ||
+        (typeof meta?.verification_bank_name === "string" && meta.verification_bank_name.trim()
+          ? meta.verification_bank_name.trim()
+          : typeof meta?.sender_name === "string"
+            ? meta.sender_name.trim()
+            : undefined) ||
         undefined
       : undefined
   const feeAmount =

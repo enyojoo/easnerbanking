@@ -1,9 +1,7 @@
 /**
  * List Noah production sell corridors + working /prices pairs for this API key.
- * Usage: cd business && npx tsx scripts/probe-noah-pairs.ts
+ * Usage: cd business && node --env-file=.env.local --import tsx scripts/probe-noah-pairs.ts
  */
-import { config } from "dotenv"
-config({ path: ".env.local" })
 
 import { noahFetch, NoahHttpError } from "../lib/noah/http"
 import { getNoahSettlementCryptoCurrency, getNoahUsdCryptoTicker, getNoahEurCryptoTicker } from "../lib/noah/config"

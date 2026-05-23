@@ -7,6 +7,10 @@ import {
   buildBankDepositProcessingDescription,
   deriveBankDepositSchemeLabel,
 } from "./bank-deposit-scheme"
+import {
+  BANK_VERIFICATION_COMPLETED_DESCRIPTION,
+  isVerificationDepositMetadata,
+} from "./verification-deposit"
 
 export type BankDepositLifecycleStepId = "processing" | "completed" | "failed"
 export type BankDepositLifecycleStepState = "complete" | "current" | "upcoming"
@@ -31,7 +35,8 @@ export function formatBankDepositPostedAmount(amount: number, currency: string):
   return `$${n.toFixed(2)}`
 }
 
-function completedDescription(): string {
+function completedDescription(meta: Record<string, unknown>): string {
+  if (isVerificationDepositMetadata(meta)) return BANK_VERIFICATION_COMPLETED_DESCRIPTION
   return BANK_DEPOSIT_COMPLETED_DESCRIPTION
 }
 
@@ -128,7 +133,7 @@ export function buildBankDepositLifecycle(
     {
       id: "completed",
       title: "Completed",
-      description: completedDescription(),
+      description: completedDescription(meta),
       state: completedState,
       occurredAt: isSettled ? completedAt : null,
     },

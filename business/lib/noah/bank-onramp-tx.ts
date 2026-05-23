@@ -4,6 +4,7 @@
  */
 
 import {
+  buildVerificationDepositMetadataFields,
   deriveBankDepositInboundDisplayLabel,
   deriveBankDepositNarrationLabel,
   deriveBankDepositPaymentRail,
@@ -289,10 +290,19 @@ export function buildNoahBankPayInLedgerMetadata(
   })
   const depositNarration = deriveBankDepositNarrationLabel({ paymentReference })
 
+  const verificationFields = buildVerificationDepositMetadataFields({
+    payload: tx,
+    fiatAmount: enrichment.fiatAmount,
+    settledStablecoinAmount: enrichment.settledStablecoinAmount,
+    fiatDepositSenderName: opts?.fiatDepositSenderName ?? enrichment.senderDisplayName,
+  })
+
   const base: Record<string, unknown> = {
     source: "webhook_transaction",
     source_type: "virtual_account",
     flow: "bank_onramp",
+    deposit_kind: verificationFields.deposit_kind,
+    verification_bank_name: verificationFields.verification_bank_name,
     fiat_deposit_amount: enrichment.fiatAmount,
     fiat_deposit_currency: enrichment.fiatCurrency,
     fee_amount: enrichment.feeAmount,

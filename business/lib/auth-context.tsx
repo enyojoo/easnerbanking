@@ -236,7 +236,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!user?.id) return
-    void import("@/lib/use-payout-corridors").then((m) => m.prefetchPayoutCorridors())
+    void import("@/lib/use-send-destinations").then((m) => m.prefetchSendDestinations())
   }, [user?.id])
 
   const login = async (email: string, password: string) => {

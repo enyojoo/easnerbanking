@@ -1,5 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { deriveBankDepositNarrationLabel } from "@easner/shared"
+import {
+  buildVerificationDepositMetadataFields,
+  deriveBankDepositNarrationLabel,
+} from "@easner/shared"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { resolveNoahCustomerTarget } from "@/lib/noah/resolve-noah-customer-target"
 import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
@@ -109,6 +112,14 @@ export async function applyNoahWebhookSideEffects(
             if (fiatEnrichment.paymentMethodType) {
               patch.noah_payment_method_type = fiatEnrichment.paymentMethodType
             }
+            const verificationFields = buildVerificationDepositMetadataFields({
+              payload: data,
+              metadata: { ...(existing.metadata ?? {}), ...patch, fiat_deposit_amount: fiatEnrichment.fiatAmount },
+              fiatAmount: fiatEnrichment.fiatAmount,
+              fiatDepositSenderName: fiatEnrichment.senderDisplayName,
+            })
+            patch.deposit_kind = verificationFields.deposit_kind
+            patch.verification_bank_name = verificationFields.verification_bank_name
             const merged = mergePayInMetadataWithLifecycle(existing.metadata, patch, {
               processing_at: fiatEnrichment.processingAt,
               noah_fiat_deposit_id: fiatEnrichment.depositId,

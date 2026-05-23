@@ -25,6 +25,7 @@ export {
 export { APP_URLS } from "./constants/urls"
 export { cn } from "./utils/cn"
 export { getCurrencySymbol } from "./currency-symbol"
+export { getTokenIconUrl } from "./crypto-icons"
 export { formatExchangeRate, formatSendRateLabel } from "./format-exchange-rate"
 export { BrandLogo } from "./components/BrandLogo"
 export type { BrandLogoProps } from "./components/BrandLogo"
@@ -35,6 +36,16 @@ export { getCurrencyCatalog } from "./currencies/catalog"
 export type { CurrencyCatalogEntry } from "./currencies/catalog"
 export * from "./types"
 export { fxEngine, type OrderAmounts } from "./fx-engine"
+export {
+  buildManualSendPayInCurrencies,
+  listManualPayInOptionsForCurrency,
+  pickDefaultManualPayInOption,
+  routeManualPayInScreen,
+  groupManualPayInOptionsByCurrency,
+  type ManualPayInPaymentMethodOption,
+  type ManualPayInPaymentMethodRow,
+  type ManualPayInScreenRoute,
+} from "./manual-send-catalog"
 export {
   sendFlowReferenceUsdPerUnit,
   referenceConversionRate,
@@ -50,6 +61,21 @@ export {
 } from "./noah-send-rates"
 export type { PayoutCorridorPublic, PayoutRail } from "./payout-corridor"
 export { corridorDisplayLabel, flagCodeFromCorridor } from "./payout-corridor"
+export type {
+  BalanceCurrencyPolicyPublic,
+  CryptoDestinationPublic,
+  ProviderHealthStatus,
+  ProviderRoutingEntry,
+  SendDestinationsFiat,
+  SendDestinationsResponse,
+} from "./send-destinations"
+export {
+  BALANCE_HOLD_CURRENCY_CODES,
+  buildCrossBorderPaymentMethods,
+  buildOtherSendCurrencies,
+  type CrossBorderPaymentMethod,
+  type OtherSendCurrency,
+} from "./send-destination-options"
 export {
   parseJurisdictionCountryPolicyJson,
   effectiveAllowlistForSurface,
@@ -107,6 +133,20 @@ export {
   deriveBankDepositNarrationLabel,
   parseSentFromNarrationLabel,
 } from "./transactions/bank-deposit-inbound-label"
+export {
+  ACCOUNT_VERIFICATION_LIST_LABEL,
+  BANK_VERIFICATION_COMPLETED_DESCRIPTION,
+  VERIFICATION_DEPOSIT_PRODUCT_LABEL,
+  VERIFICATION_BANK_FALLBACK,
+  VERIFICATION_FIAT_AMOUNT_THRESHOLD,
+  buildVerificationDepositMetadataFields,
+  classifyVerificationDeposit,
+  deriveVerificationBankName,
+  isInboundBankPayInContext,
+  isVerificationDeposit,
+  isVerificationDepositMetadata,
+} from "./transactions/verification-deposit"
+export type { DepositKind } from "./transactions/verification-deposit"
 export {
   resolveInboundTransactionListLabel,
   resolveOutboundTransactionListLabel,

@@ -19,12 +19,8 @@
       "schedule": "0 0 * * *"
     },
     {
-      "path": "/api/internal/fx-sync",
-      "schedule": "5 0 * * *"
-    },
-    {
       "path": "/api/cron/sync-exchange-rates",
-      "schedule": "30 1 * * *"
+      "schedule": "0 1 * * *"
     }
   ]
 }

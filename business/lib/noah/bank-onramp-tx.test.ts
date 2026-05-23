@@ -50,6 +50,19 @@ const sharedMock = vi.hoisted(() => {
     deriveBankDepositNarrationLabel,
     deriveBankDepositPaymentRail: () => "ach",
     deriveBankDepositSchemeLabel: () => "ACH",
+    buildVerificationDepositMetadataFields: (input: {
+      fiatAmount: number
+      settledStablecoinAmount?: number | null
+    }) => {
+      const isVerification =
+        input.fiatAmount >= 0 &&
+        input.fiatAmount < 1 &&
+        (input.settledStablecoinAmount == null || input.settledStablecoinAmount <= 0)
+      if (!isVerification) {
+        return { deposit_kind: "funding" as const, verification_bank_name: null }
+      }
+      return { deposit_kind: "verification" as const, verification_bank_name: "Test Bank" }
+    },
   }
 })
 
@@ -114,5 +127,22 @@ describe("bank-onramp-tx", () => {
     expect(meta.noah_fiat_deposit_sender_name).toBe("Samuel Odiba")
     expect(meta.deposit_narration).toBe("Sent from Grey")
     expect(meta.reference).toBe(ACH_REF)
+    expect(meta.deposit_kind).toBe("funding")
+  })
+
+  it("tags sub-dollar pay-in without settlement as verification", () => {
+    const microTx = {
+      ...FIAT_PAY_IN,
+      FiatPayment: { Amount: "0.32", FiatCurrency: "USD", FeeAmount: "0" },
+      Breakdown: [],
+      Amount: "0",
+    } as Record<string, unknown>
+    const e = extractNoahBankPayInEnrichment(microTx)!
+    const meta = buildNoahBankPayInLedgerMetadata(microTx, e, {
+      status: "settled",
+      fiatDepositSenderName: "Samuel Odiba",
+    })
+    expect(meta.deposit_kind).toBe("verification")
+    expect(meta.verification_bank_name).toBeTruthy()
   })
 })

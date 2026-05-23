@@ -11,6 +11,9 @@ export type PayoutCorridorAdminRow = {
   sort_order: number | null
   /** MM network labels shown to users; map to rails in code when calling providers. */
   providers: unknown
+  provider_routing?: unknown
+  fields_schema?: unknown
+  provider_health?: Record<string, "ok" | "unavailable">
   /** Optional ops hint (e.g. noah); null = unspecified. Does not replace runtime capability checks. */
   settlement_backend: string | null
   metadata: unknown
@@ -27,8 +30,9 @@ async function asJson<T>(response: Response): Promise<T> {
 }
 
 export const payoutCorridorsApi = {
-  async list(): Promise<PayoutCorridorAdminRow[]> {
-    const res = await officeFetch("/api/admin/payout-corridors")
+  async list(opts?: { annotateProviders?: boolean }): Promise<PayoutCorridorAdminRow[]> {
+    const q = opts?.annotateProviders ? "?annotateProviders=true" : ""
+    const res = await officeFetch(`/api/admin/payout-corridors${q}`)
     const data = await asJson<{ corridors?: PayoutCorridorAdminRow[] }>(res)
     return data.corridors ?? []
   },
@@ -42,6 +46,8 @@ export const payoutCorridorsApi = {
       country_name?: string
       settlement_backend?: string | null
       metadata?: Record<string, unknown> | null
+      provider_routing?: unknown
+      fields_schema?: Record<string, unknown> | null
     },
   ): Promise<PayoutCorridorAdminRow> {
     const res = await officeFetch(`/api/admin/payout-corridors/${id}`, {

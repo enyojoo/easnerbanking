@@ -16,6 +16,22 @@ export interface SendFlowState {
   paymentMethod: PaymentMethodCode
   otherCurrency?: OtherCurrencyCode | "STABLECOIN"
   otherPaymentMethod?: string
+  /** Selected `payment_methods.id` for manual through-another-currency flow. */
+  manualPaymentMethodId?: string
+  manualQuote?: {
+    sendAmount: number
+    receiveAmount: number
+    exchangeRate: number
+    feeAmount: number
+    feeType: string
+    totalAmount: number
+    fromCurrency: string
+    toCurrency: string
+    direction: "send" | "receive"
+    inputAmount: number
+  }
+  feeAmount?: number
+  totalAmount?: number
   note: string
   transactionId: string
   /** Executable Noah payout quote from confirm (Noah sell/prepare). */

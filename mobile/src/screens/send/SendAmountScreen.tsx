@@ -37,7 +37,9 @@ import {
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { useToast } from '../../components/ToastProvider'
-import { useNoahSendExchangeRates } from '../../hooks/queries'
+import { useNoahSendExchangeRates, useManualSendCatalog, useManualQuote } from '../../hooks/queries'
+import { pickDefaultManualPayInOption } from '@easner/shared'
+import { resolveManualPayInNavigation } from '../../lib/manual-send-navigation'
 import { useAuth } from '../../contexts/AuthContext'
 import { isTier1Complete, TIER2_COMPLETE_PLACEHOLDER } from '../../lib/compliance'
 import { generateTransactionId } from '../../lib/transactionId'
@@ -51,8 +53,17 @@ import {
   getCountryCodeForCurrency,
   getCurrencySymbol,
 } from '@easner/shared'
-import { getWalletAssets } from '../../lib/recipientCatalog'
 import { getPayoutCorridorCache, isRecipientPayoutCorridorActive, refreshPayoutCorridors } from '../../lib/payoutCorridors'
+import {
+  getCachedSendDestinations,
+  refreshSendDestinations,
+} from '../../lib/sendDestinations'
+import {
+  otherCurrenciesFromCatalog,
+  paymentMethodsFromCatalog,
+  stablecoinPickerOptions,
+} from '../../lib/sendDestinationOptions'
+import type { SendDestinationsResponse } from '@easner/shared'
 import { getTokenIconUrl } from '../../lib/cryptoIcons'
 import type { Recipient } from '../../types'
 import {
@@ -117,6 +128,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const easetagUi = recipient ? resolveRecipientEasetagForUi(recipient).trim() : ''
   const isEasetagRecipient = easetagUi.length > 0
   const [payoutCorridorActive, setPayoutCorridorActive] = useState(true)
+  const [sendDestinations, setSendDestinations] = useState<SendDestinationsResponse | null>(null)
   const [sendAmount, setSendAmount] = useState('0')
   const [note, setNote] = useState('')
   const [selectedBalanceCurrency, setSelectedBalanceCurrency] = useState<string>('USD')
@@ -165,33 +177,67 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     { code: 'EUR', name: 'Euro', symbol: '€' },
   ]
 
-  // Available options for "Through Another Currency"
-  const otherCurrencies = [
-    { code: 'STABLE', name: 'Stablecoin', symbol: '' },
-    { code: 'KES', name: 'Kenyan Shilling', symbol: 'KSh' },
-    { code: 'GHS', name: 'Ghanaian Cedi', symbol: '₵' },
-  ]
-  const stablecoinAssets = getWalletAssets()
+  const { data: manualCatalog } = useManualSendCatalog(true)
 
-  // Payment method icons mapping
+  const otherCurrencies = useMemo(() => {
+    const codes = manualCatalog?.sendCurrencies ?? []
+    if (codes.length > 0) {
+      return codes.map((code) => ({ code, name: code, symbol: '' }))
+    }
+    const fiat = otherCurrenciesFromCatalog(sendDestinations)
+    return [{ code: 'STABLE', name: 'Stablecoin', symbol: '' }, ...fiat]
+  }, [manualCatalog, sendDestinations])
+
   const paymentMethodIcons: { [key: string]: any } = {
     mtn: require('../../../assets/flags/mtn.png'),
     mpesa: require('../../../assets/flags/mpesa.png'),
     sbp: require('../../../assets/flags/sbp.png'),
   }
 
-  // Payment methods for each currency
-  const currencyPaymentMethods: { [key: string]: Array<{ code: string; name: string; icon?: string }> } = {
-    STABLE: stablecoinAssets.map((asset) => ({ code: asset, name: asset })),
-    GHS: [
-      { code: 'bankTransfer', name: 'Bank Transfer' },
-      { code: 'mtnMomo', name: 'MTN MOMO', icon: 'mtn' },
-    ],
-    KES: [
-      { code: 'mpesa', name: 'M-Pesa', icon: 'mpesa' },
-      { code: 'bankTransfer', name: 'Bank Transfer' },
-    ],
-  }
+  const currencyPaymentMethods = useMemo(() => {
+    const by = manualCatalog?.paymentMethodsByCurrency
+    if (by && Object.keys(by).length > 0) {
+      const out: Record<string, Array<{ code: string; name: string; type?: string; icon?: string }>> = {}
+      for (const [cur, opts] of Object.entries(by)) {
+        out[cur] = opts.map((o) => ({ code: o.id, name: o.name, type: o.type }))
+      }
+      return out
+    }
+    const fromCatalog = paymentMethodsFromCatalog(sendDestinations)
+    return {
+      STABLE: stablecoinPickerOptions(sendDestinations).map((o) => ({
+        code: o.code,
+        name: o.name,
+      })),
+      ...fromCatalog,
+    } as Record<string, Array<{ code: string; name: string; icon?: string }>>
+  }, [manualCatalog, sendDestinations])
+
+  useEffect(() => {
+    if (selectedPaymentMethod !== 'otherCurrency' || !selectedOtherCurrency) return
+    const opts = currencyPaymentMethods[selectedOtherCurrency] ?? []
+    if (opts.length === 0) return
+    const mapped = opts.map((o) => ({
+      id: o.code,
+      currency: selectedOtherCurrency,
+      name: o.name,
+      type: o.type ?? 'bank_account',
+      is_default: false,
+    }))
+    const def = pickDefaultManualPayInOption(
+      manualCatalog?.paymentMethodsByCurrency?.[selectedOtherCurrency] ??
+        mapped.map((m) => ({ ...m, is_default: false })),
+    )
+    if (def && !selectedOtherPaymentMethod) {
+      setSelectedOtherPaymentMethod(def.id)
+    }
+  }, [
+    selectedPaymentMethod,
+    selectedOtherCurrency,
+    currencyPaymentMethods,
+    manualCatalog,
+    selectedOtherPaymentMethod,
+  ])
 
   // Animation refs
   const headerAnim = useRef(new Animated.Value(0)).current
@@ -224,6 +270,12 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
   useFocusEffect(
     React.useCallback(() => {
+      void getCachedSendDestinations().then((c) => {
+        if (c) setSendDestinations(c)
+      })
+      void refreshSendDestinations().then((c) => {
+        if (c) setSendDestinations(c)
+      })
       void refreshPayoutCorridors().then(() => {
         const params = route.params as { recipient?: Recipient } | undefined
         const r = params?.recipient || recipient
@@ -350,11 +402,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   ) || 0
   const enteredAmount = sendAmount ? Number.parseFloat(sendAmount.replace(/,/g, '')) || 0 : 0
   const receiveCurrency = recipient?.currency || 'EUR'
-  const sendCurrency = selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency
-    ? selectedOtherCurrency === 'STABLE'
-      ? (selectedOtherPaymentMethod?.toUpperCase() || selectedBalanceCurrency)
-      : selectedOtherCurrency
-    : selectedBalanceCurrency
+  const sendCurrency =
+    selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency
+      ? selectedOtherCurrency
+      : selectedBalanceCurrency
   const dynamicAmountFontSize = getDynamicFontSize(sendAmount)
   const dynamicAmountLineHeight = Math.round(dynamicAmountFontSize * 1.12)
   const amountTextBase = {
@@ -406,9 +457,30 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     [exchangeRates],
   )
 
+  const manualQuoteEnabled =
+    selectedPaymentMethod === 'otherCurrency' &&
+    !!selectedOtherCurrency &&
+    showCrossCurrencyExchangeUi &&
+    enteredAmount > 0
+
+  const { data: manualQuote } = useManualQuote({
+    enabled: manualQuoteEnabled,
+    direction: amountEntryMode,
+    amount: enteredAmount,
+    fromCurrency: sendCurrency,
+    toCurrency: receiveCurrency,
+  })
+
   const flowAmounts = useMemo(() => {
     if (!showCrossCurrencyExchangeUi || enteredAmount <= 0) {
       return { sendAmount: enteredAmount, receiveAmount: enteredAmount, forwardRate: 1 }
+    }
+    if (selectedPaymentMethod === 'otherCurrency' && manualQuote) {
+      return {
+        sendAmount: manualQuote.sendAmount,
+        receiveAmount: manualQuote.receiveAmount,
+        forwardRate: manualQuote.exchangeRate,
+      }
     }
     return convertNoahSendFlowAmounts({
       direction: amountEntryMode,
@@ -424,13 +496,19 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     sendCurrency,
     receiveCurrency,
     noahRateMap,
+    selectedPaymentMethod,
+    manualQuote,
   ])
 
   const receiveAmount = flowAmounts.receiveAmount
   const sendingAmount = flowAmounts.sendAmount
   const exchangeRate = flowAmounts.forwardRate
-  const feeAmount = 0
-  const totalAmount = sendingAmount
+  const feeAmount =
+    selectedPaymentMethod === 'otherCurrency' && manualQuote ? manualQuote.feeAmount : 0
+  const totalAmount =
+    selectedPaymentMethod === 'otherCurrency' && manualQuote
+      ? manualQuote.totalAmount
+      : sendingAmount
 
   /** Debit from wallet when paying from balance (includes fees when FX order amounts are available). */
   const balanceDebitEstimate =
@@ -476,7 +554,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     selectedPaymentMethod === 'virtualBank'
       ? !tier1Ok
       : selectedPaymentMethod === 'otherCurrency'
-        ? !tier2Ok
+        ? !tier1Ok
         : false)
 
   const sendButtonDisabled =
@@ -976,64 +1054,38 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   totalAmount: calculatedTotalAmount,
                 } as never)
               } else if (selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency && selectedOtherPaymentMethod) {
-                // Generate Transaction ID (same format as web app)
                 const transactionId = generateTransactionId()
-                // Navigate based on payment method type
-                if (selectedOtherPaymentMethod === 'sbp') {
-                  // SBP works like Plaid - navigate to OpenBanking screen
-                  navigation.navigate('OpenBanking' as never, {
-                    transactionId: transactionId,
-                    sendAmount: calculatedSendingAmount,
-                    receiveAmount: receiveAmountValue,
-                    sendCurrency: sendCurrency,
-                    receiveCurrency: recipient.currency,
-                    recipient: recipient,
-                    paymentMethod: selectedOtherPaymentMethod,
-                    feeAmount: calculatedFeeAmount,
-                    totalAmount: calculatedTotalAmount,
-                  } as never)
-                } else if (selectedOtherPaymentMethod === 'bankTransfer') {
-                  navigation.navigate('VirtualBankAccount' as never, {
-                    transactionId: transactionId,
-                    sendAmount: calculatedSendingAmount,
-                    receiveAmount: receiveAmountValue,
-                    sendCurrency: sendCurrency,
-                    receiveCurrency: recipient.currency,
-                    recipient: recipient,
-                    paymentMethod: selectedOtherPaymentMethod,
-                    feeAmount: calculatedFeeAmount,
-                    totalAmount: calculatedTotalAmount,
-                  } as never)
-                } else if (
-                  selectedOtherCurrency === 'STABLE' &&
-                  ['USDC', 'USDT'].includes(String(selectedOtherPaymentMethod || '').toUpperCase())
-                ) {
-                  navigation.navigate('Stablecoin' as never, {
-                    transactionId,
-                    sendAmount: calculatedSendingAmount,
-                    receiveAmount: receiveAmountValue,
-                    sendCurrency,
-                    receiveCurrency: recipient.currency,
-                    recipient,
-                    feeAmount: calculatedFeeAmount,
-                    totalAmount: calculatedTotalAmount,
-                    paymentMethod: String(selectedOtherPaymentMethod).toLowerCase(),
-                  } as never)
-                } else {
-                  // For mobile money methods (M-Pesa, MTN MOMO)
-                  // Navigate to MobileMoney screen for network selection and phone number
-                  navigation.navigate('MobileMoney' as never, {
-                    transactionId: transactionId,
-                    sendAmount: calculatedSendingAmount,
-                    receiveAmount: receiveAmountValue,
-                    sendCurrency: sendCurrency,
-                    receiveCurrency: recipient.currency,
-                    recipient: recipient,
-                    paymentMethod: selectedOtherPaymentMethod,
-                    feeAmount: calculatedFeeAmount,
-                    totalAmount: calculatedTotalAmount,
-                  } as never)
-                }
+                const pmOption =
+                  manualCatalog?.paymentMethodsByCurrency?.[selectedOtherCurrency]?.find(
+                    (o) => o.id === selectedOtherPaymentMethod,
+                  ) ??
+                  currencyPaymentMethods[selectedOtherCurrency]?.find(
+                    (m) => m.code === selectedOtherPaymentMethod,
+                  )
+                const pmType =
+                  pmOption && 'type' in pmOption
+                    ? String((pmOption as { type?: string }).type ?? '')
+                    : ''
+                const screen =
+                  manualCatalog && pmType
+                    ? resolveManualPayInNavigation(pmType)
+                    : selectedOtherPaymentMethod === 'sbp'
+                      ? 'OpenBanking'
+                      : selectedOtherPaymentMethod === 'bankTransfer'
+                        ? 'VirtualBankAccount'
+                        : 'MobileMoney'
+                navigation.navigate(screen as never, {
+                  transactionId,
+                  sendAmount: calculatedSendingAmount,
+                  receiveAmount: receiveAmountValue,
+                  sendCurrency,
+                  receiveCurrency: recipient.currency,
+                  recipient,
+                  paymentMethodId: selectedOtherPaymentMethod,
+                  feeAmount: calculatedFeeAmount,
+                  totalAmount: calculatedTotalAmount,
+                  manualQuote: manualQuote ?? null,
+                } as never)
               }
             }}
             disabled={sendButtonDisabled}

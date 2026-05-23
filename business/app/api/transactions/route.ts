@@ -5,7 +5,9 @@ import { resolveLedgerListScope } from "@/lib/transactions-ledger-scope"
 import { displayEasnerTransactionId } from "@/lib/easner-transaction-id"
 import {
   deriveBankDepositInboundDisplayLabel,
+  deriveVerificationBankName,
   isEasnerProductReceiveTitle,
+  isVerificationDepositMetadata,
   toEasnerTransactionPrimaryLabel,
 } from "@easner/shared"
 import { isNoahBankOnrampFiatPayIn } from "@/lib/noah/bank-onramp-tx"
@@ -51,8 +53,9 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
   const currency = String(row.currency ?? "USD")
   /** Supabase row id — use for `/api/transactions/[id]` when `id` / `transaction_id` are display-only (e.g. ETID…). */
   const ledger_row_id = ledgerId || undefined
+  const isVerification = isVerificationDepositMetadata(meta)
   const bankLabel =
-    payload && isNoahBankOnrampFiatPayIn(payload)
+    !isVerification && payload && isNoahBankOnrampFiatPayIn(payload)
       ? deriveBankDepositInboundDisplayLabel({ metadata: meta })
       : undefined
   const name =
@@ -63,8 +66,11 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
       metadata: meta ?? null,
       payload,
     })
-  const listSenderName =
-    bankLabel && !isEasnerProductReceiveTitle(bankLabel) ? bankLabel : undefined
+  const listSenderName = isVerification
+    ? deriveVerificationBankName({ metadata: meta, payload })
+    : bankLabel && !isEasnerProductReceiveTitle(bankLabel)
+      ? bankLabel
+      : undefined
   const isEasetagP2p = String(meta?.source ?? "").toLowerCase() === "easetag_p2p"
   const sourceType =
     isEasetagP2p

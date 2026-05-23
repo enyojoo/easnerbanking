@@ -36,6 +36,14 @@ export type PayoutCorridorGateOptions = {
   requireExecutableNoahChannel?: boolean
 }
 
+/** Default true in production unless REQUIRE_EXECUTABLE_PROVIDER_CHANNEL=false. */
+export function requireExecutableProviderChannel(): boolean {
+  const v = process.env.REQUIRE_EXECUTABLE_PROVIDER_CHANNEL?.trim().toLowerCase()
+  if (v === "false" || v === "0") return false
+  if (v === "true" || v === "1") return true
+  return process.env.NODE_ENV === "production"
+}
+
 /**
  * Returns an error response if the row maps to a disabled or mismatched payout corridor.
  * No-op when catalog is disabled via env or row is wallet/easenet or country is missing.

@@ -10,19 +10,9 @@ import { getCurrencySymbol } from "@/lib/utils"
 import { generateTransactionId } from "@/lib/transaction-id"
 import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { ArrowLeft, Smartphone, Copy, Check } from "lucide-react"
-
-const SEND_FLOW_STATE_KEY = "send_flow_state"
-
-interface SendFlowState {
-  recipient: { name: string }
-  amount: number
-  receiveCurrency: string
-  sendAmount: number
-  sendCurrency: string
-  paymentMethod?: string
-  otherCurrency?: string
-  transactionId?: string
-}
+import { SEND_FLOW_STATE_KEY, type SendFlowState } from "@/lib/send-flow-session"
+import { completeManualSendFromSession } from "@/lib/manual-send-complete"
+import { ManualSendReceiptUpload } from "@/components/send/manual-send-receipt-upload"
 
 function getNetworkName(sendCurrency: string): string {
   if (sendCurrency === "GHS") return "MTN MOMO"
@@ -36,6 +26,7 @@ export default function MobileMoneyPage() {
   const [phoneNumber, setPhoneNumber] = useState("")
   const [paymentConfirmed, setPaymentConfirmed] = useState(false)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
+  const [receiptPath, setReceiptPath] = useState<string | null>(null)
 
   const handleCopy = async (text: string, key: string) => {
     try {
@@ -61,11 +52,21 @@ export default function MobileMoneyPage() {
   }, [router])
 
   const handleConfirmPayment = () => {
-    if (!phoneNumber.trim()) return
+    if (!state?.manualPaymentMethodId && !phoneNumber.trim()) return
     setPaymentConfirmed(true)
-    const transactionId = state?.transactionId ?? generateTransactionId()
-    sessionStorage.removeItem(SEND_FLOW_STATE_KEY)
-    router.push(transactionWebDetailPath(transactionId))
+    void (async () => {
+      try {
+        let transactionId = state?.transactionId ?? generateTransactionId()
+        if (state?.manualPaymentMethodId && state.manualQuote) {
+          const created = await completeManualSendFromSession(state, { receiptUrl: receiptPath })
+          transactionId = created.transactionId
+        }
+        sessionStorage.removeItem(SEND_FLOW_STATE_KEY)
+        router.push(transactionWebDetailPath(transactionId))
+      } catch {
+        setPaymentConfirmed(false)
+      }
+    })()
   }
 
   if (!state) {
@@ -155,6 +156,14 @@ export default function MobileMoneyPage() {
           </ol>
         </CardContent>
       </Card>
+
+      {state.manualPaymentMethodId && (
+        <ManualSendReceiptUpload
+          referenceCode={state.transactionId ?? generateTransactionId()}
+          onPathChange={setReceiptPath}
+          disabled={paymentConfirmed}
+        />
+      )}
 
       <div className="flex gap-3">
         <Button variant="outline" size="lg" className="h-11" onClick={() => router.back()}>

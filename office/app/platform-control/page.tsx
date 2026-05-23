@@ -5,28 +5,34 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layout"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
-  PlatformCurrenciesPanel,
-  PlatformSettingsPanel,
-  IntegrationsHealthPanel,
-  AuditLogPanel,
-  NoahOperationsPanel,
-  IndustryChecklistPanel,
-  PayoutCorridorsPanel,
+  PlatformConfigPanel,
+  RatesPanel,
+  PaymentMethodsPanel,
+  FiatPanel,
+  CryptoPanel,
 } from "@/components/platform-control/platform-control-panels"
 
-const TABS = ["currencies", "settings", "corridors", "health", "audit", "noah", "industry"] as const
+const TABS = ["platform", "rates", "payment-methods", "fiat", "crypto"] as const
 type PlatformControlTab = (typeof TABS)[number]
+
+function normalizeTab(raw: string | null): string | null {
+  if (raw === "send-destinations") return "fiat"
+  if (raw === "balance-currencies") return "platform"
+  return raw
+}
 
 function isPlatformControlTab(v: string | null): v is PlatformControlTab {
   return v != null && (TABS as readonly string[]).includes(v)
 }
 
+const TAB_CONTENT_CLASS = "mt-0 focus-visible:outline-none"
+
 function PlatformControlHubBody() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const raw = searchParams.get("tab")
-  const tab: PlatformControlTab = isPlatformControlTab(raw) ? raw : "currencies"
+  const raw = normalizeTab(searchParams.get("tab"))
+  const tab: PlatformControlTab = isPlatformControlTab(raw) ? raw : "platform"
 
   const onTabChange = useCallback(
     (value: string) => {
@@ -43,39 +49,33 @@ function PlatformControlHubBody() {
       <div className="p-6 space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Platform control</h1>
-          <p className="text-gray-600 text-sm mt-1">Currencies, payout corridors, settings, integrations, audit, and Noah tools</p>
+          <p className="text-gray-600 text-sm mt-1">
+            Platform configuration, fiat and crypto send catalogs, rates, and payment methods
+          </p>
         </div>
 
         <Tabs value={tab} onValueChange={onTabChange} className="space-y-6">
           <TabsList className="flex flex-wrap h-auto gap-1 justify-start">
-            <TabsTrigger value="currencies">Currencies</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
-            <TabsTrigger value="corridors">Payout corridors</TabsTrigger>
-            <TabsTrigger value="health">Integrations and health</TabsTrigger>
-            <TabsTrigger value="audit">Audit log</TabsTrigger>
-            <TabsTrigger value="noah">Noah operations</TabsTrigger>
-            <TabsTrigger value="industry">Industry checklist</TabsTrigger>
+            <TabsTrigger value="platform">Platform</TabsTrigger>
+            <TabsTrigger value="rates">Rates</TabsTrigger>
+            <TabsTrigger value="payment-methods">Payment methods</TabsTrigger>
+            <TabsTrigger value="fiat">Fiat</TabsTrigger>
+            <TabsTrigger value="crypto">Crypto</TabsTrigger>
           </TabsList>
-          <TabsContent value="currencies">
-            <PlatformCurrenciesPanel />
+          <TabsContent value="platform" className={TAB_CONTENT_CLASS}>
+            <PlatformConfigPanel />
           </TabsContent>
-          <TabsContent value="settings">
-            <PlatformSettingsPanel />
+          <TabsContent value="rates" className={TAB_CONTENT_CLASS}>
+            <RatesPanel />
           </TabsContent>
-          <TabsContent value="corridors">
-            <PayoutCorridorsPanel />
+          <TabsContent value="payment-methods" className={TAB_CONTENT_CLASS}>
+            <PaymentMethodsPanel />
           </TabsContent>
-          <TabsContent value="health">
-            <IntegrationsHealthPanel />
+          <TabsContent value="fiat" className={TAB_CONTENT_CLASS}>
+            <FiatPanel />
           </TabsContent>
-          <TabsContent value="audit">
-            <AuditLogPanel />
-          </TabsContent>
-          <TabsContent value="noah">
-            <NoahOperationsPanel />
-          </TabsContent>
-          <TabsContent value="industry">
-            <IndustryChecklistPanel />
+          <TabsContent value="crypto" className={TAB_CONTENT_CLASS}>
+            <CryptoPanel />
           </TabsContent>
         </Tabs>
       </div>

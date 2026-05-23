@@ -1,4 +1,8 @@
-import { sortByEasnerCountryPickerOrder, type PayoutCorridorPublic } from '@easner/shared'
+import {
+  sortByEasnerCountryPickerOrder,
+  type CryptoDestinationPublic,
+  type PayoutCorridorPublic,
+} from '@easner/shared'
 
 export type RecipientType = 'bank' | 'mobile_money' | 'wallet'
 export type RailStatus = 'supported' | 'coming_soon'
@@ -184,10 +188,16 @@ export function getBankFieldsForCurrency(currencyCode: string): RecipientFieldSp
   return bankDefaultFields
 }
 
-let payoutCorridorCache: { bank: PayoutCorridorPublic[]; mobile: PayoutCorridorPublic[] } | null = null
+export type PayoutCorridorCacheShape = {
+  bank: PayoutCorridorPublic[]
+  mobile: PayoutCorridorPublic[]
+}
 
-/** Updated when mobile loads/refreshes GET /api/payout-corridors */
-export function setPayoutCorridorCache(next: { bank: PayoutCorridorPublic[]; mobile: PayoutCorridorPublic[] } | null) {
+let payoutCorridorCache: PayoutCorridorCacheShape | null = null
+let cryptoDestinationsCache: CryptoDestinationPublic[] | null = null
+
+/** Updated when mobile loads/refreshes GET /api/send-destinations */
+export function setPayoutCorridorCache(next: PayoutCorridorCacheShape | null) {
   payoutCorridorCache = next
 }
 
@@ -195,8 +205,16 @@ export function getPayoutCorridorCache(): typeof payoutCorridorCache {
   return payoutCorridorCache
 }
 
+export function setCryptoDestinationsCache(next: CryptoDestinationPublic[] | null) {
+  cryptoDestinationsCache = next
+}
+
 function usePayoutCorridorsApi(): boolean {
   return process.env.EXPO_PUBLIC_USE_PAYOUT_CORRIDORS !== 'false'
+}
+
+function useStaticRecipientCatalogFallback(): boolean {
+  return __DEV__ && process.env.EXPO_PUBLIC_USE_STATIC_RECIPIENT_CATALOG === 'true'
 }
 
 function corridorsToRecipientEntries(corridors: PayoutCorridorPublic[], kind: 'bank' | 'mobile_money'): RecipientCatalogEntry[] {
@@ -271,18 +289,39 @@ export function getCatalogByRecipientTypeWithJurisdiction(
   return filterCatalogByJurisdictionPolicy(getCatalogByRecipientType(recipientType), policy)
 }
 
+function cryptoToRecipientEntries(destinations: CryptoDestinationPublic[]): RecipientCatalogEntry[] {
+  return destinations.map((d) => ({
+    countryCode: (d.country_code || 'XX').toUpperCase(),
+    countryName: d.country_code || 'Global',
+    currencyCode: d.asset_code,
+    currencyName: d.asset_name,
+    recipientType: 'wallet' as const,
+    status: 'supported' as const,
+    providers: d.networks,
+    fields: walletFields,
+  }))
+}
+
 export function getCatalogByRecipientType(recipientType: RecipientType): RecipientCatalogEntry[] {
   if (recipientType === 'wallet') {
-    return sortRecipientCatalogEntries(recipientCatalog.filter((entry) => entry.recipientType === 'wallet'))
+    if (cryptoDestinationsCache?.length) {
+      return sortRecipientCatalogEntries(cryptoToRecipientEntries(cryptoDestinationsCache))
+    }
+    if (useStaticRecipientCatalogFallback()) {
+      return sortRecipientCatalogEntries(recipientCatalog.filter((entry) => entry.recipientType === 'wallet'))
+    }
+    return []
   }
-  if (usePayoutCorridorsApi() && payoutCorridorCache) {
-    if (recipientType === 'bank' && payoutCorridorCache.bank.length) {
+  if (usePayoutCorridorsApi()) {
+    if (recipientType === 'bank' && payoutCorridorCache?.bank.length) {
       return sortRecipientCatalogEntries(corridorsToRecipientEntries(payoutCorridorCache.bank, 'bank'))
     }
-    if (recipientType === 'mobile_money' && payoutCorridorCache.mobile.length) {
+    if (recipientType === 'mobile_money' && payoutCorridorCache?.mobile.length) {
       return sortRecipientCatalogEntries(corridorsToRecipientEntries(payoutCorridorCache.mobile, 'mobile_money'))
     }
+    if (!useStaticRecipientCatalogFallback()) return []
   }
+  if (!useStaticRecipientCatalogFallback()) return []
   return sortRecipientCatalogEntries(recipientCatalog.filter((entry) => entry.recipientType === recipientType))
 }
 
@@ -325,9 +364,21 @@ export function getRecipientProviders(
 }
 
 export function getWalletAssets(): string[] {
+  if (cryptoDestinationsCache?.length) {
+    return [...new Set(cryptoDestinationsCache.map((d) => d.asset_code))]
+  }
   return Object.keys(walletAssetNetworkMap)
 }
 
 export function getWalletNetworksForAsset(asset: string): string[] {
-  return walletAssetNetworkMap[String(asset || '').toUpperCase()] || []
+  const code = String(asset || '').toUpperCase()
+  if (cryptoDestinationsCache?.length) {
+    const nets = new Set<string>()
+    for (const d of cryptoDestinationsCache) {
+      if (d.asset_code.toUpperCase() !== code) continue
+      for (const n of d.networks) nets.add(n)
+    }
+    if (nets.size) return [...nets]
+  }
+  return walletAssetNetworkMap[code] || []
 }

@@ -3,6 +3,7 @@ import { displayEasnerTransactionId } from "@/lib/easner-transaction-id"
 import {
   deriveBankDepositInboundDisplayLabel,
   formatDisplayPersonName,
+  isVerificationDepositMetadata,
   toEasnerTransactionPrimaryLabel,
 } from "@easner/shared"
 import { isNoahBankOnrampFiatPayIn } from "@/lib/noah/bank-onramp-tx"
@@ -58,8 +59,9 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
             ? "pending"
             : (st as "completed" | "pending" | "processing" | "failed")
 
+  const isVerification = isVerificationDepositMetadata(meta)
   const bankLabel =
-    payload && isNoahBankOnrampFiatPayIn(payload)
+    !isVerification && payload && isNoahBankOnrampFiatPayIn(payload)
       ? deriveBankDepositInboundDisplayLabel({ metadata: meta })
       : undefined
   const description =

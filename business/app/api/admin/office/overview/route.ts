@@ -83,8 +83,10 @@ export async function GET(request: Request) {
     processingBuckets,
     recentActivity,
     links: {
-      platformHealth: "/platform-control?tab=health",
-      currencies: "/platform-control?tab=currencies",
+      platformHealth: "/platform-control?tab=platform",
+      currencies: "/platform-control?tab=platform",
+      fiatSend: "/platform-control?tab=fiat",
+      cryptoSend: "/platform-control?tab=crypto",
       transactions: "/transactions",
       platformControl: "/platform-control",
     },

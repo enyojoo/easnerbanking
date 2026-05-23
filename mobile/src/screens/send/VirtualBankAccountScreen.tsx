@@ -6,20 +6,16 @@ import {
   ScrollView,
   Pressable, Platform,
   Animated,
-  Image,
   ActivityIndicator,
 } from 'react-native'
 import {
   ArrowLeft,
   Check,
-  CircleX,
-  CloudUpload,
   Copy,
-  FileText,
 } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
-import * as DocumentPicker from 'expo-document-picker'
+import { ManualSendReceiptUpload } from '../../components/send/ManualSendReceiptUpload'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
@@ -28,6 +24,8 @@ import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { useToast } from '../../components/ToastProvider'
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
+import { completeManualSendOrder, useManualPayInScreen } from '../../hooks/use-manual-pay-in-screen'
+import type { ManualQuoteResponse } from '../../lib/manual-send-api'
 
 interface MockRecipient {
   id: string
@@ -43,14 +41,46 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
   const copyToClipboard = useCopyToClipboard()
   const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>({})
   const [paymentConfirmed, setPaymentConfirmed] = useState(false)
-  const [uploadedFile, setUploadedFile] = useState<any>(null)
-  const [isUploading, setIsUploading] = useState(false)
-  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [receiptPath, setReceiptPath] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
   
-  const { transactionId, sendAmount, receiveAmount, sendCurrency, receiveCurrency, recipient, paymentMethod } = route.params || {}
+  const {
+    transactionId,
+    sendAmount,
+    receiveAmount,
+    sendCurrency,
+    receiveCurrency,
+    recipient,
+    paymentMethodId,
+    manualQuote,
+    totalAmount,
+  } = (route.params || {}) as {
+    transactionId?: string
+    sendAmount?: number
+    receiveAmount?: number
+    sendCurrency?: string
+    receiveCurrency?: string
+    recipient?: MockRecipient & { id?: string }
+    paymentMethodId?: string
+    manualQuote?: ManualQuoteResponse | null
+    totalAmount?: number
+  }
+
+  const { pm, loading: pmLoading, isManual } = useManualPayInScreen(paymentMethodId)
   
   // Get currency-specific bank details
   const getBankDetails = () => {
+    if (isManual && pm) {
+      return {
+        accountName: pm.account_name || pm.name,
+        accountNumber: pm.account_number || '',
+        routingNumber: pm.routing_number || undefined,
+        iban: pm.iban || undefined,
+        swiftBic: pm.swift_bic || undefined,
+        bankName: pm.bank_name || pm.name,
+        reference: transactionId,
+      }
+    }
     const baseDetails = {
       accountName: 'Easner Payments',
       accountNumber: '',
@@ -152,50 +182,35 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
     }, 2000)
   }
 
-  const handleUploadReceipt = async () => {
-    try {
-      setIsUploading(true)
-      setUploadError(null)
-      
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['image/*', 'application/pdf'],
-        copyToCacheDirectory: true,
-      })
-
-      if (!result.canceled && result.assets[0]) {
-        setUploadedFile(result.assets[0])
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-      }
-    } catch (error) {
-      setUploadError('Failed to upload receipt. Please try again.')
-      showError('Failed to upload receipt. Please try again.')
-    } finally {
-      setIsUploading(false)
-    }
-  }
-
-  const handleRemoveReceipt = () => {
-    setUploadedFile(null)
-    setUploadError(null)
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-  }
-
   const handleConfirmPayment = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     setPaymentConfirmed(true)
-    
-    // TODO: Upload receipt file if provided
-    // if (uploadedFile) {
-    //   // Upload receipt to backend
-    // }
-    
-    // Navigate to transaction tracking
-    setTimeout(() => {
-      navigation.replace('TransactionDetails' as never, {
-        transactionId: transactionId,
-        fromScreen: 'SendFlow',
-      } as never)
-    }, 500)
+    setSubmitting(true)
+
+    void (async () => {
+      try {
+        let txId = transactionId
+        if (isManual && paymentMethodId && recipient?.id && manualQuote) {
+          const created = await completeManualSendOrder({
+            recipientId: recipient.id,
+            paymentMethodId,
+            manualQuote,
+            referenceCode: transactionId,
+            receiptUrl: receiptPath,
+          })
+          txId = created.transactionId
+        }
+        navigation.replace('TransactionDetails' as never, {
+          transactionId: txId,
+          fromScreen: 'SendFlow',
+        } as never)
+      } catch (e) {
+        setPaymentConfirmed(false)
+        showError(e instanceof Error ? e.message : 'Failed to submit payment')
+      } finally {
+        setSubmitting(false)
+      }
+    })()
   }
 
   const renderCopyableField = (label: string, value: string, key: string) => (
@@ -345,63 +360,13 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
               </Text>
             </View>
 
-            {/* Receipt Upload Section */}
-            <View style={styles.receiptSection}>
-              <Text style={styles.receiptSectionTitle}>Upload Transfer Receipt (Optional)</Text>
-              
-              {uploadedFile ? (
-                <View style={styles.receiptPreviewContainer}>
-                  <View style={styles.receiptPreview}>
-                    {uploadedFile.mimeType?.startsWith('image/') ? (
-                      <Image 
-                        source={{ uri: uploadedFile.uri }} 
-                        style={styles.receiptPreviewImage}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View style={styles.receiptPreviewIcon}>
-                        <FileText size={32} color={colors.primary.main} strokeWidth={2} />
-                      </View>
-                    )}
-                    <View style={styles.receiptPreviewInfo}>
-                      <Text style={styles.receiptPreviewName} numberOfLines={1}>
-                        {uploadedFile.name || 'Receipt'}
-                      </Text>
-                      {uploadedFile.size && (
-                        <Text style={styles.receiptPreviewSize}>
-                          {(uploadedFile.size / 1024).toFixed(2)} KB
-                        </Text>
-                      )}
-                    </View>
-                    <Pressable
-                     android_ripple={ripple.neutral}
-                      style={styles.receiptRemoveButton}
-                      onPress={handleRemoveReceipt} >
-                      <CircleX size={24} color={colors.error.main} strokeWidth={2} />
-                    </Pressable>
-                  </View>
-                </View>
-              ) : (
-                <Pressable
-                 android_ripple={ripple.neutral}
-                  style={styles.receiptUploadButton}
-                  onPress={handleUploadReceipt}
-                  disabled={isUploading} >
-                  {isUploading ? (
-                    <ActivityIndicator size="small" color={colors.primary.main} />
-                  ) : (
-                    <>
-                      <CloudUpload size={24} color={colors.primary.main} strokeWidth={2} />
-                      <Text style={styles.receiptUploadButtonText}>Upload Receipt</Text>
-                    </>
-                  )}
-                </Pressable>
-              )}
-              
-              {uploadError && (
-                <Text style={styles.receiptError}>{uploadError}</Text>
-              )}
-            </View>
+            {isManual && transactionId ? (
+              <ManualSendReceiptUpload
+                referenceCode={transactionId}
+                onPathChange={setReceiptPath}
+                disabled={paymentConfirmed || submitting}
+              />
+            ) : null}
           </Animated.View>
         </ScrollView>
 

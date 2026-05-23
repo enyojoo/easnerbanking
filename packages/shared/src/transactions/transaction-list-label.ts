@@ -8,6 +8,10 @@ import {
   isEasnerProductReceiveTitle,
   isEasnerProductSendTitle,
 } from "./product-label"
+import {
+  ACCOUNT_VERIFICATION_LIST_LABEL,
+  isVerificationDepositMetadata,
+} from "./verification-deposit"
 
 export type TransactionListLabelInput = {
   name?: string | null
@@ -24,7 +28,12 @@ export function resolveInboundTransactionListLabel(input: TransactionListLabelIn
     return "Stablecoin Deposit"
   }
 
+  if (isVerificationDepositMetadata(input.metadata)) {
+    return ACCOUNT_VERIFICATION_LIST_LABEL
+  }
+
   const apiName = String(input.name ?? "").trim()
+  if (apiName === ACCOUNT_VERIFICATION_LIST_LABEL) return apiName
   if (apiName === "Stablecoin Deposit") return apiName
 
   if (apiName && !isEasnerProductReceiveTitle(apiName)) {

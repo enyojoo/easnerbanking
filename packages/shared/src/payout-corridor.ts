@@ -1,3 +1,5 @@
+import type { ProviderHealthStatus, ProviderRoutingEntry } from "./send-destinations"
+
 export type PayoutRail = "bank_transfer" | "mobile_money"
 
 /** Public shape returned by GET /api/payout-corridors */
@@ -16,6 +18,8 @@ export type PayoutCorridorPublic = {
   providers: unknown
   /** When true, Noah GET /channels/sell returns at least one channel for this corridor (executable payout). */
   noah_sell_available?: boolean
+  provider_routing?: ProviderRoutingEntry[]
+  provider_health?: Record<string, ProviderHealthStatus>
 }
 
 export function corridorDisplayLabel(c: Pick<PayoutCorridorPublic, "country_name" | "currency_code" | "currency_name">): string {

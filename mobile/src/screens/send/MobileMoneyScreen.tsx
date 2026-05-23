@@ -17,6 +17,10 @@ import { colors, shadows, surfaceFrameStyle, surfaceChromeCircleStyle, textStyle
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
+import { useToast } from '../../components/ToastProvider'
+import { completeManualSendOrder, useManualPayInScreen } from '../../hooks/use-manual-pay-in-screen'
+import { ManualSendReceiptUpload } from '../../components/send/ManualSendReceiptUpload'
+import type { ManualQuoteResponse } from '../../lib/manual-send-api'
 
 interface MockRecipient {
   id: string
@@ -28,15 +32,38 @@ interface MockRecipient {
 
 export default function MobileMoneyScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
+  const { showError } = useToast()
   const copyToClipboard = useCopyToClipboard()
   const [phoneNumber, setPhoneNumber] = useState('')
   const [paymentConfirmed, setPaymentConfirmed] = useState(false)
   const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>({})
+  const [receiptPath, setReceiptPath] = useState<string | null>(null)
   
-  const { transactionId, sendAmount, receiveAmount, sendCurrency, receiveCurrency, recipient, paymentMethod } = route.params || {}
+  const {
+    transactionId,
+    sendAmount,
+    receiveAmount,
+    sendCurrency,
+    receiveCurrency,
+    recipient,
+    paymentMethodId,
+    manualQuote,
+  } = (route.params || {}) as {
+    transactionId?: string
+    sendAmount?: number
+    receiveAmount?: number
+    sendCurrency?: string
+    receiveCurrency?: string
+    recipient?: MockRecipient
+    paymentMethodId?: string
+    manualQuote?: ManualQuoteResponse | null
+  }
+
+  const { pm, isManual } = useManualPayInScreen(paymentMethodId)
   
   // Determine network based on currency (single method per country)
   const getNetworkName = () => {
+    if (isManual && pm?.mobile_money_provider) return pm.mobile_money_provider
     if (sendCurrency === 'GHS') {
       return 'MTN MOMO'
     } else if (sendCurrency === 'KES') {
@@ -46,6 +73,7 @@ export default function MobileMoneyScreen({ navigation, route }: NavigationProps
   }
 
   const networkName = getNetworkName()
+  const opsPayInPhone = isManual ? pm?.phone_number?.trim() : ''
   const isGhana = sendCurrency === 'GHS'
   const isKenya = sendCurrency === 'KES'
 
@@ -99,20 +127,33 @@ export default function MobileMoneyScreen({ navigation, route }: NavigationProps
   }
 
   const handleConfirmPayment = () => {
-    if (!phoneNumber) return
+    if (!isManual && !phoneNumber) return
     
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     setPaymentConfirmed(true)
     
-    // TODO: Process mobile money payment
-    // This would trigger the mobile money payment flow
-    
-    setTimeout(() => {
-      navigation.replace('TransactionDetails' as never, {
-        transactionId,
-        fromScreen: 'SendFlow',
-      } as never)
-    }, 500)
+    void (async () => {
+      try {
+        let txId = transactionId
+        if (isManual && paymentMethodId && recipient?.id && manualQuote) {
+          const created = await completeManualSendOrder({
+            recipientId: recipient.id,
+            paymentMethodId,
+            manualQuote,
+            referenceCode: transactionId,
+            receiptUrl: receiptPath,
+          })
+          txId = created.transactionId
+        }
+        navigation.replace('TransactionDetails' as never, {
+          transactionId: txId,
+          fromScreen: 'SendFlow',
+        } as never)
+      } catch (e) {
+        setPaymentConfirmed(false)
+        showError(e instanceof Error ? e.message : 'Failed to submit payment')
+      }
+    })()
   }
 
   return (
@@ -242,6 +283,14 @@ export default function MobileMoneyScreen({ navigation, route }: NavigationProps
                 3. You will receive a confirmation SMS
               </Text>
             </View>
+
+            {isManual && transactionId ? (
+              <ManualSendReceiptUpload
+                referenceCode={transactionId}
+                onPathChange={setReceiptPath}
+                disabled={paymentConfirmed}
+              />
+            ) : null}
           </Animated.View>
         </ScrollView>
 
@@ -254,7 +303,8 @@ export default function MobileMoneyScreen({ navigation, route }: NavigationProps
               styles.payButton,
               (!phoneNumber || paymentConfirmed) && styles.payButtonDisabled
             ]}
-            onPress={handleConfirmPayment} disabled={!phoneNumber || paymentConfirmed}
+            onPress={handleConfirmPayment}
+            disabled={(!isManual && !phoneNumber) || paymentConfirmed}
           >
             <LinearGradient
               colors={(!phoneNumber || paymentConfirmed)

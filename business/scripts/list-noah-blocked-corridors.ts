@@ -1,9 +1,7 @@
 /**
  * List sendable vs quote-only vs catalog-only corridors for this API key.
- * Usage: cd business && npx tsx scripts/list-noah-blocked-corridors.ts
+ * Usage: cd business && node --env-file=.env.local --import tsx scripts/list-noah-blocked-corridors.ts
  */
-import { config } from "dotenv"
-config({ path: ".env.local" })
 
 import { noahFetch } from "../lib/noah/http"
 import { getNoahSettlementCryptoCurrency, getNoahUsdCryptoTicker } from "../lib/noah/config"

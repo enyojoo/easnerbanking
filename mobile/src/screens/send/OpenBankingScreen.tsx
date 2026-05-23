@@ -16,12 +16,32 @@ import { NavigationProps } from '../../types'
 import { colors, shadows, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
+import { useToast } from '../../components/ToastProvider'
+import { completeManualSendOrder } from '../../hooks/use-manual-pay-in-screen'
+import { ManualSendReceiptUpload } from '../../components/send/ManualSendReceiptUpload'
+import type { ManualQuoteResponse } from '../../lib/manual-send-api'
 
 export default function OpenBankingScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
+  const { showError } = useToast()
   const [loading, setLoading] = useState(false)
+  const [receiptPath, setReceiptPath] = useState<string | null>(null)
   
-  const { transactionId, sendAmount, receiveAmount, sendCurrency, receiveCurrency, recipient, paymentMethod } = route.params || {}
+  const {
+    transactionId,
+    sendCurrency,
+    paymentMethod,
+    paymentMethodId,
+    recipient,
+    manualQuote,
+  } = (route.params || {}) as {
+    transactionId?: string
+    sendCurrency?: string
+    paymentMethod?: string
+    paymentMethodId?: string
+    recipient?: { id?: string }
+    manualQuote?: ManualQuoteResponse | null
+  }
   
   // Determine if this is SBP (Russian Faster Payments System)
   const isSBP = paymentMethod === 'sbp' || sendCurrency === 'RUB'
@@ -39,12 +59,29 @@ export default function OpenBankingScreen({ navigation, route }: NavigationProps
     // TODO: Integrate Plaid/OpenBanking flow here
     // For now, simulate connection
     setTimeout(() => {
-      setLoading(false)
-      // After successful connection, navigate to transaction tracking
-      navigation.replace('TransactionDetails' as never, {
-        transactionId: transactionId,
-        fromScreen: 'SendFlow',
-      } as never)
+      void (async () => {
+        try {
+          let txId = transactionId
+          if (paymentMethodId && recipient?.id && manualQuote) {
+            const created = await completeManualSendOrder({
+              recipientId: recipient.id,
+              paymentMethodId,
+              manualQuote,
+              referenceCode: transactionId,
+              receiptUrl: receiptPath,
+            })
+            txId = created.transactionId
+          }
+          setLoading(false)
+          navigation.replace('TransactionDetails' as never, {
+            transactionId: txId,
+            fromScreen: 'SendFlow',
+          } as never)
+        } catch (e) {
+          setLoading(false)
+          showError(e instanceof Error ? e.message : 'Failed to submit payment')
+        }
+      })()
     }, 2000)
   }
 
@@ -108,6 +145,14 @@ export default function OpenBankingScreen({ navigation, route }: NavigationProps
                 : 'Securely connect your bank account to complete this payment. We use bank-level encryption to keep your information safe.'}
             </Text>
           </View>
+
+          {paymentMethodId && transactionId ? (
+            <ManualSendReceiptUpload
+              referenceCode={transactionId}
+              onPathChange={setReceiptPath}
+              disabled={loading}
+            />
+          ) : null}
 
           {loading ? (
             <View style={styles.loadingContainer}>

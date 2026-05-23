@@ -8,6 +8,8 @@ type PatchBody = {
   providers?: unknown
   country_name?: string
   settlement_backend?: string | null
+  provider_routing?: unknown
+  fields_schema?: Record<string, unknown> | null
   metadata?: Record<string, unknown> | null
 }
 
@@ -32,6 +34,8 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   if (body.providers !== undefined) updates.providers = body.providers
   if (typeof body.country_name === "string" && body.country_name.trim()) updates.country_name = body.country_name.trim()
   if (body.settlement_backend !== undefined) updates.settlement_backend = body.settlement_backend
+  if (body.provider_routing !== undefined) updates.provider_routing = body.provider_routing
+  if (body.fields_schema !== undefined) updates.fields_schema = body.fields_schema
   if (body.metadata !== undefined) updates.metadata = body.metadata
 
   if (Object.keys(updates).length <= 1) {

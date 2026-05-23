@@ -34,4 +34,16 @@ describe("resolveInboundTransactionListLabel", () => {
       }),
     ).toBe("Samuel Odiba")
   })
+
+  it("uses account verification label for verification deposits", () => {
+    expect(
+      resolveInboundTransactionListLabel({
+        name: "Samuel Odiba",
+        metadata: {
+          deposit_kind: "verification",
+          noah_fiat_deposit_sender_name: "Samuel Odiba",
+        },
+      }),
+    ).toBe("Account verification")
+  })
 })
