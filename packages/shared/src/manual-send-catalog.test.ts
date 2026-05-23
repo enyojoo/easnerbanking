@@ -36,13 +36,22 @@ describe("manual-send-catalog", () => {
   it("lists multiple PM options per currency", () => {
     const opts = listManualPayInOptionsForCurrency(
       [
-        { id: "a", currency: "KES", name: "M-Pesa", type: "mobile_money", is_default: false, status: "active" },
+        {
+          id: "a",
+          currency: "KES",
+          name: "M-Pesa",
+          type: "mobile_money",
+          is_default: false,
+          status: "active",
+          display_logo_url: "https://cdn.example/mpesa.png",
+        },
         { id: "b", currency: "KES", name: "Bank Transfer", type: "bank_account", is_default: true, status: "active" },
       ],
       "KES",
     )
     expect(opts.map((o) => o.name)).toEqual(["Bank Transfer", "M-Pesa"])
     expect(pickDefaultManualPayInOption(opts)?.id).toBe("b")
+    expect(opts.find((o) => o.id === "a")?.display_logo_url).toBe("https://cdn.example/mpesa.png")
   })
 
   it("routeManualPayInScreen maps types", () => {

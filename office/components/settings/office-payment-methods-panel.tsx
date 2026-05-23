@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, type RefObject } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -43,6 +43,7 @@ interface PaymentMethod {
   currency: string
   type: string
   name: string
+  display_logo_url?: string | null
   account_name?: string
   account_number?: string
   bank_name?: string
@@ -121,9 +122,14 @@ export function OfficePaymentMethodsPanel() {
   // Add these state variables after the existing state declarations
   const [qrCodeFile, setQrCodeFile] = useState<File | null>(null)
   const [editingQrCodeFile, setEditingQrCodeFile] = useState<File | null>(null)
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [editingLogoFile, setEditingLogoFile] = useState<File | null>(null)
   const [uploadingQrCode, setUploadingQrCode] = useState(false)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const editFileInputRef = useRef<HTMLInputElement>(null)
+  const logoInputRef = useRef<HTMLInputElement>(null)
+  const editLogoInputRef = useRef<HTMLInputElement>(null)
 
   const loadCurrencies = useCallback(async () => {
     try {
@@ -194,6 +200,120 @@ export function OfficePaymentMethodsPanel() {
     return publicUrl
   }
 
+  const handleLogoFileSelect = (file: File, isEditing = false) => {
+    const allowedTypes = ["image/svg+xml", "image/png", "image/jpeg", "image/webp"]
+    if (!allowedTypes.includes(file.type)) {
+      console.error("Only SVG, PNG, JPEG, and WebP are allowed for display logos")
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      console.error("Logo file size must be less than 2MB")
+      return
+    }
+    if (isEditing) {
+      setEditingLogoFile(file)
+    } else {
+      setLogoFile(file)
+    }
+  }
+
+  const handleRemoveDisplayLogo = async () => {
+    if (!editingPaymentMethod) return
+    const url = editingPaymentMethod.display_logo_url?.trim()
+    if (!url) {
+      setEditingPaymentMethod({ ...editingPaymentMethod, display_logo_url: null })
+      setEditingLogoFile(null)
+      return
+    }
+    setUploadingLogo(true)
+    try {
+      await paymentMethodsApi.deleteDisplayLogo(url)
+      setEditingPaymentMethod({ ...editingPaymentMethod, display_logo_url: null })
+      setEditingLogoFile(null)
+    } catch (error) {
+      console.error("Error removing display logo:", error)
+    } finally {
+      setUploadingLogo(false)
+    }
+  }
+
+  const renderDisplayLogoField = (opts: {
+    isEditing: boolean
+    currentUrl?: string | null
+    file: File | null
+    onClearFile: () => void
+    onClearStored?: () => void
+    inputRef: RefObject<HTMLInputElement | null>
+  }) => (
+    <div className="space-y-2">
+      <Label>Display logo</Label>
+      <input
+        type="file"
+        ref={opts.inputRef}
+        onChange={(e) => {
+          const picked = e.target.files?.[0]
+          if (picked) handleLogoFileSelect(picked, opts.isEditing)
+        }}
+        accept=".svg,.png,.jpg,.jpeg,.webp,image/svg+xml,image/png,image/jpeg,image/webp"
+        className="hidden"
+      />
+      <div className="flex flex-wrap items-center gap-4">
+        {(opts.file || opts.currentUrl) && (
+          <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-md border bg-muted/30">
+            {opts.file ? (
+              <img
+                src={URL.createObjectURL(opts.file)}
+                alt=""
+                className="h-full w-full object-contain"
+              />
+            ) : opts.currentUrl ? (
+              <img src={opts.currentUrl} alt="" className="h-full w-full object-contain" />
+            ) : null}
+          </div>
+        )}
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => opts.inputRef.current?.click()}
+          className="flex items-center gap-2"
+        >
+          <Upload className="h-4 w-4" />
+          {opts.file || opts.currentUrl ? "Change logo" : "Upload logo"}
+        </Button>
+        {!opts.isEditing && opts.file ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={opts.onClearFile}
+            disabled={uploadingLogo}
+          >
+            Clear file
+          </Button>
+        ) : null}
+        {opts.isEditing && (opts.currentUrl || opts.file) ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              void (async () => {
+                if (opts.currentUrl && opts.onClearStored) {
+                  await opts.onClearStored()
+                }
+                opts.onClearFile()
+              })()
+            }}
+            disabled={uploadingLogo}
+          >
+            Clear
+          </Button>
+        ) : null}
+      </div>
+      <p className="text-xs text-muted-foreground">SVG, PNG, JPEG, or WebP (max 2MB)</p>
+    </div>
+  )
+
   const handleAddPaymentMethod = async () => {
     setSaving(true)
     try {
@@ -221,10 +341,17 @@ export function OfficePaymentMethodsPanel() {
         newPaymentMethod.timerSeconds,
       )
 
+      let displayLogoUrl: string | null = null
+      if (logoFile) {
+        setUploadingLogo(true)
+        displayLogoUrl = await paymentMethodsApi.uploadDisplayLogo(logoFile)
+      }
+
       const data = await paymentMethodsApi.create({
         currency: newPaymentMethod.currency,
         type: newPaymentMethod.type,
         name: newPaymentMethod.name,
+        display_logo_url: displayLogoUrl,
         account_name: newPaymentMethod.type === "bank_account" ? newPaymentMethod.account_name || null : null,
         account_number: newPaymentMethod.type === "bank_account" ? newPaymentMethod.account_number || null : null,
         bank_name: newPaymentMethod.type === "bank_account" ? newPaymentMethod.bank_name || null : null,
@@ -269,6 +396,7 @@ export function OfficePaymentMethodsPanel() {
         is_default: false,
       })
       setQrCodeFile(null)
+      setLogoFile(null)
       setIsAddPaymentMethodOpen(false)
       console.log("Payment method added successfully")
     } catch (error) {
@@ -276,6 +404,7 @@ export function OfficePaymentMethodsPanel() {
     } finally {
       setSaving(false)
       setUploadingQrCode(false)
+      setUploadingLogo(false)
     }
   }
 
@@ -298,10 +427,23 @@ export function OfficePaymentMethodsPanel() {
           ? JSON.stringify({ provider_key: editingProviderKey })
           : editingPaymentMethod.instructions
 
+      const previousLogoUrl = editingPaymentMethod.display_logo_url?.trim() || null
+      let displayLogoUrl = editingPaymentMethod.display_logo_url ?? null
+      if (editingLogoFile) {
+        setUploadingLogo(true)
+        displayLogoUrl = await paymentMethodsApi.uploadDisplayLogo(editingLogoFile)
+        if (previousLogoUrl && previousLogoUrl !== displayLogoUrl) {
+          await paymentMethodsApi.deleteDisplayLogo(previousLogoUrl).catch((e) => {
+            console.error("Error deleting replaced display logo:", e)
+          })
+        }
+      }
+
       const data = await paymentMethodsApi.patch(editingPaymentMethod.id, {
         currency: editingPaymentMethod.currency,
         type: editingPaymentMethod.type,
         name: editingPaymentMethod.name,
+        display_logo_url: displayLogoUrl,
         account_name: editingPaymentMethod.type === "bank_account" ? editingPaymentMethod.account_name || null : null,
         account_number: editingPaymentMethod.type === "bank_account" ? editingPaymentMethod.account_number || null : null,
         bank_name: editingPaymentMethod.type === "bank_account" ? editingPaymentMethod.bank_name || null : null,
@@ -320,6 +462,7 @@ export function OfficePaymentMethodsPanel() {
       setPaymentMethods(paymentMethods.map((pm) => (pm.id === editingPaymentMethod.id ? data : pm)))
       setEditingPaymentMethod(null)
       setEditingQrCodeFile(null)
+      setEditingLogoFile(null)
       setIsEditPaymentMethodOpen(false)
       console.log("Payment method updated successfully")
     } catch (error) {
@@ -327,6 +470,7 @@ export function OfficePaymentMethodsPanel() {
     } finally {
       setSaving(false)
       setUploadingQrCode(false)
+      setUploadingLogo(false)
     }
   }
 
@@ -365,7 +509,13 @@ export function OfficePaymentMethodsPanel() {
   }
 
   const handleDeletePaymentMethod = async (id: string) => {
+    const method = paymentMethods.find((pm) => pm.id === id)
     try {
+      if (method?.display_logo_url?.trim()) {
+        await paymentMethodsApi.deleteDisplayLogo(method.display_logo_url).catch((e) => {
+          console.error("Error deleting display logo from storage:", e)
+        })
+      }
       await paymentMethodsApi.remove(id)
       setPaymentMethods(paymentMethods.filter((pm) => pm.id !== id))
       console.log("Payment method deleted successfully")
@@ -512,9 +662,16 @@ export function OfficePaymentMethodsPanel() {
                 id="name"
                 value={newPaymentMethod.name}
                 onChange={(e) => setNewPaymentMethod({ ...newPaymentMethod, name: e.target.value })}
-                placeholder="e.g., Sberbank Russia, SberPay QR"
+                placeholder="e.g., M-Pesa, Sberbank Russia"
               />
             </div>
+
+            {renderDisplayLogoField({
+              isEditing: false,
+              file: logoFile,
+              onClearFile: () => setLogoFile(null),
+              inputRef: logoInputRef,
+            })}
 
             {newPaymentMethod.type === "bank_account" && (() => {
               const accountConfig = newPaymentMethod.currency
@@ -930,7 +1087,7 @@ export function OfficePaymentMethodsPanel() {
             <Button
               onClick={handleAddPaymentMethod}
               disabled={(() => {
-                if (saving || uploadingQrCode || !newPaymentMethod.currency || !newPaymentMethod.name) {
+                if (saving || uploadingQrCode || uploadingLogo || !newPaymentMethod.currency || !newPaymentMethod.name) {
                   return true
                 }
 
@@ -1051,9 +1208,18 @@ export function OfficePaymentMethodsPanel() {
                   onChange={(e) =>
                     setEditingPaymentMethod({ ...editingPaymentMethod, name: e.target.value })
                   }
-                  placeholder="e.g., Sberbank Russia, SberPay QR"
+                  placeholder="e.g., M-Pesa, Sberbank Russia"
                 />
               </div>
+
+              {renderDisplayLogoField({
+                isEditing: true,
+                currentUrl: editingPaymentMethod.display_logo_url,
+                file: editingLogoFile,
+                onClearFile: () => setEditingLogoFile(null),
+                onClearStored: () => void handleRemoveDisplayLogo(),
+                inputRef: editLogoInputRef,
+              })}
 
                 {editingPaymentMethod.type === "bank_account" && (() => {
                 const accountConfig = editingPaymentMethod.currency
@@ -1484,6 +1650,7 @@ export function OfficePaymentMethodsPanel() {
                     if (
                       saving ||
                       uploadingQrCode ||
+                      uploadingLogo ||
                       !editingPaymentMethod.currency ||
                       !editingPaymentMethod.name
                     ) {
@@ -1557,7 +1724,18 @@ export function OfficePaymentMethodsPanel() {
                 <span className="capitalize">{method.type.replace("_", " ")}</span>
               </div>
             </TableCell>
-            <TableCell className="font-medium">{method.name}</TableCell>
+            <TableCell>
+              <div className="flex items-center gap-2 font-medium">
+                {method.display_logo_url ? (
+                  <img
+                    src={method.display_logo_url}
+                    alt=""
+                    className="h-8 w-8 shrink-0 rounded object-contain border bg-muted/30"
+                  />
+                ) : null}
+                <span>{method.name}</span>
+              </div>
+            </TableCell>
             <TableCell>
               {method.type === "bank_account" ? (() => {
                 const accountConfig = getAccountTypeConfigFromCurrency(method.currency)

@@ -17,13 +17,7 @@ import {
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 import type { Beneficiary } from "@/lib/recipient-types"
-import {
-  otherCurrenciesFromCatalog,
-  paymentMethodsFromCatalog,
-  stablecoinOptions,
-  type PaymentMethodCode,
-} from "@/lib/send-payment-methods"
-import { useSendDestinations } from "@/lib/use-send-destinations"
+import type { PaymentMethodCode } from "@/lib/send-payment-methods"
 import {
   ChevronDown,
   Check,
@@ -31,9 +25,7 @@ import {
   ArrowLeft,
   ArrowUpDown,
   Landmark,
-  Link2,
   AlertCircle,
-  Coins,
 } from "lucide-react"
 import {
   Dialog,
@@ -51,6 +43,7 @@ import {
   persistSendFlowState,
 } from "@/lib/send-flow-session"
 import { useManualSendFlow } from "@/hooks/use-manual-send-flow"
+import { PaymentMethodDisplayLogo } from "@/components/send/payment-method-display-logo"
 import { pickDefaultManualPayInOption } from "@easner/shared"
 import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
 
@@ -78,13 +71,12 @@ export default function SendPage() {
   const router = useRouter()
   const { tier1Complete, hasData, isLoading: profileLoading } = useBusinessProfile()
   const { accountRows: sourceAccounts } = useBusinessAccountRows()
-  const { data: sendDestinations } = useSendDestinations()
   const [recipient, setRecipient] = useState<Beneficiary | null>(null)
   const [amountStr, setAmountStr] = useState("")
   const [amountEntryMode, setAmountEntryMode] = useState<"receive" | "send">("receive")
   const [sourceAccountId, setSourceAccountId] = useState<string | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>("balance")
-  const [otherCurrency, setOtherCurrency] = useState<string | "STABLECOIN" | null>(null)
+  const [otherCurrency, setOtherCurrency] = useState<string | null>(null)
   const [otherPaymentMethod, setOtherPaymentMethod] = useState<string | null>(null)
   const [manualPaymentMethodId, setManualPaymentMethodId] = useState<string | null>(null)
   const [note, setNote] = useState("")
@@ -115,37 +107,61 @@ export default function SendPage() {
 
   const manualSend = useManualSendFlow({
     enabled: true,
-    otherCurrency: otherCurrency && otherCurrency !== "STABLECOIN" ? otherCurrency : null,
+    otherCurrency,
     receiveCurrency,
     amountEntryMode,
     enteredAmount,
   })
 
-  const otherCurrencies = useMemo(() => {
-    if (manualSend.sendCurrencies.length > 0) {
-      return manualSend.sendCurrencies.map((code) => ({
+  const manualSendAvailable = manualSend.sendCurrencies.length > 0
+
+  const otherCurrencies = useMemo(
+    () =>
+      manualSend.sendCurrencies.map((code) => ({
         code,
         name: code,
         symbol: "",
-      }))
-    }
-    return otherCurrenciesFromCatalog(sendDestinations)
-  }, [manualSend.sendCurrencies, sendDestinations])
+      })),
+    [manualSend.sendCurrencies],
+  )
 
   const currencyPaymentMethods = useMemo(() => {
     const by = manualSend.paymentMethodsByCurrency
-    if (Object.keys(by).length > 0) {
-      const out: Record<string, Array<{ code: string; name: string }>> = {}
-      for (const [cur, opts] of Object.entries(by)) {
-        out[cur] = opts.map((o) => ({ code: o.id, name: o.name }))
+    const out: Record<
+      string,
+      Array<{ code: string; name: string; type: string; displayLogoUrl?: string | null }>
+    > = {}
+    for (const code of manualSend.sendCurrencies) {
+      const opts = by[code] ?? []
+      if (opts.length > 0) {
+        out[code] = opts.map((o) => ({
+          code: o.id,
+          name: o.name,
+          type: o.type,
+          displayLogoUrl: o.display_logo_url,
+        }))
       }
-      return out
     }
-    return paymentMethodsFromCatalog(sendDestinations)
-  }, [manualSend.paymentMethodsByCurrency, sendDestinations])
+    return out
+  }, [manualSend.paymentMethodsByCurrency, manualSend.sendCurrencies])
 
   useEffect(() => {
-    if (!otherCurrency || otherCurrency === "STABLECOIN") return
+    if (manualSendAvailable) return
+    if (
+      paymentMethod === "otherCurrency" ||
+      otherCurrency ||
+      paymentMethod === "usdc" ||
+      paymentMethod === "usdt"
+    ) {
+      setPaymentMethod("balance")
+      setOtherCurrency(null)
+      setOtherPaymentMethod(null)
+      setManualPaymentMethodId(null)
+    }
+  }, [manualSendAvailable, paymentMethod, otherCurrency])
+
+  useEffect(() => {
+    if (!otherCurrency) return
     const opts = currencyPaymentMethods[otherCurrency] ?? []
     if (!manualPaymentMethodId && opts.length > 0) {
       const def = pickDefaultManualPayInOption(
@@ -181,8 +197,7 @@ export default function SendPage() {
 
   const sendCurrency = useMemo(() => {
     if (paymentMethod === "balance" && sourceAccount) return sourceAccount.currency
-    if (paymentMethod === "usdc" || paymentMethod === "usdt" || otherCurrency === "STABLECOIN")
-      return "USD"
+    if (paymentMethod === "usdc" || paymentMethod === "usdt") return "USD"
     if (otherCurrency) return otherCurrency
     return "USD"
   }, [paymentMethod, sourceAccount, otherCurrency])
@@ -193,7 +208,6 @@ export default function SendPage() {
     }
     if (
       otherCurrency &&
-      otherCurrency !== "STABLECOIN" &&
       manualSend.quote &&
       sendCurrency !== receiveCurrency
     ) {
@@ -258,20 +272,11 @@ export default function SendPage() {
     recipient !== null &&
     Boolean(recipient.payeeEasetag?.trim()) &&
     isEasetagLedgerP2PEnabled()
-  const isStablecoinSource = paymentMethod === "usdc" || paymentMethod === "usdt"
   const hasValidOtherCurrencySelection =
-    (otherCurrency &&
-      otherCurrency !== "STABLECOIN" &&
-      paymentMethod === "otherCurrency" &&
-      Boolean(manualPaymentMethodId || otherPaymentMethod)) ||
-    (otherCurrency === "STABLECOIN" && (paymentMethod === "usdc" || paymentMethod === "usdt")) ||
-    (otherCurrency &&
-      otherPaymentMethod &&
-      (paymentMethod === "bankTransfer" ||
-        paymentMethod === "mpesa" ||
-        paymentMethod === "mtnMomo" ||
-        paymentMethod === "sbp"))
-  const hasValidStablecoinSelection = isStablecoinSource
+    manualSendAvailable &&
+    Boolean(otherCurrency) &&
+    paymentMethod === "otherCurrency" &&
+    Boolean(manualPaymentMethodId || otherPaymentMethod)
 
   const canContinueBalance =
     recipient !== null &&
@@ -283,13 +288,9 @@ export default function SendPage() {
     tier1Complete &&
     (!needsProfileBeforeEasenetLedgerSend || (hasData && !profileLoading))
 
-  const canContinueStablecoin =
-    recipient !== null && receiveAmount > 0 && hasValidStablecoinSelection && tier1Complete
-
   const manualAmountOutOfRange =
     Boolean(
       otherCurrency &&
-        otherCurrency !== "STABLECOIN" &&
         manualSend.quote &&
         ((manualSend.quote.minAmount != null && sendAmount < manualSend.quote.minAmount) ||
           (manualSend.quote.maxAmount != null && sendAmount > manualSend.quote.maxAmount)),
@@ -302,12 +303,7 @@ export default function SendPage() {
     tier1Complete &&
     !manualAmountOutOfRange
 
-  const canContinue =
-    isBalanceSource
-      ? canContinueBalance
-      : isStablecoinSource
-        ? canContinueStablecoin
-        : canContinueOtherCurrency
+  const canContinue = isBalanceSource ? canContinueBalance : canContinueOtherCurrency
 
   const isAuthorizeFlow = !isBalanceSource
 
@@ -351,9 +347,7 @@ export default function SendPage() {
       })
       return `${sourceAccount.currency} Balance • ${getCurrencySymbol(sourceAccount.currency)}${fig}`
     }
-    if (paymentMethod === "usdc") return "Pay with USDC"
-    if (paymentMethod === "usdt") return "Pay with USDT"
-    if (otherCurrency && otherCurrency !== "STABLECOIN" && otherPaymentMethod) {
+    if (otherCurrency && otherPaymentMethod) {
       const method = currencyPaymentMethods[otherCurrency]?.find(
         (m) => m.code === otherPaymentMethod
       )
@@ -366,14 +360,8 @@ export default function SendPage() {
     if (!canContinue || !recipient) return
     const transactionId = generateTransactionId()
 
-    const feeAmount =
-      otherCurrency && otherCurrency !== "STABLECOIN" && manualSend.quote
-        ? manualSend.quote.feeAmount
-        : 0
-    const totalAmount =
-      otherCurrency && otherCurrency !== "STABLECOIN" && manualSend.quote
-        ? manualSend.quote.totalAmount
-        : sendAmount
+    const feeAmount = otherCurrency && manualSend.quote ? manualSend.quote.feeAmount : 0
+    const totalAmount = otherCurrency && manualSend.quote ? manualSend.quote.totalAmount : sendAmount
 
     const state: SendFlowState = {
       recipient: coerceBeneficiaryEasenetDisplay(recipient),
@@ -401,23 +389,6 @@ export default function SendPage() {
 
     if (paymentMethod === "otherCurrency" && manualPaymentMethodId) {
       router.push(manualSend.authorizePathForPaymentMethodId(manualPaymentMethodId))
-      return
-    }
-
-    if (otherPaymentMethod === "sbp") {
-      router.push("/send/authorize/open-banking")
-      return
-    }
-    if (otherPaymentMethod === "bankTransfer") {
-      router.push("/send/authorize/bank-transfer")
-      return
-    }
-    if (otherPaymentMethod === "mpesa" || otherPaymentMethod === "mtnMomo") {
-      router.push("/send/authorize/mobile-money")
-      return
-    }
-    if (paymentMethod === "usdc" || paymentMethod === "usdt") {
-      router.push("/send/authorize/stablecoin")
       return
     }
 
@@ -527,10 +498,6 @@ export default function SendPage() {
               <span className="flex items-center">
                 {paymentMethod === "balance" && sourceAccount ? (
                   <CurrencyFlag currency={sourceAccount.currency} size={22} className="shrink-0" />
-                ) : paymentMethod === "usdc" || paymentMethod === "usdt" ? (
-                  <Coins className="h-5 w-5" />
-                ) : otherCurrency === "STABLECOIN" ? (
-                  <Coins className="h-5 w-5" />
                 ) : otherCurrency ? (
                   <CurrencyFlag currency={otherCurrency} size={22} className="shrink-0" />
                 ) : (
@@ -630,26 +597,11 @@ export default function SendPage() {
                 </div>
               </div>
 
+              {manualSendAvailable ? (
               <div>
                 <p className="text-sm font-medium text-muted-foreground mb-2">Through Another Currency</p>
                 {!otherCurrency ? (
                   <div className="space-y-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPaymentMethod("otherCurrency")
-                        setOtherCurrency("STABLECOIN")
-                        setSourceAccountId(null)
-                        setOtherPaymentMethod(null)
-                      }}
-                      className="flex w-full items-center justify-between rounded-lg px-4 py-3 text-left transition-colors hover:bg-muted/50"
-                    >
-                      <div className="flex items-center gap-3">
-                        <Coins className="h-5 w-5 shrink-0" />
-                        <p className="font-medium">Stablecoin</p>
-                      </div>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    </button>
                     {otherCurrencies.map((currency) => (
                       <button
                         key={currency.code}
@@ -670,52 +622,6 @@ export default function SendPage() {
                       </button>
                     ))}
                   </div>
-                ) : otherCurrency === "STABLECOIN" ? (
-                  <div className="space-y-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setOtherCurrency(null)
-                        setOtherPaymentMethod(null)
-                        setPaymentMethod("otherCurrency")
-                      }}
-                      className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors hover:bg-muted/50"
-                    >
-                      <ArrowLeft className="h-4 w-4" />
-                      <p className="font-medium">Stablecoin</p>
-                    </button>
-                    {stablecoinOptions.map((opt) => {
-                      const isSelected = paymentMethod === opt.code
-                      return (
-                        <button
-                          key={opt.code}
-                          type="button"
-                          onClick={() => {
-                            setPaymentMethod(opt.code as PaymentMethodCode)
-                            setSourceAccountId(null)
-                            setOtherCurrency("STABLECOIN")
-                            setOtherPaymentMethod(opt.code)
-                            setSourceSheetOpen(false)
-                          }}
-                          className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors hover:bg-muted/50 ${
-                            isSelected ? "bg-muted" : ""
-                          }`}
-                        >
-                          <img
-                            src={
-                              opt.code === "usdc"
-                                ? "https://assets.coingecko.com/coins/images/6319/small/USD_Coin_icon.png"
-                                : "https://assets.coingecko.com/coins/images/325/small/Tether.png"
-                            }
-                            alt={opt.name}
-                            className="h-8 w-8 rounded-full shrink-0"
-                          />
-                          <p className="font-medium">{opt.name}</p>
-                          {isSelected && <Check className="h-5 w-5 text-primary shrink-0 ml-auto" />}
-                        </button>
-                      )
-                    })}
-                  </div>
                 ) : (
                   <div className="space-y-1">
                     <button
@@ -734,14 +640,6 @@ export default function SendPage() {
                     </button>
                     {currencyPaymentMethods[otherCurrency]?.map((method) => {
                       const isSelected = otherPaymentMethod === method.code
-                      const icon =
-                        method.code === "bankTransfer" ? (
-                          <Landmark className="h-5 w-5" />
-                        ) : method.code === "sbp" ? (
-                          <Link2 className="h-5 w-5" />
-                        ) : (
-                          <span className="text-lg">📱</span>
-                        )
                       return (
                         <button
                           key={method.code}
@@ -757,9 +655,12 @@ export default function SendPage() {
                             isSelected ? "bg-muted" : ""
                           }`}
                         >
-                          <span className="flex h-8 w-8 items-center justify-center shrink-0">
-                            {icon}
-                          </span>
+                          <PaymentMethodDisplayLogo
+                            name={method.name}
+                            type={method.type}
+                            currency={otherCurrency}
+                            displayLogoUrl={method.displayLogoUrl}
+                          />
                           <p className="font-medium">{method.name}</p>
                           {isSelected && <Check className="h-5 w-5 text-primary shrink-0 ml-auto" />}
                         </button>
@@ -768,6 +669,7 @@ export default function SendPage() {
                   </div>
                 )}
               </div>
+              ) : null}
             </div>
           </div>
         </DialogContent>

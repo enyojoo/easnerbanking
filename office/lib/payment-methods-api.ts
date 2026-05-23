@@ -5,6 +5,7 @@ export type PaymentMethodAdminRow = {
   currency: string
   type: string
   name: string
+  display_logo_url?: string | null
   account_name?: string | null
   account_number?: string | null
   bank_name?: string | null
@@ -58,6 +59,26 @@ export const paymentMethodsApi = {
 
   async remove(id: string): Promise<void> {
     const res = await officeFetch(`/api/admin/payment-methods/${id}`, { method: "DELETE" })
+    await asJson<{ ok?: boolean }>(res)
+  },
+
+  async uploadDisplayLogo(file: File): Promise<string> {
+    const form = new FormData()
+    form.append("file", file)
+    const res = await officeFetch("/api/admin/payment-methods/upload-logo", {
+      method: "POST",
+      body: form,
+    })
+    const data = await asJson<{ url?: string }>(res)
+    if (!data.url) throw new Error("Upload did not return a URL")
+    return data.url
+  },
+
+  async deleteDisplayLogo(url: string): Promise<void> {
+    const res = await officeFetch("/api/admin/payment-methods/display-logo", {
+      method: "DELETE",
+      body: JSON.stringify({ url }),
+    })
     await asJson<{ ok?: boolean }>(res)
   },
 }

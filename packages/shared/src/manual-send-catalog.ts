@@ -6,10 +6,13 @@ export type ManualPayInPaymentMethodOption = {
   name: string
   type: string
   is_default: boolean
+  /** Public image URL from Office → Payment methods → Display logo. */
+  display_logo_url?: string | null
 }
 
 export type ManualPayInPaymentMethodRow = ManualPayInPaymentMethodOption & {
   status?: string | null
+  display_logo_url?: string | null
 }
 
 export type ManualPayInScreenRoute =
@@ -57,12 +60,16 @@ export function listManualPayInOptionsForCurrency(
   const cur = norm(sendCurrency)
   return paymentMethods
     .filter((pm) => isActivePm(pm) && norm(pm.currency) === cur)
-    .map(({ id, currency, name, type, is_default }) => ({
+    .map(({ id, currency, name, type, is_default, display_logo_url }) => ({
       id,
       currency: norm(currency),
       name,
       type,
       is_default: Boolean(is_default),
+      display_logo_url:
+        typeof display_logo_url === "string" && display_logo_url.trim()
+          ? display_logo_url.trim()
+          : null,
     }))
     .sort((a, b) => {
       if (a.is_default !== b.is_default) return a.is_default ? -1 : 1
@@ -110,6 +117,10 @@ export function groupManualPayInOptionsByCurrency(
       name: pm.name,
       type: pm.type,
       is_default: Boolean(pm.is_default),
+      display_logo_url:
+        typeof pm.display_logo_url === "string" && pm.display_logo_url.trim()
+          ? pm.display_logo_url.trim()
+          : null,
     })
     byCur.set(code, list)
   }

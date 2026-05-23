@@ -6,6 +6,7 @@ export type PublicPaymentMethodSummary = {
   name: string
   type: string
   is_default: boolean
+  display_logo_url?: string | null
 }
 
 export type PublicPaymentMethodDetail = PublicPaymentMethodSummary & {
@@ -32,12 +33,15 @@ function rowActive(status: unknown): boolean {
 }
 
 export function toPublicPaymentMethodSummary(row: Record<string, unknown>): PublicPaymentMethodSummary {
+  const logo = row.display_logo_url
   return {
     id: String(row.id ?? ""),
     currency: String(row.currency ?? "").toUpperCase(),
     name: String(row.name ?? ""),
     type: String(row.type ?? ""),
     is_default: Boolean(row.is_default),
+    display_logo_url:
+      typeof logo === "string" && logo.trim() ? logo.trim() : null,
   }
 }
 

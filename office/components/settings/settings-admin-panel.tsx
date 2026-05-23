@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Save, Edit, X } from "lucide-react"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { supabase } from "@/lib/supabase"
 import { currenciesApi } from "@/lib/currencies-api"
@@ -41,13 +40,20 @@ interface Currency {
 
 export type SettingsAdminSection = "platform" | "rates" | "payment-methods"
 
+const GLOBAL_CURRENCY_CONTROL_LABELS: Record<"USD" | "EUR" | "GBP" | "NGN", string> = {
+  USD: "US Dollar",
+  EUR: "Euro",
+  GBP: "British Pound",
+  NGN: "Nigerian Naira",
+}
+
 const SECTION_COPY: Record<
   SettingsAdminSection,
   { title: string; description: string }
 > = {
   platform: {
     title: "Platform",
-    description: "Maintenance, registration, reporting defaults, and security parameters.",
+    description: "Maintenance, registration, and security parameters.",
   },
   rates: {
     title: "Rates",
@@ -71,7 +77,6 @@ export function SettingsAdminPanel({ section }: { section?: SettingsAdminSection
     maintenanceMode: false,
     registrationEnabled: true,
     emailVerificationRequired: true,
-    baseCurrency: "NGN",
   })
 
   // Security settings derived from system settings
@@ -146,9 +151,6 @@ export function SettingsAdminPanel({ section }: { section?: SettingsAdminSection
             break
           case "email_verification_required":
             newPlatformConfig.emailVerificationRequired = setting.value === "true"
-            break
-          case "base_currency":
-            newPlatformConfig.baseCurrency = setting.value
             break
           case "session_timeout":
             newSecuritySettings.sessionTimeout = Number.parseInt(setting.value)
@@ -236,13 +238,8 @@ export function SettingsAdminPanel({ section }: { section?: SettingsAdminSection
     try {
       setPlatformConfig({ ...platformConfig, [key]: value })
 
-      const settingKey = key === "baseCurrency" ? "base_currency" : key.replace(/([A-Z])/g, "_$1").toLowerCase()
+      const settingKey = key.replace(/([A-Z])/g, "_$1").toLowerCase()
       await updateSystemSetting(settingKey, value, typeof value === "boolean" ? "boolean" : "string")
-
-      // If base currency changed, refresh data
-      if (key === "baseCurrency") {
-        await loadCurrencies()
-      }
     } catch (error) {
       console.error("Error updating platform config:", error)
       // Revert the change if it failed
@@ -335,24 +332,15 @@ export function SettingsAdminPanel({ section }: { section?: SettingsAdminSection
                   {(["USD", "EUR", "GBP", "NGN"] as const).map((code) => {
                     const control = currencyControls[code]
                     const isDefault = code === "USD" || code === "EUR"
-          const currencyRow = currencies.find((c) => c.code.toUpperCase() === code)
-          const displayName = currencyRow?.name?.trim() || code
                     return (
                       <div key={code} className="rounded-lg border p-3">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3 min-w-0">
                   {renderCurrencyFlag(code)}
-                  <div className="space-y-1 min-w-0">
-                    <p className="text-sm font-medium truncate">
-                      {displayName}{" "}
-                      <span className="text-muted-foreground text-xs font-mono">({code})</span>
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                              {isDefault
-                                ? "Default currency. Visibility remains on."
-                                : "Non-default currency. Availability controls visibility/access."}
-                            </p>
-                  </div>
+                  <p className="text-sm font-medium truncate">
+                    {GLOBAL_CURRENCY_CONTROL_LABELS[code]}{" "}
+                    <span className="text-muted-foreground text-xs font-mono">({code})</span>
+                  </p>
                           </div>
                           <div className="flex items-center gap-6">
                             <div className="flex items-center gap-2">
@@ -415,38 +403,8 @@ export function SettingsAdminPanel({ section }: { section?: SettingsAdminSection
           onCheckedChange={(checked) => handlePlatformConfigChange("emailVerificationRequired", checked)}
                                 />
                               </div>
-      <div className="flex items-center justify-between">
-        <div>
-          <Label htmlFor="baseCurrency">Base Currency for Reporting</Label>
-          <p className="text-sm text-gray-500">Default currency for displaying transaction amounts and reports</p>
-                              </div>
-                            <Select
-          value={platformConfig.baseCurrency}
-          onValueChange={(value) => handlePlatformConfigChange("baseCurrency", value)}
-        >
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Select base currency" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {currencies
-                                    .filter((c) => c.status === "active")
-                                    .map((currency) => (
-                                      <SelectItem key={currency.code} value={currency.code}>
-                                        <div className="flex items-center gap-3">
-                                          <CurrencyFlag
-                                            currency={currency.code}
-                                            size={20}
-                                            fallbackSvg={currency.flag_svg?.trim() ? currency.flag_svg : undefined}
-                                          />
-                    <div className="font-medium">{currency.code}</div>
-                                        </div>
-                                      </SelectItem>
-                                    ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                                </div>
-                              )
+    </div>
+  )
 
   const securityCard = (
             <Card>

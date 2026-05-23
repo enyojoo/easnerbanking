@@ -58,11 +58,6 @@ import {
   getCachedSendDestinations,
   refreshSendDestinations,
 } from '../../lib/sendDestinations'
-import {
-  otherCurrenciesFromCatalog,
-  paymentMethodsFromCatalog,
-  stablecoinPickerOptions,
-} from '../../lib/sendDestinationOptions'
 import type { SendDestinationsResponse } from '@easner/shared'
 import { getTokenIconUrl } from '../../lib/cryptoIcons'
 import type { Recipient } from '../../types'
@@ -77,6 +72,11 @@ import { useEasenetRecipientHydration, type HydratedEasenetProfile } from '../..
 import { navigateToSendRecipientHub } from '../../lib/sendFlowNavigation'
 import { AvatarImage } from '../../components/AvatarImage'
 import { CachedImage } from '../../components/CachedImage'
+
+function isManualStablecoinCurrencyCode(code: string): boolean {
+  const c = code.trim().toUpperCase()
+  return c === 'USDC' || c === 'USDT' || c === 'STABLE'
+}
 
 // Landmark/Bank Icon Component
 function LandmarkIcon({ size = 24, color = colors.text.primary }: { size?: number; color?: string }) {
@@ -178,15 +178,11 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   ]
 
   const { data: manualCatalog } = useManualSendCatalog(true)
+  const manualSendAvailable = (manualCatalog?.sendCurrencies?.length ?? 0) > 0
 
   const otherCurrencies = useMemo(() => {
-    const codes = manualCatalog?.sendCurrencies ?? []
-    if (codes.length > 0) {
-      return codes.map((code) => ({ code, name: code, symbol: '' }))
-    }
-    const fiat = otherCurrenciesFromCatalog(sendDestinations)
-    return [{ code: 'STABLE', name: 'Stablecoin', symbol: '' }, ...fiat]
-  }, [manualCatalog, sendDestinations])
+    return (manualCatalog?.sendCurrencies ?? []).map((code) => ({ code, name: code, symbol: '' }))
+  }, [manualCatalog?.sendCurrencies])
 
   const paymentMethodIcons: { [key: string]: any } = {
     mtn: require('../../../assets/flags/mtn.png'),
@@ -195,23 +191,33 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   }
 
   const currencyPaymentMethods = useMemo(() => {
-    const by = manualCatalog?.paymentMethodsByCurrency
-    if (by && Object.keys(by).length > 0) {
-      const out: Record<string, Array<{ code: string; name: string; type?: string; icon?: string }>> = {}
-      for (const [cur, opts] of Object.entries(by)) {
-        out[cur] = opts.map((o) => ({ code: o.id, name: o.name, type: o.type }))
+    const by = manualCatalog?.paymentMethodsByCurrency ?? {}
+    const out: Record<
+      string,
+      Array<{ code: string; name: string; type?: string; icon?: string; displayLogoUrl?: string | null }>
+    > = {}
+    for (const code of manualCatalog?.sendCurrencies ?? []) {
+      const opts = by[code] ?? []
+      if (opts.length > 0) {
+        out[code] = opts.map((o) => ({
+          code: o.id,
+          name: o.name,
+          type: o.type,
+          displayLogoUrl: o.display_logo_url,
+        }))
       }
-      return out
     }
-    const fromCatalog = paymentMethodsFromCatalog(sendDestinations)
-    return {
-      STABLE: stablecoinPickerOptions(sendDestinations).map((o) => ({
-        code: o.code,
-        name: o.name,
-      })),
-      ...fromCatalog,
-    } as Record<string, Array<{ code: string; name: string; icon?: string }>>
-  }, [manualCatalog, sendDestinations])
+    return out
+  }, [manualCatalog?.paymentMethodsByCurrency, manualCatalog?.sendCurrencies])
+
+  useEffect(() => {
+    if (manualSendAvailable) return
+    if (selectedPaymentMethod === 'otherCurrency' || selectedOtherCurrency || selectedOtherPaymentMethod) {
+      setSelectedPaymentMethod('balance')
+      setSelectedOtherCurrency(null)
+      setSelectedOtherPaymentMethod(null)
+    }
+  }, [manualSendAvailable, selectedPaymentMethod, selectedOtherCurrency, selectedOtherPaymentMethod])
 
   useEffect(() => {
     if (selectedPaymentMethod !== 'otherCurrency' || !selectedOtherCurrency) return
@@ -826,11 +832,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                     ) : selectedPaymentMethod === 'virtualBank' ? (
                       <LandmarkIcon size={20} color={colors.text.primary} />
                     ) : selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency ? (
-                      selectedOtherCurrency === 'STABLE'
-                        ? (
-                          selectedOtherPaymentMethod && getTokenIconUrl(selectedOtherPaymentMethod) ? (
+                      isManualStablecoinCurrencyCode(selectedOtherCurrency) ? (
+                          getTokenIconUrl(selectedOtherCurrency) || getTokenIconUrl(selectedOtherPaymentMethod ?? '') ? (
                             <CachedImage
-                              uri={getTokenIconUrl(selectedOtherPaymentMethod)!}
+                              uri={
+                                getTokenIconUrl(selectedOtherCurrency) ??
+                                getTokenIconUrl(selectedOtherPaymentMethod ?? '')!
+                              }
                               style={styles.flagImage}
                               contentFit="cover"
                             />
@@ -1205,7 +1213,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   })}
                 </View>
 
-                {/* Through Another Currency Section */}
+                {manualSendAvailable ? (
                 <View style={styles.paymentSection}>
                   <Text style={styles.paymentSectionTitle}>Through Another Currency</Text>
                   
@@ -1224,8 +1232,12 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                         }}
                       >
                         <View style={styles.flagContainerSmall}>
-                          {currency.code === 'STABLE' ? (
-                            <Coins size={18} color={colors.text.primary} strokeWidth={2} />
+                          {getTokenIconUrl(currency.code) ? (
+                            <CachedImage
+                              uri={getTokenIconUrl(currency.code)!}
+                              style={styles.flagImageSmall}
+                              contentFit="cover"
+                            />
                           ) : (
                             <CurrencyFlag currency={currency.code} size={24} style={styles.flagImageSmall} />
                           )}
@@ -1274,10 +1286,19 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                             }}
                           >
                             <View style={styles.flagContainerSmall}>
-                              {selectedOtherCurrency === 'STABLE' ? (
-                                getTokenIconUrl(method.code) ? (
+                              {method.displayLogoUrl ? (
+                                <CachedImage
+                                  uri={method.displayLogoUrl}
+                                  style={styles.flagImageSmall}
+                                  contentFit="contain"
+                                />
+                              ) : isManualStablecoinCurrencyCode(selectedOtherCurrency) ? (
+                                getTokenIconUrl(selectedOtherCurrency) || getTokenIconUrl(method.code) ? (
                                   <CachedImage
-                                    uri={getTokenIconUrl(method.code)!}
+                                    uri={
+                                      getTokenIconUrl(selectedOtherCurrency) ??
+                                      getTokenIconUrl(method.code)!
+                                    }
                                     style={styles.flagImageSmall}
                                     contentFit="cover"
                                   />
@@ -1312,6 +1333,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                     </>
                   )}
                 </View>
+                ) : null}
               </View>
               </ScrollView>
             </View>

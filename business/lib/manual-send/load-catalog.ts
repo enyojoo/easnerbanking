@@ -9,7 +9,10 @@ import {
 export async function loadManualSendCatalog(admin: SupabaseClient) {
   const [{ data: rateRows, error: rateErr }, { data: pmRows, error: pmErr }] = await Promise.all([
     admin.from("exchange_rates").select("*").eq("status", "active"),
-    admin.from("payment_methods").select("id,currency,name,type,is_default,status").eq("status", "active"),
+    admin
+      .from("payment_methods")
+      .select("id,currency,name,type,is_default,status,display_logo_url")
+      .eq("status", "active"),
   ])
 
   if (rateErr) throw new Error(rateErr.message)

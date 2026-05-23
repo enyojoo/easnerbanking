@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireOfficeAdmin } from "@/lib/api/admin-auth"
 import { buildPaymentMethodPatchPayload } from "@/lib/admin/payment-methods"
+import { deletePaymentMethodDisplayLogoByUrl } from "@/lib/manual-send/payment-method-logo-storage"
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const auth = await requireOfficeAdmin(request)
@@ -20,7 +21,24 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       .neq("id", id)
   }
 
+  const { data: existing, error: loadErr } = await admin
+    .from("payment_methods")
+    .select("display_logo_url")
+    .eq("id", id)
+    .maybeSingle()
+
+  if (loadErr) return NextResponse.json({ error: loadErr.message }, { status: 500 })
+
   const patch = buildPaymentMethodPatchPayload(body)
+
+  const previousLogo =
+    typeof existing?.display_logo_url === "string" ? existing.display_logo_url.trim() : ""
+  const nextLogo =
+    patch.display_logo_url === null
+      ? ""
+      : typeof patch.display_logo_url === "string"
+        ? patch.display_logo_url.trim()
+        : previousLogo
 
   const { data, error } = await admin
     .from("payment_methods")
@@ -30,6 +48,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  if (previousLogo && previousLogo !== nextLogo) {
+    await deletePaymentMethodDisplayLogoByUrl(previousLogo)
+  }
+
   return NextResponse.json({ payment_method: data })
 }
 
@@ -39,8 +62,20 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
 
   const { id } = await context.params
   const admin = createSupabaseAdmin()
+
+  const { data: existing } = await admin
+    .from("payment_methods")
+    .select("display_logo_url")
+    .eq("id", id)
+    .maybeSingle()
+
   const { error } = await admin.from("payment_methods").delete().eq("id", id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  if (existing?.display_logo_url) {
+    await deletePaymentMethodDisplayLogoByUrl(String(existing.display_logo_url))
+  }
+
   return NextResponse.json({ ok: true })
 }
