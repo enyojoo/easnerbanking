@@ -72,14 +72,13 @@ import {
 } from '@easner/shared'
 import { PayoutSchemaExtraFields } from '../../components/recipients/PayoutSchemaExtraFields'
 import {
-  getCatalogByRecipientTypeWithJurisdiction,
+  buildRecipientCatalogForType,
   getPayoutFieldsSchemaForCorridor,
   getRecipientProviders,
   getWalletAssets,
   getWalletNetworksForAsset,
   type RecipientType,
 } from '../../lib/recipientCatalog'
-import { getAllowedCountriesCached } from '../../lib/jurisdictionCountryPolicy'
 import { getNetworkIconUrl, getTokenIconUrl } from '../../lib/cryptoIcons'
 import { loadRecipientsListCache, saveRecipientsListCache } from '../../lib/recipientsListCache'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
@@ -167,22 +166,13 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   } | null>(null)
   const [hubSearchLoading, setHubSearchLoading] = useState(false)
   const [hubSearchError, setHubSearchError] = useState<string | null>(null)
-  const [jurisdictionUnrestricted, setJurisdictionUnrestricted] = useState(true)
-  const [jurisdictionCodes, setJurisdictionCodes] = useState<string[] | null>(null)
-
-  const jurisdictionPolicy = useMemo(
-    () => ({ unrestricted: jurisdictionUnrestricted, codes: jurisdictionCodes }),
-    [jurisdictionUnrestricted, jurisdictionCodes],
-  )
-
-  useEffect(() => {
-    void getAllowedCountriesCached('kyb').then((p) => {
-      setJurisdictionUnrestricted(p.unrestricted)
-      setJurisdictionCodes(p.codes)
-    })
-  }, [])
-
-  const { catalogVersion, refresh: refreshCatalog } = useSendDestinations()
+  const {
+    bankCorridors,
+    mobileCorridors,
+    cryptoDestinations,
+    catalogRevision,
+    refresh: refreshCatalog,
+  } = useSendDestinations()
 
   useFocusEffect(
     useCallback(() => {
@@ -190,8 +180,15 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     }, [refreshCatalog]),
   )
 
-  const recipientCatalogFor = (type: RecipientType) =>
-    getCatalogByRecipientTypeWithJurisdiction(type, jurisdictionPolicy)
+  const recipientCatalogFor = useCallback(
+    (type: RecipientType) =>
+      buildRecipientCatalogForType(type, {
+        bank: bankCorridors,
+        mobile: mobileCorridors,
+        crypto: cryptoDestinations,
+      }),
+    [bankCorridors, mobileCorridors, cryptoDestinations],
+  )
 
   const [newRecipient, setNewRecipient] = useState({
     fullName: '',
@@ -721,11 +718,17 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       }
       return true
     })
-  }, [recipientTypeKey, currencySearchTerm, catalogVersion, jurisdictionPolicy])
-  const walletAssetOptions = useMemo(() => getWalletAssets(), [catalogVersion])
+  }, [recipientTypeKey, currencySearchTerm, recipientCatalogFor, catalogRevision])
+  const walletAssetOptions = useMemo(
+    () =>
+      cryptoDestinations.length
+        ? [...new Set(cryptoDestinations.map((d) => d.asset_code))]
+        : getWalletAssets(),
+    [cryptoDestinations, catalogRevision],
+  )
   const walletNetworkOptions = useMemo(
     () => getWalletNetworksForAsset(newRecipient.currency),
-    [newRecipient.currency, catalogVersion],
+    [newRecipient.currency, cryptoDestinations, catalogRevision],
   )
   const filteredWalletAssets = useMemo(
     () =>
@@ -755,8 +758,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       recipientTypeKey,
       newRecipient.currency,
       selectedCountryCurrency?.countryCode,
-      catalogVersion,
-      jurisdictionPolicy,
+      recipientCatalogFor,
+      catalogRevision,
     ],
   )
   const isAnyDropdownOpen =

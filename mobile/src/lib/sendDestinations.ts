@@ -13,12 +13,19 @@ const STORAGE_ETAG = 'easner_send_destinations_etag'
 
 const memory: { body?: SendDestinationsResponse; etag?: string } = {}
 
+/** Same default as business `NEXT_PUBLIC_USE_PAYOUT_CORRIDORS` (opt out with `"false"`). */
 export function usePayoutCorridorsCatalogMobile(): boolean {
   return process.env.EXPO_PUBLIC_USE_PAYOUT_CORRIDORS !== 'false'
 }
 
 export function useSendDestinationsCatalogMobile(): boolean {
-  return process.env.EXPO_PUBLIC_USE_SEND_DESTINATIONS !== 'false' && usePayoutCorridorsCatalogMobile()
+  return usePayoutCorridorsCatalogMobile()
+}
+
+let catalogRevision = 0
+
+export function getSendDestinationsCatalogRevision(): number {
+  return catalogRevision
 }
 
 function toCorridorCache(body: SendDestinationsResponse): PayoutCorridorCacheShape {
@@ -30,11 +37,13 @@ export function applySendDestinationsBody(body: SendDestinationsResponse | null)
     memory.body = undefined
     setPayoutCorridorCache(null)
     setCryptoDestinationsCache(null)
+    catalogRevision += 1
     return
   }
   memory.body = body
   setPayoutCorridorCache(toCorridorCache(body))
   setCryptoDestinationsCache(body.crypto ?? [])
+  catalogRevision += 1
 }
 
 /** In-process catalog (hydrated from disk or last API refresh). */

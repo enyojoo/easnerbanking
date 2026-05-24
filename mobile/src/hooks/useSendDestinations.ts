@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { SendDestinationsResponse } from '@easner/shared'
 import {
+  getSendDestinationsCatalogRevision,
   getSendDestinationsMemory,
   hydrateSendDestinationsFromStorage,
   refreshSendDestinations,
@@ -16,10 +17,16 @@ export function useSendDestinations() {
   const [data, setData] = useState<SendDestinationsResponse | null>(() =>
     enabled ? getSendDestinationsMemory() : null,
   )
+  const [revision, setRevision] = useState(() =>
+    enabled ? getSendDestinationsCatalogRevision() : 0,
+  )
 
   const syncFromMemory = useCallback(() => {
     const mem = getSendDestinationsMemory()
-    if (mem) setData(mem)
+    if (mem) {
+      setData(mem)
+      setRevision(getSendDestinationsCatalogRevision())
+    }
     return mem
   }, [])
 
@@ -29,8 +36,12 @@ export function useSendDestinations() {
       return
     }
     const body = await refreshSendDestinations()
-    if (body) setData(body)
-    else syncFromMemory()
+    if (body) {
+      setData(body)
+      setRevision(getSendDestinationsCatalogRevision())
+    } else {
+      syncFromMemory()
+    }
   }, [enabled, syncFromMemory])
 
   useEffect(() => {
@@ -39,7 +50,10 @@ export function useSendDestinations() {
     void (async () => {
       const hydrated = await hydrateSendDestinationsFromStorage()
       if (cancelled) return
-      if (hydrated) setData(hydrated)
+      if (hydrated) {
+        setData(hydrated)
+        setRevision(getSendDestinationsCatalogRevision())
+      }
       await refresh()
     })()
     return () => {
@@ -57,8 +71,9 @@ export function useSendDestinations() {
     mobileCorridors,
     cryptoDestinations,
     balanceCurrencies: data?.balance_currencies ?? [],
-    /** Bump when catalog changes so recipient forms re-read corridor cache. */
+    /** Bumps when catalog hydrates/refreshes (use with corridor arrays for form dropdowns). */
     catalogVersion: data?.catalog_version,
+    catalogRevision: revision,
     refresh,
     enabled,
   }

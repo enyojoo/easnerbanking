@@ -59,14 +59,13 @@ import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { getAllCountryCurrencies, searchCountryCurrencies, CountryCurrency } from '../../lib/countryCurrencyMapping'
 import {
-  getCatalogByRecipientTypeWithJurisdiction,
+  buildRecipientCatalogForType,
   getPayoutFieldsSchemaForCorridor,
   getRecipientProviders,
   getWalletAssets,
   getWalletNetworksForAsset,
   type RecipientType,
 } from '../../lib/recipientCatalog'
-import { getAllowedCountriesCached } from '../../lib/jurisdictionCountryPolicy'
 import { getNetworkIconUrl, getTokenIconUrl } from '../../lib/cryptoIcons'
 import { loadRecipientsListCache, saveRecipientsListCache } from '../../lib/recipientsListCache'
 import { Wallet, Building2, Smartphone, AtSign } from 'lucide-react-native'
@@ -141,14 +140,6 @@ function RecipientsContent({ navigation }: NavigationProps) {
   const [easenetLookupLoading, setEasenetLookupLoading] = useState(false)
   const [easenetLookupError, setEasenetLookupError] = useState<string | null>(null)
   const [androidDropdownKeyboardHeight, setAndroidDropdownKeyboardHeight] = useState(0)
-  const [jurisdictionUnrestricted, setJurisdictionUnrestricted] = useState(true)
-  const [jurisdictionCodes, setJurisdictionCodes] = useState<string[] | null>(null)
-
-  const jurisdictionPolicy = useMemo(
-    () => ({ unrestricted: jurisdictionUnrestricted, codes: jurisdictionCodes }),
-    [jurisdictionUnrestricted, jurisdictionCodes],
-  )
-
   useEffect(() => {
     const uid = userProfile?.id || user?.id
     if (!uid) return
@@ -168,14 +159,13 @@ function RecipientsContent({ navigation }: NavigationProps) {
     void saveRecipientsListCache(uid, queryRecipients)
   }, [queryRecipients, userProfile?.id, user?.id])
 
-  useEffect(() => {
-    void getAllowedCountriesCached('kyb').then((p) => {
-      setJurisdictionUnrestricted(p.unrestricted)
-      setJurisdictionCodes(p.codes)
-    })
-  }, [])
-
-  const { catalogVersion, refresh: refreshCatalog } = useSendDestinations()
+  const {
+    bankCorridors,
+    mobileCorridors,
+    cryptoDestinations,
+    catalogRevision,
+    refresh: refreshCatalog,
+  } = useSendDestinations()
 
   useFocusEffect(
     useCallback(() => {
@@ -183,8 +173,15 @@ function RecipientsContent({ navigation }: NavigationProps) {
     }, [refreshCatalog]),
   )
 
-  const recipientCatalogFor = (type: RecipientType) =>
-    getCatalogByRecipientTypeWithJurisdiction(type, jurisdictionPolicy)
+  const recipientCatalogFor = useCallback(
+    (type: RecipientType) =>
+      buildRecipientCatalogForType(type, {
+        bank: bankCorridors,
+        mobile: mobileCorridors,
+        crypto: cryptoDestinations,
+      }),
+    [bankCorridors, mobileCorridors, cryptoDestinations],
+  )
 
   // Animation refs
   const headerAnim = useRef(new Animated.Value(0)).current
@@ -364,7 +361,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
       }
       return true
     })
-  }, [recipientTypeKey, countrySearchTerm, catalogVersion, jurisdictionPolicy])
+  }, [recipientTypeKey, countrySearchTerm, recipientCatalogFor, catalogRevision])
   const filteredProviderList = useMemo(
     () =>
       getRecipientProviders(
@@ -372,12 +369,18 @@ function RecipientsContent({ navigation }: NavigationProps) {
         'mobile_money',
         selectedCountryCurrency?.countryCode,
       ).filter((provider) => provider.toLowerCase().includes(providerSearchTerm.toLowerCase())),
-    [newRecipient.currency, selectedCountryCurrency?.countryCode, providerSearchTerm, catalogVersion],
+    [newRecipient.currency, selectedCountryCurrency?.countryCode, providerSearchTerm, catalogRevision],
   )
-  const walletAssetOptions = useMemo(() => getWalletAssets(), [catalogVersion])
+  const walletAssetOptions = useMemo(
+    () =>
+      cryptoDestinations.length
+        ? [...new Set(cryptoDestinations.map((d) => d.asset_code))]
+        : getWalletAssets(),
+    [cryptoDestinations, catalogRevision],
+  )
   const walletNetworkOptions = useMemo(
     () => getWalletNetworksForAsset(newRecipient.currency),
-    [newRecipient.currency, catalogVersion],
+    [newRecipient.currency, cryptoDestinations, catalogRevision],
   )
   const filteredWalletAssets = useMemo(
     () =>
@@ -407,8 +410,8 @@ function RecipientsContent({ navigation }: NavigationProps) {
       recipientTypeKey,
       newRecipient.currency,
       selectedCountryCurrency?.countryCode,
-      catalogVersion,
-      jurisdictionPolicy,
+      recipientCatalogFor,
+      catalogRevision,
     ],
   )
   const isAnyDropdownOpen =

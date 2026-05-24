@@ -292,6 +292,34 @@ export function getCatalogByRecipientTypeWithJurisdiction(
   return filterCatalogByJurisdictionPolicy(getCatalogByRecipientType(recipientType), policy)
 }
 
+/** Office send-destinations rows for recipient forms (parity with business recipient-form). */
+export function buildRecipientCatalogForType(
+  recipientType: RecipientType,
+  sources: {
+    bank: PayoutCorridorPublic[]
+    mobile: PayoutCorridorPublic[]
+    crypto: CryptoDestinationPublic[]
+  },
+): RecipientCatalogEntry[] {
+  if (recipientType === 'wallet') {
+    if (sources.crypto.length) {
+      return sortRecipientCatalogEntries(cryptoToRecipientEntries(sources.crypto))
+    }
+    if (useStaticRecipientCatalogFallback()) {
+      return sortRecipientCatalogEntries(recipientCatalog.filter((entry) => entry.recipientType === 'wallet'))
+    }
+    return []
+  }
+  if (recipientType === 'bank' && sources.bank.length) {
+    return sortRecipientCatalogEntries(corridorsToRecipientEntries(sources.bank, 'bank'))
+  }
+  if (recipientType === 'mobile_money' && sources.mobile.length) {
+    return sortRecipientCatalogEntries(corridorsToRecipientEntries(sources.mobile, 'mobile_money'))
+  }
+  if (!useStaticRecipientCatalogFallback()) return []
+  return sortRecipientCatalogEntries(recipientCatalog.filter((entry) => entry.recipientType === recipientType))
+}
+
 function cryptoToRecipientEntries(destinations: CryptoDestinationPublic[]): RecipientCatalogEntry[] {
   return destinations.map((d) => ({
     countryCode: (d.country_code || 'XX').toUpperCase(),
