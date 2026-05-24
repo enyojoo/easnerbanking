@@ -10,7 +10,8 @@ const nextConfig = {
   webpack: (config) => {
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
-      "@easner/shared": resolve(__dirname, "../packages/shared/src/index.ts"),
+      // Exact match only — a bare `@easner/shared` prefix would swallow subpath imports.
+      "@easner/shared$": resolve(__dirname, "../packages/shared/src/index.ts"),
       "@easner/shared/verified-identity": resolve(
         __dirname,
         "../packages/shared/src/verified-identity.ts"
