@@ -131,12 +131,23 @@ export function normalizeFormSchemaHints(
   const pmt = String(channel.PaymentMethodType ?? "")
   const pmtLow = pmt.toLowerCase()
 
-  const referenceRequired = isRequired(schema, "Reference")
-  const referenceOptional = !referenceRequired && formFieldNode(schema, "Reference") != null
+  const country = String(channel.Country ?? "").toUpperCase()
+  const fiat = String(channel.FiatCurrency ?? "").toUpperCase()
+  const referenceInSchema = formFieldNode(schema, "Reference") != null
+  const referenceRequiredOnSchema = isRequired(schema, "Reference")
+  /** Noah US ACH/Fedwire: Reference is optional on prepare; amount screen uses optional Note. */
+  const usBankOptionalReference =
+    country === "US" &&
+    (fiat === "USD" || !fiat) &&
+    (pmtLow.includes("ach") || pmtLow.includes("fedwire"))
+  const referenceRequired = referenceRequiredOnSchema && !usBankOptionalReference
+  const referenceOptional =
+    (referenceInSchema && !referenceRequired) || usBankOptionalReference
 
   let amount_field_mode: PayoutFieldsSchemaHint["amount_field_mode"] = "note_optional_only"
-  const country = String(channel.Country ?? "").toUpperCase()
-  if (purposeEnum && purposeEnum.length > 0 && country === "CA") {
+  if (usBankOptionalReference) {
+    amount_field_mode = "note_optional_only"
+  } else if (purposeEnum && purposeEnum.length > 0 && country === "CA") {
     amount_field_mode = "payment_purpose"
   } else if (referenceRequired) {
     amount_field_mode = "note"

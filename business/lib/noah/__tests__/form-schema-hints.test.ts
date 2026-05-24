@@ -71,4 +71,42 @@ describe("normalizeFormSchemaHints", () => {
     })
     expect(hints.bank_enum).toEqual(["GTBank"])
   })
+
+  it("treats US ACH Reference as optional on the amount screen", () => {
+    const hints = normalizeFormSchemaHints({
+      ID: "ch-us",
+      PaymentMethodType: "BankAch",
+      Country: "US",
+      FiatCurrency: "USD",
+      FormSchema: {
+        required: ["BankDetails", "PaymentPurpose", "Reference"],
+        properties: {
+          BankDetails: { type: "object" },
+          PaymentPurpose: { type: "string" },
+          Reference: { type: "string", title: "Reference" },
+        },
+      },
+    })
+    expect(hints.reference_required).toBe(false)
+    expect(hints.reference_optional).toBe(true)
+    expect(hints.amount_field_mode).toBe("note_optional_only")
+  })
+
+  it("keeps EUR SEPA reference required when in schema", () => {
+    const hints = normalizeFormSchemaHints({
+      ID: "ch-eur",
+      PaymentMethodType: "BankSepa",
+      Country: "DE",
+      FiatCurrency: "EUR",
+      FormSchema: {
+        required: ["BankDetails", "Reference"],
+        properties: {
+          BankDetails: { type: "object" },
+          Reference: { type: "string" },
+        },
+      },
+    })
+    expect(hints.reference_required).toBe(true)
+    expect(hints.amount_field_mode).toBe("note")
+  })
 })

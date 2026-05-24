@@ -328,6 +328,7 @@ export default function SendPage() {
   const noteFieldUi = getSendAmountNoteFieldUi({
     hints: payoutHints,
     isEasetag: isEasetagRecipient,
+    receiveCurrency,
   })
 
   const payoutMinReceive = useMemo(
@@ -544,6 +545,7 @@ export default function SendPage() {
       note,
       paymentPurpose,
       isEasetag: isEasetagRecipient,
+      receiveCurrency,
     })
     if (!fieldCheck.ok) {
       setAmountFieldError(fieldCheck.message)

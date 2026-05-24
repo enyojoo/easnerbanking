@@ -210,6 +210,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const noteFieldUi = getSendAmountNoteFieldUi({
     hints: payoutHints,
     isEasetag: isEasetagRecipient,
+    receiveCurrency: recipient?.currency,
   })
 
   const { data: manualCatalog } = useManualSendCatalog(true)
@@ -1156,6 +1157,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 note,
                 paymentPurpose,
                 isEasetag: isEasetagRecipient,
+                receiveCurrency: recipient?.currency,
               })
               if (!fieldCheck.ok) {
                 setAmountFieldError(fieldCheck.message)

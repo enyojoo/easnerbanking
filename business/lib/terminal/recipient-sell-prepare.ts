@@ -6,6 +6,7 @@ import {
   buildEurSepaSellForm,
   buildGbBankLocalSellForm,
   buildIdentifierSellForm,
+  normalizeBankAccountNumber,
   buildUsBankSellForm,
   fetchSellChannelItems,
   findBankSellChannelId,
@@ -189,8 +190,8 @@ export async function prepareSellFromRecipientRow(input: {
 
   if (fiatCurrency === "USD") {
     const payCountry = country === "US" ? "US" : country || "US"
-    const accountNumber = String(row.account_number || "").trim()
-    const routingNumber = String(row.routing_number || "").trim()
+    const accountNumber = normalizeBankAccountNumber(String(row.account_number || ""))
+    const routingNumber = normalizeBankAccountNumber(String(row.routing_number || ""))
     if (!accountNumber || !routingNumber) {
       throw new Error("US bank recipient requires account and routing numbers.")
     }

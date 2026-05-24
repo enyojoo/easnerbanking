@@ -81,8 +81,8 @@ export function buildUsBankSellForm(recipient: UsBankRecipientFormInput): Record
   const purpose = recipient.paymentPurpose?.trim() || defaultPaymentPurpose()
   const achRail = recipient.achRail !== false
   const details: Record<string, unknown> = {
-    AccountNumber: recipient.accountNumber.trim(),
-    BankCode: recipient.routingNumber.trim(),
+    AccountNumber: normalizeBankAccountNumber(recipient.accountNumber),
+    BankCode: normalizeBankAccountNumber(recipient.routingNumber),
   }
   if (achRail && recipient.accountType) {
     details.AccountType = recipient.accountType
@@ -109,9 +109,9 @@ export function buildCaBankLocalSellForm(input: {
 }): Record<string, unknown> {
   return {
     BankDetails: {
-      AccountNumber: input.accountNumber.trim(),
-      BankCode: input.routingNumber.trim(),
-      BranchCode: input.branchCode.trim(),
+      AccountNumber: normalizeBankAccountNumber(input.accountNumber),
+      BankCode: normalizeBankAccountNumber(input.routingNumber),
+      BranchCode: normalizeBankAccountNumber(input.branchCode),
       BankName: input.bankName.trim(),
     },
     AccountHolderName: buildAccountHolderName({ fullName: input.fullName }),
@@ -129,7 +129,7 @@ export function buildGbBankLocalSellForm(input: {
 }): Record<string, unknown> {
   return {
     BankDetails: {
-      AccountNumber: input.accountNumber.trim(),
+      AccountNumber: normalizeBankAccountNumber(input.accountNumber),
       SortCode: input.sortCode.replace(/\D/g, ""),
       BankName: input.bankName.trim(),
     },

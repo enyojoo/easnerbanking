@@ -49,15 +49,31 @@ export type SendAmountNoteFieldUi = {
   placeholder: string
 }
 
+function isUsOptionalReferenceCorridor(input: {
+  hints: PayoutFieldsSchemaHint | null | undefined
+  receiveCurrency?: string
+}): boolean {
+  const cur = String(input.receiveCurrency || "").trim().toUpperCase()
+  const pmt = String(input.hints?.payment_method_type || "").toLowerCase()
+  return cur === "USD" && (pmt.includes("ach") || pmt.includes("fedwire"))
+}
+
 /** Amount-screen note / reference copy from corridor hints (Easetag is always optional "Note"). */
 export function getSendAmountNoteFieldUi(input: {
   hints: PayoutFieldsSchemaHint | null | undefined
   isEasetag?: boolean
+  receiveCurrency?: string
 }): SendAmountNoteFieldUi {
   if (input.isEasetag) {
     return { mode: "note_optional_only", label: "Note", placeholder: "Note" }
   }
+  if (isUsOptionalReferenceCorridor(input)) {
+    return { mode: "note_optional_only", label: "Note", placeholder: "Note (optional)" }
+  }
   const mode = input.hints?.amount_field_mode ?? "note_optional_only"
+  if (input.hints?.reference_optional) {
+    return { mode: "note_optional_only", label: "Note", placeholder: "Note (optional)" }
+  }
   if (mode === "payment_purpose") {
     return { mode, label: "Payment purpose", placeholder: "Select purpose" }
   }
@@ -73,8 +89,10 @@ export function validateSendAmountFields(input: {
   note: string
   paymentPurpose: string
   isEasetag?: boolean
+  receiveCurrency?: string
 }): SendAmountFieldValidation {
   if (input.isEasetag) return { ok: true }
+  if (isUsOptionalReferenceCorridor(input)) return { ok: true }
   const mode = input.hints?.amount_field_mode ?? "note_optional_only"
   const note = input.note.trim()
   const purpose = input.paymentPurpose.trim()
@@ -84,7 +102,7 @@ export function validateSendAmountFields(input: {
     }
     return { ok: true }
   }
-  if (mode === "note" && !note) {
+  if (mode === "note" && !note && !input.hints?.reference_optional) {
     return { ok: false, message: "Enter a payment reference to continue." }
   }
   return { ok: true }

@@ -944,8 +944,8 @@
         "channel_id": "0369a140-8b18-51ca-8ce6-f1dff5ba0362",
         "payment_method_type": "BankAch",
         "form_schema_hash": "78eb203118e32b45",
-        "reference_required": true,
-        "reference_optional": false,
+        "reference_required": false,
+        "reference_optional": true,
         "needs_phone": false,
         "needs_email": false,
         "needs_address": true,
@@ -955,7 +955,7 @@
           "min": "2.5"
         },
         "processing_seconds": 3600,
-        "amount_field_mode": "note"
+        "amount_field_mode": "note_optional_only"
       }
     },
     {
