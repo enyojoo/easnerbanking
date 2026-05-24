@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react'
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { FlashList } from '@shopify/flash-list'
 import {
   View,
@@ -49,6 +49,8 @@ import { recipientService, RecipientData } from '../../lib/recipientService'
 import { useAuth } from '../../contexts/AuthContext'
 import { analytics } from '../../lib/analytics'
 import { useFocusRefresh } from '../../hooks/useFocusRefresh'
+import { useSendDestinations } from '../../hooks/useSendDestinations'
+import { useFocusEffect } from '@react-navigation/native'
 import { getAccountTypeConfigFromCurrency, formatFieldValue } from '../../lib/currencyAccountTypes'
 import { validateRequired, validateAccountNumber, validateIBAN } from '../../utils/validators'
 import { formatIBAN, formatSortCode, formatRoutingNumber, formatAccountNumber } from '../../utils/formatters'
@@ -172,6 +174,14 @@ function RecipientsContent({ navigation }: NavigationProps) {
       setJurisdictionCodes(p.codes)
     })
   }, [])
+
+  const { catalogVersion, refresh: refreshCatalog } = useSendDestinations()
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshCatalog()
+    }, [refreshCatalog]),
+  )
 
   const recipientCatalogFor = (type: RecipientType) =>
     getCatalogByRecipientTypeWithJurisdiction(type, jurisdictionPolicy)
@@ -342,17 +352,19 @@ function RecipientsContent({ navigation }: NavigationProps) {
       : selectedRecipientType === 'easenet'
         ? 'bank'
         : (selectedRecipientType || 'bank')
-  const filteredCurrencies = recipientCatalogFor(recipientTypeKey as RecipientType).filter((currency) => {
-    if (countrySearchTerm) {
-      const t = countrySearchTerm.toLowerCase()
-      return (
-        currency.currencyName.toLowerCase().includes(t) ||
-        currency.currencyCode.toLowerCase().includes(t) ||
-        currency.countryName.toLowerCase().includes(t)
-      )
-    }
-    return true
-  })
+  const filteredCurrencies = useMemo(() => {
+    return recipientCatalogFor(recipientTypeKey as RecipientType).filter((currency) => {
+      if (countrySearchTerm) {
+        const t = countrySearchTerm.toLowerCase()
+        return (
+          currency.currencyName.toLowerCase().includes(t) ||
+          currency.currencyCode.toLowerCase().includes(t) ||
+          currency.countryName.toLowerCase().includes(t)
+        )
+      }
+      return true
+    })
+  }, [recipientTypeKey, countrySearchTerm, catalogVersion, jurisdictionPolicy])
   const filteredProviderList = useMemo(
     () =>
       getRecipientProviders(
@@ -360,23 +372,45 @@ function RecipientsContent({ navigation }: NavigationProps) {
         'mobile_money',
         selectedCountryCurrency?.countryCode,
       ).filter((provider) => provider.toLowerCase().includes(providerSearchTerm.toLowerCase())),
-    [newRecipient.currency, selectedCountryCurrency?.countryCode, providerSearchTerm],
+    [newRecipient.currency, selectedCountryCurrency?.countryCode, providerSearchTerm, catalogVersion],
+  )
+  const walletAssetOptions = useMemo(() => getWalletAssets(), [catalogVersion])
+  const walletNetworkOptions = useMemo(
+    () => getWalletNetworksForAsset(newRecipient.currency),
+    [newRecipient.currency, catalogVersion],
   )
   const filteredWalletAssets = useMemo(
-    () => getWalletAssets().filter((asset) => asset.toLowerCase().includes(walletAssetSearchTerm.toLowerCase())),
-    [walletAssetSearchTerm],
+    () =>
+      walletAssetOptions.filter((asset) =>
+        asset.toLowerCase().includes(walletAssetSearchTerm.toLowerCase()),
+      ),
+    [walletAssetOptions, walletAssetSearchTerm],
   )
   const filteredWalletNetworks = useMemo(
     () =>
-      getWalletNetworksForAsset(newRecipient.currency).filter((network) =>
+      walletNetworkOptions.filter((network) =>
         network.toLowerCase().includes(walletNetworkSearchTerm.toLowerCase()),
       ),
-    [newRecipient.currency, walletNetworkSearchTerm],
+    [walletNetworkOptions, walletNetworkSearchTerm],
   )
-  const selectedCatalogEntry =
-    recipientCatalogFor(recipientTypeKey as RecipientType).find(
-      (item) => item.currencyCode === newRecipient.currency && item.countryCode === selectedCountryCurrency?.countryCode,
-    ) || recipientCatalogFor(recipientTypeKey as RecipientType).find((item) => item.currencyCode === newRecipient.currency)
+  const selectedCatalogEntry = useMemo(
+    () =>
+      recipientCatalogFor(recipientTypeKey as RecipientType).find(
+        (item) =>
+          item.currencyCode === newRecipient.currency &&
+          item.countryCode === selectedCountryCurrency?.countryCode,
+      ) ||
+      recipientCatalogFor(recipientTypeKey as RecipientType).find(
+        (item) => item.currencyCode === newRecipient.currency,
+      ),
+    [
+      recipientTypeKey,
+      newRecipient.currency,
+      selectedCountryCurrency?.countryCode,
+      catalogVersion,
+      jurisdictionPolicy,
+    ],
+  )
   const isAnyDropdownOpen =
     showCountryDropdown ||
     showProviderDropdown ||

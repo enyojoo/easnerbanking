@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react'
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import {
   View,
   Text,
@@ -87,6 +87,8 @@ import { CountryFlag } from '../../components/flags/CountryFlag'
 import RecipientFormDropdownList from '../../components/recipients/RecipientFormDropdownList'
 import { RecipientBankNameField } from '../../components/recipients/RecipientBankNameField'
 import { useToast } from '../../components/ToastProvider'
+import { useSendDestinations } from '../../hooks/useSendDestinations'
+import { useFocusEffect } from '@react-navigation/native'
 
 const getInitials = (name: string): string => {
   const parts = name.trim().split(' ')
@@ -179,6 +181,14 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       setJurisdictionCodes(p.codes)
     })
   }, [])
+
+  const { catalogVersion, refresh: refreshCatalog } = useSendDestinations()
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshCatalog()
+    }, [refreshCatalog]),
+  )
 
   const recipientCatalogFor = (type: RecipientType) =>
     getCatalogByRecipientTypeWithJurisdiction(type, jurisdictionPolicy)
@@ -700,20 +710,55 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       : selectedRecipientType === 'easenet'
         ? 'bank'
         : (selectedRecipientType || 'bank')
-  const filteredCurrencies = recipientCatalogFor(recipientTypeKey as RecipientType).filter((currency) => {
-    if (currencySearchTerm) {
-      return (
-        currency.currencyName.toLowerCase().includes(currencySearchTerm.toLowerCase()) ||
-        currency.currencyCode.toLowerCase().includes(currencySearchTerm.toLowerCase()) ||
-        currency.countryName.toLowerCase().includes(currencySearchTerm.toLowerCase())
-      )
-    }
-    return true
-  })
-  const selectedCatalogEntry =
-    recipientCatalogFor(recipientTypeKey as RecipientType).find(
-      (item) => item.currencyCode === newRecipient.currency && item.countryCode === selectedCountryCurrency?.countryCode,
-    ) || recipientCatalogFor(recipientTypeKey as RecipientType).find((item) => item.currencyCode === newRecipient.currency)
+  const filteredCurrencies = useMemo(() => {
+    return recipientCatalogFor(recipientTypeKey as RecipientType).filter((currency) => {
+      if (currencySearchTerm) {
+        return (
+          currency.currencyName.toLowerCase().includes(currencySearchTerm.toLowerCase()) ||
+          currency.currencyCode.toLowerCase().includes(currencySearchTerm.toLowerCase()) ||
+          currency.countryName.toLowerCase().includes(currencySearchTerm.toLowerCase())
+        )
+      }
+      return true
+    })
+  }, [recipientTypeKey, currencySearchTerm, catalogVersion, jurisdictionPolicy])
+  const walletAssetOptions = useMemo(() => getWalletAssets(), [catalogVersion])
+  const walletNetworkOptions = useMemo(
+    () => getWalletNetworksForAsset(newRecipient.currency),
+    [newRecipient.currency, catalogVersion],
+  )
+  const filteredWalletAssets = useMemo(
+    () =>
+      walletAssetOptions.filter((asset) =>
+        asset.toLowerCase().includes(walletAssetSearchTerm.toLowerCase()),
+      ),
+    [walletAssetOptions, walletAssetSearchTerm],
+  )
+  const filteredWalletNetworks = useMemo(
+    () =>
+      walletNetworkOptions.filter((network) =>
+        network.toLowerCase().includes(walletNetworkSearchTerm.toLowerCase()),
+      ),
+    [walletNetworkOptions, walletNetworkSearchTerm],
+  )
+  const selectedCatalogEntry = useMemo(
+    () =>
+      recipientCatalogFor(recipientTypeKey as RecipientType).find(
+        (item) =>
+          item.currencyCode === newRecipient.currency &&
+          item.countryCode === selectedCountryCurrency?.countryCode,
+      ) ||
+      recipientCatalogFor(recipientTypeKey as RecipientType).find(
+        (item) => item.currencyCode === newRecipient.currency,
+      ),
+    [
+      recipientTypeKey,
+      newRecipient.currency,
+      selectedCountryCurrency?.countryCode,
+      catalogVersion,
+      jurisdictionPolicy,
+    ],
+  )
   const isAnyDropdownOpen =
     showCurrencyDropdown ||
     showProviderDropdown ||
@@ -1443,11 +1488,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                           />
                         </View>
                         <RecipientFormDropdownList>
-                          {getWalletAssets()
-                            .filter((asset) =>
-                              asset.toLowerCase().includes(walletAssetSearchTerm.toLowerCase()),
-                            )
-                            .map((asset) => (
+                          {filteredWalletAssets.map((asset) => (
                               <Pressable
                                 key={asset}
                                 android_ripple={ripple.neutral}
@@ -1523,11 +1564,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                           />
                         </View>
                         <RecipientFormDropdownList>
-                          {getWalletNetworksForAsset(newRecipient.currency)
-                            .filter((network) =>
-                              network.toLowerCase().includes(walletNetworkSearchTerm.toLowerCase()),
-                            )
-                            .map((network) => (
+                          {filteredWalletNetworks.map((network) => (
                               <Pressable
                                 key={network}
                                 android_ripple={ripple.neutral}

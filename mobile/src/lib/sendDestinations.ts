@@ -8,8 +8,10 @@ import {
   type PayoutCorridorCacheShape,
 } from './recipientCatalog'
 
-const STORAGE_KEY = 'easner_send_destinations_v1'
+const STORAGE_KEY = 'easner_send_destinations_v2'
 const STORAGE_ETAG = 'easner_send_destinations_etag'
+
+const memory: { body?: SendDestinationsResponse; etag?: string } = {}
 
 export function usePayoutCorridorsCatalogMobile(): boolean {
   return process.env.EXPO_PUBLIC_USE_PAYOUT_CORRIDORS !== 'false'
@@ -23,60 +25,73 @@ function toCorridorCache(body: SendDestinationsResponse): PayoutCorridorCacheSha
   return { bank: body.fiat.bank_transfer, mobile: body.fiat.mobile_money }
 }
 
+export function applySendDestinationsBody(body: SendDestinationsResponse | null): void {
+  if (!body?.fiat) {
+    memory.body = undefined
+    setPayoutCorridorCache(null)
+    setCryptoDestinationsCache(null)
+    return
+  }
+  memory.body = body
+  setPayoutCorridorCache(toCorridorCache(body))
+  setCryptoDestinationsCache(body.crypto ?? [])
+}
+
+/** In-process catalog (hydrated from disk or last API refresh). */
+export function getSendDestinationsMemory(): SendDestinationsResponse | null {
+  return memory.body ?? null
+}
+
 export { getPayoutCorridorCache }
 
-export async function hydrateSendDestinationsFromStorage(): Promise<void> {
-  if (!useSendDestinationsCatalogMobile()) return
+export async function hydrateSendDestinationsFromStorage(): Promise<SendDestinationsResponse | null> {
+  if (!useSendDestinationsCatalogMobile()) return null
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY)
-    if (!raw) return
+    if (!raw) return memory.body ?? null
     const parsed = JSON.parse(raw) as SendDestinationsResponse
     if (parsed?.fiat) {
-      setPayoutCorridorCache(toCorridorCache(parsed))
-      setCryptoDestinationsCache(parsed.crypto ?? [])
+      applySendDestinationsBody(parsed)
+      const storedEtag = await AsyncStorage.getItem(STORAGE_ETAG)
+      if (storedEtag) memory.etag = storedEtag
     }
+    return memory.body ?? null
   } catch {
-    // ignore
+    return memory.body ?? null
   }
 }
 
 export async function refreshSendDestinations(): Promise<SendDestinationsResponse | null> {
   if (!useSendDestinationsCatalogMobile()) return null
   try {
-    const etag = (await AsyncStorage.getItem(STORAGE_ETAG)) || undefined
     const headers: Record<string, string> = {}
-    if (etag) headers['If-None-Match'] = etag
+    if (memory.etag) headers['If-None-Match'] = memory.etag
 
     const res = await apiRequest('/api/send-destinations?annotateProviders=true', { headers })
     if (res.status === 304) {
-      const raw = await AsyncStorage.getItem(STORAGE_KEY)
-      if (!raw) return null
-      return JSON.parse(raw) as SendDestinationsResponse
+      return memory.body ?? (await hydrateSendDestinationsFromStorage())
     }
-    if (!res.ok) return null
+    if (!res.ok) return memory.body ?? null
 
     const newEtag = res.headers.get('ETag')
-    if (newEtag) await AsyncStorage.setItem(STORAGE_ETAG, newEtag)
+    if (newEtag) {
+      memory.etag = newEtag
+      await AsyncStorage.setItem(STORAGE_ETAG, newEtag)
+    }
 
     const body = (await res.json()) as SendDestinationsResponse
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(body))
-    setPayoutCorridorCache(toCorridorCache(body))
-    setCryptoDestinationsCache(body.crypto ?? [])
+    applySendDestinationsBody(body)
     return body
   } catch (e) {
     console.warn('refreshSendDestinations', e)
-    return null
+    return memory.body ?? null
   }
 }
 
 export async function getCachedSendDestinations(): Promise<SendDestinationsResponse | null> {
-  try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY)
-    if (!raw) return null
-    return JSON.parse(raw) as SendDestinationsResponse
-  } catch {
-    return null
-  }
+  if (memory.body) return memory.body
+  return hydrateSendDestinationsFromStorage()
 }
 
 /** @deprecated use refreshSendDestinations */
