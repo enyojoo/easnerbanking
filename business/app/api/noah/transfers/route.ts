@@ -96,6 +96,10 @@ export async function POST(request: Request) {
   }
 
   const admin = createSupabaseAdmin()
+
+  // Single recipient fetch (was 2x); derive both the corridor gate row and the
+  // sell-prepare row from one query so we save one round-trip to Postgres.
+  let recipientRow: RecipientSellPrepareRow | null = null
   let gateRow: {
     country_code: string
     currency: string
@@ -111,28 +115,30 @@ export async function POST(request: Request) {
   if (recipientId) {
     const { data: rec } = await admin
       .from("recipients")
-      .select("country_code,currency,bank_name,mobile_provider,wallet_network,payee_easetag")
+      .select("*")
       .eq("id", recipientId)
       .eq("user_id", user.id)
       .maybeSingle()
-    if (rec) {
-      gateRow = {
-        country_code: String(rec.country_code || countryCode).toUpperCase(),
-        currency: String(rec.currency || fiatCurrency).toUpperCase(),
-        bank_name: rec.bank_name,
-        mobile_provider: rec.mobile_provider,
-        wallet_network: rec.wallet_network,
-        payee_easetag: rec.payee_easetag,
-      }
-      if (gateRow.wallet_network || gateRow.payee_easetag) {
-        return NextResponse.json(
-          {
-            error:
-              "Wallet and Easetag recipients cannot use balance Global Payout. Choose a bank or mobile money recipient.",
-          },
-          { status: 400 },
-        )
-      }
+    if (!rec) {
+      return NextResponse.json({ error: "Recipient not found." }, { status: 404 })
+    }
+    recipientRow = rec as RecipientSellPrepareRow
+    gateRow = {
+      country_code: String(rec.country_code || countryCode).toUpperCase(),
+      currency: String(rec.currency || fiatCurrency).toUpperCase(),
+      bank_name: rec.bank_name,
+      mobile_provider: rec.mobile_provider,
+      wallet_network: rec.wallet_network,
+      payee_easetag: rec.payee_easetag,
+    }
+    if (gateRow.wallet_network || gateRow.payee_easetag) {
+      return NextResponse.json(
+        {
+          error:
+            "Wallet and Easetag recipients cannot use balance Global Payout. Choose a bank or mobile money recipient.",
+        },
+        { status: 400 },
+      )
     }
   }
   const gate = await payoutCorridorGate(admin, gateRow, {
@@ -146,19 +152,6 @@ export async function POST(request: Request) {
    * (saves 2–4s on the PIN→send round-trip). If it 404s ("not found" on RDS) the session
    * has expired and we transparently re-prepare below.
    */
-  let recipientRow: RecipientSellPrepareRow | null = null
-  if (recipientId) {
-    const { data: rec } = await admin
-      .from("recipients")
-      .select("*")
-      .eq("id", recipientId)
-      .eq("user_id", user.id)
-      .maybeSingle()
-    if (!rec) {
-      return NextResponse.json({ error: "Recipient not found." }, { status: 404 })
-    }
-    recipientRow = rec as RecipientSellPrepareRow
-  }
 
   async function freshPrepare(): Promise<void> {
     if (!recipientRow) return
@@ -265,6 +258,13 @@ export async function POST(request: Request) {
     }
   }
 
+  // Kick off the business-org owner lookup in parallel with the Noah sell call so the
+  // ledger upsert below does not pay for it serially. Falls back to the auth user id.
+  const ownerLookupPromise =
+    noahCtx.scope === "business" && noahCtx.businessId
+      ? resolveBusinessOrgOwnerUserId(admin, noahCtx.businessId).catch(() => null)
+      : Promise.resolve(null)
+
   try {
     // Fast path: client-supplied FormSessionID + CryptoAuthorizedAmount from the on-screen
     // quote. ~70%+ of the time this is still alive on Noah's side and we save 2–4s of prepare.
@@ -324,12 +324,9 @@ export async function POST(request: Request) {
       sellMode: "form_session",
     })
     const { amount: txAmount, currency } = pickTxAmountAndCurrency(tx)
-    let txUserId = user.id
     const businessId = noahCtx.businessId
-    if (noahCtx.scope === "business" && noahCtx.businessId) {
-      const owner = await resolveBusinessOrgOwnerUserId(admin, noahCtx.businessId)
-      if (owner) txUserId = owner
-    }
+    const orgOwner = await ownerLookupPromise
+    const txUserId = orgOwner ?? user.id
     const walletCurrency = settlementWalletCurrencyForNoahCrypto(cryptoCurrencyRaw)
     const ledger = pickNoahGlobalPayoutLedgerFields(tx, {
       cryptoAuthorizedAmount,

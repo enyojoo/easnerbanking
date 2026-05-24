@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics'
 import type { QueryClient } from '@tanstack/react-query'
-import type { Scope } from '@easner/shared'
+import { qk, scopeKey, type Scope } from '@easner/shared'
 import { getApiBaseUrl, getNoahScopeHeaders } from '../lib/apiClient'
 import { supabase } from '../lib/supabase'
 import { noahService, type NoahTransfer } from '../lib/noahService'
@@ -10,6 +10,46 @@ import { isDraftEasenetRecipient } from '../lib/draftEasenetRecipient'
 import { invalidateRecipientsFeed } from '../query/refresh-user-feeds'
 import { recordRecipientSentTouch } from '../lib/recentSendRecipients'
 import { resolveRecipientEasetagForUi } from '../lib/easenetRecipientUi'
+import type { MobileTransactionRow } from './queries/use-transactions'
+
+type InfinitePages = {
+  pages: Array<{ transactions: MobileTransactionRow[]; nextCursor: string | null }>
+  pageParams: unknown[]
+}
+
+/**
+ * Insert a pending transaction row into every cached transactions list so the
+ * dashboard / feed reflect the user's intent immediately. Returns a rollback
+ * fn that restores the prior cache state if the network call fails.
+ */
+function insertOptimisticTransaction(
+  qc: QueryClient,
+  scope: Scope | undefined,
+  row: MobileTransactionRow,
+): () => void {
+  if (!scope) return () => {}
+  const entries = qc.getQueriesData<InfinitePages>({
+    queryKey: [...scopeKey(scope), 'transactions', 'list'],
+    exact: false,
+  })
+  const snapshots = entries.map(([key, data]) => [key, data] as const)
+  for (const [key, data] of entries) {
+    if (!data?.pages?.length) continue
+    const [first, ...rest] = data.pages
+    qc.setQueryData<InfinitePages>(key, {
+      ...data,
+      pages: [
+        { ...first, transactions: [row, ...first.transactions] },
+        ...rest,
+      ],
+    })
+  }
+  return () => {
+    for (const [key, data] of snapshots) {
+      qc.setQueryData(key, data)
+    }
+  }
+}
 
 function inferCountryFromRecipientCurrency(currency: string): string | undefined {
   const m: Record<string, string> = {
@@ -94,8 +134,27 @@ export async function executeBalanceSend(
 
   const canUseFiatBalance = selectedBalanceCurrency === 'USD' || selectedBalanceCurrency === 'EUR'
 
+  // Optimistic feed row — appears in the dashboard list instantly so the user
+  // does not see a delay between confirm and "Transfer pending". Reverted on error;
+  // replaced on success by `qk.transactions.root` invalidation in onSettled.
+  const optimisticId = `optimistic_${Date.now()}`
+  const rollbackOptimistic = insertOptimisticTransaction(ctx.qc, ctx.scope, {
+    id: optimisticId,
+    transaction_id: optimisticId,
+    transaction_type: 'send',
+    amount: String(receiveAmountValue || calculatedTotalAmount),
+    currency: (recipient.currency || selectedBalanceCurrency || '').toLowerCase(),
+    status: 'pending',
+    created_at: new Date().toISOString(),
+    noah_created_at: new Date().toISOString(),
+    direction: 'debit',
+    name: recipient.full_name || 'Transfer',
+    description: note?.trim() || null,
+  })
+
   let transfer: NoahTransfer
 
+  try {
   if (easetag) {
     transfer = await noahService.createWalletToWalletTransfer({
       destinationEasetag: easetag,
@@ -168,6 +227,15 @@ export async function executeBalanceSend(
         ...(input.paymentPurpose?.trim() ? { paymentPurpose: input.paymentPurpose.trim() } : {}),
       })
     }
+  }
+  } catch (e) {
+    rollbackOptimistic()
+    throw e
+  }
+
+  // Replace the optimistic row with authoritative data from the server.
+  if (ctx.scope) {
+    void ctx.qc.invalidateQueries({ queryKey: qk.transactions.root(ctx.scope), refetchType: 'active' })
   }
 
   const providerTxRef = transfer.transaction_id || transfer.id

@@ -1,4 +1,4 @@
-import { useQuery, type QueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, type QueryClient } from '@tanstack/react-query'
 import { mapNoahWalletRateRows } from '@easner/shared'
 import { noahService } from '../../lib/noahService'
 import type { ExchangeRate } from '../../types'
@@ -49,5 +49,9 @@ export function useNoahSendExchangeRates(
     staleTime: STALE_MS,
     gcTime: GC_MS,
     enabled,
+    // Show the previously-loaded currency's rates while the new one fetches so the
+    // SendAmount screen never flashes a "no rate" state when switching recipients.
+    // The hook also re-derives the rate by code, so consumers naturally ignore stale pairs.
+    placeholderData: keepPreviousData,
   })
 }
