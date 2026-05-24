@@ -24,12 +24,11 @@ import {
 import { RecipientForm } from "@/components/recipient-form"
 import type { Beneficiary } from "@/lib/recipient-types"
 import { coerceBeneficiaryEasenetDisplay, deleteRecipient, listRecipients } from "@/lib/recipients-store"
-import { RecipientPayoutProfileRow } from "@/components/recipient-payout-profile-row"
+import { SendSelectedRecipientSummary } from "@/components/send/send-selected-recipient-summary"
 import { useAuth } from "@/lib/auth-context"
 import { useRecipientsCached } from "@/hooks/use-recipients-cached"
 import { createSendFlowSeedForRecipient, persistSendFlowState } from "@/lib/send-flow-session"
 import { cn } from "@/lib/utils"
-import { EasenetRecipientProfileRowHydrated } from "@/components/easenet-recipient-profile-row-hydrated"
 
 export function SettingsRecipientsTab() {
   const router = useRouter()
@@ -197,28 +196,10 @@ export function SettingsRecipientsTab() {
                   className="flex items-center justify-between gap-3 p-4 border rounded-lg hover:bg-muted/50 transition-colors"
                 >
                     <div className="flex min-w-0 flex-1 items-center gap-3">
-                      {recipient.payeeEasetag ? (
-                        <EasenetRecipientProfileRowHydrated
-                          fullName={recipient.name}
-                          easetag={recipient.payeeEasetag}
-                          accountKind={recipient.payeeAccountKind}
-                          avatarUrl={recipient.avatarUrl}
-                          className="min-w-0 flex-1"
-                          nameClassName="font-semibold text-sm"
-                          subtitleClassName="text-xs text-muted-foreground"
-                        />
-                                            ) : (
-                        <RecipientPayoutProfileRow
-                          fullName={recipient.name}
-                          countryCode={recipient.countryCode}
-                          currency={recipient.currency}
-                          avatarUrl={recipient.avatarUrl}
-                          className="min-w-0 flex-1"
-                          nameClassName="text-sm font-semibold"
-                          subtitle={`${recipient.bankName} • ${recipient.fullAccountNumber} • ${recipient.currency}`}
-                          subtitleClassName="text-xs text-muted-foreground"
-                        />
-                      )}
+                      <SendSelectedRecipientSummary
+                        beneficiary={recipient}
+                        subtitleClassName="text-xs text-muted-foreground"
+                      />
                     </div>
                     <div className="flex items-center gap-2">
                       <Button

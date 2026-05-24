@@ -66,17 +66,11 @@ import {
 import type { SendDestinationsResponse } from '@easner/shared'
 import { getTokenIconUrl } from '../../lib/cryptoIcons'
 import type { Recipient } from '../../types'
-import {
-  EasenetSubtitleRow,
-  isEasenetRecipientRecord,
-  PayoutSubtitleRow,
-  resolveRecipientEasetagForUi,
-} from '../../lib/easenetRecipientUi'
-import { getPayoutRecipientSubtitleParts, isMobileMoneyRecipient } from '../../lib/recipientPayoutPreview'
-import { useEasenetRecipientHydration, type HydratedEasenetProfile } from '../../hooks/useEasenetRecipientHydration'
+import { resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
+import { isMobileMoneyRecipient } from '../../lib/recipientPayoutPreview'
+import { useEasenetRecipientHydration } from '../../hooks/useEasenetRecipientHydration'
 import { navigateToSendRecipientHub } from '../../lib/sendFlowNavigation'
-import { AvatarImage } from '../../components/AvatarImage'
-import { CachedImage } from '../../components/CachedImage'
+import { SendSelectedRecipientSummary } from '../../components/send/SendSelectedRecipientSummary'
 
 function isManualStablecoinCurrencyCode(code: string): boolean {
   const c = code.trim().toUpperCase()
@@ -341,13 +335,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
   // Run entrance animations
   useCalmParallelEnterWhen(true, headerAnim, contentAnim)
-
-  const getInitials = (fullName: string) => {
-    const parts = fullName.trim().split(' ').filter(Boolean)
-    if (parts.length === 0) return '??'
-    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase()
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-  }
 
   // Format amount with commas, optional decimal, max 2 decimals.
   const formatAmount = (rawValue: string): string => {
@@ -749,26 +736,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                     })
                   }} >
                   <Text style={styles.recipientLabel}>To:</Text>
-                  <SendRecipientAvatar recipient={recipient} getInitials={getInitials} easenetPreview={easenetDisplay} />
-                  <View style={styles.recipientInfo}>
-                    <Text style={styles.recipientName} numberOfLines={1} ellipsizeMode="tail">
-                      {isEasenetRecipientRecord(recipient) ? easenetDisplay.fullName : recipient.full_name}
-                    </Text>
-                    {isEasenetRecipientRecord(recipient) ? (
-                      <EasenetSubtitleRow
-                        easetag={resolveRecipientEasetagForUi(recipient)}
-                        accountKind={easenetDisplay.accountKind}
-                        textStyle={styles.recipientDetails}
-                        gap={4}
-                      />
-                    ) : (
-                      <PayoutSubtitleRow
-                        {...getPayoutRecipientSubtitleParts(recipient)}
-                        textStyle={styles.recipientDetails}
-                        gap={4}
-                      />
-                    )}
-                  </View>
+                  <SendSelectedRecipientSummary recipient={recipient} easenetPreview={easenetDisplay} />
                   <RotateCcw
                     size={17}
                     color={colors.text.primary}
@@ -1628,71 +1596,6 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontFamily: fontFamily.medium,
   },
-  recipientAvatarCircleWrap: {
-    position: 'relative',
-  },
-  recipientAvatarCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.primary.main + '15',
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
-  },
-  easenetMarkBadgeSmall: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    zIndex: 3,
-    elevation: 3,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: colors.background.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.background.primary,
-    overflow: 'hidden',
-  },
-  easenetMarkImgSmall: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-  },
-  /** Full-bleed inside circular clip (flag, token, or easetag photo) */
-  recipientAvatarFill: {
-    width: 36,
-    height: 36,
-    borderRadius: 0,
-  },
-  recipientAvatarInitials: {
-    ...textStyles.titleSmall,
-    color: colors.primary.main,
-    fontFamily: fontFamily.semibold,
-    fontWeight: '700',
-  },
-  recipientInfo: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingVertical: 0,
-  },
-  recipientName: {
-    ...textStyles.bodyLarge,
-    color: colors.text.primary,
-    fontFamily: fontFamily.semibold,
-    lineHeight: 18,
-    marginBottom: 0,
-  },
-  recipientDetails: {
-    ...textStyles.bodySmall,
-    color: colors.text.secondary,
-    fontFamily: fontFamily.regular,
-    lineHeight: 16,
-  },
   changeRecipientIcon: {
     marginLeft: 'auto',
   },
@@ -2113,103 +2016,3 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
 })
-
-function EasenetSendRecipientAvatar({
-  recipient,
-  getInitials,
-  easenetPreview,
-}: {
-  recipient: Recipient
-  getInitials: (name: string) => string
-  easenetPreview?: HydratedEasenetProfile | null
-}) {
-  const displayName = (easenetPreview?.fullName || recipient.full_name).trim()
-  const uri = String(easenetPreview?.avatarUrl || recipient.payee_avatar_url || '').trim()
-  const [imgFailed, setImgFailed] = useState(false)
-  useEffect(() => {
-    setImgFailed(false)
-  }, [uri])
-  return (
-    <View style={styles.recipientAvatarCircle}>
-      {uri && !imgFailed ? (
-        <AvatarImage
-          avatarUrl={uri}
-          style={styles.recipientAvatarFill}
-          onError={() => setImgFailed(true)}
-        />
-      ) : (
-        <Text style={styles.recipientAvatarInitials}>{getInitials(displayName)}</Text>
-      )}
-    </View>
-  )
-}
-
-function PayoutSendRecipientAvatar({
-  recipient,
-}: {
-  recipient: Recipient
-}) {
-  const isWalletRecipient = String(recipient.bank_name || '').toLowerCase().includes('wallet')
-  const tokenIcon = getTokenIconUrl(recipient.currency)
-  const countryCode =
-    recipient.country_code ||
-    (recipient.currency === 'EUR' ? 'EU' : getCountryCodeForCurrency(recipient.currency) || 'US')
-  const uri = String(recipient.payee_avatar_url || '').trim()
-  const [imgFailed, setImgFailed] = useState(false)
-  useEffect(() => {
-    setImgFailed(false)
-  }, [uri])
-
-  const hasPhoto = Boolean(uri && !imgFailed)
-
-  /** No photo: full-bleed flag or token in the circle (same visual weight as Easenet’s full-bleed photo). */
-  if (!hasPhoto) {
-    return (
-      <View style={styles.recipientAvatarCircle}>
-        {isWalletRecipient && tokenIcon ? (
-          <CachedImage uri={tokenIcon} style={styles.recipientAvatarFill} contentFit="cover" />
-        ) : (
-          <CountryFlag code={countryCode} size={36} style={styles.recipientAvatarFill} contentFit="cover" />
-        )}
-      </View>
-    )
-  }
-
-  /** Photo: match Easenet — large image in circle + small corner badge (network / country). */
-  return (
-    <View style={styles.recipientAvatarCircleWrap}>
-      <View style={styles.recipientAvatarCircle}>
-        <AvatarImage
-          avatarUrl={uri}
-          style={styles.recipientAvatarFill}
-          onError={() => setImgFailed(true)}
-        />
-      </View>
-      <View style={styles.easenetMarkBadgeSmall}>
-        {isWalletRecipient && tokenIcon ? (
-          <CachedImage uri={tokenIcon} style={styles.easenetMarkImgSmall} contentFit="cover" />
-        ) : (
-          <CountryFlag code={countryCode} size={16} style={styles.easenetMarkImgSmall} contentFit="contain" />
-        )}
-      </View>
-    </View>
-  )
-}
-
-function SendRecipientAvatar({
-  recipient,
-  getInitials,
-  easenetPreview,
-}: {
-  recipient: Recipient
-  getInitials: (name: string) => string
-  easenetPreview?: HydratedEasenetProfile | null
-}) {
-  const isEasenet = isEasenetRecipientRecord(recipient)
-
-  if (isEasenet) {
-    return <EasenetSendRecipientAvatar recipient={recipient} getInitials={getInitials} easenetPreview={easenetPreview} />
-  }
-
-  return <PayoutSendRecipientAvatar recipient={recipient} />
-}

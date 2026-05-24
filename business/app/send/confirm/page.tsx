@@ -15,7 +15,7 @@ import { getCurrencySymbol } from "@/lib/utils"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 import type { Beneficiary } from "@/lib/recipient-types"
 import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
-import { EasenetRecipientProfileRowHydrated } from "@/components/easenet-recipient-profile-row-hydrated"
+import { SendSelectedRecipientSummary } from "@/components/send/send-selected-recipient-summary"
 import { generateTransactionId, isEasnerClientTransactionIdFormat } from "@/lib/transaction-id"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { dataCache, CACHE_KEYS, requestBusinessAccountsRefresh } from "@/lib/cache"
@@ -23,7 +23,7 @@ import { isEasetagLedgerP2PEnabled } from "@/lib/ledger/easetag-transfer"
 import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { refetchBusinessMoneyQueries } from "@/lib/query/refresh-after-money-move"
 import { useScope } from "@/lib/query/scope"
-import { ArrowLeft, User, Copy, Check, Loader2 } from "lucide-react"
+import { ArrowLeft, Copy, Check, Loader2 } from "lucide-react"
 
 const SEND_FLOW_STATE_KEY = "send_flow_state"
 
@@ -512,25 +512,9 @@ export default function SendConfirmPage() {
               </span>
             </div>
           )}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
+          <div className="space-y-2 border-b pb-4">
             <span className="text-sm text-muted-foreground">Recipient</span>
-            <div className="flex min-w-0 flex-1 justify-end">
-              {isEasenetRecipient(state.recipient) && state.recipient.payeeEasetag ? (
-                <EasenetRecipientProfileRowHydrated
-                  className="max-w-full"
-                  fullName={state.recipient.name}
-                  easetag={state.recipient.payeeEasetag}
-                  accountKind={state.recipient.payeeAccountKind}
-                  avatarUrl={state.recipient.avatarUrl}
-                  subtitleClassName="text-sm text-muted-foreground"
-                />
-              ) : (
-                <div className="flex max-w-full items-center gap-2">
-                  <User className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <span className="truncate font-medium">{state.recipient.name}</span>
-                </div>
-              )}
-            </div>
+            <SendSelectedRecipientSummary beneficiary={state.recipient} />
           </div>
           {sourceAccount && (
             <div className="flex items-center justify-between border-b pb-4">
@@ -548,28 +532,34 @@ export default function SendConfirmPage() {
             <span className="text-sm text-muted-foreground">Processing time</span>
             <span className="font-medium">{processingTime}</span>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Noah fee</span>
-            <span className="font-semibold">
-              {getCurrencySymbol(state.sendCurrency)}
-              {transferFee.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Exchange rate</span>
-            <span className="font-semibold">
-              {hasFx
-                ? formatSendRateLabel(state.sendCurrency, state.receiveCurrency, exchangeRate)
-                : formatExchangeRate(exchangeRate)}
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Easner fee</span>
-            <span className="font-semibold">
-              {getCurrencySymbol(state.sendCurrency)}
-              {payoutFee.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-            </span>
-          </div>
+          {!easenetSend && (payoutQuoteLoading || transferFee > 0) ? (
+            <div className="flex items-center justify-between border-b pb-4">
+              <span className="text-sm text-muted-foreground">Exchange fee</span>
+              <span className="font-semibold">
+                {payoutQuoteLoading
+                  ? "…"
+                  : `${getCurrencySymbol(state.sendCurrency)}${transferFee.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+              </span>
+            </div>
+          ) : null}
+          {!easenetSend && hasFx ? (
+            <div className="flex items-center justify-between border-b pb-4">
+              <span className="text-sm text-muted-foreground">Exchange rate</span>
+              <span className="font-semibold">
+                {formatSendRateLabel(state.sendCurrency, state.receiveCurrency, exchangeRate)}
+              </span>
+            </div>
+          ) : null}
+          {!easenetSend && (payoutQuoteLoading || payoutFee > 0) ? (
+            <div className="flex items-center justify-between border-b pb-4">
+              <span className="text-sm text-muted-foreground">Processing fee</span>
+              <span className="font-semibold">
+                {payoutQuoteLoading
+                  ? "…"
+                  : `${getCurrencySymbol(state.sendCurrency)}${payoutFee.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+              </span>
+            </div>
+          ) : null}
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Total recipient amount</span>
             <span className="font-semibold">

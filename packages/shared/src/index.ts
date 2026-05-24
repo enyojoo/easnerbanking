@@ -81,6 +81,17 @@ export {
   resolveEffectivePayoutMin,
 } from "./payout-business-limits"
 export {
+  beneficiaryToPayoutSubtitleInput,
+  formatAccountNumberDigits,
+  formatIbanDisplay,
+  formatPayoutRecipientSubtitle,
+  getPayoutRecipientSubtitleParts,
+  isMobileMoneyPayoutRow,
+  isWalletPayoutRow,
+  truncateMiddle,
+  type PayoutRecipientSubtitleInput,
+} from "./payout-recipient-subtitle"
+export {
   computeEnteredAmountForReceiveMin,
   computePayoutReceiveAmount,
   PAYOUT_MIN_ENFORCE_DEBOUNCE_MS,

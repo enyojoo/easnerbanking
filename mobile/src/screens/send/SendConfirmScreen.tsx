@@ -30,6 +30,8 @@ import { noahService } from '../../lib/noahService'
 import type { PayoutPrepareSession } from '../../hooks/executeBalanceSend'
 import { resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
 import { isMobileMoneyRecipient } from '../../lib/recipientPayoutPreview'
+import { useEasenetRecipientHydration } from '../../hooks/useEasenetRecipientHydration'
+import { SendSelectedRecipientSummary } from '../../components/send/SendSelectedRecipientSummary'
 import { getCachedSendDestinations } from '../../lib/sendDestinations'
 import { isEasnerClientTransactionIdFormat } from '../../lib/transactionId'
 
@@ -123,6 +125,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   } = pricing
 
   const easetagUi = recipient ? resolveRecipientEasetagForUi(recipient) : ''
+  const easenetDisplay = useEasenetRecipientHydration(recipient ?? null)
   const sendDestinations = getCachedSendDestinations()
   const payoutRail = recipient && isMobileMoneyRecipient(recipient) ? 'mobile_money' : 'bank_transfer'
   const payoutHints =
@@ -395,30 +398,50 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             <View style={styles.card}>
               <Row label="You send" value={`${fmtMoney(calculatedSendingAmount, selectedBalanceCurrency)} ${selectedBalanceCurrency}`} />
-              {!easetagUi && (noahFee > 0 || quoteLoading) ? (
+              {!easetagUi ? (
+                <>
+                  {quoteLoading || noahFee > 0 ? (
+                    <Row
+                      label="Exchange fee"
+                      value={quoteLoading ? '…' : fmtMoney(noahFee, selectedBalanceCurrency)}
+                    />
+                  ) : null}
+                  {quoteLoading || easnerFee > 0 || calculatedFeeAmount > 0 ? (
+                    <Row
+                      label="Processing fee"
+                      value={
+                        quoteLoading
+                          ? '…'
+                          : fmtMoney(easnerFee || calculatedFeeAmount, selectedBalanceCurrency)
+                      }
+                    />
+                  ) : null}
+                </>
+              ) : calculatedFeeAmount > 0 ? (
                 <Row
-                  label="Noah fee"
-                  value={quoteLoading ? '…' : fmtMoney(noahFee, selectedBalanceCurrency)}
+                  label="Processing fee"
+                  value={fmtMoney(calculatedFeeAmount, selectedBalanceCurrency)}
                 />
               ) : null}
-              {!easetagUi ? (
-                <Row
-                  label="Easner fee"
-                  value={quoteLoading ? '…' : fmtMoney(easnerFee || calculatedFeeAmount, selectedBalanceCurrency)}
-                />
-              ) : (
-                <Row label="Fees" value={fmtMoney(calculatedFeeAmount, selectedBalanceCurrency)} />
-              )}
               <Row label="Total debited" value={`${fmtMoney(calculatedTotalAmount, selectedBalanceCurrency)} ${selectedBalanceCurrency}`} bold />
               <Row label="Recipient gets" value={`${fmtMoney(receiveAmountValue, receiveCurrency)} ${receiveCurrency}`} />
               {arrivalHint && !easetagUi ? (
                 <Row label="Arrival" value={arrivalHint} />
               ) : null}
-              <Row
-                label="To"
-                value={recipient.full_name}
-                last={!displayTransactionId && !pricingQuoteExpiry}
-              />
+              {recipient ? (
+                <View
+                  style={[
+                    styles.recipientRow,
+                    !displayTransactionId && !pricingQuoteExpiry && styles.rowLast,
+                  ]}
+                >
+                  <Text style={styles.rowLabel}>Recipient</Text>
+                  <SendSelectedRecipientSummary
+                    recipient={recipient}
+                    easenetPreview={easenetDisplay}
+                  />
+                </View>
+              ) : null}
               {displayTransactionId ? (
                 <Row label="Transaction ID" value={displayTransactionId} last={!pricingQuoteExpiry} />
               ) : null}
@@ -517,6 +540,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
     marginBottom: 0,
     paddingBottom: 0,
+  },
+  recipientRow: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border.light,
+    paddingBottom: spacing[3],
+    marginBottom: spacing[3],
+    gap: spacing[2],
   },
   rowLabel: {
     ...textStyles.caption,

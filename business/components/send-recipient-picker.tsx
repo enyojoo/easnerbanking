@@ -14,14 +14,12 @@ import { RecipientForm } from "@/components/recipient-form"
 import type { Beneficiary } from "@/lib/recipient-types"
 import { Label } from "@/components/ui/label"
 import { Search, Plus, ChevronDown, Loader2 } from "lucide-react"
-import { RecipientPayoutProfileRow } from "@/components/recipient-payout-profile-row"
+import { SendSelectedRecipientSummary } from "@/components/send/send-selected-recipient-summary"
 import { useRecipientsCached } from "@/hooks/use-recipients-cached"
 import { fetchEasenetProfileByTag } from "@/lib/easenet-profile"
 import { buildDraftEasetagBeneficiary } from "@/lib/draft-easetag-beneficiary"
 import { filterBeneficiariesBySearch } from "@/lib/send-hub-recipient-search"
 import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
-import { EasenetRecipientProfileRowHydrated } from "@/components/easenet-recipient-profile-row-hydrated"
-
 interface SendRecipientPickerProps {
   selected: Beneficiary | null
   onSelect: (recipient: Beneficiary | null) => void
@@ -159,27 +157,7 @@ export function SendRecipientPicker({
         className="flex w-full items-center justify-between rounded-lg border border-input bg-background px-4 py-3 text-left transition-colors hover:bg-muted/50 focus:outline-none focus:ring-0 focus:ring-offset-0 focus:border-ring"
       >
         {selected ? (
-          <div className="flex min-w-0 flex-1 items-center gap-3">
-            {selected.payeeEasetag ? (
-              <EasenetRecipientProfileRowHydrated
-                fullName={selected.name}
-                easetag={selected.payeeEasetag}
-                accountKind={selected.payeeAccountKind}
-                avatarUrl={selected.avatarUrl}
-                className="min-w-0 flex-1"
-                subtitleClassName="text-sm text-muted-foreground"
-              />
-            ) : (
-              <RecipientPayoutProfileRow
-                fullName={selected.name}
-                countryCode={selected.countryCode}
-                currency={selected.currency}
-                avatarUrl={selected.avatarUrl}
-                className="min-w-0 flex-1"
-                subtitle={`${selected.currency} • ${selected.fullAccountNumber}`}
-              />
-            )}
-          </div>
+          <SendSelectedRecipientSummary beneficiary={selected} />
         ) : (
           <span className="text-muted-foreground">Select recipient</span>
         )}
@@ -237,26 +215,10 @@ export function SendRecipientPicker({
                   onClick={() => handleSelect(b)}
                   className="flex w-full items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left transition-colors hover:bg-muted hover:border-input"
                 >
-                  {b.payeeEasetag ? (
-                    <EasenetRecipientProfileRowHydrated
-                      fullName={b.name}
-                      easetag={b.payeeEasetag}
-                      accountKind={b.payeeAccountKind}
-                      avatarUrl={b.avatarUrl}
-                      className="min-w-0 flex-1"
-                      subtitleClassName="text-xs text-muted-foreground"
-                    />
-                  ) : (
-                    <RecipientPayoutProfileRow
-                      fullName={b.name}
-                      countryCode={b.countryCode}
-                      currency={b.currency}
-                      avatarUrl={b.avatarUrl}
-                      className="min-w-0 flex-1"
-                      subtitle={`${b.bankName} • ${b.currency}`}
-                      subtitleClassName="text-xs text-muted-foreground"
-                    />
-                  )}
+                  <SendSelectedRecipientSummary
+                    beneficiary={b}
+                    subtitleClassName="text-xs text-muted-foreground"
+                  />
                 </button>
               ))}
             </div>
