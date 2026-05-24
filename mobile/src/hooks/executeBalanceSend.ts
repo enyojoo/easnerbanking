@@ -165,6 +165,7 @@ export async function executeBalanceSend(
         ...(payoutSession.channelId ? { channelId: payoutSession.channelId } : {}),
         recipientId: recipient.id,
         ...(note?.trim() ? { note: note.trim() } : {}),
+        ...(input.paymentPurpose?.trim() ? { paymentPurpose: input.paymentPurpose.trim() } : {}),
       })
     }
   }

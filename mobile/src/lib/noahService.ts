@@ -1003,6 +1003,7 @@ export const noahService = {
     channelId?: string
     recipientId?: string
     note?: string
+    paymentPurpose?: string
   }): Promise<NoahTransfer> {
     const session = await requireAuthSession()
     const scopeHeaders = await getNoahScopeHeaders()

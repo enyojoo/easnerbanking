@@ -9,6 +9,10 @@ import { getNoahSettlementCryptoCurrency } from "@/lib/noah/config"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { payoutCorridorGate, requireExecutableProviderChannel } from "@/lib/payout-corridor-validation"
 import { mapNoahPrepareError } from "@/lib/noah/noah-prepare-errors"
+import {
+  prepareSellFromRecipientRow,
+  type RecipientSellPrepareRow,
+} from "@/lib/terminal/recipient-sell-prepare"
 
 export async function POST(request: Request) {
   const mis = requireNoahEnv()
@@ -31,12 +35,13 @@ export async function POST(request: Request) {
         channelId?: string
         recipientId?: string
         note?: string
+        paymentPurpose?: string
       }
     | null
 
   const sourceWalletId = String(body?.sourceWalletId || "").trim()
-  const formSessionId = String(body?.formSessionId || "").trim()
-  const cryptoAuthorizedAmount = String(body?.cryptoAuthorizedAmount || "").trim()
+  let formSessionId = String(body?.formSessionId || "").trim()
+  let cryptoAuthorizedAmount = String(body?.cryptoAuthorizedAmount || "").trim()
   const cryptoCurrencyRaw = String(body?.cryptoCurrency || getNoahSettlementCryptoCurrency()).trim()
   const amountRaw = String(body?.amount ?? "").trim()
   const currencyRaw = String(body?.currency || "").trim().toUpperCase()
@@ -48,6 +53,8 @@ export async function POST(request: Request) {
   const channelId = String(body?.channelId || "").trim()
   const recipientId = String(body?.recipientId || "").trim()
   const sendNote = typeof body?.note === "string" ? body.note.trim() : ""
+  const sendPaymentPurpose =
+    typeof body?.paymentPurpose === "string" ? body.paymentPurpose.trim() : ""
 
   const isFormSessionSell =
     Boolean(formSessionId) &&
@@ -112,6 +119,44 @@ export async function POST(request: Request) {
     requireExecutableNoahChannel: requireExecutableProviderChannel(),
   })
   if (gate) return gate
+
+  /** Fresh prepare immediately before sell — quote FormSessionIDs go stale after PIN / delay. */
+  if (recipientId) {
+    const { data: rec } = await admin
+      .from("recipients")
+      .select("*")
+      .eq("id", recipientId)
+      .eq("user_id", user.id)
+      .maybeSingle()
+    if (!rec) {
+      return NextResponse.json({ error: "Recipient not found." }, { status: 404 })
+    }
+    try {
+      const prepared = await prepareSellFromRecipientRow({
+        row: rec as RecipientSellPrepareRow,
+        fiatAmount: amount,
+        cryptoCurrency: cryptoCurrencyRaw,
+        noahCustomerId: noahCtx.noahCustomerId,
+        overrides:
+          sendNote || sendPaymentPurpose
+            ? {
+                ...(sendNote ? { note: sendNote } : {}),
+                ...(sendPaymentPurpose ? { paymentPurpose: sendPaymentPurpose } : {}),
+              }
+            : undefined,
+      })
+      formSessionId = String(prepared.prep.formSessionId || "").trim()
+      cryptoAuthorizedAmount = String(prepared.prep.cryptoAuthorizedAmount || "").trim()
+      if (!formSessionId || !cryptoAuthorizedAmount) {
+        return NextResponse.json(
+          { error: "Could not prepare payout session. Go back and get a fresh quote." },
+          { status: 400 },
+        )
+      }
+    } catch (e) {
+      return NextResponse.json({ error: mapNoahPrepareError(e) }, { status: 400 })
+    }
+  }
 
   const sellPayloadPascal = {
     CustomerID: noahCtx.noahCustomerId,

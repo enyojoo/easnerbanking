@@ -338,6 +338,7 @@ export default function SendConfirmPage() {
         ...(state.payoutQuote?.channelId ? { channelId: state.payoutQuote.channelId } : {}),
         recipientId: state.recipient.id,
         ...(state.note ? { note: state.note } : {}),
+        ...(state.paymentPurpose ? { paymentPurpose: state.paymentPurpose } : {}),
       }
 
       const transferRes = await fetchWithSession("/api/noah/transfers", {

@@ -22,6 +22,9 @@ export function mapNoahPrepareError(e: unknown): string {
     if (e.status === 401 || e.status === 403) {
       return "Payout authorization failed. Check your Noah verification status."
     }
+    if (msg.includes("invalid request") || msg === "bad request") {
+      return "Payout could not be completed. Go back, tap Continue again for a fresh quote, then confirm. If it persists, re-save the recipient (bank, reference, or phone)."
+    }
     return e.message.slice(0, 280)
   }
   if (e instanceof Error) return e.message
