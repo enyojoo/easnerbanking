@@ -1,5 +1,6 @@
 import { noahFetch } from "@/lib/noah/http"
 import { logNoahPayoutFailure } from "@/lib/noah/log-noah-payout-failure"
+
 export type SellPrepareResult = {
   formSessionId?: string
   cryptoAuthorizedAmount?: string
@@ -12,6 +13,7 @@ export type SellPrepareResult = {
 export type NoahFormNextStep = {
   stepId: string
   stepType: string
+  schema?: Record<string, unknown>
 }
 
 function deepFindPaymentMethodId(obj: unknown): string | null {
@@ -48,8 +50,11 @@ export function parseNoahFormNextStep(raw: Record<string, unknown>): NoahFormNex
   const o = ns as Record<string, unknown>
   const stepId = String(o.StepID ?? o.stepId ?? "").trim()
   const stepType = String(o.StepType ?? o.stepType ?? "").trim()
+  const schemaRaw = o.Schema ?? o.schema
+  const schema =
+    schemaRaw && typeof schemaRaw === "object" ? (schemaRaw as Record<string, unknown>) : undefined
   if (!stepId && !stepType) return null
-  return { stepId, stepType }
+  return { stepId, stepType, schema }
 }
 
 export function sellFormSessionNeedsFinalize(raw: Record<string, unknown>): boolean {
@@ -59,6 +64,54 @@ export function sellFormSessionNeedsFinalize(raw: Record<string, unknown>): bool
   const status = String(raw.FormSessionStatus ?? raw.formSessionStatus ?? "").toLowerCase()
   if (status && !/(complete|completed|done)/.test(status)) return true
   return false
+}
+
+/** Build Form payload for Noah Ack steps (e.g. Cob = beneficiary confirmation). */
+export function buildAckFormForNextStep(next: NoahFormNextStep): Record<string, unknown> {
+  const schema = next.schema
+  if (schema && typeof schema === "object") {
+    const props = schema.properties as Record<string, unknown> | undefined
+    if (props && typeof props === "object") {
+      const form: Record<string, unknown> = {}
+      for (const [key, def] of Object.entries(props)) {
+        const d = def as Record<string, unknown>
+        if (d.type === "boolean") form[key] = true
+        else if (d.const !== undefined) form[key] = d.const
+      }
+      if (Object.keys(form).length > 0) return form
+    }
+  }
+  const id = next.stepId.trim()
+  if (!id) return {}
+  return { [id]: { Confirmed: true, Acknowledged: true } }
+}
+
+function uniqueFormCandidates(
+  next: NoahFormNextStep | null,
+  initialForm: Record<string, unknown>,
+): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = []
+  const seen = new Set<string>()
+  const push = (form: Record<string, unknown>) => {
+    const key = JSON.stringify(form)
+    if (seen.has(key)) return
+    seen.add(key)
+    out.push(form)
+  }
+
+  if (next) {
+    push(buildAckFormForNextStep(next))
+    if (next.stepId) {
+      push({ [next.stepId]: true })
+      push({ [next.stepId]: { Confirmed: true } })
+    }
+    if (next.stepType.toLowerCase() === "dataentry" && Object.keys(initialForm).length > 0) {
+      push(initialForm)
+    }
+  }
+  push({})
+  if (Object.keys(initialForm).length > 0) push(initialForm)
+  return out
 }
 
 async function postSellPrepare(body: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -92,10 +145,22 @@ async function postSellPrepare(body: Record<string, unknown>): Promise<Record<st
   }
 }
 
+export function assertSellFormSessionReady(prep: SellPrepareResult): void {
+  if (!String(prep.formSessionId || "").trim()) {
+    throw new Error("Noah prepare did not return a form session.")
+  }
+  if (!sellFormSessionNeedsFinalize(prep.raw)) return
+  const next = parseNoahFormNextStep(prep.raw)
+  const step = next?.stepId ? ` (pending ${next.stepId})` : ""
+  throw new Error(
+    `Payout setup did not finish${step}. Check the recipient bank details and try again.`,
+  )
+}
+
 /**
  * Noah Reliance sell often leaves a pending form step (e.g. Cob = beneficiary confirmation)
- * after the first prepare when DelayedSell is true. A follow-up prepare completes the session
- * before POST /transactions/sell.
+ * after the first prepare when DelayedSell is true. Follow-up prepare calls with FormSessionID
+ * submit the Ack/DataEntry payload before POST /transactions/sell.
  */
 export async function finalizeSellFormSessionAfterPrepare(input: {
   channelId: string
@@ -110,44 +175,57 @@ export async function finalizeSellFormSessionAfterPrepare(input: {
 
   let raw = input.prep.raw
   let result = input.prep
-  const formVariants: Record<string, unknown>[] = [{}, input.initialForm]
+  if (!sellFormSessionNeedsFinalize(raw)) return result
 
-  for (let attempt = 0; attempt < 4; attempt++) {
-    const needs =
-      attempt === 0 ||
-      sellFormSessionNeedsFinalize(raw) ||
-      parseNoahFormNextStep(raw)?.stepId.toLowerCase() === "cob"
-    if (!needs) break
+  const tried = new Set<string>()
 
+  for (let round = 0; round < 8 && sellFormSessionNeedsFinalize(raw); round++) {
     const next = parseNoahFormNextStep(raw)
-    const useEmptyForm =
-      !next || next.stepType.toLowerCase() === "ack" || next.stepId.toLowerCase() === "cob"
-    const form = useEmptyForm ? formVariants[0]! : formVariants[1]!
+    const forms = uniqueFormCandidates(next, input.initialForm)
 
-    try {
-      raw = await postSellPrepare({
-        ChannelID: input.channelId,
-        CryptoCurrency: input.cryptoCurrency,
-        FiatAmount: input.fiatAmount,
-        FormSessionID: formSessionId,
-        Form: form,
-        DelayedSell: false,
-        ...(input.customerId ? { CustomerID: input.customerId } : {}),
-        ...(result.paymentMethodId ? { PaymentMethodID: result.paymentMethodId } : {}),
-      })
-      result = parsePrepareSellRaw(raw)
-      if (!sellFormSessionNeedsFinalize(raw)) break
-    } catch (e) {
-      logNoahPayoutFailure("prepare_finalize", e, {
-        channelId: input.channelId,
-        formSessionIdPrefix: formSessionId.slice(0, 12),
-        paymentMethodId: result.paymentMethodId ?? null,
-        attempt,
-        nextStep: next ?? null,
-      })
-      if (attempt === 0 && useEmptyForm) continue
-      break
+    for (const delayedSell of [true, false] as const) {
+      for (const form of forms) {
+        const attemptKey = JSON.stringify({ form, delayedSell, round })
+        if (tried.has(attemptKey)) continue
+        tried.add(attemptKey)
+
+        try {
+          raw = await postSellPrepare({
+            ChannelID: input.channelId,
+            CryptoCurrency: input.cryptoCurrency,
+            FiatAmount: input.fiatAmount,
+            FormSessionID: formSessionId,
+            Form: form,
+            DelayedSell: delayedSell,
+            ...(input.customerId ? { CustomerID: input.customerId } : {}),
+            ...(result.paymentMethodId ? { PaymentMethodID: result.paymentMethodId } : {}),
+          })
+          result = parsePrepareSellRaw(raw)
+          if (!sellFormSessionNeedsFinalize(raw)) return result
+        } catch (e) {
+          logNoahPayoutFailure("prepare_finalize", e, {
+            channelId: input.channelId,
+            formSessionIdPrefix: formSessionId.slice(0, 12),
+            paymentMethodId: result.paymentMethodId ?? null,
+            round,
+            delayedSell,
+            nextStep: next ?? null,
+            formKeys: Object.keys(form),
+          })
+        }
+      }
     }
+  }
+
+  if (sellFormSessionNeedsFinalize(raw)) {
+    const next = parseNoahFormNextStep(raw)
+    logNoahPayoutFailure("prepare_finalize_incomplete", new Error("form session incomplete"), {
+      channelId: input.channelId,
+      formSessionIdPrefix: formSessionId.slice(0, 12),
+      nextStep: next ?? null,
+      formSessionComplete: raw.FormSessionComplete ?? raw.formSessionComplete ?? null,
+    })
+    assertSellFormSessionReady(result)
   }
 
   return result

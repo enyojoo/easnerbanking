@@ -1,5 +1,6 @@
 import { noahFetch } from "./http"
 import {
+  assertSellFormSessionReady,
   finalizeSellFormSessionAfterPrepare,
   parsePrepareSellRaw,
   type SellPrepareResult,
@@ -176,6 +177,7 @@ export async function prepareSellTransaction(input: {
     initialForm: input.form,
     prep,
   })
+  assertSellFormSessionReady(prep)
   return prep
 }
 

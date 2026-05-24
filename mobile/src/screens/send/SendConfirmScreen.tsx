@@ -21,7 +21,6 @@ import type { Recipient, User } from '../../types'
 import {
   colors,
   surfaceChromeCircleStyle,
-  surfaceFrameStyle,
   textStyles,
   borderRadius,
   spacing,
@@ -561,11 +560,11 @@ function FromBalanceRow({ currency }: { currency: string }) {
   return (
     <View style={styles.fromRow}>
       <Text style={styles.rowLabel}>From</Text>
-      <View style={styles.fromBalancePill}>
+      <View style={styles.fromBalanceInline}>
         <View style={styles.fromFlagContainer}>
           <CurrencyFlag currency={currency} size={22} style={styles.fromFlagImage} />
         </View>
-        <Text style={styles.fromBalancePillText} numberOfLines={1}>
+        <Text style={styles.fromBalanceText} numberOfLines={1}>
           {currency} Balance
         </Text>
       </View>
@@ -672,16 +671,13 @@ const styles = StyleSheet.create({
     paddingBottom: spacing[3],
     marginBottom: spacing[3],
   },
-  fromBalancePill: {
+  fromBalanceInline: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: spacing[2],
     flexShrink: 1,
     maxWidth: '72%',
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.full }),
+    justifyContent: 'flex-end',
   },
   fromFlagContainer: {
     ...surfaceChromeCircleStyle(colors, 22, { shadow: 'none' }),
@@ -692,7 +688,7 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 11,
   },
-  fromBalancePillText: {
+  fromBalanceText: {
     flexShrink: 1,
     fontSize: 14,
     color: colors.text.primary,
