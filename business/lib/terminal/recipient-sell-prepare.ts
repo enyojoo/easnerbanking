@@ -320,7 +320,7 @@ export async function prepareSellFromRecipientRow(input: {
         bankName,
         fullName,
         phone: row.phone_number ?? undefined,
-        email: overrides?.email || row.email ?? undefined,
+        email: overrides?.email || row.email || undefined,
         address: addressFromRow(row),
         paymentPurpose: paymentPurpose || note,
         reference: note,
