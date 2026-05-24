@@ -109,8 +109,10 @@ export async function prepareSellFromRecipientRow(input: {
   cryptoCurrency: string
   noahCustomerId: string
   overrides?: SellPrepareOverrides
+  commitForExecution?: boolean
 }): Promise<{ channelId: string; prep: Awaited<ReturnType<typeof prepareSellTransaction>> }> {
-  const { row, fiatAmount, cryptoCurrency, noahCustomerId, overrides } = input
+  const { row, fiatAmount, cryptoCurrency, noahCustomerId, overrides, commitForExecution } = input
+  const execCommit = commitForExecution ?? false
   const fiat = fiatAmount.toFixed(2)
   const country = resolveRecipientPayoutCountry(row)
   const fiatCurrency = String(row.currency || "").toUpperCase()
@@ -152,6 +154,7 @@ export async function prepareSellFromRecipientRow(input: {
       fiatAmount: fiat,
       form,
       customerId: noahCustomerId,
+      commitForExecution: execCommit,
     })
     return { channelId: picked.channelId, prep }
   }
@@ -184,6 +187,7 @@ export async function prepareSellFromRecipientRow(input: {
       fiatAmount: fiat,
       form,
       customerId: noahCustomerId,
+      commitForExecution: execCommit,
     })
     return { channelId: channel.channelId, prep }
   }
@@ -223,6 +227,7 @@ export async function prepareSellFromRecipientRow(input: {
       fiatAmount: fiat,
       form,
       customerId: noahCustomerId,
+      commitForExecution: execCommit,
     })
     return { channelId: channel.channelId, prep }
   }
@@ -265,6 +270,7 @@ export async function prepareSellFromRecipientRow(input: {
       fiatAmount: fiat,
       form,
       customerId: noahCustomerId,
+      commitForExecution: execCommit,
     })
     return { channelId: channel.channelId, prep }
   }
@@ -300,6 +306,7 @@ export async function prepareSellFromRecipientRow(input: {
       fiatAmount: fiat,
       form,
       customerId: noahCustomerId,
+      commitForExecution: execCommit,
     })
     return { channelId: channel.channelId, prep }
   }
@@ -342,6 +349,7 @@ export async function prepareSellFromRecipientRow(input: {
       fiatAmount: fiat,
       form,
       customerId: noahCustomerId,
+      commitForExecution: execCommit,
     })
     return { channelId: channel.channelId, prep }
   }

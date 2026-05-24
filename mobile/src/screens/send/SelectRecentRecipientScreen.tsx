@@ -59,7 +59,7 @@ import { CachedImage } from '../../components/CachedImage'
 import KeyboardSafeContainer from '../../components/KeyboardSafeContainer'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../contexts/AuthContext'
-import { useCurrenciesCatalog, useRecipientsList, useTransactionsList, mapLedgerRowToTransaction } from '../../hooks/queries'
+import { useCurrenciesCatalog, useRecipientsList, useTransactionsList, mapLedgerRowToTransaction, prefetchNoahSendExchangeRates } from '../../hooks/queries'
 import { useScope } from '../../query/scope'
 import { invalidateRecipientsFeed } from '../../query/refresh-user-feeds'
 import { recipientService } from '../../lib/recipientService'
@@ -71,6 +71,8 @@ import {
   recipientFormNeedsEmail,
 } from '@easner/shared'
 import { PayoutSchemaExtraFields } from '../../components/recipients/PayoutSchemaExtraFields'
+import { UsBankAddressFields } from '../../components/recipients/UsBankAddressFields'
+import { useKeyboardScrollPadding } from '../../hooks/useKeyboardScrollPadding'
 import {
   buildRecipientCatalogForType,
   getPayoutFieldsSchemaForCorridor,
@@ -216,6 +218,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   // Animation refs
   const headerAnim = useRef(new Animated.Value(0)).current
   const contentAnim = useRef(new Animated.Value(0)).current
+  const formScrollRef = useRef<ScrollView>(null)
+  const keyboardScrollPadding = useKeyboardScrollPadding()
 
   useCalmParallelEnterWhen(true, headerAnim, contentAnim)
 
@@ -395,6 +399,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
 
   const handleSelectRecipient = async (recipient: Recipient) => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    void prefetchNoahSendExchangeRates(qc, recipient.currency)
     // Use navigate (not push) so re-entering amount after "Change recipient" does not stack duplicate
     // SendAmount screens — back should be hub once, then dashboard.
     navigation.navigate('SendAmount' as never, {
@@ -509,8 +514,11 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     ) {
       return false
     }
-    if (selectedCountryCurrency?.countryCode === 'US' && !newRecipient.addressLine1.trim()) {
-      return false
+    if (selectedCountryCurrency?.countryCode === 'US') {
+      if (!newRecipient.addressLine1.trim()) return false
+      if (!newRecipient.city.trim()) return false
+      if (!newRecipient.state.trim()) return false
+      if (!newRecipient.postalCode.trim()) return false
     }
 
     const accountConfig = getAccountTypeConfigFromCurrency(newRecipient.currency)
@@ -1198,13 +1206,18 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
             </View>
 
             <ScrollView 
+              ref={formScrollRef}
               style={styles.modalScrollView}
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.modalScrollContent}
+              contentContainerStyle={[
+                styles.modalScrollContent,
+                { paddingBottom: Math.max(insets.bottom, 20) + keyboardScrollPadding },
+              ]}
               nestedScrollEnabled={true}
               /** When a dropdown is open, pause the form scroll so the dropdown list receives vertical drags (Android + iOS). */
               scrollEnabled={!isAnyDropdownOpen}
               keyboardShouldPersistTaps="handled"
+              automaticallyAdjustKeyboardInsets
             >
               <View style={styles.modalContent}>
               {isAnyDropdownOpen && Platform.OS !== 'android' && (
@@ -1745,17 +1758,22 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                             </View>
                           </View>
                         ) : null}
-                        <View>
-                          <TextInput
-                            style={styles.modalInput}
-                            value={newRecipient.addressLine1}
-                            onChangeText={(text) => setNewRecipient(prev => ({ ...prev, addressLine1: text }))}
-                            placeholder="Address *"
-                            placeholderTextColor={colors.text.secondary}
-                            autoCapitalize="words"
-                            editable={!isSubmitting}
-                          />
-                        </View>
+                        <UsBankAddressFields
+                          scrollRef={formScrollRef}
+                          inputStyle={styles.modalInput}
+                          rowStyle={styles.twoColumnRow}
+                          halfInputStyle={styles.halfInput}
+                          values={{
+                            addressLine1: newRecipient.addressLine1,
+                            city: newRecipient.city,
+                            state: newRecipient.state,
+                            postalCode: newRecipient.postalCode,
+                          }}
+                          onChange={(patch) =>
+                            setNewRecipient((prev) => ({ ...prev, ...patch }))
+                          }
+                          isSubmitting={isSubmitting}
+                        />
                         <View>
                           <TextInput
                             style={styles.modalInput}

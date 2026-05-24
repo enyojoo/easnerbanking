@@ -8,6 +8,7 @@ import { resolveNoahCustomerTarget } from "@/lib/noah/resolve-noah-customer-targ
 import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
 import { mapNoahVerificationToKycStatus } from "@/lib/noah/map-kyc"
 import { pickTxAmountAndCurrency } from "@/lib/noah/map-transactions"
+import { pickNoahGlobalPayoutLedgerFields, isNoahGlobalPayoutSellTx } from "@/lib/noah/global-payout-ledger"
 import {
   buildNoahBankPayInLedgerMetadata,
   buildNoahOrchestrationOutLegMetadata,
@@ -251,21 +252,57 @@ export async function applyNoahWebhookSideEffects(
           }
         }
 
+        const isGlobalPayoutSell = isNoahGlobalPayoutSellTx(txData)
+        let ledgerAmount = amount
+        let ledgerCurrency = currency
+        let ledgerBaseCurrency = currency
+        let ledgerAsset: string | undefined
+
+        if (isGlobalPayoutSell) {
+          const { data: existingTx } = await admin
+            .from("transactions")
+            .select("metadata")
+            .eq("provider", "noah")
+            .eq("provider_transaction_id", id)
+            .maybeSingle()
+          const priorMeta = (existingTx?.metadata as Record<string, unknown> | null) ?? {}
+          const priorCrypto =
+            typeof priorMeta.crypto_authorized_amount === "string"
+              ? priorMeta.crypto_authorized_amount
+              : undefined
+          const ledger = pickNoahGlobalPayoutLedgerFields(txData, {
+            cryptoAuthorizedAmount: priorCrypto,
+          })
+          ledgerAmount = ledger.amount > 0 ? ledger.amount : amount
+          ledgerCurrency = ledger.currency
+          ledgerBaseCurrency = ledger.baseCurrency
+          ledgerAsset = ledger.asset ?? undefined
+          metadata = {
+            ...metadata,
+            payout_type: "global_fiat",
+            receive_amount: ledger.receiveAmount,
+            receive_currency: ledger.receiveCurrency,
+            crypto_asset: ledger.asset,
+            ...(priorCrypto ? { crypto_authorized_amount: priorCrypto } : {}),
+          }
+        }
+
         const upsert = await upsertLedgerTransaction(admin, {
           userId,
           businessId,
           provider: "noah",
           providerTransactionId: id,
           status,
-          amount,
-          currency,
+          amount: ledgerAmount,
+          currency: ledgerCurrency,
           direction,
           payload: txData,
           metadata,
           txHash: pickTxHash(txData) ?? payInEnrichment?.onChainTxHash ?? null,
           occurredAt: String(txData.Created ?? txData.Updated ?? new Date().toISOString()),
           settledAt: status === "settled" ? String(txData.Updated ?? txData.Created ?? new Date().toISOString()) : null,
-          baseCurrency: currency,
+          baseCurrency: ledgerBaseCurrency,
+          asset: ledgerAsset,
         })
 
         const shouldCreditWallet =

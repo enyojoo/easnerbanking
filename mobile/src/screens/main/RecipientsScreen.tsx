@@ -89,6 +89,8 @@ import {
   recipientFormNeedsEmail,
 } from '@easner/shared'
 import { PayoutSchemaExtraFields } from '../../components/recipients/PayoutSchemaExtraFields'
+import { UsBankAddressFields } from '../../components/recipients/UsBankAddressFields'
+import { useKeyboardScrollPadding } from '../../hooks/useKeyboardScrollPadding'
 
 function RecipientsContent({ navigation }: NavigationProps) {
   const { user, userProfile } = useAuth()
@@ -185,6 +187,8 @@ function RecipientsContent({ navigation }: NavigationProps) {
 
   // Animation refs
   const headerAnim = useRef(new Animated.Value(0)).current
+  const formScrollRef = useRef<ScrollView>(null)
+  const keyboardScrollPadding = useKeyboardScrollPadding()
   const contentAnim = useRef(new Animated.Value(0)).current
 
   // Run entrance animations
@@ -1484,13 +1488,18 @@ function RecipientsContent({ navigation }: NavigationProps) {
             </View>
 
             <ScrollView 
+              ref={formScrollRef}
               style={styles.modalScrollView}
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.modalScrollContent}
+              contentContainerStyle={[
+                styles.modalScrollContent,
+                { paddingBottom: Math.max(insets.bottom, 20) + keyboardScrollPadding },
+              ]}
               nestedScrollEnabled={true}
               // Pause parent form scroll while a dropdown is open so list drags stay inside the dropdown.
               scrollEnabled={!isAnyDropdownOpen}
               keyboardShouldPersistTaps="handled"
+              automaticallyAdjustKeyboardInsets
             >
               <View style={styles.modalContent}>
               {isAnyDropdownOpen && Platform.OS !== 'android' && (
@@ -2036,52 +2045,22 @@ function RecipientsContent({ navigation }: NavigationProps) {
                             </View>
                           </View>
                         ) : null}
-                        <View>
-                          <TextInput
-                            style={styles.modalInput}
-                            value={newRecipient.addressLine1}
-                            onChangeText={(text) => setNewRecipient(prev => ({ ...prev, addressLine1: text }))}
-                            placeholder="Street address *"
-                            placeholderTextColor={colors.text.secondary}
-                            autoCapitalize="words"
-                            editable={!isSubmitting}
-                          />
-                        </View>
-                        <View>
-                          <TextInput
-                            style={styles.modalInput}
-                            value={newRecipient.city}
-                            onChangeText={(text) => setNewRecipient(prev => ({ ...prev, city: text }))}
-                            placeholder="City *"
-                            placeholderTextColor={colors.text.secondary}
-                            autoCapitalize="words"
-                            editable={!isSubmitting}
-                          />
-                        </View>
-                        <View style={styles.twoColumnRow}>
-                          <View style={styles.halfInput}>
-                            <TextInput
-                              style={styles.modalInput}
-                              value={newRecipient.state}
-                              onChangeText={(text) => setNewRecipient(prev => ({ ...prev, state: text }))}
-                              placeholder="State *"
-                              placeholderTextColor={colors.text.secondary}
-                              autoCapitalize="characters"
-                              editable={!isSubmitting}
-                            />
-                          </View>
-                          <View style={styles.halfInput}>
-                            <TextInput
-                              style={styles.modalInput}
-                              value={newRecipient.postalCode}
-                              onChangeText={(text) => setNewRecipient(prev => ({ ...prev, postalCode: text }))}
-                              placeholder="ZIP *"
-                              placeholderTextColor={colors.text.secondary}
-                              keyboardType="default"
-                              editable={!isSubmitting}
-                            />
-                          </View>
-                        </View>
+                        <UsBankAddressFields
+                          scrollRef={formScrollRef}
+                          inputStyle={styles.modalInput}
+                          rowStyle={styles.twoColumnRow}
+                          halfInputStyle={styles.halfInput}
+                          values={{
+                            addressLine1: newRecipient.addressLine1,
+                            city: newRecipient.city,
+                            state: newRecipient.state,
+                            postalCode: newRecipient.postalCode,
+                          }}
+                          onChange={(patch) =>
+                            setNewRecipient((prev) => ({ ...prev, ...patch }))
+                          }
+                          isSubmitting={isSubmitting}
+                        />
                         <View>
                           <TextInput
                             style={[styles.modalInput, fieldErrors.routingNumber && styles.modalInputError]}

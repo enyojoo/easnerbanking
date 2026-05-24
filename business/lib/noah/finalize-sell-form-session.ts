@@ -318,7 +318,7 @@ async function runPrepareStep(
     if (!result.formSessionId) return null
     return result
   } catch (e) {
-    logNoahPayoutFailure("prepare_finalize", e, meta)
+    logNoahPayoutFailure(String(meta.stage ?? "prepare_finalize"), e, meta)
     return null
   }
 }
@@ -415,6 +415,8 @@ export async function finalizeSellFormSessionAfterPrepare(input: {
   customerId?: string
   initialForm: Record<string, unknown>
   prep: SellPrepareResult
+  /** When true, final prepare with DelayedSell=false (transfer only — not quote). */
+  commitForExecution?: boolean
 }): Promise<SellPrepareResult> {
   const formSessionId = String(input.prep.formSessionId || "").trim()
   if (!formSessionId) return input.prep
@@ -489,13 +491,17 @@ export async function finalizeSellFormSessionAfterPrepare(input: {
     }
   }
 
-  return commitSellFormSessionForExecution({
-    channelId: input.channelId,
-    cryptoCurrency: input.cryptoCurrency,
-    fiatAmount: input.fiatAmount,
-    customerId: input.customerId,
-    initialForm: input.initialForm,
-    prep: result,
-    lastAckForm,
-  })
+  if (input.commitForExecution) {
+    return commitSellFormSessionForExecution({
+      channelId: input.channelId,
+      cryptoCurrency: input.cryptoCurrency,
+      fiatAmount: input.fiatAmount,
+      customerId: input.customerId,
+      initialForm: input.initialForm,
+      prep: result,
+      lastAckForm,
+    })
+  }
+
+  return result
 }

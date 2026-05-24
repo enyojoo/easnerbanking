@@ -37,7 +37,8 @@ import {
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { useToast } from '../../components/ToastProvider'
-import { useNoahSendExchangeRates, useManualSendCatalog, useManualQuote } from '../../hooks/queries'
+import { useNoahSendExchangeRates, useManualSendCatalog, useManualQuote, prefetchNoahSendExchangeRates } from '../../hooks/queries'
+import { useQueryClient } from '@tanstack/react-query'
 import { pickDefaultManualPayInOption } from '@easner/shared'
 import { resolveManualPayInNavigation } from '../../lib/manual-send-navigation'
 import { useAuth } from '../../contexts/AuthContext'
@@ -49,6 +50,7 @@ import { CountryFlag } from '../../components/flags/CountryFlag'
 import {
   convertNoahSendFlowAmounts,
   exchangeRatesToRateMap,
+  getNoahSendConversionRate,
   findPayoutFieldsSchema,
   formatSendRateLabel,
   getCurrencySymbol,
@@ -108,6 +110,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const insets = useSafeAreaInsets()
   const { userProfile, refreshUserProfile } = useAuth()
   const { showError, showInfo } = useToast()
+  const qc = useQueryClient()
   const noahKycStatus =
     userProfile?.noah_kyc_status ??
     (userProfile as { noah_kyc_status?: string; profile?: { noah_kyc_status?: string } })?.profile?.noah_kyc_status
@@ -158,11 +161,16 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     isEasetagRecipient &&
     selectedPaymentMethod === 'balance' &&
     String(selectedBalanceCurrency).toUpperCase() === String((recipient?.currency || '').trim().toUpperCase())
-  const { data: exchangeRatesFromContext = [] } = useNoahSendExchangeRates(
+  const { data: exchangeRatesFromContext = [], isFetched: noahRatesFetched } = useNoahSendExchangeRates(
     recipient?.currency,
     { enabled: !skipNoahExchangeRatesForEasetagP2p },
   )
   const exchangeRates = exchangeRatesFromContext || []
+
+  useEffect(() => {
+    if (!recipient?.currency || skipNoahExchangeRatesForEasetagP2p) return
+    void prefetchNoahSendExchangeRates(qc, recipient.currency)
+  }, [recipient?.currency, skipNoahExchangeRatesForEasetagP2p, qc])
 
   // Initialize sending balance currency once:
   // 1) honor incoming preference from prior screen flow, 2) otherwise fallback to available balance.
@@ -507,6 +515,22 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     [exchangeRates],
   )
 
+  const hasNoahRateForPair = useMemo(() => {
+    if (!showCrossCurrencyExchangeUi) return true
+    const send = String(sendCurrency || '').trim().toUpperCase()
+    const receive = String(receiveCurrency || '').trim().toUpperCase()
+    if (send === receive) return true
+    if (!noahRatesFetched) return false
+    const rate = getNoahSendConversionRate(noahRateMap, send, receive)
+    return Number.isFinite(rate) && rate > 0 && Boolean(noahRateMap[`${send}_${receive}`])
+  }, [
+    showCrossCurrencyExchangeUi,
+    sendCurrency,
+    receiveCurrency,
+    noahRatesFetched,
+    noahRateMap,
+  ])
+
   const manualQuoteEnabled =
     !isEasetagRecipient &&
     selectedPaymentMethod === 'otherCurrency' &&
@@ -533,6 +557,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         forwardRate: manualQuote.exchangeRate,
       }
     }
+    if (!hasNoahRateForPair) {
+      return {
+        sendAmount: 0,
+        receiveAmount: amountEntryMode === 'receive' ? enteredAmount : 0,
+        forwardRate: 0,
+      }
+    }
     return convertNoahSendFlowAmounts({
       direction: amountEntryMode,
       amount: enteredAmount,
@@ -549,6 +580,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     noahRateMap,
     selectedPaymentMethod,
     manualQuote,
+    hasNoahRateForPair,
   ])
 
   const receiveAmount = flowAmounts.receiveAmount
@@ -910,7 +942,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 <View style={styles.exchangeInfoSlot}>
                   {!exchangeInfoAmountPositive ? (
                     <Text style={[styles.exchangeInfoText, styles.exchangeInfoPlaceholder]}> </Text>
-                  ) : showCrossCurrencyExchangeUi ? (
+                  ) : showCrossCurrencyExchangeUi && hasNoahRateForPair ? (
                     <View style={styles.exchangeInfoColumn}>
                       <View style={styles.exchangeInfoInline}>
                         <Pressable

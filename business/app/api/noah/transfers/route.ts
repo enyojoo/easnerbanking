@@ -3,6 +3,11 @@ import { randomUUID } from "node:crypto"
 import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "../_helpers"
 import { noahFetch } from "@/lib/noah/http"
 import { pickTxAmountAndCurrency } from "@/lib/noah/map-transactions"
+import {
+  pickNoahGlobalPayoutLedgerFields,
+  isNoahGlobalPayoutSellTx,
+  settlementWalletCurrencyForNoahCrypto,
+} from "@/lib/noah/global-payout-ledger"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { getNoahSettlementCryptoCurrency } from "@/lib/noah/config"
@@ -151,6 +156,7 @@ export async function POST(request: Request) {
         fiatAmount: amount,
         cryptoCurrency: cryptoCurrencyRaw,
         noahCustomerId: noahCtx.noahCustomerId,
+        commitForExecution: true,
         overrides:
           sendNote || sendPaymentPurpose
             ? {
@@ -271,25 +277,41 @@ export async function POST(request: Request) {
       const owner = await resolveBusinessOrgOwnerUserId(admin, noahCtx.businessId)
       if (owner) txUserId = owner
     }
+    const walletCurrency = settlementWalletCurrencyForNoahCrypto(cryptoCurrencyRaw)
+    const ledger = pickNoahGlobalPayoutLedgerFields(tx, {
+      cryptoAuthorizedAmount,
+      sourceBalanceCurrency: walletCurrency,
+    })
+    const ledgerAmount =
+      ledger.amount > 0
+        ? ledger.amount
+        : Math.abs(parseFloat(cryptoAuthorizedAmount) || 0) || txAmount || amount
+
     await upsertLedgerTransaction(admin, {
       userId: txUserId,
       businessId,
       provider: "noah",
       providerTransactionId: id,
       status,
-      amount: txAmount || amount,
-      currency: currency || fiatCurrency,
+      amount: ledgerAmount,
+      currency: ledger.currency || walletCurrency,
       direction: "out",
       payload: tx,
       metadata: {
         sourceWalletId,
         ...metadataExtra,
         source: "api_noah_transfers",
+        payout_type: "global_fiat",
+        receive_amount: ledger.receiveAmount || amount,
+        receive_currency: ledger.receiveCurrency || fiatCurrency,
+        crypto_authorized_amount: cryptoAuthorizedAmount,
+        crypto_asset: ledger.asset ?? cryptoCurrencyRaw,
       },
       occurredAt: String(tx.Created ?? tx.Updated ?? new Date().toISOString()),
       settledAt: status === "settled" ? String(tx.Updated ?? tx.Created ?? new Date().toISOString()) : null,
       txHash: String(tx.TxHash ?? tx.TransactionHash ?? "").trim() || null,
-      baseCurrency: currency || fiatCurrency,
+      asset: ledger.asset ?? cryptoCurrencyRaw,
+      baseCurrency: ledger.baseCurrency || walletCurrency,
     })
 
     return NextResponse.json({

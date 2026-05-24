@@ -37,6 +37,12 @@ export function mapNoahPayoutUserError(
     if (msg.includes("phone")) {
       return "A valid phone number is required for this payout."
     }
+    if (
+      msg.includes("street, city, state") ||
+      (msg.includes("address") && msg.includes("postal"))
+    ) {
+      return "This US bank recipient needs a full address. Edit the recipient and add street, city, state, and ZIP."
+    }
     if (msg.includes("paymentpurpose") || msg.includes("payment purpose")) {
       return "Payment purpose is required or not allowed for this corridor."
     }
