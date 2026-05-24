@@ -1,9 +1,14 @@
 import { NoahHttpError } from "@/lib/noah/http"
 
+export type NoahPayoutErrorStage = "prepare" | "sell" | "quote"
+
 /** Map Noah prepare/sell API errors to user-facing copy. */
-export function mapNoahPrepareError(e: unknown): string {
+export function mapNoahPayoutUserError(
+  e: unknown,
+  stage: NoahPayoutErrorStage = "prepare",
+): string {
   if (e instanceof NoahHttpError) {
-    const msg = e.message.toLowerCase()
+    const msg = (e.detail || e.message).toLowerCase()
     if (msg.includes("reference")) {
       return "Payment reference is required or invalid for this corridor."
     }
@@ -11,7 +16,7 @@ export function mapNoahPrepareError(e: unknown): string {
       return "Selected bank is not valid for this corridor. Re-save the recipient and pick a bank from the list."
     }
     if (msg.includes("formsession") || (msg.includes("session") && msg.includes("expired"))) {
-      return "This quote expired. Go back and get a fresh quote."
+      return "This quote expired. Go back and tap Continue for a fresh quote."
     }
     if (msg.includes("phone")) {
       return "A valid phone number is required for this payout."
@@ -19,14 +24,36 @@ export function mapNoahPrepareError(e: unknown): string {
     if (msg.includes("paymentpurpose") || msg.includes("payment purpose")) {
       return "Payment purpose is required or not allowed for this corridor."
     }
+    if (
+      msg.includes("insufficient") ||
+      msg.includes("balance") ||
+      msg.includes("not enough")
+    ) {
+      return "Your balance is too low to complete this transfer."
+    }
+    if (msg.includes("cryptoauthorized") || msg.includes("authorized amount")) {
+      return "The payout amount changed. Go back, tap Continue for a new quote, then confirm again."
+    }
     if (e.status === 401 || e.status === 403) {
-      return "Payout authorization failed. Check your Noah verification status."
+      return "Transfer authorization failed. Check your account verification status."
     }
     if (msg.includes("invalid request") || msg === "bad request") {
-      return "Payout could not be completed. Go back, tap Continue again for a fresh quote, then confirm. If it persists, re-save the recipient (bank, reference, or phone)."
+      if (stage === "sell") {
+        return "We couldn't send this transfer. Go back and try again."
+      }
+      return "We couldn't price this payout. Check the recipient details, then go back and tap Continue again."
     }
-    return e.message.slice(0, 280)
+    const detail = (e.detail || e.message).trim()
+    if (detail && detail.length <= 200 && !detail.toLowerCase().includes("noah api")) {
+      return detail
+    }
+    return "Something went wrong with this payout. Please try again in a moment."
   }
   if (e instanceof Error) return e.message
   return String(e)
+}
+
+/** @deprecated Use `mapNoahPayoutUserError`. */
+export function mapNoahPrepareError(e: unknown): string {
+  return mapNoahPayoutUserError(e, "prepare")
 }

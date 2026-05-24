@@ -27,6 +27,8 @@ type RecipientPayoutProfileRowProps = {
   className?: string
   nameClassName?: string
   subtitleClassName?: string
+  /** Right-align name + subtitle (review/confirm rows). */
+  alignEnd?: boolean
 }
 
 /**
@@ -41,10 +43,17 @@ export function RecipientPayoutProfileRow({
   className,
   nameClassName,
   subtitleClassName,
+  alignEnd = false,
 }: RecipientPayoutProfileRowProps) {
   const subtitleCn = subtitleClassName ?? "text-sm text-muted-foreground"
   return (
-    <div className={cn("flex min-w-0 items-center gap-3", className)}>
+    <div
+      className={cn(
+        "flex min-w-0 items-center gap-3",
+        alignEnd && "flex-row-reverse justify-end",
+        className,
+      )}
+    >
       <div className="relative mr-1 shrink-0">
         {avatarUrl ? (
           <Avatar className="h-10 w-10 border border-border">
@@ -58,8 +67,8 @@ export function RecipientPayoutProfileRow({
         )}
         <RecipientCornerFlagBadge countryCode={countryCode} currency={currency} />
       </div>
-      <div className="min-w-0 flex-1">
-        <p className={cn("truncate font-medium", nameClassName)}>{fullName}</p>
+      <div className={cn("min-w-0", alignEnd ? "shrink text-right" : "flex-1")}>
+        <p className={cn("truncate font-medium", alignEnd && "text-right", nameClassName)}>{fullName}</p>
         <div className={cn("min-w-0 truncate", subtitleCn)}>{subtitle}</div>
       </div>
     </div>

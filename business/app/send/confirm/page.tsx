@@ -9,7 +9,12 @@ import { Card, CardContent } from "@/components/ui/card"
 import { PinChallengeDialog } from "@/components/app-lock/pin-challenge-dialog"
 import { useAuth } from "@/lib/auth-context"
 import { hasPin, isLoginPinModuleAvailable } from "@/lib/login-pin"
-import { formatMoneyDisplay, formatPayoutArrivalHint, formatSendRateLabel } from "@easner/shared"
+import {
+  computeBalancePayoutExchangeFee,
+  formatMoneyDisplay,
+  formatPayoutArrivalHint,
+  formatSendRateLabel,
+} from "@easner/shared"
 import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 import type { Beneficiary } from "@/lib/recipient-types"
@@ -77,7 +82,6 @@ export default function SendConfirmPage() {
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [isAuthorizing, setIsAuthorizing] = useState(false)
   const [authorizeError, setAuthorizeError] = useState<string | null>(null)
-  const [payoutQuoteLoading, setPayoutQuoteLoading] = useState(false)
   const [payoutQuoteError, setPayoutQuoteError] = useState<string | null>(null)
   const displayIdFallbackRef = useRef<string | null>(null)
 
@@ -149,7 +153,6 @@ export default function SendConfirmPage() {
       return
     if (isPayoutQuoteFresh(state.payoutQuote, state.amount)) return
     let cancelled = false
-    setPayoutQuoteLoading(true)
     setPayoutQuoteError(null)
     void (async () => {
       try {
@@ -193,7 +196,7 @@ export default function SendConfirmPage() {
           setPayoutQuoteError(e instanceof Error ? e.message : "Payout quote failed")
         }
       } finally {
-        if (!cancelled) setPayoutQuoteLoading(false)
+        // silent background refresh — no blocking UI
       }
     })()
     return () => {
@@ -409,16 +412,18 @@ export default function SendConfirmPage() {
   const hasFx = !easenetSend && state.receiveCurrency !== state.sendCurrency
   const pq = state.payoutQuote
   const quoteReady = easenetSend || Boolean(pq?.formSessionId)
-  const noahFee = pq?.noahFee ?? 0
-  const noahFeeCurrency = pq?.noahFeeCurrency ?? state.receiveCurrency
   const easnerFee = pq?.easnerFee ?? 0
   const easnerFeeCurrency = pq?.easnerFeeCurrency ?? state.sendCurrency
+  const exchangeFee = computeBalancePayoutExchangeFee(
+    pq?.totalDebited ?? 0,
+    state.sendAmount,
+    easnerFee,
+  )
   const exchangeRate =
     hasFx && state.amount > 0 ? state.sendAmount / state.amount : 1
 
   const authorizeDisabled =
     isAuthorizing ||
-    payoutQuoteLoading ||
     Boolean(payoutQuoteError && !easenetSend) ||
     (!easenetSend && (!quoteReady || quoteCountdown.expired))
 
@@ -451,16 +456,13 @@ export default function SendConfirmPage() {
           <div className="flex items-center justify-between border-b pb-4">
             <span className="text-sm text-muted-foreground">You send</span>
             <span className="text-xl font-semibold">
-              {formatMoneyDisplay(
-                easenetSend ? state.sendAmount : (pq?.sendAmount ?? state.sendAmount),
-                state.sendCurrency,
-              )}
+              {formatMoneyDisplay(state.sendAmount, state.sendCurrency)}
             </span>
           </div>
           {sourceAccount && state.paymentMethod === "balance" ? (
             <div className="flex items-center justify-between border-b pb-4">
               <span className="text-sm text-muted-foreground">From</span>
-              <div className="flex items-center gap-2 font-medium">
+              <div className="flex shrink-0 items-center gap-2 font-medium">
                 <CurrencyFlag currency={sourceAccount.currency} size={22} className="shrink-0" />
                 <span>{sourceAccount.currency} Balance</span>
               </div>
@@ -471,7 +473,7 @@ export default function SendConfirmPage() {
               <div className="flex items-center justify-between border-b pb-4">
                 <span className="text-sm text-muted-foreground">Exchange fee</span>
                 <span className="font-semibold">
-                  {formatMoneyDisplay(noahFee, noahFeeCurrency)}
+                  {formatMoneyDisplay(exchangeFee, state.sendCurrency)}
                 </span>
               </div>
               <div className="flex items-center justify-between border-b pb-4">
@@ -488,9 +490,15 @@ export default function SendConfirmPage() {
                   </span>
                 </div>
               ) : null}
+              {!easenetSend && (pq?.totalDebited ?? 0) > 0 ? (
+                <div className="flex items-center justify-between border-b pb-4">
+                  <span className="text-sm text-muted-foreground">Total debited</span>
+                  <span className="text-xl font-semibold">
+                    {formatMoneyDisplay(pq!.totalDebited, state.sendCurrency)}
+                  </span>
+                </div>
+              ) : null}
             </>
-          ) : payoutQuoteLoading && !easenetSend ? (
-            <div className="border-b pb-4 text-sm text-muted-foreground">Refreshing quote…</div>
           ) : null}
           <div className="flex items-center justify-between border-b pb-4">
             <span className="text-sm text-muted-foreground">Recipient gets</span>
@@ -502,7 +510,8 @@ export default function SendConfirmPage() {
             <span className="shrink-0 text-sm text-muted-foreground">Recipient</span>
             <SendSelectedRecipientSummary
               beneficiary={state.recipient}
-              className="min-w-0 max-w-[65%] justify-end"
+              alignEnd
+              className="min-w-0 max-w-[70%] shrink-0"
             />
           </div>
           <div className="flex items-center justify-between border-b pb-4">

@@ -230,7 +230,7 @@ export async function buildPayoutQuote(input: {
     channelId,
     noah: {
       totalFee: noahFee,
-      feeCurrency: receiveCurrency,
+      feeCurrency: sourceBalanceCurrency,
       cryptoAuthorizedAmount,
       cryptoCurrency,
       formSessionId,

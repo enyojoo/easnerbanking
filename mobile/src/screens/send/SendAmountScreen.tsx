@@ -135,7 +135,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const [note, setNote] = useState('')
   const [paymentPurpose, setPaymentPurpose] = useState('')
   const [amountFieldError, setAmountFieldError] = useState<string | null>(null)
-  const [quoteFetching, setQuoteFetching] = useState(false)
   const [showPurposePicker, setShowPurposePicker] = useState(false)
   const [selectedBalanceCurrency, setSelectedBalanceCurrency] = useState<string>('USD')
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false)
@@ -655,8 +654,57 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         ? !tier1Ok
         : false)
 
+  const needsBackgroundPayoutQuote =
+    selectedPaymentMethod === 'balance' &&
+    !isEasetagRecipient &&
+    !recipient?.wallet_network?.trim() &&
+    receiveAmount > 0 &&
+    Boolean(recipient?.id)
+
+  const payoutQuotePrefetchKey = useMemo(() => {
+    if (!needsBackgroundPayoutQuote || !recipient?.id) return ''
+    return [
+      recipient.id,
+      receiveAmount,
+      selectedBalanceCurrency,
+      note.trim(),
+      paymentPurpose.trim(),
+    ].join('|')
+  }, [
+    needsBackgroundPayoutQuote,
+    recipient?.id,
+    receiveAmount,
+    selectedBalanceCurrency,
+    note,
+    paymentPurpose,
+  ])
+
+  useEffect(() => {
+    if (!payoutQuotePrefetchKey) return
+    let cancelled = false
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const pq = await noahService.createPayoutQuote({
+            recipientId: recipient!.id,
+            receiveAmount,
+            sourceBalanceCurrency: selectedBalanceCurrency,
+            ...(note.trim() ? { note: note.trim() } : {}),
+            ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+          })
+          if (!cancelled) stashSendPayoutQuote(pq)
+        } catch {
+          // silent — confirm refreshes if needed
+        }
+      })()
+    }, 450)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [payoutQuotePrefetchKey, recipient, receiveAmount, selectedBalanceCurrency, note, paymentPurpose])
+
   const sendButtonDisabled =
-    quoteFetching ||
     !sendAmount ||
     sendAmount === '0.00' ||
     Number.parseFloat(sendAmount.replace(/,/g, '')) <= 0 ||
@@ -1159,15 +1207,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               const calculatedFeeAmount = 0
               const calculatedTotalAmount = calculatedSendingAmount
 
-              const needsPayoutQuote =
-                selectedPaymentMethod === 'balance' &&
-                !isEasetagRecipient &&
-                !recipient?.wallet_network?.trim() &&
-                receiveAmountValue > 0
-
               if (selectedPaymentMethod === 'balance') {
                 const transactionId = generateTransactionId()
-                const navParams = {
+                navigation.navigate('SendConfirm' as never, {
                   recipient,
                   calculatedSendingAmount,
                   calculatedFeeAmount,
@@ -1178,33 +1220,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   transactionId,
                   ...(note.trim() ? { note: note.trim() } : {}),
                   ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
-                }
-
-                if (needsPayoutQuote) {
-                  setQuoteFetching(true)
-                  void (async () => {
-                    try {
-                      const pq = await noahService.createPayoutQuote({
-                        recipientId: recipient.id,
-                        receiveAmount: receiveAmountValue,
-                        sourceBalanceCurrency: selectedBalanceCurrency,
-                        ...(note.trim() ? { note: note.trim() } : {}),
-                        ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
-                      })
-                      stashSendPayoutQuote(pq)
-                      navigation.navigate('SendConfirm' as never, navParams as never)
-                    } catch (e) {
-                      const msg = e instanceof Error ? e.message : 'Could not load payout quote'
-                      setAmountFieldError(msg)
-                      showError(msg)
-                    } finally {
-                      setQuoteFetching(false)
-                    }
-                  })()
-                  return
-                }
-
-                navigation.navigate('SendConfirm' as never, navParams as never)
+                } as never)
                 return
               }
 
@@ -1278,10 +1294,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               style={styles.sendButtonGradient}
             >
               <Text style={styles.sendButtonText}>
-                {quoteFetching
-                  ? 'Getting quote…'
-                  : selectedPaymentMethod === 'balance'
-                    ? 'Continue'
+                {selectedPaymentMethod === 'balance'
+                  ? 'Continue'
                   : selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency && selectedOtherPaymentMethod
                     ? 'Authorize'
                     : selectedPaymentMethod

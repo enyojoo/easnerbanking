@@ -56,8 +56,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   )
 
   const showError = useCallback(
-    (message: string, duration = 4000) => {
-      showToast(message, 'error', duration)
+    (message: string, duration?: number) => {
+      const ms =
+        duration ??
+        Math.min(10_000, Math.max(5000, 3500 + Math.ceil(message.length / 24) * 1000))
+      showToast(message, 'error', ms)
     },
     [showToast]
   )

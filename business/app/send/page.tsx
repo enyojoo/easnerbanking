@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect, useCallback } from "react"
+import { useState, useMemo, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -55,6 +55,7 @@ import {
   validateSendAmountFields,
 } from "@easner/shared"
 import { mapPayoutQuoteToFlowState } from "@/lib/noah/map-payout-quote-to-flow"
+import type { PayoutQuoteResult } from "@/lib/noah/payout-quote"
 import { usePayoutMinEnforcement } from "@/hooks/use-payout-min-enforcement"
 import {
   Select,
@@ -99,8 +100,8 @@ export default function SendPage() {
   const [note, setNote] = useState("")
   const [paymentPurpose, setPaymentPurpose] = useState("")
   const [amountFieldError, setAmountFieldError] = useState<string | null>(null)
-  const [quoteFetching, setQuoteFetching] = useState(false)
   const [sourceSheetOpen, setSourceSheetOpen] = useState(false)
+  const payoutQuoteCacheRef = useRef<{ key: string; quote: PayoutQuoteResult } | null>(null)
   const [noahFxRates, setNoahFxRates] = useState<Record<string, number>>({})
 
   useEffect(() => {
@@ -470,8 +471,64 @@ export default function SendPage() {
     !isWalletRecipient &&
     receiveAmount > 0
 
-  const handleContinue = async () => {
-    if (!canContinue || !recipient || quoteFetching) return
+  const payoutQuoteCacheKey = useMemo(() => {
+    if (!recipient?.id || !(receiveAmount > 0)) return ""
+    return [
+      recipient.id,
+      receiveAmount,
+      sendCurrency,
+      note.trim(),
+      paymentPurpose.trim(),
+    ].join("|")
+  }, [recipient?.id, receiveAmount, sendCurrency, note, paymentPurpose])
+
+  useEffect(() => {
+    if (!needsPayoutQuoteBeforeConfirm || !payoutQuoteCacheKey || !recipient?.id) return
+    let cancelled = false
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const headers: Record<string, string> = { "Content-Type": "application/json" }
+          if (businessId) headers["X-Easner-Noah-Scope"] = "business"
+          const res = await fetchWithSession("/api/noah/payouts/quote", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              recipientId: recipient.id,
+              receiveAmount,
+              sourceBalanceCurrency: sendCurrency,
+              ...(note.trim() ? { note: note.trim() } : {}),
+              ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+            }),
+          })
+          const data = (await res.json().catch(() => ({}))) as {
+            ok?: boolean
+            quote?: PayoutQuoteResult
+          }
+          if (!res.ok || !data.ok || !data.quote || cancelled) return
+          payoutQuoteCacheRef.current = { key: payoutQuoteCacheKey, quote: data.quote }
+        } catch {
+          // silent — confirm can refresh if needed
+        }
+      })()
+    }, 450)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [
+    needsPayoutQuoteBeforeConfirm,
+    payoutQuoteCacheKey,
+    recipient?.id,
+    receiveAmount,
+    sendCurrency,
+    note,
+    paymentPurpose,
+    businessId,
+  ])
+
+  const handleContinue = () => {
+    if (!canContinue || !recipient) return
     if (isEasetagRecipient && paymentMethod === "otherCurrency") {
       setAmountFieldError("Easetag sends are only supported from your balance.")
       return
@@ -528,43 +585,15 @@ export default function SendPage() {
       ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
       transactionId,
     }
+    let flowState = state
     if (needsPayoutQuoteBeforeConfirm) {
-      setQuoteFetching(true)
-      setAmountFieldError(null)
-      try {
-        const headers: Record<string, string> = { "Content-Type": "application/json" }
-        if (businessId) headers["X-Easner-Noah-Scope"] = "business"
-        const res = await fetchWithSession("/api/noah/payouts/quote", {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            recipientId: recipient.id,
-            receiveAmount: receiveAmount,
-            sourceBalanceCurrency: sendCurrency,
-            ...(note.trim() ? { note: note.trim() } : {}),
-            ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
-          }),
-        })
-        const data = (await res.json().catch(() => ({}))) as {
-          ok?: boolean
-          error?: string
-          quote?: Parameters<typeof mapPayoutQuoteToFlowState>[1]
-        }
-        if (!res.ok || !data.ok || !data.quote) {
-          throw new Error(data.error || "Could not load payout quote")
-        }
-        const withQuote = mapPayoutQuoteToFlowState(state, data.quote)
-        persistSendFlowState(withQuote)
-        router.push("/send/confirm")
-      } catch (e) {
-        setAmountFieldError(e instanceof Error ? e.message : "Could not load payout quote")
-      } finally {
-        setQuoteFetching(false)
+      const cached = payoutQuoteCacheRef.current
+      if (cached?.key === payoutQuoteCacheKey) {
+        flowState = mapPayoutQuoteToFlowState(state, cached.quote)
       }
-      return
     }
 
-    persistSendFlowState(state)
+    persistSendFlowState(flowState)
 
     if (isBalanceSource) {
       router.push("/send/confirm")
@@ -742,10 +771,10 @@ export default function SendPage() {
       <Button
         size="lg"
         className="w-full h-12"
-        disabled={!canContinue || quoteFetching}
-        onClick={() => void handleContinue()}
+        disabled={!canContinue}
+        onClick={handleContinue}
       >
-        {quoteFetching ? "Getting quote…" : isAuthorizeFlow ? "Authorize" : "Continue"}
+        {isAuthorizeFlow ? "Authorize" : "Continue"}
       </Button>
 
       <Dialog open={sourceSheetOpen} onOpenChange={setSourceSheetOpen}>

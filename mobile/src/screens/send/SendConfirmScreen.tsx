@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, Pressable, StyleSheet, ScrollView, Animated, ActivityIndicator } from 'react-native'
 import { ArrowLeft } from 'lucide-react-native'
 import Constants from 'expo-constants'
@@ -7,7 +7,14 @@ import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CommonActions, useFocusEffect } from '@react-navigation/native'
 import { useQueryClient } from '@tanstack/react-query'
-import { findPayoutFieldsSchema, formatMoneyDisplay, formatPayoutArrivalHint, getSendAmountNoteFieldUi, qk } from '@easner/shared'
+import {
+  computeBalancePayoutExchangeFee,
+  findPayoutFieldsSchema,
+  formatMoneyDisplay,
+  formatPayoutArrivalHint,
+  getSendAmountNoteFieldUi,
+  qk,
+} from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import type { Recipient, User } from '../../types'
@@ -89,6 +96,8 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   const sendNote = typeof params.note === 'string' ? params.note.trim() : ''
   const sendPaymentPurpose = typeof params.paymentPurpose === 'string' ? params.paymentPurpose.trim() : ''
 
+  const amountScreenSendAmount = params.calculatedSendingAmount ?? 0
+
   const [pricing, setPricing] = useState(() => {
     const stashed = peekSendPayoutQuote()
     const useStashed =
@@ -99,7 +108,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       const easnerFeeAmt =
         stashed.easner.pricingTotals?.total_easner_fee ?? stashed.easner.totalFeeAmount ?? 0
       return {
-        calculatedSendingAmount: stashed.sendAmount,
+        calculatedSendingAmount: amountScreenSendAmount,
         calculatedFeeAmount: easnerFeeAmt,
         calculatedTotalAmount: stashed.totalDebited,
         noahFee: stashed.noah.totalFee,
@@ -136,7 +145,6 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     calculatedSendingAmount,
     calculatedFeeAmount,
     calculatedTotalAmount,
-    noahFee,
     easnerFee,
     pricingQuoteId,
     pricingQuoteExpiry,
@@ -179,10 +187,19 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   const displayTransactionId = paramTransactionId ? paramTransactionId.toUpperCase() : null
   const quoteCountdown = useQuoteCountdown(pricingQuoteExpiry)
   const quoteReady = Boolean(easetagUi || payoutSession?.formSessionId)
-  const noahFeeCurrency = receiveCurrency
-  const easnerFeeCurrency = selectedBalanceCurrency
+  const processingFee = easnerFee || calculatedFeeAmount
+  const exchangeFee = useMemo(
+    () =>
+      computeBalancePayoutExchangeFee(
+        calculatedTotalAmount,
+        calculatedSendingAmount,
+        processingFee,
+      ),
+    [calculatedTotalAmount, calculatedSendingAmount, processingFee],
+  )
 
   const [sendingAfterPin, setSendingAfterPin] = useState(false)
+  const [transferError, setTransferError] = useState<string | null>(null)
 
   useEffect(() => {
     analytics.trackScreenView('SendConfirm')
@@ -214,7 +231,6 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           0
         setPricing((prev) => ({
           ...prev,
-          calculatedSendingAmount: pq.sendAmount,
           noahFee: pq.noah.totalFee,
           easnerFee: easnerFeeAmt,
           calculatedFeeAmount: easnerFeeAmt,
@@ -310,7 +326,9 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
         } catch (e: unknown) {
           if (!cancelled) {
             await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
-            showError(e instanceof Error ? e.message : 'Transfer failed.')
+            const msg =
+              e instanceof Error ? e.message : 'We couldn\'t send this transfer. Go back and try again.'
+            setTransferError(msg)
           }
         } finally {
           if (!cancelled) setSendingAfterPin(false)
@@ -340,6 +358,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
 
   const onConfirmPress = async () => {
     if (!recipient || sendingAfterPin) return
+    setTransferError(null)
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     if (!user?.id) {
       showError('Not authenticated.')
@@ -349,20 +368,16 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       showError('Set an app PIN in Settings before authorizing transfers.')
       return
     }
-    if (quoteLoading) {
-      showError('Loading payout quote…')
-      return
-    }
     if (quoteError && !easetagUi) {
-      showError(quoteError)
+      setTransferError(quoteError)
       return
     }
     if (!easetagUi && !payoutSession?.formSessionId) {
-      showError('Payout quote is still loading. Wait a moment or go back and try again.')
+      setTransferError('Payout quote is still loading. Wait a moment or go back and try again.')
       return
     }
     if (!easetagUi && quoteCountdown.expired) {
-      showError('Quote expired. Go back and continue again for a fresh quote.')
+      setTransferError('Quote expired. Go back and continue again for a fresh quote.')
       return
     }
     navigation.navigate('SendPin' as never)
@@ -439,12 +454,12 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                 <RowTrailing
                   label="From"
                   trailing={
-                    <>
+                    <View style={styles.fromBalanceChip}>
                       <CurrencyFlag currency={selectedBalanceCurrency} size={22} />
                       <Text style={[styles.rowValue, styles.rowValueBold]} numberOfLines={1}>
                         {selectedBalanceCurrency} Balance
                       </Text>
-                    </>
+                    </View>
                   }
                 />
               ) : null}
@@ -452,15 +467,13 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                 <>
                   <Row
                     label="Exchange fee"
-                    value={formatMoneyDisplay(noahFee, noahFeeCurrency)}
+                    value={formatMoneyDisplay(exchangeFee, selectedBalanceCurrency)}
                   />
                   <Row
                     label="Processing fee"
-                    value={formatMoneyDisplay(easnerFee || calculatedFeeAmount, easnerFeeCurrency)}
+                    value={formatMoneyDisplay(processingFee, selectedBalanceCurrency)}
                   />
                 </>
-              ) : quoteLoading && !easetagUi ? (
-                <Row label="Quote" value="Refreshing…" />
               ) : null}
               {!easetagUi && calculatedTotalAmount > 0 ? (
                 <Row
@@ -488,6 +501,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                     <SendSelectedRecipientSummary
                       recipient={recipient}
                       easenetPreview={easenetDisplay}
+                      alignEnd
                     />
                   </View>
                 </View>
@@ -495,7 +509,16 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
               {displayTransactionId ? (
                 <Row label="Transaction ID" value={displayTransactionId} last={!pricingQuoteExpiry} />
               ) : null}
-              {quoteError ? <Text style={styles.quoteError}>{quoteError}</Text> : null}
+              {quoteError ? (
+                <Text style={styles.quoteError} accessibilityRole="alert">
+                  {quoteError}
+                </Text>
+              ) : null}
+              {transferError ? (
+                <Text style={styles.transferError} accessibilityRole="alert">
+                  {transferError}
+                </Text>
+              ) : null}
               {!easetagUi && pricingQuoteExpiry ? (
                 <Text style={styles.quoteHint}>
                   {quoteCountdown.expired
@@ -623,10 +646,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing[3],
   },
   recipientSummaryWrap: {
-    flex: 1,
+    flexShrink: 1,
     minWidth: 0,
-    maxWidth: '65%',
+    maxWidth: '72%',
     alignItems: 'flex-end',
+    justifyContent: 'flex-end',
   },
   rowLabel: {
     ...textStyles.caption,
@@ -643,9 +667,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    gap: spacing[2],
-    flex: 1,
+    flexShrink: 0,
     minWidth: 0,
+  },
+  fromBalanceChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    flexShrink: 0,
   },
   rowValueBold: {
     fontFamily: fontFamily.semibold,
@@ -659,6 +688,13 @@ const styles = StyleSheet.create({
     ...textStyles.caption,
     color: colors.error.main,
     marginTop: spacing[2],
+    flexShrink: 1,
+  },
+  transferError: {
+    ...textStyles.bodySmall,
+    color: colors.error.main,
+    marginTop: spacing[2],
+    flexShrink: 1,
   },
   cta: {
     marginTop: spacing[2],

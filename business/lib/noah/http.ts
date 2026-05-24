@@ -7,6 +7,10 @@ export class NoahHttpError extends Error {
   constructor(
     message: string,
     public readonly status: number,
+    public readonly detail?: string,
+    public readonly type?: string,
+    /** Parsed JSON error body from Noah (for server logs). */
+    public readonly body?: unknown,
   ) {
     super(message)
     this.name = "NoahHttpError"
@@ -126,9 +130,12 @@ export async function noahFetch<T>(opts: NoahFetchOptions): Promise<T> {
   }
 
   if (!res.ok) {
-    const err = data as { Detail?: string; Type?: string }
-    const message = err?.Detail || err?.Type || `Noah API ${res.status}: ${text.slice(0, 500)}`
-    throw new NoahHttpError(message, res.status)
+    const err = data as { Detail?: string; Type?: string; title?: string }
+    const detail = String(err?.Detail ?? "").trim() || undefined
+    const type = String(err?.Type ?? err?.title ?? "").trim() || undefined
+    const message =
+      detail || type || `Noah API ${res.status}: ${text.slice(0, 500)}`
+    throw new NoahHttpError(message, res.status, detail, type, data)
   }
 
   return data as T

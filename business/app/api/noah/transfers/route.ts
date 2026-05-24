@@ -8,7 +8,9 @@ import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { getNoahSettlementCryptoCurrency } from "@/lib/noah/config"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { payoutCorridorGate, requireExecutableProviderChannel } from "@/lib/payout-corridor-validation"
-import { mapNoahPrepareError } from "@/lib/noah/noah-prepare-errors"
+import { mapNoahPayoutUserError } from "@/lib/noah/noah-prepare-errors"
+import { logNoahPayoutFailure } from "@/lib/noah/log-noah-payout-failure"
+import { NoahHttpError } from "@/lib/noah/http"
 import {
   prepareSellFromRecipientRow,
   type RecipientSellPrepareRow,
@@ -66,6 +68,17 @@ export async function POST(request: Request) {
     amount > 0
 
   if (!isFormSessionSell) {
+    console.warn("[noah_payout]", {
+      stage: "transfers_validation",
+      userId: user.id,
+      scope: noahCtx.scope,
+      hasSourceWalletId: Boolean(sourceWalletId),
+      hasFormSessionId: Boolean(formSessionId),
+      hasCryptoAuthorizedAmount: Boolean(cryptoAuthorizedAmount),
+      fiatCurrency,
+      countryCode,
+      amount,
+    })
     return NextResponse.json(
       {
         error:
@@ -154,25 +167,49 @@ export async function POST(request: Request) {
         )
       }
     } catch (e) {
-      return NextResponse.json({ error: mapNoahPrepareError(e) }, { status: 400 })
+      logNoahPayoutFailure("transfers_prepare", e, {
+        recipientId,
+        countryCode,
+        fiatCurrency,
+        fiatAmount: amount,
+        cryptoCurrency: cryptoCurrencyRaw,
+        userId: user.id,
+        scope: noahCtx.scope,
+      })
+      return NextResponse.json(
+        { error: mapNoahPayoutUserError(e, "prepare") },
+        { status: 400 },
+      )
     }
   }
 
+  /** Noah sell schema: CryptoCurrency, FiatAmount, CryptoAuthorizedAmount, FormSessionID, Nonce only (`additionalProperties: false`). */
+  const sellNonce = randomUUID()
   const sellPayloadPascal = {
-    CustomerID: noahCtx.noahCustomerId,
     CryptoCurrency: cryptoCurrencyRaw,
     FiatAmount: amount.toFixed(2),
     CryptoAuthorizedAmount: cryptoAuthorizedAmount,
     FormSessionID: formSessionId,
-    Nonce: randomUUID(),
+    Nonce: sellNonce,
   }
   const sellPayloadCamel = {
-    customerId: noahCtx.noahCustomerId,
     cryptoCurrency: cryptoCurrencyRaw,
     fiatAmount: amount.toFixed(2),
     cryptoAuthorizedAmount: cryptoAuthorizedAmount,
     formSessionId,
-    nonce: randomUUID(),
+    nonce: sellNonce,
+  }
+  const sellLogMeta = {
+    recipientId: recipientId || null,
+    countryCode,
+    fiatCurrency,
+    fiatAmount: amount.toFixed(2),
+    cryptoCurrency: cryptoCurrencyRaw,
+    cryptoAuthorizedAmount,
+    formSessionIdPrefix: formSessionId.slice(0, 12),
+    channelId: channelId || null,
+    userId: user.id,
+    scope: noahCtx.scope,
   }
   const metadataExtra = {
     formSessionId,
@@ -193,12 +230,18 @@ export async function POST(request: Request) {
         path: "/transactions/sell",
         json: sellPayloadPascal,
       })
-    } catch {
-      tx = await noahFetch<Record<string, unknown>>({
-        method: "POST",
-        path: "/transactions/sell",
-        json: sellPayloadCamel,
-      })
+    } catch (sellPascalErr) {
+      logNoahPayoutFailure("transfers_sell_pascal", sellPascalErr, sellLogMeta)
+      try {
+        tx = await noahFetch<Record<string, unknown>>({
+          method: "POST",
+          path: "/transactions/sell",
+          json: sellPayloadCamel,
+        })
+      } catch (sellCamelErr) {
+        logNoahPayoutFailure("transfers_sell_camel", sellCamelErr, sellLogMeta)
+        throw sellCamelErr instanceof NoahHttpError ? sellCamelErr : sellPascalErr
+      }
     }
 
     const id = String(tx.ID ?? tx.id ?? "")
@@ -247,6 +290,10 @@ export async function POST(request: Request) {
       status,
     })
   } catch (e: unknown) {
-    return NextResponse.json({ error: mapNoahPrepareError(e) }, { status: 400 })
+    logNoahPayoutFailure("transfers_sell", e, sellLogMeta)
+    return NextResponse.json(
+      { error: mapNoahPayoutUserError(e, "sell") },
+      { status: 400 },
+    )
   }
 }

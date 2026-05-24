@@ -101,9 +101,12 @@ function PayoutRecipientAvatar({ recipient }: { recipient: Recipient }) {
 export function SendSelectedRecipientSummary({
   recipient,
   easenetPreview,
+  alignEnd = false,
 }: {
   recipient: Recipient
   easenetPreview?: HydratedEasenetProfile | null
+  /** Review/confirm: align chip flush right with amount values. */
+  alignEnd?: boolean
 }) {
   const isEasenet = isEasenetRecipientRecord(recipient)
   const displayName = isEasenet
@@ -111,14 +114,14 @@ export function SendSelectedRecipientSummary({
     : recipient.full_name
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, alignEnd && styles.rootAlignEnd]}>
       {isEasenet ? (
         <EasenetRecipientAvatar recipient={recipient} easenetPreview={easenetPreview} />
       ) : (
         <PayoutRecipientAvatar recipient={recipient} />
       )}
-      <View style={styles.info}>
-        <Text style={styles.name} numberOfLines={1} ellipsizeMode="tail">
+      <View style={[styles.info, alignEnd && styles.infoAlignEnd]}>
+        <Text style={[styles.name, alignEnd && styles.textAlignEnd]} numberOfLines={1} ellipsizeMode="tail">
           {displayName}
         </Text>
         {isEasenet ? (
@@ -148,10 +151,24 @@ const styles = StyleSheet.create({
     minWidth: 0,
     flex: 1,
   },
+  rootAlignEnd: {
+    flexDirection: 'row-reverse',
+    flex: 0,
+    flexShrink: 1,
+    justifyContent: 'flex-end',
+  },
   info: {
     flex: 1,
     justifyContent: 'center',
     minWidth: 0,
+  },
+  infoAlignEnd: {
+    flex: 0,
+    flexShrink: 1,
+    alignItems: 'flex-end',
+  },
+  textAlignEnd: {
+    textAlign: 'right',
   },
   name: {
     ...textStyles.bodyLarge,

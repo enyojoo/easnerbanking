@@ -12,12 +12,17 @@ export function SendSelectedRecipientSummary({
   beneficiary,
   className,
   subtitleClassName = "text-sm text-muted-foreground",
+  alignEnd = false,
 }: {
   beneficiary: Beneficiary
   className?: string
   subtitleClassName?: string
+  /** Review/confirm: chip aligns flush right with amount rows. */
+  alignEnd?: boolean
 }) {
   const b = coerceBeneficiaryEasenetDisplay(beneficiary)
+
+  const endClass = alignEnd ? "text-right" : undefined
 
   if (b.payeeEasetag) {
     return (
@@ -26,7 +31,8 @@ export function SendSelectedRecipientSummary({
         easetag={b.payeeEasetag}
         accountKind={b.payeeAccountKind}
         avatarUrl={b.avatarUrl}
-        className={className ?? "min-w-0 flex-1"}
+        className={className ?? (alignEnd ? "min-w-0 shrink-0" : "min-w-0 flex-1")}
+        nameClassName={endClass}
         subtitleClassName={subtitleClassName}
       />
     )
@@ -41,7 +47,9 @@ export function SendSelectedRecipientSummary({
       currency={b.currency}
       avatarUrl={b.avatarUrl}
       subtitle={<PayoutRecipientSubtitleRow left={left} right={right} className={subtitleClassName} />}
-      className={className ?? "min-w-0 flex-1"}
+      alignEnd={alignEnd}
+      className={className ?? (alignEnd ? "min-w-0 shrink-0" : "min-w-0 flex-1")}
+      nameClassName={endClass}
       subtitleClassName={subtitleClassName}
     />
   )

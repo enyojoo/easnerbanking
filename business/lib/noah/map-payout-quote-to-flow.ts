@@ -1,3 +1,4 @@
+import { computeBalancePayoutExchangeFee } from "@easner/shared"
 import type { PayoutQuoteResult } from "@/lib/noah/payout-quote"
 import type { SendFlowState } from "@/lib/send-flow-session"
 
@@ -7,17 +8,20 @@ export function mapPayoutQuoteToFlowState(
 ): SendFlowState {
   const easnerFee =
     q.easner.pricingTotals?.total_easner_fee ?? q.easner.totalFeeAmount ?? 0
+  const exchangeFeeInBalance = computeBalancePayoutExchangeFee(
+    q.totalDebited,
+    state.sendAmount,
+    easnerFee,
+  )
   return {
     ...state,
-    sendAmount: q.sendAmount,
-    sendCurrency: q.sendCurrency,
     payoutQuote: {
       receiveAmount: q.receiveAmount,
       sendAmount: q.sendAmount,
       sendCurrency: q.sendCurrency,
       totalDebited: q.totalDebited,
-      noahFee: q.noah.totalFee,
-      noahFeeCurrency: q.noah.feeCurrency,
+      noahFee: exchangeFeeInBalance,
+      noahFeeCurrency: q.sendCurrency,
       easnerFee,
       easnerFeeCurrency: q.sendCurrency,
       formSessionId: q.noah.formSessionId,

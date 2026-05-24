@@ -3,7 +3,8 @@ import { requireAuth, requireNoahEnv } from "../../_helpers"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
 import { buildPayoutQuote } from "@/lib/noah/payout-quote"
-import { mapNoahPrepareError } from "@/lib/noah/noah-prepare-errors"
+import { mapNoahPayoutUserError } from "@/lib/noah/noah-prepare-errors"
+import { logNoahPayoutFailure } from "@/lib/noah/log-noah-payout-failure"
 import { payoutCorridorGate } from "@/lib/payout-corridor-validation"
 import {
   validatePayoutAmountAgainstLimits,
@@ -139,6 +140,15 @@ export async function POST(request: Request) {
     })
     return NextResponse.json({ ok: true, quote })
   } catch (e) {
-    return NextResponse.json({ ok: false, error: mapNoahPrepareError(e) }, { status: 400 })
+    logNoahPayoutFailure("payouts_quote", e, {
+      recipientId,
+      receiveAmount,
+      sourceBalanceCurrency,
+      userId: user.id,
+    })
+    return NextResponse.json(
+      { ok: false, error: mapNoahPayoutUserError(e, "quote") },
+      { status: 400 },
+    )
   }
 }

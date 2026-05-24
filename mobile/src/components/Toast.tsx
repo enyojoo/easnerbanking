@@ -111,9 +111,7 @@ export default function Toast({
     >
       <View style={[styles.toast, { borderLeftColor: getColor() }]}>
         <TypeIcon size={20} color={iconColor} strokeWidth={2} />
-        <Text style={styles.message} numberOfLines={2}>
-          {message}
-        </Text>
+        <Text style={styles.message}>{message}</Text>
         {action && (
           <Pressable
             onPress={() => {
@@ -156,7 +154,7 @@ const styles = StyleSheet.create({
   },
   toast: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     backgroundColor: colors.neutral.white,
     borderRadius: borderRadius.xl,
     padding: spacing[4],
