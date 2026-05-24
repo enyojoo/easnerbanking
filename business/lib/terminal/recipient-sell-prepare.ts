@@ -1,12 +1,12 @@
 import { mobileProviderPrepareSubstrings } from "@/lib/noah/form-schema-hints"
 import { resolveRecipientPayoutCountry } from "@/lib/terminal/recipient-payout-country"
+import { normalizeBankAccountNumber } from "@/lib/noah/sell-form-builders"
 import {
   buildBankLocalSellForm,
   buildCaBankLocalSellForm,
   buildEurSepaSellForm,
   buildGbBankLocalSellForm,
   buildIdentifierSellForm,
-  normalizeBankAccountNumber,
   buildUsBankSellForm,
   fetchSellChannelItems,
   findBankSellChannelId,

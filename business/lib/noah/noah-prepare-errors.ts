@@ -18,6 +18,16 @@ export function mapNoahPayoutUserError(
     if (msg.includes("formsession") || (msg.includes("session") && msg.includes("expired"))) {
       return "This quote expired. Go back and tap Continue for a fresh quote."
     }
+    if (
+      e.status === 404 ||
+      msg.includes("not found") ||
+      msg.includes("resourcenotfound")
+    ) {
+      if (stage === "sell") {
+        return "This quote expired. Go back and tap Continue for a fresh quote."
+      }
+      return "Payout channel is unavailable right now. Try again in a moment."
+    }
     if (msg.includes("missing step") && msg.includes("cob")) {
       return "We couldn't verify this recipient with our payment partner. Check the bank name and account number, then try again."
     }

@@ -15,6 +15,7 @@ import {
   prepareSellFromRecipientRow,
   type RecipientSellPrepareRow,
 } from "@/lib/terminal/recipient-sell-prepare"
+import { parseNoahFormNextStep } from "@/lib/noah/finalize-sell-form-session"
 
 export async function POST(request: Request) {
   const mis = requireNoahEnv()
@@ -166,6 +167,15 @@ export async function POST(request: Request) {
           { status: 400 },
         )
       }
+      console.info("[noah_payout]", {
+        stage: "transfers_prepare_ok",
+        recipientId,
+        formSessionIdPrefix: formSessionId.slice(0, 12),
+        cryptoAuthorizedAmount,
+        formSessionComplete:
+          prepared.prep.raw.FormSessionComplete ?? prepared.prep.raw.formSessionComplete ?? null,
+        hasNextStep: Boolean(parseNoahFormNextStep(prepared.prep.raw)),
+      })
     } catch (e) {
       logNoahPayoutFailure("transfers_prepare", e, {
         recipientId,

@@ -4,8 +4,28 @@ import {
   buildAckFormForNextStep,
   extractBeneficiaryAckContext,
   parseNoahFormNextStep,
+  parsePrepareSellRaw,
   sellFormSessionNeedsFinalize,
 } from "@/lib/noah/finalize-sell-form-session"
+
+describe("parsePrepareSellRaw", () => {
+  it("preserves formSessionId when follow-up prepare omits it", () => {
+    const previous = parsePrepareSellRaw({
+      FormSessionID: "abc-123",
+      CryptoAuthorizedAmount: "4.52",
+      CryptoAmountEstimate: "4.50",
+      TotalFee: "0.02",
+    })
+    expect(
+      parsePrepareSellRaw({ FormSessionComplete: true }, previous),
+    ).toMatchObject({
+      formSessionId: "abc-123",
+      cryptoAuthorizedAmount: "4.52",
+      cryptoAmountEstimate: "4.50",
+      totalFee: "0.02",
+    })
+  })
+})
 
 describe("parseNoahFormNextStep", () => {
   it("reads Pascal-case NextStep with schema", () => {
