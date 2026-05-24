@@ -33,6 +33,8 @@ export interface SendFlowState {
   feeAmount?: number
   totalAmount?: number
   note: string
+  /** Canada CAD — Noah PaymentPurpose (amount screen dropdown). */
+  paymentPurpose?: string
   transactionId: string
   /** Executable Noah payout quote from confirm (Noah sell/prepare). */
   payoutQuote?: {

@@ -42,6 +42,7 @@ export interface Recipient {
   account_number: string
   bank_name: string
   phone_number?: string
+  email?: string
   currency: string
   routing_number?: string
   sort_code?: string

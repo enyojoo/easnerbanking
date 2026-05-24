@@ -7,7 +7,7 @@ import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CommonActions, useFocusEffect } from '@react-navigation/native'
 import { useQueryClient } from '@tanstack/react-query'
-import { qk } from '@easner/shared'
+import { findPayoutFieldsSchema, formatPayoutArrivalHint, qk } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import type { Recipient, User } from '../../types'
@@ -29,6 +29,8 @@ import type { PricingQuote } from '../../lib/noahService'
 import { noahService } from '../../lib/noahService'
 import type { PayoutPrepareSession } from '../../hooks/executeBalanceSend'
 import { resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
+import { isMobileMoneyRecipient } from '../../lib/recipientPayoutPreview'
+import { getCachedSendDestinations } from '../../lib/sendDestinations'
 import { isEasnerClientTransactionIdFormat } from '../../lib/transactionId'
 
 function inferCountryFromRecipientCurrency(currency: string): string | undefined {
@@ -80,6 +82,8 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     pricingQuoteResult?: PricingQuote | null
     /** Same ETID through review → PIN → transfer (`reserved_debit_etid` on ledger P2P). */
     transactionId?: string
+    note?: string
+    paymentPurpose?: string
   }
 
   const recipient = params.recipient
@@ -87,6 +91,8 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   const selectedBalanceCurrency = params.selectedBalanceCurrency ?? 'USD'
   const receiveCurrency = params.receiveCurrency ?? recipient?.currency ?? ''
   const paramTransactionId = typeof params.transactionId === 'string' ? params.transactionId.trim() : ''
+  const sendNote = typeof params.note === 'string' ? params.note.trim() : ''
+  const sendPaymentPurpose = typeof params.paymentPurpose === 'string' ? params.paymentPurpose.trim() : ''
 
   const [pricing, setPricing] = useState(() => ({
     calculatedSendingAmount: params.calculatedSendingAmount ?? 0,
@@ -117,6 +123,22 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   } = pricing
 
   const easetagUi = recipient ? resolveRecipientEasetagForUi(recipient) : ''
+  const sendDestinations = getCachedSendDestinations()
+  const payoutRail = recipient && isMobileMoneyRecipient(recipient) ? 'mobile_money' : 'bank_transfer'
+  const payoutHints =
+    sendDestinations && recipient?.country_code
+      ? findPayoutFieldsSchema(
+          payoutRail === 'mobile_money'
+            ? sendDestinations.fiat.mobile_money
+            : sendDestinations.fiat.bank_transfer,
+          {
+            countryCode: recipient.country_code,
+            currencyCode: recipient.currency,
+            rail: payoutRail,
+          },
+        )
+      : null
+  const arrivalHint = formatPayoutArrivalHint(payoutHints?.processing_seconds)
   const useLedger =
     Constants.expoConfig?.extra?.easetagLedgerP2pEnabled === true ||
     process.env.EXPO_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true' ||
@@ -149,6 +171,8 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           recipientId: recipient.id,
           receiveAmount: receiveAmountValue,
           sourceBalanceCurrency: selectedBalanceCurrency,
+          ...(sendNote ? { note: sendNote } : {}),
+          ...(sendPaymentPurpose ? { paymentPurpose: sendPaymentPurpose } : {}),
         })
         if (cancelled) return
         const easnerFeeAmt =
@@ -169,6 +193,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
             formSessionId: pq.noah.formSessionId,
             cryptoAuthorizedAmount: pq.noah.cryptoAuthorizedAmount,
             cryptoCurrency: pq.noah.cryptoCurrency,
+            ...(pq.channelId ? { channelId: pq.channelId } : {}),
           },
           quoteLoading: false,
           quoteError: null,
@@ -182,7 +207,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     return () => {
       cancelled = true
     }
-  }, [easetagUi, recipient?.id, recipient?.currency, selectedBalanceCurrency, receiveAmountValue])
+  }, [easetagUi, recipient?.id, recipient?.currency, selectedBalanceCurrency, receiveAmountValue, sendNote, sendPaymentPurpose])
 
   useFocusEffect(
     useCallback(() => {
@@ -202,6 +227,8 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
               selectedBalanceCurrency,
               ...(payoutSession ? { payoutSession } : {}),
               ...(ledgerReservedDebitEtid ? { reservedDebitEtid: ledgerReservedDebitEtid } : {}),
+              ...(sendNote ? { note: sendNote } : {}),
+              ...(sendPaymentPurpose ? { paymentPurpose: sendPaymentPurpose } : {}),
             },
             {
               userId: user.id,
@@ -380,6 +407,9 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
               )}
               <Row label="Total debited" value={`${fmtMoney(calculatedTotalAmount, selectedBalanceCurrency)} ${selectedBalanceCurrency}`} bold />
               <Row label="Recipient gets" value={`${fmtMoney(receiveAmountValue, receiveCurrency)} ${receiveCurrency}`} />
+              {arrivalHint && !easetagUi ? (
+                <Row label="Arrival" value={arrivalHint} />
+              ) : null}
               <Row
                 label="To"
                 value={recipient.full_name}

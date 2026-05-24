@@ -9,7 +9,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { PinChallengeDialog } from "@/components/app-lock/pin-challenge-dialog"
 import { useAuth } from "@/lib/auth-context"
 import { hasPin, isLoginPinModuleAvailable } from "@/lib/login-pin"
-import { formatExchangeRate, formatSendRateLabel } from "@easner/shared"
+import { formatExchangeRate, formatPayoutArrivalHint, formatSendRateLabel } from "@easner/shared"
+import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
 import { getCurrencySymbol } from "@/lib/utils"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 import type { Beneficiary } from "@/lib/recipient-types"
@@ -35,6 +36,7 @@ interface SendFlowState {
   sourceAccountId?: string
   paymentMethod?: string
   note: string
+  paymentPurpose?: string
   transactionId?: string
   payoutQuote?: {
     receiveAmount: number
@@ -46,6 +48,7 @@ interface SendFlowState {
     formSessionId: string
     cryptoAuthorizedAmount: string
     cryptoCurrency: string
+    channelId?: string
     pricingQuoteId: string
     expiresAt: string
   }
@@ -60,6 +63,10 @@ interface SendFlowState {
 
 function isEasenetRecipient(recipient: Beneficiary): boolean {
   return Boolean(recipient.payeeEasetag?.trim())
+}
+
+function isWalletRecipient(recipient: Beneficiary): boolean {
+  return Boolean(recipient.walletNetwork) || /wallet/i.test(recipient.bankName || "")
 }
 
 function getTransferMethod(recipient: Beneficiary, currency: string): string {
@@ -108,6 +115,17 @@ export default function SendConfirmPage() {
     return displayIdFallbackRef.current
   }, [state?.transactionId])
 
+  const payoutRail =
+    state && (/mobile money/i.test(state.recipient.bankName || "") || state.recipient.mobileProvider)
+      ? ("mobile_money" as const)
+      : ("bank_transfer" as const)
+  const { hints: payoutHints } = usePayoutFormSchema({
+    countryCode: state?.recipient.countryCode,
+    currencyCode: state?.receiveCurrency,
+    rail: payoutRail,
+  })
+  const arrivalHint = formatPayoutArrivalHint(payoutHints?.processing_seconds)
+
   const needPinChallenge =
     !!user?.id && isLoginPinModuleAvailable() && hasPin(user.id)
 
@@ -154,7 +172,8 @@ export default function SendConfirmPage() {
   }, [profileLoading, tier1Complete, state, router])
 
   useEffect(() => {
-    if (!state || isEasenetRecipient(state.recipient) || !(state.amount > 0)) return
+    if (!state || isEasenetRecipient(state.recipient) || isWalletRecipient(state.recipient) || !(state.amount > 0))
+      return
     if (state.payoutQuote?.receiveAmount === state.amount) return
     let cancelled = false
     setPayoutQuoteLoading(true)
@@ -170,6 +189,8 @@ export default function SendConfirmPage() {
             recipientId: state.recipient.id,
             receiveAmount: state.amount,
             sourceBalanceCurrency: state.sendCurrency,
+            ...(state.note ? { note: state.note } : {}),
+            ...(state.paymentPurpose ? { paymentPurpose: state.paymentPurpose } : {}),
           }),
         })
         const data = (await res.json().catch(() => ({}))) as {
@@ -180,6 +201,7 @@ export default function SendConfirmPage() {
             sendAmount: number
             sendCurrency: string
             totalDebited: number
+            channelId?: string
             noah: { totalFee: number; formSessionId: string; cryptoAuthorizedAmount: string; cryptoCurrency: string; rate?: number }
             easner: { quoteId: string; expiresAt: string; effectiveRate?: number }
             pricingQuoteId: string
@@ -209,6 +231,7 @@ export default function SendConfirmPage() {
             formSessionId: q.noah.formSessionId,
             cryptoAuthorizedAmount: q.noah.cryptoAuthorizedAmount,
             cryptoCurrency: q.noah.cryptoCurrency,
+            channelId: (q as { channelId?: string }).channelId,
             pricingQuoteId: q.pricingQuoteId,
             expiresAt: q.expiresAt,
           },
@@ -232,7 +255,7 @@ export default function SendConfirmPage() {
     return () => {
       cancelled = true
     }
-  }, [state?.recipient.id, state?.amount, state?.sendCurrency, businessId])
+  }, [state?.recipient.id, state?.amount, state?.sendCurrency, state?.note, state?.paymentPurpose, businessId])
 
   const finishSend = async (transactionId: string) => {
     if (!state) return
@@ -263,6 +286,7 @@ export default function SendConfirmPage() {
               amount: state.sendAmount,
               currency: state.sendCurrency.toUpperCase(),
               ...(plannedEtid ? { reserved_debit_etid: plannedEtid } : {}),
+              ...(state.note ? { note: state.note } : {}),
             }
           : {
               destinationEasetag: tag,
@@ -327,6 +351,13 @@ export default function SendConfirmPage() {
       return
     }
 
+    if (isWalletRecipient(state.recipient)) {
+      setAuthorizeError(
+        "Wallet address recipients cannot be paid from your USD/EUR balance. Use crypto send or another method.",
+      )
+      return
+    }
+
     const pq = state.payoutQuote
     if (!pq?.formSessionId) {
       setAuthorizeError(payoutQuoteError || "Payout quote is not ready. Go back and try again.")
@@ -366,6 +397,10 @@ export default function SendConfirmPage() {
             formSessionId: pq.formSessionId,
             cryptoAuthorizedAmount: pq.cryptoAuthorizedAmount,
             cryptoCurrency: pq.cryptoCurrency,
+            countryCode: state.recipient.countryCode?.toUpperCase(),
+            ...(state.payoutQuote?.channelId ? { channelId: state.payoutQuote.channelId } : {}),
+            recipientId: state.recipient.id,
+            ...(state.note ? { note: state.note } : {}),
           }
 
       const transferRes = await fetchWithSession("/api/noah/transfers", {
@@ -430,7 +465,7 @@ export default function SendConfirmPage() {
 
   const sourceAccount = sourceAccounts.find((a) => a.id === state.sourceAccountId!)
   const transferMethod = getTransferMethod(state.recipient, state.receiveCurrency)
-  const processingTime = getProcessingTime(transferMethod)
+  const processingTime = arrivalHint ?? getProcessingTime(transferMethod)
   const easenetSend = isEasenetRecipient(state.recipient)
   const hasFx = !easenetSend && state.receiveCurrency !== state.sendCurrency
   const noahFee = easenetSend ? 0 : (state.payoutQuote?.noahFee ?? state.pricingQuote?.transferFee ?? 0)

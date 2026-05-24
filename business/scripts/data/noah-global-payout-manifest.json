@@ -1,0 +1,1012 @@
+{
+  "generated_at": "2026-05-23T23:54:30.671Z",
+  "corridors": [
+    {
+      "country_code": "AT",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "5080cbb9-12f8-5d6a-b74a-b5d0563cbbf4",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "BE",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "a76040a7-41c7-54ac-b126-307aaafeb026",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "BG",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "1a02550f-b0a2-59af-8732-44e2687c1d2c",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "CH",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "0b7f6ce4-18be-52b2-ac7b-dab0a2a980b6",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "CY",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "20b08107-6daa-5872-a990-e51b723a492b",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "CZ",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "1b6438a6-c52d-5571-86a8-aef06c274875",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "DE",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "1b1d6b46-2b7e-5e23-acd7-de09ae4d561c",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "DK",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "6de6158e-d634-5aef-b09c-84a384e50078",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "EE",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "dd6653c3-ceb4-5e76-b199-84f3f15b03fc",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "ES",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "a4949a9e-7e55-52ae-b3e0-7f5a3faf2eed",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "FI",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "b1756b87-9eb8-530c-a6c2-cd2a936a2b71",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "FR",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "18af6cf4-d4d2-566f-bfdb-bceb42f47ffb",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "GB",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "3e388565-4320-5c73-a00a-4582ca107c05",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "GH",
+      "fiat_currency": "GHS",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankLocal",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "b57fa87f-9d2b-5b42-a6e0-7acdcb1019c5",
+        "payment_method_type": "BankLocal",
+        "form_schema_hash": "86896d1c1a4de300",
+        "reference_required": false,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "10"
+        },
+        "processing_seconds": 86400,
+        "amount_field_mode": "note_optional_only"
+      }
+    },
+    {
+      "country_code": "GR",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "68b53505-61da-54b8-a3e3-39c5a6315a27",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "HR",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "6dfc22ac-63ac-5d98-9d6a-e474190639b7",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "HU",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "2287dcf1-cef4-57d4-a988-b5f415b8af38",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "IE",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "0c30712a-8107-55d8-9bdc-7ccd925e6425",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "IS",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "ab4ded70-b61a-52f7-8926-8f554e9ef640",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "IT",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "57562065-2ca2-5b97-b705-4a4ec67a42b9",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "KE",
+      "fiat_currency": "KES",
+      "rail": "bank_transfer",
+      "channel_count": 2,
+      "payment_method_type": "BankLocal",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "5e67e9b5-2a8c-5520-9915-34d25511d2c4",
+        "payment_method_type": "BankLocal",
+        "form_schema_hash": "ad0e81e4bb9b92c5",
+        "reference_required": false,
+        "reference_optional": false,
+        "needs_phone": true,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "104"
+        },
+        "processing_seconds": 86400,
+        "amount_field_mode": "note_optional_only"
+      }
+    },
+    {
+      "country_code": "KE",
+      "fiat_currency": "KES",
+      "rail": "mobile_money",
+      "channel_count": 2,
+      "payment_method_type": "IdentifierMobileMoney",
+      "payment_method_category": "Identifier",
+      "fields_schema": {
+        "channel_id": "18f3cc1f-9a02-5558-b306-a2a881a8083d",
+        "payment_method_type": "IdentifierMobileMoney",
+        "form_schema_hash": "afbe59dab8fc2707",
+        "reference_required": false,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "100"
+        },
+        "processing_seconds": 86400,
+        "amount_field_mode": "note_optional_only"
+      }
+    },
+    {
+      "country_code": "LI",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "cd6750da-6fad-570d-9bd9-918dd31682cd",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "LT",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "0578e0f4-988e-556f-a079-76a72fd3378f",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "LU",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "36e12662-5ecb-5cb9-a652-1bbef2358d7c",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "LV",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "d03e247d-cce7-55d2-960b-213a65821069",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "MT",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "824cf14e-1518-5c78-a298-dd83bdc3f343",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "NG",
+      "fiat_currency": "NGN",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankLocal",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "ae1f871a-f2cd-5eab-84bf-5240091d9767",
+        "payment_method_type": "BankLocal",
+        "form_schema_hash": "a54d7f465cc31705",
+        "reference_required": false,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "50"
+        },
+        "processing_seconds": 50,
+        "amount_field_mode": "note_optional_only"
+      }
+    },
+    {
+      "country_code": "NL",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "cc80b92e-3f36-5d83-bdf2-6fa3fe7ebae4",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "NO",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "e12bd501-6820-54b9-a37e-92d2f493a63a",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "PL",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "d38f4b9c-7048-55f8-b62c-6813ae767182",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "PT",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "7db2821d-ae62-5685-8737-94cd93333c93",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "RO",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "6cb3b9d4-5683-5f54-a50f-e81f52531c15",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "SE",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "bc5695b8-e3d2-5c79-800d-f0fdafca64ee",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "SI",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "798bc7fc-de43-56a7-bdd1-8494072ad44d",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "SK",
+      "fiat_currency": "EUR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSepa",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "a3469fed-5c74-5241-ad0e-8111c150edd2",
+        "payment_method_type": "BankSepa",
+        "form_schema_hash": "55845652e89bfae9",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": false,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "0",
+          "max": "1000000"
+        },
+        "processing_seconds": 60,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "US",
+      "fiat_currency": "USD",
+      "rail": "bank_transfer",
+      "channel_count": 3,
+      "payment_method_type": "BankAch",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "0369a140-8b18-51ca-8ce6-f1dff5ba0362",
+        "payment_method_type": "BankAch",
+        "form_schema_hash": "78eb203118e32b45",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": true,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "2.5"
+        },
+        "processing_seconds": 3600,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "XX",
+      "fiat_currency": "USD",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankSwift",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "43c031ba-1bf5-5bd9-b075-e0d30dbe5161",
+        "payment_method_type": "BankSwift",
+        "form_schema_hash": "9a18f71ea877c02f",
+        "reference_required": true,
+        "reference_optional": false,
+        "needs_phone": false,
+        "needs_email": false,
+        "needs_address": true,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "30"
+        },
+        "processing_seconds": 86400,
+        "amount_field_mode": "note"
+      }
+    },
+    {
+      "country_code": "ZA",
+      "fiat_currency": "ZAR",
+      "rail": "bank_transfer",
+      "channel_count": 1,
+      "payment_method_type": "BankLocal",
+      "payment_method_category": "Bank",
+      "fields_schema": {
+        "channel_id": "87e0cbde-036d-562a-b882-1ce150e3cbc3",
+        "payment_method_type": "BankLocal",
+        "form_schema_hash": "03df3b4769010a56",
+        "reference_required": false,
+        "reference_optional": false,
+        "needs_phone": true,
+        "needs_email": true,
+        "needs_address": true,
+        "needs_branch_code": false,
+        "needs_sort_code": false,
+        "limits": {
+          "min": "10"
+        },
+        "processing_seconds": 86400,
+        "amount_field_mode": "note_optional_only"
+      }
+    }
+  ]
+}

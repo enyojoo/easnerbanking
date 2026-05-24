@@ -40,6 +40,7 @@ type Body = {
   amount?: string | number
   currency?: string
   reserved_debit_etid?: string
+  note?: string
 }
 
 /**
@@ -67,6 +68,7 @@ export async function POST(request: Request) {
   }
 
   const ledgerAmount = Math.round(amount * 100) / 100
+  const sendNote = typeof body?.note === "string" ? body.note.trim() : ""
 
   const acc = await resolveNoahAccountContext(request, auth.user.id)
   if (!acc.ok) return acc.response
@@ -209,6 +211,7 @@ export async function POST(request: Request) {
         payeeEasetag: payeeEasetagResolved,
         senderEasetag: senderEasetag || undefined,
         reservedDebitEtid: reservedDebit || undefined,
+        sendNote: sendNote || undefined,
       })
       if (!result.ok) {
         return NextResponse.json({ ok: false, error: result.error }, { status: 400 })
@@ -240,6 +243,7 @@ export async function POST(request: Request) {
         payeeEasetag: payeeEasetagResolved,
         senderEasetag: senderEasetag || undefined,
         reservedDebitEtid: reservedDebit || undefined,
+        sendNote: sendNote || undefined,
       })
       if (!result.ok) {
         return NextResponse.json({ ok: false, error: result.error }, { status: 400 })
@@ -281,6 +285,7 @@ export async function POST(request: Request) {
     payeeEasetag: payeeEasetagResolved,
     senderEasetag: senderEasetag || undefined,
     reservedDebitEtid: reservedDebit || undefined,
+    sendNote: sendNote || undefined,
   })
 
   if (!result.ok) {

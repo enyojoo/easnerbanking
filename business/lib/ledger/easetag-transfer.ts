@@ -79,6 +79,8 @@ export type ExecuteEasetagTransferInput = {
   payeeEasetag: string
   /** Client-generated ETID; persisted on both legs when valid `ETID` + 8 digits. */
   reservedDebitEtid?: string | null
+  /** User note from send flow — shown on transaction detail only. */
+  sendNote?: string | null
 }
 
 export type ExecuteEasetagTransferResult =
@@ -165,6 +167,11 @@ export async function executeEasetagTransfer(
     payee_easetag: payeeTag,
   }
   if (senderTag) debitMeta.sender_easetag = senderTag
+  const sendNote = String(input.sendNote || "").trim()
+  if (sendNote) {
+    debitMeta.send_note = sendNote
+    debitMeta.note = sendNote
+  }
 
   const creditMeta: Record<string, unknown> = {
     easner_transaction_id: etid,
@@ -174,6 +181,10 @@ export async function executeEasetagTransfer(
     sender_easetag: senderTag,
   }
   if (payeeTag) creditMeta.payee_easetag = payeeTag
+  if (sendNote) {
+    creditMeta.send_note = sendNote
+    creditMeta.note = sendNote
+  }
 
   let debited = false
   let credited = false

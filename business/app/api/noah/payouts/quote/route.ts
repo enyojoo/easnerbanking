@@ -3,6 +3,7 @@ import { requireAuth, requireNoahEnv } from "../../_helpers"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
 import { buildPayoutQuote } from "@/lib/noah/payout-quote"
+import { mapNoahPrepareError } from "@/lib/noah/noah-prepare-errors"
 import { payoutCorridorGate } from "@/lib/payout-corridor-validation"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
@@ -31,6 +32,10 @@ export async function POST(request: Request) {
     recipient?: RecipientSellPrepareRow
     receiveAmount?: number | string
     sourceBalanceCurrency?: string
+    note?: string
+    paymentPurpose?: string
+    email?: string
+    branchCode?: string
   } | null
 
   const receiveAmount = Number(body?.receiveAmount)
@@ -75,6 +80,23 @@ export async function POST(request: Request) {
   }
 
   try {
+    const note = typeof body?.note === "string" ? body.note.trim() : undefined
+    const paymentPurpose =
+      typeof body?.paymentPurpose === "string" ? body.paymentPurpose.trim() : undefined
+    const prepareOverrides =
+      note || paymentPurpose || body?.email || body?.branchCode
+        ? {
+            ...(note ? { note } : {}),
+            ...(paymentPurpose ? { paymentPurpose } : {}),
+            ...(typeof body?.email === "string" && body.email.trim()
+              ? { email: body.email.trim() }
+              : {}),
+            ...(typeof body?.branchCode === "string" && body.branchCode.trim()
+              ? { branchCode: body.branchCode.trim() }
+              : {}),
+          }
+        : undefined
+
     const quote = await buildPayoutQuote({
       userId: user.id,
       noahCustomerId: acc.ctx.noahCustomerId,
@@ -82,10 +104,10 @@ export async function POST(request: Request) {
       recipient: inlineRecipient,
       receiveFiatAmount: receiveAmount,
       sourceBalanceCurrency,
+      prepareOverrides,
     })
     return NextResponse.json({ ok: true, quote })
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    return NextResponse.json({ ok: false, error: msg }, { status: 400 })
+    return NextResponse.json({ ok: false, error: mapNoahPrepareError(e) }, { status: 400 })
   }
 }

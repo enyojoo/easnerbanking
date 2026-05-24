@@ -5,6 +5,7 @@ export type RecipientWritePayload = {
   account_number: string
   bank_name: string
   phone_number?: string | null
+  email?: string | null
   currency: string
   routing_number?: string | null
   sort_code?: string | null

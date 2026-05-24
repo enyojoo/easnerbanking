@@ -13,6 +13,7 @@ type RecipientRow = {
   account_number: string
   bank_name: string
   phone_number?: string | null
+  email?: string | null
   currency: string
   routing_number?: string | null
   sort_code?: string | null
@@ -46,6 +47,7 @@ export type RecipientUpsertInput = {
   bankName: string
   currency: string
   phoneNumber?: string
+  email?: string
   mobileProvider?: string
   walletAsset?: string
   walletNetwork?: string
@@ -123,6 +125,7 @@ function toWritePayload(input: RecipientUpsertInput) {
     account_number: input.accountNumber,
     bank_name: deriveBankName(input),
     phone_number: input.phoneNumber || null,
+    email: input.email?.trim() || null,
     currency: input.currency,
     routing_number: input.routingNumber || null,
     sort_code: input.sortCode || null,
@@ -242,7 +245,7 @@ export function toBeneficiary(row: RecipientRow): Beneficiary {
     sortCode: row.sort_code || undefined,
     country: resolveCountryName(row.currency, normalizedCountryCode),
     currency: row.currency,
-    email: "",
+    email: row.email || "",
     phone: row.phone_number || "",
     createdAt: row.created_at,
     lastUsed: row.updated_at || row.created_at,

@@ -1,7 +1,10 @@
 import {
+  findPayoutFieldsSchema,
   sortByEasnerCountryPickerOrder,
   type CryptoDestinationPublic,
   type PayoutCorridorPublic,
+  type PayoutFieldsSchemaHint,
+  type PayoutRail,
 } from '@easner/shared'
 
 export type RecipientType = 'bank' | 'mobile_money' | 'wallet'
@@ -325,6 +328,21 @@ export function getCatalogByRecipientType(recipientType: RecipientType): Recipie
   return sortRecipientCatalogEntries(recipientCatalog.filter((entry) => entry.recipientType === recipientType))
 }
 
+export function getPayoutFieldsSchemaForCorridor(input: {
+  countryCode: string
+  currencyCode: string
+  rail: PayoutRail
+}): PayoutFieldsSchemaHint | null {
+  if (!payoutCorridorCache) return null
+  const corridors =
+    input.rail === 'mobile_money' ? payoutCorridorCache.mobile : payoutCorridorCache.bank
+  return findPayoutFieldsSchema(corridors, {
+    countryCode: input.countryCode,
+    currencyCode: input.currencyCode,
+    rail: input.rail,
+  })
+}
+
 export function getRecipientFormFields(
   currencyCode: string,
   recipientType: RecipientType,
@@ -355,7 +373,14 @@ export function getRecipientProviders(
         c.country_code.toUpperCase() === countryCode.toUpperCase() &&
         c.currency_code.toUpperCase() === currencyCode.toUpperCase(),
     )
-    if (row && Array.isArray(row.providers)) return row.providers as string[]
+    if (row) {
+      if (Array.isArray(row.providers) && (row.providers as string[]).length > 0) {
+        return row.providers as string[]
+      }
+      const fromSchema = row.fields_schema?.mobile_provider_labels
+      if (fromSchema?.length) return fromSchema
+    }
+    return []
   }
   const match = recipientCatalog.find(
     (entry) => entry.currencyCode === currencyCode && entry.recipientType === recipientType,

@@ -91,6 +91,7 @@ export interface PayoutQuote {
   sendAmount: number
   sendCurrency: string
   totalDebited: number
+  channelId?: string
   noah: {
     totalFee: number
     cryptoAuthorizedAmount: string
@@ -135,6 +136,10 @@ export const noahService = {
     recipientId: string
     receiveAmount: number
     sourceBalanceCurrency: string
+    note?: string
+    paymentPurpose?: string
+    email?: string
+    branchCode?: string
   }): Promise<PayoutQuote> {
     const session = await requireAuthSession()
     const scopeHeaders = await getNoahScopeHeaders()
@@ -149,6 +154,10 @@ export const noahService = {
         recipientId: input.recipientId,
         receiveAmount: input.receiveAmount,
         sourceBalanceCurrency: input.sourceBalanceCurrency,
+        ...(input.note ? { note: input.note } : {}),
+        ...(input.paymentPurpose ? { paymentPurpose: input.paymentPurpose } : {}),
+        ...(input.email ? { email: input.email } : {}),
+        ...(input.branchCode ? { branchCode: input.branchCode } : {}),
       }),
     })
     const data = await response.json().catch(() => ({}))
@@ -901,6 +910,7 @@ export const noahService = {
     cryptoCurrency?: string
     /** Same `ETID`+8 digits as review; passed as `reserved_debit_etid` for ledger P2P (no DB reservation row). */
     reservedDebitEtid?: string
+    note?: string
   }): Promise<NoahTransfer> {
     const session = await requireAuthSession()
     const scopeHeaders = await getNoahScopeHeaders()
@@ -925,6 +935,7 @@ export const noahService = {
           ...(input.reservedDebitEtid?.trim()
             ? { reserved_debit_etid: input.reservedDebitEtid.trim().toUpperCase() }
             : {}),
+          ...(input.note?.trim() ? { note: input.note.trim() } : {}),
         }),
       })
       const data = (await response.json().catch(() => ({}))) as Record<string, unknown>
@@ -991,6 +1002,10 @@ export const noahService = {
     formSessionId?: string
     cryptoAuthorizedAmount?: string
     cryptoCurrency?: string
+    countryCode?: string
+    channelId?: string
+    recipientId?: string
+    note?: string
   }): Promise<NoahTransfer> {
     const session = await requireAuthSession()
     const scopeHeaders = await getNoahScopeHeaders()

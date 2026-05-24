@@ -46,6 +46,15 @@ import { useManualSendFlow } from "@/hooks/use-manual-send-flow"
 import { PaymentMethodDisplayLogo } from "@/components/send/payment-method-display-logo"
 import { pickDefaultManualPayInOption } from "@easner/shared"
 import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
+import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
+import { validatePayoutAmountAgainstLimits, validateSendAmountFields } from "@easner/shared"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 function formatAmountForDisplay(raw: string): string {
   if (!raw || raw === ".") return raw || ""
@@ -80,6 +89,8 @@ export default function SendPage() {
   const [otherPaymentMethod, setOtherPaymentMethod] = useState<string | null>(null)
   const [manualPaymentMethodId, setManualPaymentMethodId] = useState<string | null>(null)
   const [note, setNote] = useState("")
+  const [paymentPurpose, setPaymentPurpose] = useState("")
+  const [amountFieldError, setAmountFieldError] = useState<string | null>(null)
   const [sourceSheetOpen, setSourceSheetOpen] = useState(false)
   const [noahFxRates, setNoahFxRates] = useState<Record<string, number>>({})
 
@@ -95,6 +106,7 @@ export default function SendPage() {
         setOtherCurrency(s.otherCurrency ?? null)
         setOtherPaymentMethod(s.otherPaymentMethod ?? null)
         setNote(s.note || "")
+        setPaymentPurpose(s.paymentPurpose || "")
       } catch {
         // ignore
       }
@@ -298,6 +310,18 @@ export default function SendPage() {
     tier1Complete &&
     !manualAmountOutOfRange
 
+  const isEasetagRecipient = Boolean(recipient?.payeeEasetag?.trim())
+  const payoutRail =
+    recipient && /mobile money/i.test(recipient.bankName || "")
+      ? ("mobile_money" as const)
+      : ("bank_transfer" as const)
+  const { hints: payoutHints } = usePayoutFormSchema({
+    countryCode: recipient?.countryCode,
+    currencyCode: recipient?.currency,
+    rail: payoutRail,
+  })
+  const amountFieldMode = payoutHints?.amount_field_mode ?? "note_optional_only"
+
   const canContinue = isBalanceSource ? canContinueBalance : canContinueOtherCurrency
 
   const isAuthorizeFlow = !isBalanceSource
@@ -351,8 +375,39 @@ export default function SendPage() {
     return "Select method"
   }
 
+  const isWalletRecipient =
+    Boolean(recipient?.walletNetwork) || /wallet/i.test(recipient?.bankName || "")
+
   const handleContinue = () => {
     if (!canContinue || !recipient) return
+    if (isBalanceSource && isWalletRecipient) {
+      setAmountFieldError(
+        "Wallet address recipients cannot be paid from your balance. Choose a bank, mobile money, or Easetag recipient.",
+      )
+      return
+    }
+    const fieldCheck = validateSendAmountFields({
+      hints: payoutHints,
+      note,
+      paymentPurpose,
+      isEasetag: isEasetagRecipient,
+    })
+    if (!fieldCheck.ok) {
+      setAmountFieldError(fieldCheck.message)
+      return
+    }
+    if (isBalanceSource && receiveAmount > 0) {
+      const limitCheck = validatePayoutAmountAgainstLimits({
+        amount: receiveAmount,
+        hints: payoutHints,
+        currencyCode: receiveCurrency,
+      })
+      if (!limitCheck.ok) {
+        setAmountFieldError(limitCheck.message)
+        return
+      }
+    }
+    setAmountFieldError(null)
     const transactionId = generateTransactionId()
 
     const feeAmount = otherCurrency && manualSend.quote ? manualSend.quote.feeAmount : 0
@@ -373,6 +428,7 @@ export default function SendPage() {
       feeAmount,
       totalAmount,
       note: note.trim(),
+      ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
       transactionId,
     }
     persistSendFlowState(state)
@@ -519,18 +575,60 @@ export default function SendPage() {
         </div>
       )}
 
-      {recipient && (
+      {recipient && amountFieldMode === "payment_purpose" ? (
         <div className="space-y-2">
-          <Label htmlFor="note">Note (optional)</Label>
+          <Label htmlFor="payment-purpose">Payment purpose</Label>
+          <Select value={paymentPurpose} onValueChange={setPaymentPurpose}>
+            <SelectTrigger id="payment-purpose" className="h-11">
+              <SelectValue placeholder="Select purpose" />
+            </SelectTrigger>
+            <SelectContent>
+              {(payoutHints?.payment_purpose_enum ?? []).map((p) => (
+                <SelectItem key={p} value={p}>
+                  {p}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {amountFieldError ? <p className="text-sm text-destructive">{amountFieldError}</p> : null}
+          {payoutHints?.limits?.min || payoutHints?.limits?.max ? (
+            <p className="text-xs text-muted-foreground">
+              {[
+                payoutHints.limits.min ? `Min ${payoutHints.limits.min} ${receiveCurrency}` : null,
+                payoutHints.limits.max ? `Max ${payoutHints.limits.max} ${receiveCurrency}` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          ) : null}
+        </div>
+      ) : recipient ? (
+        <div className="space-y-2">
+          <Label htmlFor="note">Note</Label>
           <Input
             id="note"
-            placeholder="Add a note for this transfer"
+            placeholder={
+              amountFieldMode === "note"
+                ? "Payment reference (required)"
+                : "Add a note for this transfer"
+            }
             value={note}
             onChange={(e) => setNote(e.target.value)}
             className="h-11"
           />
+          {amountFieldError ? <p className="text-sm text-destructive">{amountFieldError}</p> : null}
+          {payoutHints?.limits?.min || payoutHints?.limits?.max ? (
+            <p className="text-xs text-muted-foreground">
+              {[
+                payoutHints.limits.min ? `Min ${payoutHints.limits.min} ${receiveCurrency}` : null,
+                payoutHints.limits.max ? `Max ${payoutHints.limits.max} ${receiveCurrency}` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          ) : null}
         </div>
-      )}
+      ) : null}
 
       <Button
         size="lg"

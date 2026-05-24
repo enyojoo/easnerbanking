@@ -2,6 +2,27 @@ import type { ProviderHealthStatus, ProviderRoutingEntry } from "./send-destinat
 
 export type PayoutRail = "bank_transfer" | "mobile_money"
 
+/** Normalized Noah FormSchema hints for recipient + send UI. */
+export type PayoutFieldsSchemaHint = {
+  channel_id?: string
+  payment_method_type?: string
+  form_schema_hash?: string
+  reference_required?: boolean
+  reference_optional?: boolean
+  payment_purpose_enum?: string[]
+  bank_enum?: string[]
+  /** Mobile money: labels from Noah Identifier channels (e.g. M-PESA for KE). */
+  mobile_provider_labels?: string[]
+  needs_phone?: boolean
+  needs_email?: boolean
+  needs_address?: boolean
+  needs_branch_code?: boolean
+  needs_sort_code?: boolean
+  limits?: { min?: string; max?: string }
+  processing_seconds?: number
+  amount_field_mode: "note" | "payment_purpose" | "note_optional_only"
+}
+
 /** Public shape returned by GET /api/payout-corridors */
 export type PayoutCorridorPublic = {
   id: string
@@ -20,6 +41,8 @@ export type PayoutCorridorPublic = {
   noah_sell_available?: boolean
   provider_routing?: ProviderRoutingEntry[]
   provider_health?: Record<string, ProviderHealthStatus>
+  /** From Noah GET /channels/sell — bank enums, reference rules, purpose list. */
+  fields_schema?: PayoutFieldsSchemaHint | null
 }
 
 export function corridorDisplayLabel(c: Pick<PayoutCorridorPublic, "country_name" | "currency_code" | "currency_name">): string {

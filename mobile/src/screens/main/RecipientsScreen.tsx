@@ -58,6 +58,7 @@ import { ripple } from '../../lib/androidRipple'
 import { getAllCountryCurrencies, searchCountryCurrencies, CountryCurrency } from '../../lib/countryCurrencyMapping'
 import {
   getCatalogByRecipientTypeWithJurisdiction,
+  getPayoutFieldsSchemaForCorridor,
   getRecipientProviders,
   getWalletAssets,
   getWalletNetworksForAsset,
@@ -80,7 +81,12 @@ import RecipientFormDropdownList from '../../components/recipients/RecipientForm
 import { isEasenetRecipientRecord, resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { CountryFlag } from '../../components/flags/CountryFlag'
-import { getCountryCodeForCurrency } from '@easner/shared'
+import {
+  getCountryCodeForCurrency,
+  recipientFormNeedsAddress,
+  recipientFormNeedsEmail,
+} from '@easner/shared'
+import { PayoutSchemaExtraFields } from '../../components/recipients/PayoutSchemaExtraFields'
 
 function RecipientsContent({ navigation }: NavigationProps) {
   const { user, userProfile } = useAuth()
@@ -111,6 +117,8 @@ function RecipientsContent({ navigation }: NavigationProps) {
   const [walletAssetSearchTerm, setWalletAssetSearchTerm] = useState('')
   const [walletNetworkSearchTerm, setWalletNetworkSearchTerm] = useState('')
   const [showScanModal, setShowScanModal] = useState(false)
+  const [showBankEnumPicker, setShowBankEnumPicker] = useState(false)
+  const [bankEnumSearch, setBankEnumSearch] = useState('')
   const [cameraPermission, requestCameraPermission] = useCameraPermissions()
   const [countrySearchTerm, setCountrySearchTerm] = useState('')
   const [transferType, setTransferType] = useState<'ACH' | 'Wire' | null>(null) // For USA
@@ -192,6 +200,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
     city: '',
     state: '',
     postalCode: '',
+    email: '',
     payeeEasetag: '',
   })
 
@@ -450,6 +459,17 @@ function RecipientsContent({ navigation }: NavigationProps) {
             ? `Mobile Money (${newRecipient.provider})`
             : newRecipient.bankName
 
+      const bankSchemaHints =
+        selectedCountryCurrency && selectedRecipientType === 'bank'
+          ? getPayoutFieldsSchemaForCorridor({
+              countryCode: selectedCountryCurrency.countryCode,
+              currencyCode: selectedCountryCurrency.currencyCode,
+              rail: 'bank_transfer',
+            })
+          : null
+      const needsAddr =
+        selectedRecipientType === 'bank' &&
+        recipientFormNeedsAddress({ hints: bankSchemaHints, currencyCode: newRecipient.currency })
       const createdRecipient = await recipientService.create(userProfile.id, {
         fullName: newRecipient.fullName,
         accountNumber: accountNumberForType,
@@ -457,6 +477,10 @@ function RecipientsContent({ navigation }: NavigationProps) {
         currency: newRecipient.currency,
         countryCode: selectedCountryCurrency?.countryCode,
         phoneNumber: selectedRecipientType === 'mobile' ? newRecipient.phoneNumber || undefined : undefined,
+        email:
+          selectedRecipientType === 'bank' && recipientFormNeedsEmail(bankSchemaHints)
+            ? newRecipient.email.trim() || undefined
+            : undefined,
         mobileProvider: selectedRecipientType === 'mobile' ? newRecipient.provider : undefined,
         walletNetwork: selectedRecipientType === 'wallet' ? newRecipient.network : undefined,
         walletMemoTag: selectedRecipientType === 'wallet' ? newRecipient.memoTag : undefined,
@@ -467,10 +491,22 @@ function RecipientsContent({ navigation }: NavigationProps) {
         transferType: selectedCountryCurrency?.countryCode === 'US' ? transferType || undefined : undefined,
         checkingOrSavings:
           selectedCountryCurrency?.countryCode === 'US' ? (newRecipient.checkingOrSavings as 'checking' | 'savings' | '') || undefined : undefined,
-        addressLine1: selectedCountryCurrency?.countryCode === 'US' ? newRecipient.addressLine1 || undefined : undefined,
-        city: selectedCountryCurrency?.countryCode === 'US' ? newRecipient.city || undefined : undefined,
-        state: selectedCountryCurrency?.countryCode === 'US' ? newRecipient.state || undefined : undefined,
-        postalCode: selectedCountryCurrency?.countryCode === 'US' ? newRecipient.postalCode || undefined : undefined,
+        addressLine1:
+          selectedCountryCurrency?.countryCode === 'US' || needsAddr
+            ? newRecipient.addressLine1 || undefined
+            : undefined,
+        city:
+          selectedCountryCurrency?.countryCode === 'US' || needsAddr
+            ? newRecipient.city || undefined
+            : undefined,
+        state:
+          selectedCountryCurrency?.countryCode === 'US' || needsAddr
+            ? newRecipient.state || undefined
+            : undefined,
+        postalCode:
+          selectedCountryCurrency?.countryCode === 'US' || needsAddr
+            ? newRecipient.postalCode || undefined
+            : undefined,
       })
       setUiRecipients((prev) => [createdRecipient, ...prev.filter((r) => r.id !== createdRecipient.id)])
 
@@ -576,6 +612,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
       city: recipient.city || '',
       state: recipient.state || '',
       postalCode: recipient.postal_code || '',
+      email: recipient.email || '',
       payeeEasetag: (
         recipient.payee_easetag ||
         (inferredType === 'easenet' ? recipient.account_number : '') ||
@@ -638,11 +675,26 @@ function RecipientsContent({ navigation }: NavigationProps) {
             ? `Mobile Money (${newRecipient.provider})`
             : newRecipient.bankName
 
+      const bankSchemaHints =
+        selectedCountryCurrency && selectedRecipientType === 'bank'
+          ? getPayoutFieldsSchemaForCorridor({
+              countryCode: selectedCountryCurrency.countryCode,
+              currencyCode: selectedCountryCurrency.currencyCode,
+              rail: 'bank_transfer',
+            })
+          : null
+      const needsAddr =
+        selectedRecipientType === 'bank' &&
+        recipientFormNeedsAddress({ hints: bankSchemaHints, currencyCode: newRecipient.currency })
       const updatedRecipient = await recipientService.update(editingRecipient.id, user.id, {
         fullName: newRecipient.fullName,
         accountNumber: accountNumberForType,
         bankName: bankNameForType,
         phoneNumber: selectedRecipientType === 'mobile' ? newRecipient.phoneNumber : '',
+        email:
+          selectedRecipientType === 'bank' && recipientFormNeedsEmail(bankSchemaHints)
+            ? newRecipient.email.trim() || undefined
+            : undefined,
         mobileProvider: selectedRecipientType === 'mobile' ? newRecipient.provider : undefined,
         walletNetwork: selectedRecipientType === 'wallet' ? newRecipient.network : undefined,
         walletMemoTag: selectedRecipientType === 'wallet' ? newRecipient.memoTag : undefined,
@@ -654,10 +706,22 @@ function RecipientsContent({ navigation }: NavigationProps) {
         transferType: selectedCountryCurrency?.countryCode === 'US' ? transferType || undefined : undefined,
         checkingOrSavings:
           selectedCountryCurrency?.countryCode === 'US' ? (newRecipient.checkingOrSavings as 'checking' | 'savings' | '') || undefined : undefined,
-        addressLine1: selectedCountryCurrency?.countryCode === 'US' ? newRecipient.addressLine1 || undefined : undefined,
-        city: selectedCountryCurrency?.countryCode === 'US' ? newRecipient.city || undefined : undefined,
-        state: selectedCountryCurrency?.countryCode === 'US' ? newRecipient.state || undefined : undefined,
-        postalCode: selectedCountryCurrency?.countryCode === 'US' ? newRecipient.postalCode || undefined : undefined,
+        addressLine1:
+          selectedCountryCurrency?.countryCode === 'US' || needsAddr
+            ? newRecipient.addressLine1 || undefined
+            : undefined,
+        city:
+          selectedCountryCurrency?.countryCode === 'US' || needsAddr
+            ? newRecipient.city || undefined
+            : undefined,
+        state:
+          selectedCountryCurrency?.countryCode === 'US' || needsAddr
+            ? newRecipient.state || undefined
+            : undefined,
+        postalCode:
+          selectedCountryCurrency?.countryCode === 'US' || needsAddr
+            ? newRecipient.postalCode || undefined
+            : undefined,
       })
       setUiRecipients((prev) => prev.map((r) => (r.id === updatedRecipient.id ? updatedRecipient : r)))
 
@@ -747,7 +811,11 @@ function RecipientsContent({ navigation }: NavigationProps) {
     if (selectedCountryCurrency?.countryCode === 'US' && !transferType) {
       return false
     }
-    if (selectedCountryCurrency?.countryCode === 'US' && !newRecipient.checkingOrSavings) {
+    if (
+      selectedCountryCurrency?.countryCode === 'US' &&
+      transferType !== 'Wire' &&
+      !newRecipient.checkingOrSavings
+    ) {
       return false
     }
     if (selectedCountryCurrency?.countryCode === 'US' && !newRecipient.addressLine1.trim()) {
@@ -777,6 +845,41 @@ function RecipientsContent({ navigation }: NavigationProps) {
       }
     }
 
+    const bankEnum =
+      selectedCountryCurrency && selectedRecipientType === 'bank'
+        ? getPayoutFieldsSchemaForCorridor({
+            countryCode: selectedCountryCurrency.countryCode,
+            currencyCode: selectedCountryCurrency.currencyCode,
+            rail: 'bank_transfer',
+          })?.bank_enum ?? []
+        : []
+    if (
+      bankEnum.length > 0 &&
+      newRecipient.bankName.trim() &&
+      !bankEnum.includes(newRecipient.bankName.trim())
+    ) {
+      return false
+    }
+
+    const schemaHints =
+      selectedCountryCurrency && selectedRecipientType === 'bank'
+        ? getPayoutFieldsSchemaForCorridor({
+            countryCode: selectedCountryCurrency.countryCode,
+            currencyCode: selectedCountryCurrency.currencyCode,
+            rail: 'bank_transfer',
+          })
+        : null
+    if (recipientFormNeedsEmail(schemaHints) && !newRecipient.email.trim()) return false
+    if (
+      recipientFormNeedsAddress({ hints: schemaHints, currencyCode: newRecipient.currency }) &&
+      selectedCountryCurrency?.countryCode !== 'US'
+    ) {
+      if (!newRecipient.addressLine1.trim()) return false
+      if (!newRecipient.city.trim()) return false
+      if (!newRecipient.state.trim()) return false
+      if (!newRecipient.postalCode.trim()) return false
+    }
+
     return true
   }
 
@@ -800,6 +903,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
       city: '',
       state: '',
       postalCode: '',
+      email: '',
       payeeEasetag: '',
     })
     setError('')
@@ -1820,55 +1924,97 @@ function RecipientsContent({ navigation }: NavigationProps) {
 
                     {/* Bank Name - Always required */}
                     <View>
-                      <TextInput
-                        style={[styles.modalInput, fieldErrors.bankName && styles.modalInputError]}
-                        value={newRecipient.bankName}
-                        onChangeText={(text) => {
-                          setNewRecipient(prev => ({ ...prev, bankName: text }))
-                          validateField('bankName', text)
-                        }}
-                        onBlur={() => validateField('bankName', newRecipient.bankName)}
-                        placeholder={`${accountConfig.fieldLabels.bank_name} *`}
-                        placeholderTextColor={colors.text.secondary}
-                        autoCapitalize="words"
-                        returnKeyType="done"
-                        onSubmitEditing={() => Keyboard.dismiss()}
-                        editable={!isSubmitting}
-                      />
-                      {fieldErrors.bankName && (
-                        <Text style={styles.errorText}>{fieldErrors.bankName}</Text>
-                      )}
+                      {(() => {
+                        const bankEnum =
+                          selectedCountryCurrency && selectedRecipientType === 'bank'
+                            ? getPayoutFieldsSchemaForCorridor({
+                                countryCode: selectedCountryCurrency.countryCode,
+                                currencyCode: selectedCountryCurrency.currencyCode,
+                                rail: 'bank_transfer',
+                              })?.bank_enum ?? []
+                            : []
+                        if (bankEnum.length > 0) {
+                          return (
+                            <>
+                              <Pressable
+                                android_ripple={ripple.neutral}
+                                style={[styles.modalInput, fieldErrors.bankName && styles.modalInputError]}
+                                onPress={() => setShowBankEnumPicker(true)}
+                                disabled={isSubmitting}
+                              >
+                                <Text
+                                  style={
+                                    newRecipient.bankName
+                                      ? styles.bankEnumValue
+                                      : styles.bankEnumPlaceholder
+                                  }
+                                  numberOfLines={1}
+                                >
+                                  {newRecipient.bankName || `${accountConfig.fieldLabels.bank_name} *`}
+                                </Text>
+                              </Pressable>
+                              {fieldErrors.bankName && (
+                                <Text style={styles.errorText}>{fieldErrors.bankName}</Text>
+                              )}
+                            </>
+                          )
+                        }
+                        return (
+                          <>
+                            <TextInput
+                              style={[styles.modalInput, fieldErrors.bankName && styles.modalInputError]}
+                              value={newRecipient.bankName}
+                              onChangeText={(text) => {
+                                setNewRecipient((prev) => ({ ...prev, bankName: text }))
+                                validateField('bankName', text)
+                              }}
+                              onBlur={() => validateField('bankName', newRecipient.bankName)}
+                              placeholder={`${accountConfig.fieldLabels.bank_name} *`}
+                              placeholderTextColor={colors.text.secondary}
+                              autoCapitalize="words"
+                              returnKeyType="done"
+                              onSubmitEditing={() => Keyboard.dismiss()}
+                              editable={!isSubmitting}
+                            />
+                            {fieldErrors.bankName && (
+                              <Text style={styles.errorText}>{fieldErrors.bankName}</Text>
+                            )}
+                          </>
+                        )
+                      })()}
                     </View>
 
                     {/* US Account Fields */}
                     {accountConfig.accountType === "us" && (
                       <>
-                        <View style={styles.transferTypeContainer}>
-                          <View style={styles.transferTypeOptions}>
-                            <Pressable
-                             android_ripple={ripple.neutral}
-                              style={[styles.transferTypeOption, newRecipient.checkingOrSavings === 'checking' && styles.transferTypeOptionSelected]}
-                              onPress={() => {
-                                setNewRecipient(prev => ({ ...prev, checkingOrSavings: 'checking' }))
-                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                              }} >
-                              <Text style={[styles.transferTypeOptionText, newRecipient.checkingOrSavings === 'checking' && styles.transferTypeOptionTextSelected]}>
-                                Checking
-                              </Text>
-                            </Pressable>
-                            <Pressable
-                             android_ripple={ripple.neutral}
-                              style={[styles.transferTypeOption, newRecipient.checkingOrSavings === 'savings' && styles.transferTypeOptionSelected]}
-                              onPress={() => {
-                                setNewRecipient(prev => ({ ...prev, checkingOrSavings: 'savings' }))
-                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                              }} >
-                              <Text style={[styles.transferTypeOptionText, newRecipient.checkingOrSavings === 'savings' && styles.transferTypeOptionTextSelected]}>
-                                Savings
-                              </Text>
-                            </Pressable>
+                        {transferType !== 'Wire' ? (
+                          <View style={styles.transferTypeContainer}>
+                            <View style={styles.transferTypeOptions}>
+                              <Pressable
+                               android_ripple={ripple.neutral}
+                                style={[styles.transferTypeOption, newRecipient.checkingOrSavings === 'checking' && styles.transferTypeOptionSelected]}
+                                onPress={() => {
+                                  setNewRecipient(prev => ({ ...prev, checkingOrSavings: 'checking' }))
+                                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                                }} >
+                                <Text style={[styles.transferTypeOptionText, newRecipient.checkingOrSavings === 'checking' && styles.transferTypeOptionTextSelected]}>
+                                  Checking
+                                </Text>
+                              </Pressable>
+                              <Pressable
+                               android_ripple={ripple.neutral}
+                                style={[styles.transferTypeOption, newRecipient.checkingOrSavings === 'savings' && styles.transferTypeOptionSelected]}
+                                onPress={() => {
+                                  setNewRecipient(prev => ({ ...prev, checkingOrSavings: 'savings' }))
+                                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                                }} >
+                                <Text style={[styles.transferTypeOptionText, newRecipient.checkingOrSavings === 'savings' && styles.transferTypeOptionTextSelected]}>
+                                  Savings
+                                </Text>
+                              </Pressable>
+                            </View>
                           </View>
-                        </View>
+                        ) : null}
                         <View>
                           <TextInput
                             style={styles.modalInput}
@@ -2110,6 +2256,27 @@ function RecipientsContent({ navigation }: NavigationProps) {
                       </View>
                     )}
 
+                    {selectedRecipientType === 'bank' && selectedCountryCurrency ? (
+                      <PayoutSchemaExtraFields
+                        hints={getPayoutFieldsSchemaForCorridor({
+                          countryCode: selectedCountryCurrency.countryCode,
+                          currencyCode: selectedCountryCurrency.currencyCode,
+                          rail: 'bank_transfer',
+                        })}
+                        currencyCode={newRecipient.currency}
+                        countryCode={selectedCountryCurrency.countryCode}
+                        values={{
+                          email: newRecipient.email,
+                          addressLine1: newRecipient.addressLine1,
+                          city: newRecipient.city,
+                          state: newRecipient.state,
+                          postalCode: newRecipient.postalCode,
+                        }}
+                        onChange={(patch) => setNewRecipient((prev) => ({ ...prev, ...patch }))}
+                        isSubmitting={isSubmitting}
+                      />
+                    ) : null}
+
                   </>
                 )
               })()}
@@ -2172,6 +2339,61 @@ function RecipientsContent({ navigation }: NavigationProps) {
             )}
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal
+        visible={showBankEnumPicker}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowBankEnumPicker(false)}
+      >
+        <View style={styles.scanOverlay}>
+          <View style={[styles.modalContainer, { maxHeight: '70%' }]}>
+            <Text style={styles.modalTitle}>Select bank</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={bankEnumSearch}
+              onChangeText={setBankEnumSearch}
+              placeholder="Search banks"
+              placeholderTextColor={colors.text.secondary}
+            />
+            <ScrollView keyboardShouldPersistTaps="handled">
+              {(selectedCountryCurrency
+                ? getPayoutFieldsSchemaForCorridor({
+                    countryCode: selectedCountryCurrency.countryCode,
+                    currencyCode: selectedCountryCurrency.currencyCode,
+                    rail: 'bank_transfer',
+                  })?.bank_enum ?? []
+                : []
+              )
+                .filter((b) =>
+                  b.toLowerCase().includes(bankEnumSearch.trim().toLowerCase()),
+                )
+                .map((bank) => (
+                  <Pressable
+                    key={bank}
+                    android_ripple={ripple.neutral}
+                    style={styles.bankEnumRow}
+                    onPress={() => {
+                      setNewRecipient((prev) => ({ ...prev, bankName: bank }))
+                      validateField('bankName', bank)
+                      setShowBankEnumPicker(false)
+                      setBankEnumSearch('')
+                    }}
+                  >
+                    <Text style={styles.bankEnumValue}>{bank}</Text>
+                  </Pressable>
+                ))}
+            </ScrollView>
+            <Pressable
+              android_ripple={ripple.neutral}
+              style={styles.cancelButton}
+              onPress={() => setShowBankEnumPicker(false)}
+            >
+              <Text style={styles.cancelButtonText}>Close</Text>
+            </Pressable>
+          </View>
+        </View>
       </Modal>
 
       <EasnerAlertSheet
@@ -2927,6 +3149,21 @@ const styles = StyleSheet.create({
     ...textStyles.bodyMedium,
     color: colors.primary.main,
     fontFamily: fontFamily.semibold,
+  },
+  bankEnumValue: {
+    ...textStyles.bodyMedium,
+    color: colors.text.primary,
+    fontFamily: fontFamily.regular,
+  },
+  bankEnumPlaceholder: {
+    ...textStyles.bodyMedium,
+    color: colors.text.secondary,
+    fontFamily: fontFamily.regular,
+  },
+  bankEnumRow: {
+    paddingVertical: spacing[3],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.frame.border,
   },
   transferTypeContainer: {
     marginBottom: spacing[2],

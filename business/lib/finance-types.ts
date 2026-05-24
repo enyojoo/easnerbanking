@@ -71,6 +71,8 @@ export interface Transaction {
   settledAt?: string
   /** Detail row label — e.g. Easetag P2P shows "Easetag". */
   paymentScheme?: string
+  /** User note from send flow (Easetag / payout metadata). */
+  sendNote?: string
   /** Bank ACH pay-in detail only. */
   lifecycle?: Array<{
     id: string

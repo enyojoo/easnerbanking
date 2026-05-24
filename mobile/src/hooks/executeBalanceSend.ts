@@ -39,6 +39,7 @@ export type PayoutPrepareSession = {
   formSessionId: string
   cryptoAuthorizedAmount: string
   cryptoCurrency: string
+  channelId?: string
 }
 
 export type ExecuteBalanceSendInput = {
@@ -50,6 +51,8 @@ export type ExecuteBalanceSendInput = {
   payoutSession?: PayoutPrepareSession
   /** Ledger Easetag P2P: same ETID as confirm review (`reserved_debit_etid`). */
   reservedDebitEtid?: string
+  note?: string
+  paymentPurpose?: string
 }
 
 export type ExecuteBalanceSendContext = {
@@ -84,9 +87,17 @@ export async function executeBalanceSend(
     selectedBalanceCurrency,
     payoutSession,
     reservedDebitEtid,
+    note,
+    paymentPurpose,
   } = input
 
   const easetag = resolveRecipientEasetagForUi(recipient).trim()
+
+  if (recipient.wallet_network?.trim()) {
+    throw new Error(
+      'Wallet address recipients cannot be paid from your USD/EUR balance. Choose a bank or mobile money recipient.',
+    )
+  }
 
   const usdLike =
     String(recipient.currency || '').toUpperCase() === 'USD' &&
@@ -113,6 +124,7 @@ export async function executeBalanceSend(
       amount: calculatedTotalAmount.toFixed(8),
       currency: selectedBalanceCurrency.toLowerCase(),
       ...(reservedDebitEtid?.trim() ? { reservedDebitEtid: reservedDebitEtid.trim() } : {}),
+      ...(note?.trim() ? { note: note.trim() } : {}),
     })
   } else {
     const {
@@ -185,6 +197,10 @@ export async function executeBalanceSend(
         formSessionId: session.formSessionId,
         cryptoAuthorizedAmount: session.cryptoAuthorizedAmount,
         cryptoCurrency: session.cryptoCurrency,
+        countryCode: mobileCorridorCountry,
+        ...(payoutSession?.channelId ? { channelId: payoutSession.channelId } : {}),
+        recipientId: recipient.id,
+        ...(note?.trim() ? { note: note.trim() } : {}),
       })
     } else if (eurSepa && canUseFiatBalance) {
       const fiatAmount = receiveAmountValue.toFixed(2)
@@ -215,6 +231,10 @@ export async function executeBalanceSend(
         formSessionId: session.formSessionId,
         cryptoAuthorizedAmount: session.cryptoAuthorizedAmount,
         cryptoCurrency: session.cryptoCurrency,
+        countryCode: eurCountry,
+        ...(session.channelId ? { channelId: session.channelId } : {}),
+        recipientId: recipient.id,
+        ...(note?.trim() ? { note: note.trim() } : {}),
       })
     } else if (usdLike && hasAch && canUseFiatBalance) {
       if (
@@ -259,6 +279,31 @@ export async function executeBalanceSend(
         formSessionId: session.formSessionId,
         cryptoAuthorizedAmount: session.cryptoAuthorizedAmount,
         cryptoCurrency: session.cryptoCurrency,
+        countryCode: 'US',
+        ...(session.channelId ? { channelId: session.channelId } : {}),
+        recipientId: recipient.id,
+        ...(note?.trim() ? { note: note.trim() } : {}),
+      })
+    } else if (payoutSession && canUseFiatBalance) {
+      const cc = (
+        recipient.country_code ||
+        inferCountryFromRecipientCurrency(recipient.currency) ||
+        ''
+      ).toUpperCase()
+      if (!cc) {
+        throw new Error('Recipient country is required for this payout.')
+      }
+      transfer = await noahService.createTransfer({
+        amount: receiveAmountValue.toFixed(2),
+        currency: recipient.currency.toLowerCase(),
+        sourceWalletId,
+        formSessionId: payoutSession.formSessionId,
+        cryptoAuthorizedAmount: payoutSession.cryptoAuthorizedAmount,
+        cryptoCurrency: payoutSession.cryptoCurrency,
+        countryCode: cc,
+        ...(payoutSession.channelId ? { channelId: payoutSession.channelId } : {}),
+        recipientId: recipient.id,
+        ...(note?.trim() ? { note: note.trim() } : {}),
       })
     } else {
       throw new Error(

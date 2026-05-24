@@ -10,6 +10,7 @@ export type PayoutCorridorUpsertRow = {
   provider_routing?: unknown
   providers?: unknown
   sort_order?: number | null
+  fields_schema?: unknown
 }
 
 /** Insert or update by natural key (works even before unique index migration is applied). */
@@ -37,6 +38,7 @@ export async function upsertPayoutCorridor(
         ...(row.provider_routing !== undefined ? { provider_routing: row.provider_routing } : {}),
         ...(row.providers !== undefined ? { providers: row.providers } : {}),
         ...(row.sort_order !== undefined ? { sort_order: row.sort_order } : {}),
+        ...(row.fields_schema !== undefined ? { fields_schema: row.fields_schema } : {}),
         updated_at: new Date().toISOString(),
       })
       .eq("id", existing.id)
@@ -47,6 +49,7 @@ export async function upsertPayoutCorridor(
     ...row,
     enabled: row.enabled ?? false,
     provider_routing: row.provider_routing ?? [],
+    ...(row.fields_schema !== undefined ? { fields_schema: row.fields_schema } : {}),
     updated_at: new Date().toISOString(),
   })
   return error ? { ok: false, error: error.message } : { ok: true }

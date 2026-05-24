@@ -1,9 +1,15 @@
 /**
  * List Noah production sell corridors + working /prices pairs for this API key.
  * Usage: cd business && node --env-file=.env.local --import tsx scripts/probe-noah-pairs.ts
+ *
+ * Writes `docs/noah-payout-manifest.json` when PROBE_WRITE_MANIFEST=true.
  */
 
+import { writeFileSync } from "fs"
+import { join } from "path"
 import { noahFetch, NoahHttpError } from "../lib/noah/http"
+import { fetchSellChannelItems } from "../lib/noah/payout-prepare"
+import { normalizeFormSchemaHints, pickChannelForRail } from "../lib/noah/form-schema-hints"
 import { getNoahSettlementCryptoCurrency, getNoahUsdCryptoTicker, getNoahEurCryptoTicker } from "../lib/noah/config"
 
 function errMsg(e: unknown): string {
@@ -147,6 +153,52 @@ async function main() {
   console.log(`Corridors with working /prices (USDC): ${pricesOk.length}`)
   const pricedFiats = [...new Set(pricesOk.map((p) => p.fiat))].sort()
   console.log(`Fiats with /prices quote: ${pricedFiats.join(", ")}`)
+
+  if (process.env.PROBE_WRITE_MANIFEST === "true") {
+    const manifest: Array<Record<string, unknown>> = []
+    for (const { country, fiats } of corridors) {
+      for (const fiat of fiats) {
+        try {
+          const items = await fetchSellChannelItems({
+            country,
+            fiatCurrency: fiat,
+            cryptoCurrency: settlement,
+          })
+          if (items.length === 0) continue
+          for (const rail of ["bank_transfer", "mobile_money"] as const) {
+            const pick = pickChannelForRail(items, rail)
+            if (!pick) continue
+            manifest.push({
+              country_code: country,
+              fiat_currency: fiat,
+              rail,
+              channel_count: items.length,
+              payment_method_type: pick.PaymentMethodType,
+              payment_method_category: pick.PaymentMethodCategory,
+              fields_schema: normalizeFormSchemaHints(pick),
+            })
+          }
+        } catch {
+          // skip pair
+        }
+      }
+    }
+    const payload = JSON.stringify(
+      { generated_at: new Date().toISOString(), corridors: manifest },
+      null,
+      2,
+    )
+    const docsPath = join(process.cwd(), "..", "docs", "noah-payout-manifest.json")
+    const scriptsDataPath = join(
+      process.cwd(),
+      "data",
+      "noah-global-payout-manifest.json",
+    )
+    writeFileSync(docsPath, payload)
+    writeFileSync(scriptsDataPath, payload)
+    console.log(`\nWrote manifest (${manifest.length} rows) → ${docsPath}`)
+    console.log(`Also wrote → ${scriptsDataPath}`)
+  }
 }
 
 main().catch((e) => {

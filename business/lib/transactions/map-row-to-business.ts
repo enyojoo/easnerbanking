@@ -101,6 +101,12 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     counterpartyNameRaw && counterpartyNameRaw !== description ? counterpartyNameRaw : undefined
 
   const isEasetagP2p = String(meta?.source ?? "").toLowerCase() === "easetag_p2p"
+  const sendNote =
+    typeof meta?.send_note === "string"
+      ? meta.send_note.trim()
+      : typeof meta?.note === "string"
+        ? meta.note.trim()
+        : ""
 
   const hasStablecoinSignals =
     paymentRail != null ||
@@ -137,5 +143,6 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     asset: row.asset != null ? String(row.asset) : undefined,
     chain: row.chain != null ? String(row.chain) : undefined,
     settledAt: row.settled_at != null ? String(row.settled_at) : undefined,
+    ...(sendNote ? { sendNote } : {}),
   }
 }

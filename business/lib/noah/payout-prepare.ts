@@ -7,7 +7,27 @@ export type ChannelItem = {
   Country?: string
   FiatCurrency?: string
   FormSchema?: Record<string, unknown>
+  Limits?: { MinLimit?: string; MaxLimit?: string }
+  ProcessingSeconds?: number
 }
+
+export {
+  buildAccountHolderName,
+  buildAccountHolderAddress,
+  buildBankLocalSellForm,
+  buildCaBankLocalSellForm,
+  buildEurSepaSellForm,
+  buildGbBankLocalSellForm,
+  buildIdentifierSellForm,
+  buildUsBankSellForm,
+  isNoahUsAchChannel,
+} from "./sell-form-builders"
+export type {
+  AccountHolderNameInput,
+  BankLocalSellInput,
+  IdentifierSellInput,
+  UsBankRecipientFormInput,
+} from "./sell-form-builders"
 
 /**
  * Noah global payouts: discover a bank sell channel for country + fiat + crypto settlement asset.
@@ -75,7 +95,7 @@ export async function findBankSellChannelId(input: {
  */
 export function findIdentifierSellChannel(
   items: ChannelItem[],
-  hints?: { paymentMethodSubstrings?: string[] }
+  hints?: { paymentMethodSubstrings?: string[] },
 ): { channelId: string; paymentMethodType: string; formSchema?: Record<string, unknown> } | null {
   const ident = items.filter((c) => String(c.PaymentMethodCategory ?? "").toLowerCase() === "identifier")
   if (ident.length === 0) return null
@@ -95,94 +115,6 @@ export function findIdentifierSellChannel(
     channelId: String(id),
     paymentMethodType: String(pick.PaymentMethodType ?? ""),
     formSchema: pick.FormSchema,
-  }
-}
-
-/** Map phone + name into Noah Identifier Form fields using channel FormSchema.required hints. */
-export function buildIdentifierSellForm(
-  formSchema: Record<string, unknown> | undefined,
-  data: { phone: string; fullName: string }
-): Record<string, unknown> {
-  const props = formSchema?.properties
-  if (!props || typeof props !== "object") {
-    return { FullName: data.fullName, PhoneNumber: data.phone }
-  }
-  const required = (formSchema.required as string[] | undefined) ?? Object.keys(props as object)
-  const out: Record<string, unknown> = {}
-  const p = props as Record<string, { title?: string }>
-  for (const key of required) {
-    const low = key.toLowerCase()
-    const title = String(p[key]?.title ?? "").toLowerCase()
-    const blob = `${low} ${title}`
-    if (/phone|msisdn|mobile|e164|msisdn|subscriber/i.test(blob)) out[key] = data.phone
-    else if (/name|holder|beneficiary|recipient/i.test(blob)) out[key] = data.fullName
-  }
-  if (Object.keys(out).length === 0) {
-    return { FullName: data.fullName, PhoneNumber: data.phone }
-  }
-  return out
-}
-
-export type UsBankRecipientFormInput = {
-  accountHolderAddress: { address: string; city: string; state: string; postalCode: string }
-  accountNumber: string
-  routingNumber: string
-  /** Required in Noah `BankAch` FormSchema; omit for `BankFedwire`. */
-  accountType?: "Checking" | "Savings"
-  paymentPurpose?: string
-  /**
-   * When false (Fedwire), `AccountType` is not sent in `BankDetails` (Noah Fedwire schema).
-   * When true (ACH), `accountType` is included when provided.
-   */
-  achRail?: boolean
-}
-
-/** True when Noah channel is US ACH (`BankAch`), not Fedwire. */
-export function isNoahUsAchChannel(paymentMethodType: string): boolean {
-  const t = String(paymentMethodType || "").toLowerCase()
-  return t.includes("ach") && !t.includes("fedwire")
-}
-
-function defaultPaymentPurpose() {
-  return "personal transfer"
-}
-
-/** Build Noah sell Form for EU SEPA-style bank channels (IBAN + account type). */
-export function buildEurSepaSellForm(recipient: {
-  iban: string
-  accountType?: "Checking" | "Savings"
-  paymentPurpose?: string
-}): Record<string, unknown> {
-  const purpose = recipient.paymentPurpose?.trim() || defaultPaymentPurpose()
-  return {
-    BankDetails: {
-      AccountNumber: recipient.iban.replace(/\s/g, ""),
-      AccountType: recipient.accountType ?? "Checking",
-    },
-    PaymentPurpose: purpose,
-  }
-}
-
-/** Build Noah sell Form object for US BankAch / BankFedwire dynamic forms. */
-export function buildUsBankSellForm(recipient: UsBankRecipientFormInput): Record<string, unknown> {
-  const purpose = recipient.paymentPurpose?.trim() || defaultPaymentPurpose()
-  const achRail = recipient.achRail !== false
-  const details: Record<string, unknown> = {
-    AccountNumber: recipient.accountNumber.trim(),
-    BankCode: recipient.routingNumber.trim(),
-  }
-  if (achRail && recipient.accountType) {
-    details.AccountType = recipient.accountType
-  }
-  return {
-    AccountHolderAddress: {
-      Address: recipient.accountHolderAddress.address,
-      City: recipient.accountHolderAddress.city,
-      State: recipient.accountHolderAddress.state,
-      PostalCode: recipient.accountHolderAddress.postalCode,
-    },
-    BankDetails: details,
-    PaymentPurpose: purpose,
   }
 }
 

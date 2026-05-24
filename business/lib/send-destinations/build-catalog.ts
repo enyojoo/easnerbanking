@@ -5,7 +5,7 @@ import type {
   ProviderRoutingEntry,
   SendDestinationsResponse,
 } from "@easner/shared"
-import type { PayoutCorridorPublic, PayoutRail } from "@easner/shared"
+import type { PayoutCorridorPublic, PayoutFieldsSchemaHint, PayoutRail } from "@easner/shared"
 import { annotateCorridorsWithNoahAvailability } from "@/lib/noah/channel-availability"
 import { getGlobalCurrencyPolicies } from "@/lib/accounts/currency-controls"
 import { getNoahSettlementCryptoCurrency } from "@/lib/noah/config"
@@ -22,6 +22,7 @@ type PayoutCorridorRow = {
   sort_order: number | null
   providers: unknown
   provider_routing: unknown
+  fields_schema: unknown
   updated_at: string
 }
 
@@ -69,6 +70,9 @@ function publicCorridor(
     provider_routing: parseProviderRouting(row.provider_routing),
     ...(typeof row.noah_sell_available === "boolean" ? { noah_sell_available: row.noah_sell_available } : {}),
     ...(row.provider_health ? { provider_health: row.provider_health } : {}),
+    ...(row.fields_schema != null
+      ? { fields_schema: row.fields_schema as PayoutFieldsSchemaHint }
+      : {}),
   }
 }
 
@@ -113,7 +117,7 @@ export async function buildSendDestinationsCatalog(input?: {
     admin
       .from("payout_corridors")
       .select(
-        "id,rail,country_code,country_name,currency_code,currency_name,sort_order,providers,provider_routing,updated_at",
+        "id,rail,country_code,country_name,currency_code,currency_name,sort_order,providers,provider_routing,fields_schema,updated_at",
       )
       .eq("enabled", true)
       .order("sort_order", { ascending: true, nullsFirst: false })

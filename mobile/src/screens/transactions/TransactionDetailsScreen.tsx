@@ -840,8 +840,36 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                       <Text style={styles.summaryLabel}>When</Text>
                       <Text style={styles.summaryValue}>{formatTimestamp(easetagWhenTs)}</Text>
                     </View>
+                    {(() => {
+                      const sendNote = String(
+                        transaction.metadata?.send_note ??
+                          transaction.metadata?.note ??
+                          '',
+                      ).trim()
+                      if (!sendNote) return null
+                      return (
+                        <View style={styles.summaryRow}>
+                          <Text style={styles.summaryLabel}>Note</Text>
+                          <Text style={styles.summaryValue}>{sendNote}</Text>
+                        </View>
+                      )
+                    })()}
                   </>
                 ) : null}
+
+                {!isEasetagP2p &&
+                (() => {
+                  const sendNote = String(
+                    transaction.metadata?.send_note ?? transaction.metadata?.note ?? '',
+                  ).trim()
+                  if (!sendNote) return null
+                  return (
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>Note</Text>
+                      <Text style={styles.summaryValue}>{sendNote}</Text>
+                    </View>
+                  )
+                })()}
 
                 {!isEasetagP2p && !isBankOnrampReceive && transaction.sender_display_name ? (
                   <View style={styles.summaryRow}>

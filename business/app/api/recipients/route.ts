@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { payoutCorridorGate } from "@/lib/payout-corridor-validation"
+import { recipientFormNeedsEmail } from "@easner/shared"
 import {
   looksLikeMissingStructuredColumn,
   type RecipientWritePayload,
@@ -58,6 +59,51 @@ export async function POST(request: Request) {
   const admin = createSupabaseAdmin()
   const gate = await payoutCorridorGate(admin, payload as Parameters<typeof payoutCorridorGate>[1])
   if (gate) return gate
+
+  const cc = String(payload.country_code || "").toUpperCase()
+  const cur = String(payload.currency || "").toUpperCase()
+  const isMobile = Boolean(payload.mobile_provider)
+  if (cc && cur && !payload.wallet_network && !payload.payee_easetag) {
+    const rail = isMobile ? "mobile_money" : "bank_transfer"
+    const { data: corridor } = await admin
+      .from("payout_corridors")
+      .select("fields_schema")
+      .eq("country_code", cc)
+      .eq("currency_code", cur)
+      .eq("rail", rail)
+      .maybeSingle()
+    const bankEnum = (
+      corridor?.fields_schema as { bank_enum?: string[] } | null | undefined
+    )?.bank_enum
+    if (
+      !isMobile &&
+      Array.isArray(bankEnum) &&
+      bankEnum.length > 0 &&
+      payload.bank_name?.trim() &&
+      !bankEnum.includes(payload.bank_name.trim())
+    ) {
+      return NextResponse.json(
+        { error: "Bank must be selected from the corridor list." },
+        { status: 400 },
+      )
+    }
+    const fieldsSchema = corridor?.fields_schema as
+      | { needs_email?: boolean }
+      | null
+      | undefined
+    if (!isMobile && recipientFormNeedsEmail(fieldsSchema ?? null)) {
+      const em = String(payload.email || "").trim()
+      if (!em) {
+        return NextResponse.json(
+          { error: "Email is required for this payout corridor." },
+          { status: 400 },
+        )
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+        return NextResponse.json({ error: "Invalid email address." }, { status: 400 })
+      }
+    }
+  }
 
   const primary = await admin
     .from("recipients")

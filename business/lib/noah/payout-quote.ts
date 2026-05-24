@@ -4,8 +4,10 @@ import { noahImpliedProviderRate } from "@/lib/noah/fx-prices"
 import {
   prepareSellFromRecipientRow,
   type RecipientSellPrepareRow,
+  type SellPrepareOverrides,
 } from "@/lib/terminal/recipient-sell-prepare"
 import { NoProviderForCorridorError, selectProviderForCorridor } from "@/lib/payout-providers"
+import { mapNoahPrepareError } from "@/lib/noah/noah-prepare-errors"
 
 /** Easner fee slice on payout quotes (Noah prepare is authoritative; no DB pricing engine). */
 export type EasnerPayoutQuoteSlice = {
@@ -34,6 +36,7 @@ export type PayoutQuoteResult = {
   sendAmount: number
   sendCurrency: string
   totalDebited: number
+  channelId?: string
   noah: {
     totalFee: number
     cryptoAuthorizedAmount: string
@@ -93,6 +96,8 @@ export async function buildPayoutQuote(input: {
   recipient?: RecipientSellPrepareRow
   receiveFiatAmount: number
   sourceBalanceCurrency: string
+  /** Note → Reference (US/EUR); CA PaymentPurpose; Africa optional reference. */
+  prepareOverrides?: SellPrepareOverrides
 }): Promise<PayoutQuoteResult> {
   const receiveAmount = Number(input.receiveFiatAmount)
   if (!Number.isFinite(receiveAmount) || receiveAmount <= 0) {
@@ -147,12 +152,37 @@ export async function buildPayoutQuote(input: {
     }
   }
 
-  const { prep } = await prepareSellFromRecipientRow({
-    row,
-    fiatAmount: receiveAmount,
-    cryptoCurrency,
-    noahCustomerId: input.noahCustomerId,
-  })
+  const runPrepare = () =>
+    prepareSellFromRecipientRow({
+      row,
+      fiatAmount: receiveAmount,
+      cryptoCurrency,
+      noahCustomerId: input.noahCustomerId,
+      overrides: input.prepareOverrides,
+    })
+
+  let prep: Awaited<ReturnType<typeof prepareSellFromRecipientRow>>["prep"]
+  let channelId: string | undefined
+  try {
+    const prepared = await runPrepare()
+    prep = prepared.prep
+    channelId = prepared.channelId
+  } catch (e) {
+    const msg = e instanceof Error ? e.message.toLowerCase() : String(e).toLowerCase()
+    const expired =
+      msg.includes("formsession") || (msg.includes("session") && msg.includes("expired"))
+    if (expired) {
+      try {
+        const prepared = await runPrepare()
+        prep = prepared.prep
+        channelId = prepared.channelId
+      } catch (retryErr) {
+        throw new Error(mapNoahPrepareError(retryErr))
+      }
+    } else {
+      throw new Error(mapNoahPrepareError(e))
+    }
+  }
 
   const formSessionId = String(prep.formSessionId || "").trim()
   const cryptoAuthorizedAmount = String(prep.cryptoAuthorizedAmount || "").trim()
@@ -194,6 +224,7 @@ export async function buildPayoutQuote(input: {
     sendAmount,
     sendCurrency: sourceBalanceCurrency,
     totalDebited: sendAmount,
+    channelId,
     noah: {
       totalFee: noahFee,
       cryptoAuthorizedAmount,

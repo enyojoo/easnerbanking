@@ -169,6 +169,13 @@ export function TransactionDetailsPanel({
             </div>
           ) : null}
 
+          {transaction.sendNote ? (
+            <div className="flex justify-between text-sm gap-4">
+              <span className="text-muted-foreground shrink-0">Note</span>
+              <span className="font-medium text-right">{transaction.sendNote}</span>
+            </div>
+          ) : null}
+
           {transaction.fee !== undefined && transaction.fee > 0 && (
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Fee</span>

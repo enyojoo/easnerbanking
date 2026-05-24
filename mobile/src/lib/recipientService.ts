@@ -42,6 +42,7 @@ export interface RecipientData {
   currency: string
   countryCode?: string
   phoneNumber?: string
+  email?: string
   mobileProvider?: string
   walletNetwork?: string
   walletMemoTag?: string
@@ -163,6 +164,7 @@ export const recipientService = {
       account_number: recipientData.accountNumber,
       bank_name: bankNameForPersist,
       phone_number: recipientData.phoneNumber || undefined,
+      email: recipientData.email || undefined,
       currency: recipientData.currency,
       country_code: recipientData.countryCode || undefined,
       routing_number: recipientData.routingNumber || undefined,
@@ -193,6 +195,7 @@ export const recipientService = {
           account_number: recipientData.accountNumber,
           bank_name: bankNameForPersist,
           phone_number: recipientData.phoneNumber || null,
+          email: recipientData.email || null,
           currency: recipientData.currency,
           country_code: recipientData.countryCode || null,
           routing_number: recipientData.routingNumber || null,
@@ -282,6 +285,7 @@ export const recipientService = {
       accountNumber?: string
       bankName?: string
       phoneNumber?: string
+      email?: string
       mobileProvider?: string
       countryCode?: string
       walletNetwork?: string
@@ -315,6 +319,7 @@ export const recipientService = {
     if (updates.accountNumber !== undefined) updateData.account_number = updates.accountNumber
     if (derivedBankName !== undefined) updateData.bank_name = derivedBankName
     if (updates.phoneNumber !== undefined) updateData.phone_number = updates.phoneNumber || null
+    if (updates.email !== undefined) updateData.email = updates.email || null
     if (updates.routingNumber !== undefined) updateData.routing_number = updates.routingNumber || null
     if (updates.sortCode !== undefined) updateData.sort_code = updates.sortCode || null
     if (updates.iban !== undefined) updateData.iban = updates.iban || null

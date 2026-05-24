@@ -10,7 +10,7 @@ const memory: { etag?: string; body?: SendDestinationsResponse } = {}
 function readSession(): SendDestinationsResponse | null {
   if (typeof window === "undefined" || typeof sessionStorage === "undefined") return null
   try {
-    const raw = sessionStorage.getItem("easner_send_destinations_v1")
+    const raw = sessionStorage.getItem("easner_send_destinations_v2")
     if (!raw) return null
     return JSON.parse(raw) as SendDestinationsResponse
   } catch {
@@ -21,7 +21,7 @@ function readSession(): SendDestinationsResponse | null {
 function writeSession(body: SendDestinationsResponse) {
   if (typeof window === "undefined" || typeof sessionStorage === "undefined") return
   try {
-    sessionStorage.setItem("easner_send_destinations_v1", JSON.stringify(body))
+    sessionStorage.setItem("easner_send_destinations_v2", JSON.stringify(body))
   } catch {
     // ignore
   }

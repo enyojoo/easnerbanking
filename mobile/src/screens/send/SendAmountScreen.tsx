@@ -49,9 +49,12 @@ import { CountryFlag } from '../../components/flags/CountryFlag'
 import {
   convertNoahSendFlowAmounts,
   exchangeRatesToRateMap,
+  findPayoutFieldsSchema,
   formatSendRateLabel,
   getCountryCodeForCurrency,
   getCurrencySymbol,
+  validatePayoutAmountAgainstLimits,
+  validateSendAmountFields,
 } from '@easner/shared'
 import { getPayoutCorridorCache, isRecipientPayoutCorridorActive, refreshPayoutCorridors } from '../../lib/payoutCorridors'
 import {
@@ -131,6 +134,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const [sendDestinations, setSendDestinations] = useState<SendDestinationsResponse | null>(null)
   const [sendAmount, setSendAmount] = useState('0')
   const [note, setNote] = useState('')
+  const [paymentPurpose, setPaymentPurpose] = useState('')
+  const [amountFieldError, setAmountFieldError] = useState<string | null>(null)
+  const [showPurposePicker, setShowPurposePicker] = useState(false)
   const [selectedBalanceCurrency, setSelectedBalanceCurrency] = useState<string>('USD')
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'balance' | 'linkBank' | 'virtualBank' | 'otherCurrency'>(
@@ -176,6 +182,21 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     { code: 'USD', name: 'US Dollar', symbol: '$' },
     { code: 'EUR', name: 'Euro', symbol: '€' },
   ]
+
+  const payoutRail = recipient && isMobileMoneyRecipient(recipient) ? 'mobile_money' : 'bank_transfer'
+  const payoutHints = useMemo(() => {
+    if (!sendDestinations || !recipient?.country_code) return null
+    const corridors =
+      payoutRail === 'mobile_money'
+        ? sendDestinations.fiat.mobile_money
+        : sendDestinations.fiat.bank_transfer
+    return findPayoutFieldsSchema(corridors, {
+      countryCode: recipient.country_code || getCountryCodeForCurrency(recipient.currency) || '',
+      currencyCode: recipient.currency,
+      rail: payoutRail,
+    })
+  }, [sendDestinations, recipient, payoutRail])
+  const amountFieldMode = payoutHints?.amount_field_mode ?? 'note_optional_only'
 
   const { data: manualCatalog } = useManualSendCatalog(true)
   const manualSendAvailable = (manualCatalog?.sendCurrencies?.length ?? 0) > 0
@@ -874,20 +895,42 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
               {/* Note and Keypad Wrapper */}
               <View style={styles.noteKeypadWrapper}>
-                {/* Note Field */}
-                <View style={styles.noteContainer}>
-                  <MessageSquareText size={18} color={colors.text.secondary} strokeWidth={2} />
-              <TextInput
-                    style={styles.noteInput}
-                    placeholder="Note"
-                    placeholderTextColor={colors.text.secondary}
-                    value={note}
-                    onChangeText={setNote}
-                    multiline={false}
-                    returnKeyType="done"
-                    onSubmitEditing={() => Keyboard.dismiss()}
-                  />
-                </View>
+                {amountFieldMode === 'payment_purpose' ? (
+                  <Pressable
+                    android_ripple={ripple.neutral}
+                    style={styles.noteContainer}
+                    onPress={() => setShowPurposePicker(true)}
+                  >
+                    <MessageSquareText size={18} color={colors.text.secondary} strokeWidth={2} />
+                    <Text
+                      style={[
+                        styles.noteInput,
+                        !paymentPurpose && { color: colors.text.secondary },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {paymentPurpose || 'Payment purpose'}
+                    </Text>
+                    <ChevronDown size={16} color={colors.text.secondary} />
+                  </Pressable>
+                ) : (
+                  <View style={styles.noteContainer}>
+                    <MessageSquareText size={18} color={colors.text.secondary} strokeWidth={2} />
+                    <TextInput
+                      style={styles.noteInput}
+                      placeholder={amountFieldMode === 'note' ? 'Reference (required)' : 'Note'}
+                      placeholderTextColor={colors.text.secondary}
+                      value={note}
+                      onChangeText={setNote}
+                      multiline={false}
+                      returnKeyType="done"
+                      onSubmitEditing={() => Keyboard.dismiss()}
+                    />
+                  </View>
+                )}
+                {amountFieldError ? (
+                  <Text style={styles.amountFieldError}>{amountFieldError}</Text>
+                ) : null}
                 
                 {/* Numeric Keypad - 3x4 grid */}
                 <View style={styles.keypadContainer}>
@@ -998,6 +1041,41 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
               if (verificationBlocksSend) return
 
+              const fieldCheck = validateSendAmountFields({
+                hints: payoutHints,
+                note,
+                paymentPurpose,
+                isEasetag: isEasetagRecipient,
+              })
+              if (!fieldCheck.ok) {
+                setAmountFieldError(fieldCheck.message)
+                showError(fieldCheck.message)
+                return
+              }
+              if (selectedPaymentMethod === 'balance' && receiveAmountValue > 0) {
+                const limitCheck = validatePayoutAmountAgainstLimits({
+                  amount: receiveAmountValue,
+                  hints: payoutHints,
+                  currencyCode: receiveCurrency,
+                })
+                if (!limitCheck.ok) {
+                  setAmountFieldError(limitCheck.message)
+                  showError(limitCheck.message)
+                  return
+                }
+              }
+              setAmountFieldError(null)
+
+              if (
+                selectedPaymentMethod === 'balance' &&
+                recipient?.wallet_network?.trim()
+              ) {
+                showError(
+                  'Wallet address recipients cannot be paid from your balance. Choose a bank or mobile money recipient.',
+                )
+                return
+              }
+
               void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
 
               const navAmounts =
@@ -1031,6 +1109,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   selectedBalanceCurrency,
                   receiveCurrency: recipient.currency,
                   transactionId,
+                  ...(note.trim() ? { note: note.trim() } : {}),
+                  ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
                 } as never)
                 return
               }
@@ -1335,6 +1415,40 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 </View>
                 ) : null}
               </View>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal
+          visible={showPurposePicker}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setShowPurposePicker(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <Pressable
+              android_ripple={ripple.neutral}
+              style={StyleSheet.absoluteFill}
+              onPress={() => setShowPurposePicker(false)}
+            />
+            <View style={[styles.modalContainer, { maxHeight: windowHeight * 0.6, paddingBottom: insets.bottom }]}>
+              <Text style={styles.modalTitle}>Payment purpose</Text>
+              <ScrollView keyboardShouldPersistTaps="handled">
+                {(payoutHints?.payment_purpose_enum ?? []).map((p) => (
+                  <Pressable
+                    key={p}
+                    android_ripple={ripple.neutral}
+                    style={styles.currencyItem}
+                    onPress={() => {
+                      setPaymentPurpose(p)
+                      setShowPurposePicker(false)
+                      setAmountFieldError(null)
+                    }}
+                  >
+                    <Text style={styles.currencyItemCode}>{p}</Text>
+                  </Pressable>
+                ))}
               </ScrollView>
             </View>
           </View>
@@ -1699,6 +1813,12 @@ const styles = StyleSheet.create({
         paddingVertical: 0,
       },
     }),
+  },
+  amountFieldError: {
+    ...textStyles.caption,
+    color: colors.error.main,
+    marginTop: spacing[1],
+    paddingHorizontal: spacing[1],
   },
   keypadContainer: {
     width: '100%',

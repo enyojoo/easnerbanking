@@ -8,6 +8,7 @@ import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { getNoahSettlementCryptoCurrency } from "@/lib/noah/config"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { payoutCorridorGate, requireExecutableProviderChannel } from "@/lib/payout-corridor-validation"
+import { mapNoahPrepareError } from "@/lib/noah/noah-prepare-errors"
 
 export async function POST(request: Request) {
   const mis = requireNoahEnv()
@@ -28,6 +29,9 @@ export async function POST(request: Request) {
         cryptoAuthorizedAmount?: string
         cryptoCurrency?: string
         countryCode?: string
+        channelId?: string
+        recipientId?: string
+        note?: string
       }
     | null
 
@@ -53,17 +57,60 @@ export async function POST(request: Request) {
     amount > 0
 
   const countryCode = String(body?.countryCode || "").trim().toUpperCase()
-  if (isFormSessionSell && countryCode) {
+  const channelId = String(body?.channelId || "").trim()
+  const recipientId = String(body?.recipientId || "").trim()
+  const sendNote = typeof body?.note === "string" ? body.note.trim() : ""
+
+  if (isFormSessionSell) {
+    if (!countryCode) {
+      return NextResponse.json(
+        { error: "countryCode is required for Global Payout (form-session sell)." },
+        { status: 400 },
+      )
+    }
     const admin = createSupabaseAdmin()
-    const gate = await payoutCorridorGate(
-      admin,
-      {
-        country_code: countryCode,
-        currency: fiatCurrency,
-        bank_name: "Bank transfer",
-      },
-      { requireExecutableNoahChannel: requireExecutableProviderChannel() },
-    )
+    let gateRow: {
+      country_code: string
+      currency: string
+      bank_name?: string | null
+      mobile_provider?: string | null
+      wallet_network?: string | null
+      payee_easetag?: string | null
+    } = {
+      country_code: countryCode,
+      currency: fiatCurrency,
+      bank_name: "Bank transfer",
+    }
+    if (recipientId) {
+      const { data: rec } = await admin
+        .from("recipients")
+        .select("country_code,currency,bank_name,mobile_provider,wallet_network,payee_easetag")
+        .eq("id", recipientId)
+        .eq("user_id", user.id)
+        .maybeSingle()
+      if (rec) {
+        gateRow = {
+          country_code: String(rec.country_code || countryCode).toUpperCase(),
+          currency: String(rec.currency || fiatCurrency).toUpperCase(),
+          bank_name: rec.bank_name,
+          mobile_provider: rec.mobile_provider,
+          wallet_network: rec.wallet_network,
+          payee_easetag: rec.payee_easetag,
+        }
+        if (gateRow.wallet_network || gateRow.payee_easetag) {
+          return NextResponse.json(
+            {
+              error:
+                "Wallet and Easetag recipients cannot use balance Global Payout. Choose a bank or mobile money recipient.",
+            },
+            { status: 400 },
+          )
+        }
+      }
+    }
+    const gate = await payoutCorridorGate(admin, gateRow, {
+      requireExecutableNoahChannel: requireExecutableProviderChannel(),
+    })
     if (gate) return gate
   }
 
@@ -105,7 +152,16 @@ export async function POST(request: Request) {
       formSessionId,
       nonce: randomUUID(),
     }
-    metadataExtra = { formSessionId, cryptoCurrency: cryptoCurrencyRaw, fiatCurrency, sellMode: "form_session" }
+    metadataExtra = {
+      formSessionId,
+      cryptoCurrency: cryptoCurrencyRaw,
+      fiatCurrency,
+      sellMode: "form_session",
+      country_code: countryCode || null,
+      ...(channelId ? { channel_id: channelId } : {}),
+      ...(recipientId ? { recipient_id: recipientId } : {}),
+      ...(sendNote ? { send_note: sendNote } : {}),
+    }
   } else {
     sellPayloadPascal = {
       CustomerID: noahCtx.noahCustomerId,
@@ -142,6 +198,16 @@ export async function POST(request: Request) {
 
     const id = String(tx.ID ?? tx.id ?? "")
     const status = String(tx.Status ?? tx.status ?? "pending").toLowerCase()
+    if (isFormSessionSell) {
+      console.info("[noah_global_payout]", {
+        country: countryCode,
+        fiat: fiatCurrency,
+        channelId: channelId || null,
+        formSessionId,
+        providerTransactionId: id,
+        sellMode: "form_session",
+      })
+    }
     const { amount: txAmount, currency } = pickTxAmountAndCurrency(tx)
     const admin = createSupabaseAdmin()
     let txUserId = user.id
@@ -180,7 +246,6 @@ export async function POST(request: Request) {
       status,
     })
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e)
-    return NextResponse.json({ error: msg }, { status: 400 })
+    return NextResponse.json({ error: mapNoahPrepareError(e) }, { status: 400 })
   }
 }

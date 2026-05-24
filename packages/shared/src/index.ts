@@ -62,8 +62,17 @@ export {
   convertNoahSendFlowAmounts,
   exchangeRatesToRateMap,
 } from "./noah-send-rates"
-export type { PayoutCorridorPublic, PayoutRail } from "./payout-corridor"
+export type { PayoutCorridorPublic, PayoutFieldsSchemaHint, PayoutRail } from "./payout-corridor"
 export { corridorDisplayLabel, flagCodeFromCorridor } from "./payout-corridor"
+export {
+  findPayoutFieldsSchema,
+  validateSendAmountFields,
+  validatePayoutAmountAgainstLimits,
+  recipientFormNeedsEmail,
+  recipientFormNeedsAddress,
+  formatPayoutArrivalHint,
+  type SendAmountFieldValidation,
+} from "./payout-form-schema"
 export type {
   BalanceCurrencyPolicyPublic,
   CryptoDestinationPublic,
