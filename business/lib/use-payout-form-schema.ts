@@ -9,16 +9,16 @@ export function usePayoutFormSchema(input: {
   currencyCode?: string | null
   rail?: PayoutRail
 }): { hints: PayoutFieldsSchemaHint | null; loading: boolean } {
-  const { bankCorridors, mobileCorridors, loading, enabled } = useSendDestinations()
+  const { bankCorridors, mobileCorridors, loading } = useSendDestinations()
   const cc = String(input.countryCode || "").trim().toUpperCase()
   const cur = String(input.currencyCode || "").trim().toUpperCase()
   const rail = input.rail ?? "bank_transfer"
 
   const hints = useMemo(() => {
-    if (!enabled || !cc || !cur) return null
+    if (!cc || !cur) return null
     const corridors = rail === "mobile_money" ? mobileCorridors : bankCorridors
     return findPayoutFieldsSchema(corridors, { countryCode: cc, currencyCode: cur, rail })
-  }, [enabled, cc, cur, rail, bankCorridors, mobileCorridors])
+  }, [cc, cur, rail, bankCorridors, mobileCorridors])
 
-  return { hints, loading: enabled && loading }
+  return { hints, loading }
 }

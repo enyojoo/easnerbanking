@@ -13,15 +13,6 @@ const STORAGE_ETAG = 'easner_send_destinations_etag'
 
 const memory: { body?: SendDestinationsResponse; etag?: string } = {}
 
-/** Same default as business `NEXT_PUBLIC_USE_PAYOUT_CORRIDORS` (opt out with `"false"`). */
-export function usePayoutCorridorsCatalogMobile(): boolean {
-  return process.env.EXPO_PUBLIC_USE_PAYOUT_CORRIDORS !== 'false'
-}
-
-export function useSendDestinationsCatalogMobile(): boolean {
-  return usePayoutCorridorsCatalogMobile()
-}
-
 let catalogRevision = 0
 
 export function getSendDestinationsCatalogRevision(): number {
@@ -54,7 +45,6 @@ export function getSendDestinationsMemory(): SendDestinationsResponse | null {
 export { getPayoutCorridorCache }
 
 export async function hydrateSendDestinationsFromStorage(): Promise<SendDestinationsResponse | null> {
-  if (!useSendDestinationsCatalogMobile()) return null
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY)
     if (!raw) return memory.body ?? null
@@ -71,7 +61,6 @@ export async function hydrateSendDestinationsFromStorage(): Promise<SendDestinat
 }
 
 export async function refreshSendDestinations(): Promise<SendDestinationsResponse | null> {
-  if (!useSendDestinationsCatalogMobile()) return null
   try {
     const headers: Record<string, string> = {}
     if (memory.etag) headers['If-None-Match'] = memory.etag

@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { PayoutCorridorPublic, PayoutRail } from "@easner/shared"
 import { fetchWithSession } from "@/lib/fetch-with-session"
-import { isPayoutCorridorsCatalogEnabled } from "@/lib/payout-corridors-flag"
 
 type CatalogResponse = {
   catalog_version?: string
@@ -55,32 +54,24 @@ async function fetchCorridors(rail: PayoutRail | "all", etag?: string): Promise<
   return { status: res.status, body, etag: newEtag }
 }
 
-/** Rows hydrated synchronously from module memory or sessionStorage (same source as initial React state). */
-function initialCorridorRows(enabled: boolean, cacheKey: PayoutRail | "all"): PayoutCorridorPublic[] {
-  if (!enabled) return []
+function initialCorridorRows(cacheKey: PayoutRail | "all"): PayoutCorridorPublic[] {
   return memory[cacheKey]?.body?.corridors ?? readSessionRail(cacheKey)?.corridors ?? []
 }
 
 export function usePayoutCorridors(rail: PayoutRail | "all") {
-  const enabled = isPayoutCorridorsCatalogEnabled()
   const cacheKey = rail
-  const [corridors, setCorridors] = useState<PayoutCorridorPublic[]>(() => initialCorridorRows(enabled, cacheKey))
+  const [corridors, setCorridors] = useState<PayoutCorridorPublic[]>(() => initialCorridorRows(cacheKey))
   const [catalogVersion, setCatalogVersion] = useState<string | undefined>(
     () => memory[cacheKey]?.body?.catalog_version ?? readSessionRail(cacheKey)?.catalog_version,
   )
-  const [loading, setLoading] = useState(() => (enabled ? initialCorridorRows(enabled, cacheKey).length === 0 : false))
+  const [loading, setLoading] = useState(() => initialCorridorRows(cacheKey).length === 0)
   const [error, setError] = useState<string | null>(null)
   const corridorsRef = useRef(corridors)
   corridorsRef.current = corridors
 
   const refresh = useCallback(async () => {
-    if (!enabled) {
-      setCorridors([])
-      setLoading(false)
-      return
-    }
     const hasCatalogToShow =
-      corridorsRef.current.length > 0 || initialCorridorRows(enabled, cacheKey).length > 0
+      corridorsRef.current.length > 0 || initialCorridorRows(cacheKey).length > 0
     if (!hasCatalogToShow) {
       setLoading(true)
     }
@@ -105,7 +96,7 @@ export function usePayoutCorridors(rail: PayoutRail | "all") {
     } finally {
       setLoading(false)
     }
-  }, [enabled, rail, cacheKey])
+  }, [rail, cacheKey])
 
   useEffect(() => {
     void refresh()
@@ -113,12 +104,11 @@ export function usePayoutCorridors(rail: PayoutRail | "all") {
 
   const stableCorridors = useMemo(() => corridors, [corridors])
 
-  return { corridors: stableCorridors, catalogVersion, loading, error, refresh, enabled }
+  return { corridors: stableCorridors, catalogVersion, loading, error, refresh }
 }
 
 /** Fire-and-forget prefetch for bank + mobile lists (e.g. after login). */
 export async function prefetchPayoutCorridors(): Promise<void> {
-  if (!isPayoutCorridorsCatalogEnabled()) return
   try {
     const [bank, mobile] = await Promise.all([
       fetchCorridors("bank_transfer", memory.bank_transfer?.etag),

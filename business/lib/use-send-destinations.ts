@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { SendDestinationsResponse } from "@easner/shared"
 import { fetchWithSession } from "@/lib/fetch-with-session"
-import { isPayoutCorridorsCatalogEnabled } from "@/lib/payout-corridors-flag"
 
 const memory: { etag?: string; body?: SendDestinationsResponse } = {}
 
@@ -49,19 +48,13 @@ function initialBody(): SendDestinationsResponse | null {
 }
 
 export function useSendDestinations() {
-  const enabled = isPayoutCorridorsCatalogEnabled()
-  const [data, setData] = useState<SendDestinationsResponse | null>(() => (enabled ? initialBody() : null))
-  const [loading, setLoading] = useState(() => enabled && !initialBody())
+  const [data, setData] = useState<SendDestinationsResponse | null>(() => initialBody())
+  const [loading, setLoading] = useState(() => !initialBody())
   const [error, setError] = useState<string | null>(null)
   const dataRef = useRef(data)
   dataRef.current = data
 
   const refresh = useCallback(async () => {
-    if (!enabled) {
-      setData(null)
-      setLoading(false)
-      return
-    }
     if (!dataRef.current) setLoading(true)
     setError(null)
     try {
@@ -80,7 +73,7 @@ export function useSendDestinations() {
     } finally {
       setLoading(false)
     }
-  }, [enabled])
+  }, [])
 
   useEffect(() => {
     void refresh()
@@ -100,12 +93,10 @@ export function useSendDestinations() {
     loading,
     error,
     refresh,
-    enabled,
   }
 }
 
 export async function prefetchSendDestinations(): Promise<void> {
-  if (!isPayoutCorridorsCatalogEnabled()) return
   try {
     const r = await fetchSendDestinations(memory.etag)
     if (r.body && r.etag) {

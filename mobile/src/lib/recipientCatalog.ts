@@ -212,10 +212,6 @@ export function setCryptoDestinationsCache(next: CryptoDestinationPublic[] | nul
   cryptoDestinationsCache = next
 }
 
-function usePayoutCorridorsApi(): boolean {
-  return process.env.EXPO_PUBLIC_USE_PAYOUT_CORRIDORS !== 'false'
-}
-
 function useStaticRecipientCatalogFallback(): boolean {
   return __DEV__ && process.env.EXPO_PUBLIC_USE_STATIC_RECIPIENT_CATALOG === 'true'
 }
@@ -343,14 +339,11 @@ export function getCatalogByRecipientType(recipientType: RecipientType): Recipie
     }
     return []
   }
-  if (usePayoutCorridorsApi()) {
-    if (recipientType === 'bank' && payoutCorridorCache?.bank.length) {
-      return sortRecipientCatalogEntries(corridorsToRecipientEntries(payoutCorridorCache.bank, 'bank'))
-    }
-    if (recipientType === 'mobile_money' && payoutCorridorCache?.mobile.length) {
-      return sortRecipientCatalogEntries(corridorsToRecipientEntries(payoutCorridorCache.mobile, 'mobile_money'))
-    }
-    if (!useStaticRecipientCatalogFallback()) return []
+  if (recipientType === 'bank' && payoutCorridorCache?.bank.length) {
+    return sortRecipientCatalogEntries(corridorsToRecipientEntries(payoutCorridorCache.bank, 'bank'))
+  }
+  if (recipientType === 'mobile_money' && payoutCorridorCache?.mobile.length) {
+    return sortRecipientCatalogEntries(corridorsToRecipientEntries(payoutCorridorCache.mobile, 'mobile_money'))
   }
   if (!useStaticRecipientCatalogFallback()) return []
   return sortRecipientCatalogEntries(recipientCatalog.filter((entry) => entry.recipientType === recipientType))

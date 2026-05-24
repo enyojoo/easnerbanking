@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { hasNoahSellChannel } from "@/lib/noah/channel-availability"
-import { isPayoutCorridorsCatalogEnabled } from "@/lib/payout-corridors-flag"
-
 type RecipientLike = {
   country_code?: string | null
   currency: string
@@ -46,14 +44,13 @@ export function requireExecutableProviderChannel(): boolean {
 
 /**
  * Returns an error response if the row maps to a disabled or mismatched payout corridor.
- * No-op when catalog is disabled via env or row is wallet/easenet or country is missing.
+ * No-op when row is wallet/easenet or country is missing.
  */
 export async function payoutCorridorGate(
   admin: SupabaseClient,
   row: RecipientLike,
   options?: PayoutCorridorGateOptions,
 ): Promise<NextResponse | null> {
-  if (!isPayoutCorridorsCatalogEnabled()) return null
   if (isWalletRow(row) || isEasenetRow(row)) return null
 
   const cc = String(row.country_code || "").toUpperCase()

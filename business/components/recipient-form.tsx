@@ -149,14 +149,13 @@ export function RecipientForm({
     bankCorridors,
     mobileCorridors,
     cryptoDestinations,
-    enabled: corridorCatalogEnabled,
     loading: bankCorridorsLoading,
     refresh: refreshSendDestinations,
   } = useSendDestinations()
 
   useEffect(() => {
-    if (corridorCatalogEnabled) void refreshSendDestinations()
-  }, [corridorCatalogEnabled, refreshSendDestinations])
+    void refreshSendDestinations()
+  }, [refreshSendDestinations])
   const mobileCorridorsLoading = bankCorridorsLoading
   const walletAssetNetworks = useMemo(() => {
     const fromApi = walletAssetNetworksFromCatalog(cryptoDestinations)
@@ -247,7 +246,7 @@ export function RecipientForm({
         easenetTag: inferredType === "easenet" ? bene.payeeEasetag || bene.accountNumber || "" : "",
       })
     }
-  }, [recipient, isEdit, corridorCatalogEnabled, bankCorridors, mobileCorridors])
+  }, [recipient, isEdit, bankCorridors, mobileCorridors])
 
   useEffect(() => {
     if (formData.recipientType !== "easenet") {
@@ -290,8 +289,8 @@ export function RecipientForm({
     }
   }, [formData.easenetTag, formData.recipientType])
 
-  const bankFromApi = corridorCatalogEnabled && bankCorridors.length > 0
-  const mobileFromApi = corridorCatalogEnabled && mobileCorridors.length > 0
+  const bankFromApi = bankCorridors.length > 0
+  const mobileFromApi = mobileCorridors.length > 0
 
   const bankCountriesFlat = useMemo(() => {
     const seen = new Set<string>()

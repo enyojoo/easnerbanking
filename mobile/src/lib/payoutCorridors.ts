@@ -1,12 +1,8 @@
 import type { Recipient } from '../types'
-import {
-  usePayoutCorridorsCatalogMobile,
-  getPayoutCorridorCache,
-} from './sendDestinations'
+import { getPayoutCorridorCache } from './sendDestinations'
 import type { PayoutCorridorCacheShape } from './recipientCatalog'
 
 export {
-  usePayoutCorridorsCatalogMobile,
   getPayoutCorridorCache,
   hydratePayoutCorridorsFromStorage,
   hydrateSendDestinationsFromStorage,
@@ -21,12 +17,11 @@ function isWalletRecipient(r: Pick<Recipient, 'bank_name' | 'currency'>): boolea
   return b.includes('wallet') && !b.includes('mobile money')
 }
 
-/** False when catalog is on, cache is populated, and country+currency+rail are not in enabled corridors. */
+/** False when cache is populated and country+currency+rail are not in office-enabled corridors. */
 export function isRecipientPayoutCorridorActive(
   r: Pick<Recipient, 'bank_name' | 'mobile_provider' | 'country_code' | 'currency'>,
   cache: CachedShape | null,
 ): boolean {
-  if (!usePayoutCorridorsCatalogMobile()) return true
   if (!cache || (!cache.bank.length && !cache.mobile.length)) return true
   if (isWalletRecipient(r as Recipient)) return true
   const b = (r.bank_name || '').toLowerCase()

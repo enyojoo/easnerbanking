@@ -5,7 +5,6 @@ import {
   getSendDestinationsMemory,
   hydrateSendDestinationsFromStorage,
   refreshSendDestinations,
-  useSendDestinationsCatalogMobile,
 } from '../lib/sendDestinations'
 
 /**
@@ -13,13 +12,8 @@ import {
  * Data is prefetched at login and read from memory — no loading UI; lists render when ready.
  */
 export function useSendDestinations() {
-  const enabled = useSendDestinationsCatalogMobile()
-  const [data, setData] = useState<SendDestinationsResponse | null>(() =>
-    enabled ? getSendDestinationsMemory() : null,
-  )
-  const [revision, setRevision] = useState(() =>
-    enabled ? getSendDestinationsCatalogRevision() : 0,
-  )
+  const [data, setData] = useState<SendDestinationsResponse | null>(() => getSendDestinationsMemory())
+  const [revision, setRevision] = useState(() => getSendDestinationsCatalogRevision())
 
   const syncFromMemory = useCallback(() => {
     const mem = getSendDestinationsMemory()
@@ -31,10 +25,6 @@ export function useSendDestinations() {
   }, [])
 
   const refresh = useCallback(async () => {
-    if (!enabled) {
-      setData(null)
-      return
-    }
     const body = await refreshSendDestinations()
     if (body) {
       setData(body)
@@ -42,10 +32,9 @@ export function useSendDestinations() {
     } else {
       syncFromMemory()
     }
-  }, [enabled, syncFromMemory])
+  }, [syncFromMemory])
 
   useEffect(() => {
-    if (!enabled) return
     let cancelled = false
     void (async () => {
       const hydrated = await hydrateSendDestinationsFromStorage()
@@ -59,7 +48,7 @@ export function useSendDestinations() {
     return () => {
       cancelled = true
     }
-  }, [enabled, refresh])
+  }, [refresh])
 
   const bankCorridors = useMemo(() => data?.fiat.bank_transfer ?? [], [data])
   const mobileCorridors = useMemo(() => data?.fiat.mobile_money ?? [], [data])
@@ -75,6 +64,5 @@ export function useSendDestinations() {
     catalogVersion: data?.catalog_version,
     catalogRevision: revision,
     refresh,
-    enabled,
   }
 }
