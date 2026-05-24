@@ -200,6 +200,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
   const { data: manualCatalog } = useManualSendCatalog(true)
   const manualSendAvailable = (manualCatalog?.sendCurrencies?.length ?? 0) > 0
+  /** Easetag P2P is balance-only; manual pay-in rails are not supported. */
+  const showManualSendPaymentOptions = manualSendAvailable && !isEasetagRecipient
 
   const otherCurrencies = useMemo(() => {
     return manualCatalog?.sendCurrencyOptions ?? []
@@ -239,6 +241,19 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       setSelectedOtherPaymentMethod(null)
     }
   }, [manualSendAvailable, selectedPaymentMethod, selectedOtherCurrency, selectedOtherPaymentMethod])
+
+  useEffect(() => {
+    if (!isEasetagRecipient) return
+    if (
+      selectedPaymentMethod === 'otherCurrency' ||
+      selectedOtherCurrency ||
+      selectedOtherPaymentMethod
+    ) {
+      setSelectedPaymentMethod('balance')
+      setSelectedOtherCurrency(null)
+      setSelectedOtherPaymentMethod(null)
+    }
+  }, [isEasetagRecipient, selectedPaymentMethod, selectedOtherCurrency, selectedOtherPaymentMethod])
 
   useEffect(() => {
     if (selectedPaymentMethod !== 'otherCurrency' || !selectedOtherCurrency) return
@@ -485,6 +500,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   )
 
   const manualQuoteEnabled =
+    !isEasetagRecipient &&
     selectedPaymentMethod === 'otherCurrency' &&
     !!selectedOtherCurrency &&
     showCrossCurrencyExchangeUi &&
@@ -1039,6 +1055,11 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               // For otherCurrency, require both currency and payment method selection
               if (selectedPaymentMethod === 'otherCurrency' && (!selectedOtherCurrency || !selectedOtherPaymentMethod)) return
 
+              if (isEasetagRecipient && selectedPaymentMethod === 'otherCurrency') {
+                showError('Easetag sends are only supported from your balance.')
+                return
+              }
+
               if (verificationBlocksSend) return
 
               const fieldCheck = validateSendAmountFields({
@@ -1293,7 +1314,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   })}
                 </View>
 
-                {manualSendAvailable ? (
+                {showManualSendPaymentOptions ? (
                 <View style={styles.paymentSection}>
                   <Text style={styles.paymentSectionTitle}>Through Another Currency</Text>
                   
