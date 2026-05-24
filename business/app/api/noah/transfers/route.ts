@@ -156,7 +156,9 @@ export async function POST(request: Request) {
         fiatAmount: amount,
         cryptoCurrency: cryptoCurrencyRaw,
         noahCustomerId: noahCtx.noahCustomerId,
-        commitForExecution: true,
+        // Noah `DelayedSell` is a flag on the original prepare ("defer balance check"), not a separate commit phase.
+        // After Cob ack clears NextStep, go straight to POST /transactions/sell.
+        commitForExecution: false,
         overrides:
           sendNote || sendPaymentPurpose
             ? {

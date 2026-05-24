@@ -9,12 +9,20 @@ export function logNoahPayoutFailure(
   const payload: Record<string, unknown> = { stage, ...meta }
 
   if (e instanceof NoahHttpError) {
+    let noahBodyJson: string | null = null
+    try {
+      noahBodyJson = e.body == null ? null : JSON.stringify(e.body)
+    } catch {
+      noahBodyJson = null
+    }
     console.error("[noah_payout]", {
       ...payload,
       httpStatus: e.status,
       noahDetail: e.detail ?? e.message,
       noahType: e.type ?? null,
       noahBody: e.body ?? null,
+      // Stringified copy so deeply nested arrays (e.g. RequestExtension.Body validator output) survive Vercel log truncation.
+      noahBodyJson,
     })
     return
   }
