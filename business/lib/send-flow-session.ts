@@ -43,7 +43,9 @@ export interface SendFlowState {
     sendCurrency: string
     totalDebited: number
     noahFee: number
+    noahFeeCurrency: string
     easnerFee: number
+    easnerFeeCurrency: string
     formSessionId: string
     cryptoAuthorizedAmount: string
     cryptoCurrency: string

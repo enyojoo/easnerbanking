@@ -54,10 +54,13 @@ import {
   getCurrencySymbol,
   resolveEffectivePayoutMin,
   resolvePayoutCountryCode,
+  getSendAmountNoteFieldUi,
   validatePayoutAmountAgainstLimits,
   validateSendAmountFields,
 } from '@easner/shared'
 import { usePayoutMinEnforcement } from '../../hooks/usePayoutMinEnforcement'
+import { noahService } from '../../lib/noahService'
+import { stashSendPayoutQuote } from '../../lib/sendFlowPayoutQuote'
 import { getPayoutCorridorCache, isRecipientPayoutCorridorActive, refreshPayoutCorridors } from '../../lib/payoutCorridors'
 import {
   getCachedSendDestinations,
@@ -132,6 +135,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const [note, setNote] = useState('')
   const [paymentPurpose, setPaymentPurpose] = useState('')
   const [amountFieldError, setAmountFieldError] = useState<string | null>(null)
+  const [quoteFetching, setQuoteFetching] = useState(false)
   const [showPurposePicker, setShowPurposePicker] = useState(false)
   const [selectedBalanceCurrency, setSelectedBalanceCurrency] = useState<string>('USD')
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false)
@@ -200,6 +204,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     })
   }, [sendDestinations, recipient, payoutRail, payoutCountryCode])
   const amountFieldMode = payoutHints?.amount_field_mode ?? 'note_optional_only'
+  const noteFieldUi = getSendAmountNoteFieldUi({
+    hints: payoutHints,
+    isEasetag: isEasetagRecipient,
+  })
 
   const { data: manualCatalog } = useManualSendCatalog(true)
   const manualSendAvailable = (manualCatalog?.sendCurrencies?.length ?? 0) > 0
@@ -648,6 +656,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         : false)
 
   const sendButtonDisabled =
+    quoteFetching ||
     !sendAmount ||
     sendAmount === '0.00' ||
     Number.parseFloat(sendAmount.replace(/,/g, '')) <= 0 ||
@@ -962,7 +971,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                     <MessageSquareText size={18} color={colors.text.secondary} strokeWidth={2} />
                     <TextInput
                       style={styles.noteInput}
-                      placeholder={amountFieldMode === 'note' ? 'Reference (required)' : 'Note'}
+                      placeholder={noteFieldUi.placeholder}
                       placeholderTextColor={colors.text.secondary}
                       value={note}
                       onChangeText={setNote}
@@ -1150,10 +1159,15 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               const calculatedFeeAmount = 0
               const calculatedTotalAmount = calculatedSendingAmount
 
-              // Balance: navigate immediately — Noah pricing quote runs on review screen (was blocking here ~300ms–2s).
+              const needsPayoutQuote =
+                selectedPaymentMethod === 'balance' &&
+                !isEasetagRecipient &&
+                !recipient?.wallet_network?.trim() &&
+                receiveAmountValue > 0
+
               if (selectedPaymentMethod === 'balance') {
                 const transactionId = generateTransactionId()
-                navigation.navigate('SendConfirm' as never, {
+                const navParams = {
                   recipient,
                   calculatedSendingAmount,
                   calculatedFeeAmount,
@@ -1164,7 +1178,33 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   transactionId,
                   ...(note.trim() ? { note: note.trim() } : {}),
                   ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
-                } as never)
+                }
+
+                if (needsPayoutQuote) {
+                  setQuoteFetching(true)
+                  void (async () => {
+                    try {
+                      const pq = await noahService.createPayoutQuote({
+                        recipientId: recipient.id,
+                        receiveAmount: receiveAmountValue,
+                        sourceBalanceCurrency: selectedBalanceCurrency,
+                        ...(note.trim() ? { note: note.trim() } : {}),
+                        ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+                      })
+                      stashSendPayoutQuote(pq)
+                      navigation.navigate('SendConfirm' as never, navParams as never)
+                    } catch (e) {
+                      const msg = e instanceof Error ? e.message : 'Could not load payout quote'
+                      setAmountFieldError(msg)
+                      showError(msg)
+                    } finally {
+                      setQuoteFetching(false)
+                    }
+                  })()
+                  return
+                }
+
+                navigation.navigate('SendConfirm' as never, navParams as never)
                 return
               }
 
@@ -1238,8 +1278,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               style={styles.sendButtonGradient}
             >
               <Text style={styles.sendButtonText}>
-                {selectedPaymentMethod === 'balance'
-                  ? 'Continue'
+                {quoteFetching
+                  ? 'Getting quote…'
+                  : selectedPaymentMethod === 'balance'
+                    ? 'Continue'
                   : selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency && selectedOtherPaymentMethod
                     ? 'Authorize'
                     : selectedPaymentMethod

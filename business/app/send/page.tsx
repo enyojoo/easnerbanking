@@ -50,9 +50,11 @@ import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
 import {
   exchangeRatesToRateMap,
   resolveEffectivePayoutMin,
+  getSendAmountNoteFieldUi,
   validatePayoutAmountAgainstLimits,
   validateSendAmountFields,
 } from "@easner/shared"
+import { mapPayoutQuoteToFlowState } from "@/lib/noah/map-payout-quote-to-flow"
 import { usePayoutMinEnforcement } from "@/hooks/use-payout-min-enforcement"
 import {
   Select,
@@ -84,7 +86,7 @@ function parseAmountFromDisplay(display: string): number {
 
 export default function SendPage() {
   const router = useRouter()
-  const { tier1Complete, hasData, isLoading: profileLoading } = useBusinessProfile()
+  const { tier1Complete, hasData, isLoading: profileLoading, businessId } = useBusinessProfile()
   const { accountRows: sourceAccounts } = useBusinessAccountRows()
   const [recipient, setRecipient] = useState<Beneficiary | null>(null)
   const [amountStr, setAmountStr] = useState("")
@@ -97,6 +99,7 @@ export default function SendPage() {
   const [note, setNote] = useState("")
   const [paymentPurpose, setPaymentPurpose] = useState("")
   const [amountFieldError, setAmountFieldError] = useState<string | null>(null)
+  const [quoteFetching, setQuoteFetching] = useState(false)
   const [sourceSheetOpen, setSourceSheetOpen] = useState(false)
   const [noahFxRates, setNoahFxRates] = useState<Record<string, number>>({})
 
@@ -123,6 +126,8 @@ export default function SendPage() {
   const receiveCurrency = recipient?.currency ?? "USD"
   const sourceAccount = sourceAccounts.find((a) => a.id === sourceAccountId)
   const isEasetagRecipient = Boolean(recipient?.payeeEasetag?.trim())
+  const isWalletRecipient =
+    Boolean(recipient?.walletNetwork) || /wallet/i.test(recipient?.bankName || "")
 
   const manualSend = useManualSendFlow({
     enabled: !isEasetagRecipient,
@@ -319,6 +324,10 @@ export default function SendPage() {
     rail: payoutRail,
   })
   const amountFieldMode = payoutHints?.amount_field_mode ?? "note_optional_only"
+  const noteFieldUi = getSendAmountNoteFieldUi({
+    hints: payoutHints,
+    isEasetag: isEasetagRecipient,
+  })
 
   const payoutMinReceive = useMemo(
     () =>
@@ -455,11 +464,14 @@ export default function SendPage() {
     return "Select method"
   }
 
-  const isWalletRecipient =
-    Boolean(recipient?.walletNetwork) || /wallet/i.test(recipient?.bankName || "")
+  const needsPayoutQuoteBeforeConfirm =
+    isBalanceSource &&
+    !isEasetagRecipient &&
+    !isWalletRecipient &&
+    receiveAmount > 0
 
-  const handleContinue = () => {
-    if (!canContinue || !recipient) return
+  const handleContinue = async () => {
+    if (!canContinue || !recipient || quoteFetching) return
     if (isEasetagRecipient && paymentMethod === "otherCurrency") {
       setAmountFieldError("Easetag sends are only supported from your balance.")
       return
@@ -516,6 +528,42 @@ export default function SendPage() {
       ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
       transactionId,
     }
+    if (needsPayoutQuoteBeforeConfirm) {
+      setQuoteFetching(true)
+      setAmountFieldError(null)
+      try {
+        const headers: Record<string, string> = { "Content-Type": "application/json" }
+        if (businessId) headers["X-Easner-Noah-Scope"] = "business"
+        const res = await fetchWithSession("/api/noah/payouts/quote", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            recipientId: recipient.id,
+            receiveAmount: receiveAmount,
+            sourceBalanceCurrency: sendCurrency,
+            ...(note.trim() ? { note: note.trim() } : {}),
+            ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+          }),
+        })
+        const data = (await res.json().catch(() => ({}))) as {
+          ok?: boolean
+          error?: string
+          quote?: Parameters<typeof mapPayoutQuoteToFlowState>[1]
+        }
+        if (!res.ok || !data.ok || !data.quote) {
+          throw new Error(data.error || "Could not load payout quote")
+        }
+        const withQuote = mapPayoutQuoteToFlowState(state, data.quote)
+        persistSendFlowState(withQuote)
+        router.push("/send/confirm")
+      } catch (e) {
+        setAmountFieldError(e instanceof Error ? e.message : "Could not load payout quote")
+      } finally {
+        setQuoteFetching(false)
+      }
+      return
+    }
+
     persistSendFlowState(state)
 
     if (isBalanceSource) {
@@ -679,14 +727,10 @@ export default function SendPage() {
         </div>
       ) : recipient ? (
         <div className="space-y-2">
-          <Label htmlFor="note">Note</Label>
+          <Label htmlFor="note">{noteFieldUi.label}</Label>
           <Input
             id="note"
-            placeholder={
-              amountFieldMode === "note"
-                ? "Payment reference (required)"
-                : "Add a note for this transfer"
-            }
+            placeholder={noteFieldUi.placeholder}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             className="h-11"
@@ -698,10 +742,10 @@ export default function SendPage() {
       <Button
         size="lg"
         className="w-full h-12"
-        disabled={!canContinue}
-        onClick={handleContinue}
+        disabled={!canContinue || quoteFetching}
+        onClick={() => void handleContinue()}
       >
-        {isAuthorizeFlow ? "Authorize" : "Continue"}
+        {quoteFetching ? "Getting quote…" : isAuthorizeFlow ? "Authorize" : "Continue"}
       </Button>
 
       <Dialog open={sourceSheetOpen} onOpenChange={setSourceSheetOpen}>

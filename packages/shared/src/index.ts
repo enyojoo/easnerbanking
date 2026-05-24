@@ -25,6 +25,7 @@ export {
 export { APP_URLS } from "./constants/urls"
 export { cn } from "./utils/cn"
 export { getCurrencySymbol } from "./currency-symbol"
+export { formatMoneyDisplay } from "./format-money-display"
 export { getTokenIconUrl } from "./crypto-icons"
 export { formatExchangeRate, formatSendRateLabel } from "./format-exchange-rate"
 export { BrandLogo } from "./components/BrandLogo"
@@ -66,6 +67,7 @@ export type { PayoutCorridorPublic, PayoutFieldsSchemaHint, PayoutRail } from ".
 export { corridorDisplayLabel, flagCodeFromCorridor } from "./payout-corridor"
 export {
   findPayoutFieldsSchema,
+  getSendAmountNoteFieldUi,
   validateSendAmountFields,
   validatePayoutAmountAgainstLimits,
   recipientFormNeedsEmail,

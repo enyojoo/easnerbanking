@@ -40,6 +40,8 @@ export type PayoutQuoteResult = {
   channelId?: string
   noah: {
     totalFee: number
+    /** Fiat destination currency for TotalFee from Noah prepare. */
+    feeCurrency: string
     cryptoAuthorizedAmount: string
     cryptoCurrency: string
     formSessionId: string
@@ -228,6 +230,7 @@ export async function buildPayoutQuote(input: {
     channelId,
     noah: {
       totalFee: noahFee,
+      feeCurrency: receiveCurrency,
       cryptoAuthorizedAmount,
       cryptoCurrency,
       formSessionId,

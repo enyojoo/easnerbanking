@@ -43,6 +43,30 @@ export function findPayoutFieldsSchema(
 
 export type SendAmountFieldValidation = { ok: true } | { ok: false; message: string }
 
+export type SendAmountNoteFieldUi = {
+  mode: "note" | "payment_purpose" | "note_optional_only"
+  label: string
+  placeholder: string
+}
+
+/** Amount-screen note / reference copy from corridor hints (Easetag is always optional "Note"). */
+export function getSendAmountNoteFieldUi(input: {
+  hints: PayoutFieldsSchemaHint | null | undefined
+  isEasetag?: boolean
+}): SendAmountNoteFieldUi {
+  if (input.isEasetag) {
+    return { mode: "note_optional_only", label: "Note", placeholder: "Note" }
+  }
+  const mode = input.hints?.amount_field_mode ?? "note_optional_only"
+  if (mode === "payment_purpose") {
+    return { mode, label: "Payment purpose", placeholder: "Select purpose" }
+  }
+  if (mode === "note") {
+    return { mode, label: "Reference", placeholder: "Reference (required)" }
+  }
+  return { mode, label: "Note", placeholder: "Note" }
+}
+
 /** Validate note / payment purpose on send CTA per corridor hints. */
 export function validateSendAmountFields(input: {
   hints: PayoutFieldsSchemaHint | null

@@ -9,9 +9,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { PinChallengeDialog } from "@/components/app-lock/pin-challenge-dialog"
 import { useAuth } from "@/lib/auth-context"
 import { hasPin, isLoginPinModuleAvailable } from "@/lib/login-pin"
-import { formatExchangeRate, formatPayoutArrivalHint, formatSendRateLabel } from "@easner/shared"
+import { formatMoneyDisplay, formatPayoutArrivalHint, formatSendRateLabel } from "@easner/shared"
 import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
-import { getCurrencySymbol } from "@/lib/utils"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 import type { Beneficiary } from "@/lib/recipient-types"
 import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
@@ -23,43 +22,16 @@ import { isEasetagLedgerP2PEnabled } from "@/lib/ledger/easetag-transfer"
 import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { refetchBusinessMoneyQueries } from "@/lib/query/refresh-after-money-move"
 import { useScope } from "@/lib/query/scope"
+import { type SendFlowState, SEND_FLOW_STATE_KEY } from "@/lib/send-flow-session"
+import type { PayoutQuoteResult } from "@/lib/noah/payout-quote"
+import {
+  isPayoutQuoteFresh,
+  mapPayoutQuoteToFlowState,
+} from "@/lib/noah/map-payout-quote-to-flow"
+import { useQuoteCountdown } from "@/hooks/use-quote-countdown"
 import { ArrowLeft, Copy, Check, Loader2 } from "lucide-react"
 
-const SEND_FLOW_STATE_KEY = "send_flow_state"
-
-interface SendFlowState {
-  recipient: Beneficiary
-  amount: number
-  receiveCurrency: string
-  sendAmount: number
-  sendCurrency: string
-  sourceAccountId?: string
-  paymentMethod?: string
-  note: string
-  paymentPurpose?: string
-  transactionId?: string
-  payoutQuote?: {
-    receiveAmount: number
-    sendAmount: number
-    sendCurrency: string
-    totalDebited: number
-    noahFee: number
-    easnerFee: number
-    formSessionId: string
-    cryptoAuthorizedAmount: string
-    cryptoCurrency: string
-    channelId?: string
-    pricingQuoteId: string
-    expiresAt: string
-  }
-  pricingQuote?: {
-    transferFee?: number
-    payoutFee?: number
-    exchangeRate?: number
-    expiresAt?: string
-    repricingReason?: string | null
-  }
-}
+const SEND_FLOW_STATE_KEY_LOCAL = SEND_FLOW_STATE_KEY
 
 function isEasenetRecipient(recipient: Beneficiary): boolean {
   return Boolean(recipient.payeeEasetag?.trim())
@@ -140,7 +112,7 @@ export default function SendConfirmPage() {
   }
 
   useEffect(() => {
-    const raw = sessionStorage.getItem(SEND_FLOW_STATE_KEY)
+    const raw = sessionStorage.getItem(SEND_FLOW_STATE_KEY_LOCAL)
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as SendFlowState
@@ -174,7 +146,7 @@ export default function SendConfirmPage() {
   useEffect(() => {
     if (!state || isEasenetRecipient(state.recipient) || isWalletRecipient(state.recipient) || !(state.amount > 0))
       return
-    if (state.payoutQuote?.receiveAmount === state.amount) return
+    if (isPayoutQuoteFresh(state.payoutQuote, state.amount)) return
     let cancelled = false
     setPayoutQuoteLoading(true)
     setPayoutQuoteError(null)
@@ -212,38 +184,9 @@ export default function SendConfirmPage() {
           throw new Error(data.error || "Could not load payout quote")
         }
         if (cancelled) return
-        const q = data.quote
-        const easnerFee =
-          (q as { easner?: { pricingTotals?: { total_easner_fee?: number }; totalFeeAmount?: number } }).easner
-            ?.pricingTotals?.total_easner_fee ??
-          (q as { easner?: { totalFeeAmount?: number } }).easner?.totalFeeAmount ??
-          0
-        const next: SendFlowState = {
-          ...state,
-          sendAmount: q.sendAmount,
-          payoutQuote: {
-            receiveAmount: q.receiveAmount,
-            sendAmount: q.sendAmount,
-            sendCurrency: q.sendCurrency,
-            totalDebited: q.totalDebited,
-            noahFee: q.noah.totalFee,
-            easnerFee,
-            formSessionId: q.noah.formSessionId,
-            cryptoAuthorizedAmount: q.noah.cryptoAuthorizedAmount,
-            cryptoCurrency: q.noah.cryptoCurrency,
-            channelId: (q as { channelId?: string }).channelId,
-            pricingQuoteId: q.pricingQuoteId,
-            expiresAt: q.expiresAt,
-          },
-          pricingQuote: {
-            transferFee: q.noah.totalFee,
-            payoutFee: easnerFee,
-            exchangeRate: q.noah.rate ?? q.easner.effectiveRate,
-            expiresAt: q.expiresAt,
-          },
-        }
+        const next = mapPayoutQuoteToFlowState(state, data.quote as PayoutQuoteResult)
         setState(next)
-        sessionStorage.setItem(SEND_FLOW_STATE_KEY, JSON.stringify(next))
+        sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(next))
       } catch (e) {
         if (!cancelled) {
           setPayoutQuoteError(e instanceof Error ? e.message : "Payout quote failed")
@@ -257,9 +200,11 @@ export default function SendConfirmPage() {
     }
   }, [state?.recipient.id, state?.amount, state?.sendCurrency, state?.note, state?.paymentPurpose, businessId])
 
+  const quoteCountdown = useQuoteCountdown(state?.payoutQuote?.expiresAt)
+
   const finishSend = async (transactionId: string) => {
     if (!state) return
-    sessionStorage.removeItem(SEND_FLOW_STATE_KEY)
+    sessionStorage.removeItem(SEND_FLOW_STATE_KEY_LOCAL)
     await refetchBusinessMoneyQueries(qc, scope)
     router.push(transactionWebDetailPath(transactionId))
   }
@@ -460,15 +405,20 @@ export default function SendConfirmPage() {
   const processingTime = arrivalHint ?? getProcessingTime(transferMethod)
   const easenetSend = isEasenetRecipient(state.recipient)
   const hasFx = !easenetSend && state.receiveCurrency !== state.sendCurrency
-  const noahFee = easenetSend ? 0 : (state.payoutQuote?.noahFee ?? state.pricingQuote?.transferFee ?? 0)
-  const easnerFee = easenetSend ? 0 : (state.payoutQuote?.easnerFee ?? state.pricingQuote?.payoutFee ?? 0)
-  const transferFee = noahFee
-  const payoutFee = easnerFee
-  const exchangeRate = easenetSend
-    ? 1
-    : state.pricingQuote?.exchangeRate ?? (hasFx && state.amount > 0 ? state.sendAmount / state.amount : 1)
+  const pq = state.payoutQuote
+  const quoteReady = easenetSend || Boolean(pq?.formSessionId)
+  const noahFee = pq?.noahFee ?? 0
+  const noahFeeCurrency = pq?.noahFeeCurrency ?? state.receiveCurrency
+  const easnerFee = pq?.easnerFee ?? 0
+  const easnerFeeCurrency = pq?.easnerFeeCurrency ?? state.sendCurrency
+  const exchangeRate =
+    hasFx && state.amount > 0 ? state.sendAmount / state.amount : 1
 
-  const authorizeDisabled = isAuthorizing || payoutQuoteLoading || Boolean(payoutQuoteError && !easenetSend)
+  const authorizeDisabled =
+    isAuthorizing ||
+    payoutQuoteLoading ||
+    Boolean(payoutQuoteError && !easenetSend) ||
+    (!easenetSend && (!quoteReady || quoteCountdown.expired))
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -497,24 +447,52 @@ export default function SendConfirmPage() {
             </button>
           </div>
           <div className="flex items-center justify-between border-b pb-4">
-            <span className="text-sm text-muted-foreground">Amount</span>
+            <span className="text-sm text-muted-foreground">You send</span>
             <span className="text-xl font-semibold">
-              {getCurrencySymbol(state.receiveCurrency)}
-              {state.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              {formatMoneyDisplay(
+                easenetSend ? state.sendAmount : (pq?.sendAmount ?? state.sendAmount),
+                state.sendCurrency,
+              )}
             </span>
           </div>
-          {hasFx && (
-            <div className="flex items-center justify-between border-b pb-4">
-              <span className="text-sm text-muted-foreground">You send</span>
-              <span className="font-medium">
-                {getCurrencySymbol(state.sendCurrency)}
-                {state.sendAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-              </span>
-            </div>
-          )}
-          <div className="space-y-2 border-b pb-4">
-            <span className="text-sm text-muted-foreground">Recipient</span>
-            <SendSelectedRecipientSummary beneficiary={state.recipient} />
+          {!easenetSend && quoteReady ? (
+            <>
+              <div className="flex items-center justify-between border-b pb-4">
+                <span className="text-sm text-muted-foreground">Exchange fee</span>
+                <span className="font-semibold">
+                  {formatMoneyDisplay(noahFee, noahFeeCurrency)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between border-b pb-4">
+                <span className="text-sm text-muted-foreground">Processing fee</span>
+                <span className="font-semibold">
+                  {formatMoneyDisplay(easnerFee, easnerFeeCurrency)}
+                </span>
+              </div>
+              {hasFx ? (
+                <div className="flex items-center justify-between border-b pb-4">
+                  <span className="text-sm text-muted-foreground">Exchange rate</span>
+                  <span className="font-semibold">
+                    {formatSendRateLabel(state.sendCurrency, state.receiveCurrency, exchangeRate)}
+                  </span>
+                </div>
+              ) : null}
+            </>
+          ) : payoutQuoteLoading && !easenetSend ? (
+            <div className="border-b pb-4 text-sm text-muted-foreground">Refreshing quote…</div>
+          ) : null}
+          <div className="flex items-center justify-between border-b pb-4">
+            <span className="text-sm text-muted-foreground">Recipient gets</span>
+            <span className="font-semibold">
+              {formatMoneyDisplay(state.amount, state.receiveCurrency)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-3 border-b pb-4">
+            <span className="shrink-0 text-sm text-muted-foreground">Recipient</span>
+            <SendSelectedRecipientSummary
+              beneficiary={state.recipient}
+              className="min-w-0 max-w-[65%] justify-end"
+            />
           </div>
           {sourceAccount && (
             <div className="flex items-center justify-between border-b pb-4">
@@ -532,45 +510,14 @@ export default function SendConfirmPage() {
             <span className="text-sm text-muted-foreground">Processing time</span>
             <span className="font-medium">{processingTime}</span>
           </div>
-          {!easenetSend && (payoutQuoteLoading || transferFee > 0) ? (
-            <div className="flex items-center justify-between border-b pb-4">
-              <span className="text-sm text-muted-foreground">Exchange fee</span>
-              <span className="font-semibold">
-                {payoutQuoteLoading
-                  ? "…"
-                  : `${getCurrencySymbol(state.sendCurrency)}${transferFee.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
-              </span>
-            </div>
+          {payoutQuoteError && !easenetSend ? (
+            <p className="text-sm text-destructive">{payoutQuoteError}</p>
           ) : null}
-          {!easenetSend && hasFx ? (
-            <div className="flex items-center justify-between border-b pb-4">
-              <span className="text-sm text-muted-foreground">Exchange rate</span>
-              <span className="font-semibold">
-                {formatSendRateLabel(state.sendCurrency, state.receiveCurrency, exchangeRate)}
-              </span>
-            </div>
-          ) : null}
-          {!easenetSend && (payoutQuoteLoading || payoutFee > 0) ? (
-            <div className="flex items-center justify-between border-b pb-4">
-              <span className="text-sm text-muted-foreground">Processing fee</span>
-              <span className="font-semibold">
-                {payoutQuoteLoading
-                  ? "…"
-                  : `${getCurrencySymbol(state.sendCurrency)}${payoutFee.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
-              </span>
-            </div>
-          ) : null}
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Total recipient amount</span>
-            <span className="font-semibold">
-              {getCurrencySymbol(state.receiveCurrency)}
-              {state.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-            </span>
-          </div>
-          {state.pricingQuote?.expiresAt ? (
+          {!easenetSend && pq?.expiresAt ? (
             <div className="text-xs text-muted-foreground">
-              Quote expires at {new Date(state.pricingQuote.expiresAt).toLocaleTimeString()}
-              {state.pricingQuote.repricingReason ? ` • repriced: ${state.pricingQuote.repricingReason}` : ""}
+              {quoteCountdown.expired
+                ? "Quote expired — go back and continue again for a fresh quote."
+                : `Quote valid for ${quoteCountdown.label}`}
             </div>
           ) : null}
         </CardContent>

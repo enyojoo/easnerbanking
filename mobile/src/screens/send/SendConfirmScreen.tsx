@@ -7,7 +7,7 @@ import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CommonActions, useFocusEffect } from '@react-navigation/native'
 import { useQueryClient } from '@tanstack/react-query'
-import { findPayoutFieldsSchema, formatPayoutArrivalHint, qk } from '@easner/shared'
+import { findPayoutFieldsSchema, formatMoneyDisplay, formatPayoutArrivalHint, getSendAmountNoteFieldUi, qk } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import type { Recipient, User } from '../../types'
@@ -34,6 +34,12 @@ import { useEasenetRecipientHydration } from '../../hooks/useEasenetRecipientHyd
 import { SendSelectedRecipientSummary } from '../../components/send/SendSelectedRecipientSummary'
 import { getCachedSendDestinations } from '../../lib/sendDestinations'
 import { isEasnerClientTransactionIdFormat } from '../../lib/transactionId'
+import {
+  isStashedPayoutQuoteFresh,
+  peekSendPayoutQuote,
+  clearSendPayoutQuote,
+} from '../../lib/sendFlowPayoutQuote'
+import { useQuoteCountdown } from '../../hooks/useQuoteCountdown'
 
 function inferCountryFromRecipientCurrency(currency: string): string | undefined {
   const m: Record<string, string> = {
@@ -43,20 +49,6 @@ function inferCountryFromRecipientCurrency(currency: string): string | undefined
     ZAR: 'ZA',
   }
   return m[currency.toUpperCase()]
-}
-
-function fmtMoney(amount: number, currency: string): string {
-  const sym =
-    currency === 'USD'
-      ? '$'
-      : currency === 'EUR'
-        ? '€'
-        : currency === 'KES'
-          ? 'KSh '
-          : currency === 'GHS'
-            ? '₵ '
-            : ''
-  return `${sym}${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
 export default function SendConfirmScreen({ navigation, route }: NavigationProps) {
@@ -96,19 +88,48 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   const sendNote = typeof params.note === 'string' ? params.note.trim() : ''
   const sendPaymentPurpose = typeof params.paymentPurpose === 'string' ? params.paymentPurpose.trim() : ''
 
-  const [pricing, setPricing] = useState(() => ({
-    calculatedSendingAmount: params.calculatedSendingAmount ?? 0,
-    calculatedFeeAmount: params.calculatedFeeAmount ?? 0,
-    calculatedTotalAmount: params.calculatedTotalAmount ?? 0,
-    noahFee: 0,
-    easnerFee: 0,
-    pricingQuoteId: params.pricingQuoteId as string | undefined,
-    pricingQuoteExpiry: params.pricingQuoteExpiry as string | undefined,
-    pricingQuoteResult: (params.pricingQuoteResult ?? null) as PricingQuote | null,
-    payoutSession: undefined as PayoutPrepareSession | undefined,
-    quoteLoading: false,
-    quoteError: null as string | null,
-  }))
+  const [pricing, setPricing] = useState(() => {
+    const stashed = peekSendPayoutQuote()
+    const useStashed =
+      stashed &&
+      (params.receiveAmountValue ?? 0) > 0 &&
+      stashed.receiveAmount === (params.receiveAmountValue ?? 0)
+    if (useStashed) {
+      const easnerFeeAmt =
+        stashed.easner.pricingTotals?.total_easner_fee ?? stashed.easner.totalFeeAmount ?? 0
+      return {
+        calculatedSendingAmount: stashed.sendAmount,
+        calculatedFeeAmount: easnerFeeAmt,
+        calculatedTotalAmount: stashed.totalDebited,
+        noahFee: stashed.noah.totalFee,
+        easnerFee: easnerFeeAmt,
+        pricingQuoteId: stashed.pricingQuoteId,
+        pricingQuoteExpiry: stashed.expiresAt,
+        pricingQuoteResult: stashed.easner,
+        payoutSession: {
+          formSessionId: stashed.noah.formSessionId,
+          cryptoAuthorizedAmount: stashed.noah.cryptoAuthorizedAmount,
+          cryptoCurrency: stashed.noah.cryptoCurrency,
+          ...(stashed.channelId ? { channelId: stashed.channelId } : {}),
+        },
+        quoteLoading: false,
+        quoteError: null as string | null,
+      }
+    }
+    return {
+      calculatedSendingAmount: params.calculatedSendingAmount ?? 0,
+      calculatedFeeAmount: params.calculatedFeeAmount ?? 0,
+      calculatedTotalAmount: params.calculatedTotalAmount ?? 0,
+      noahFee: 0,
+      easnerFee: 0,
+      pricingQuoteId: params.pricingQuoteId as string | undefined,
+      pricingQuoteExpiry: params.pricingQuoteExpiry as string | undefined,
+      pricingQuoteResult: (params.pricingQuoteResult ?? null) as PricingQuote | null,
+      payoutSession: undefined as PayoutPrepareSession | undefined,
+      quoteLoading: false,
+      quoteError: null as string | null,
+    }
+  })
 
   const {
     calculatedSendingAmount,
@@ -155,6 +176,10 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       : undefined
 
   const displayTransactionId = paramTransactionId ? paramTransactionId.toUpperCase() : null
+  const quoteCountdown = useQuoteCountdown(pricingQuoteExpiry)
+  const quoteReady = Boolean(easetagUi || payoutSession?.formSessionId)
+  const noahFeeCurrency = receiveCurrency
+  const easnerFeeCurrency = selectedBalanceCurrency
 
   const [sendingAfterPin, setSendingAfterPin] = useState(false)
 
@@ -162,10 +187,14 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     analytics.trackScreenView('SendConfirm')
   }, [])
 
-  /** Executable Noah payout quote at confirm (Noah sell/prepare). Skipped for Easetag P2P. */
+  /** Refresh quote only when not preloaded on amount screen. */
   useEffect(() => {
     if (!recipient || easetagUi) return
     if (!recipient.id || !(receiveAmountValue > 0)) return
+    if (isStashedPayoutQuoteFresh(receiveAmountValue)) {
+      clearSendPayoutQuote()
+      return
+    }
     let cancelled = false
     setPricing((prev) => ({ ...prev, quoteLoading: true, quoteError: null }))
     void (async () => {
@@ -331,6 +360,10 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       showError('Payout quote is still loading. Wait a moment or go back and try again.')
       return
     }
+    if (!easetagUi && quoteCountdown.expired) {
+      showError('Quote expired. Go back and continue again for a fresh quote.')
+      return
+    }
     navigation.navigate('SendPin' as never)
   }
 
@@ -397,34 +430,35 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
         >
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             <View style={styles.card}>
-              <Row label="You send" value={`${fmtMoney(calculatedSendingAmount, selectedBalanceCurrency)} ${selectedBalanceCurrency}`} />
-              {!easetagUi ? (
+              <Row
+                label="You send"
+                value={formatMoneyDisplay(calculatedSendingAmount, selectedBalanceCurrency)}
+              />
+              {!easetagUi && quoteReady ? (
                 <>
-                  {quoteLoading || noahFee > 0 ? (
-                    <Row
-                      label="Exchange fee"
-                      value={quoteLoading ? '…' : fmtMoney(noahFee, selectedBalanceCurrency)}
-                    />
-                  ) : null}
-                  {quoteLoading || easnerFee > 0 || calculatedFeeAmount > 0 ? (
-                    <Row
-                      label="Processing fee"
-                      value={
-                        quoteLoading
-                          ? '…'
-                          : fmtMoney(easnerFee || calculatedFeeAmount, selectedBalanceCurrency)
-                      }
-                    />
-                  ) : null}
+                  <Row
+                    label="Exchange fee"
+                    value={formatMoneyDisplay(noahFee, noahFeeCurrency)}
+                  />
+                  <Row
+                    label="Processing fee"
+                    value={formatMoneyDisplay(easnerFee || calculatedFeeAmount, easnerFeeCurrency)}
+                  />
                 </>
-              ) : calculatedFeeAmount > 0 ? (
+              ) : quoteLoading && !easetagUi ? (
+                <Row label="Quote" value="Refreshing…" />
+              ) : null}
+              {!easetagUi && calculatedTotalAmount > 0 ? (
                 <Row
-                  label="Processing fee"
-                  value={fmtMoney(calculatedFeeAmount, selectedBalanceCurrency)}
+                  label="Total debited"
+                  value={formatMoneyDisplay(calculatedTotalAmount, selectedBalanceCurrency)}
+                  bold
                 />
               ) : null}
-              <Row label="Total debited" value={`${fmtMoney(calculatedTotalAmount, selectedBalanceCurrency)} ${selectedBalanceCurrency}`} bold />
-              <Row label="Recipient gets" value={`${fmtMoney(receiveAmountValue, receiveCurrency)} ${receiveCurrency}`} />
+              <Row
+                label="Recipient gets"
+                value={formatMoneyDisplay(receiveAmountValue, receiveCurrency)}
+              />
               {arrivalHint && !easetagUi ? (
                 <Row label="Arrival" value={arrivalHint} />
               ) : null}
@@ -436,18 +470,24 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                   ]}
                 >
                   <Text style={styles.rowLabel}>Recipient</Text>
-                  <SendSelectedRecipientSummary
-                    recipient={recipient}
-                    easenetPreview={easenetDisplay}
-                  />
+                  <View style={styles.recipientSummaryWrap}>
+                    <SendSelectedRecipientSummary
+                      recipient={recipient}
+                      easenetPreview={easenetDisplay}
+                    />
+                  </View>
                 </View>
               ) : null}
               {displayTransactionId ? (
                 <Row label="Transaction ID" value={displayTransactionId} last={!pricingQuoteExpiry} />
               ) : null}
               {quoteError ? <Text style={styles.quoteError}>{quoteError}</Text> : null}
-              {pricingQuoteExpiry ? (
-                <Text style={styles.quoteHint}>Quote expires {new Date(pricingQuoteExpiry).toLocaleTimeString()}</Text>
+              {!easetagUi && pricingQuoteExpiry ? (
+                <Text style={styles.quoteHint}>
+                  {quoteCountdown.expired
+                    ? 'Quote expired — go back and continue again for a fresh quote.'
+                    : `Quote valid for ${quoteCountdown.label}`}
+                </Text>
               ) : null}
             </View>
           </ScrollView>
@@ -542,11 +582,20 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
   },
   recipientRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: spacing[3],
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border.light,
     paddingBottom: spacing[3],
     marginBottom: spacing[3],
-    gap: spacing[2],
+  },
+  recipientSummaryWrap: {
+    flex: 1,
+    minWidth: 0,
+    maxWidth: '65%',
+    alignItems: 'flex-end',
   },
   rowLabel: {
     ...textStyles.caption,
