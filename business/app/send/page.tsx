@@ -53,7 +53,7 @@ import {
   validatePayoutAmountAgainstLimits,
   validateSendAmountFields,
 } from "@easner/shared"
-import { usePayoutMinEnforcement } from "@easner/shared/hooks/use-payout-min-enforcement"
+import { usePayoutMinEnforcement } from "@/hooks/use-payout-min-enforcement"
 import {
   Select,
   SelectContent,

@@ -16,10 +16,6 @@ const nextConfig = {
         __dirname,
         "../packages/shared/src/verified-identity.ts"
       ),
-      "@easner/shared/hooks/use-payout-min-enforcement": resolve(
-        __dirname,
-        "../packages/shared/src/hooks/use-payout-min-enforcement.ts"
-      ),
       "@easner/server": resolve(__dirname, "../packages/server/lib/index.ts"),
       "@radix-ui/react-slot": resolve(__dirname, "../node_modules/@radix-ui/react-slot"),
       "@noble/hashes": resolve(__dirname, "../node_modules/@turnkey/crypto/node_modules/@noble/hashes"),

@@ -17,10 +17,6 @@ module.exports = function (api) {
               __dirname,
               '../packages/shared/src/flags/warm-flags.native',
             ),
-            '@easner/shared/hooks/use-payout-min-enforcement': path.resolve(
-              __dirname,
-              '../packages/shared/src/hooks/use-payout-min-enforcement',
-            ),
             // @noble/hashes: do not alias here — subpath imports like `@noble/hashes/pbkdf2.js`
             // must resolve via package `exports` (see mobile/metro.config.js extraNodeModules).
           },
