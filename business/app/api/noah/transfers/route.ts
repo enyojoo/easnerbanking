@@ -28,8 +28,9 @@ export async function POST(request: Request) {
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
   const { user } = auth
-  const noahCtx = await resolveNoahContextAsync(user.id, request)
-  if (!noahCtx.ok) return noahCtx.response
+  const noahCtxResult = await resolveNoahContextAsync(user.id, request)
+  if (!noahCtxResult.ok) return noahCtxResult.response
+  const noahCtx = noahCtxResult
 
   const body = (await request.json().catch(() => null)) as
     | {
@@ -139,7 +140,13 @@ export async function POST(request: Request) {
   })
   if (gate) return gate
 
-  /** Fresh prepare immediately before sell — quote FormSessionIDs go stale after PIN / delay. */
+  /**
+   * Performance: try POST /transactions/sell with the FormSessionID the client already
+   * received from the on-screen quote. If Noah accepts it, we skip the second prepare
+   * (saves 2–4s on the PIN→send round-trip). If it 404s ("not found" on RDS) the session
+   * has expired and we transparently re-prepare below.
+   */
+  let recipientRow: RecipientSellPrepareRow | null = null
   if (recipientId) {
     const { data: rec } = await admin
       .from("recipients")
@@ -150,116 +157,160 @@ export async function POST(request: Request) {
     if (!rec) {
       return NextResponse.json({ error: "Recipient not found." }, { status: 404 })
     }
-    try {
-      const prepared = await prepareSellFromRecipientRow({
-        row: rec as RecipientSellPrepareRow,
-        fiatAmount: amount,
+    recipientRow = rec as RecipientSellPrepareRow
+  }
+
+  async function freshPrepare(): Promise<void> {
+    if (!recipientRow) return
+    const prepared = await prepareSellFromRecipientRow({
+      row: recipientRow,
+      fiatAmount: amount,
+      cryptoCurrency: cryptoCurrencyRaw,
+      noahCustomerId: noahCtx.noahCustomerId,
+      commitForExecution: false,
+      overrides:
+        sendNote || sendPaymentPurpose
+          ? {
+              ...(sendNote ? { note: sendNote } : {}),
+              ...(sendPaymentPurpose ? { paymentPurpose: sendPaymentPurpose } : {}),
+            }
+          : undefined,
+    })
+    formSessionId = String(prepared.prep.formSessionId || "").trim()
+    cryptoAuthorizedAmount = String(prepared.prep.cryptoAuthorizedAmount || "").trim()
+    if (!formSessionId || !cryptoAuthorizedAmount) {
+      throw new Error("Could not prepare payout session. Go back and get a fresh quote.")
+    }
+    console.info("[noah_payout]", {
+      stage: "transfers_prepare_ok",
+      recipientId,
+      formSessionIdPrefix: formSessionId.slice(0, 12),
+      cryptoAuthorizedAmount,
+      formSessionComplete:
+        prepared.prep.raw.FormSessionComplete ?? prepared.prep.raw.formSessionComplete ?? null,
+      hasNextStep: Boolean(parseNoahFormNextStep(prepared.prep.raw)),
+    })
+  }
+
+  function buildSellPayloads() {
+    const sellNonce = randomUUID()
+    return {
+      pascal: {
+        CryptoCurrency: cryptoCurrencyRaw,
+        FiatAmount: amount.toFixed(2),
+        CryptoAuthorizedAmount: cryptoAuthorizedAmount,
+        FormSessionID: formSessionId,
+        Nonce: sellNonce,
+      },
+      camel: {
         cryptoCurrency: cryptoCurrencyRaw,
-        noahCustomerId: noahCtx.noahCustomerId,
-        // Noah `DelayedSell` is a flag on the original prepare ("defer balance check"), not a separate commit phase.
-        // After Cob ack clears NextStep, go straight to POST /transactions/sell.
-        commitForExecution: false,
-        overrides:
-          sendNote || sendPaymentPurpose
-            ? {
-                ...(sendNote ? { note: sendNote } : {}),
-                ...(sendPaymentPurpose ? { paymentPurpose: sendPaymentPurpose } : {}),
-              }
-            : undefined,
-      })
-      formSessionId = String(prepared.prep.formSessionId || "").trim()
-      cryptoAuthorizedAmount = String(prepared.prep.cryptoAuthorizedAmount || "").trim()
-      if (!formSessionId || !cryptoAuthorizedAmount) {
-        return NextResponse.json(
-          { error: "Could not prepare payout session. Go back and get a fresh quote." },
-          { status: 400 },
-        )
-      }
-      console.info("[noah_payout]", {
-        stage: "transfers_prepare_ok",
-        recipientId,
-        formSessionIdPrefix: formSessionId.slice(0, 12),
-        cryptoAuthorizedAmount,
-        formSessionComplete:
-          prepared.prep.raw.FormSessionComplete ?? prepared.prep.raw.formSessionComplete ?? null,
-        hasNextStep: Boolean(parseNoahFormNextStep(prepared.prep.raw)),
-      })
-    } catch (e) {
-      logNoahPayoutFailure("transfers_prepare", e, {
-        recipientId,
-        countryCode,
-        fiatCurrency,
-        fiatAmount: amount,
-        cryptoCurrency: cryptoCurrencyRaw,
-        userId: user.id,
-        scope: noahCtx.scope,
-      })
-      return NextResponse.json(
-        { error: mapNoahPayoutUserError(e, "prepare") },
-        { status: 400 },
-      )
+        fiatAmount: amount.toFixed(2),
+        cryptoAuthorizedAmount: cryptoAuthorizedAmount,
+        formSessionId,
+        nonce: sellNonce,
+      },
     }
   }
 
-  /** Noah sell schema: CryptoCurrency, FiatAmount, CryptoAuthorizedAmount, FormSessionID, Nonce only (`additionalProperties: false`). */
-  const sellNonce = randomUUID()
-  const sellPayloadPascal = {
-    CryptoCurrency: cryptoCurrencyRaw,
-    FiatAmount: amount.toFixed(2),
-    CryptoAuthorizedAmount: cryptoAuthorizedAmount,
-    FormSessionID: formSessionId,
-    Nonce: sellNonce,
+  /** Returns Noah tx, or null if Noah responded 404/expired (caller re-prepares). */
+  async function attemptSell(allowFallback: boolean): Promise<Record<string, unknown> | null> {
+    const { pascal, camel } = buildSellPayloads()
+    try {
+      return await noahFetch<Record<string, unknown>>({
+        method: "POST",
+        path: "/transactions/sell",
+        json: pascal,
+      })
+    } catch (pascalErr) {
+      const isExpired =
+        pascalErr instanceof NoahHttpError &&
+        (pascalErr.status === 404 ||
+          /not\s*found|resourcenotfound|expired/i.test(
+            String(pascalErr.detail ?? pascalErr.message ?? ""),
+          ))
+      if (isExpired && allowFallback) return null
+      logNoahPayoutFailure("transfers_sell_pascal", pascalErr, sellLogMeta())
+      try {
+        return await noahFetch<Record<string, unknown>>({
+          method: "POST",
+          path: "/transactions/sell",
+          json: camel,
+        })
+      } catch (camelErr) {
+        const isExpiredCamel =
+          camelErr instanceof NoahHttpError &&
+          (camelErr.status === 404 ||
+            /not\s*found|resourcenotfound|expired/i.test(
+              String(camelErr.detail ?? camelErr.message ?? ""),
+            ))
+        if (isExpiredCamel && allowFallback) return null
+        logNoahPayoutFailure("transfers_sell_camel", camelErr, sellLogMeta())
+        throw camelErr instanceof NoahHttpError ? camelErr : pascalErr
+      }
+    }
   }
-  const sellPayloadCamel = {
-    cryptoCurrency: cryptoCurrencyRaw,
-    fiatAmount: amount.toFixed(2),
-    cryptoAuthorizedAmount: cryptoAuthorizedAmount,
-    formSessionId,
-    nonce: sellNonce,
-  }
-  const sellLogMeta = {
-    recipientId: recipientId || null,
-    countryCode,
-    fiatCurrency,
-    fiatAmount: amount.toFixed(2),
-    cryptoCurrency: cryptoCurrencyRaw,
-    cryptoAuthorizedAmount,
-    formSessionIdPrefix: formSessionId.slice(0, 12),
-    channelId: channelId || null,
-    userId: user.id,
-    scope: noahCtx.scope,
-  }
-  const metadataExtra = {
-    formSessionId,
-    cryptoCurrency: cryptoCurrencyRaw,
-    fiatCurrency,
-    sellMode: "form_session",
-    country_code: countryCode,
-    ...(channelId ? { channel_id: channelId } : {}),
-    ...(recipientId ? { recipient_id: recipientId } : {}),
-    ...(sendNote ? { send_note: sendNote } : {}),
+
+  function sellLogMeta() {
+    return {
+      recipientId: recipientId || null,
+      countryCode,
+      fiatCurrency,
+      fiatAmount: amount.toFixed(2),
+      cryptoCurrency: cryptoCurrencyRaw,
+      cryptoAuthorizedAmount,
+      formSessionIdPrefix: formSessionId.slice(0, 12),
+      channelId: channelId || null,
+      userId: user.id,
+      scope: noahCtx.scope,
+    }
   }
 
   try {
-    let tx: Record<string, unknown>
-    try {
-      tx = await noahFetch<Record<string, unknown>>({
-        method: "POST",
-        path: "/transactions/sell",
-        json: sellPayloadPascal,
+    // Fast path: client-supplied FormSessionID + CryptoAuthorizedAmount from the on-screen
+    // quote. ~70%+ of the time this is still alive on Noah's side and we save 2–4s of prepare.
+    let tx: Record<string, unknown> | null = await attemptSell(Boolean(recipientRow))
+
+    if (!tx) {
+      console.info("[noah_payout]", {
+        stage: "transfers_sell_session_expired_refresh",
+        recipientId: recipientId || null,
+        formSessionIdPrefix: formSessionId.slice(0, 12),
       })
-    } catch (sellPascalErr) {
-      logNoahPayoutFailure("transfers_sell_pascal", sellPascalErr, sellLogMeta)
       try {
-        tx = await noahFetch<Record<string, unknown>>({
-          method: "POST",
-          path: "/transactions/sell",
-          json: sellPayloadCamel,
+        await freshPrepare()
+      } catch (e) {
+        logNoahPayoutFailure("transfers_prepare", e, {
+          recipientId,
+          countryCode,
+          fiatCurrency,
+          fiatAmount: amount,
+          cryptoCurrency: cryptoCurrencyRaw,
+          userId: user.id,
+          scope: noahCtx.scope,
         })
-      } catch (sellCamelErr) {
-        logNoahPayoutFailure("transfers_sell_camel", sellCamelErr, sellLogMeta)
-        throw sellCamelErr instanceof NoahHttpError ? sellCamelErr : sellPascalErr
+        return NextResponse.json(
+          { error: mapNoahPayoutUserError(e, "prepare") },
+          { status: 400 },
+        )
       }
+      tx = await attemptSell(false)
+      if (!tx) {
+        return NextResponse.json(
+          { error: "Could not complete sell after refreshing the quote." },
+          { status: 400 },
+        )
+      }
+    }
+
+    const metadataExtra = {
+      formSessionId,
+      cryptoCurrency: cryptoCurrencyRaw,
+      fiatCurrency,
+      sellMode: "form_session",
+      country_code: countryCode,
+      ...(channelId ? { channel_id: channelId } : {}),
+      ...(recipientId ? { recipient_id: recipientId } : {}),
+      ...(sendNote ? { send_note: sendNote } : {}),
     }
 
     const id = String(tx.ID ?? tx.id ?? "")
@@ -324,7 +375,7 @@ export async function POST(request: Request) {
       status,
     })
   } catch (e: unknown) {
-    logNoahPayoutFailure("transfers_sell", e, sellLogMeta)
+    logNoahPayoutFailure("transfers_sell", e, sellLogMeta())
     return NextResponse.json(
       { error: mapNoahPayoutUserError(e, "sell") },
       { status: 400 },

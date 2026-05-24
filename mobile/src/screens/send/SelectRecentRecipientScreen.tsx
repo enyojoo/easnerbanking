@@ -815,6 +815,11 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       <Pressable
        android_ripple={ripple.neutral}
         style={[styles.recipientItem, !isLast && styles.recipientItemDivider]}
+        onPressIn={() => {
+          // Start the rate fetch the instant the finger touches the row, ~80–150ms before
+          // the navigation transition completes — so SendAmount renders the rate immediately.
+          void prefetchNoahSendExchangeRates(qc, item.currency)
+        }}
         onPress={() => handleSelectRecipient(item)} >
         <View style={styles.recipientRow}>
           <View style={[styles.recipientPreviewSlot, isDraftEasenet && styles.recipientPreviewSlotWithBadge]}>

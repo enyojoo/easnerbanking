@@ -11,6 +11,8 @@ import { useAuth } from '../contexts/AuthContext'
 import { registerAppLockListener } from '../lib/app-lock-bus'
 import { prefetchReceiveDepositQueries } from '../hooks/queries/use-receive-deposit-queries'
 import { prefetchRecipientsList } from '../hooks/queries/use-recipients'
+import { prefetchNoahSendExchangeRates } from '../hooks/queries/use-noah-send-exchange-rates'
+import { recipientService } from '../lib/recipientService'
 
 /**
  * Root Query provider for the mobile app. Owns:
@@ -82,6 +84,23 @@ function WarmOperationalCachesOnScope({ children }: { children: React.ReactNode 
     if (!isReady || !scope) return
     void prefetchReceiveDepositQueries(qc, scope)
     void prefetchRecipientsList(qc, scope)
+    // Warm Noah wallet rates for every currency the user actually sends to.
+    // This makes the rate appear instantly on SendAmount even on the first
+    // tap of a recipient (no network round-trip during navigation animation).
+    void (async () => {
+      try {
+        const recipients = await recipientService.getByUserId(scope.userId)
+        const seen = new Set<string>()
+        for (const r of recipients ?? []) {
+          const cur = String(r?.currency ?? '').trim().toUpperCase()
+          if (cur.length !== 3 || seen.has(cur)) continue
+          seen.add(cur)
+          void prefetchNoahSendExchangeRates(qc, cur)
+        }
+      } catch {
+        // Best-effort cache warming; surface errors via the actual hook on the screen.
+      }
+    })()
   }, [isReady, scope])
   return <>{children}</>
 }
@@ -108,6 +127,8 @@ function ForegroundResumeRefresher({ children }: { children: React.ReactNode }) 
       // Soft refresh: keep showing cached balances/transactions while refetching.
       void qc.refetchQueries({ queryKey: qk.wallets.root(scope), type: 'active' })
       void qc.refetchQueries({ queryKey: qk.transactions.root(scope), type: 'active' })
+      // Refresh active Noah rate queries so a stale FX never flashes after a long background.
+      void qc.refetchQueries({ queryKey: ['exchange-rates', 'noah-send'], type: 'active' })
     }, [isReady, scope, user?.id])
 
   React.useEffect(() => {
