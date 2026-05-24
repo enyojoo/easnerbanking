@@ -1,11 +1,17 @@
 #!/usr/bin/env node
 /**
  * npm workspaces hoist deps to the repo root. Expo config plugins resolve modules
- * relative to the app directory only, so EAS Build can fail with "Failed to resolve
- * plugin for module expo-secure-store" when packages exist only in ../node_modules.
+ * from the plugin package location (often hoisted to ../node_modules), so local
+ * `expo start` fails with "Cannot find module 'expo/config-plugins'" when `expo`
+ * lives only under mobile/node_modules. EAS Build can also fail when plugins exist
+ * only in ../node_modules and mobile/node_modules is missing them.
  *
- * Symlink each direct dependency from the root node_modules into mobile/node_modules
- * when missing. Uses absolute symlink targets (more reliable than relative on CI).
+ * - Symlink each direct dependency from root node_modules into mobile/node_modules
+ *   when missing.
+ * - Symlink `expo` from mobile/node_modules into root/node_modules when missing
+ *   (hoisted expo-* plugins require expo/config-plugins from the root tree).
+ *
+ * Uses absolute symlink targets (more reliable than relative on CI).
  */
 const fs = require('fs')
 const path = require('path')
@@ -126,3 +132,42 @@ function linkExpoBin(dir) {
 
 linkExpoBin(rootDir)
 linkExpoBin(mobileDir)
+
+/**
+ * Hoisted expo-* config plugins (e.g. expo-system-ui) resolve `expo/config-plugins`
+ * from the root node_modules tree, but npm workspaces often keep `expo` only under
+ * mobile/node_modules.
+ */
+function linkExpoToRoot() {
+  const src = path.join(mobileNm, 'expo')
+  const dest = path.join(rootNm, 'expo')
+  if (!fs.existsSync(src)) return
+
+  if (fs.existsSync(dest)) {
+    try {
+      const st = fs.lstatSync(dest)
+      if (st.isSymbolicLink()) {
+        try {
+          if (fs.realpathSync(dest) === fs.realpathSync(src)) return
+        } catch {}
+        fs.unlinkSync(dest)
+      } else {
+        return
+      }
+    } catch {
+      return
+    }
+  }
+
+  try {
+    fs.symlinkSync(src, dest)
+  } catch (e) {
+    const err = e
+    if (err && err.code !== 'EEXIST') {
+      console.warn('[linkWorkspaceDeps] expo → root:', err.message)
+    }
+  }
+}
+
+linkExpoToRoot()
+
