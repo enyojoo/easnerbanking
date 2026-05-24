@@ -50,10 +50,10 @@ import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
 import {
   exchangeRatesToRateMap,
   resolveEffectivePayoutMin,
-  usePayoutMinEnforcement,
   validatePayoutAmountAgainstLimits,
   validateSendAmountFields,
 } from "@easner/shared"
+import { usePayoutMinEnforcement } from "@easner/shared/hooks/use-payout-min-enforcement"
 import {
   Select,
   SelectContent,

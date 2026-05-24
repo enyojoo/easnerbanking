@@ -54,10 +54,10 @@ import {
   getCurrencySymbol,
   resolveEffectivePayoutMin,
   resolvePayoutCountryCode,
-  usePayoutMinEnforcement,
   validatePayoutAmountAgainstLimits,
   validateSendAmountFields,
 } from '@easner/shared'
+import { usePayoutMinEnforcement } from '@easner/shared/hooks/use-payout-min-enforcement'
 import { getPayoutCorridorCache, isRecipientPayoutCorridorActive, refreshPayoutCorridors } from '../../lib/payoutCorridors'
 import {
   getCachedSendDestinations,

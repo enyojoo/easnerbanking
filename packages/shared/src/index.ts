@@ -96,7 +96,6 @@ export {
   computePayoutReceiveAmount,
   PAYOUT_MIN_ENFORCE_DEBOUNCE_MS,
 } from "./payout-min-enforcement"
-export { usePayoutMinEnforcement } from "./hooks/use-payout-min-enforcement"
 export type {
   BalanceCurrencyPolicyPublic,
   CryptoDestinationPublic,

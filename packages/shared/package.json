@@ -10,6 +10,11 @@
       "require": "./src/index.ts",
       "types": "./src/index.ts"
     },
+    "./hooks/use-payout-min-enforcement": {
+      "import": "./src/hooks/use-payout-min-enforcement.ts",
+      "require": "./src/hooks/use-payout-min-enforcement.ts",
+      "types": "./src/hooks/use-payout-min-enforcement.ts"
+    },
     "./verified-identity": {
       "import": "./src/verified-identity.ts",
       "require": "./src/verified-identity.ts",
