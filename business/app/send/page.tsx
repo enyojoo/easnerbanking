@@ -116,9 +116,10 @@ export default function SendPage() {
   const enteredAmount = parseAmountFromDisplay(amountStr)
   const receiveCurrency = recipient?.currency ?? "USD"
   const sourceAccount = sourceAccounts.find((a) => a.id === sourceAccountId)
+  const isEasetagRecipient = Boolean(recipient?.payeeEasetag?.trim())
 
   const manualSend = useManualSendFlow({
-    enabled: true,
+    enabled: !isEasetagRecipient,
     otherCurrency,
     receiveCurrency,
     amountEntryMode,
@@ -126,6 +127,8 @@ export default function SendPage() {
   })
 
   const manualSendAvailable = manualSend.sendCurrencies.length > 0
+  /** Easetag P2P is balance-only; manual pay-in rails are not supported. */
+  const showManualSendPaymentOptions = manualSendAvailable && !isEasetagRecipient
 
   const otherCurrencies = useMemo(
     () => manualSend.sendCurrencyOptions,
@@ -166,6 +169,21 @@ export default function SendPage() {
       setManualPaymentMethodId(null)
     }
   }, [manualSendAvailable, paymentMethod, otherCurrency])
+
+  useEffect(() => {
+    if (!isEasetagRecipient) return
+    if (
+      paymentMethod === "otherCurrency" ||
+      otherCurrency ||
+      otherPaymentMethod ||
+      manualPaymentMethodId
+    ) {
+      setPaymentMethod("balance")
+      setOtherCurrency(null)
+      setOtherPaymentMethod(null)
+      setManualPaymentMethodId(null)
+    }
+  }, [isEasetagRecipient, paymentMethod, otherCurrency, otherPaymentMethod, manualPaymentMethodId])
 
   useEffect(() => {
     if (!otherCurrency) return
@@ -280,7 +298,7 @@ export default function SendPage() {
     Boolean(recipient.payeeEasetag?.trim()) &&
     isEasetagLedgerP2PEnabled()
   const hasValidOtherCurrencySelection =
-    manualSendAvailable &&
+    showManualSendPaymentOptions &&
     Boolean(otherCurrency) &&
     paymentMethod === "otherCurrency" &&
     Boolean(manualPaymentMethodId || otherPaymentMethod)
@@ -310,7 +328,6 @@ export default function SendPage() {
     tier1Complete &&
     !manualAmountOutOfRange
 
-  const isEasetagRecipient = Boolean(recipient?.payeeEasetag?.trim())
   const payoutRail =
     recipient && /mobile money/i.test(recipient.bankName || "")
       ? ("mobile_money" as const)
@@ -380,6 +397,10 @@ export default function SendPage() {
 
   const handleContinue = () => {
     if (!canContinue || !recipient) return
+    if (isEasetagRecipient && paymentMethod === "otherCurrency") {
+      setAmountFieldError("Easetag sends are only supported from your balance.")
+      return
+    }
     if (isBalanceSource && isWalletRecipient) {
       setAmountFieldError(
         "Wallet address recipients cannot be paid from your balance. Choose a bank, mobile money, or Easetag recipient.",
@@ -690,7 +711,7 @@ export default function SendPage() {
                 </div>
               </div>
 
-              {manualSendAvailable ? (
+              {showManualSendPaymentOptions ? (
               <div>
                 <p className="text-sm font-medium text-muted-foreground mb-2">Through Another Currency</p>
                 {!otherCurrency ? (
