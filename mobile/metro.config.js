@@ -39,6 +39,10 @@ const extraNodeModules = {
   '@easner/shared': sharedRoot,
   // Metro extraNodeModules points at the package dir, not package.json exports subpaths.
   '@easner/shared/warm-flags': path.join(sharedRoot, 'src/flags/warm-flags.native.ts'),
+  '@easner/shared/hooks/use-payout-min-enforcement': path.join(
+    sharedRoot,
+    'src/hooks/use-payout-min-enforcement.ts',
+  ),
 }
 
 // EAS monorepo: hoisted deps may only exist under ../node_modules; force resolution if present.
