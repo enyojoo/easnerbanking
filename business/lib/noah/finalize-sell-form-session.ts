@@ -323,74 +323,6 @@ async function runPrepareStep(
   }
 }
 
-/**
- * Noah requires a final prepare with DelayedSell=false before POST /transactions/sell.
- * Quote-only sessions (DelayedSell=true) can return FormSessionID but 404 on sell.
- */
-export async function commitSellFormSessionForExecution(input: {
-  channelId: string
-  cryptoCurrency: string
-  fiatAmount: string
-  customerId?: string
-  initialForm: Record<string, unknown>
-  prep: SellPrepareResult
-  lastAckForm?: Record<string, unknown>
-}): Promise<SellPrepareResult> {
-  const formSessionId = String(input.prep.formSessionId || "").trim()
-  if (!formSessionId) return input.prep
-
-  const forms: Record<string, unknown>[] = []
-  const seen = new Set<string>()
-  const pushForm = (form: Record<string, unknown>) => {
-    const key = JSON.stringify(form)
-    if (seen.has(key)) return
-    seen.add(key)
-    forms.push(form)
-  }
-  if (input.lastAckForm && Object.keys(input.lastAckForm).length > 0) {
-    pushForm(input.lastAckForm)
-  }
-  pushForm({})
-  if (Object.keys(input.initialForm).length > 0) pushForm(input.initialForm)
-
-  let result = input.prep
-  for (const form of forms) {
-    const next = await runPrepareStep(
-      {
-        channelId: input.channelId,
-        cryptoCurrency: input.cryptoCurrency,
-        fiatAmount: input.fiatAmount,
-        customerId: input.customerId,
-        formSessionId: String(result.formSessionId || formSessionId),
-        form,
-        delayedSell: false,
-        paymentMethodId: result.paymentMethodId,
-      },
-      result,
-      {
-        channelId: input.channelId,
-        formSessionIdPrefix: formSessionId.slice(0, 12),
-        stage: "prepare_commit",
-        formKeys: Object.keys(form),
-      },
-    )
-    if (next && !sellFormSessionNeedsFinalize(next.raw)) {
-      return next
-    }
-    if (next) result = next
-  }
-
-  logNoahPayoutFailure("prepare_commit_incomplete", new Error("execution commit incomplete"), {
-    channelId: input.channelId,
-    formSessionIdPrefix: formSessionId.slice(0, 12),
-    formSessionComplete: result.raw.FormSessionComplete ?? result.raw.formSessionComplete ?? null,
-    nextStep: parseNoahFormNextStep(result.raw),
-  })
-  throw new Error(
-    "Payout setup did not finish. Go back and tap Continue for a fresh quote, then try again.",
-  )
-}
-
 export function assertSellFormSessionReady(prep: SellPrepareResult): void {
   if (!String(prep.formSessionId || "").trim()) {
     throw new Error("Noah prepare did not return a form session.")
@@ -406,7 +338,11 @@ export function assertSellFormSessionReady(prep: SellPrepareResult): void {
 /**
  * Noah Reliance sell often leaves a pending form step (e.g. Cob = beneficiary confirmation)
  * after the first prepare when DelayedSell is true. Follow-up prepare calls with FormSessionID
- * submit the Ack/DataEntry payload, then commit with DelayedSell=false before POST /transactions/sell.
+ * submit the Ack/DataEntry payload until the form session is complete (NextStep cleared).
+ *
+ * Per Noah docs, `DelayedSell` is a flag on the original prepare ("defer balance check until
+ * the final sell request"), not a separate commit phase — once the session is complete, the
+ * caller goes straight to `POST /transactions/sell`.
  */
 export async function finalizeSellFormSessionAfterPrepare(input: {
   channelId: string
@@ -415,15 +351,12 @@ export async function finalizeSellFormSessionAfterPrepare(input: {
   customerId?: string
   initialForm: Record<string, unknown>
   prep: SellPrepareResult
-  /** When true, final prepare with DelayedSell=false (transfer only — not quote). */
-  commitForExecution?: boolean
 }): Promise<SellPrepareResult> {
   const formSessionId = String(input.prep.formSessionId || "").trim()
   if (!formSessionId) return input.prep
 
   let raw = input.prep.raw
   let result = input.prep
-  let lastAckForm: Record<string, unknown> | undefined
   const ackContext = extractBeneficiaryAckContext(raw, input.initialForm)
 
   if (sellFormSessionNeedsFinalize(raw)) {
@@ -464,7 +397,6 @@ export async function finalizeSellFormSessionAfterPrepare(input: {
           if (!step) continue
           raw = step.raw
           result = step
-          if (Object.keys(form).length > 0) lastAckForm = form
           Object.assign(ackContext, extractBeneficiaryAckContext(raw, input.initialForm))
           if (!sellFormSessionNeedsFinalize(raw)) break
         }
@@ -489,18 +421,6 @@ export async function finalizeSellFormSessionAfterPrepare(input: {
       })
       assertSellFormSessionReady(result)
     }
-  }
-
-  if (input.commitForExecution) {
-    return commitSellFormSessionForExecution({
-      channelId: input.channelId,
-      cryptoCurrency: input.cryptoCurrency,
-      fiatAmount: input.fiatAmount,
-      customerId: input.customerId,
-      initialForm: input.initialForm,
-      prep: result,
-      lastAckForm,
-    })
   }
 
   return result

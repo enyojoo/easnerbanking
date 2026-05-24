@@ -5,7 +5,6 @@ import { noahFetch } from "@/lib/noah/http"
 import { pickTxAmountAndCurrency } from "@/lib/noah/map-transactions"
 import {
   pickNoahGlobalPayoutLedgerFields,
-  isNoahGlobalPayoutSellTx,
   settlementWalletCurrencyForNoahCrypto,
 } from "@/lib/noah/global-payout-ledger"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
@@ -160,7 +159,6 @@ export async function POST(request: Request) {
       fiatAmount: amount,
       cryptoCurrency: cryptoCurrencyRaw,
       noahCustomerId: noahCtx.noahCustomerId,
-      commitForExecution: false,
       overrides:
         sendNote || sendPaymentPurpose
           ? {

@@ -137,8 +137,6 @@ export async function prepareSellTransaction(input: {
   fiatAmount: string
   form: Record<string, unknown>
   customerId?: string
-  /** Commit form session for sell (transfer). Quotes stay DelayedSell-only. */
-  commitForExecution?: boolean
 }): Promise<SellPrepareResult> {
   const body: Record<string, unknown> = {
     ChannelID: input.channelId,
@@ -179,7 +177,6 @@ export async function prepareSellTransaction(input: {
     customerId: input.customerId,
     initialForm: input.form,
     prep,
-    commitForExecution: input.commitForExecution ?? false,
   })
   assertSellFormSessionReady(prep)
   return prep
