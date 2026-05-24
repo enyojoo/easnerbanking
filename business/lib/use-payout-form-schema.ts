@@ -1,7 +1,12 @@
 "use client"
 
 import { useMemo } from "react"
-import { findPayoutFieldsSchema, type PayoutFieldsSchemaHint, type PayoutRail } from "@easner/shared"
+import {
+  findPayoutFieldsSchema,
+  resolvePayoutCountryCode,
+  type PayoutFieldsSchemaHint,
+  type PayoutRail,
+} from "@easner/shared"
 import { useSendDestinations } from "@/lib/use-send-destinations"
 
 export function usePayoutFormSchema(input: {
@@ -10,7 +15,10 @@ export function usePayoutFormSchema(input: {
   rail?: PayoutRail
 }): { hints: PayoutFieldsSchemaHint | null; loading: boolean } {
   const { bankCorridors, mobileCorridors, loading } = useSendDestinations()
-  const cc = String(input.countryCode || "").trim().toUpperCase()
+  const cc = resolvePayoutCountryCode({
+    countryCode: input.countryCode,
+    currencyCode: input.currencyCode || "",
+  })
   const cur = String(input.currencyCode || "").trim().toUpperCase()
   const rail = input.rail ?? "bank_transfer"
 

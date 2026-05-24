@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { resolveRecipientPayoutCountry } from "@/lib/terminal/recipient-payout-country"
 import { hasNoahSellChannel } from "@/lib/noah/channel-availability"
 type RecipientLike = {
   country_code?: string | null
@@ -53,7 +54,10 @@ export async function payoutCorridorGate(
 ): Promise<NextResponse | null> {
   if (isWalletRow(row) || isEasenetRow(row)) return null
 
-  const cc = String(row.country_code || "").toUpperCase()
+  const cc = resolveRecipientPayoutCountry({
+    country_code: row.country_code,
+    currency: row.currency,
+  })
   if (!cc) return null
 
   const rail = isMobileRow(row) ? "mobile_money" : "bank_transfer"

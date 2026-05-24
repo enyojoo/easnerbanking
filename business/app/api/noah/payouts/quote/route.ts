@@ -5,6 +5,7 @@ import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
 import { buildPayoutQuote } from "@/lib/noah/payout-quote"
 import { mapNoahPrepareError } from "@/lib/noah/noah-prepare-errors"
 import { payoutCorridorGate } from "@/lib/payout-corridor-validation"
+import { validatePayoutAmountAgainstLimits } from "@easner/shared"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
 
@@ -77,6 +78,20 @@ export async function POST(request: Request) {
       { requireExecutableNoahChannel: true }, // explicit for quote even if env default changes
     )
     if (gate) return gate
+
+    const isMobile =
+      Boolean(gateRow.mobile_provider) ||
+      String(gateRow.bank_name || "").toLowerCase().includes("mobile money")
+    const rail = isMobile ? ("mobile_money" as const) : ("bank_transfer" as const)
+    const limitCheck = validatePayoutAmountAgainstLimits({
+      amount: receiveAmount,
+      hints: null,
+      currencyCode: gateRow.currency,
+      rail,
+    })
+    if (!limitCheck.ok) {
+      return NextResponse.json({ error: limitCheck.message }, { status: 400 })
+    }
   }
 
   try {

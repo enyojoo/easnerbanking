@@ -51,8 +51,10 @@ import {
   exchangeRatesToRateMap,
   findPayoutFieldsSchema,
   formatSendRateLabel,
-  getCountryCodeForCurrency,
   getCurrencySymbol,
+  resolveEffectivePayoutMin,
+  resolvePayoutCountryCode,
+  usePayoutMinEnforcement,
   validatePayoutAmountAgainstLimits,
   validateSendAmountFields,
 } from '@easner/shared'
@@ -184,18 +186,25 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   ]
 
   const payoutRail = recipient && isMobileMoneyRecipient(recipient) ? 'mobile_money' : 'bank_transfer'
+  const payoutCountryCode = useMemo(() => {
+    if (!recipient) return ''
+    return resolvePayoutCountryCode({
+      countryCode: recipient.country_code,
+      currencyCode: recipient.currency,
+    })
+  }, [recipient])
   const payoutHints = useMemo(() => {
-    if (!sendDestinations || !recipient?.country_code) return null
+    if (!sendDestinations || !recipient || !payoutCountryCode) return null
     const corridors =
       payoutRail === 'mobile_money'
         ? sendDestinations.fiat.mobile_money
         : sendDestinations.fiat.bank_transfer
     return findPayoutFieldsSchema(corridors, {
-      countryCode: recipient.country_code || getCountryCodeForCurrency(recipient.currency) || '',
+      countryCode: payoutCountryCode,
       currencyCode: recipient.currency,
       rail: payoutRail,
     })
-  }, [sendDestinations, recipient, payoutRail])
+  }, [sendDestinations, recipient, payoutRail, payoutCountryCode])
   const amountFieldMode = payoutHints?.amount_field_mode ?? 'note_optional_only'
 
   const { data: manualCatalog } = useManualSendCatalog(true)
@@ -546,6 +555,57 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const receiveAmount = flowAmounts.receiveAmount
   const sendingAmount = flowAmounts.sendAmount
   const exchangeRate = flowAmounts.forwardRate
+
+  const payoutMinReceive = useMemo(
+    () =>
+      recipient && !isEasetagRecipient
+        ? resolveEffectivePayoutMin({
+            hints: payoutHints,
+            currencyCode: receiveCurrency,
+            rail: payoutRail,
+          })
+        : null,
+    [recipient, isEasetagRecipient, payoutHints, receiveCurrency, payoutRail],
+  )
+
+  const manualFxRateMap = useMemo(
+    () => exchangeRatesToRateMap(manualCatalog?.exchangeRates ?? []),
+    [manualCatalog?.exchangeRates],
+  )
+
+  const payoutEnforcementRateMap =
+    selectedPaymentMethod === 'otherCurrency' ? manualFxRateMap : noahRateMap
+
+  const payoutMinEnforcementEnabled =
+    Boolean(recipient) &&
+    !isEasetagRecipient &&
+    (selectedPaymentMethod === 'balance' ||
+      (selectedPaymentMethod === 'otherCurrency' && Boolean(selectedOtherCurrency)))
+
+  const payoutMinSeedKey = recipient
+    ? `${recipient.id}:${receiveCurrency}:${payoutRail}:${selectedPaymentMethod}:${selectedOtherCurrency ?? ''}`
+    : null
+
+  usePayoutMinEnforcement({
+    enabled: payoutMinEnforcementEnabled,
+    seedKey: payoutMinSeedKey,
+    minReceive: payoutMinReceive,
+    amountEntryMode,
+    enteredAmount,
+    sendCurrency,
+    receiveCurrency,
+    rateMap: payoutEnforcementRateMap,
+    manualQuote: manualQuote ?? null,
+    useManualQuote:
+      selectedPaymentMethod === 'otherCurrency' &&
+      Boolean(selectedOtherCurrency) &&
+      showCrossCurrencyExchangeUi &&
+      Boolean(manualQuote),
+    onApplyEnteredAmount: (amount) => {
+      setSendAmount(formatAmount(amount.toFixed(2)))
+    },
+  })
+
   const feeAmount =
     selectedPaymentMethod === 'otherCurrency' && manualQuote ? manualQuote.feeAmount : 0
   const totalAmount =
@@ -947,7 +1007,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 {amountFieldError ? (
                   <Text style={styles.amountFieldError}>{amountFieldError}</Text>
                 ) : null}
-                
+
                 {/* Numeric Keypad - 3x4 grid */}
                 <View style={styles.keypadContainer}>
                   <View
@@ -1073,11 +1133,15 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 showError(fieldCheck.message)
                 return
               }
-              if (selectedPaymentMethod === 'balance' && receiveAmountValue > 0) {
+              if (
+                (selectedPaymentMethod === 'balance' || selectedPaymentMethod === 'otherCurrency') &&
+                receiveAmountValue > 0
+              ) {
                 const limitCheck = validatePayoutAmountAgainstLimits({
                   amount: receiveAmountValue,
                   hints: payoutHints,
                   currencyCode: receiveCurrency,
+                  rail: payoutRail,
                 })
                 if (!limitCheck.ok) {
                   setAmountFieldError(limitCheck.message)

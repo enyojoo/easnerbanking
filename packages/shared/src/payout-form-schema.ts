@@ -1,6 +1,29 @@
 import type { PayoutCorridorPublic, PayoutFieldsSchemaHint, PayoutRail } from "./payout-corridor"
+import { getCountryCodeForCurrency } from "./flags/currency-mapping"
+import { parsePayoutMinAmount, resolveEffectivePayoutMin } from "./payout-business-limits"
 
 export type { PayoutFieldsSchemaHint }
+
+/** When a currency has no 1:1 ISO country (e.g. EUR), default corridor country for Noah hints/prepare. */
+const PAYOUT_CURRENCY_DEFAULT_COUNTRY: Record<string, string> = {
+  EUR: "DE",
+}
+
+/** Resolve ISO2 country for payout corridors when recipient rows omit country_code. */
+export function resolvePayoutCountryCode(input: {
+  countryCode?: string | null
+  currencyCode: string
+}): string {
+  const fromRow = String(input.countryCode || "").trim().toUpperCase()
+  if (fromRow) return fromRow
+  const cur = String(input.currencyCode || "").trim().toUpperCase()
+  if (!cur) return ""
+  const mapped = getCountryCodeForCurrency(cur)
+  if (mapped) return mapped.toUpperCase()
+  return PAYOUT_CURRENCY_DEFAULT_COUNTRY[cur] ?? ""
+}
+
+export { parsePayoutMinAmount } from "./payout-business-limits"
 
 /** Find corridor row + fields_schema for country/currency/rail. */
 export function findPayoutFieldsSchema(
@@ -57,26 +80,42 @@ export function recipientFormNeedsAddress(input: {
   return input.currencyCode.trim().toUpperCase() === "CAD"
 }
 
-/** Amount screen: validate receive amount against Noah channel limits from fields_schema. */
+/** Amount screen: validate receive amount against Noah max and effective min (Noah ∪ business policy). */
 export function validatePayoutAmountAgainstLimits(input: {
   amount: number
   hints: PayoutFieldsSchemaHint | null | undefined
   currencyCode?: string
+  rail?: PayoutRail
 }): SendAmountFieldValidation {
-  const limits = input.hints?.limits
-  if (!limits) return { ok: true }
   const cur = input.currencyCode?.trim().toUpperCase() || ""
-  const min = limits.min != null ? Number.parseFloat(String(limits.min)) : NaN
-  const max = limits.max != null ? Number.parseFloat(String(limits.max)) : NaN
-  if (Number.isFinite(min) && input.amount < min) {
+  const effectiveMin =
+    cur.length > 0
+      ? resolveEffectivePayoutMin({
+          hints: input.hints,
+          currencyCode: cur,
+          rail: input.rail,
+        })
+      : null
+  const maxRaw = input.hints?.limits?.max
+  const max = maxRaw != null ? Number.parseFloat(String(maxRaw)) : NaN
+
+  if (effectiveMin != null && input.amount < effectiveMin) {
     const suffix = cur ? ` ${cur}` : ""
-    return { ok: false, message: `Minimum payout amount is ${limits.min}${suffix}.` }
+    const label = formatPayoutLimitLabel(effectiveMin)
+    return { ok: false, message: `Minimum send amount is ${label}${suffix}.` }
   }
   if (Number.isFinite(max) && input.amount > max) {
     const suffix = cur ? ` ${cur}` : ""
-    return { ok: false, message: `Maximum payout amount is ${limits.max}${suffix}.` }
+    return { ok: false, message: `Maximum payout amount is ${maxRaw}${suffix}.` }
   }
   return { ok: true }
+}
+
+function formatPayoutLimitLabel(amount: number): string {
+  if (Number.isInteger(amount) || Math.abs(amount - Math.round(amount)) < 1e-9) {
+    return Math.round(amount).toLocaleString("en-US")
+  }
+  return amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 /** Confirm screen: human-readable arrival hint from ProcessingSeconds. */

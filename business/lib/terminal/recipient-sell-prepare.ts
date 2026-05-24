@@ -1,4 +1,5 @@
 import { mobileProviderPrepareSubstrings } from "@/lib/noah/form-schema-hints"
+import { resolveRecipientPayoutCountry } from "@/lib/terminal/recipient-payout-country"
 import {
   buildBankLocalSellForm,
   buildCaBankLocalSellForm,
@@ -47,6 +48,11 @@ function isMobileRecipient(row: RecipientSellPrepareRow): boolean {
   return /^mobile money/i.test(row.bank_name || "")
 }
 
+function isWalletRecipient(row: RecipientSellPrepareRow): boolean {
+  const bank = String(row.bank_name || "").toLowerCase()
+  return bank.includes("wallet") && !bank.includes("mobile money")
+}
+
 function parseUsAddress(row: RecipientSellPrepareRow): {
   street: string
   city: string
@@ -91,13 +97,7 @@ function addressFromRow(row: RecipientSellPrepareRow): {
   return { address, city, state, postalCode }
 }
 
-function bankEnumInSchema(formSchema?: Record<string, unknown>): boolean {
-  const props = formSchema?.properties as Record<string, unknown> | undefined
-  const bankDetails = props?.BankDetails as Record<string, unknown> | undefined
-  const bankProps = bankDetails?.properties as Record<string, unknown> | undefined
-  const bank = bankProps?.Bank as { enum?: unknown[] } | undefined
-  return Array.isArray(bank?.enum) && bank.enum.length > 0
-}
+export { resolveRecipientPayoutCountry } from "@/lib/terminal/recipient-payout-country"
 
 /**
  * Noah sell/prepare for a saved recipient row (bank US/EUR/CA/GB/BankLocal or identifier / mobile).
@@ -111,11 +111,17 @@ export async function prepareSellFromRecipientRow(input: {
 }): Promise<{ channelId: string; prep: Awaited<ReturnType<typeof prepareSellTransaction>> }> {
   const { row, fiatAmount, cryptoCurrency, noahCustomerId, overrides } = input
   const fiat = fiatAmount.toFixed(2)
-  const country = String(row.country_code || "").toUpperCase()
+  const country = resolveRecipientPayoutCountry(row)
   const fiatCurrency = String(row.currency || "").toUpperCase()
   const fullName = String(row.full_name || "").trim()
   const note = overrides?.note?.trim()
   const paymentPurpose = overrides?.paymentPurpose?.trim()
+
+  if (isWalletRecipient(row)) {
+    throw new Error(
+      "Wallet payouts use an on-chain address. Pay from balance to a fiat bank or mobile money recipient.",
+    )
+  }
 
   if (isMobileRecipient(row)) {
     const phoneNumber = String(row.phone_number || "").replace(/\s/g, "")
@@ -181,7 +187,8 @@ export async function prepareSellFromRecipientRow(input: {
     return { channelId: channel.channelId, prep }
   }
 
-  if (country === "US" && fiatCurrency === "USD") {
+  if (fiatCurrency === "USD") {
+    const payCountry = country === "US" ? "US" : country || "US"
     const accountNumber = String(row.account_number || "").trim()
     const routingNumber = String(row.routing_number || "").trim()
     if (!accountNumber || !routingNumber) {
@@ -190,7 +197,7 @@ export async function prepareSellFromRecipientRow(input: {
     const addr = parseUsAddress(row)
     const preferAch = String(row.transfer_type || "ACH").toUpperCase() !== "WIRE"
     const channel = await findBankSellChannelId({
-      country,
+      country: payCountry,
       fiatCurrency,
       cryptoCurrency,
       preferAch,
@@ -219,7 +226,8 @@ export async function prepareSellFromRecipientRow(input: {
     return { channelId: channel.channelId, prep }
   }
 
-  if (country === "CA" && fiatCurrency === "CAD") {
+  if (fiatCurrency === "CAD") {
+    const payCountry = country === "CA" ? "CA" : country || "CA"
     const accountNumber = String(row.account_number || "").trim()
     const routingNumber = String(row.routing_number || "").trim()
     const branchCode = String(overrides?.branchCode || row.sort_code || "").trim()
@@ -232,7 +240,7 @@ export async function prepareSellFromRecipientRow(input: {
       throw new Error("Payment purpose is required for Canadian bank payouts.")
     }
     const channel = await findBankSellChannelId({
-      country,
+      country: payCountry,
       fiatCurrency,
       cryptoCurrency,
       preferAch: false,
@@ -260,7 +268,8 @@ export async function prepareSellFromRecipientRow(input: {
     return { channelId: channel.channelId, prep }
   }
 
-  if (fiatCurrency === "GBP" && country === "GB") {
+  if (fiatCurrency === "GBP") {
+    const payCountry = country === "GB" ? "GB" : country || "GB"
     const accountNumber = String(row.account_number || "").trim()
     const sortCode = String(row.sort_code || "").trim()
     const bankName = String(row.bank_name || "").trim()
@@ -268,7 +277,7 @@ export async function prepareSellFromRecipientRow(input: {
       throw new Error("UK bank recipient requires account number, sort code, and bank name.")
     }
     const channel = await findBankSellChannelId({
-      country,
+      country: payCountry,
       fiatCurrency,
       cryptoCurrency,
       preferAch: false,
@@ -313,27 +322,24 @@ export async function prepareSellFromRecipientRow(input: {
         `No bank payout channel is available for ${country} ${fiatCurrency}.`,
       )
     }
-    const schema = channel.formSchema
-    if (bankEnumInSchema(schema)) {
-      const form = buildBankLocalSellForm(schema, {
-        accountNumber,
-        bankName,
-        fullName,
-        phone: row.phone_number ?? undefined,
-        email: overrides?.email || row.email || undefined,
-        address: addressFromRow(row),
-        paymentPurpose: paymentPurpose || note,
-        reference: note,
-      })
-      const prep = await prepareSellTransaction({
-        channelId: channel.channelId,
-        cryptoCurrency,
-        fiatAmount: fiat,
-        form,
-        customerId: noahCustomerId,
-      })
-      return { channelId: channel.channelId, prep }
-    }
+    const form = buildBankLocalSellForm(channel.formSchema, {
+      accountNumber,
+      bankName,
+      fullName,
+      phone: row.phone_number ?? undefined,
+      email: overrides?.email || row.email || undefined,
+      address: addressFromRow(row),
+      paymentPurpose: paymentPurpose || note,
+      reference: note,
+    })
+    const prep = await prepareSellTransaction({
+      channelId: channel.channelId,
+      cryptoCurrency,
+      fiatAmount: fiat,
+      form,
+      customerId: noahCustomerId,
+    })
+    return { channelId: channel.channelId, prep }
   }
 
   throw new Error(

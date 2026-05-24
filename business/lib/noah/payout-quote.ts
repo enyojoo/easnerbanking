@@ -3,6 +3,7 @@ import { getNoahEurCryptoTicker, getNoahUsdCryptoTicker } from "@/lib/noah/confi
 import { noahImpliedProviderRate } from "@/lib/noah/fx-prices"
 import {
   prepareSellFromRecipientRow,
+  resolveRecipientPayoutCountry,
   type RecipientSellPrepareRow,
   type SellPrepareOverrides,
 } from "@/lib/terminal/recipient-sell-prepare"
@@ -130,7 +131,7 @@ export async function buildPayoutQuote(input: {
   const receiveCurrency = String(row.currency || "").trim().toUpperCase()
   const cryptoCurrency = settlementCryptoForBalance(sourceBalanceCurrency)
 
-  const countryCode = String(row.country_code || "").trim().toUpperCase()
+  const countryCode = resolveRecipientPayoutCountry(row)
   if (countryCode) {
     try {
       const provider = await selectProviderForCorridor(admin, {

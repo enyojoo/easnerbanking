@@ -47,7 +47,13 @@ import { PaymentMethodDisplayLogo } from "@/components/send/payment-method-displ
 import { pickDefaultManualPayInOption } from "@easner/shared"
 import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
 import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
-import { validatePayoutAmountAgainstLimits, validateSendAmountFields } from "@easner/shared"
+import {
+  exchangeRatesToRateMap,
+  resolveEffectivePayoutMin,
+  usePayoutMinEnforcement,
+  validatePayoutAmountAgainstLimits,
+  validateSendAmountFields,
+} from "@easner/shared"
 import {
   Select,
   SelectContent,
@@ -303,31 +309,6 @@ export default function SendPage() {
     paymentMethod === "otherCurrency" &&
     Boolean(manualPaymentMethodId || otherPaymentMethod)
 
-  const canContinueBalance =
-    recipient !== null &&
-    receiveAmount > 0 &&
-    sourceAccountId !== null &&
-    sourceAccount &&
-    sourceAccount.availableBalance >= sendAmount &&
-    isBalanceSource &&
-    tier1Complete &&
-    (!needsProfileBeforeEasenetLedgerSend || (hasData && !profileLoading))
-
-  const manualAmountOutOfRange =
-    Boolean(
-      otherCurrency &&
-        manualSend.quote &&
-        ((manualSend.quote.minAmount != null && sendAmount < manualSend.quote.minAmount) ||
-          (manualSend.quote.maxAmount != null && sendAmount > manualSend.quote.maxAmount)),
-    )
-
-  const canContinueOtherCurrency =
-    recipient !== null &&
-    receiveAmount > 0 &&
-    hasValidOtherCurrencySelection &&
-    tier1Complete &&
-    !manualAmountOutOfRange
-
   const payoutRail =
     recipient && /mobile money/i.test(recipient.bankName || "")
       ? ("mobile_money" as const)
@@ -338,6 +319,88 @@ export default function SendPage() {
     rail: payoutRail,
   })
   const amountFieldMode = payoutHints?.amount_field_mode ?? "note_optional_only"
+
+  const payoutMinReceive = useMemo(
+    () =>
+      recipient && !isEasetagRecipient
+        ? resolveEffectivePayoutMin({
+            hints: payoutHints,
+            currencyCode: receiveCurrency,
+            rail: payoutRail,
+          })
+        : null,
+    [recipient, isEasetagRecipient, payoutHints, receiveCurrency, payoutRail],
+  )
+
+  const manualFxRateMap = useMemo(
+    () => exchangeRatesToRateMap(manualSend.catalog?.exchangeRates ?? []),
+    [manualSend.catalog?.exchangeRates],
+  )
+
+  const payoutEnforcementRateMap =
+    paymentMethod === "otherCurrency" ? manualFxRateMap : noahFxRates
+
+  const payoutMinEnforcementEnabled =
+    Boolean(recipient) &&
+    !isEasetagRecipient &&
+    (isBalanceSource ||
+      (paymentMethod === "otherCurrency" && Boolean(otherCurrency)))
+
+  const payoutMinSeedKey = recipient
+    ? `${recipient.id}:${receiveCurrency}:${payoutRail}:${paymentMethod}:${otherCurrency ?? ""}`
+    : null
+
+  usePayoutMinEnforcement({
+    enabled: payoutMinEnforcementEnabled,
+    seedKey: payoutMinSeedKey,
+    minReceive: payoutMinReceive,
+    amountEntryMode,
+    enteredAmount,
+    sendCurrency,
+    receiveCurrency,
+    rateMap: payoutEnforcementRateMap,
+    manualQuote: manualSend.quote,
+    useManualQuote:
+      paymentMethod === "otherCurrency" &&
+      Boolean(otherCurrency) &&
+      receiveCurrency !== sendCurrency &&
+      Boolean(manualSend.quote),
+    onApplyEnteredAmount: (amount) => {
+      setAmountStr(formatAmountForDisplay(amount.toFixed(2)))
+    },
+  })
+
+  const payoutReceiveBelowMin =
+    payoutMinReceive != null &&
+    receiveAmount > 0 &&
+    receiveAmount < payoutMinReceive
+
+  const manualAmountOutOfRange =
+    Boolean(
+      otherCurrency &&
+        manualSend.quote &&
+        ((manualSend.quote.minAmount != null && sendAmount < manualSend.quote.minAmount) ||
+          (manualSend.quote.maxAmount != null && sendAmount > manualSend.quote.maxAmount)),
+    )
+
+  const canContinueBalance =
+    recipient !== null &&
+    receiveAmount > 0 &&
+    sourceAccountId !== null &&
+    sourceAccount &&
+    sourceAccount.availableBalance >= sendAmount &&
+    isBalanceSource &&
+    tier1Complete &&
+    !payoutReceiveBelowMin &&
+    (!needsProfileBeforeEasenetLedgerSend || (hasData && !profileLoading))
+
+  const canContinueOtherCurrency =
+    recipient !== null &&
+    receiveAmount > 0 &&
+    hasValidOtherCurrencySelection &&
+    tier1Complete &&
+    !manualAmountOutOfRange &&
+    !payoutReceiveBelowMin
 
   const canContinue = isBalanceSource ? canContinueBalance : canContinueOtherCurrency
 
@@ -417,11 +480,12 @@ export default function SendPage() {
       setAmountFieldError(fieldCheck.message)
       return
     }
-    if (isBalanceSource && receiveAmount > 0) {
+    if ((isBalanceSource || paymentMethod === "otherCurrency") && receiveAmount > 0) {
       const limitCheck = validatePayoutAmountAgainstLimits({
         amount: receiveAmount,
         hints: payoutHints,
         currencyCode: receiveCurrency,
+        rail: payoutRail,
       })
       if (!limitCheck.ok) {
         setAmountFieldError(limitCheck.message)
@@ -612,16 +676,6 @@ export default function SendPage() {
             </SelectContent>
           </Select>
           {amountFieldError ? <p className="text-sm text-destructive">{amountFieldError}</p> : null}
-          {payoutHints?.limits?.min || payoutHints?.limits?.max ? (
-            <p className="text-xs text-muted-foreground">
-              {[
-                payoutHints.limits.min ? `Min ${payoutHints.limits.min} ${receiveCurrency}` : null,
-                payoutHints.limits.max ? `Max ${payoutHints.limits.max} ${receiveCurrency}` : null,
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            </p>
-          ) : null}
         </div>
       ) : recipient ? (
         <div className="space-y-2">
@@ -638,16 +692,6 @@ export default function SendPage() {
             className="h-11"
           />
           {amountFieldError ? <p className="text-sm text-destructive">{amountFieldError}</p> : null}
-          {payoutHints?.limits?.min || payoutHints?.limits?.max ? (
-            <p className="text-xs text-muted-foreground">
-              {[
-                payoutHints.limits.min ? `Min ${payoutHints.limits.min} ${receiveCurrency}` : null,
-                payoutHints.limits.max ? `Max ${payoutHints.limits.max} ${receiveCurrency}` : null,
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            </p>
-          ) : null}
         </div>
       ) : null}
 
