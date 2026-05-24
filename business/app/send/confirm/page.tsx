@@ -14,6 +14,7 @@ import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 import type { Beneficiary } from "@/lib/recipient-types"
 import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
+import { CurrencyFlag } from "@/components/flags"
 import { SendSelectedRecipientSummary } from "@/components/send/send-selected-recipient-summary"
 import { generateTransactionId, isEasnerClientTransactionIdFormat } from "@/lib/transaction-id"
 import { fetchWithSession } from "@/lib/fetch-with-session"
@@ -456,6 +457,15 @@ export default function SendConfirmPage() {
               )}
             </span>
           </div>
+          {sourceAccount && state.paymentMethod === "balance" ? (
+            <div className="flex items-center justify-between border-b pb-4">
+              <span className="text-sm text-muted-foreground">From</span>
+              <div className="flex items-center gap-2 font-medium">
+                <CurrencyFlag currency={sourceAccount.currency} size={22} className="shrink-0" />
+                <span>{sourceAccount.currency} Balance</span>
+              </div>
+            </div>
+          ) : null}
           {!easenetSend && quoteReady ? (
             <>
               <div className="flex items-center justify-between border-b pb-4">
@@ -495,14 +505,6 @@ export default function SendConfirmPage() {
               className="min-w-0 max-w-[65%] justify-end"
             />
           </div>
-          {sourceAccount && (
-            <div className="flex items-center justify-between border-b pb-4">
-              <span className="text-sm text-muted-foreground">From account</span>
-              <span className="font-medium">
-                {sourceAccount.accountName} • {sourceAccount.currency}
-              </span>
-            </div>
-          )}
           <div className="flex items-center justify-between border-b pb-4">
             <span className="text-sm text-muted-foreground">Transfer method</span>
             <span className="font-medium">{transferMethod}</span>

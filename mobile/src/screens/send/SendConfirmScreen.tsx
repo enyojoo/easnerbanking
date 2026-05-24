@@ -31,6 +31,7 @@ import type { PayoutPrepareSession } from '../../hooks/executeBalanceSend'
 import { resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
 import { isMobileMoneyRecipient } from '../../lib/recipientPayoutPreview'
 import { useEasenetRecipientHydration } from '../../hooks/useEasenetRecipientHydration'
+import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { SendSelectedRecipientSummary } from '../../components/send/SendSelectedRecipientSummary'
 import { getCachedSendDestinations } from '../../lib/sendDestinations'
 import { isEasnerClientTransactionIdFormat } from '../../lib/transactionId'
@@ -434,6 +435,19 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                 label="You send"
                 value={formatMoneyDisplay(calculatedSendingAmount, selectedBalanceCurrency)}
               />
+              {selectedBalanceCurrency === 'USD' || selectedBalanceCurrency === 'EUR' ? (
+                <RowTrailing
+                  label="From"
+                  trailing={
+                    <>
+                      <CurrencyFlag currency={selectedBalanceCurrency} size={22} />
+                      <Text style={[styles.rowValue, styles.rowValueBold]} numberOfLines={1}>
+                        {selectedBalanceCurrency} Balance
+                      </Text>
+                    </>
+                  }
+                />
+              ) : null}
               {!easetagUi && quoteReady ? (
                 <>
                   <Row
@@ -531,6 +545,23 @@ function Row({ label, value, bold, last }: { label: string; value: string; bold?
   )
 }
 
+function RowTrailing({
+  label,
+  trailing,
+  last,
+}: {
+  label: string
+  trailing: React.ReactNode
+  last?: boolean
+}) {
+  return (
+    <View style={[styles.row, last && styles.rowLast]}>
+      <Text style={styles.rowLabel}>{label}</Text>
+      <View style={styles.rowValueTrailing}>{trailing}</View>
+    </View>
+  )
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -607,6 +638,14 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     textAlign: 'right',
     flex: 1,
+  },
+  rowValueTrailing: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: spacing[2],
+    flex: 1,
+    minWidth: 0,
   },
   rowValueBold: {
     fontFamily: fontFamily.semibold,
