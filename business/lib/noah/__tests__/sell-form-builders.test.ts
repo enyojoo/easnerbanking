@@ -98,6 +98,7 @@ describe("buildBankLocalSellForm", () => {
       fullName: "Jane Doe",
     })
     expect((form.BankDetails as Record<string, unknown>).Bank).toBe("GTBank")
+    expect(form.AccountHolderName).toBeDefined()
   })
 })
 

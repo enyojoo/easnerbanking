@@ -8,7 +8,7 @@ describe("mapNoahPayoutUserError", () => {
       new NoahHttpError("Invalid request", 400, "Invalid request", "BadRequest"),
       "sell",
     )
-    expect(msg).toBe("We couldn't send this transfer. Go back and try again.")
+    expect(msg).toBe("We couldn't send this transfer, please try again.")
   })
 
   it("surfaces Noah detail when short and specific", () => {

@@ -1,4 +1,11 @@
 import { noahFetch } from "./http"
+import {
+  finalizeSellFormSessionAfterPrepare,
+  parsePrepareSellRaw,
+  type SellPrepareResult,
+} from "@/lib/noah/finalize-sell-form-session"
+
+export type { SellPrepareResult }
 
 export type ChannelItem = {
   ID?: string
@@ -118,33 +125,9 @@ export function findIdentifierSellChannel(
   }
 }
 
-export type SellPrepareResult = {
-  formSessionId?: string
-  cryptoAuthorizedAmount?: string
-  cryptoAmountEstimate?: string
-  paymentMethodId?: string
-  totalFee?: string
-  raw: Record<string, unknown>
-}
-
-function deepFindPaymentMethodId(obj: unknown): string | null {
-  if (!obj || typeof obj !== "object") return null
-  for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
-    if (
-      typeof v === "string" &&
-      v.length > 8 &&
-      /paymentmethodid|fiatpaymentmethodid|externalaccountid/i.test(k)
-    ) {
-      return v
-    }
-    const inner = deepFindPaymentMethodId(v)
-    if (inner) return inner
-  }
-  return null
-}
-
 /**
  * POST /transactions/sell/prepare — validates payout form and returns FormSessionID (+ optional PaymentMethodID).
+ * Runs a follow-up prepare when needed so the form session is complete before sell (Noah Cob step).
  */
 export async function prepareSellTransaction(input: {
   channelId: string
@@ -184,15 +167,16 @@ export async function prepareSellTransaction(input: {
       },
     })
   }
-  const pm = deepFindPaymentMethodId(raw)
-  return {
-    formSessionId: String(raw.FormSessionID ?? raw.formSessionId ?? ""),
-    cryptoAuthorizedAmount: String(raw.CryptoAuthorizedAmount ?? raw.cryptoAuthorizedAmount ?? ""),
-    cryptoAmountEstimate: String(raw.CryptoAmountEstimate ?? raw.cryptoAmountEstimate ?? ""),
-    paymentMethodId: pm ?? undefined,
-    totalFee: String(raw.TotalFee ?? raw.totalFee ?? ""),
-    raw,
-  }
+  let prep = parsePrepareSellRaw(raw)
+  prep = await finalizeSellFormSessionAfterPrepare({
+    channelId: input.channelId,
+    cryptoCurrency: input.cryptoCurrency,
+    fiatAmount: input.fiatAmount,
+    customerId: input.customerId,
+    initialForm: input.form,
+    prep,
+  })
+  return prep
 }
 
 export { getNoahSettlementCryptoCurrency } from "./config"

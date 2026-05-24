@@ -154,7 +154,7 @@ export function buildBankLocalSellForm(
     },
     PaymentPurpose: purpose,
   }
-  if (formSchema && isRequired(formSchema, "AccountHolderName")) {
+  if (data.fullName.trim()) {
     form.AccountHolderName = buildAccountHolderName({ fullName: data.fullName })
   }
   if (data.phone?.trim() && (isRequired(formSchema, "PhoneNumber") || prop(formSchema, "PhoneNumber"))) {

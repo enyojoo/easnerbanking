@@ -18,7 +18,16 @@ import {
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import type { Recipient, User } from '../../types'
-import { colors, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
+import {
+  colors,
+  surfaceChromeCircleStyle,
+  surfaceFrameStyle,
+  textStyles,
+  borderRadius,
+  spacing,
+  motion,
+  fontFamily,
+} from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { useAuth } from '../../contexts/AuthContext'
@@ -326,8 +335,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
         } catch (e: unknown) {
           if (!cancelled) {
             await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
-            const msg =
-              e instanceof Error ? e.message : 'We couldn\'t send this transfer. Go back and try again.'
+            const msg = e instanceof Error ? e.message : TRANSFER_FAIL_MESSAGE
             setTransferError(msg)
           }
         } finally {
@@ -451,17 +459,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                 value={formatMoneyDisplay(calculatedSendingAmount, selectedBalanceCurrency)}
               />
               {selectedBalanceCurrency === 'USD' || selectedBalanceCurrency === 'EUR' ? (
-                <RowTrailing
-                  label="From"
-                  trailing={
-                    <View style={styles.fromBalanceChip}>
-                      <CurrencyFlag currency={selectedBalanceCurrency} size={22} />
-                      <Text style={[styles.rowValue, styles.rowValueBold]} numberOfLines={1}>
-                        {selectedBalanceCurrency} Balance
-                      </Text>
-                    </View>
-                  }
-                />
+                <FromBalanceRow currency={selectedBalanceCurrency} />
               ) : null}
               {!easetagUi && quoteReady ? (
                 <>
@@ -557,6 +555,24 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   )
 }
 
+const TRANSFER_FAIL_MESSAGE = "We couldn't send this transfer, please try again."
+
+function FromBalanceRow({ currency }: { currency: string }) {
+  return (
+    <View style={styles.fromRow}>
+      <Text style={styles.rowLabel}>From</Text>
+      <View style={styles.fromBalancePill}>
+        <View style={styles.fromFlagContainer}>
+          <CurrencyFlag currency={currency} size={22} style={styles.fromFlagImage} />
+        </View>
+        <Text style={styles.fromBalancePillText} numberOfLines={1}>
+          {currency} Balance
+        </Text>
+      </View>
+    </View>
+  )
+}
+
 function Row({ label, value, bold, last }: { label: string; value: string; bold?: boolean; last?: boolean }) {
   return (
     <View style={[styles.row, last && styles.rowLast]}>
@@ -564,23 +580,6 @@ function Row({ label, value, bold, last }: { label: string; value: string; bold?
       <Text style={[styles.rowValue, bold && styles.rowValueBold]} numberOfLines={2}>
         {value}
       </Text>
-    </View>
-  )
-}
-
-function RowTrailing({
-  label,
-  trailing,
-  last,
-}: {
-  label: string
-  trailing: React.ReactNode
-  last?: boolean
-}) {
-  return (
-    <View style={[styles.row, last && styles.rowLast]}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <View style={styles.rowValueTrailing}>{trailing}</View>
     </View>
   )
 }
@@ -663,18 +662,41 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     flex: 1,
   },
-  rowValueTrailing: {
+  fromRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    flexShrink: 0,
-    minWidth: 0,
+    justifyContent: 'space-between',
+    gap: spacing[3],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border.light,
+    paddingBottom: spacing[3],
+    marginBottom: spacing[3],
   },
-  fromBalanceChip: {
+  fromBalancePill: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing[2],
-    flexShrink: 0,
+    flexShrink: 1,
+    maxWidth: '72%',
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.full }),
+  },
+  fromFlagContainer: {
+    ...surfaceChromeCircleStyle(colors, 22, { shadow: 'none' }),
+    overflow: 'hidden',
+  },
+  fromFlagImage: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+  },
+  fromBalancePillText: {
+    flexShrink: 1,
+    fontSize: 14,
+    color: colors.text.primary,
+    fontFamily: fontFamily.semibold,
   },
   rowValueBold: {
     fontFamily: fontFamily.semibold,

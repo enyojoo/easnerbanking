@@ -18,6 +18,12 @@ export function mapNoahPayoutUserError(
     if (msg.includes("formsession") || (msg.includes("session") && msg.includes("expired"))) {
       return "This quote expired. Go back and tap Continue for a fresh quote."
     }
+    if (msg.includes("missing step") && msg.includes("cob")) {
+      return "We couldn't verify this recipient with our payment partner. Check the bank name and account number, then try again."
+    }
+    if (msg.includes("form session") && msg.includes("not completed")) {
+      return "Payout setup didn't finish. Go back and try again."
+    }
     if (msg.includes("phone")) {
       return "A valid phone number is required for this payout."
     }
@@ -39,7 +45,7 @@ export function mapNoahPayoutUserError(
     }
     if (msg.includes("invalid request") || msg === "bad request") {
       if (stage === "sell") {
-        return "We couldn't send this transfer. Go back and try again."
+        return "We couldn't send this transfer, please try again."
       }
       return "We couldn't price this payout. Check the recipient details, then go back and tap Continue again."
     }
