@@ -991,18 +991,15 @@ export const noahService = {
     }
   },
 
-  /**
-   * Create transfer from wallet to external bank account
-   */
+  /** Global Payout sell execute (form session from `/api/noah/payouts/quote`). */
   async createTransfer(transferData: {
     amount: string
     currency: string
     sourceWalletId: string
-    destinationExternalAccountId?: string
-    formSessionId?: string
-    cryptoAuthorizedAmount?: string
-    cryptoCurrency?: string
-    countryCode?: string
+    formSessionId: string
+    cryptoAuthorizedAmount: string
+    cryptoCurrency: string
+    countryCode: string
     channelId?: string
     recipientId?: string
     note?: string

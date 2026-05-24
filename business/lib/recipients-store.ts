@@ -62,10 +62,6 @@ export type RecipientUpsertInput = {
   city?: string
   state?: string
   postalCode?: string
-  noahExternalAccountId?: string
-  noahFormSessionId?: string
-  noahSellCryptoAuthorized?: string
-  noahSellCryptoCurrency?: string
   /** Normalized easetag (no @); required for easenet */
   payeeEasetag?: string
   payeeAvatarUrl?: string | null
@@ -137,10 +133,6 @@ function toWritePayload(input: RecipientUpsertInput) {
     city: input.city || null,
     state: input.state || null,
     postal_code: input.postalCode || null,
-    noah_external_account_id: input.noahExternalAccountId || null,
-    noah_form_session_id: input.noahFormSessionId || null,
-    noah_sell_crypto_authorized: input.noahSellCryptoAuthorized || null,
-    noah_sell_crypto_currency: input.noahSellCryptoCurrency || null,
     mobile_provider: input.mobileProvider || null,
     wallet_network: input.walletNetwork || null,
     wallet_memo_tag: input.walletMemoTag || null,
@@ -255,7 +247,6 @@ export function toBeneficiary(row: RecipientRow): Beneficiary {
     city: row.city || undefined,
     state: row.state || undefined,
     postalCode: row.postal_code || undefined,
-    noahExternalAccountId: row.noah_external_account_id || undefined,
     mobileProvider: row.mobile_provider || mobileProvider || undefined,
     walletAsset: walletAssetFromLabel || undefined,
     walletNetwork: row.wallet_network || walletNetworkFromLabel || undefined,

@@ -18,10 +18,13 @@ export interface PersonalTransferInput {
   amount: string
   currency: string
   sourceWalletId: string
-  destinationExternalAccountId?: string
-  formSessionId?: string
-  cryptoAuthorizedAmount?: string
-  cryptoCurrency?: string
+  formSessionId: string
+  cryptoAuthorizedAmount: string
+  cryptoCurrency: string
+  countryCode: string
+  channelId?: string
+  recipientId?: string
+  note?: string
   memo?: string
   idempotencyKey?: string
 }
@@ -52,10 +55,13 @@ export function useCreateTransfer() {
           amount: input.amount,
           currency: input.currency,
           sourceWalletId: input.sourceWalletId,
-          destinationExternalAccountId: input.destinationExternalAccountId,
           formSessionId: input.formSessionId,
           cryptoAuthorizedAmount: input.cryptoAuthorizedAmount,
           cryptoCurrency: input.cryptoCurrency,
+          countryCode: input.countryCode,
+          ...(input.channelId ? { channelId: input.channelId } : {}),
+          ...(input.recipientId ? { recipientId: input.recipientId } : {}),
+          ...(input.note ? { note: input.note } : {}),
         },
         headers: input.idempotencyKey ? { 'Idempotency-Key': input.idempotencyKey } : undefined,
       }),

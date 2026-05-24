@@ -10,7 +10,6 @@ import { isDraftEasenetRecipient } from '../lib/draftEasenetRecipient'
 import { invalidateRecipientsFeed } from '../query/refresh-user-feeds'
 import { recordRecipientSentTouch } from '../lib/recentSendRecipients'
 import { resolveRecipientEasetagForUi } from '../lib/easenetRecipientUi'
-import { isMobileMoneyRecipient } from '../lib/recipientPayoutPreview'
 
 function inferCountryFromRecipientCurrency(currency: string): string | undefined {
   const m: Record<string, string> = {
@@ -18,15 +17,10 @@ function inferCountryFromRecipientCurrency(currency: string): string | undefined
     GHS: 'GH',
     NGN: 'NG',
     ZAR: 'ZA',
+    CAD: 'CA',
+    GBP: 'GB',
   }
   return m[currency.toUpperCase()]
-}
-
-function mobileMoneyPrepareHints(r: Pick<Recipient, 'mobile_provider'>): string[] | undefined {
-  const p = (r.mobile_provider || '').toLowerCase()
-  if (p.includes('mtn')) return ['mtn', 'momo']
-  if (p.includes('mpesa') || p.includes('m-pesa')) return ['mpesa']
-  return undefined
 }
 
 export function detailIdFromTransfer(transfer: NoahTransfer): string {
@@ -47,7 +41,7 @@ export type ExecuteBalanceSendInput = {
   calculatedTotalAmount: number
   receiveAmountValue: number
   selectedBalanceCurrency: string
-  /** When set, skip Noah prepare at execute (already done on confirm). */
+  /** Required for fiat Global Payout — from confirm screen quote (`/api/noah/payouts/quote`). */
   payoutSession?: PayoutPrepareSession
   /** Ledger Easetag P2P: same ETID as confirm review (`reserved_debit_etid`). */
   reservedDebitEtid?: string
@@ -88,7 +82,6 @@ export async function executeBalanceSend(
     payoutSession,
     reservedDebitEtid,
     note,
-    paymentPurpose,
   } = input
 
   const easetag = resolveRecipientEasetagForUi(recipient).trim()
@@ -99,22 +92,7 @@ export async function executeBalanceSend(
     )
   }
 
-  const usdLike =
-    String(recipient.currency || '').toUpperCase() === 'USD' &&
-    String(recipient.country_code || '').toUpperCase() === 'US'
-  const hasAch =
-    Boolean(recipient.routing_number?.trim()) && Boolean(recipient.account_number?.trim())
-  const eurSepa =
-    String(recipient.currency || '').toUpperCase() === 'EUR' && Boolean(recipient.iban?.trim())
-  const eurCountry = (recipient.country_code || 'DE').toUpperCase()
   const canUseFiatBalance = selectedBalanceCurrency === 'USD' || selectedBalanceCurrency === 'EUR'
-  const mobileCorridorCountry = (
-    recipient.country_code ||
-    inferCountryFromRecipientCurrency(recipient.currency) ||
-    ''
-  ).toUpperCase()
-  const isMobile =
-    isMobileMoneyRecipient(recipient) && Boolean(mobileCorridorCountry) && canUseFiatBalance
 
   let transfer: NoahTransfer
 
@@ -154,145 +132,28 @@ export async function executeBalanceSend(
       throw new Error('No source wallet id from Noah.')
     }
 
-    if (recipient.noah_external_account_id?.trim()) {
-      transfer = await noahService.createTransfer({
-        amount: calculatedTotalAmount.toString(),
-        currency: selectedBalanceCurrency.toLowerCase(),
-        sourceWalletId,
-        destinationExternalAccountId: recipient.noah_external_account_id.trim(),
-      })
-    } else if (isMobile) {
-      const phone = (recipient.phone_number || recipient.account_number || '').replace(/\s/g, '')
-      if (!phone) {
-        throw new Error('Mobile money needs a phone number on the recipient.')
-      }
-      const fiatAmount = receiveAmountValue.toFixed(2)
-      const session =
-        payoutSession ??
-        (await (async () => {
-          const prep = await noahService.prepareMobileMoneyPayout({
-            fiatAmount,
-            countryCode: mobileCorridorCountry,
-            currency: recipient.currency.toUpperCase(),
-            fullName: recipient.full_name,
-            phoneNumber: phone,
-            paymentMethodSubstrings: mobileMoneyPrepareHints(recipient),
-          })
-          if (!prep.ok || !prep.formSessionId || !prep.cryptoAuthorizedAmount) {
-            throw new Error(
-              prep.error ||
-                'Noah could not prepare this mobile payout. Confirm Identifier channels exist for this country and currency.',
-            )
-          }
-          return {
-            formSessionId: prep.formSessionId,
-            cryptoAuthorizedAmount: prep.cryptoAuthorizedAmount,
-            cryptoCurrency: prep.cryptoCurrency,
-          }
-        })())
-      transfer = await noahService.createTransfer({
-        amount: fiatAmount,
-        currency: recipient.currency.toLowerCase(),
-        sourceWalletId,
-        formSessionId: session.formSessionId,
-        cryptoAuthorizedAmount: session.cryptoAuthorizedAmount,
-        cryptoCurrency: session.cryptoCurrency,
-        countryCode: mobileCorridorCountry,
-        ...(payoutSession?.channelId ? { channelId: payoutSession.channelId } : {}),
-        recipientId: recipient.id,
-        ...(note?.trim() ? { note: note.trim() } : {}),
-      })
-    } else if (eurSepa && canUseFiatBalance) {
-      const fiatAmount = receiveAmountValue.toFixed(2)
-      const session =
-        payoutSession ??
-        (await (async () => {
-          const prep = await noahService.prepareSellPayout({
-            fiatAmount,
-            fullName: recipient.full_name,
-            countryCode: eurCountry,
-            currency: 'EUR',
-            iban: recipient.iban!.trim(),
-            accountType: recipient.checking_or_savings === 'savings' ? 'Savings' : 'Checking',
-          })
-          if (!prep.ok || !prep.formSessionId || !prep.cryptoAuthorizedAmount) {
-            throw new Error(prep.error || 'Noah could not prepare SEPA payout.')
-          }
-          return {
-            formSessionId: prep.formSessionId,
-            cryptoAuthorizedAmount: prep.cryptoAuthorizedAmount,
-            cryptoCurrency: prep.cryptoCurrency,
-          }
-        })())
-      transfer = await noahService.createTransfer({
-        amount: fiatAmount,
-        currency: 'eur',
-        sourceWalletId,
-        formSessionId: session.formSessionId,
-        cryptoAuthorizedAmount: session.cryptoAuthorizedAmount,
-        cryptoCurrency: session.cryptoCurrency,
-        countryCode: eurCountry,
-        ...(session.channelId ? { channelId: session.channelId } : {}),
-        recipientId: recipient.id,
-        ...(note?.trim() ? { note: note.trim() } : {}),
-      })
-    } else if (usdLike && hasAch && canUseFiatBalance) {
+    if (!canUseFiatBalance) {
+      throw new Error('Balance send supports USD or EUR funding only.')
+    } else {
       if (
-        !recipient.address_line1?.trim() ||
-        !recipient.city?.trim() ||
-        !recipient.state?.trim() ||
-        !recipient.postal_code?.trim()
+        !payoutSession?.formSessionId?.trim() ||
+        !payoutSession.cryptoAuthorizedAmount?.trim() ||
+        !payoutSession.cryptoCurrency?.trim()
       ) {
-        throw new Error('US bank payouts need street, city, state, and postal code on the recipient.')
+        throw new Error(
+          'Payout quote is required. Return to review and wait for the quote to load before confirming.',
+        )
       }
-      const fiatAmount = receiveAmountValue.toFixed(2)
-      const session =
-        payoutSession ??
-        (await (async () => {
-          const prep = await noahService.prepareSellPayout({
-            fiatAmount,
-            fullName: recipient.full_name,
-            countryCode: 'US',
-            currency: 'USD',
-            accountNumber: recipient.account_number.trim(),
-            routingNumber: recipient.routing_number!.trim(),
-            addressLine1: recipient.address_line1.trim(),
-            city: recipient.city.trim(),
-            state: recipient.state.trim(),
-            postalCode: recipient.postal_code.trim(),
-            accountType: recipient.checking_or_savings === 'savings' ? 'Savings' : 'Checking',
-            transferType: recipient.transfer_type === 'Wire' ? 'Wire' : 'ACH',
-          })
-          if (!prep.ok || !prep.formSessionId || !prep.cryptoAuthorizedAmount) {
-            throw new Error(prep.error || 'Noah could not prepare this payout. Check recipient details.')
-          }
-          return {
-            formSessionId: prep.formSessionId,
-            cryptoAuthorizedAmount: prep.cryptoAuthorizedAmount,
-            cryptoCurrency: prep.cryptoCurrency,
-          }
-        })())
-      transfer = await noahService.createTransfer({
-        amount: fiatAmount,
-        currency: 'usd',
-        sourceWalletId,
-        formSessionId: session.formSessionId,
-        cryptoAuthorizedAmount: session.cryptoAuthorizedAmount,
-        cryptoCurrency: session.cryptoCurrency,
-        countryCode: 'US',
-        ...(session.channelId ? { channelId: session.channelId } : {}),
-        recipientId: recipient.id,
-        ...(note?.trim() ? { note: note.trim() } : {}),
-      })
-    } else if (payoutSession && canUseFiatBalance) {
-      const cc = (
+
+      const countryCode = (
         recipient.country_code ||
         inferCountryFromRecipientCurrency(recipient.currency) ||
         ''
       ).toUpperCase()
-      if (!cc) {
+      if (!countryCode) {
         throw new Error('Recipient country is required for this payout.')
       }
+
       transfer = await noahService.createTransfer({
         amount: receiveAmountValue.toFixed(2),
         currency: recipient.currency.toLowerCase(),
@@ -300,15 +161,11 @@ export async function executeBalanceSend(
         formSessionId: payoutSession.formSessionId,
         cryptoAuthorizedAmount: payoutSession.cryptoAuthorizedAmount,
         cryptoCurrency: payoutSession.cryptoCurrency,
-        countryCode: cc,
+        countryCode,
         ...(payoutSession.channelId ? { channelId: payoutSession.channelId } : {}),
         recipientId: recipient.id,
         ...(note?.trim() ? { note: note.trim() } : {}),
       })
-    } else {
-      throw new Error(
-        'Noah balance send needs: Easetag, saved payout id, mobile money with country, EUR IBAN, or US ACH with full address.',
-      )
     }
   }
 

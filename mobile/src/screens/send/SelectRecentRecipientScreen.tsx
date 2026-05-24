@@ -85,6 +85,7 @@ import { loadRecipientsListCache, saveRecipientsListCache } from '../../lib/reci
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { CountryFlag } from '../../components/flags/CountryFlag'
 import RecipientFormDropdownList from '../../components/recipients/RecipientFormDropdownList'
+import { RecipientBankNameField } from '../../components/recipients/RecipientBankNameField'
 import { useToast } from '../../components/ToastProvider'
 
 const getInitials = (name: string): string => {
@@ -128,8 +129,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   // Add recipient flow states
   const [showRecipientTypeModal, setShowRecipientTypeModal] = useState(false)
   const [showBankAccountForm, setShowBankAccountForm] = useState(false)
-  const [showBankEnumPicker, setShowBankEnumPicker] = useState(false)
-  const [bankEnumSearch, setBankEnumSearch] = useState('')
+  const [showBankDropdown, setShowBankDropdown] = useState(false)
+  const [bankSearchTerm, setBankSearchTerm] = useState('')
   const [selectedRecipientType, setSelectedRecipientType] = useState<'wallet' | 'bank' | 'mobile' | 'easenet' | null>(null)
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false)
   const [showProviderDropdown, setShowProviderDropdown] = useState(false)
@@ -713,12 +714,19 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     recipientCatalogFor(recipientTypeKey as RecipientType).find(
       (item) => item.currencyCode === newRecipient.currency && item.countryCode === selectedCountryCurrency?.countryCode,
     ) || recipientCatalogFor(recipientTypeKey as RecipientType).find((item) => item.currencyCode === newRecipient.currency)
-  const isAnyDropdownOpen = showCurrencyDropdown || showProviderDropdown || showWalletAssetDropdown || showWalletNetworkDropdown
+  const isAnyDropdownOpen =
+    showCurrencyDropdown ||
+    showProviderDropdown ||
+    showWalletAssetDropdown ||
+    showWalletNetworkDropdown ||
+    showBankDropdown
   const closeAllDropdowns = () => {
     setShowCurrencyDropdown(false)
     setShowProviderDropdown(false)
     setShowWalletAssetDropdown(false)
     setShowWalletNetworkDropdown(false)
+    setShowBankDropdown(false)
+    setBankSearchTerm('')
   }
   const renderDropdownContainer = (onClose: () => void, content: React.ReactNode) => {
     if (Platform.OS === 'android') {
@@ -1633,55 +1641,38 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                       />
                     </View>
 
-                    {/* Bank Name */}
-                    <View>
-                      {(() => {
-                        const bankEnum =
-                          selectedCountryCurrency && selectedRecipientType === 'bank'
-                            ? getPayoutFieldsSchemaForCorridor({
-                                countryCode: selectedCountryCurrency.countryCode,
-                                currencyCode: selectedCountryCurrency.currencyCode,
-                                rail: 'bank_transfer',
-                              })?.bank_enum ?? []
-                            : []
-                        if (bankEnum.length > 0) {
-                          return (
-                            <Pressable
-                              android_ripple={ripple.neutral}
-                              style={styles.modalInput}
-                              onPress={() => setShowBankEnumPicker(true)}
-                              disabled={isSubmitting}
-                            >
-                              <Text
-                                style={
-                                  newRecipient.bankName
-                                    ? styles.bankEnumValue
-                                    : styles.bankEnumPlaceholder
-                                }
-                                numberOfLines={1}
-                              >
-                                {newRecipient.bankName || `${accountConfig.fieldLabels.bank_name} *`}
-                              </Text>
-                            </Pressable>
-                          )
-                        }
-                        return (
-                          <TextInput
-                            style={styles.modalInput}
-                            value={newRecipient.bankName}
-                            onChangeText={(text) =>
-                              setNewRecipient((prev) => ({ ...prev, bankName: text }))
-                            }
-                            placeholder={`${accountConfig.fieldLabels.bank_name} *`}
-                            placeholderTextColor={colors.text.secondary}
-                            autoCapitalize="words"
-                            returnKeyType="done"
-                            onSubmitEditing={() => Keyboard.dismiss()}
-                            editable={!isSubmitting}
-                          />
-                        )
-                      })()}
-                    </View>
+                    <RecipientBankNameField
+                      banks={
+                        selectedCountryCurrency
+                          ? getPayoutFieldsSchemaForCorridor({
+                              countryCode: selectedCountryCurrency.countryCode,
+                              currencyCode: selectedCountryCurrency.currencyCode,
+                              rail: 'bank_transfer',
+                            })?.bank_enum ?? []
+                          : []
+                      }
+                      value={newRecipient.bankName}
+                      onChange={(bank) =>
+                        setNewRecipient((prev) => ({ ...prev, bankName: bank }))
+                      }
+                      placeholder={`${accountConfig.fieldLabels.bank_name} *`}
+                      disabled={isSubmitting}
+                      showDropdown={showBankDropdown}
+                      onToggleDropdown={() => {
+                        setShowBankDropdown(!showBankDropdown)
+                        setShowCurrencyDropdown(false)
+                        setShowProviderDropdown(false)
+                        setShowWalletAssetDropdown(false)
+                        setShowWalletNetworkDropdown(false)
+                      }}
+                      searchTerm={bankSearchTerm}
+                      onSearchTermChange={setBankSearchTerm}
+                      onCloseDropdown={() => {
+                        setShowBankDropdown(false)
+                        setBankSearchTerm('')
+                      }}
+                      renderDropdownContainer={renderDropdownContainer}
+                    />
 
                     {/* US Account Fields */}
                     {accountConfig.accountType === "us" && (
@@ -1970,59 +1961,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
         </KeyboardAvoidingView>
       </Modal>
 
-      <Modal
-        visible={showBankEnumPicker}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowBankEnumPicker(false)}
-      >
-        <View style={styles.scanOverlay}>
-          <View style={[styles.modalContainer, { maxHeight: '70%' }]}>
-            <Text style={styles.modalTitle}>Select bank</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={bankEnumSearch}
-              onChangeText={setBankEnumSearch}
-              placeholder="Search banks"
-              placeholderTextColor={colors.text.secondary}
-            />
-            <ScrollView keyboardShouldPersistTaps="handled">
-              {(selectedCountryCurrency
-                ? getPayoutFieldsSchemaForCorridor({
-                    countryCode: selectedCountryCurrency.countryCode,
-                    currencyCode: selectedCountryCurrency.currencyCode,
-                    rail: 'bank_transfer',
-                  })?.bank_enum ?? []
-                : []
-              )
-                .filter((b) =>
-                  b.toLowerCase().includes(bankEnumSearch.trim().toLowerCase()),
-                )
-                .map((bank) => (
-                  <Pressable
-                    key={bank}
-                    android_ripple={ripple.neutral}
-                    style={styles.bankEnumRow}
-                    onPress={() => {
-                      setNewRecipient((prev) => ({ ...prev, bankName: bank }))
-                      setShowBankEnumPicker(false)
-                      setBankEnumSearch('')
-                    }}
-                  >
-                    <Text style={styles.bankEnumValue}>{bank}</Text>
-                  </Pressable>
-                ))}
-            </ScrollView>
-            <Pressable
-              android_ripple={ripple.neutral}
-              style={styles.cancelButton}
-              onPress={() => setShowBankEnumPicker(false)}
-            >
-              <Text style={styles.cancelButtonText}>Close</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
     </>
   )
 

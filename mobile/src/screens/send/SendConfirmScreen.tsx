@@ -324,6 +324,10 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       showError(quoteError)
       return
     }
+    if (!easetagUi && !payoutSession?.formSessionId) {
+      showError('Payout quote is still loading. Wait a moment or go back and try again.')
+      return
+    }
     navigation.navigate('SendPin' as never)
   }
 

@@ -28,7 +28,6 @@ export interface Beneficiary {
   city?: string
   state?: string
   postalCode?: string
-  noahExternalAccountId?: string
   mobileProvider?: string
   walletAsset?: string
   walletNetwork?: string

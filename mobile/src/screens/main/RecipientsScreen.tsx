@@ -78,6 +78,7 @@ import { EasenetRecipientHydratedPreview } from '../../components/EasenetRecipie
 import { RecipientPayoutPreview } from '../../components/RecipientPayoutPreview'
 import { ListRowSkeleton } from '../../components/skeletons'
 import RecipientFormDropdownList from '../../components/recipients/RecipientFormDropdownList'
+import { RecipientBankNameField } from '../../components/recipients/RecipientBankNameField'
 import { isEasenetRecipientRecord, resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { CountryFlag } from '../../components/flags/CountryFlag'
@@ -117,8 +118,8 @@ function RecipientsContent({ navigation }: NavigationProps) {
   const [walletAssetSearchTerm, setWalletAssetSearchTerm] = useState('')
   const [walletNetworkSearchTerm, setWalletNetworkSearchTerm] = useState('')
   const [showScanModal, setShowScanModal] = useState(false)
-  const [showBankEnumPicker, setShowBankEnumPicker] = useState(false)
-  const [bankEnumSearch, setBankEnumSearch] = useState('')
+  const [showBankDropdown, setShowBankDropdown] = useState(false)
+  const [bankSearchTerm, setBankSearchTerm] = useState('')
   const [cameraPermission, requestCameraPermission] = useCameraPermissions()
   const [countrySearchTerm, setCountrySearchTerm] = useState('')
   const [transferType, setTransferType] = useState<'ACH' | 'Wire' | null>(null) // For USA
@@ -376,12 +377,19 @@ function RecipientsContent({ navigation }: NavigationProps) {
     recipientCatalogFor(recipientTypeKey as RecipientType).find(
       (item) => item.currencyCode === newRecipient.currency && item.countryCode === selectedCountryCurrency?.countryCode,
     ) || recipientCatalogFor(recipientTypeKey as RecipientType).find((item) => item.currencyCode === newRecipient.currency)
-  const isAnyDropdownOpen = showCountryDropdown || showProviderDropdown || showWalletAssetDropdown || showWalletNetworkDropdown
+  const isAnyDropdownOpen =
+    showCountryDropdown ||
+    showProviderDropdown ||
+    showWalletAssetDropdown ||
+    showWalletNetworkDropdown ||
+    showBankDropdown
   const closeAllDropdowns = () => {
     setShowCountryDropdown(false)
     setShowProviderDropdown(false)
     setShowWalletAssetDropdown(false)
     setShowWalletNetworkDropdown(false)
+    setShowBankDropdown(false)
+    setBankSearchTerm('')
   }
   const renderDropdownContainer = (onClose: () => void, content: React.ReactNode) => {
     if (Platform.OS === 'android') {
@@ -1922,67 +1930,43 @@ function RecipientsContent({ navigation }: NavigationProps) {
                       )}
                     </View>
 
-                    {/* Bank Name - Always required */}
-                    <View>
-                      {(() => {
-                        const bankEnum =
-                          selectedCountryCurrency && selectedRecipientType === 'bank'
-                            ? getPayoutFieldsSchemaForCorridor({
-                                countryCode: selectedCountryCurrency.countryCode,
-                                currencyCode: selectedCountryCurrency.currencyCode,
-                                rail: 'bank_transfer',
-                              })?.bank_enum ?? []
-                            : []
-                        if (bankEnum.length > 0) {
-                          return (
-                            <>
-                              <Pressable
-                                android_ripple={ripple.neutral}
-                                style={[styles.modalInput, fieldErrors.bankName && styles.modalInputError]}
-                                onPress={() => setShowBankEnumPicker(true)}
-                                disabled={isSubmitting}
-                              >
-                                <Text
-                                  style={
-                                    newRecipient.bankName
-                                      ? styles.bankEnumValue
-                                      : styles.bankEnumPlaceholder
-                                  }
-                                  numberOfLines={1}
-                                >
-                                  {newRecipient.bankName || `${accountConfig.fieldLabels.bank_name} *`}
-                                </Text>
-                              </Pressable>
-                              {fieldErrors.bankName && (
-                                <Text style={styles.errorText}>{fieldErrors.bankName}</Text>
-                              )}
-                            </>
-                          )
-                        }
-                        return (
-                          <>
-                            <TextInput
-                              style={[styles.modalInput, fieldErrors.bankName && styles.modalInputError]}
-                              value={newRecipient.bankName}
-                              onChangeText={(text) => {
-                                setNewRecipient((prev) => ({ ...prev, bankName: text }))
-                                validateField('bankName', text)
-                              }}
-                              onBlur={() => validateField('bankName', newRecipient.bankName)}
-                              placeholder={`${accountConfig.fieldLabels.bank_name} *`}
-                              placeholderTextColor={colors.text.secondary}
-                              autoCapitalize="words"
-                              returnKeyType="done"
-                              onSubmitEditing={() => Keyboard.dismiss()}
-                              editable={!isSubmitting}
-                            />
-                            {fieldErrors.bankName && (
-                              <Text style={styles.errorText}>{fieldErrors.bankName}</Text>
-                            )}
-                          </>
-                        )
-                      })()}
-                    </View>
+                    {/* Bank Name */}
+                    <RecipientBankNameField
+                      banks={
+                        selectedCountryCurrency
+                          ? getPayoutFieldsSchemaForCorridor({
+                              countryCode: selectedCountryCurrency.countryCode,
+                              currencyCode: selectedCountryCurrency.currencyCode,
+                              rail: 'bank_transfer',
+                            })?.bank_enum ?? []
+                          : []
+                      }
+                      value={newRecipient.bankName}
+                      onChange={(bank) => {
+                        setNewRecipient((prev) => ({ ...prev, bankName: bank }))
+                        validateField('bankName', bank)
+                      }}
+                      placeholder={`${accountConfig.fieldLabels.bank_name} *`}
+                      disabled={isSubmitting}
+                      hasError={Boolean(fieldErrors.bankName)}
+                      errorMessage={fieldErrors.bankName}
+                      showDropdown={showBankDropdown}
+                      onToggleDropdown={() => {
+                        setShowBankDropdown(!showBankDropdown)
+                        setShowCountryDropdown(false)
+                        setShowProviderDropdown(false)
+                        setShowWalletAssetDropdown(false)
+                        setShowWalletNetworkDropdown(false)
+                      }}
+                      searchTerm={bankSearchTerm}
+                      onSearchTermChange={setBankSearchTerm}
+                      onCloseDropdown={() => {
+                        setShowBankDropdown(false)
+                        setBankSearchTerm('')
+                      }}
+                      renderDropdownContainer={renderDropdownContainer}
+                      onBlurValidate={(v) => validateField('bankName', v)}
+                    />
 
                     {/* US Account Fields */}
                     {accountConfig.accountType === "us" && (
@@ -2339,61 +2323,6 @@ function RecipientsContent({ navigation }: NavigationProps) {
             )}
           </View>
         </KeyboardAvoidingView>
-      </Modal>
-
-      <Modal
-        visible={showBankEnumPicker}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowBankEnumPicker(false)}
-      >
-        <View style={styles.scanOverlay}>
-          <View style={[styles.modalContainer, { maxHeight: '70%' }]}>
-            <Text style={styles.modalTitle}>Select bank</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={bankEnumSearch}
-              onChangeText={setBankEnumSearch}
-              placeholder="Search banks"
-              placeholderTextColor={colors.text.secondary}
-            />
-            <ScrollView keyboardShouldPersistTaps="handled">
-              {(selectedCountryCurrency
-                ? getPayoutFieldsSchemaForCorridor({
-                    countryCode: selectedCountryCurrency.countryCode,
-                    currencyCode: selectedCountryCurrency.currencyCode,
-                    rail: 'bank_transfer',
-                  })?.bank_enum ?? []
-                : []
-              )
-                .filter((b) =>
-                  b.toLowerCase().includes(bankEnumSearch.trim().toLowerCase()),
-                )
-                .map((bank) => (
-                  <Pressable
-                    key={bank}
-                    android_ripple={ripple.neutral}
-                    style={styles.bankEnumRow}
-                    onPress={() => {
-                      setNewRecipient((prev) => ({ ...prev, bankName: bank }))
-                      validateField('bankName', bank)
-                      setShowBankEnumPicker(false)
-                      setBankEnumSearch('')
-                    }}
-                  >
-                    <Text style={styles.bankEnumValue}>{bank}</Text>
-                  </Pressable>
-                ))}
-            </ScrollView>
-            <Pressable
-              android_ripple={ripple.neutral}
-              style={styles.cancelButton}
-              onPress={() => setShowBankEnumPicker(false)}
-            >
-              <Text style={styles.cancelButtonText}>Close</Text>
-            </Pressable>
-          </View>
-        </View>
       </Modal>
 
       <EasnerAlertSheet

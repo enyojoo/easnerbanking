@@ -1,37 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from './supabase'
 import { resolveRecipientEasetagForUi } from './easenetRecipientUi'
-import { getApiBaseUrl, getNoahScopeHeaders } from './apiClient'
-import { getSessionReliable } from './authSession'
 import type { Recipient } from '../types'
-
-function isNoahBankRecipientForExternalAccount(data: RecipientData): boolean {
-  const cc = String(data.countryCode || '').toUpperCase()
-  const cur = String(data.currency || '').toUpperCase()
-  if (cc === 'US' && cur === 'USD' && data.routingNumber?.trim() && data.addressLine1?.trim()) {
-    return true
-  }
-  return cur === 'EUR' && Boolean(data.iban?.trim())
-}
-
-async function tryRegisterNoahExternalAccount(recipientId: string): Promise<void> {
-  try {
-    const session = await getSessionReliable()
-    if (!session?.access_token) return
-    const scopeHeaders = await getNoahScopeHeaders()
-    await fetch(`${getApiBaseUrl()}/api/recipients/${encodeURIComponent(recipientId)}/noah-external-account`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-        ...scopeHeaders,
-      },
-      body: JSON.stringify({ fiatAmount: 1 }),
-    })
-  } catch {
-    // Optional — repeat sends can still use prepare at confirm
-  }
-}
 
 export type { Recipient }
 
@@ -59,7 +29,6 @@ export interface RecipientData {
   payeeEasetag?: string
   payeeAvatarUrl?: string | null
   payeeAccountKind?: 'personal' | 'business'
-  noahExternalAccountId?: string
 }
 
 function isMissingTableError(e: unknown): boolean {
@@ -183,7 +152,6 @@ export const recipientService = {
       mobile_provider: recipientData.mobileProvider || undefined,
       wallet_network: recipientData.walletNetwork || undefined,
       wallet_memo_tag: recipientData.walletMemoTag || undefined,
-      noah_external_account_id: recipientData.noahExternalAccountId,
       created_at: now(),
       updated_at: now(),
     }
@@ -211,7 +179,6 @@ export const recipientService = {
           payee_easetag: recipientData.payeeEasetag || null,
           payee_avatar_url: recipientData.payeeAvatarUrl ?? null,
           payee_account_kind: recipientData.payeeAccountKind || null,
-          noah_external_account_id: recipientData.noahExternalAccountId || null,
         }
       const { data, error } = await supabase
         .from('recipients')
@@ -221,11 +188,7 @@ export const recipientService = {
 
       if (error) throw error
       if (data) {
-        const saved = normalizeRecipient(data as Recipient)
-        if (isNoahBankRecipientForExternalAccount(recipientData) && !recipientData.noahExternalAccountId) {
-          void tryRegisterNoahExternalAccount(saved.id)
-        }
-        return saved
+        return normalizeRecipient(data as Recipient)
       }
     } catch (e) {
       if (isMissingColumnError(e)) {
@@ -243,7 +206,6 @@ export const recipientService = {
           transfer_type: recipientData.transferType || null,
           checking_or_savings: recipientData.checkingOrSavings || null,
           address_line1: recipientData.addressLine1 || null,
-          noah_external_account_id: recipientData.noahExternalAccountId || null,
         }
         const { data, error } = await supabase.from('recipients').insert(payload).select().single()
         if (!error && data) return normalizeRecipient(data as Recipient)

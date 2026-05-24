@@ -32,12 +32,8 @@ export interface Recipient {
   id: string
   user_id: string
   country_code?: string
-  /** When linked to Noah external account for payouts */
+  /** @deprecated Legacy column; payouts use confirm-time quote + form session only. */
   noah_external_account_id?: string
-  /** Noah form-session sell (must match prepare fiat amount) */
-  noah_form_session_id?: string | null
-  noah_sell_crypto_authorized?: string | null
-  noah_sell_crypto_currency?: string | null
   full_name: string
   account_number: string
   bank_name: string

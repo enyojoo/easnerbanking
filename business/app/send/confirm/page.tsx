@@ -382,26 +382,18 @@ export default function SendConfirmPage() {
         throw new Error("No source wallet id from Noah.")
       }
 
-      const externalId = state.recipient.noahExternalAccountId?.trim()
-      const transferBody = externalId
-        ? {
-            sourceWalletId,
-            destinationExternalAccountId: externalId,
-            amount: state.amount.toFixed(2),
-            currency: state.sendCurrency.toLowerCase(),
-          }
-        : {
-            sourceWalletId,
-            amount: state.amount.toFixed(2),
-            currency: state.receiveCurrency.toLowerCase(),
-            formSessionId: pq.formSessionId,
-            cryptoAuthorizedAmount: pq.cryptoAuthorizedAmount,
-            cryptoCurrency: pq.cryptoCurrency,
-            countryCode: state.recipient.countryCode?.toUpperCase(),
-            ...(state.payoutQuote?.channelId ? { channelId: state.payoutQuote.channelId } : {}),
-            recipientId: state.recipient.id,
-            ...(state.note ? { note: state.note } : {}),
-          }
+      const transferBody = {
+        sourceWalletId,
+        amount: state.amount.toFixed(2),
+        currency: state.receiveCurrency.toLowerCase(),
+        formSessionId: pq.formSessionId,
+        cryptoAuthorizedAmount: pq.cryptoAuthorizedAmount,
+        cryptoCurrency: pq.cryptoCurrency,
+        countryCode: state.recipient.countryCode?.toUpperCase(),
+        ...(state.payoutQuote?.channelId ? { channelId: state.payoutQuote.channelId } : {}),
+        recipientId: state.recipient.id,
+        ...(state.note ? { note: state.note } : {}),
+      }
 
       const transferRes = await fetchWithSession("/api/noah/transfers", {
         method: "POST",
