@@ -60,7 +60,11 @@ import {
 } from '@easner/shared'
 import { usePayoutMinEnforcement } from '../../hooks/usePayoutMinEnforcement'
 import { noahService } from '../../lib/noahService'
-import { stashSendPayoutQuote } from '../../lib/sendFlowPayoutQuote'
+import {
+  isStashedPayoutQuoteFresh,
+  peekSendPayoutQuote,
+  stashSendPayoutQuote,
+} from '../../lib/sendFlowPayoutQuote'
 import { getPayoutCorridorCache, isRecipientPayoutCorridorActive, refreshPayoutCorridors } from '../../lib/payoutCorridors'
 import {
   getCachedSendDestinations,
@@ -1209,6 +1213,30 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
               if (selectedPaymentMethod === 'balance') {
                 const transactionId = generateTransactionId()
+                const needsNoahQuote =
+                  !isEasetagRecipient &&
+                  !recipient.wallet_network?.trim() &&
+                  receiveAmountValue > 0 &&
+                  Boolean(recipient.id)
+
+                if (needsNoahQuote && !isStashedPayoutQuoteFresh(receiveAmountValue)) {
+                  try {
+                    const pq = await noahService.createPayoutQuote({
+                      recipientId: recipient.id,
+                      receiveAmount: receiveAmountValue,
+                      sourceBalanceCurrency: selectedBalanceCurrency,
+                      ...(note.trim() ? { note: note.trim() } : {}),
+                      ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+                    })
+                    stashSendPayoutQuote(pq)
+                  } catch (e) {
+                    const msg =
+                      e instanceof Error ? e.message : 'Could not get a payout quote. Try again.'
+                    showError(msg)
+                    return
+                  }
+                }
+
                 navigation.navigate('SendConfirm' as never, {
                   recipient,
                   calculatedSendingAmount,

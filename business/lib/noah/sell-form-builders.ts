@@ -42,6 +42,14 @@ function defaultPaymentPurpose() {
   return "personal transfer"
 }
 
+/** Strip spaces/separators so Noah bank rails get digits-only account numbers (e.g. NGN). */
+export function normalizeBankAccountNumber(accountNumber: string): string {
+  return String(accountNumber || "")
+    .trim()
+    .replace(/\s/g, "")
+    .replace(/[^\d]/g, "")
+}
+
 export function buildEurSepaSellForm(input: {
   iban: string
   fullName: string
@@ -149,7 +157,7 @@ export function buildBankLocalSellForm(
   const purpose = data.paymentPurpose?.trim() || defaultPaymentPurpose()
   const form: Record<string, unknown> = {
     BankDetails: {
-      AccountNumber: data.accountNumber.trim(),
+      AccountNumber: normalizeBankAccountNumber(data.accountNumber),
       Bank: data.bankName.trim(),
     },
     PaymentPurpose: purpose,

@@ -305,7 +305,10 @@ export async function prepareSellFromRecipientRow(input: {
 
   // Generic BankLocal (NG, KE, GH, ZA, …)
   if (country && fiatCurrency) {
-    const accountNumber = String(row.account_number || "").trim()
+    const accountNumber = String(row.account_number || "")
+      .trim()
+      .replace(/\s/g, "")
+      .replace(/[^\d]/g, "")
     const bankName = String(row.bank_name || "").trim()
     if (!accountNumber || !bankName) {
       throw new Error("Bank recipient requires account number and bank name.")

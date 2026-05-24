@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   assertSellFormSessionReady,
   buildAckFormForNextStep,
+  extractBeneficiaryAckContext,
   parseNoahFormNextStep,
   sellFormSessionNeedsFinalize,
 } from "@/lib/noah/finalize-sell-form-session"
@@ -38,10 +39,55 @@ describe("buildAckFormForNextStep", () => {
     ).toEqual({ Confirmed: true })
   })
 
-  it("falls back to step id object when no schema properties", () => {
+  it("fills required string beneficiary name from context", () => {
     expect(
-      buildAckFormForNextStep({ stepId: "Cob", stepType: "Ack" }),
-    ).toEqual({ Cob: { Confirmed: true, Acknowledged: true } })
+      buildAckFormForNextStep(
+        {
+          stepId: "Cob",
+          stepType: "Ack",
+          schema: {
+            type: "object",
+            title: "Confirm beneficiary",
+            properties: {
+              BeneficiaryAccountName: { type: "string" },
+              Confirmed: { type: "boolean" },
+            },
+            required: ["BeneficiaryAccountName", "Confirmed"],
+          },
+        },
+        { BeneficiaryAccountName: "Samuel Enyojo Odiba" },
+      ),
+    ).toEqual({
+      BeneficiaryAccountName: "Samuel Enyojo Odiba",
+      Confirmed: true,
+    })
+  })
+
+  it("falls back to confirm flags when no schema properties", () => {
+    expect(buildAckFormForNextStep({ stepId: "Cob", stepType: "Ack" })).toEqual({
+      Confirmed: true,
+      Acknowledged: true,
+      Cob: { Confirmed: true, Acknowledged: true },
+    })
+  })
+})
+
+describe("extractBeneficiaryAckContext", () => {
+  it("reads full name from AccountHolderName on initial form", () => {
+    expect(
+      extractBeneficiaryAckContext(
+        {},
+        {
+          AccountHolderName: {
+            AccountHolderType: "Individual",
+            Name: { FirstName: "Samuel", LastName: "Odiba" },
+          },
+        },
+      ),
+    ).toMatchObject({
+      BeneficiaryName: "Samuel Odiba",
+      BeneficiaryAccountName: "Samuel Odiba",
+    })
   })
 })
 

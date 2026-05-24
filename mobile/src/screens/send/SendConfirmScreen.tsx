@@ -218,7 +218,30 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     if (!recipient || easetagUi) return
     if (!recipient.id || !(receiveAmountValue > 0)) return
     if (isStashedPayoutQuoteFresh(receiveAmountValue)) {
-      clearSendPayoutQuote()
+      const stashed = peekSendPayoutQuote()
+      if (stashed) {
+        const easnerFeeAmt =
+          stashed.easner.pricingTotals?.total_easner_fee ?? stashed.easner.totalFeeAmount ?? 0
+        setPricing((prev) => ({
+          ...prev,
+          calculatedSendingAmount: amountScreenSendAmount,
+          calculatedFeeAmount: easnerFeeAmt,
+          calculatedTotalAmount: stashed.totalDebited,
+          noahFee: stashed.noah.totalFee,
+          easnerFee: easnerFeeAmt,
+          pricingQuoteId: stashed.pricingQuoteId,
+          pricingQuoteExpiry: stashed.expiresAt,
+          pricingQuoteResult: stashed.easner,
+          payoutSession: {
+            formSessionId: stashed.noah.formSessionId,
+            cryptoAuthorizedAmount: stashed.noah.cryptoAuthorizedAmount,
+            cryptoCurrency: stashed.noah.cryptoCurrency,
+            ...(stashed.channelId ? { channelId: stashed.channelId } : {}),
+          },
+          quoteLoading: false,
+          quoteError: null,
+        }))
+      }
       return
     }
     let cancelled = false

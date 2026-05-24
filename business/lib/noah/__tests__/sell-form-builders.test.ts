@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   buildAccountHolderName,
   buildBankLocalSellForm,
+  normalizeBankAccountNumber,
   buildCaBankLocalSellForm,
   buildEurSepaSellForm,
   buildGbBankLocalSellForm,
@@ -99,6 +100,16 @@ describe("buildBankLocalSellForm", () => {
     })
     expect((form.BankDetails as Record<string, unknown>).Bank).toBe("GTBank")
     expect(form.AccountHolderName).toBeDefined()
+  })
+
+  it("strips spaces from account numbers", () => {
+    const form = buildBankLocalSellForm(ngSchema, {
+      accountNumber: "2067 8169 45",
+      bankName: "Kuda",
+      fullName: "Jane Doe",
+    })
+    expect((form.BankDetails as Record<string, unknown>).AccountNumber).toBe("2067816945")
+    expect(normalizeBankAccountNumber("2349 3949 39")).toBe("2349394939")
   })
 })
 

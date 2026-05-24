@@ -66,29 +66,128 @@ export function sellFormSessionNeedsFinalize(raw: Record<string, unknown>): bool
   return false
 }
 
+function fullNameFromInitialForm(initialForm: Record<string, unknown>): string {
+  const holder = initialForm.AccountHolderName
+  if (!holder || typeof holder !== "object") return ""
+  const h = holder as Record<string, unknown>
+  if (typeof h.Name === "string") return h.Name.trim()
+  const name = h.Name
+  if (name && typeof name === "object") {
+    const n = name as Record<string, unknown>
+    const fn = String(n.FirstName ?? "").trim()
+    const ln = String(n.LastName ?? "").trim()
+    return `${fn} ${ln}`.trim()
+  }
+  return ""
+}
+
+/** Pull beneficiary / account-name hints from prepare responses for Cob ack steps. */
+export function extractBeneficiaryAckContext(
+  raw: Record<string, unknown>,
+  initialForm: Record<string, unknown>,
+): Record<string, unknown> {
+  const ctx: Record<string, unknown> = {}
+  const fullName = fullNameFromInitialForm(initialForm)
+  if (fullName) {
+    ctx.BeneficiaryName = fullName
+    ctx.BeneficiaryAccountName = fullName
+    ctx.AccountHolderName = fullName
+    ctx.ConfirmedBeneficiaryName = fullName
+  }
+
+  const walk = (obj: unknown, depth = 0) => {
+    if (!obj || typeof obj !== "object" || depth > 8) return
+    for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+      if (k === "Schema" || k === "schema" || k === "FormSchema") continue
+      if (
+        typeof v === "string" &&
+        v.trim() &&
+        /beneficiary|accountname|accountholder|resolvedname|nameenquiry|displayname/i.test(k)
+      ) {
+        if (!ctx[k]) ctx[k] = v.trim()
+      }
+      walk(v, depth + 1)
+    }
+  }
+  walk(raw)
+  return ctx
+}
+
+function defaultValueForSchemaProperty(
+  key: string,
+  def: Record<string, unknown>,
+  ctx: Record<string, unknown>,
+): unknown {
+  if (ctx[key] !== undefined) return ctx[key]
+  const lower = key.toLowerCase()
+  for (const [ck, cv] of Object.entries(ctx)) {
+    if (ck.toLowerCase() === lower) return cv
+  }
+  if (def.const !== undefined) return def.const
+  const t = String(def.type ?? "").toLowerCase()
+  if (t === "boolean") return true
+  if (t === "string") {
+    if (/name/i.test(key) && typeof ctx.BeneficiaryName === "string") return ctx.BeneficiaryName
+    if (/name/i.test(key) && typeof ctx.BeneficiaryAccountName === "string") {
+      return ctx.BeneficiaryAccountName
+    }
+    return ""
+  }
+  if (t === "object" && def.properties && typeof def.properties === "object") {
+    const nested: Record<string, unknown> = {}
+    for (const [nk, nd] of Object.entries(def.properties as Record<string, unknown>)) {
+      if (nd && typeof nd === "object") {
+        const v = defaultValueForSchemaProperty(nk, nd as Record<string, unknown>, ctx)
+        if (v !== "" && v !== undefined) nested[nk] = v
+      }
+    }
+    if (Object.keys(nested).length > 0) return nested
+  }
+  const enumVals = def.enum as unknown[] | undefined
+  if (Array.isArray(enumVals) && enumVals.length > 0) return enumVals[0]
+  return undefined
+}
+
 /** Build Form payload for Noah Ack steps (e.g. Cob = beneficiary confirmation). */
-export function buildAckFormForNextStep(next: NoahFormNextStep): Record<string, unknown> {
+export function buildAckFormForNextStep(
+  next: NoahFormNextStep,
+  context: Record<string, unknown> = {},
+): Record<string, unknown> {
   const schema = next.schema
   if (schema && typeof schema === "object") {
     const props = schema.properties as Record<string, unknown> | undefined
-    if (props && typeof props === "object") {
+    const required = Array.isArray(schema.required)
+      ? (schema.required as string[]).filter((k) => typeof k === "string")
+      : []
+    const keys =
+      required.length > 0 ? required : props ? Object.keys(props) : []
+
+    if (props && keys.length > 0) {
       const form: Record<string, unknown> = {}
-      for (const [key, def] of Object.entries(props)) {
-        const d = def as Record<string, unknown>
-        if (d.type === "boolean") form[key] = true
-        else if (d.const !== undefined) form[key] = d.const
+      for (const key of keys) {
+        const def = props[key]
+        if (!def || typeof def !== "object") continue
+        const v = defaultValueForSchemaProperty(key, def as Record<string, unknown>, context)
+        if (v !== undefined && v !== "") form[key] = v
+        else if ((def as Record<string, unknown>).type === "boolean") form[key] = true
       }
       if (Object.keys(form).length > 0) return form
     }
   }
+
   const id = next.stepId.trim()
-  if (!id) return {}
-  return { [id]: { Confirmed: true, Acknowledged: true } }
+  if (!id) return { Confirmed: true, Acknowledged: true }
+  return {
+    Confirmed: true,
+    Acknowledged: true,
+    [id]: { Confirmed: true, Acknowledged: true },
+  }
 }
 
 function uniqueFormCandidates(
   next: NoahFormNextStep | null,
   initialForm: Record<string, unknown>,
+  ackContext: Record<string, unknown>,
 ): Record<string, unknown>[] {
   const out: Record<string, unknown>[] = []
   const seen = new Set<string>()
@@ -100,17 +199,24 @@ function uniqueFormCandidates(
   }
 
   if (next) {
-    push(buildAckFormForNextStep(next))
+    const ack = buildAckFormForNextStep(next, ackContext)
+    push(ack)
     if (next.stepId) {
+      push({ [next.stepId]: ack })
       push({ [next.stepId]: true })
-      push({ [next.stepId]: { Confirmed: true } })
+      push({ ...ack, [next.stepId]: true })
+    }
+    push({ Confirmed: true })
+    push({ ConfirmBeneficiary: true })
+    push({ Acknowledged: true })
+    if (Object.keys(initialForm).length > 0) {
+      push({ ...initialForm, ...ack })
     }
     if (next.stepType.toLowerCase() === "dataentry" && Object.keys(initialForm).length > 0) {
       push(initialForm)
     }
   }
   push({})
-  if (Object.keys(initialForm).length > 0) push(initialForm)
   return out
 }
 
@@ -178,10 +284,11 @@ export async function finalizeSellFormSessionAfterPrepare(input: {
   if (!sellFormSessionNeedsFinalize(raw)) return result
 
   const tried = new Set<string>()
+  const ackContext = extractBeneficiaryAckContext(raw, input.initialForm)
 
   for (let round = 0; round < 8 && sellFormSessionNeedsFinalize(raw); round++) {
     const next = parseNoahFormNextStep(raw)
-    const forms = uniqueFormCandidates(next, input.initialForm)
+    const forms = uniqueFormCandidates(next, input.initialForm, ackContext)
 
     for (const delayedSell of [true, false] as const) {
       for (const form of forms) {
@@ -219,10 +326,17 @@ export async function finalizeSellFormSessionAfterPrepare(input: {
 
   if (sellFormSessionNeedsFinalize(raw)) {
     const next = parseNoahFormNextStep(raw)
+    const schema = next?.schema
     logNoahPayoutFailure("prepare_finalize_incomplete", new Error("form session incomplete"), {
       channelId: input.channelId,
       formSessionIdPrefix: formSessionId.slice(0, 12),
       nextStep: next ?? null,
+      schemaRequired: schema?.required ?? null,
+      schemaPropertyKeys:
+        schema?.properties && typeof schema.properties === "object"
+          ? Object.keys(schema.properties as Record<string, unknown>)
+          : null,
+      ackContextKeys: Object.keys(ackContext),
       formSessionComplete: raw.FormSessionComplete ?? raw.formSessionComplete ?? null,
     })
     assertSellFormSessionReady(result)
