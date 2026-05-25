@@ -333,13 +333,13 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
         setSendingAfterPin(true)
         try {
           const reviewSnapshot =
-            hasFx && customerRate > 0 && calculatedTotalAmount > 0
+            !easetagUi && calculatedTotalAmount > 0 && receiveAmountValue > 0
               ? {
                   you_send_amount: youSendAmount,
                   total_debited: calculatedTotalAmount,
                   exchange_fee: exchangeFee,
                   processing_fee: processingFee,
-                  exchange_rate: customerRate,
+                  exchange_rate: hasFx && customerRate > 0 ? customerRate : 1,
                   send_currency: selectedBalanceCurrency,
                   receive_amount: receiveAmountValue,
                   receive_currency: receiveCurrency,

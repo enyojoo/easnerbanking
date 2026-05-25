@@ -2,7 +2,7 @@
  * Formatters for various input types
  */
 
-import { easnerBrand } from '@easner/shared'
+import { easnerBrand, formatMoneyDisplay, getCurrencySymbol } from '@easner/shared'
 
 /**
  * Format phone number as user types
@@ -74,26 +74,21 @@ export function formatRoutingNumber(value: string): string {
 export function formatCurrency(
   amount: number,
   currency: string,
-  showSymbol: boolean = true
 ): string {
-  const symbols: Record<string, string> = {
-    USD: '$',
-    EUR: '€',
-    GBP: '£',
-    NGN: '₦',
-    KES: 'KSh',
-    GHS: 'GH₵',
-    RUB: '₽',
-  }
-
-  const symbol = symbols[currency] || currency
-  const formatted = amount.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-
-  return showSymbol ? `${symbol}${formatted}` : formatted
+  return formatMoneyDisplay(Math.abs(amount), currency)
 }
+
+/** Signed amount for transaction list / detail heroes (e.g. `-₦5,000.00`). */
+export function formatSignedCurrency(
+  amount: number,
+  currency: string,
+  isReceived: boolean,
+): string {
+  const sign = isReceived ? '+' : '-'
+  return `${sign}${formatMoneyDisplay(Math.abs(amount), currency)}`
+}
+
+export { getCurrencySymbol }
 
 export type TransactionStatusTone =
   | 'completed'

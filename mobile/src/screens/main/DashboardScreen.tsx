@@ -55,7 +55,7 @@ import { apiFetch } from '../../query/api-client'
 import { NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
 import { ListRowSkeleton } from '../../components/skeletons'
 import { SectionCard } from '../../components/ui'
-import { getTransactionStatusDisplay } from '../../utils/formatters'
+import { formatSignedCurrency, getTransactionStatusDisplay } from '../../utils/formatters'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import { isTier1Complete } from '../../lib/compliance'
 import { noahService } from '../../lib/noahService'
@@ -456,21 +456,8 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     }
   }
 
-  const formatAmount = (amount: number, isReceived: boolean, currency: string = 'USD') => {
-    const sign = isReceived ? '+' : '-'
-    // Normalize currency to uppercase for comparison
-    const normalizedCurrency = (currency || 'USD').toUpperCase()
-    const currencySymbol = normalizedCurrency === 'USD' ? '$' : normalizedCurrency === 'EUR' ? '€' : currency
-    
-    // Check if amount has decimal places
-    const absAmount = Math.abs(amount)
-    const hasDecimals = absAmount % 1 !== 0
-    const formattedAmount = hasDecimals
-      ? absAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-      : absAmount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-    
-    return `${sign}${currencySymbol}${formattedAmount}`
-  }
+  const formatAmount = (amount: number, isReceived: boolean, currency: string = 'USD') =>
+    formatSignedCurrency(amount, currency, isReceived)
 
   const formatTransactionDate = (dateString: string): string => {
     const date = new Date(dateString)

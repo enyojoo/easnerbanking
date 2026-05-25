@@ -46,7 +46,8 @@ import {
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
 import { ripple } from '../../lib/androidRipple'
-import { useTransactionDetail, useCurrenciesCatalog } from '../../hooks/queries'
+import { formatSignedCurrency } from '../../utils/formatters'
+import { useTransactionDetail } from '../../hooks/queries'
 import { isEasnerProductReceiveTitle, isEasnerProductSendTitle, qk, scopeKey, formatMoneyDisplay, formatSendRateLabel, formatPayoutRecipientSubtitle, formatTransactionDetailHeroTitle, type GlobalPayoutReviewSnapshot, type GlobalPayoutRecipientSnapshot } from '@easner/shared'
 import { ApiError } from '../../query/api-client'
 import { useScope } from '../../query/scope'
@@ -146,7 +147,6 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   const qc = useQueryClient()
   const { scope } = useScope()
   const detailQuery = useTransactionDetail(transactionId)
-  const { data: currencies = [] } = useCurrenciesCatalog()
   const copyToClipboard = useCopyToClipboard()
   const cachedListSnapshot = useMemo<LedgerTransaction | null>(() => {
     if (!scope || !transactionId) return null
@@ -320,25 +320,8 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
     }, 2000)
   }
 
-  const formatAmount = (amount: number, currency: string, isReceived: boolean) => {
-    const sign = isReceived ? '+' : '-'
-    // Normalize currency to uppercase
-    const normalizedCurrency = (currency || 'USD').toUpperCase()
-    const currencyData = currencies.find((c) => c && c.code === normalizedCurrency)
-    const symbol = currencyData?.symbol || 
-                   (normalizedCurrency === 'USD' ? '$' : 
-                    normalizedCurrency === 'EUR' ? '€' : 
-                    normalizedCurrency)
-    
-    // Check if amount has decimal places
-    const absAmount = Math.abs(amount)
-    const hasDecimals = absAmount % 1 !== 0
-    const formattedAmount = hasDecimals
-      ? absAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-      : absAmount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-    
-    return `${sign}${symbol}${formattedAmount}`
-  }
+  const formatAmount = (amount: number, currency: string, isReceived: boolean) =>
+    formatSignedCurrency(amount, currency, isReceived)
 
   const formatTimestamp = (dateString: string) => {
     if (!dateString) return ''

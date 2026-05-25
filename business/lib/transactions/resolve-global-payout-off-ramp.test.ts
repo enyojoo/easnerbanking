@@ -5,6 +5,14 @@ vi.mock("@easner/shared", () => ({
     { id: "processing", title: "Processing", description: "...", state: "current", occurredAt: null },
     { id: "completed", title: "Completed", description: "...", state: "upcoming", occurredAt: null },
   ],
+  computeBalancePayoutExchangeFee: (
+    totalDebited: number,
+    youSendAmount: number,
+    processingFeeAmount: number,
+  ) => {
+    const raw = totalDebited - youSendAmount - processingFeeAmount
+    return raw > 0.000_01 ? Math.round(raw * 100) / 100 : 0
+  },
   formatDisplayPersonName: (n: string) =>
     n === "SAMUEL ODIBA ENYOJO" ? "Samuel Odiba Enyojo" : n,
   formatTransactionDetailHeroTitle: ({
@@ -18,6 +26,7 @@ vi.mock("@easner/shared", () => ({
       ? `Transfer to ${counterpartyName === "SAMUEL ODIBA ENYOJO" ? "Samuel Odiba Enyojo" : counterpartyName}`
       : "Transfer",
   getGlobalPayoutTransferMethod: () => "Bank transfer",
+  getGlobalPayoutProcessingTime: () => "Within minutes",
   isGlobalPayoutOffRampOutRow: (row: { direction?: unknown; metadata?: Record<string, unknown> | null }) =>
     String(row.direction ?? "").toLowerCase() === "out" &&
     String(row.metadata?.payout_type ?? "").toLowerCase() === "global_fiat",
@@ -52,7 +61,8 @@ describe("resolveGlobalPayoutOffRampDetail", () => {
     expect(resolved?.displayAmount).toBe(5000)
     expect(resolved?.displayCurrency).toBe("NGN")
     expect(resolved?.displayHeroTitle).toBe("Transfer to Samuel Odiba Enyojo")
-    expect(resolved?.payoutReview?.exchange_fee).toBe(0)
+    expect(resolved?.payoutReview?.you_send_amount).toBeLessThanOrEqual(4.52)
+    expect(resolved?.payoutReview?.exchange_rate).toBeGreaterThan(1)
     expect(resolved?.lifecycle).toHaveLength(2)
   })
 })

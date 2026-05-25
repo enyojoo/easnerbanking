@@ -1,5 +1,6 @@
 import {
   buildGlobalPayoutLifecycle,
+  computeBalancePayoutExchangeFee,
   formatDisplayPersonName,
   formatTransactionDetailHeroTitle,
   getGlobalPayoutTransferMethod,
@@ -80,6 +81,16 @@ function deriveRecipientName(
   return null
 }
 
+function needsPayoutReviewReconstruction(review: GlobalPayoutReviewSnapshot): boolean {
+  const hasFx =
+    review.send_currency.toUpperCase() !== review.receive_currency.toUpperCase()
+  if (!hasFx) return false
+  if (review.exchange_fee > 0.001) return false
+  if (review.exchange_rate > 1.001) return false
+  if (review.you_send_amount < review.total_debited - 0.01) return false
+  return true
+}
+
 function derivePayoutReview(
   meta: Record<string, unknown>,
   payload: Record<string, unknown> | null | undefined,
@@ -87,7 +98,7 @@ function derivePayoutReview(
   ledgerCurrency: string,
 ): GlobalPayoutReviewSnapshot | null {
   const fromMeta = normalizePayoutReviewSnapshot(meta.payout_review)
-  if (fromMeta) return fromMeta
+  if (fromMeta && !needsPayoutReviewReconstruction(fromMeta)) return fromMeta
 
   const receiveAmount = roundFiat(
     typeof meta.receive_amount === "number" ? meta.receive_amount : Number(meta.receive_amount),
@@ -102,13 +113,27 @@ function derivePayoutReview(
           countryCode: enrichment.countryCode,
           bankName: enrichment.bankName,
         })
+        const totalDebited = ledgerAmount
+        const sendCurrency = ledgerCurrency
+        const hasFx = sendCurrency !== enrichment.receiveCurrency
+        const exchangeRate = hasFx && totalDebited > 0
+          ? Math.round((enrichment.receiveAmount / totalDebited) * 100) / 100
+          : 1
+        const youSendAmount = hasFx && exchangeRate > 0
+          ? roundFiat(enrichment.receiveAmount / exchangeRate) ?? totalDebited
+          : totalDebited
+        const processingFee = 0
         return {
-          you_send_amount: ledgerAmount,
-          total_debited: ledgerAmount,
-          exchange_fee: 0,
-          processing_fee: 0,
-          exchange_rate: 1,
-          send_currency: ledgerCurrency,
+          you_send_amount: youSendAmount,
+          total_debited: totalDebited,
+          exchange_fee: computeBalancePayoutExchangeFee(
+            totalDebited,
+            youSendAmount,
+            processingFee,
+          ),
+          processing_fee: processingFee,
+          exchange_rate: exchangeRate,
+          send_currency: sendCurrency,
           receive_amount: enrichment.receiveAmount,
           receive_currency: enrichment.receiveCurrency,
           transfer_method: transferMethod,
@@ -116,31 +141,85 @@ function derivePayoutReview(
         }
       }
     }
-    return null
+    return fromMeta
   }
 
+  const sendCurrency = String(
+    fromMeta?.send_currency || meta.send_currency || ledgerCurrency,
+  ).toUpperCase()
   const totalDebited =
-    roundFiat(typeof meta.total_debited === "number" ? meta.total_debited : ledgerAmount) ??
+    roundFiat(fromMeta?.total_debited) ??
+    roundFiat(typeof meta.total_debited === "number" ? meta.total_debited : Number(meta.total_debited)) ??
+    roundFiat(
+      typeof meta.crypto_authorized_amount === "number"
+        ? meta.crypto_authorized_amount
+        : Number(meta.crypto_authorized_amount),
+    ) ??
     ledgerAmount
 
-  const transferMethod = getGlobalPayoutTransferMethod({
-    currency: receiveCurrency,
-    countryCode: meta.country_code,
-    bankName: meta.bank_name,
-    mobileProvider: meta.mobile_provider,
-  })
+  const processingFee =
+    roundFiat(fromMeta?.processing_fee) ??
+    roundFiat(
+      typeof meta.processing_fee === "number"
+        ? meta.processing_fee
+        : Number(meta.processing_fee ?? meta.easner_fee ?? 0),
+    ) ??
+    0
+
+  const hasFx = sendCurrency !== receiveCurrency
+
+  let exchangeRate =
+    fromMeta?.exchange_rate && fromMeta.exchange_rate > 1
+      ? fromMeta.exchange_rate
+      : roundFiat(Number(meta.exchange_rate)) ?? 0
+
+  let youSendAmount =
+    roundFiat(fromMeta?.you_send_amount) ??
+    roundFiat(typeof meta.you_send_amount === "number" ? meta.you_send_amount : Number(meta.you_send_amount))
+
+  if (hasFx) {
+    if (!exchangeRate || exchangeRate <= 1) {
+      if (youSendAmount && youSendAmount > 0 && youSendAmount < totalDebited) {
+        exchangeRate = Math.round((receiveAmount / youSendAmount) * 100) / 100
+      } else if (totalDebited > processingFee) {
+        const approxYouSend = totalDebited - processingFee
+        exchangeRate = Math.round((receiveAmount / approxYouSend) * 100) / 100
+        youSendAmount = roundFiat(receiveAmount / exchangeRate)
+      }
+    } else if (!youSendAmount || youSendAmount >= totalDebited) {
+      youSendAmount = roundFiat(receiveAmount / exchangeRate)
+    }
+  } else {
+    exchangeRate = 1
+    if (!youSendAmount || youSendAmount <= 0) {
+      youSendAmount = roundFiat(totalDebited - processingFee) ?? totalDebited
+    }
+  }
+
+  youSendAmount = youSendAmount ?? totalDebited
+  const exchangeFee = computeBalancePayoutExchangeFee(totalDebited, youSendAmount, processingFee)
+
+  const transferMethod =
+    fromMeta?.transfer_method ||
+    getGlobalPayoutTransferMethod({
+      currency: receiveCurrency,
+      countryCode: meta.country_code,
+      bankName: meta.bank_name,
+      mobileProvider: meta.mobile_provider,
+    })
 
   return {
-    you_send_amount: totalDebited,
+    you_send_amount: youSendAmount,
     total_debited: totalDebited,
-    exchange_fee: 0,
-    processing_fee: 0,
-    exchange_rate: 1,
-    send_currency: ledgerCurrency,
+    exchange_fee: exchangeFee,
+    processing_fee: processingFee,
+    exchange_rate: hasFx ? exchangeRate || 1 : 1,
+    send_currency: sendCurrency,
     receive_amount: receiveAmount,
     receive_currency: receiveCurrency,
     transfer_method: transferMethod,
-    processing_time: getGlobalPayoutProcessingTime(transferMethod),
+    processing_time:
+      fromMeta?.processing_time || getGlobalPayoutProcessingTime(transferMethod),
   }
 }
 

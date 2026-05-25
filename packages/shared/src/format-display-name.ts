@@ -10,7 +10,11 @@ function titleCaseWord(word: string): string {
 
 /** "JANE Q PUBLIC" → "Jane Q Public"; preserves hyphens and apostrophes. */
 export function formatDisplayPersonName(input: string | null | undefined): string {
-  const raw = String(input ?? "").trim()
+  const raw = String(input ?? "")
+    .trim()
+    .replace(/,/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
   if (!raw) return ""
   return raw
     .split(/\s+/)

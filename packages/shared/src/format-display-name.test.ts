@@ -19,4 +19,8 @@ describe("formatDisplayPersonName", () => {
   it("preserves hyphens and apostrophes", () => {
     expect(formatDisplayPersonName("MARY-JANE O'BRIEN")).toBe("Mary-Jane O'Brien")
   })
+
+  it("removes comma separators from bank-style names", () => {
+    expect(formatDisplayPersonName("JAMES, JONE JOHN")).toBe("James Jone John")
+  })
 })

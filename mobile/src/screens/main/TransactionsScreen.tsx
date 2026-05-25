@@ -52,7 +52,7 @@ import {
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { buildGroupedActivityItems } from '../../lib/transactionListGrouping'
-import { getTransactionStatusDisplay } from '../../utils/formatters'
+import { formatSignedCurrency, getTransactionStatusDisplay } from '../../utils/formatters'
 import {
   markRecentMoneyActivity,
   qk,
@@ -586,25 +586,8 @@ function TransactionsContent({ navigation }: NavigationProps) {
     }
   }
 
-  const formatAmount = (amount: number, currency: string, isReceived: boolean = false) => {
-    const sign = isReceived ? '+' : '-'
-    // Normalize currency to uppercase for lookup
-    const normalizedCurrency = (currency || 'USD').toUpperCase()
-    const currencyData = currencies.find((c) => c && c.code === normalizedCurrency)
-    // Fallback to common symbols if currency data not found
-    const symbol = currencyData?.symbol || 
-                   (normalizedCurrency === 'USD' ? '$' : 
-                    normalizedCurrency === 'EUR' ? '€' : 
-                    normalizedCurrency)
-    
-    // Check if amount has decimal places
-    const hasDecimals = amount % 1 !== 0
-    const formattedAmount = hasDecimals
-      ? amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-      : amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-    
-    return `${sign}${symbol}${formattedAmount}`
-  }
+  const formatAmount = (amount: number, currency: string, isReceived: boolean = false) =>
+    formatSignedCurrency(amount, currency, isReceived)
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
