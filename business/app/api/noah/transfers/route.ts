@@ -37,6 +37,8 @@ export async function POST(request: Request) {
     | {
         amount?: string | number
         currency?: string
+        /** Legacy — ignored; Noah CustomerID resolved from auth. */
+        sourceWalletId?: string
         formSessionId?: string
         cryptoAuthorizedAmount?: string
         cryptoCurrency?: string

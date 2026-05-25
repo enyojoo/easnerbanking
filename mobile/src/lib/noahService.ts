@@ -17,6 +17,11 @@ function apiUrl(): string {
   return getApiBaseUrl()
 }
 
+/** Legacy execute field — Noah CustomerID (`eind_` + compact user uuid). Server resolves this today; kept for older API builds. */
+function noahSourceWalletIdFromSession(session: Session): string {
+  return `eind_${session.user.id.replace(/-/g, '')}`
+}
+
 /** One sync at a time (consumer hook + Account Verification + intervals share this client). */
 let syncStatusQueueTail: Promise<unknown> = Promise.resolve()
 
@@ -979,6 +984,7 @@ export const noahService = {
       body: JSON.stringify({
         amount: transferData.amount,
         currency: transferData.currency,
+        sourceWalletId: noahSourceWalletIdFromSession(session),
         formSessionId: transferData.formSessionId,
         cryptoAuthorizedAmount: transferData.cryptoAuthorizedAmount,
         cryptoCurrency: transferData.cryptoCurrency,
