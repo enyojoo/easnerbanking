@@ -13,6 +13,7 @@ import {
 import { isNoahBankOnrampFiatPayIn } from "@/lib/noah/bank-onramp-tx"
 import { enrichBankDepositLedgerRows } from "@/lib/transactions/enrich-bank-deposit-ledger-rows"
 import { mapRowToBusinessTransaction } from "@/lib/transactions/map-row-to-business"
+import { resolveGlobalPayoutOffRampDetail } from "@/lib/transactions/resolve-global-payout-off-ramp"
 import {
   isTurnkeyNoahBankOnrampChainMirror,
   isTurnkeyTransactionHiddenFromFeed,
@@ -66,6 +67,10 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
       metadata: meta ?? null,
       payload,
     })
+  const globalPayout = resolveGlobalPayoutOffRampDetail(row)
+  const displayAmount = globalPayout?.displayAmount ?? amount
+  const displayCurrency = globalPayout?.displayCurrency ?? currency
+  const displayName = globalPayout?.displayDescription ?? name
   const listSenderName = isVerification
     ? deriveVerificationBankName({ metadata: meta, payload })
     : bankLabel && !isEasnerProductReceiveTitle(bankLabel)
@@ -90,12 +95,22 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
     ledger_row_id,
     type: transaction_type,
     transaction_type,
-    amount,
-    currency,
+    amount: displayAmount,
+    currency: displayCurrency,
+    display_amount: displayAmount,
+    display_currency: displayCurrency,
+    display_description: displayName,
+    ...(globalPayout
+      ? {
+          ledger_amount: globalPayout.ledgerAmount,
+          ledger_currency: globalPayout.ledgerCurrency,
+          display_hero_title: globalPayout.displayHeroTitle,
+        }
+      : {}),
     status: st,
     created_at: created,
     noah_created_at: created,
-    name,
+    name: displayName,
     ...(listSenderName ? { sender_display_name: listSenderName } : {}),
     direction: dirRaw === "in" ? "credit" : "debit",
     source_type: sourceType,

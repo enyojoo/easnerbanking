@@ -197,6 +197,34 @@ export type {
   BankDepositLifecycleStepState,
   BuildBankDepositLifecycleInput,
 } from "./transactions/bank-deposit-lifecycle"
+export {
+  isGlobalPayoutOffRampFlow,
+  isGlobalPayoutOffRampOutRow,
+} from "./transactions/global-payout-flow"
+export {
+  buildGlobalPayoutLifecycle,
+  formatGlobalPayoutCompletedDescription,
+} from "./transactions/global-payout-lifecycle"
+export type {
+  BuildGlobalPayoutLifecycleInput,
+  GlobalPayoutLifecycleStep,
+  GlobalPayoutLifecycleStepId,
+  GlobalPayoutLifecycleStepState,
+} from "./transactions/global-payout-lifecycle"
+export type {
+  GlobalPayoutRecipientSnapshot,
+  GlobalPayoutReviewSnapshot,
+} from "./transactions/global-payout-types"
+export {
+  getGlobalPayoutProcessingTime,
+  getGlobalPayoutTransferMethod,
+  isMobileMoneyPayoutCorridor,
+} from "./transactions/payout-transfer-method"
+export type { PayoutTransferMethodInput } from "./transactions/payout-transfer-method"
+export {
+  formatTransactionDetailHeroTitle,
+} from "./transactions/transaction-detail-hero-title"
+export type { TransactionDetailHeroTitleInput } from "./transactions/transaction-detail-hero-title"
 export { formatDisplayPersonName } from "./format-display-name"
 export {
   buildVerifiedIdentityFromKycFields,

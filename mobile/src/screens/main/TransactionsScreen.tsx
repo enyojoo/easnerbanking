@@ -661,10 +661,26 @@ function TransactionsContent({ navigation }: NavigationProps) {
       if (!dateStr) continue
       const txType = tx.transaction_type || tx.type
       const amt = Math.abs(
-        Number(tx.amount ?? tx.send_amount ?? tx.crypto_amount ?? tx.fiat_amount ?? 0) || 0,
+        Number(
+          txType === 'send' || txType === 'card_funding'
+            ? (tx.ledger_amount ?? tx.amount ?? tx.send_amount ?? tx.crypto_amount ?? tx.fiat_amount ?? 0)
+            : (tx.display_amount ?? tx.amount ?? tx.send_amount ?? tx.crypto_amount ?? tx.fiat_amount ?? 0),
+        ) || 0,
       )
       const cur =
-        tx.currency || tx.send_currency || tx.crypto_currency || tx.fiat_currency || 'USD'
+        txType === 'send' || txType === 'card_funding'
+          ? (tx.ledger_currency ??
+            tx.currency ??
+            tx.send_currency ??
+            tx.crypto_currency ??
+            tx.fiat_currency ??
+            'USD')
+          : (tx.display_currency ??
+            tx.currency ??
+            tx.send_currency ??
+            tx.crypto_currency ??
+            tx.fiat_currency ??
+            'USD')
       if (txType === 'receive') {
         inAmount += amt
         if (!inCurrency) inCurrency = cur

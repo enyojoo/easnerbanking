@@ -92,6 +92,16 @@ export function amountsFromNoahPriceItem(
 }
 
 /**
+ * Noah `/prices` mid-market rate (`Items[0].Rate`) — destination fiat per 1 unit of source.
+ * Stable across ticket size; unlike `destinationAmount / sourceAmount`, which embeds channel fees.
+ */
+export function midMarketRateFromNoahPriceItem(row: NoahPriceItem): number | null {
+  const rate = numFromNoah(row.Rate)
+  if (Number.isFinite(rate) && rate > 0) return rate
+  return null
+}
+
+/**
  * ISO country for Noah /prices `Country` query param (payout/receiving country).
  * Prefer explicit override, then Easner corridors, then Noah sell catalog, then defaults.
  */
@@ -230,7 +240,7 @@ export async function noahConvertFiatAmount(input: {
   }
 }
 
-/** Noah mid rate: destination per 1 unit of source. */
+/** Noah mid rate: destination per 1 unit of source (`Items[0].Rate` when present). */
 export async function noahImpliedProviderRate(input: {
   sourceCurrency: string
   destinationCurrency: string
@@ -247,6 +257,31 @@ export async function noahImpliedProviderRate(input: {
   const country =
     input.country ??
     resolveCountryForNoahPrices(dst, { countryByCurrency })
+
+  const srcTicker = noahPricesSourceTicker(src)
+  const dstTicker = noahPricesDestTicker(dst)
+
+  try {
+    const data = await noahFetchPrice({
+      sourceTicker: srcTicker,
+      destTicker: dstTicker,
+      sourceAmount: amount,
+      country,
+      paymentMethodCategory: input.paymentMethodCategory,
+    })
+    const row = parseNoahPriceResponse(data)
+    if (row) {
+      const mid = midMarketRateFromNoahPriceItem(row)
+      if (mid != null) return mid
+      const { sourceAmount, destinationAmount } = amountsFromNoahPriceItem(row, amount)
+      if (destinationAmount > 0 && sourceAmount > 0) {
+        return destinationAmount / sourceAmount
+      }
+    }
+  } catch (directErr) {
+    if (src === "USD") throw directErr
+  }
+
   const destAmt = await noahConvertFiatAmount({
     sourceFiat: src,
     destFiat: dst,
@@ -294,6 +329,18 @@ export async function noahFiatPriceQuote(input: {
     const parsed = amountsFromNoahPriceItem(row, input.sourceAmount)
     destinationAmount = parsed.destinationAmount
     sourceAmount = parsed.sourceAmount
+    const mid = midMarketRateFromNoahPriceItem(row)
+    if (mid != null) {
+      return {
+        sourceCurrency,
+        destinationCurrency,
+        sourceAmount,
+        destinationAmount,
+        impliedRate: mid,
+        country,
+        noah: data,
+      }
+    }
   } catch {
     destinationAmount = await noahConvertFiatAmount({
       sourceFiat: sourceCurrency,

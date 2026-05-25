@@ -1,6 +1,10 @@
 /** Ledger field mapping for Noah global fiat payouts (no @easner/shared imports). */
 
 import type { SupabaseClient } from "@supabase/supabase-js"
+import {
+  formatNoahAccountHolderName,
+  pickNoahOrchestrationRuleExecutionId,
+} from "@/lib/noah/bank-onramp-tx"
 
 export function pendingGlobalPayoutProviderTransactionId(easnerPayoutId: string): string {
   return `global_payout_pending:${easnerPayoutId}`
@@ -10,6 +14,88 @@ export function isNoahGlobalPayoutSellTx(tx: Record<string, unknown>): boolean {
   if (String(tx.Direction ?? "").toUpperCase() !== "OUT") return false
   if (!tx.FiatPayment || typeof tx.FiatPayment !== "object") return false
   return Boolean(String(tx.CryptoCurrency ?? "").trim())
+}
+
+/**
+ * Noah received USDC/EURC from Turnkey before fiat payout — internal orchestration leg, not user-facing credit.
+ * Mirrors bank-on-ramp orchestration Out (Solana) which we suppress on the other side of the flow.
+ */
+export function isNoahGlobalPayoutOrchestrationInLeg(tx: Record<string, unknown>): boolean {
+  if (String(tx.Direction ?? "").toUpperCase() !== "IN") return false
+  if (!pickNoahOrchestrationRuleExecutionId(tx)) return false
+  if (tx.FiatPayment) return false
+  const net = String(tx.Network ?? "")
+  if (!net || net === "OffNetwork") return false
+  const crypto = String(tx.CryptoCurrency ?? "").toUpperCase()
+  if (!crypto.includes("USDC") && !crypto.includes("EURC")) return false
+  const externalId = String(tx.ExternalID ?? tx.externalID ?? tx.ExternalId ?? "").trim()
+  return Boolean(externalId)
+}
+
+export type NoahGlobalPayoutPayOutEnrichment = {
+  beneficiaryName: string | null
+  bankName: string | null
+  accountNumber: string | null
+  bankCode: string | null
+  countryCode: string | null
+  receiveAmount: number
+  receiveCurrency: string
+  fxRate: string | null
+}
+
+/** Beneficiary / bank fields from Noah OffNetwork OUT webhook (user-facing payout row). */
+export function extractNoahGlobalPayoutPayOutEnrichment(
+  tx: Record<string, unknown>,
+): NoahGlobalPayoutPayOutEnrichment | null {
+  if (!isNoahGlobalPayoutSellTx(tx)) return null
+  const fp = tx.FiatPayment as Record<string, unknown> | undefined
+  const fpm = tx.FiatPaymentMethod as Record<string, unknown> | undefined
+  const issuer = fpm?.IssuerDetails as Record<string, unknown> | undefined
+  const display = fpm?.DisplayDetails as Record<string, unknown> | undefined
+  const holder = fpm?.AccountHolderDetails as Record<string, unknown> | undefined
+  const receiveAmount = Math.abs(parseFloat(String(fp?.Amount ?? "0")) || 0)
+  const receiveCurrency = String(fp?.FiatCurrency ?? "USD").toUpperCase()
+  return {
+    beneficiaryName: formatNoahAccountHolderName(holder),
+    bankName:
+      issuer?.Name != null && String(issuer.Name).trim() ? String(issuer.Name).trim() : null,
+    accountNumber:
+      display?.AccountNumber != null && String(display.AccountNumber).trim()
+        ? String(display.AccountNumber).trim()
+        : null,
+    bankCode:
+      display?.BankCode != null && String(display.BankCode).trim()
+        ? String(display.BankCode).trim()
+        : null,
+    countryCode:
+      fpm?.Country != null && String(fpm.Country).trim() ? String(fpm.Country).trim() : null,
+    receiveAmount,
+    receiveCurrency,
+    fxRate: fp?.Rate != null && String(fp.Rate).trim() ? String(fp.Rate).trim() : null,
+  }
+}
+
+export function buildNoahGlobalPayoutPayOutMetadata(
+  tx: Record<string, unknown>,
+  enrichment: NoahGlobalPayoutPayOutEnrichment,
+): Record<string, unknown> {
+  return {
+    flow: "global_fiat_offramp",
+    ...(enrichment.beneficiaryName
+      ? {
+          beneficiary_name: enrichment.beneficiaryName,
+          recipient_name: enrichment.beneficiaryName,
+          counterparty_name: enrichment.beneficiaryName,
+        }
+      : {}),
+    ...(enrichment.bankName ? { bank_name: enrichment.bankName } : {}),
+    ...(enrichment.accountNumber ? { account_number: enrichment.accountNumber } : {}),
+    ...(enrichment.bankCode ? { bank_code: enrichment.bankCode } : {}),
+    ...(enrichment.countryCode ? { country_code: enrichment.countryCode } : {}),
+    ...(enrichment.fxRate ? { fx_rate: enrichment.fxRate } : {}),
+    payment_rail: "bank",
+    destination_payment_rail: "bank",
+  }
 }
 
 export function settlementWalletCurrencyForNoahCrypto(crypto: string): string {
@@ -159,4 +245,38 @@ export async function linkPendingGlobalPayoutToNoahTransactionId(
       updated_at: new Date().toISOString(),
     })
     .eq("id", input.pendingRowId)
+}
+
+/** Attach Solana orchestration IN leg to the user-facing global payout OUT row; do not create a separate IN ledger row. */
+export async function linkGlobalPayoutOutRowFromOrchestrationIn(
+  admin: SupabaseClient,
+  input: {
+    outRowId: string
+    priorMetadata: Record<string, unknown>
+    ruleExecutionId: string | null
+    solanaTxHash: string | null
+  },
+): Promise<void> {
+  const patch: Record<string, unknown> = {
+    ...input.priorMetadata,
+    flow: "global_fiat_offramp",
+    global_payout_orchestration_in_leg_linked: true,
+  }
+  if (input.ruleExecutionId) {
+    patch.noah_rule_execution_id = input.ruleExecutionId
+  }
+  if (input.solanaTxHash) {
+    patch.noah_on_chain_tx_hash = input.solanaTxHash
+    if (!patch.turnkey_tx_hash) {
+      patch.turnkey_tx_hash = input.solanaTxHash
+    }
+  }
+  await admin
+    .from("transactions")
+    .update({
+      metadata: patch,
+      ...(input.solanaTxHash ? { tx_hash: input.solanaTxHash } : {}),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.outRowId)
 }

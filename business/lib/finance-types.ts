@@ -84,6 +84,12 @@ export interface Transaction {
   depositAmount?: number
   postedAmount?: number
   postedCurrency?: string
+  /** Global payout detail hero title — e.g. Transfer to {name}. */
+  displayHeroTitle?: string
+  ledgerAmount?: number
+  ledgerCurrency?: string
+  payoutReview?: import("@easner/shared").GlobalPayoutReviewSnapshot
+  recipientSnapshot?: import("@easner/shared").GlobalPayoutRecipientSnapshot
 }
 
 export interface StablecoinAccount {

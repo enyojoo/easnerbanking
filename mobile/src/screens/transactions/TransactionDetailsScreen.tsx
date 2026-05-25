@@ -47,7 +47,7 @@ import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
 import { ripple } from '../../lib/androidRipple'
 import { useTransactionDetail, useCurrenciesCatalog } from '../../hooks/queries'
-import { isEasnerProductReceiveTitle, isEasnerProductSendTitle, qk, scopeKey } from '@easner/shared'
+import { isEasnerProductReceiveTitle, isEasnerProductSendTitle, qk, scopeKey, formatMoneyDisplay, formatSendRateLabel, formatPayoutRecipientSubtitle, formatTransactionDetailHeroTitle, type GlobalPayoutReviewSnapshot, type GlobalPayoutRecipientSnapshot } from '@easner/shared'
 import { ApiError } from '../../query/api-client'
 import { useScope } from '../../query/scope'
 
@@ -89,6 +89,15 @@ interface LedgerTransaction {
   deposit_amount?: number
   posted_amount?: number
   posted_currency?: string
+  display_amount?: number
+  display_currency?: string
+  display_hero_title?: string
+  display_description?: string
+  ledger_amount?: number
+  ledger_currency?: string
+  payout_review?: GlobalPayoutReviewSnapshot
+  recipient_snapshot?: GlobalPayoutRecipientSnapshot
+  send_note?: string
 }
 
 type StatusInfo = {
@@ -407,12 +416,16 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   }
   
   const getTransactionTypeDisplay = (): string => {
+    const heroTitle = String(transaction.display_hero_title || '').trim()
+    if (heroTitle) return heroTitle
     if (transaction.transaction_type === 'receive') {
       if (transaction.source_type === 'liquidation_address') {
         return 'Stablecoin Deposit'
       }
       const n = String(transaction.sender_display_name || transaction.name || '').trim()
-      if (n) return n
+      if (n) {
+        return formatTransactionDetailHeroTitle({ direction: 'in', counterpartyName: n })
+      }
       return 'Bank Deposit'
     }
     if (transaction.transaction_type === 'send' && isEasnerProductSendTitle(transaction.name)) {
@@ -670,6 +683,11 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
     (Boolean(transaction.lifecycle?.length) ||
       transaction.metadata?.flow === 'bank_onramp' ||
       transaction.source_type === 'virtual_account')
+  const isGlobalPayoutSend =
+    transaction.transaction_type === 'send' &&
+    Boolean(transaction.payout_review || transaction.metadata?.payout_type === 'global_fiat')
+  const heroAmount = Number(transaction.display_amount ?? transaction.amount)
+  const heroCurrency = String(transaction.display_currency ?? transaction.currency ?? 'USD')
 
   const easetagWhenTs =
     transaction.completed_at ||
@@ -750,7 +768,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                 ]}
                 numberOfLines={1}
               >
-                {formatAmount(transaction.amount, transaction.currency, isReceived)}
+                {formatAmount(heroAmount, heroCurrency, isReceived)}
               </Text>
               <StatusPill
                 label={statusInfo.label}
@@ -990,8 +1008,115 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                   </>
                 )}
 
-                {/* Send flows (non–Easetag P2P) */}
-                {!isEasetagP2p && transaction.transaction_type === 'send' && (
+                {/* Global payout send — review snapshot rows */}
+                {isGlobalPayoutSend && transaction.payout_review ? (
+                  <>
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>You send</Text>
+                      <Text style={styles.summaryValue}>
+                        {formatMoneyDisplay(
+                          transaction.payout_review.you_send_amount,
+                          transaction.payout_review.send_currency,
+                        )}
+                      </Text>
+                    </View>
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>Exchange fee</Text>
+                      <Text style={styles.summaryValue}>
+                        {formatMoneyDisplay(
+                          transaction.payout_review.exchange_fee,
+                          transaction.payout_review.send_currency,
+                        )}
+                      </Text>
+                    </View>
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>Processing fee</Text>
+                      <Text style={styles.summaryValue}>
+                        {formatMoneyDisplay(
+                          transaction.payout_review.processing_fee,
+                          transaction.payout_review.send_currency,
+                        )}
+                      </Text>
+                    </View>
+                    {transaction.payout_review.receive_currency.toUpperCase() !==
+                    transaction.payout_review.send_currency.toUpperCase() ? (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Exchange rate</Text>
+                        <Text style={styles.summaryValue}>
+                          {formatSendRateLabel(
+                            transaction.payout_review.send_currency,
+                            transaction.payout_review.receive_currency,
+                            transaction.payout_review.exchange_rate,
+                          )}
+                        </Text>
+                      </View>
+                    ) : null}
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>Total debited</Text>
+                      <Text style={styles.summaryValue}>
+                        {formatMoneyDisplay(
+                          transaction.payout_review.total_debited,
+                          transaction.payout_review.send_currency,
+                        )}
+                      </Text>
+                    </View>
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>Recipient gets</Text>
+                      <Text style={styles.summaryValue}>
+                        {formatMoneyDisplay(
+                          transaction.payout_review.receive_amount,
+                          transaction.payout_review.receive_currency,
+                        )}
+                      </Text>
+                    </View>
+                    {transaction.recipient_snapshot ? (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Recipient</Text>
+                        <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                          <Text style={styles.summaryValue}>
+                            {transaction.recipient_snapshot.full_name}
+                          </Text>
+                          {formatPayoutRecipientSubtitle({
+                            bankName: transaction.recipient_snapshot.bank_name,
+                            phone: transaction.recipient_snapshot.phone,
+                            mobileProvider: transaction.recipient_snapshot.mobile_provider,
+                            accountNumber: transaction.recipient_snapshot.account_number,
+                            fullAccountNumber: transaction.recipient_snapshot.account_number,
+                          }) ? (
+                            <Text style={[styles.summaryValue, { fontSize: 13, color: colors.text.secondary }]}>
+                              {formatPayoutRecipientSubtitle({
+                                bankName: transaction.recipient_snapshot.bank_name,
+                                phone: transaction.recipient_snapshot.phone,
+                                mobileProvider: transaction.recipient_snapshot.mobile_provider,
+                                accountNumber: transaction.recipient_snapshot.account_number,
+                                fullAccountNumber: transaction.recipient_snapshot.account_number,
+                              })}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </View>
+                    ) : null}
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>Transfer method</Text>
+                      <Text style={styles.summaryValue}>{transaction.payout_review.transfer_method}</Text>
+                    </View>
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>Processing time</Text>
+                      <Text style={styles.summaryValue}>{transaction.payout_review.processing_time}</Text>
+                    </View>
+                    {transaction.send_note || transaction.metadata?.send_note ? (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Note</Text>
+                        <Text style={styles.summaryValue}>
+                          {String(transaction.send_note || transaction.metadata?.send_note || '')}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </>
+                ) : null}
+
+                {/* Send flows (non–Easetag P2P, non–global payout) */}
+                {!isEasetagP2p && !isGlobalPayoutSend && transaction.transaction_type === 'send' && (
                   <>
                     {transaction.final_amount && transaction.final_amount !== transaction.amount && (
                       <View style={styles.summaryRow}>
@@ -1030,9 +1155,14 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
               </View>
             </SectionCard>
 
-            {isBankOnrampReceive && transaction.lifecycle && transaction.lifecycle.length > 0 ? (
+            {(isBankOnrampReceive || isGlobalPayoutSend) &&
+            transaction.lifecycle &&
+            transaction.lifecycle.length > 0 ? (
               <SectionCard style={styles.card}>
-                <TransactionLifecycleTracker steps={transaction.lifecycle} />
+                <TransactionLifecycleTracker
+                  steps={transaction.lifecycle}
+                  title={isGlobalPayoutSend ? 'Transfer status' : undefined}
+                />
               </SectionCard>
             ) : null}
           </Animated.View>

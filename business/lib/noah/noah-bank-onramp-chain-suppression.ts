@@ -31,6 +31,13 @@ function classifyNoahBankOnrampChainLedgerRow(row: {
 
   if (dir === "in") {
     if (
+      meta.global_payout_orchestration_in_leg === true ||
+      meta.global_payout_orchestration_in_leg_linked === true ||
+      meta.payout_type === "global_fiat"
+    ) {
+      return null
+    }
+    if (
       meta.flow === "bank_onramp" ||
       meta.noah_rule_execution_id ||
       meta.noah_orchestration_settlement_in_leg === true ||

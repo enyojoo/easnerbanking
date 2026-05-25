@@ -45,7 +45,10 @@ export type PayoutQuoteResult = {
     cryptoAuthorizedAmount: string
     cryptoCurrency: string
     formSessionId: string
+    /** Mid-market destination per 1 source (`/prices` `Rate` field). */
     rate?: number
+    /** All-in destination per 1 source at this ticket (`receive / totalDebited`). */
+    effectiveRate?: number
   }
   easner: EasnerPayoutQuoteSlice
   /** Empty when no persisted Easner quote (apply/validate not used). */
@@ -223,6 +226,8 @@ export async function buildPayoutQuote(input: {
     providerRate,
   })
 
+  const effectiveRate = sendAmount > 0 ? receiveAmount / sendAmount : providerRate
+
   return {
     receiveAmount,
     receiveCurrency,
@@ -237,6 +242,7 @@ export async function buildPayoutQuote(input: {
       cryptoCurrency,
       formSessionId,
       rate: providerRate,
+      effectiveRate,
     },
     easner,
     pricingQuoteId: "",

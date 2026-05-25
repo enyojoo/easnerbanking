@@ -25,6 +25,14 @@ describe("isTurnkeyTransactionHiddenFromFeed", () => {
     expect(isTurnkeyTransactionHiddenFromFeed({ global_payout_settlement_leg: true })).toBe(true)
   })
 
+  it("returns true when global_payout_orchestration_in_leg is true", () => {
+    expect(isTurnkeyTransactionHiddenFromFeed({ global_payout_orchestration_in_leg: true })).toBe(true)
+  })
+
+  it("returns true when noah_orchestration_settlement_in_leg is true", () => {
+    expect(isTurnkeyTransactionHiddenFromFeed({ noah_orchestration_settlement_in_leg: true })).toBe(true)
+  })
+
   it("returns true for Noah orchestration out payload without metadata flag", () => {
     expect(
       isTurnkeyTransactionHiddenFromFeed(null, {

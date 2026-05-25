@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest"
 import {
   amountsFromNoahPriceItem,
   fiatToNoahPriceTicker,
+  midMarketRateFromNoahPriceItem,
   noahImpliedProviderRate,
   noahPricesDestTicker,
   parseNoahPriceResponse,
@@ -46,6 +47,7 @@ describe("parseNoahPriceResponse", () => {
     expect(row?.DestinationAmount).toBe("135283.2")
     const { destinationAmount } = amountsFromNoahPriceItem(row!, 100)
     expect(destinationAmount).toBe(135283.2)
+    expect(midMarketRateFromNoahPriceItem(row!)).toBe(1352.83)
   })
 })
 
@@ -62,7 +64,39 @@ describe("noahImpliedProviderRate", () => {
     vi.mocked(noahFetch).mockReset()
   })
 
-  it("returns destination per source from Items[0] with Country", async () => {
+  it("returns mid-market Rate from Items[0] when present", async () => {
+    vi.mocked(noahFetch).mockResolvedValue({
+      Items: [
+        {
+          SourceAmount: "100",
+          DestinationAmount: "125153.8",
+          Rate: "1355.939237759392377963824",
+        },
+      ],
+    })
+
+    const rate = await noahImpliedProviderRate({
+      sourceCurrency: "USD",
+      destinationCurrency: "NGN",
+      sourceAmount: 100,
+      country: "NG",
+    })
+
+    expect(rate).toBeCloseTo(1355.939, 2)
+    expect(noahFetch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "/prices",
+        query: expect.objectContaining({
+          SourceCurrency: "USDC",
+          DestinationCurrency: "NGN",
+          Country: "NG",
+          SourceAmount: "100.00000000",
+        }),
+      }),
+    )
+  })
+
+  it("falls back to destination per source when Rate is missing", async () => {
     vi.mocked(noahFetch).mockResolvedValue({
       Items: [{ SourceAmount: "100", DestinationAmount: "135283.2" }],
     })
@@ -75,17 +109,6 @@ describe("noahImpliedProviderRate", () => {
     })
 
     expect(rate).toBeCloseTo(1352.832, 2)
-    expect(noahFetch).toHaveBeenCalledWith(
-      expect.objectContaining({
-        path: "/prices",
-        query: expect.objectContaining({
-          SourceCurrency: "USDC",
-          DestinationCurrency: "NGN",
-          Country: "NG",
-          SourceAmount: "100.00000000",
-        }),
-      }),
-    )
   })
 
   it("uses EUR fiat ticker for EUR destination not EURC", async () => {

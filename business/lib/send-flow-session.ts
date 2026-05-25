@@ -42,6 +42,8 @@ export interface SendFlowState {
     sendAmount: number
     sendCurrency: string
     totalDebited: number
+    /** Mid-market destination per 1 source (`/prices` `Rate`). */
+    midRate?: number
     noahFee: number
     noahFeeCurrency: string
     easnerFee: number

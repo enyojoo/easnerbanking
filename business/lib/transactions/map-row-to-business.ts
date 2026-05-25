@@ -7,6 +7,7 @@ import {
   toEasnerTransactionPrimaryLabel,
 } from "@easner/shared"
 import { isNoahBankOnrampFiatPayIn } from "@/lib/noah/bank-onramp-tx"
+import { resolveGlobalPayoutOffRampDetail } from "@/lib/transactions/resolve-global-payout-off-ramp"
 
 function deriveCounterpartyName(input: {
   metadata?: Record<string, unknown> | null
@@ -60,11 +61,13 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
             : (st as "completed" | "pending" | "processing" | "failed")
 
   const isVerification = isVerificationDepositMetadata(meta)
+  const globalPayout = resolveGlobalPayoutOffRampDetail(row)
   const bankLabel =
-    !isVerification && payload && isNoahBankOnrampFiatPayIn(payload)
+    !isVerification && !globalPayout && payload && isNoahBankOnrampFiatPayIn(payload)
       ? deriveBankDepositInboundDisplayLabel({ metadata: meta })
       : undefined
   const description =
+    globalPayout?.displayDescription ??
     bankLabel ??
     toEasnerTransactionPrimaryLabel({
       provider,
@@ -80,7 +83,16 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
         ? String(row.created_at)
         : new Date().toISOString()
 
-  const currencyCode = String(row.currency ?? "USD")
+  const currencyCode = globalPayout
+    ? globalPayout.displayCurrency
+    : String(row.currency ?? "USD")
+  const listAmount = globalPayout ? globalPayout.displayAmount : typeof row.amount === "number" ? row.amount : Number(row.amount) || 0
+  const listBaseAmount = globalPayout ? globalPayout.ledgerAmount : typeof row.base_amount === "number" ? row.base_amount : Number(row.base_amount) || undefined
+  const listBaseCurrency = globalPayout
+    ? globalPayout.ledgerCurrency
+    : row.base_currency != null
+      ? String(row.base_currency)
+      : undefined
   const providerTxId = row.provider_transaction_id != null ? String(row.provider_transaction_id) : undefined
   const easnerId = displayEasnerTransactionId({
     easnerTransactionId: row.easner_transaction_id != null ? String(row.easner_transaction_id) : null,
@@ -118,7 +130,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
   return {
     id: easnerId,
     type,
-    amount: typeof row.amount === "number" ? row.amount : Number(row.amount) || 0,
+    amount: listAmount,
     displayCurrency: currencyCode,
     description,
     date: created,
@@ -128,8 +140,18 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     reference: easnerId,
     paymentScheme: isEasetagP2p ? "Easetag" : undefined,
     transferId: providerTxId,
-    baseCurrency: row.base_currency != null ? String(row.base_currency) : undefined,
-    baseAmount: typeof row.base_amount === "number" ? row.base_amount : Number(row.base_amount) || undefined,
+    baseCurrency: listBaseCurrency,
+    baseAmount: listBaseAmount,
+    ...(globalPayout
+      ? {
+          displayHeroTitle: globalPayout.displayHeroTitle,
+          ledgerAmount: globalPayout.ledgerAmount,
+          ledgerCurrency: globalPayout.ledgerCurrency,
+          payoutReview: globalPayout.payoutReview ?? undefined,
+          recipientSnapshot: globalPayout.recipientSnapshot ?? undefined,
+          lifecycle: globalPayout.lifecycle,
+        }
+      : {}),
     collectionChannel:
       meta?.collection_channel != null ? String(meta.collection_channel) : undefined,
     autopayoutConfigId:

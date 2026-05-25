@@ -15,6 +15,11 @@ import {
   type SellPrepareOverrides,
 } from "@/lib/terminal/recipient-sell-prepare"
 import {
+  buildRecipientSnapshotFromRow,
+  normalizePayoutReviewSnapshot,
+  type GlobalPayoutReviewSnapshot,
+} from "@/lib/noah/build-payout-execute-snapshot"
+import {
   pickDestinationAddress,
   pickTriggerCryptoAmount,
   startOnchainDepositToPaymentWorkflow,
@@ -39,6 +44,8 @@ export type ExecuteTurnkeyOfframpPayoutInput = {
   channelId?: string
   overrides?: SellPrepareOverrides
   idempotencyKey?: string
+  reviewSnapshot?: GlobalPayoutReviewSnapshot
+  sendNote?: string
 }
 
 export type ExecuteTurnkeyOfframpPayoutResult =
@@ -125,6 +132,8 @@ export async function executeTurnkeyOfframpPayout(
     countryCode,
     channelId,
     overrides,
+    reviewSnapshot: reviewSnapshotRaw,
+    sendNote,
   } = input
 
   const idempotencyKey = String(input.idempotencyKey || "").trim()
@@ -225,6 +234,10 @@ export async function executeTurnkeyOfframpPayout(
   const asset = assetForCrypto(cryptoCurrency)
   const now = new Date().toISOString()
 
+  const payoutReview = normalizePayoutReviewSnapshot(reviewSnapshotRaw)
+  const recipientSnapshot = buildRecipientSnapshotFromRow(recipientRow)
+  const noteFromOverrides = overrides?.note?.trim() || sendNote?.trim() || ""
+
   const pendingMetadata: Record<string, unknown> = {
     source: "api_noah_transfers",
     payout_type: "global_fiat",
@@ -241,6 +254,9 @@ export async function executeTurnkeyOfframpPayout(
     destination_address: destinationAddress,
     noah_workflow_id: noahWorkflowId,
     source_address: sourceAddress,
+    recipient_snapshot: recipientSnapshot,
+    ...(payoutReview ? { payout_review: payoutReview } : {}),
+    ...(noteFromOverrides ? { send_note: noteFromOverrides, note: noteFromOverrides } : {}),
     ...(resolvedChannelId ? { channel_id: resolvedChannelId } : {}),
     ...(recipientId ? { recipient_id: recipientId } : {}),
     ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),

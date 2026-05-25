@@ -8,12 +8,23 @@ vi.mock("@easner/shared", () => ({
   BANK_DEPOSIT_COMPLETED_DESCRIPTION: "Funds are now available in your account balance.",
   isBankOnrampDepositFlow: (meta: Record<string, unknown> | null | undefined) =>
     String(meta?.flow ?? "").toLowerCase() === "bank_onramp",
+  isGlobalPayoutOffRampFlow: (meta: Record<string, unknown> | null | undefined) =>
+    String(meta?.payout_type ?? "").toLowerCase() === "global_fiat",
   isVerificationDepositMetadata: (meta: Record<string, unknown> | null | undefined) =>
     String(meta?.deposit_kind ?? "").toLowerCase() === "verification",
   deriveVerificationBankName: (input: { metadata?: Record<string, unknown> | null }) =>
     String(input.metadata?.verification_bank_name ?? "Your bank"),
   deriveEasnerInboundRemitterDisplayName: () => undefined,
-  formatDisplayPersonName: (n: string) => n,
+  formatDisplayPersonName: (n: string) =>
+    n === "SAMUEL ODIBA ENYOJO"
+      ? "Samuel Odiba Enyojo"
+      : n === "SAMUEL"
+        ? "Samuel"
+        : n,
+  formatMoneyDisplay: (amount: number, currency: string) =>
+    currency.toUpperCase() === "NGN"
+      ? `₦${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : `$${amount.toFixed(2)}`,
   toEasnerTransactionProductCategory: () => "Bank Deposit",
 }))
 
@@ -53,5 +64,52 @@ describe("buildTransactionSettledPushContent", () => {
     })
     expect(title).toBe("Bank Deposit")
     expect(body).toContain("Funds are now available")
+  })
+
+  it("uses receive fiat and corridor title for global payout send", () => {
+    const { title, body } = buildTransactionSettledPushContent({
+      provider: "noah",
+      direction: "out",
+      amount: 4.52,
+      currency: "USD",
+      metadata: {
+        payout_type: "global_fiat",
+        receive_amount: 5000,
+        receive_currency: "NGN",
+        payout_review: {
+          you_send_amount: 4,
+          total_debited: 4.52,
+          exchange_fee: 0.32,
+          processing_fee: 0.2,
+          exchange_rate: 1342.75,
+          send_currency: "USD",
+          receive_amount: 5000,
+          receive_currency: "NGN",
+          transfer_method: "Bank transfer",
+          processing_time: "Same day",
+        },
+        recipient_snapshot: { full_name: "SAMUEL ODIBA ENYOJO" },
+      },
+    })
+    expect(title).toBe("Bank transfer")
+    expect(body).toBe("Sent ₦5,000.00 to Samuel Odiba Enyojo")
+  })
+
+  it("falls back to metadata receive amount for pre-snapshot global payout", () => {
+    const { title, body } = buildTransactionSettledPushContent({
+      provider: "noah",
+      direction: "out",
+      amount: 4.52,
+      currency: "USD",
+      metadata: {
+        payout_type: "global_fiat",
+        receive_amount: 5000,
+        receive_currency: "NGN",
+        beneficiary_name: "SAMUEL",
+      },
+    })
+    expect(title).toBe("Bank transfer")
+    expect(body).toContain("₦5,000.00")
+    expect(body).toContain("Samuel")
   })
 })

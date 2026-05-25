@@ -8,9 +8,11 @@ export function mapPayoutQuoteToFlowState(
 ): SendFlowState {
   const easnerFee =
     q.easner.pricingTotals?.total_easner_fee ?? q.easner.totalFeeAmount ?? 0
+  const youSendAtMid =
+    q.noah.rate && q.noah.rate > 0 ? q.receiveAmount / q.noah.rate : state.sendAmount
   const exchangeFeeInBalance = computeBalancePayoutExchangeFee(
     q.totalDebited,
-    state.sendAmount,
+    youSendAtMid,
     easnerFee,
   )
   return {
@@ -20,6 +22,7 @@ export function mapPayoutQuoteToFlowState(
       sendAmount: q.sendAmount,
       sendCurrency: q.sendCurrency,
       totalDebited: q.totalDebited,
+      midRate: q.noah.rate,
       noahFee: exchangeFeeInBalance,
       noahFeeCurrency: q.sendCurrency,
       easnerFee,

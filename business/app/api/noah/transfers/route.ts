@@ -12,6 +12,7 @@ import {
   cryptoCurrencyForBalanceCurrency,
   executeTurnkeyOfframpPayout,
 } from "@/lib/noah/turnkey-offramp-orchestration"
+import { normalizePayoutReviewSnapshot } from "@/lib/noah/build-payout-execute-snapshot"
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
 
 export async function POST(request: Request) {
@@ -49,6 +50,7 @@ export async function POST(request: Request) {
         paymentPurpose?: string
         idempotencyKey?: string
         reservedDebitEtid?: string
+        reviewSnapshot?: Record<string, unknown>
       }
     | null
 
@@ -67,6 +69,7 @@ export async function POST(request: Request) {
   const sendNote = typeof body?.note === "string" ? body.note.trim() : ""
   const sendPaymentPurpose =
     typeof body?.paymentPurpose === "string" ? body.paymentPurpose.trim() : ""
+  const reviewSnapshot = normalizePayoutReviewSnapshot(body?.reviewSnapshot)
   const idempotencyKey = String(
     body?.idempotencyKey || body?.reservedDebitEtid || request.headers.get("idempotency-key") || "",
   ).trim()
@@ -160,6 +163,8 @@ export async function POST(request: Request) {
               ...(sendPaymentPurpose ? { paymentPurpose: sendPaymentPurpose } : {}),
             }
           : undefined,
+      reviewSnapshot: reviewSnapshot ?? undefined,
+      sendNote: sendNote || undefined,
       idempotencyKey: idempotencyKey || undefined,
     })
 

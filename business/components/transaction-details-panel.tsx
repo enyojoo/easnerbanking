@@ -13,11 +13,69 @@ import { currentLocationPath, withReturnTo } from "@/lib/invoice-navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { TransactionLifecycleTracker } from "@/components/transactions/transaction-lifecycle-tracker"
+import { TransactionDetailHero } from "@/components/transactions/transaction-detail-hero"
+import { PayoutReviewDetailsRows } from "@/components/transactions/payout-review-details-rows"
 
 export interface TransactionDetailsPanelProps {
   transaction: Transaction | null
   /** When true, omit "Track status" (e.g. already on full-page `/transactions/[etid]`). */
   omitTrackStatus?: boolean
+}
+
+function TransactionDetailActions({
+  transaction,
+  omitTrackStatus,
+  txHere,
+  etidForLink,
+  showLifecycleTracker,
+  downloadingReceipt,
+  onDownloadReceipt,
+}: {
+  transaction: Transaction
+  omitTrackStatus: boolean
+  txHere: string
+  etidForLink: string
+  showLifecycleTracker: boolean
+  downloadingReceipt: boolean
+  onDownloadReceipt: () => void
+}) {
+  return (
+    <Card className="border-border shadow-sm">
+      <CardContent className="space-y-2 p-6">
+        {transaction.invoiceId ? (
+          <Button variant="outline" className="w-full gap-2 bg-transparent" asChild>
+            <Link href={withReturnTo(`/invoices/${transaction.invoiceId}`, txHere)}>
+              <FileText className="h-4 w-4" />
+              View invoice
+            </Link>
+          </Button>
+        ) : null}
+        {!omitTrackStatus &&
+          !showLifecycleTracker &&
+          (transaction.transferId || transaction.id.startsWith("ETID")) &&
+          (transaction.status === "pending" || transaction.status === "processing") && (
+            <Button variant="outline" className="w-full gap-2 bg-transparent" asChild>
+              <Link href={etidForLink}>
+                <Activity className="h-4 w-4" />
+                Track status
+              </Link>
+            </Button>
+          )}
+        {transaction.status === "completed" ? (
+          <Button
+            variant="outline"
+            className="w-full gap-2 bg-transparent"
+            type="button"
+            onClick={onDownloadReceipt}
+            disabled={downloadingReceipt}
+          >
+            <Download className="h-4 w-4" />
+            {downloadingReceipt ? "Downloading..." : "Download Receipt"}
+          </Button>
+        ) : null}
+      </CardContent>
+    </Card>
+  )
 }
 
 export function TransactionDetailsPanel({
@@ -44,6 +102,8 @@ export function TransactionDetailsPanel({
     Boolean(transaction.paymentRail)
   const isCard = Boolean(cardLast4) || transaction.type === "card"
   const partyLabel = transaction.direction === "credit" ? "Sender" : "Recipient"
+  const isGlobalPayout = Boolean(transaction.payoutReview)
+  const showLifecycleTracker = Boolean(transaction.lifecycle?.length)
 
   const handleCopy = async (text: string, key: string) => {
     try {
@@ -65,13 +125,47 @@ export function TransactionDetailsPanel({
   }
 
   const etidForLink = transactionWebDetailPath(transaction.id)
-  const showBankDepositTracker = Boolean(transaction.lifecycle?.length)
   const displayCurrency = transaction.postedCurrency || transaction.displayCurrency || "USD"
+
+  if (isGlobalPayout && transaction.payoutReview) {
+    return (
+      <div className="space-y-4">
+        <TransactionDetailHero transaction={transaction} />
+        <PayoutReviewDetailsRows
+          transactionId={transaction.id}
+          payoutReview={transaction.payoutReview}
+          recipientSnapshot={transaction.recipientSnapshot}
+          sendNote={transaction.sendNote}
+          copiedKey={copiedKey}
+          onCopy={handleCopy}
+        />
+        {showLifecycleTracker && transaction.lifecycle ? (
+          <Card className="border-border shadow-sm">
+            <CardContent className="p-6">
+              <TransactionLifecycleTracker
+                lifecycle={transaction.lifecycle}
+                title="Transfer status"
+              />
+            </CardContent>
+          </Card>
+        ) : null}
+        <TransactionDetailActions
+          transaction={transaction}
+          omitTrackStatus={omitTrackStatus}
+          txHere={txHere}
+          etidForLink={etidForLink}
+          showLifecycleTracker={showLifecycleTracker}
+          downloadingReceipt={downloadingReceipt}
+          onDownloadReceipt={handleDownloadReceipt}
+        />
+      </div>
+    )
+  }
 
   return (
     <Card className="border-border shadow-sm">
-      <CardContent className="p-6 space-y-4">
-        <div className="flex items-center justify-between pb-4 border-b">
+      <CardContent className="space-y-4 p-6">
+        <div className="flex items-center justify-between border-b pb-4">
           <div>
             <p className="text-sm text-muted-foreground">Amount</p>
             <p
@@ -96,15 +190,15 @@ export function TransactionDetailsPanel({
         </div>
 
         <div className="space-y-3">
-          <div className="flex justify-between text-sm gap-4">
-            <span className="text-muted-foreground shrink-0">What</span>
-            <span className="font-medium text-right">{transaction.description}</span>
+          <div className="flex justify-between gap-4 text-sm">
+            <span className="shrink-0 text-muted-foreground">What</span>
+            <span className="text-right font-medium">{transaction.description}</span>
           </div>
 
-          <div className="flex justify-between text-sm gap-4">
-            <span className="text-muted-foreground shrink-0">Transaction ID</span>
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="font-medium text-sm truncate">{transaction.id}</span>
+          <div className="flex justify-between gap-4 text-sm">
+            <span className="shrink-0 text-muted-foreground">Transaction ID</span>
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="truncate text-sm font-medium">{transaction.id}</span>
               <Button
                 variant="ghost"
                 size="icon"
@@ -122,15 +216,15 @@ export function TransactionDetailsPanel({
           </div>
 
           {transaction.paymentScheme ? (
-            <div className="flex justify-between text-sm gap-4">
-              <span className="text-muted-foreground shrink-0">Scheme</span>
-              <span className="font-medium text-right">{transaction.paymentScheme}</span>
+            <div className="flex justify-between gap-4 text-sm">
+              <span className="shrink-0 text-muted-foreground">Scheme</span>
+              <span className="text-right font-medium">{transaction.paymentScheme}</span>
             </div>
           ) : null}
 
-          <div className="flex justify-between text-sm gap-4">
-            <span className="text-muted-foreground shrink-0">When</span>
-            <span className="font-medium text-right">
+          <div className="flex justify-between gap-4 text-sm">
+            <span className="shrink-0 text-muted-foreground">When</span>
+            <span className="text-right font-medium">
               {new Date(transaction.date).toLocaleDateString("en-US", {
                 year: "numeric",
                 month: "long",
@@ -162,17 +256,17 @@ export function TransactionDetailsPanel({
 
           {(isBank || isStablecoin || isCard) &&
           transaction.counterpartyName &&
-          !showBankDepositTracker ? (
-            <div className="flex justify-between text-sm gap-4">
-              <span className="text-muted-foreground shrink-0">{partyLabel}</span>
-              <span className="font-medium text-right">{transaction.counterpartyName}</span>
+          !showLifecycleTracker ? (
+            <div className="flex justify-between gap-4 text-sm">
+              <span className="shrink-0 text-muted-foreground">{partyLabel}</span>
+              <span className="text-right font-medium">{transaction.counterpartyName}</span>
             </div>
           ) : null}
 
           {transaction.sendNote ? (
-            <div className="flex justify-between text-sm gap-4">
-              <span className="text-muted-foreground shrink-0">Note</span>
-              <span className="font-medium text-right">{transaction.sendNote}</span>
+            <div className="flex justify-between gap-4 text-sm">
+              <span className="shrink-0 text-muted-foreground">Note</span>
+              <span className="text-right font-medium">{transaction.sendNote}</span>
             </div>
           ) : null}
 
@@ -185,26 +279,26 @@ export function TransactionDetailsPanel({
             </div>
           )}
 
-          {showBankDepositTracker && transaction.narration ? (
-            <div className="flex justify-between text-sm gap-4">
-              <span className="text-muted-foreground shrink-0">Narration</span>
-              <span className="font-medium text-right">{transaction.narration}</span>
+          {showLifecycleTracker && transaction.narration ? (
+            <div className="flex justify-between gap-4 text-sm">
+              <span className="shrink-0 text-muted-foreground">Narration</span>
+              <span className="text-right font-medium">{transaction.narration}</span>
             </div>
           ) : null}
 
-          {showBankDepositTracker &&
+          {showLifecycleTracker &&
           transaction.postedAmount != null &&
           transaction.postedAmount > 0 ? (
-            <div className="flex justify-between text-sm gap-4">
-              <span className="text-muted-foreground shrink-0">Amount credited</span>
-              <span className="font-medium text-right">
+            <div className="flex justify-between gap-4 text-sm">
+              <span className="shrink-0 text-muted-foreground">Amount credited</span>
+              <span className="text-right font-medium">
                 {formatCurrency(transaction.postedAmount, displayCurrency)}
               </span>
             </div>
           ) : null}
         </div>
 
-        {showBankDepositTracker && transaction.lifecycle ? (
+        {showLifecycleTracker && transaction.lifecycle ? (
           <div className="border-t pt-4">
             <TransactionLifecycleTracker lifecycle={transaction.lifecycle} />
           </div>
@@ -225,7 +319,7 @@ export function TransactionDetailsPanel({
           </div>
         ) : null}
 
-        <div className="pt-4 border-t space-y-2">
+        <div className="space-y-2 border-t pt-4">
           {transaction.invoiceId && (
             <Button variant="outline" className="w-full gap-2 bg-transparent" asChild>
               <Link href={withReturnTo(`/invoices/${transaction.invoiceId}`, txHere)}>
@@ -235,7 +329,7 @@ export function TransactionDetailsPanel({
             </Button>
           )}
           {!omitTrackStatus &&
-            !showBankDepositTracker &&
+            !showLifecycleTracker &&
             (transaction.transferId || transaction.id.startsWith("ETID")) &&
             (transaction.status === "pending" || transaction.status === "processing") && (
               <Button variant="outline" className="w-full gap-2 bg-transparent" asChild>

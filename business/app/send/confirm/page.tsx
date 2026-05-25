@@ -4,23 +4,23 @@ import { useState, useEffect, useRef, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
-import { useBusinessProfile } from "@/lib/use-business-profile"
 import { Card, CardContent } from "@/components/ui/card"
+import { useBusinessProfile } from "@/lib/use-business-profile"
 import { PinChallengeDialog } from "@/components/app-lock/pin-challenge-dialog"
 import { useAuth } from "@/lib/auth-context"
 import { hasPin, isLoginPinModuleAvailable } from "@/lib/login-pin"
 import {
   computeBalancePayoutExchangeFee,
-  formatMoneyDisplay,
   formatPayoutArrivalHint,
-  formatSendRateLabel,
+  getGlobalPayoutProcessingTime,
+  getGlobalPayoutTransferMethod,
 } from "@easner/shared"
 import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 import type { Beneficiary } from "@/lib/recipient-types"
 import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
-import { CurrencyFlag } from "@/components/flags"
 import { SendSelectedRecipientSummary } from "@/components/send/send-selected-recipient-summary"
+import { PayoutReviewDetailsRows } from "@/components/transactions/payout-review-details-rows"
 import { generateTransactionId, isEasnerClientTransactionIdFormat } from "@/lib/transaction-id"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { dataCache, CACHE_KEYS, requestBusinessAccountsRefresh } from "@/lib/cache"
@@ -34,7 +34,7 @@ import {
   mapPayoutQuoteToFlowState,
 } from "@/lib/noah/map-payout-quote-to-flow"
 import { useQuoteCountdown } from "@/hooks/use-quote-countdown"
-import { ArrowLeft, Copy, Check, Loader2 } from "lucide-react"
+import { ArrowLeft, Loader2 } from "lucide-react"
 
 const SEND_FLOW_STATE_KEY_LOCAL = SEND_FLOW_STATE_KEY
 
@@ -46,27 +46,15 @@ function isWalletRecipient(recipient: Beneficiary): boolean {
   return Boolean(recipient.walletNetwork) || /wallet/i.test(recipient.bankName || "")
 }
 
-function getTransferMethod(recipient: Beneficiary, currency: string): string {
-  if (isEasenetRecipient(recipient)) return "Easetag (wallet-to-wallet)"
-  if (currency === "USD" && recipient.country === "United States") return "ACH"
-  if (currency === "EUR") return "SEPA"
-  if (currency === "GBP" && recipient.country === "United Kingdom") return "Faster Payments"
-  return "Wire Transfer"
-}
-
-function getProcessingTime(method: string): string {
-  switch (method) {
-    case "Easetag (wallet-to-wallet)":
-      return "Usually instant"
-    case "ACH":
-      return "1-3 business days"
-    case "SEPA":
-      return "1-2 business days"
-    case "Faster Payments":
-      return "Within minutes"
-    default:
-      return "Same day"
-  }
+function corridorTransferMethod(recipient: Beneficiary, currency: string): string {
+  return getGlobalPayoutTransferMethod({
+    currency,
+    countryCode: recipient.countryCode,
+    country: recipient.country,
+    bankName: recipient.bankName,
+    mobileProvider: recipient.mobileProvider,
+    payeeEasetag: recipient.payeeEasetag,
+  })
 }
 
 export default function SendConfirmPage() {
@@ -304,6 +292,35 @@ export default function SendConfirmPage() {
           ? state.transactionId.trim().toUpperCase()
           : ""
 
+      const transferMethod = corridorTransferMethod(state.recipient, state.receiveCurrency)
+      const processingTime = arrivalHint ?? getGlobalPayoutProcessingTime(transferMethod)
+      const reviewYouSend =
+        state.receiveCurrency !== state.sendCurrency && pq!.midRate && pq!.midRate > 0
+          ? state.amount / pq!.midRate
+          : state.sendAmount
+      const reviewExchangeRate =
+        state.receiveCurrency !== state.sendCurrency && pq!.midRate && pq!.midRate > 0
+          ? pq!.midRate
+          : state.receiveCurrency !== state.sendCurrency && state.amount > 0
+            ? state.amount / pq!.totalDebited
+            : 1
+      const reviewSnapshot = {
+        you_send_amount: reviewYouSend,
+        total_debited: pq!.totalDebited,
+        exchange_fee: computeBalancePayoutExchangeFee(
+          pq!.totalDebited,
+          reviewYouSend,
+          pq!.easnerFee ?? 0,
+        ),
+        processing_fee: pq!.easnerFee ?? 0,
+        exchange_rate: reviewExchangeRate,
+        send_currency: state.sendCurrency,
+        receive_amount: state.amount,
+        receive_currency: state.receiveCurrency,
+        transfer_method: transferMethod,
+        processing_time: processingTime,
+      }
+
       const transferBody = {
         amount: state.amount.toFixed(2),
         currency: state.receiveCurrency.toLowerCase(),
@@ -316,6 +333,7 @@ export default function SendConfirmPage() {
         ...(payoutEtid ? { reservedDebitEtid: payoutEtid } : {}),
         ...(state.note ? { note: state.note } : {}),
         ...(state.paymentPurpose ? { paymentPurpose: state.paymentPurpose } : {}),
+        reviewSnapshot,
       }
 
       const transferRes = await fetchWithSession("/api/noah/transfers", {
@@ -383,21 +401,29 @@ export default function SendConfirmPage() {
   }
 
   const sourceAccount = sourceAccounts.find((a) => a.id === state.sourceAccountId!)
-  const transferMethod = getTransferMethod(state.recipient, state.receiveCurrency)
-  const processingTime = arrivalHint ?? getProcessingTime(transferMethod)
+  const transferMethod = corridorTransferMethod(state.recipient, state.receiveCurrency)
+  const processingTime = arrivalHint ?? getGlobalPayoutProcessingTime(transferMethod)
   const easenetSend = isEasenetRecipient(state.recipient)
   const hasFx = !easenetSend && state.receiveCurrency !== state.sendCurrency
   const pq = state.payoutQuote
   const quoteReady = easenetSend || Boolean(pq?.formSessionId)
   const easnerFee = pq?.easnerFee ?? 0
   const easnerFeeCurrency = pq?.easnerFeeCurrency ?? state.sendCurrency
+  const youSendAmount =
+    hasFx && pq?.midRate && pq.midRate > 0
+      ? state.amount / pq.midRate
+      : state.sendAmount
+  const exchangeRate =
+    hasFx && pq?.midRate && pq.midRate > 0
+      ? pq.midRate
+      : hasFx && state.amount > 0 && (pq?.totalDebited ?? state.sendAmount) > 0
+        ? state.amount / (pq?.totalDebited ?? state.sendAmount)
+        : 1
   const exchangeFee = computeBalancePayoutExchangeFee(
     pq?.totalDebited ?? 0,
-    state.sendAmount,
+    youSendAmount,
     easnerFee,
   )
-  const exchangeRate =
-    hasFx && state.amount > 0 ? state.sendAmount / state.amount : 1
 
   const authorizeDisabled =
     isAuthorizing ||
@@ -410,107 +436,45 @@ export default function SendConfirmPage() {
         <h1 className="text-2xl font-semibold text-foreground">Review transfer</h1>
       </div>
 
-      <Card>
-        <CardContent className="space-y-4 p-6">
-          <div className="flex items-center justify-between gap-2 border-b pb-4">
-            <span className="text-sm text-muted-foreground">Transaction ID</span>
-            <button
-              type="button"
-              className="flex items-center gap-2 font-mono text-sm font-medium transition-colors hover:text-primary"
-              onClick={() => {
-                void handleCopy(displayTransactionId, "transactionId")
-              }}
-              aria-label="Copy transaction id"
-            >
-              {displayTransactionId}
-              {copiedKey === "transactionId" ? (
-                <Check className="h-4 w-4 shrink-0 text-primary" />
-              ) : (
-                <Copy className="h-4 w-4 shrink-0" />
-              )}
-            </button>
-          </div>
-          <div className="flex items-center justify-between border-b pb-4">
-            <span className="text-sm text-muted-foreground">You send</span>
-            <span className="text-xl font-semibold">
-              {formatMoneyDisplay(state.sendAmount, state.sendCurrency)}
-            </span>
-          </div>
-          {sourceAccount && state.paymentMethod === "balance" ? (
-            <div className="flex items-center justify-between border-b pb-4">
-              <span className="text-sm text-muted-foreground">From</span>
-              <div className="flex shrink-0 items-center gap-2 font-medium">
-                <CurrencyFlag currency={sourceAccount.currency} size={22} className="shrink-0" />
-                <span>{sourceAccount.currency} Balance</span>
-              </div>
-            </div>
-          ) : null}
-          {!easenetSend && quoteReady ? (
-            <>
-              <div className="flex items-center justify-between border-b pb-4">
-                <span className="text-sm text-muted-foreground">Exchange fee</span>
-                <span className="font-semibold">
-                  {formatMoneyDisplay(exchangeFee, state.sendCurrency)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between border-b pb-4">
-                <span className="text-sm text-muted-foreground">Processing fee</span>
-                <span className="font-semibold">
-                  {formatMoneyDisplay(easnerFee, easnerFeeCurrency)}
-                </span>
-              </div>
-              {hasFx ? (
-                <div className="flex items-center justify-between border-b pb-4">
-                  <span className="text-sm text-muted-foreground">Exchange rate</span>
-                  <span className="font-semibold">
-                    {formatSendRateLabel(state.sendCurrency, state.receiveCurrency, exchangeRate)}
-                  </span>
-                </div>
-              ) : null}
-              {!easenetSend && (pq?.totalDebited ?? 0) > 0 ? (
-                <div className="flex items-center justify-between border-b pb-4">
-                  <span className="text-sm text-muted-foreground">Total debited</span>
-                  <span className="text-xl font-semibold">
-                    {formatMoneyDisplay(pq!.totalDebited, state.sendCurrency)}
-                  </span>
-                </div>
-              ) : null}
-            </>
-          ) : null}
-          <div className="flex items-center justify-between border-b pb-4">
-            <span className="text-sm text-muted-foreground">Recipient gets</span>
-            <span className="font-semibold">
-              {formatMoneyDisplay(state.amount, state.receiveCurrency)}
-            </span>
-          </div>
-          <div className="flex items-center justify-between gap-3 border-b pb-4">
-            <span className="shrink-0 text-sm text-muted-foreground">Recipient</span>
-            <SendSelectedRecipientSummary
-              beneficiary={state.recipient}
-              alignEnd
-              className="min-w-0 max-w-[70%] shrink-0"
-            />
-          </div>
-          <div className="flex items-center justify-between border-b pb-4">
-            <span className="text-sm text-muted-foreground">Transfer method</span>
-            <span className="font-medium">{transferMethod}</span>
-          </div>
-          <div className="flex items-center justify-between border-b pb-4">
-            <span className="text-sm text-muted-foreground">Processing time</span>
-            <span className="font-medium">{processingTime}</span>
-          </div>
-          {payoutQuoteError && !easenetSend ? (
-            <p className="text-sm text-destructive">{payoutQuoteError}</p>
-          ) : null}
-          {!easenetSend && pq?.expiresAt ? (
-            <div className="text-xs text-muted-foreground">
-              {quoteCountdown.expired
-                ? "Quote expired — go back and continue again for a fresh quote."
-                : `Quote valid for ${quoteCountdown.label}`}
-            </div>
-          ) : null}
-        </CardContent>
-      </Card>
+      <PayoutReviewDetailsRows
+        transactionId={displayTransactionId}
+        payoutReview={{
+          you_send_amount: youSendAmount,
+          total_debited: pq?.totalDebited ?? state.sendAmount,
+          exchange_fee: exchangeFee,
+          processing_fee: easnerFee,
+          exchange_rate: exchangeRate,
+          send_currency: state.sendCurrency,
+          receive_amount: state.amount,
+          receive_currency: state.receiveCurrency,
+          transfer_method: transferMethod,
+          processing_time: processingTime,
+        }}
+        recipientNode={
+          <SendSelectedRecipientSummary
+            beneficiary={state.recipient}
+            alignEnd
+            className="min-w-0 max-w-[70%] shrink-0"
+          />
+        }
+        sourceAccountCurrency={
+          sourceAccount && state.paymentMethod === "balance" ? sourceAccount.currency : null
+        }
+        copiedKey={copiedKey}
+        onCopy={handleCopy}
+        showFeeBreakdown={!easenetSend && quoteReady}
+      />
+
+      {payoutQuoteError && !easenetSend ? (
+        <p className="text-sm text-destructive">{payoutQuoteError}</p>
+      ) : null}
+      {!easenetSend && pq?.expiresAt ? (
+        <div className="text-xs text-muted-foreground">
+          {quoteCountdown.expired
+            ? "Quote expired — go back and continue again for a fresh quote."
+            : `Quote valid for ${quoteCountdown.label}`}
+        </div>
+      ) : null}
 
       {authorizeError ? (
         <p className="text-sm text-red-600" role="alert">

@@ -8,7 +8,7 @@ import { resolveNoahCustomerTarget } from "@/lib/noah/resolve-noah-customer-targ
 import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
 import { mapNoahVerificationToKycStatus } from "@/lib/noah/map-kyc"
 import { pickTxAmountAndCurrency } from "@/lib/noah/map-transactions"
-import { pickNoahGlobalPayoutLedgerFields, isNoahGlobalPayoutSellTx, findPendingGlobalPayoutByExternalId, linkPendingGlobalPayoutToNoahTransactionId, settlementWalletCurrencyForNoahCrypto } from "@/lib/noah/global-payout-ledger"
+import { pickNoahGlobalPayoutLedgerFields, isNoahGlobalPayoutSellTx, isNoahGlobalPayoutOrchestrationInLeg, extractNoahGlobalPayoutPayOutEnrichment, buildNoahGlobalPayoutPayOutMetadata, findPendingGlobalPayoutByExternalId, linkPendingGlobalPayoutToNoahTransactionId, linkGlobalPayoutOutRowFromOrchestrationIn, settlementWalletCurrencyForNoahCrypto } from "@/lib/noah/global-payout-ledger"
 import {
   buildNoahBankPayInLedgerMetadata,
   buildNoahOrchestrationOutLegMetadata,
@@ -200,7 +200,19 @@ export async function applyNoahWebhookSideEffects(
         const ruleExecutionId = pickNoahOrchestrationRuleExecutionId(txData)
         const isOrchestrationOut = isNoahBankOnrampOrchestrationOutLeg(txData)
         const payInEnrichment = extractNoahBankPayInEnrichment(txData)
+        const globalPayoutOrchestrationIn =
+          isNoahGlobalPayoutOrchestrationInLeg(txData) && externalId
+            ? await findPendingGlobalPayoutByExternalId(admin, externalId)
+            : null
 
+        if (globalPayoutOrchestrationIn) {
+          await linkGlobalPayoutOutRowFromOrchestrationIn(admin, {
+            outRowId: globalPayoutOrchestrationIn.id,
+            priorMetadata: globalPayoutOrchestrationIn.metadata,
+            ruleExecutionId,
+            solanaTxHash: pickTxHash(txData),
+          })
+        } else {
         let metadata: Record<string, unknown> = { source: "webhook_transaction" }
         if (autopayoutConfigId) {
           metadata.collection_channel = "autopayout"
@@ -253,6 +265,7 @@ export async function applyNoahWebhookSideEffects(
         }
 
         const isGlobalPayoutSell = isNoahGlobalPayoutSellTx(txData)
+        const payoutEnrichment = isGlobalPayoutSell ? extractNoahGlobalPayoutPayOutEnrichment(txData) : null
         let ledgerAmount = amount
         let ledgerCurrency = currency
         let ledgerBaseCurrency = currency
@@ -309,6 +322,7 @@ export async function applyNoahWebhookSideEffects(
             noah_transaction_id: id,
             ...(externalId ? { easner_payout_id: externalId } : {}),
             ...(priorCrypto ? { crypto_authorized_amount: priorCrypto } : {}),
+            ...(payoutEnrichment ? buildNoahGlobalPayoutPayOutMetadata(txData, payoutEnrichment) : {}),
           }
         }
 
@@ -368,6 +382,7 @@ export async function applyNoahWebhookSideEffects(
               businessId,
             })
           }
+        }
         }
       }
 

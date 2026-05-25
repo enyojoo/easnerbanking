@@ -136,6 +136,13 @@ export default function TransactionsPage() {
 
   const amountInBase = (t: TransactionWithSource): number => {
     if (
+      typeof t.ledgerAmount === "number" &&
+      Number.isFinite(t.ledgerAmount) &&
+      String(t.ledgerCurrency || t.baseCurrency || "").toUpperCase() === baseCurrencyCode
+    ) {
+      return Math.abs(t.ledgerAmount)
+    }
+    if (
       typeof t.baseAmount === "number" &&
       Number.isFinite(t.baseAmount) &&
       String(t.baseCurrency || "").toUpperCase() === baseCurrencyCode

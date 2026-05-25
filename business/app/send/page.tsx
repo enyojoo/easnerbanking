@@ -101,6 +101,7 @@ export default function SendPage() {
   const [amountFieldError, setAmountFieldError] = useState<string | null>(null)
   const [sourceSheetOpen, setSourceSheetOpen] = useState(false)
   const payoutQuoteCacheRef = useRef<{ key: string; quote: PayoutQuoteResult } | null>(null)
+  const [payoutQuotePreview, setPayoutQuotePreview] = useState<PayoutQuoteResult | null>(null)
   const [noahFxRates, setNoahFxRates] = useState<Record<string, number>>({})
 
   useEffect(() => {
@@ -273,6 +274,9 @@ export default function SendPage() {
 
   const sendAmount = flowAmounts.sendAmount
   const receiveAmount = flowAmounts.receiveAmount
+  const quotedTotalDebited = payoutQuotePreview?.totalDebited
+  const balanceDebitAmount =
+    quotedTotalDebited != null && quotedTotalDebited > 0 ? quotedTotalDebited : sendAmount
 
   const hasFx =
     receiveCurrency !== sendCurrency && receiveAmount > 0 && sendAmount > 0
@@ -281,19 +285,19 @@ export default function SendPage() {
 
   const displayBalanceForSource =
     sourceAccount && paymentMethod === "balance"
-      ? sourceAccount.availableBalance - (sendAmount > 0 ? sendAmount : 0)
+      ? sourceAccount.availableBalance - (balanceDebitAmount > 0 ? balanceDebitAmount : 0)
       : 0
 
   const suggestedAccount = useMemo(() => {
     const usdAccount = sourceAccounts.find((a) => a.currency === "USD")
     if (!recipient || receiveAmount <= 0) return usdAccount ?? sourceAccounts[0]
     const matching = sourceAccounts.find(
-      (a) => a.currency === receiveCurrency && a.availableBalance >= sendAmount
+      (a) => a.currency === receiveCurrency && a.availableBalance >= balanceDebitAmount
     )
     if (matching) return matching
-    const sufficient = sourceAccounts.find((a) => a.availableBalance >= sendAmount)
+    const sufficient = sourceAccounts.find((a) => a.availableBalance >= balanceDebitAmount)
     return sufficient ?? usdAccount ?? sourceAccounts[0]
-  }, [recipient, receiveAmount, receiveCurrency, sendAmount, sourceAccounts])
+  }, [recipient, receiveAmount, receiveCurrency, balanceDebitAmount, sourceAccounts])
 
   useEffect(() => {
     if (recipient && !sourceAccountId && paymentMethod === "balance" && suggestedAccount) {
@@ -397,7 +401,7 @@ export default function SendPage() {
     receiveAmount > 0 &&
     sourceAccountId !== null &&
     sourceAccount &&
-    sourceAccount.availableBalance >= sendAmount &&
+    sourceAccount.availableBalance >= balanceDebitAmount &&
     isBalanceSource &&
     tier1Complete &&
     !payoutReceiveBelowMin &&
@@ -419,7 +423,7 @@ export default function SendPage() {
     isBalanceSource &&
     sourceAccount &&
     receiveAmount > 0 &&
-    sourceAccount.availableBalance < sendAmount
+    sourceAccount.availableBalance < balanceDebitAmount
 
   const formatSwitchAmount = (raw: number): string => {
     const rounded = Math.round((Number.isFinite(raw) ? raw : 0) * 100) / 100
@@ -506,8 +510,9 @@ export default function SendPage() {
           }
           if (!res.ok || !data.ok || !data.quote || cancelled) return
           payoutQuoteCacheRef.current = { key: payoutQuoteCacheKey, quote: data.quote }
+          setPayoutQuotePreview(data.quote)
         } catch {
-          // silent — confirm can refresh if needed
+          if (!cancelled) setPayoutQuotePreview(null)
         }
       })()
     }, 450)
@@ -791,7 +796,7 @@ export default function SendPage() {
                 <p className="text-sm font-medium text-muted-foreground mb-2">From Balance</p>
                 <div className="space-y-1">
                   {sourceAccounts.map((acc) => {
-                    const sufficient = acc.availableBalance >= sendAmount
+                    const sufficient = acc.availableBalance >= balanceDebitAmount
                     const isSelected =
                       paymentMethod === "balance" && sourceAccountId === acc.id
                     return (

@@ -16,6 +16,10 @@ import {
   isBankOnrampPayInRow,
 } from "@/lib/transactions/bank-deposit-detail"
 import {
+  attachGlobalPayoutDetailFieldsAsync,
+  isGlobalPayoutOffRampRow,
+} from "@/lib/transactions/global-payout-detail"
+import {
   isTurnkeyNoahBankOnrampChainMirror,
   isTurnkeyTransactionHiddenFromFeed,
 } from "@/lib/transactions/transaction-feed-filters"
@@ -27,6 +31,7 @@ import {
   toEasnerTransactionProductCategory,
 } from "@easner/shared"
 import { enrichBankDepositLedgerRows } from "@/lib/transactions/enrich-bank-deposit-ledger-rows"
+import { resolveGlobalPayoutOffRampDetail } from "@/lib/transactions/resolve-global-payout-off-ramp"
 
 const LEDGER_SELECT =
   "id, easner_transaction_id, provider, provider_transaction_id, status, amount, currency, direction, metadata, payload, created_at, updated_at, occurred_at, settled_at, tx_hash, wallet_address, counterparty_address, asset, chain, base_currency, base_amount"
@@ -300,6 +305,7 @@ export async function GET(request: Request, routeCtx: Props) {
   }
 
   transaction = await attachBankDepositDetailFieldsAsync(admin, rec, transaction)
+  transaction = await attachGlobalPayoutDetailFieldsAsync(admin, rec, transaction)
 
   if (scope === "business") {
     const [enrichedRec] = await enrichBankDepositLedgerRows(admin, [rec])
@@ -362,6 +368,57 @@ export async function GET(request: Request, routeCtx: Props) {
                   (transaction.metadata as Record<string, unknown>).deposit_scheme_label,
                 )
               : "ACH",
+      }
+    } else if (isGlobalPayoutOffRampRow(rec)) {
+      businessTransaction = {
+        ...businessTransaction,
+        amount:
+          typeof transaction.display_amount === "number"
+            ? transaction.display_amount
+            : businessTransaction.amount,
+        displayCurrency:
+          typeof transaction.display_currency === "string"
+            ? String(transaction.display_currency)
+            : businessTransaction.displayCurrency,
+        description:
+          typeof transaction.display_description === "string"
+            ? String(transaction.display_description)
+            : businessTransaction.description,
+        displayHeroTitle:
+          typeof transaction.display_hero_title === "string"
+            ? String(transaction.display_hero_title)
+            : businessTransaction.displayHeroTitle,
+        baseAmount:
+          typeof transaction.ledger_amount === "number"
+            ? transaction.ledger_amount
+            : businessTransaction.baseAmount,
+        baseCurrency:
+          typeof transaction.ledger_currency === "string"
+            ? String(transaction.ledger_currency)
+            : businessTransaction.baseCurrency,
+        ledgerAmount:
+          typeof transaction.ledger_amount === "number"
+            ? transaction.ledger_amount
+            : businessTransaction.ledgerAmount,
+        ledgerCurrency:
+          typeof transaction.ledger_currency === "string"
+            ? String(transaction.ledger_currency)
+            : businessTransaction.ledgerCurrency,
+        lifecycle: (transaction.lifecycle as typeof businessTransaction.lifecycle) ?? undefined,
+        payoutReview:
+          (transaction.payout_review as typeof businessTransaction.payoutReview) ??
+          businessTransaction.payoutReview,
+        recipientSnapshot:
+          (transaction.recipient_snapshot as typeof businessTransaction.recipientSnapshot) ??
+          businessTransaction.recipientSnapshot,
+        sendNote:
+          typeof transaction.send_note === "string"
+            ? transaction.send_note
+            : businessTransaction.sendNote,
+        counterpartyName:
+          typeof transaction.display_description === "string"
+            ? String(transaction.display_description)
+            : businessTransaction.counterpartyName,
       }
     }
     return NextResponse.json({ transaction, businessTransaction })

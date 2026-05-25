@@ -3,11 +3,14 @@ import {
   deriveEasnerInboundRemitterDisplayName,
   deriveVerificationBankName,
   formatDisplayPersonName,
+  formatMoneyDisplay,
   isBankOnrampDepositFlow,
+  isGlobalPayoutOffRampFlow,
   isVerificationDepositMetadata,
   toEasnerTransactionProductCategory,
 } from "@easner/shared"
 import { formatCurrency } from "@/lib/utils"
+import { normalizePayoutReviewSnapshot } from "@/lib/noah/build-payout-execute-snapshot"
 
 type LedgerDirection = "in" | "out"
 
@@ -127,6 +130,37 @@ export function buildTransactionSettledPushContent(input: TransactionSettledCont
       body: outboundEasetag
         ? `Sent ${amountText} to @${outboundEasetag}`
         : `Sent ${amountText}`,
+    }
+  }
+
+  if (direction === "out" && isGlobalPayoutOffRampFlow(meta)) {
+    const payoutReview = normalizePayoutReviewSnapshot(meta?.payout_review)
+    const receiveAmount =
+      payoutReview?.receive_amount ??
+      (typeof meta?.receive_amount === "number" ? meta.receive_amount : null)
+    const receiveCurrency = String(
+      payoutReview?.receive_currency ?? meta?.receive_currency ?? meta?.fiat_currency ?? "",
+    ).toUpperCase()
+    const recipientRaw =
+      (typeof (meta?.recipient_snapshot as Record<string, unknown> | undefined)?.full_name ===
+      "string"
+        ? String((meta?.recipient_snapshot as Record<string, unknown>).full_name)
+        : "") ||
+      deriveOutboundCounterpartyName({ metadata: meta, payload: input.payload ?? null }) ||
+      ""
+    const recipientName = formatDisplayPersonName(recipientRaw) || recipientRaw
+    const amountDisplay =
+      receiveAmount != null && receiveCurrency
+        ? formatMoneyDisplay(receiveAmount, receiveCurrency)
+        : amountText
+    const transferMethod =
+      payoutReview?.transfer_method ||
+      (typeof meta?.transfer_method === "string" ? String(meta.transfer_method) : "Bank transfer")
+    return {
+      title: transferMethod,
+      body: recipientName
+        ? `Sent ${amountDisplay} to ${recipientName}`
+        : `Sent ${amountDisplay}`,
     }
   }
 

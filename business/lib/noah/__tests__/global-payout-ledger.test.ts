@@ -1,9 +1,72 @@
 import { describe, expect, it } from "vitest"
 import {
+  extractNoahGlobalPayoutPayOutEnrichment,
+  isNoahGlobalPayoutOrchestrationInLeg,
   isNoahGlobalPayoutSellTx,
   pendingGlobalPayoutProviderTransactionId,
   pickNoahGlobalPayoutLedgerFields,
 } from "@/lib/noah/global-payout-ledger"
+
+describe("isNoahGlobalPayoutOrchestrationInLeg", () => {
+  it("matches Solana IN orchestration leg for global payout", () => {
+    expect(
+      isNoahGlobalPayoutOrchestrationInLeg({
+        Direction: "In",
+        Network: "Solana",
+        CryptoCurrency: "USDC",
+        ExternalID: "56ed5056-71fa-44c1-96cc-4b404197f11f",
+        Orchestration: { RuleExecutionID: "9ddfacd4-57de-11f1-a03a-ea31bc6f4dc9" },
+      }),
+    ).toBe(true)
+  })
+
+  it("rejects OffNetwork OUT fiat payout shape", () => {
+    expect(
+      isNoahGlobalPayoutOrchestrationInLeg({
+        Direction: "Out",
+        Network: "OffNetwork",
+        CryptoCurrency: "USDC",
+        ExternalID: "56ed5056-71fa-44c1-96cc-4b404197f11f",
+        FiatPayment: { Amount: "5000", FiatCurrency: "NGN" },
+        Orchestration: { RuleExecutionID: "9ddfacd4-57de-11f1-a03a-ea31bc6f4dc9" },
+      }),
+    ).toBe(false)
+  })
+
+  it("rejects orchestration IN without ExternalID (bank on-ramp shape)", () => {
+    expect(
+      isNoahGlobalPayoutOrchestrationInLeg({
+        Direction: "In",
+        Network: "Solana",
+        CryptoCurrency: "USDC",
+        Orchestration: { RuleExecutionID: "rule-1" },
+      }),
+    ).toBe(false)
+  })
+})
+
+describe("extractNoahGlobalPayoutPayOutEnrichment", () => {
+  it("pulls beneficiary and bank fields from OffNetwork OUT webhook", () => {
+    const enrichment = extractNoahGlobalPayoutPayOutEnrichment({
+      Direction: "Out",
+      CryptoCurrency: "USDC",
+      FiatPayment: { Amount: "5000", FiatCurrency: "NGN", Rate: "1356.04" },
+      FiatPaymentMethod: {
+        Country: "NG",
+        IssuerDetails: { Name: "Kuda" },
+        DisplayDetails: { BankCode: "090267", AccountNumber: "2067816945" },
+        AccountHolderDetails: {
+          Name: { FirstName: "ODIBA,", MiddleName: "ENYOJO", LastName: "SAMUEL" },
+        },
+      },
+    })
+    expect(enrichment?.receiveAmount).toBe(5000)
+    expect(enrichment?.receiveCurrency).toBe("NGN")
+    expect(enrichment?.bankName).toBe("Kuda")
+    expect(enrichment?.accountNumber).toBe("2067816945")
+    expect(enrichment?.beneficiaryName).toContain("SAMUEL")
+  })
+})
 
 describe("isNoahGlobalPayoutSellTx", () => {
   it("matches Noah OUT fiat payout webhook shape", () => {
