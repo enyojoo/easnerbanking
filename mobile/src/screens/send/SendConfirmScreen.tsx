@@ -11,6 +11,9 @@ import {
   findPayoutFieldsSchema,
   formatMoneyDisplay,
   formatPayoutArrivalHint,
+  formatSendRateLabel,
+  getGlobalPayoutProcessingTime,
+  getGlobalPayoutTransferMethod,
   getSendAmountNoteFieldUi,
   qk,
 } from '@easner/shared'
@@ -187,16 +190,39 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   const displayTransactionId = paramTransactionId ? paramTransactionId.toUpperCase() : null
   const quoteCountdown = useQuoteCountdown(pricingQuoteExpiry)
   const quoteReady = Boolean(easetagUi || payoutSession?.formSessionId)
+  const hasFx =
+    !easetagUi &&
+    selectedBalanceCurrency.toUpperCase() !== receiveCurrency.toUpperCase()
+  const customerRate = useMemo(() => {
+    const stashed = peekSendPayoutQuote()
+    const rate = stashed?.noah?.rate ?? pricingQuoteResult?.providerRate ?? 0
+    return Number.isFinite(rate) && rate > 0 ? rate : 0
+  }, [pricingQuoteResult?.providerRate, payoutSession?.formSessionId, calculatedTotalAmount])
+  const youSendAmount = useMemo(() => {
+    if (!hasFx) return calculatedSendingAmount
+    if (customerRate > 0) return receiveAmountValue / customerRate
+    return calculatedSendingAmount
+  }, [hasFx, customerRate, receiveAmountValue, calculatedSendingAmount])
   const processingFee = easnerFee || calculatedFeeAmount
   const exchangeFee = useMemo(
     () =>
       computeBalancePayoutExchangeFee(
         calculatedTotalAmount,
-        calculatedSendingAmount,
+        youSendAmount,
         processingFee,
       ),
-    [calculatedTotalAmount, calculatedSendingAmount, processingFee],
+    [calculatedTotalAmount, youSendAmount, processingFee],
   )
+  const transferMethod = recipient
+    ? getGlobalPayoutTransferMethod({
+        currency: receiveCurrency,
+        countryCode: recipient.country_code,
+        bankName: recipient.bank_name,
+        mobileProvider: recipient.mobile_provider,
+        payeeEasetag: recipient.payee_easetag,
+      })
+    : 'Bank transfer'
+  const processingTime = arrivalHint ?? getGlobalPayoutProcessingTime(transferMethod)
 
   const [sendingAfterPin, setSendingAfterPin] = useState(false)
   const [transferError, setTransferError] = useState<string | null>(null)
@@ -216,7 +242,10 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           stashed.easner.pricingTotals?.total_easner_fee ?? stashed.easner.totalFeeAmount ?? 0
         setPricing((prev) => ({
           ...prev,
-          calculatedSendingAmount: amountScreenSendAmount,
+          calculatedSendingAmount:
+            stashed.noah.rate && stashed.noah.rate > 0
+              ? receiveAmountValue / stashed.noah.rate
+              : amountScreenSendAmount,
           calculatedFeeAmount: easnerFeeAmt,
           calculatedTotalAmount: stashed.totalDebited,
           noahFee: stashed.noah.totalFee,
@@ -254,6 +283,10 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           0
         setPricing((prev) => ({
           ...prev,
+          calculatedSendingAmount:
+            pq.noah.rate && pq.noah.rate > 0
+              ? receiveAmountValue / pq.noah.rate
+              : amountScreenSendAmount,
           noahFee: pq.noah.totalFee,
           easnerFee: easnerFeeAmt,
           calculatedFeeAmount: easnerFeeAmt,
@@ -291,6 +324,22 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       void (async () => {
         setSendingAfterPin(true)
         try {
+          const reviewSnapshot =
+            hasFx && customerRate > 0 && calculatedTotalAmount > 0
+              ? {
+                  you_send_amount: youSendAmount,
+                  total_debited: calculatedTotalAmount,
+                  exchange_fee: exchangeFee,
+                  processing_fee: processingFee,
+                  exchange_rate: customerRate,
+                  send_currency: selectedBalanceCurrency,
+                  receive_amount: receiveAmountValue,
+                  receive_currency: receiveCurrency,
+                  transfer_method: transferMethod,
+                  processing_time: processingTime,
+                }
+              : undefined
+
           const { detailId } = await executeBalanceSend(
             {
               recipient,
@@ -298,6 +347,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
               receiveAmountValue,
               selectedBalanceCurrency,
               ...(payoutSession ? { payoutSession } : {}),
+              ...(reviewSnapshot ? { reviewSnapshot } : {}),
               ...(sendReservedDebitEtid ? { reservedDebitEtid: sendReservedDebitEtid } : {}),
               ...(sendNote ? { note: sendNote } : {}),
               ...(sendPaymentPurpose ? { paymentPurpose: sendPaymentPurpose } : {}),
@@ -470,10 +520,20 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
             <View style={styles.card}>
               <Row
                 label="You send"
-                value={formatMoneyDisplay(calculatedSendingAmount, selectedBalanceCurrency)}
+                value={formatMoneyDisplay(youSendAmount, selectedBalanceCurrency)}
               />
               {selectedBalanceCurrency === 'USD' || selectedBalanceCurrency === 'EUR' ? (
                 <FromBalanceRow currency={selectedBalanceCurrency} />
+              ) : null}
+              {hasFx && customerRate > 0 ? (
+                <Row
+                  label="Exchange rate"
+                  value={formatSendRateLabel(
+                    selectedBalanceCurrency,
+                    receiveCurrency,
+                    customerRate,
+                  )}
+                />
               ) : null}
               {!easetagUi && quoteReady ? (
                 <>

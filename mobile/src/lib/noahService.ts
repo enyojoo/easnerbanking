@@ -968,6 +968,7 @@ export const noahService = {
     paymentPurpose?: string
     /** Same ETID as review screen; idempotency for PIN retry. */
     reservedDebitEtid?: string
+    reviewSnapshot?: Record<string, unknown>
   }): Promise<NoahTransfer> {
     const session = await requireAuthSession()
     const scopeHeaders = await getNoahScopeHeaders()
@@ -994,6 +995,7 @@ export const noahService = {
         ...(transferData.note ? { note: transferData.note } : {}),
         ...(transferData.paymentPurpose ? { paymentPurpose: transferData.paymentPurpose } : {}),
         ...(etid ? { reservedDebitEtid: etid } : {}),
+        ...(transferData.reviewSnapshot ? { reviewSnapshot: transferData.reviewSnapshot } : {}),
       }),
     })
 
@@ -1131,15 +1133,15 @@ export const noahService = {
   async getNoahExchangeRates(options?: {
     destinations?: string
   }): Promise<
-    Array<{ from_currency: string; to_currency: string; rate: number; as_of?: string }>
+    Array<{ from_currency: string; to_currency: string; rate: number; as_of?: string; noah_mid?: number }>
   > {
     const session = await requireAuthSession()
     const scopeHeaders = await getNoahScopeHeaders()
     const dest = options?.destinations?.trim().toUpperCase()
     const path =
       dest && dest.length === 3
-        ? `/api/noah/exchange-rates?destinations=${encodeURIComponent(dest)}`
-        : "/api/noah/exchange-rates"
+        ? `/api/fx/noah-rates?destinations=${encodeURIComponent(dest)}`
+        : "/api/fx/noah-rates"
     const response = await fetch(`${apiUrl()}${path}`, {
       method: 'GET',
       headers: {

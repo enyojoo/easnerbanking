@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   convertNoahSendFlowAmounts,
   getNoahSendConversionRate,
+  isNoahSendRateRowFresh,
   noahSendRatesQueryPath,
   noahWalletRowsToRateMap,
 } from "./noah-send-rates"
@@ -9,8 +10,33 @@ import {
 describe("noahSendRatesQueryPath", () => {
   it("includes destinations for valid ISO code", () => {
     expect(noahSendRatesQueryPath("ngn")).toBe(
-      "/api/noah/exchange-rates?destinations=NGN",
+      "/api/fx/noah-rates?destinations=NGN",
     )
+  })
+})
+
+describe("isNoahSendRateRowFresh", () => {
+  it("rejects missing as_of and accepts recent rows", () => {
+    expect(isNoahSendRateRowFresh(null)).toBe(false)
+    expect(
+      isNoahSendRateRowFresh({
+        from_currency: "USD",
+        to_currency: "NGN",
+        rate: 1288,
+        as_of: new Date().toISOString(),
+      }),
+    ).toBe(true)
+    expect(
+      isNoahSendRateRowFresh(
+        {
+          from_currency: "USD",
+          to_currency: "NGN",
+          rate: 1288,
+          as_of: new Date(Date.now() - 20 * 60_000).toISOString(),
+        },
+        900_000,
+      ),
+    ).toBe(false)
   })
 })
 

@@ -10,9 +10,10 @@ import {
   PaymentMethodsPanel,
   FiatPanel,
   CryptoPanel,
+  NoahRatesPanel,
 } from "@/components/platform-control/platform-control-panels"
 
-const TABS = ["platform", "rates", "payment-methods", "fiat", "crypto"] as const
+const TABS = ["platform", "rates", "noah-rates", "payment-methods", "fiat", "crypto"] as const
 type PlatformControlTab = (typeof TABS)[number]
 
 function normalizeTab(raw: string | null): string | null {
@@ -57,7 +58,8 @@ function PlatformControlHubBody() {
         <Tabs value={tab} onValueChange={onTabChange} className="space-y-6">
           <TabsList className="flex flex-wrap h-auto gap-1 justify-start">
             <TabsTrigger value="platform">Platform</TabsTrigger>
-            <TabsTrigger value="rates">Rates</TabsTrigger>
+            <TabsTrigger value="rates">P2P rates</TabsTrigger>
+            <TabsTrigger value="noah-rates">Noah rates</TabsTrigger>
             <TabsTrigger value="payment-methods">Payment methods</TabsTrigger>
             <TabsTrigger value="fiat">Fiat</TabsTrigger>
             <TabsTrigger value="crypto">Crypto</TabsTrigger>
@@ -67,6 +69,9 @@ function PlatformControlHubBody() {
           </TabsContent>
           <TabsContent value="rates" className={TAB_CONTENT_CLASS}>
             <RatesPanel />
+          </TabsContent>
+          <TabsContent value="noah-rates" className={TAB_CONTENT_CLASS}>
+            <NoahRatesPanel />
           </TabsContent>
           <TabsContent value="payment-methods" className={TAB_CONTENT_CLASS}>
             <PaymentMethodsPanel />

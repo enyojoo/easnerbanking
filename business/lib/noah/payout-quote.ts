@@ -1,6 +1,6 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { getNoahEurCryptoTicker, getNoahUsdCryptoTicker } from "@/lib/noah/config"
-import { noahImpliedProviderRate } from "@/lib/noah/fx-prices"
+import { findNoahRate, isNoahRateFresh, listNoahRates } from "@/lib/fx/noah-rates"
 import {
   prepareSellFromRecipientRow,
   resolveRecipientPayoutCountry,
@@ -45,8 +45,10 @@ export type PayoutQuoteResult = {
     cryptoAuthorizedAmount: string
     cryptoCurrency: string
     formSessionId: string
-    /** Mid-market destination per 1 source (`/prices` `Rate` field). */
+    /** Customer-facing destination per 1 source (`noah_rates.rate`, margin-applied). */
     rate?: number
+    /** Raw Noah mid from sync (`noah_rates.noah_mid`). */
+    noahMid?: number
     /** All-in destination per 1 source at this ticket (`receive / totalDebited`). */
     effectiveRate?: number
   }
@@ -204,18 +206,22 @@ export async function buildPayoutQuote(input: {
   }
 
   const noahFee = Number.parseFloat(String(prep.totalFee || "0")) || 0
-  const country = String(row.country_code || "").trim().toUpperCase() || undefined
 
   let providerRate = 1
-  try {
-    providerRate = await noahImpliedProviderRate({
-      sourceCurrency: sourceBalanceCurrency,
-      destinationCurrency: receiveCurrency,
-      sourceAmount: sendAmount,
-      country,
+  let noahMid: number | undefined
+  if (sourceBalanceCurrency !== receiveCurrency) {
+    const dbRates = await listNoahRates(admin, {
+      destinations: [receiveCurrency],
+      status: "active",
     })
-  } catch {
-    providerRate = sourceBalanceCurrency === receiveCurrency ? 1 : 1
+    const dbRow = findNoahRate(dbRates, sourceBalanceCurrency, receiveCurrency)
+    if (!dbRow || !isNoahRateFresh(dbRow)) {
+      throw new Error(
+        `Exchange rate for ${sourceBalanceCurrency} → ${receiveCurrency} is unavailable. Try again shortly.`,
+      )
+    }
+    providerRate = dbRow.rate
+    noahMid = dbRow.noah_mid
   }
 
   const easner = buildEasnerSlice({
@@ -242,6 +248,7 @@ export async function buildPayoutQuote(input: {
       cryptoCurrency,
       formSessionId,
       rate: providerRate,
+      ...(noahMid != null && noahMid > 0 ? { noahMid } : {}),
       effectiveRate,
     },
     easner,

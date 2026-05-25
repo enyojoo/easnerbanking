@@ -3,6 +3,10 @@
 import { ArrowDownLeft, ArrowUpRight } from "lucide-react"
 import { formatMoneyDisplay } from "@easner/shared"
 import type { Transaction } from "@/lib/finance-types"
+import {
+  resolveTransactionDetailHeroAmount,
+  resolveTransactionDetailHeroTitle,
+} from "@/lib/transactions/resolve-transaction-detail-hero"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 
@@ -18,12 +22,9 @@ function statusLabel(status: Transaction["status"]): string {
 
 export function TransactionDetailHero({ transaction }: Props) {
   const isCredit = transaction.direction === "credit"
-  const title =
-    transaction.displayHeroTitle?.trim() ||
-    transaction.description ||
-    (isCredit ? "Deposit" : "Transfer")
-  const currency = transaction.displayCurrency || "USD"
-  const amountText = formatMoneyDisplay(Math.abs(transaction.amount), currency)
+  const title = resolveTransactionDetailHeroTitle(transaction)
+  const { amount, currency } = resolveTransactionDetailHeroAmount(transaction)
+  const amountText = formatMoneyDisplay(amount, currency)
   const signedAmount = `${isCredit ? "+" : "-"}${amountText}`
 
   return (

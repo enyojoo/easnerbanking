@@ -26,6 +26,7 @@ import {
 import { collectNoahBankOnrampOnChainTxHashesForScope } from "@/lib/noah/noah-bank-onramp-chain-suppression"
 import {
   deriveEasnerInboundRemitterDisplayName,
+  formatTransactionDetailHeroTitle,
   isEasnerProductReceiveTitle,
   toEasnerTransactionPrimaryLabel,
   toEasnerTransactionProductCategory,
@@ -335,6 +336,11 @@ export async function GET(request: Request, routeCtx: Props) {
       businessTransaction = {
         ...businessTransaction,
         description: displayDescription,
+        displayHeroTitle: formatTransactionDetailHeroTitle({
+          direction: "in",
+          counterpartyName: displayDescription,
+          productFallback: "Bank Deposit",
+        }),
         ...(narrationLabel ? { narration: narrationLabel } : {}),
         ...(displayDescription && displayDescription !== businessTransaction.description
           ? { counterpartyName: displayDescription }

@@ -1,11 +1,18 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "../_helpers"
+import { requireAuth } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { getNoahRatesRefreshTtlMs, listNoahRates, triggerNoahRatesBackgroundRefresh } from "@/lib/fx/noah-rates"
+import {
+  getNoahRatesRefreshTtlMs,
+  listNoahRates,
+  triggerNoahRatesBackgroundRefresh,
+} from "@/lib/fx/noah-rates"
 
 export const runtime = "nodejs"
 
-/** @deprecated Prefer GET /api/fx/noah-rates — reads `noah_rates` table instead of live Noah /prices. */
+/**
+ * Customer-facing global payout rates from `noah_rates` (Noah mid + Easner margin).
+ * Used by business/mobile send preview — not live Noah /prices on every screen load.
+ */
 export async function GET(request: Request) {
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
@@ -32,6 +39,7 @@ export async function GET(request: Request) {
         rate: r.rate,
         noah_mid: r.noah_mid,
         as_of: r.as_of,
+        country_code: r.country_code,
       })),
     },
     {

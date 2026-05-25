@@ -51,6 +51,7 @@ import {
   convertNoahSendFlowAmounts,
   exchangeRatesToRateMap,
   getNoahSendConversionRate,
+  isNoahSendRateRowFresh,
   findPayoutFieldsSchema,
   formatSendRateLabel,
   getCurrencySymbol,
@@ -521,14 +522,27 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     const receive = String(receiveCurrency || '').trim().toUpperCase()
     if (send === receive) return true
     if (!noahRatesFetched) return false
-    const rate = getNoahSendConversionRate(noahRateMap, send, receive)
-    return Number.isFinite(rate) && rate > 0 && Boolean(noahRateMap[`${send}_${receive}`])
+    const row = exchangeRatesFromContext.find(
+      (r) =>
+        String(r.from_currency || '').toUpperCase() === send &&
+        String(r.to_currency || '').toUpperCase() === receive,
+    )
+    return isNoahSendRateRowFresh(
+      row
+        ? {
+            from_currency: send,
+            to_currency: receive,
+            rate: row.rate,
+            as_of: row.updated_at || row.created_at,
+          }
+        : null,
+    )
   }, [
     showCrossCurrencyExchangeUi,
     sendCurrency,
     receiveCurrency,
     noahRatesFetched,
-    noahRateMap,
+    exchangeRatesFromContext,
   ])
 
   const manualQuoteEnabled =
@@ -1241,9 +1255,17 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       forwardRate: 1,
                     }
               const receiveAmountValue = navAmounts.receiveAmount
-              const calculatedSendingAmount = navAmounts.sendAmount
+              const stashedQuote =
+                isStashedPayoutQuoteFresh(receiveAmountValue) ? peekSendPayoutQuote() : null
+              const calculatedSendingAmount =
+                stashedQuote?.noah?.rate && stashedQuote.noah.rate > 0
+                  ? receiveAmountValue / stashedQuote.noah.rate
+                  : navAmounts.sendAmount
               const calculatedFeeAmount = 0
-              const calculatedTotalAmount = calculatedSendingAmount
+              const calculatedTotalAmount =
+                stashedQuote?.totalDebited && stashedQuote.totalDebited > 0
+                  ? stashedQuote.totalDebited
+                  : calculatedSendingAmount
 
               if (selectedPaymentMethod === 'balance') {
                 const transactionId = generateTransactionId()

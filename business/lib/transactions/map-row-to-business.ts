@@ -3,6 +3,7 @@ import { displayEasnerTransactionId } from "@/lib/easner-transaction-id"
 import {
   deriveBankDepositInboundDisplayLabel,
   formatDisplayPersonName,
+  formatTransactionDetailHeroTitle,
   isVerificationDepositMetadata,
   toEasnerTransactionPrimaryLabel,
 } from "@easner/shared"
@@ -113,6 +114,15 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     counterpartyNameRaw && counterpartyNameRaw !== description ? counterpartyNameRaw : undefined
 
   const isEasetagP2p = String(meta?.source ?? "").toLowerCase() === "easetag_p2p"
+  const displayHeroTitle =
+    globalPayout?.displayHeroTitle ??
+    (bankLabel && dirRaw === "in"
+      ? formatTransactionDetailHeroTitle({
+          direction: "in",
+          counterpartyName: bankLabel,
+          productFallback: "Bank Deposit",
+        })
+      : undefined)
   const sendNote =
     typeof meta?.send_note === "string"
       ? meta.send_note.trim()
@@ -151,7 +161,9 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
           recipientSnapshot: globalPayout.recipientSnapshot ?? undefined,
           lifecycle: globalPayout.lifecycle,
         }
-      : {}),
+      : displayHeroTitle
+        ? { displayHeroTitle }
+        : {}),
     collectionChannel:
       meta?.collection_channel != null ? String(meta.collection_channel) : undefined,
     autopayoutConfigId:

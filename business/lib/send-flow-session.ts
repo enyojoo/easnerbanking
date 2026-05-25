@@ -42,7 +42,7 @@ export interface SendFlowState {
     sendAmount: number
     sendCurrency: string
     totalDebited: number
-    /** Mid-market destination per 1 source (`/prices` `Rate`). */
+    /** Customer-facing destination per 1 source (`noah_rates.rate`). */
     midRate?: number
     noahFee: number
     noahFeeCurrency: string

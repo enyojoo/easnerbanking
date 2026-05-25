@@ -64,6 +64,30 @@ describe("noahImpliedProviderRate", () => {
     vi.mocked(noahFetch).mockReset()
   })
 
+  it("uses Rate field not destination/source at $100 reference", async () => {
+    vi.mocked(noahFetch).mockResolvedValue({
+      Items: [
+        {
+          SourceAmount: "100",
+          DestinationAmount: "125153.8",
+          Rate: "1355.939237759392377963824",
+        },
+      ],
+    })
+
+    const rate = await noahImpliedProviderRate({
+      sourceCurrency: "USD",
+      destinationCurrency: "NGN",
+      sourceAmount: 100,
+      country: "NG",
+    })
+
+    const impliedFromAmounts = 125153.8 / 100
+    expect(rate).toBeCloseTo(1355.939, 2)
+    expect(rate).not.toBeCloseTo(impliedFromAmounts, 0)
+    expect(impliedFromAmounts).toBeCloseTo(1251.538, 0)
+  })
+
   it("returns mid-market Rate from Items[0] when present", async () => {
     vi.mocked(noahFetch).mockResolvedValue({
       Items: [

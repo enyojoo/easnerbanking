@@ -81,6 +81,8 @@ export type ExecuteBalanceSendInput = {
   selectedBalanceCurrency: string
   /** Required for fiat Global Payout — from confirm screen quote (`/api/noah/payouts/quote`). */
   payoutSession?: PayoutPrepareSession
+  /** Persisted on transfer metadata for transaction detail / notifications. */
+  reviewSnapshot?: Record<string, unknown>
   /** Ledger Easetag P2P: same ETID as confirm review (`reserved_debit_etid`). */
   reservedDebitEtid?: string
   note?: string
@@ -193,6 +195,7 @@ export async function executeBalanceSend(
         countryCode,
         ...(payoutSession.channelId ? { channelId: payoutSession.channelId } : {}),
         recipientId: recipient.id,
+        ...(input.reviewSnapshot ? { reviewSnapshot: input.reviewSnapshot } : {}),
         ...(reservedDebitEtid?.trim() ? { reservedDebitEtid: reservedDebitEtid.trim() } : {}),
         ...(note?.trim() ? { note: note.trim() } : {}),
         ...(input.paymentPurpose?.trim() ? { paymentPurpose: input.paymentPurpose.trim() } : {}),

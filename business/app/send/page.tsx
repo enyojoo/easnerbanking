@@ -11,8 +11,10 @@ import { formatSendRateLabel } from "@easner/shared"
 import { getCurrencySymbol } from "@/lib/utils"
 import {
   convertNoahSendFlowAmounts,
+  isNoahSendRateRowFresh,
   noahSendRatesQueryPath,
   noahWalletRowsToRateMap,
+  type NoahWalletRateRow,
 } from "@easner/shared"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
@@ -93,6 +95,7 @@ export default function SendPage() {
   const [amountEntryMode, setAmountEntryMode] = useState<"receive" | "send">("receive")
   const [sourceAccountId, setSourceAccountId] = useState<string | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>("balance")
+  const isBalanceSource = paymentMethod === "balance"
   const [otherCurrency, setOtherCurrency] = useState<string | null>(null)
   const [otherPaymentMethod, setOtherPaymentMethod] = useState<string | null>(null)
   const [manualPaymentMethodId, setManualPaymentMethodId] = useState<string | null>(null)
@@ -103,6 +106,7 @@ export default function SendPage() {
   const payoutQuoteCacheRef = useRef<{ key: string; quote: PayoutQuoteResult } | null>(null)
   const [payoutQuotePreview, setPayoutQuotePreview] = useState<PayoutQuoteResult | null>(null)
   const [noahFxRates, setNoahFxRates] = useState<Record<string, number>>({})
+  const [noahRateRows, setNoahRateRows] = useState<NoahWalletRateRow[]>([])
 
   useEffect(() => {
     const raw = sessionStorage.getItem(SEND_FLOW_STATE_KEY)
@@ -219,12 +223,17 @@ export default function SendPage() {
       try {
         const res = await fetchWithSession(noahSendRatesQueryPath(dest))
         const data = (await res.json().catch(() => ({}))) as {
-          rates?: Array<{ from_currency: string; to_currency: string; rate: number }>
+          rates?: NoahWalletRateRow[]
         }
         if (!res.ok || cancelled) return
-        setNoahFxRates(noahWalletRowsToRateMap(data.rates || []))
+        const rows = data.rates || []
+        setNoahRateRows(rows)
+        setNoahFxRates(noahWalletRowsToRateMap(rows))
       } catch {
-        if (!cancelled) setNoahFxRates({})
+        if (!cancelled) {
+          setNoahFxRates({})
+          setNoahRateRows([])
+        }
       }
     })()
     return () => {
@@ -283,6 +292,23 @@ export default function SendPage() {
   const forwardRate = flowAmounts.forwardRate
   const rateDisplay = hasFx ? formatSendRateLabel(sendCurrency, receiveCurrency, forwardRate) : null
 
+  const needsNoahRateForSend =
+    isBalanceSource &&
+    !isEasetagRecipient &&
+    !isWalletRecipient &&
+    sendCurrency !== receiveCurrency
+
+  const activeNoahRateRow = useMemo(() => {
+    const send = sendCurrency.trim().toUpperCase()
+    const receive = receiveCurrency.trim().toUpperCase()
+    return (
+      noahRateRows.find((r) => r.from_currency === send && r.to_currency === receive) ?? null
+    )
+  }, [noahRateRows, sendCurrency, receiveCurrency])
+
+  const hasValidNoahRateForPair =
+    !needsNoahRateForSend || isNoahSendRateRowFresh(activeNoahRateRow)
+
   const displayBalanceForSource =
     sourceAccount && paymentMethod === "balance"
       ? sourceAccount.availableBalance - (balanceDebitAmount > 0 ? balanceDebitAmount : 0)
@@ -305,7 +331,6 @@ export default function SendPage() {
     }
   }, [recipient, sourceAccountId, paymentMethod, suggestedAccount])
 
-  const isBalanceSource = paymentMethod === "balance"
   /** Easenet balance send: need org context loaded before Continue (Noah scope on transfer). */
   const needsProfileBeforeEasenetSend =
     isBalanceSource &&
@@ -404,6 +429,7 @@ export default function SendPage() {
     sourceAccount.availableBalance >= balanceDebitAmount &&
     isBalanceSource &&
     tier1Complete &&
+    hasValidNoahRateForPair &&
     !payoutReceiveBelowMin &&
     (!needsProfileBeforeEasenetSend || (hasData && !profileLoading))
 
@@ -639,7 +665,11 @@ export default function SendPage() {
             </Label>
             {receiveCurrency !== sendCurrency ? (
               <div className="flex min-w-0 flex-1 items-center justify-end text-sm text-muted-foreground">
-                {hasFx && rateDisplay ? (
+                {needsNoahRateForSend && !hasValidNoahRateForPair ? (
+                  <span className="text-destructive text-xs">
+                    Exchange rate unavailable. Try again shortly.
+                  </span>
+                ) : hasFx && rateDisplay ? (
                   <div className="flex max-w-full items-center justify-end gap-x-1 whitespace-nowrap">
                     <button
                       type="button"

@@ -6,13 +6,29 @@ export type NoahWalletRateRow = {
   to_currency: string
   rate: number
   as_of?: string
+  noah_mid?: number
+  country_code?: string | null
 }
+
+/** Default TTL aligned with business NOAH_RATES_REFRESH_TTL_MS (15 min). */
+export const NOAH_SEND_RATES_STALE_MS = 900_000
 
 /** Query path for Noah wallet send preview (business + mobile). */
 export function noahSendRatesQueryPath(receiveCurrency: string): string {
   const dest = receiveCurrency.trim().toUpperCase()
-  if (!dest || dest.length !== 3) return "/api/noah/exchange-rates"
-  return `/api/noah/exchange-rates?destinations=${encodeURIComponent(dest)}`
+  if (!dest || dest.length !== 3) return "/api/fx/noah-rates"
+  return `/api/fx/noah-rates?destinations=${encodeURIComponent(dest)}`
+}
+
+/** True when an active DB rate exists and is within TTL. */
+export function isNoahSendRateRowFresh(
+  row: Pick<NoahWalletRateRow, "rate" | "as_of" | "from_currency" | "to_currency"> | null | undefined,
+  maxAgeMs = NOAH_SEND_RATES_STALE_MS,
+): boolean {
+  if (!row || !Number.isFinite(row.rate) || row.rate <= 0) return false
+  const asOf = row.as_of ? new Date(row.as_of).getTime() : NaN
+  if (!Number.isFinite(asOf) || asOf <= 0) return false
+  return Date.now() - asOf <= maxAgeMs
 }
 
 /** Build `from_to` rate map from Noah batch rows. */
