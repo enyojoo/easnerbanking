@@ -27,7 +27,7 @@
 | Name | Example (₦5,000 NG) | Meaning |
 |------|---------------------|---------|
 | Noah mid (`noah_mid`) | ~1,356 NGN/USD | Raw `Rate` from `/prices`; matches `FiatPayment.Rate` at settlement |
-| Customer rate (`noah_rates.rate`) | ~1,315 NGN/USD | Mid × `(1 − NOAH_PAYOUT_MARGIN)` |
+| Customer rate (`noah_rates.rate`) | ~1,336 NGN/USD | Mid × `(1 − NOAH_PAYOUT_MARGIN)` |
 | All-in effective | ~1,106 NGN/USD | `receive ÷ totalDebited` — includes channel spread; not shown as exchange rate |
 
 Do **not** use `DestinationAmount ÷ SourceAmount` from `/prices` as the mid — that embeds channel fees and varies by ticket size.
@@ -40,7 +40,16 @@ Do **not** use `DestinationAmount ÷ SourceAmount` from `/prices` as the mid —
 customer_rate = noah_mid × (1 − NOAH_PAYOUT_MARGIN)
 ```
 
-Default margin: 3% (`NOAH_PAYOUT_MARGIN` in `packages/rate-sync/src/noah-margin.ts`). P2P manual send still uses `EASNER_BRIDGE_MARGIN` (5%) on `exchange_rates`.
+Default margin: 1.5% (`NOAH_PAYOUT_MARGIN` in `packages/rate-sync/src/noah-margin.ts`). P2P manual send still uses `EASNER_BRIDGE_MARGIN` (5%) on `exchange_rates`.
+
+### Refresh cadence
+
+| Mechanism | Default | Config |
+|-----------|---------|--------|
+| Stale TTL (send blocked if older) | **15 min** | `NOAH_RATES_REFRESH_TTL_MS` (business env) |
+| Background sync on read | When stale | `GET /api/fx/noah-rates` triggers `syncNoahRatesSafe` |
+| Vercel cron | **Not scheduled** | Add `/api/cron/sync-noah-rates` to `business/vercel.json` |
+| Office / CLI | Manual | Platform Control → Sync rates, or `scripts/sync-noah-rates.ts` |
 
 Easner revenue on global payout comes from this spread only — not from Noah settlement Breakdown buckets.
 

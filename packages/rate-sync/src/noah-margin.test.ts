@@ -10,7 +10,7 @@ describe("applyNoahCustomerRate", () => {
     const mid = 1356.045
     const rate = applyNoahCustomerRate(mid)
     expect(rate).toBeCloseTo(mid * (1 - NOAH_PAYOUT_MARGIN), 2)
-    expect(rate).toBeCloseTo(1315.36, 1)
+    expect(rate).toBeCloseTo(1335.7, 1)
   })
 
   it("rejects invalid mid", () => {
@@ -19,7 +19,7 @@ describe("applyNoahCustomerRate", () => {
 })
 
 describe("easnerBridgeMarginBps", () => {
-  it("returns 300 for default 3% Noah payout margin", () => {
-    expect(easnerBridgeMarginBps()).toBe(300)
+  it("returns 150 for default 1.5% Noah payout margin", () => {
+    expect(easnerBridgeMarginBps()).toBe(150)
   })
 })

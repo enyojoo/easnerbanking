@@ -1,7 +1,7 @@
 /** Global payout customer margin (distinct from P2P `EASNER_BRIDGE_MARGIN`). */
-export const NOAH_PAYOUT_MARGIN = 3 / 100
+export const NOAH_PAYOUT_MARGIN = 1.5 / 100
 
-/** Margin as basis points (300 = 3%). */
+/** Margin as basis points (150 = 1.5%). */
 export function easnerBridgeMarginBps(margin = NOAH_PAYOUT_MARGIN): number {
   return Math.round(margin * 10_000)
 }

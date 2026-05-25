@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS public.noah_rates (
   country_code varchar(2),
   noah_mid numeric(20, 10) NOT NULL,
   rate numeric(20, 10) NOT NULL,
-  margin_bps int NOT NULL DEFAULT 300,
+  margin_bps int NOT NULL DEFAULT 150,
   source text NOT NULL DEFAULT 'noah_prices_sync',
   as_of timestamptz NOT NULL DEFAULT now(),
   fee_type text NOT NULL DEFAULT 'free',

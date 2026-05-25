@@ -21,6 +21,10 @@
     {
       "path": "/api/cron/sync-exchange-rates",
       "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/sync-noah-rates",
+      "schedule": "*/15 * * * *"
     }
   ]
 }
