@@ -2,6 +2,51 @@
 const fs = require('fs')
 const path = require('path')
 
+// EAS Build hoists expo-* config plugins (e.g. expo-system-ui) to the workspace
+// root, but `expo` itself often stays in mobile/node_modules. The hoisted plugin
+// then fails with "Cannot find module 'expo/config-plugins'". The mobile
+// postinstall + eas-build-post-install hooks normally fix this via
+// scripts/linkWorkspaceDeps.js, but EAS Build's step-based pipeline (with
+// NPM_CONFIG_IGNORE_SCRIPTS=true) skips both, so we self-bootstrap here. This
+// runs before EAS' withPlugins resolves plugins from the loaded app config.
+;(function ensureExpoLinkedToRoot() {
+  try {
+    const mobileDir = __dirname
+    const rootDir = path.resolve(mobileDir, '..')
+    const rootNm = path.join(rootDir, 'node_modules')
+    const mobileNm = path.join(mobileDir, 'node_modules')
+    if (!fs.existsSync(rootNm)) return
+    const expoSrc = path.join(mobileNm, 'expo')
+    const expoDest = path.join(rootNm, 'expo')
+    if (fs.existsSync(expoSrc) && !fs.existsSync(expoDest)) {
+      try {
+        fs.symlinkSync(expoSrc, expoDest)
+      } catch (e) {
+        if (e && e.code !== 'EEXIST') {
+          console.warn('[app.config] expo→root symlink failed:', e.message)
+        }
+      }
+    }
+    for (const name of ['@expo/config-plugins', '@expo/config']) {
+      const src = path.join(rootNm, name)
+      const dest = path.join(mobileNm, name)
+      if (!fs.existsSync(src)) continue
+      if (fs.existsSync(dest)) continue
+      const destParent = path.dirname(dest)
+      try {
+        if (!fs.existsSync(destParent)) fs.mkdirSync(destParent, { recursive: true })
+        fs.symlinkSync(src, dest)
+      } catch (e) {
+        if (e && e.code !== 'EEXIST') {
+          console.warn('[app.config]', name, 'symlink failed:', e.message)
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[app.config] ensureExpoLinkedToRoot failed:', e && e.message)
+  }
+})()
+
 function loadEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return
   const content = fs.readFileSync(filePath, 'utf8')
