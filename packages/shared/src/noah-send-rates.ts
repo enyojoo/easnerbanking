@@ -31,6 +31,23 @@ export function isNoahSendRateRowFresh(
   return Date.now() - asOf <= maxAgeMs
 }
 
+/** Match Noah sell/prepare FiatAmount formatting (2 decimal places). */
+export function normalizePayoutReceiveAmount(amount: number): number {
+  if (!Number.isFinite(amount) || amount <= 0) return 0
+  return Math.round(amount * 100) / 100
+}
+
+/** Match wallet balance / send-side display precision. */
+export function normalizePayoutSendAmount(amount: number): number {
+  if (!Number.isFinite(amount) || amount <= 0) return 0
+  return Math.round(amount * 100) / 100
+}
+
+/** Compare receive amounts after Noah prepare normalization. */
+export function payoutReceiveAmountsMatch(a: number, b: number): boolean {
+  return normalizePayoutReceiveAmount(a) === normalizePayoutReceiveAmount(b)
+}
+
 /** Build `from_to` rate map from Noah batch rows. */
 export function noahWalletRowsToRateMap(
   rows: NoahWalletRateRow[],
@@ -107,15 +124,25 @@ export function convertNoahSendFlowAmounts(input: {
     return { sendAmount: 0, receiveAmount: 0, forwardRate: 1 }
   }
   if (send === receive) {
-    return { sendAmount: amount, receiveAmount: amount, forwardRate: 1 }
+    const normalized = normalizePayoutReceiveAmount(amount)
+    return { sendAmount: normalized, receiveAmount: normalized, forwardRate: 1 }
   }
 
   const forwardRate = getNoahSendConversionRate(rateMap, send, receive)
   if (direction === "receive") {
-    const sendAmount = forwardRate > 0 ? amount / forwardRate : 0
-    return { sendAmount, receiveAmount: amount, forwardRate }
+    const receiveAmount = normalizePayoutReceiveAmount(amount)
+    const sendAmount =
+      forwardRate > 0
+        ? normalizePayoutSendAmount(receiveAmount / forwardRate)
+        : 0
+    return { sendAmount, receiveAmount, forwardRate }
   }
-  return { sendAmount: amount, receiveAmount: amount * forwardRate, forwardRate }
+  const sendAmount = normalizePayoutSendAmount(amount)
+  const receiveAmount =
+    forwardRate > 0
+      ? normalizePayoutReceiveAmount(sendAmount * forwardRate)
+      : 0
+  return { sendAmount, receiveAmount, forwardRate }
 }
 
 /** Build rate map from `ExchangeRate[]` rows (e.g. mobile Noah hook). */

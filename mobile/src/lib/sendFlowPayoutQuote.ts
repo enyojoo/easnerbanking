@@ -1,5 +1,7 @@
 import type { PayoutQuote } from './noahService'
 
+import { payoutReceiveAmountsMatch } from '@easner/shared'
+
 let stashed: PayoutQuote | null = null
 
 export function stashSendPayoutQuote(quote: PayoutQuote): void {
@@ -16,6 +18,6 @@ export function clearSendPayoutQuote(): void {
 
 export function isStashedPayoutQuoteFresh(receiveAmount: number): boolean {
   if (!stashed?.expiresAt || !stashed.noah?.formSessionId) return false
-  if (stashed.receiveAmount !== receiveAmount) return false
+  if (!payoutReceiveAmountsMatch(stashed.receiveAmount, receiveAmount)) return false
   return new Date(stashed.expiresAt).getTime() > Date.now()
 }

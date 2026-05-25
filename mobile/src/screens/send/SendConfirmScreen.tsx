@@ -15,6 +15,7 @@ import {
   getGlobalPayoutProcessingTime,
   getGlobalPayoutTransferMethod,
   getSendAmountNoteFieldUi,
+  payoutReceiveAmountsMatch,
   qk,
 } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -96,6 +97,8 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     transactionId?: string
     note?: string
     paymentPurpose?: string
+    amountEntryMode?: 'send' | 'receive'
+    amountScreenSendAmount?: number
   }
 
   const recipient = params.recipient
@@ -106,14 +109,15 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   const sendNote = typeof params.note === 'string' ? params.note.trim() : ''
   const sendPaymentPurpose = typeof params.paymentPurpose === 'string' ? params.paymentPurpose.trim() : ''
 
-  const amountScreenSendAmount = params.calculatedSendingAmount ?? 0
+  const amountScreenSendAmount = params.amountScreenSendAmount ?? params.calculatedSendingAmount ?? 0
+  const amountEntryMode = params.amountEntryMode ?? 'receive'
 
   const [pricing, setPricing] = useState(() => {
     const stashed = peekSendPayoutQuote()
     const useStashed =
       stashed &&
       (params.receiveAmountValue ?? 0) > 0 &&
-      stashed.receiveAmount === (params.receiveAmountValue ?? 0)
+      payoutReceiveAmountsMatch(stashed.receiveAmount, params.receiveAmountValue ?? 0)
     if (useStashed) {
       const easnerFeeAmt =
         stashed.easner.pricingTotals?.total_easner_fee ?? stashed.easner.totalFeeAmount ?? 0
@@ -273,6 +277,10 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           recipientId: recipient.id,
           receiveAmount: receiveAmountValue,
           sourceBalanceCurrency: selectedBalanceCurrency,
+          amountEntryMode,
+          ...(amountEntryMode === 'send' && amountScreenSendAmount > 0
+            ? { sendAmount: amountScreenSendAmount }
+            : {}),
           ...(sendNote ? { note: sendNote } : {}),
           ...(sendPaymentPurpose ? { paymentPurpose: sendPaymentPurpose } : {}),
         })
@@ -312,7 +320,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     return () => {
       cancelled = true
     }
-  }, [easetagUi, recipient?.id, recipient?.currency, selectedBalanceCurrency, receiveAmountValue, sendNote, sendPaymentPurpose])
+  }, [easetagUi, recipient?.id, recipient?.currency, selectedBalanceCurrency, receiveAmountValue, amountEntryMode, amountScreenSendAmount, sendNote, sendPaymentPurpose])
 
   useFocusEffect(
     useCallback(() => {

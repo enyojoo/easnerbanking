@@ -7,6 +7,7 @@ import { mapNoahPayoutUserError } from "@/lib/noah/noah-prepare-errors"
 import { logNoahPayoutFailure } from "@/lib/noah/log-noah-payout-failure"
 import { payoutCorridorGate } from "@/lib/payout-corridor-validation"
 import {
+  normalizePayoutReceiveAmount,
   validatePayoutAmountAgainstLimits,
   type PayoutFieldsSchemaHint,
 } from "@easner/shared"
@@ -36,6 +37,8 @@ export async function POST(request: Request) {
     recipientId?: string
     recipient?: RecipientSellPrepareRow
     receiveAmount?: number | string
+    sendAmount?: number | string
+    amountEntryMode?: "send" | "receive"
     sourceBalanceCurrency?: string
     note?: string
     paymentPurpose?: string
@@ -43,7 +46,15 @@ export async function POST(request: Request) {
     branchCode?: string
   } | null
 
-  const receiveAmount = Number(body?.receiveAmount)
+  const amountEntryMode = body?.amountEntryMode === "send" ? "send" : "receive"
+  const receiveAmount = normalizePayoutReceiveAmount(Number(body?.receiveAmount))
+  const sendAmountInput = Number(body?.sendAmount)
+  const sendBudget =
+    amountEntryMode === "send" &&
+    Number.isFinite(sendAmountInput) &&
+    sendAmountInput > 0
+      ? sendAmountInput
+      : undefined
   const sourceBalanceCurrency = String(body?.sourceBalanceCurrency || "USD").trim().toUpperCase()
   const recipientId = body?.recipientId?.trim()
   const inlineRecipient = body?.recipient
@@ -136,6 +147,7 @@ export async function POST(request: Request) {
       recipient: inlineRecipient,
       receiveFiatAmount: receiveAmount,
       sourceBalanceCurrency,
+      sendBudget,
       prepareOverrides,
     })
     return NextResponse.json({ ok: true, quote })

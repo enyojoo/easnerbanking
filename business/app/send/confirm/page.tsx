@@ -152,6 +152,10 @@ export default function SendConfirmPage() {
             recipientId: state.recipient.id,
             receiveAmount: state.amount,
             sourceBalanceCurrency: state.sendCurrency,
+            amountEntryMode: state.amountEntryMode ?? "receive",
+            ...(state.amountEntryMode === "send" && state.sendAmount > 0
+              ? { sendAmount: state.sendAmount }
+              : {}),
             ...(state.note ? { note: state.note } : {}),
             ...(state.paymentPurpose ? { paymentPurpose: state.paymentPurpose } : {}),
           }),
@@ -189,7 +193,7 @@ export default function SendConfirmPage() {
     return () => {
       cancelled = true
     }
-  }, [state?.recipient.id, state?.amount, state?.sendCurrency, state?.note, state?.paymentPurpose, businessId])
+  }, [state?.recipient.id, state?.amount, state?.sendAmount, state?.amountEntryMode, state?.sendCurrency, state?.note, state?.paymentPurpose, businessId])
 
   const quoteCountdown = useQuoteCountdown(state?.payoutQuote?.expiresAt)
 

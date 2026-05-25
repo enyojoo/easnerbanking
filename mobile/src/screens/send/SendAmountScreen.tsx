@@ -740,6 +740,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             recipientId: recipient!.id,
             receiveAmount,
             sourceBalanceCurrency: selectedBalanceCurrency,
+            amountEntryMode,
+            ...(amountEntryMode === 'send' && sendingAmount > 0 ? { sendAmount: sendingAmount } : {}),
             ...(note.trim() ? { note: note.trim() } : {}),
             ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
           })
@@ -753,7 +755,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       cancelled = true
       clearTimeout(timer)
     }
-  }, [payoutQuotePrefetchKey, recipient, receiveAmount, selectedBalanceCurrency, note, paymentPurpose])
+  }, [payoutQuotePrefetchKey, recipient, receiveAmount, selectedBalanceCurrency, amountEntryMode, sendingAmount, note, paymentPurpose])
 
   const sendButtonDisabled =
     !sendAmount ||
@@ -1254,15 +1256,15 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       receiveAmount: enteredAmountValue,
                       forwardRate: 1,
                     }
-              const receiveAmountValue = navAmounts.receiveAmount
+              let receiveAmountValue = navAmounts.receiveAmount
               const stashedQuote =
                 isStashedPayoutQuoteFresh(receiveAmountValue) ? peekSendPayoutQuote() : null
-              const calculatedSendingAmount =
+              let calculatedSendingAmount =
                 stashedQuote?.noah?.rate && stashedQuote.noah.rate > 0
                   ? receiveAmountValue / stashedQuote.noah.rate
                   : navAmounts.sendAmount
               const calculatedFeeAmount = 0
-              const calculatedTotalAmount =
+              let calculatedTotalAmount =
                 stashedQuote?.totalDebited && stashedQuote.totalDebited > 0
                   ? stashedQuote.totalDebited
                   : calculatedSendingAmount
@@ -1281,16 +1283,27 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       recipientId: recipient.id,
                       receiveAmount: receiveAmountValue,
                       sourceBalanceCurrency: selectedBalanceCurrency,
+                      amountEntryMode,
+                      ...(amountEntryMode === 'send' && navAmounts.sendAmount > 0
+                        ? { sendAmount: navAmounts.sendAmount }
+                        : {}),
                       ...(note.trim() ? { note: note.trim() } : {}),
                       ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
                     })
                     stashSendPayoutQuote(pq)
+                    receiveAmountValue = pq.receiveAmount
+                    calculatedSendingAmount = pq.sendAmount
+                    calculatedTotalAmount = pq.totalDebited
                   } catch (e) {
                     const msg =
                       e instanceof Error ? e.message : 'Could not get a payout quote. Try again.'
                     showError(msg)
                     return
                   }
+                } else if (stashedQuote) {
+                  receiveAmountValue = stashedQuote.receiveAmount
+                  calculatedSendingAmount = stashedQuote.sendAmount
+                  calculatedTotalAmount = stashedQuote.totalDebited
                 }
 
                 navigation.navigate('SendConfirm' as never, {
@@ -1301,6 +1314,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   receiveAmountValue,
                   selectedBalanceCurrency,
                   receiveCurrency: recipient.currency,
+                  amountEntryMode,
+                  amountScreenSendAmount: navAmounts.sendAmount,
                   transactionId,
                   ...(note.trim() ? { note: note.trim() } : {}),
                   ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),

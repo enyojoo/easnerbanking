@@ -140,6 +140,8 @@ export const noahService = {
     recipientId: string
     receiveAmount: number
     sourceBalanceCurrency: string
+    amountEntryMode?: 'send' | 'receive'
+    sendAmount?: number
     note?: string
     paymentPurpose?: string
     email?: string
@@ -158,6 +160,12 @@ export const noahService = {
         recipientId: input.recipientId,
         receiveAmount: input.receiveAmount,
         sourceBalanceCurrency: input.sourceBalanceCurrency,
+        amountEntryMode: input.amountEntryMode ?? 'receive',
+        ...(input.amountEntryMode === 'send' &&
+        input.sendAmount != null &&
+        input.sendAmount > 0
+          ? { sendAmount: input.sendAmount }
+          : {}),
         ...(input.note ? { note: input.note } : {}),
         ...(input.paymentPurpose ? { paymentPurpose: input.paymentPurpose } : {}),
         ...(input.email ? { email: input.email } : {}),

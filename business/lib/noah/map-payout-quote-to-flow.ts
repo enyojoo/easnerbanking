@@ -1,4 +1,4 @@
-import { computeBalancePayoutExchangeFee } from "@easner/shared"
+import { computeBalancePayoutExchangeFee, payoutReceiveAmountsMatch } from "@easner/shared"
 import type { PayoutQuoteResult } from "@/lib/noah/payout-quote"
 import type { SendFlowState } from "@/lib/send-flow-session"
 
@@ -17,6 +17,9 @@ export function mapPayoutQuoteToFlowState(
   )
   return {
     ...state,
+    amount: q.receiveAmount,
+    sendAmount: q.sendAmount,
+    totalAmount: q.totalDebited,
     payoutQuote: {
       receiveAmount: q.receiveAmount,
       sendAmount: q.sendAmount,
@@ -42,6 +45,6 @@ export function isPayoutQuoteFresh(
   receiveAmount: number,
 ): boolean {
   if (!pq?.formSessionId || !pq.expiresAt) return false
-  if (pq.receiveAmount !== receiveAmount) return false
+  if (!payoutReceiveAmountsMatch(pq.receiveAmount, receiveAmount)) return false
   return new Date(pq.expiresAt).getTime() > Date.now()
 }

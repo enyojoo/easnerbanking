@@ -36,6 +36,8 @@ export interface SendFlowState {
   /** Canada CAD — Noah PaymentPurpose (amount screen dropdown). */
   paymentPurpose?: string
   transactionId: string
+  /** Which side of the FX pair the user typed on the amount screen. */
+  amountEntryMode?: "send" | "receive"
   /** Executable Noah payout quote from confirm (Noah sell/prepare). */
   payoutQuote?: {
     receiveAmount: number

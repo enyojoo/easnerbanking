@@ -5,6 +5,8 @@ import {
   isNoahSendRateRowFresh,
   noahSendRatesQueryPath,
   noahWalletRowsToRateMap,
+  normalizePayoutReceiveAmount,
+  payoutReceiveAmountsMatch,
 } from "./noah-send-rates"
 
 describe("noahSendRatesQueryPath", () => {
@@ -68,7 +70,7 @@ describe("convertNoahSendFlowAmounts", () => {
     expect(o.forwardRate).toBe(1352.815)
   })
 
-  it("send-entered: receive = send × forward rate (round-trip)", () => {
+  it("send-entered: receive = send × forward rate (normalized round-trip)", () => {
     const fromReceive = convertNoahSendFlowAmounts({
       direction: "receive",
       amount: 10_000,
@@ -83,6 +85,29 @@ describe("convertNoahSendFlowAmounts", () => {
       receiveCurrency: "NGN",
       rateMap: map,
     })
-    expect(fromSend.receiveAmount).toBeCloseTo(10_000, 1)
+    expect(fromSend.receiveAmount).toBe(
+      normalizePayoutReceiveAmount(fromReceive.sendAmount * 1352.815),
+    )
+  })
+
+  it("send-entered: normalizes receive to 2dp for Noah prepare", () => {
+    const o = convertNoahSendFlowAmounts({
+      direction: "send",
+      amount: 7.39,
+      sendCurrency: "USD",
+      receiveCurrency: "NGN",
+      rateMap: map,
+    })
+    expect(o.receiveAmount).toBe(
+      normalizePayoutReceiveAmount(7.39 * 1352.815),
+    )
+    expect(o.receiveAmount).toBe(9997.3)
+  })
+})
+
+describe("payoutReceiveAmountsMatch", () => {
+  it("treats sub-cent noise as equal after normalization", () => {
+    expect(payoutReceiveAmountsMatch(9997.30385, 9997.3)).toBe(true)
+    expect(payoutReceiveAmountsMatch(10_000, 9999.99)).toBe(false)
   })
 })
