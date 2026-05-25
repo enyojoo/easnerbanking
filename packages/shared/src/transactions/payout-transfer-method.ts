@@ -28,7 +28,7 @@ export function getGlobalPayoutTransferMethod(input: PayoutTransferMethodInput):
   const country = normalizeCountry(input)
 
   if (currency === "USD" && country === "US") return "ACH"
-  if (currency === "EUR") return "SEPA"
+  if (currency === "EUR") return "SEPA Instant"
   if (currency === "GBP" && country === "GB") return "Faster Payments"
   return "Bank transfer"
 }
@@ -38,15 +38,15 @@ export function getGlobalPayoutProcessingTime(method: string): string {
     case "Easetag (wallet-to-wallet)":
       return "Usually instant"
     case "ACH":
-      return "1-3 business days"
+      return "Within 24 hours"
     case "SEPA":
-      return "1-2 business days"
-    case "Faster Payments":
+    case "SEPA Instant":
       return "Within minutes"
+    case "Faster Payments":
     case "Mobile money":
     case "Bank transfer":
-      return "Same day"
+      return "Within minutes"
     default:
-      return "Same day"
+      return "Within minutes"
   }
 }

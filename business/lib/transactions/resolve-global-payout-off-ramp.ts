@@ -3,6 +3,7 @@ import {
   formatDisplayPersonName,
   formatTransactionDetailHeroTitle,
   getGlobalPayoutTransferMethod,
+  getGlobalPayoutProcessingTime,
   isGlobalPayoutOffRampOutRow,
   type GlobalPayoutLifecycleStep,
   type GlobalPayoutRecipientSnapshot,
@@ -96,6 +97,11 @@ function derivePayoutReview(
     if (payload) {
       const enrichment = extractNoahGlobalPayoutPayOutEnrichment(payload)
       if (enrichment && enrichment.receiveAmount > 0) {
+        const transferMethod = getGlobalPayoutTransferMethod({
+          currency: enrichment.receiveCurrency,
+          countryCode: enrichment.countryCode,
+          bankName: enrichment.bankName,
+        })
         return {
           you_send_amount: ledgerAmount,
           total_debited: ledgerAmount,
@@ -105,12 +111,8 @@ function derivePayoutReview(
           send_currency: ledgerCurrency,
           receive_amount: enrichment.receiveAmount,
           receive_currency: enrichment.receiveCurrency,
-          transfer_method: getGlobalPayoutTransferMethod({
-            currency: enrichment.receiveCurrency,
-            countryCode: enrichment.countryCode,
-            bankName: enrichment.bankName,
-          }),
-          processing_time: "Same day",
+          transfer_method: transferMethod,
+          processing_time: getGlobalPayoutProcessingTime(transferMethod),
         }
       }
     }
@@ -121,6 +123,13 @@ function derivePayoutReview(
     roundFiat(typeof meta.total_debited === "number" ? meta.total_debited : ledgerAmount) ??
     ledgerAmount
 
+  const transferMethod = getGlobalPayoutTransferMethod({
+    currency: receiveCurrency,
+    countryCode: meta.country_code,
+    bankName: meta.bank_name,
+    mobileProvider: meta.mobile_provider,
+  })
+
   return {
     you_send_amount: totalDebited,
     total_debited: totalDebited,
@@ -130,13 +139,8 @@ function derivePayoutReview(
     send_currency: ledgerCurrency,
     receive_amount: receiveAmount,
     receive_currency: receiveCurrency,
-    transfer_method: getGlobalPayoutTransferMethod({
-      currency: receiveCurrency,
-      countryCode: meta.country_code,
-      bankName: meta.bank_name,
-      mobileProvider: meta.mobile_provider,
-    }),
-    processing_time: "Same day",
+    transfer_method: transferMethod,
+    processing_time: getGlobalPayoutProcessingTime(transferMethod),
   }
 }
 

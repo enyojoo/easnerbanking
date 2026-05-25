@@ -194,6 +194,12 @@ function getTransactionName(item: CombinedTransaction, transactionType: string):
     if (senderDisplay && !isEasnerProductReceiveTitle(senderDisplay)) return senderDisplay
     if (apiName && !isEasnerProductReceiveTitle(apiName)) return apiName
   }
+  if (transactionType === 'send') {
+    const displayDescription = String(
+      (item as { display_description?: string }).display_description ?? '',
+    ).trim()
+    if (displayDescription) return displayDescription
+  }
   return resolveTransactionListLabel(transactionType, {
     name: item.name,
     source_type: item.source_type,

@@ -1,5 +1,6 @@
 import {
   formatDisplayPersonName,
+  getGlobalPayoutProcessingTime,
   getGlobalPayoutTransferMethod,
   type GlobalPayoutRecipientSnapshot,
   type GlobalPayoutReviewSnapshot,
@@ -37,6 +38,7 @@ export function normalizePayoutReviewSnapshot(
   const youSend = Number(o.you_send_amount)
   if (!Number.isFinite(receiveAmount) || receiveAmount <= 0) return null
   if (!Number.isFinite(totalDebited) || totalDebited <= 0) return null
+  const transferMethod = String(o.transfer_method || getGlobalPayoutTransferMethod({})).trim()
   return {
     you_send_amount: Number.isFinite(youSend) ? youSend : totalDebited,
     total_debited: totalDebited,
@@ -46,7 +48,9 @@ export function normalizePayoutReviewSnapshot(
     send_currency: String(o.send_currency || "USD").toUpperCase(),
     receive_amount: receiveAmount,
     receive_currency: String(o.receive_currency || "USD").toUpperCase(),
-    transfer_method: String(o.transfer_method || getGlobalPayoutTransferMethod({})).trim(),
-    processing_time: String(o.processing_time || "Same day").trim(),
+    transfer_method: transferMethod,
+    processing_time: String(
+      o.processing_time || getGlobalPayoutProcessingTime(transferMethod),
+    ).trim(),
   }
 }

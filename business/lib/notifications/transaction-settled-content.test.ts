@@ -86,7 +86,7 @@ describe("buildTransactionSettledPushContent", () => {
           receive_amount: 5000,
           receive_currency: "NGN",
           transfer_method: "Bank transfer",
-          processing_time: "Same day",
+          processing_time: "Within minutes",
         },
         recipient_snapshot: { full_name: "SAMUEL ODIBA ENYOJO" },
       },

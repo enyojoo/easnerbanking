@@ -58,13 +58,20 @@ export function resolveInboundTransactionListLabel(input: TransactionListLabelIn
 export function resolveOutboundTransactionListLabel(input: {
   name?: string | null
   recipient_full_name?: string | null
+  metadata?: Record<string, unknown> | null
 }): string {
   const apiName = String(input.name ?? "").trim()
   if (isEasnerProductSendTitle(apiName)) return apiName
 
   const toName = String(input.recipient_full_name ?? apiName).trim()
-  if (toName) return `Sent to ${formatDisplayPersonName(toName)}`
-  return "Sent"
+  if (!toName) return "Sent"
+
+  // Global payout list rows show recipient name only (matches web + inbound deposits).
+  if (String(input.metadata?.payout_type ?? "").toLowerCase() === "global_fiat") {
+    return formatDisplayPersonName(toName) || toName
+  }
+
+  return `Sent to ${formatDisplayPersonName(toName)}`
 }
 
 export function resolveTransactionListLabel(
