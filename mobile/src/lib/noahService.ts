@@ -1001,14 +1001,14 @@ export const noahService = {
       transaction_id?: string
     }
     const tid = String(raw.transaction_id ?? raw.id ?? '')
-    const etid =
+    const responseEtid =
       typeof raw.easner_transaction_id === 'string' ? raw.easner_transaction_id.trim() : ''
-    const detailId = etid || tid
+    const detailId = responseEtid || tid
     return {
       ...raw,
       id: detailId,
       transaction_id: detailId,
-      ...(etid ? { easner_transaction_id: etid } : {}),
+      ...(responseEtid ? { easner_transaction_id: responseEtid } : {}),
     }
   },
 
