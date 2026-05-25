@@ -282,7 +282,7 @@ export function OfficeNoahRatesPanel() {
       {syncSummary ? <p className="text-sm text-muted-foreground">{syncSummary}</p> : null}
       {totalStalePairs > 0 ? (
         <p className="text-sm text-amber-700">
-          {totalStalePairs} active pair{totalStalePairs === 1 ? "" : "s"} exceed the 15‑minute TTL — cross-currency balance send is blocked until sync.
+          {totalStalePairs} active pair{totalStalePairs === 1 ? "" : "s"} exceed the 5‑minute TTL — cross-currency balance send is blocked until sync.
         </p>
       ) : null}
 

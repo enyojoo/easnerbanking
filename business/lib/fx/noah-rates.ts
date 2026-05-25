@@ -17,8 +17,8 @@ export type NoahRateRow = {
 }
 
 export function getNoahRatesRefreshTtlMs(): number {
-  const parsed = Number.parseInt(process.env.NOAH_RATES_REFRESH_TTL_MS || "900000", 10)
-  if (!Number.isFinite(parsed) || parsed <= 0) return 900_000
+  const parsed = Number.parseInt(process.env.NOAH_RATES_REFRESH_TTL_MS || "300000", 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) return 300_000
   return parsed
 }
 

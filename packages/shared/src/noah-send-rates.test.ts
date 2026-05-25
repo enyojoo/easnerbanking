@@ -38,7 +38,7 @@ describe("isNoahSendRateRowFresh", () => {
           rate: 1288,
           as_of: new Date(Date.now() - 20 * 60_000).toISOString(),
         },
-        900_000,
+        300_000,
       ),
     ).toBe(false)
   })

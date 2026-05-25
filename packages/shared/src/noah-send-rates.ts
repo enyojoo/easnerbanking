@@ -10,8 +10,8 @@ export type NoahWalletRateRow = {
   country_code?: string | null
 }
 
-/** Default TTL aligned with business NOAH_RATES_REFRESH_TTL_MS (15 min). */
-export const NOAH_SEND_RATES_STALE_MS = 900_000
+/** Default TTL aligned with business NOAH_RATES_REFRESH_TTL_MS (5 min). */
+export const NOAH_SEND_RATES_STALE_MS = 300_000
 
 /** Query path for Noah wallet send preview (business + mobile). */
 export function noahSendRatesQueryPath(receiveCurrency: string): string {

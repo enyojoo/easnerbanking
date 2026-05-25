@@ -24,7 +24,7 @@
     },
     {
       "path": "/api/cron/sync-noah-rates",
-      "schedule": "*/15 * * * *"
+      "schedule": "*/5 * * * *"
     }
   ]
 }

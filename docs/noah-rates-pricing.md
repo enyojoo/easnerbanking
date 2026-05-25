@@ -46,9 +46,9 @@ Default margin: 1.5% (`NOAH_PAYOUT_MARGIN` in `packages/rate-sync/src/noah-margi
 
 | Mechanism | Default | Config |
 |-----------|---------|--------|
-| Stale TTL (send blocked if older) | **15 min** | `NOAH_RATES_REFRESH_TTL_MS` (business env) |
+| Stale TTL (send blocked if older) | **5 min** | `NOAH_RATES_REFRESH_TTL_MS` (business env) |
 | Background sync on read | When stale | `GET /api/fx/noah-rates` triggers `syncNoahRatesSafe` |
-| Vercel cron | **Not scheduled** | Add `/api/cron/sync-noah-rates` to `business/vercel.json` |
+| Vercel cron | **Every 5 min** | `/api/cron/sync-noah-rates` in `business/vercel.json` |
 | Office / CLI | Manual | Platform Control → Sync rates, or `scripts/sync-noah-rates.ts` |
 
 Easner revenue on global payout comes from this spread only — not from Noah settlement Breakdown buckets.
