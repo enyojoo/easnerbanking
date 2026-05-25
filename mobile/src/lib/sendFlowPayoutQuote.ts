@@ -20,8 +20,16 @@ export function clearSendPayoutQuote(): void {
   stashed = null
 }
 
-export function isStashedPayoutQuoteFresh(receiveAmount: number): boolean {
+export function isStashedPayoutQuoteFresh(
+  receiveAmount: number,
+  options?: { amountEntryMode?: 'send' | 'receive'; sendAmount?: number },
+): boolean {
   if (!stashed?.expiresAt || !stashed.noah?.formSessionId) return false
-  if (!payoutReceiveAmountsMatch(stashed.receiveAmount, receiveAmount)) return false
-  return new Date(stashed.expiresAt).getTime() > Date.now()
+  if (new Date(stashed.expiresAt).getTime() <= Date.now()) return false
+  if (options?.amountEntryMode === 'send') {
+    const sendAmount = options.sendAmount
+    if (sendAmount == null || !(sendAmount > 0)) return false
+    return payoutReceiveAmountsMatch(stashed.sendAmount, sendAmount)
+  }
+  return payoutReceiveAmountsMatch(stashed.receiveAmount, receiveAmount)
 }

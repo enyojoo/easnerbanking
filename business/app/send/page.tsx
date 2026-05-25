@@ -504,12 +504,13 @@ export default function SendPage() {
     if (!recipient?.id || !(receiveAmount > 0)) return ""
     return [
       recipient.id,
-      receiveAmount,
+      amountEntryMode,
+      amountEntryMode === "send" ? sendAmount : receiveAmount,
       sendCurrency,
       note.trim(),
       paymentPurpose.trim(),
     ].join("|")
-  }, [recipient?.id, receiveAmount, sendCurrency, note, paymentPurpose])
+  }, [recipient?.id, amountEntryMode, sendAmount, receiveAmount, sendCurrency, note, paymentPurpose])
 
   useEffect(() => {
     if (!needsPayoutQuoteBeforeConfirm || !payoutQuoteCacheKey || !recipient?.id) return

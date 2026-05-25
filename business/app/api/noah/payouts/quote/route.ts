@@ -156,6 +156,8 @@ export async function POST(request: Request) {
       recipientId,
       receiveAmount,
       sourceBalanceCurrency,
+      amountEntryMode,
+      sendBudget,
       userId: user.id,
     })
     return NextResponse.json(

@@ -10,6 +10,10 @@ import {
 } from "@/lib/terminal/recipient-sell-prepare"
 import { NoProviderForCorridorError, selectProviderForCorridor } from "@/lib/payout-providers"
 import { mapNoahPrepareError } from "@/lib/noah/noah-prepare-errors"
+import {
+  resolvePrepareWithinSendBudget,
+  seedQuoteReceiveForSendBudget,
+} from "@/lib/noah/payout-quote-send-budget"
 
 /** Easner fee slice on payout quotes (Noah prepare is authoritative; no DB pricing engine). */
 export type EasnerPayoutQuoteSlice = {
@@ -62,7 +66,6 @@ export type PayoutQuoteResult = {
 }
 
 const QUOTE_TTL_MS = 15 * 60 * 1000
-const SEND_BUDGET_EPSILON = 0.01
 
 function buildEasnerSlice(params: {
   sourceAmount: number
@@ -180,7 +183,26 @@ export async function buildPayoutQuote(input: {
       overrides: input.prepareOverrides,
     })
 
+  let dbRow: ReturnType<typeof findNoahRate> = null
+  if (sourceBalanceCurrency !== receiveCurrency) {
+    const dbRates = await listNoahRates(admin, {
+      destinations: [receiveCurrency],
+      status: "active",
+    })
+    dbRow = findNoahRate(dbRates, sourceBalanceCurrency, receiveCurrency)
+  }
+
   let quoteReceiveAmount = receiveAmount
+  if (sendBudget != null) {
+    quoteReceiveAmount = seedQuoteReceiveForSendBudget({
+      sendBudget,
+      sourceCurrency: sourceBalanceCurrency,
+      receiveCurrency,
+      clientReceiveAmount: receiveAmount,
+      dbRate: dbRow && isNoahRateFresh(dbRow) ? dbRow.rate : null,
+    })
+  }
+
   let prep: Awaited<ReturnType<typeof prepareSellFromRecipientRow>>["prep"]
   let channelId: string | undefined
 
@@ -203,24 +225,34 @@ export async function buildPayoutQuote(input: {
     }
   }
 
-  try {
-    let prepared = await executePrepare(quoteReceiveAmount)
-    prep = prepared.prep
-    channelId = prepared.channelId
-
-    if (sendBudget != null) {
-      let authorized = Number.parseFloat(String(prep.cryptoAuthorizedAmount || ""))
-      for (let attempt = 0; attempt < 3 && authorized > sendBudget + SEND_BUDGET_EPSILON; attempt++) {
-        const scaled = normalizePayoutReceiveAmount(
-          quoteReceiveAmount * (sendBudget / authorized),
-        )
-        if (!(scaled > 0) || scaled >= quoteReceiveAmount) break
-        quoteReceiveAmount = scaled
-        prepared = await executePrepare(quoteReceiveAmount)
-        prep = prepared.prep
-        channelId = prepared.channelId
-        authorized = Number.parseFloat(String(prep.cryptoAuthorizedAmount || ""))
+  const runPrepareWithSessionRetry = async (fiatAmount: number) => {
+    try {
+      return await runPrepare(fiatAmount)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message.toLowerCase() : String(e).toLowerCase()
+      const expired =
+        msg.includes("formsession") || (msg.includes("session") && msg.includes("expired"))
+      if (expired) {
+        return await runPrepare(fiatAmount)
       }
+      throw e
+    }
+  }
+
+  try {
+    if (sendBudget != null) {
+      const resolved = await resolvePrepareWithinSendBudget({
+        sendBudget,
+        initialReceive: quoteReceiveAmount,
+        runPrepare: runPrepareWithSessionRetry,
+      })
+      quoteReceiveAmount = resolved.receiveAmount
+      prep = resolved.prepared.prep
+      channelId = resolved.prepared.channelId
+    } else {
+      const prepared = await executePrepare(quoteReceiveAmount)
+      prep = prepared.prep
+      channelId = prepared.channelId
     }
   } catch (e) {
     throw e instanceof Error ? e : new Error(mapNoahPrepareError(e))
@@ -242,11 +274,6 @@ export async function buildPayoutQuote(input: {
   let providerRate = 1
   let noahMid: number | undefined
   if (sourceBalanceCurrency !== receiveCurrency) {
-    const dbRates = await listNoahRates(admin, {
-      destinations: [receiveCurrency],
-      status: "active",
-    })
-    const dbRow = findNoahRate(dbRates, sourceBalanceCurrency, receiveCurrency)
     if (dbRow && isNoahRateFresh(dbRow)) {
       providerRate = dbRow.rate
       noahMid = dbRow.noah_mid

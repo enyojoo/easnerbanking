@@ -239,7 +239,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   useEffect(() => {
     if (!recipient || easetagUi) return
     if (!recipient.id || !(receiveAmountValue > 0)) return
-    if (isStashedPayoutQuoteFresh(receiveAmountValue)) {
+    if (isStashedPayoutQuoteFresh(receiveAmountValue, { amountEntryMode, sendAmount: amountScreenSendAmount })) {
       const stashed = peekSendPayoutQuote()
       if (stashed) {
         const easnerFeeAmt =

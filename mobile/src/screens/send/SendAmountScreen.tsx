@@ -716,7 +716,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     if (!needsBackgroundPayoutQuote || !recipient?.id) return ''
     return [
       recipient.id,
-      receiveAmount,
+      amountEntryMode,
+      amountEntryMode === 'send' ? sendingAmount : receiveAmount,
       selectedBalanceCurrency,
       note.trim(),
       paymentPurpose.trim(),
@@ -724,6 +725,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   }, [
     needsBackgroundPayoutQuote,
     recipient?.id,
+    amountEntryMode,
+    sendingAmount,
     receiveAmount,
     selectedBalanceCurrency,
     note,
@@ -1212,22 +1215,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 showError(fieldCheck.message)
                 return
               }
-              if (
-                (selectedPaymentMethod === 'balance' || selectedPaymentMethod === 'otherCurrency') &&
-                receiveAmountValue > 0
-              ) {
-                const limitCheck = validatePayoutAmountAgainstLimits({
-                  amount: receiveAmountValue,
-                  hints: payoutHints,
-                  currencyCode: receiveCurrency,
-                  rail: payoutRail,
-                })
-                if (!limitCheck.ok) {
-                  setAmountFieldError(limitCheck.message)
-                  showError(limitCheck.message)
-                  return
-                }
-              }
               setAmountFieldError(null)
 
               if (
@@ -1257,8 +1244,31 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       forwardRate: 1,
                     }
               let receiveAmountValue = navAmounts.receiveAmount
+
+              if (
+                (selectedPaymentMethod === 'balance' || selectedPaymentMethod === 'otherCurrency') &&
+                receiveAmountValue > 0
+              ) {
+                const limitCheck = validatePayoutAmountAgainstLimits({
+                  amount: receiveAmountValue,
+                  hints: payoutHints,
+                  currencyCode: receiveCurrency,
+                  rail: payoutRail,
+                })
+                if (!limitCheck.ok) {
+                  setAmountFieldError(limitCheck.message)
+                  showError(limitCheck.message)
+                  return
+                }
+              }
+
               const stashedQuote =
-                isStashedPayoutQuoteFresh(receiveAmountValue) ? peekSendPayoutQuote() : null
+                isStashedPayoutQuoteFresh(receiveAmountValue, {
+                  amountEntryMode,
+                  sendAmount: navAmounts.sendAmount,
+                })
+                  ? peekSendPayoutQuote()
+                  : null
               let calculatedSendingAmount =
                 stashedQuote?.noah?.rate && stashedQuote.noah.rate > 0
                   ? receiveAmountValue / stashedQuote.noah.rate
@@ -1277,7 +1287,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   receiveAmountValue > 0 &&
                   Boolean(recipient.id)
 
-                if (needsNoahQuote && !isStashedPayoutQuoteFresh(receiveAmountValue)) {
+                if (
+                  needsNoahQuote &&
+                  !isStashedPayoutQuoteFresh(receiveAmountValue, {
+                    amountEntryMode,
+                    sendAmount: navAmounts.sendAmount,
+                  })
+                ) {
                   try {
                     const pq = await noahService.createPayoutQuote({
                       recipientId: recipient.id,
