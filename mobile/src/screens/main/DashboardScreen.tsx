@@ -66,7 +66,7 @@ import {
   qk,
   isEasnerProductReceiveTitle,
   resolveInboundTransactionListLabel,
-  resolveOutboundTransactionListLabel,
+  resolveTransactionListLabel,
 } from '@easner/shared'
 import { AvatarImage } from '../../components/AvatarImage'
 import { avatarImageUri, warmAvatarCache } from '../../lib/avatarCache'
@@ -85,16 +85,21 @@ interface DashboardTransaction {
   id: string
   transaction_id: string
   ledger_row_id?: string
-  type: 'send' | 'receive'
+  type?: 'send' | 'receive'
+  transaction_type?: 'send' | 'receive'
   amount: number
   currency: string
   name?: string
+  display_description?: string
   status: string
   created_at: string
   noah_created_at?: string
-  source_type?: string // 'virtual_account', 'liquidation_address', etc.
+  source_type?: string
   source_liquidation_address_id?: string
-  metadata?: any
+  metadata?: Record<string, unknown>
+  payload?: Record<string, unknown>
+  recipient?: { full_name?: string }
+  sender_display_name?: string
 }
 
 export default function DashboardScreen({ navigation }: NavigationProps) {
@@ -472,10 +477,10 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   }
 
   const getTransactionName = (transaction: DashboardTransaction): string => {
-    if (transaction.type === 'receive') {
-      const senderDisplay = String(
-        (transaction as { sender_display_name?: string }).sender_display_name ?? '',
-      ).trim()
+    const transactionType = transaction.transaction_type || transaction.type || 'send'
+
+    if (transactionType === 'receive') {
+      const senderDisplay = String(transaction.sender_display_name ?? '').trim()
       const apiName = String(transaction.name ?? '').trim()
       if (senderDisplay && !isEasnerProductReceiveTitle(senderDisplay)) return senderDisplay
       if (apiName && !isEasnerProductReceiveTitle(apiName)) return apiName
@@ -484,17 +489,26 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
         source_type: transaction.source_type,
         source_liquidation_address_id: transaction.source_liquidation_address_id,
         metadata: transaction.metadata,
-        payload: (transaction as { payload?: Record<string, unknown> }).payload,
+        payload: transaction.payload,
       })
     }
-    return resolveOutboundTransactionListLabel({
+
+    const displayDescription = String(transaction.display_description ?? '').trim()
+    if (displayDescription) return displayDescription
+
+    return resolveTransactionListLabel(transactionType, {
       name: transaction.name,
+      source_type: transaction.source_type,
+      source_liquidation_address_id: transaction.source_liquidation_address_id,
+      metadata: transaction.metadata,
+      payload: transaction.payload,
       recipient_full_name: transaction.recipient?.full_name,
     })
   }
 
   const getTransactionIconType = (transaction: DashboardTransaction): string => {
-    if (transaction.type === 'receive') return 'inbox'
+    const transactionType = transaction.transaction_type || transaction.type
+    if (transactionType === 'receive') return 'inbox'
     // Could add more logic here based on transaction metadata
     return 'outbox'
   }
@@ -922,7 +936,8 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                   )
                 }
                 const transaction = seg.transaction
-                const isReceived = transaction.type === 'receive'
+                const txType = transaction.transaction_type || transaction.type
+                const isReceived = txType === 'receive'
                 const iconType = getTransactionIconType(transaction)
                 const statusDisplay = getTransactionStatusDisplay(transaction.status)
                 return (
