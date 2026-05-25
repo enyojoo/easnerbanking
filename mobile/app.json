@@ -91,7 +91,9 @@
           "imageWidth": 200
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-background-task",
+      "expo-sharing"
     ],
     "owner": "easner"
   }
