@@ -4,7 +4,15 @@ export {
   useTransactionsList,
   useTransactionDetail,
   mapLedgerRowToTransaction,
+  prefetchTransactionDetail,
+  prefetchRecentTransactionDetailsInBackground,
+  transactionDetailLookupId,
+  seedTransactionDetailFromDisk,
+  transactionDetailQueryOptions,
+  unwrapTransactionDetailPayload,
   TRANSACTIONS_LEDGER_PAGE_SIZE,
+  TRANSACTION_DETAIL_STALE_MS,
+  TRANSACTION_DETAIL_GC_MS,
 } from './use-transactions'
 export type { MobileTransactionRow } from './use-transactions'
 export { useRecipientsList, prefetchRecipientsList, RECIPIENTS_STALE_MS } from './use-recipients'

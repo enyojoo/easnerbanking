@@ -51,7 +51,6 @@ import { useBalance } from '../../contexts/BalanceContext'
 import { apiGet, apiPost } from '../../lib/apiClient'
 import { useQueryClient } from '@tanstack/react-query'
 import { useScope } from '../../query/scope'
-import { apiFetch } from '../../query/api-client'
 import { NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
 import { ListRowSkeleton } from '../../components/skeletons'
 import { SectionCard } from '../../components/ui'
@@ -59,7 +58,7 @@ import { formatSignedCurrency, getTransactionStatusDisplay } from '../../utils/f
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import { isTier1Complete } from '../../lib/compliance'
 import { noahService } from '../../lib/noahService'
-import { useTransactionsList, TRANSACTIONS_LEDGER_PAGE_SIZE } from '../../hooks/queries'
+import { useTransactionsList, prefetchRecentTransactionDetailsInBackground, prefetchTransactionDetail, TRANSACTIONS_LEDGER_PAGE_SIZE } from '../../hooks/queries'
 import { prefetchReceiveDepositQueries } from '../../hooks/queries/use-receive-deposit-queries'
 import {
   markRecentMoneyActivity,
@@ -288,19 +287,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
 
   useEffect(() => {
     if (!scope || recentTransactions.length === 0) return
-    for (const row of recentTransactions.slice(0, 10)) {
-      const txId = String(row.ledger_row_id?.trim() || row.transaction_id || row.id || '').trim()
-      if (!txId) continue
-      void qc.prefetchQuery({
-        queryKey: qk.transactions.detail(scope, txId),
-        queryFn: () =>
-          apiFetch<{ transaction?: DashboardTransaction }>(
-            `/api/transactions/${encodeURIComponent(txId)}`,
-            { headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS } },
-          ),
-        staleTime: 45_000,
-      })
-    }
+    prefetchRecentTransactionDetailsInBackground(qc, scope, recentTransactions, 10)
   }, [qc, recentTransactions, scope])
 
   // Refresh balances on focus only if stale (don't fetch every time)
@@ -928,6 +915,14 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                         fromScreen: 'Dashboard',
                         initialTransaction: transaction,
                       } as never)
+                    }}
+                    onPressIn={() => {
+                      if (!scope) return
+                      const txId = String(
+                        transaction.ledger_row_id?.trim() || transaction.transaction_id || transaction.id || '',
+                      ).trim()
+                      if (!txId) return
+                      void prefetchTransactionDetail(qc, scope, txId)
                     }}
                   >
                     {getTransactionIcon(iconType, isReceived)}

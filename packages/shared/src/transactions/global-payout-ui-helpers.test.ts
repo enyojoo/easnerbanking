@@ -24,6 +24,15 @@ describe("formatTransactionDetailHeroTitle", () => {
       }),
     ).toBe("Deposit from Grey")
   })
+
+  it("preserves Easetag receive hero without Deposit from prefix", () => {
+    expect(
+      formatTransactionDetailHeroTitle({
+        direction: "in",
+        counterpartyName: "Received from @alice",
+      }),
+    ).toBe("Received from @alice")
+  })
 })
 
 describe("getGlobalPayoutTransferMethod", () => {

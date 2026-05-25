@@ -194,6 +194,7 @@ function mapLedgerRowToMobileDetail(row: Record<string, unknown>): Record<string
       asset: row.asset ?? null,
       chain: row.chain ?? null,
     },
+    ...(isEasetagP2p ? { display_hero_title: base.name } : {}),
   }
 }
 

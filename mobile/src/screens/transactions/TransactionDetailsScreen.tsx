@@ -47,8 +47,12 @@ import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
 import { ripple } from '../../lib/androidRipple'
 import { formatSignedCurrency } from '../../utils/formatters'
-import { useTransactionDetail } from '../../hooks/queries'
-import { isEasnerProductReceiveTitle, isEasnerProductSendTitle, qk, scopeKey, formatMoneyDisplay, formatSendRateLabel, formatPayoutRecipientSubtitle, formatTransactionDetailHeroTitle, type GlobalPayoutReviewSnapshot, type GlobalPayoutRecipientSnapshot } from '@easner/shared'
+import {
+  useTransactionDetail,
+  seedTransactionDetailFromDisk,
+  unwrapTransactionDetailPayload,
+} from '../../hooks/queries'
+import { isEasnerProductReceiveTitle, isEasnerProductSendTitle, isEasetagReceiveTitle, qk, scopeKey, formatMoneyDisplay, formatSendRateLabel, formatPayoutRecipientSubtitle, formatTransactionDetailHeroTitle, type GlobalPayoutReviewSnapshot, type GlobalPayoutRecipientSnapshot } from '@easner/shared'
 import { ApiError } from '../../query/api-client'
 import { useScope } from '../../query/scope'
 
@@ -173,6 +177,8 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   }, [qc, scope, transactionId])
   const cachedDetailSnapshot = useMemo<LedgerTransaction | null>(() => {
     if (!scope || !transactionId) return null
+    const fromQuery = unwrapTransactionDetailPayload(detailQuery.data ?? undefined)
+    if (fromQuery) return fromQuery as unknown as LedgerTransaction
     const detailData = qc.getQueryData(qk.transactions.detail(scope, transactionId)) as
       | { transaction?: LedgerTransaction }
       | LedgerTransaction
@@ -180,19 +186,20 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
     if (!detailData) return null
     return ((detailData as { transaction?: LedgerTransaction })?.transaction ??
       detailData) as LedgerTransaction
-  }, [qc, scope, transactionId])
+  }, [qc, scope, transactionId, detailQuery.data, detailQuery.dataUpdatedAt])
 
-  const [transaction, setTransaction] = useState<LedgerTransaction | null>(
-    mergeTransactionSnapshots(
-      initialTransaction ?? null,
-      mergeTransactionSnapshots(cachedDetailSnapshot, cachedListSnapshot),
-    ),
+  const transaction = useMemo(
+    () =>
+      mergeTransactionSnapshots(
+        initialTransaction ?? null,
+        mergeTransactionSnapshots(cachedDetailSnapshot, cachedListSnapshot),
+      ),
+    [initialTransaction, cachedDetailSnapshot, cachedListSnapshot],
   )
-  const [loading, setLoading] = useState(initialTransaction || cachedDetailSnapshot || cachedListSnapshot ? false : true)
+
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>({})
-  const dataLoadedRef = useRef(false)
 
   const hasCoreDetailFields = useMemo(() => {
     if (!transaction) return false
@@ -217,26 +224,12 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   useCalmParallelEnterWhen(true, headerAnim, contentAnim)
 
   useEffect(() => {
-    dataLoadedRef.current = false
-    setTransaction(
-      mergeTransactionSnapshots(
-        initialTransaction ?? null,
-        mergeTransactionSnapshots(cachedDetailSnapshot, cachedListSnapshot),
-      ),
-    )
-    setError(null)
-    setLoading(initialTransaction || cachedDetailSnapshot || cachedListSnapshot ? false : true)
-  }, [transactionId, initialTransaction, cachedDetailSnapshot, cachedListSnapshot])
+    if (!scope || !transactionId) return
+    void seedTransactionDetailFromDisk(qc, scope, transactionId)
+  }, [qc, scope, transactionId])
 
   useEffect(() => {
     if (!transactionId) return
-
-    if (detailQuery.isPending) {
-      // Keep initial row data visible; only show skeleton when we truly have nothing.
-      setLoading(!transaction)
-      return
-    }
-
     if (detailQuery.isError) {
       const err = detailQuery.error
       const msg =
@@ -246,65 +239,33 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
             : err.message
           : 'Failed to load transaction details'
       setError(msg)
-      // Keep prior/initial snapshot visible instead of hard blanking.
-      if (!transaction) {
-        setTransaction(null)
-      }
-      setLoading(false)
       return
     }
-
-    const raw = detailQuery.data
-    if (!raw) {
-      setError('Transaction not found')
-      setTransaction(null)
-      setLoading(false)
-      return
-    }
-    const transactionData = ((raw as any)?.transaction ?? raw) as LedgerTransaction | null | undefined
-    if (transactionData) {
-      setTransaction((prev) => mergeTransactionSnapshots(transactionData, prev))
-      dataLoadedRef.current = true
+    if (detailQuery.data) {
       setError(null)
-    } else {
-      setError('Transaction not found')
-      setTransaction(null)
     }
-    setLoading(false)
-  }, [
-    transactionId,
-    detailQuery.data,
-    detailQuery.isPending,
-    detailQuery.isError,
-    detailQuery.error,
-  ])
+  }, [transactionId, detailQuery.data, detailQuery.isError, detailQuery.error])
 
-  const fetchTransactionDetails = useCallback(async (force = false) => {
-    if (dataLoadedRef.current && !force) return
-    setLoading(true)
+  const fetchTransactionDetails = useCallback(async () => {
     setError(null)
     try {
       const result = await detailQuery.refetch()
-      const transactionData = ((result.data as any)?.transaction ?? result.data) as LedgerTransaction | null | undefined
-      if (transactionData) {
-        setTransaction((prev) => mergeTransactionSnapshots(transactionData, prev))
-        dataLoadedRef.current = true
-      } else {
+      const transactionData = unwrapTransactionDetailPayload(result.data ?? undefined)
+      if (!transactionData && !transaction) {
         setError('Transaction not found')
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error fetching transaction details:', err)
-      setError('Failed to load transaction details')
-    } finally {
-      setLoading(false)
+      if (!transaction) {
+        setError('Failed to load transaction details')
+      }
     }
-  }, [detailQuery])
+  }, [detailQuery, transaction])
 
   const onRefresh = async () => {
     setRefreshing(true)
-    dataLoadedRef.current = false
     try {
-      await fetchTransactionDetails(true)
+      await fetchTransactionDetails()
     } finally {
       setRefreshing(false)
     }
@@ -399,15 +360,22 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   }
   
   const getTransactionTypeDisplay = (): string => {
-    const heroTitle = String(transaction.display_hero_title || '').trim()
+    let heroTitle = String(transaction.display_hero_title || '').trim()
+    if (heroTitle.startsWith('Deposit from ') && isEasetagReceiveTitle(heroTitle.replace(/^Deposit from /i, ''))) {
+      heroTitle = heroTitle.replace(/^Deposit from /i, '')
+    }
     if (heroTitle) return heroTitle
     if (transaction.transaction_type === 'receive') {
       if (transaction.source_type === 'liquidation_address') {
         return 'Stablecoin Deposit'
       }
-      const n = String(transaction.sender_display_name || transaction.name || '').trim()
-      if (n) {
-        return formatTransactionDetailHeroTitle({ direction: 'in', counterpartyName: n })
+      const n = String(transaction.name || transaction.sender_display_name || '').trim()
+      if (transaction.source_type === 'easetag_p2p' || isEasetagReceiveTitle(n)) {
+        return n || 'Easetag Received'
+      }
+      const senderName = String(transaction.sender_display_name || transaction.name || '').trim()
+      if (senderName) {
+        return formatTransactionDetailHeroTitle({ direction: 'in', counterpartyName: senderName })
       }
       return 'Bank Deposit'
     }
@@ -597,8 +565,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   // Prevent a partially-populated cached snapshot from rendering a mostly-empty UI.
   // If we don't have core fields yet, treat the view as loading until the detail query resolves.
   const shouldShowSkeleton =
-    (loading && (!transaction || !hasCoreDetailFields)) ||
-    (detailQuery.isPending && !hasCoreDetailFields && !error)
+    detailQuery.isPending && (!transaction || !hasCoreDetailFields) && !error
 
   if (shouldShowSkeleton) {
     return (
@@ -646,7 +613,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
             </View>
             <Text style={styles.errorTitle}>Something went wrong</Text>
             <Text style={styles.errorText}>{error || 'Transaction not found'}</Text>
-            <Pressable android_ripple={ripple.neutral} style={styles.retryButton} onPress={() => fetchTransactionDetails(true)}>
+            <Pressable android_ripple={ripple.neutral} style={styles.retryButton} onPress={() => fetchTransactionDetails()}>
               <Text style={styles.retryButtonText}>Try Again</Text>
             </Pressable>
           </View>

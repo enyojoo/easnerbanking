@@ -7,7 +7,7 @@
  * | Combined / dashboard tx feeds | 60s | Financially sensitive, stale-while-revalidate |
  * | Context transactions (Noah list) | 60s | Same |
  * | Exchange rates | 5m | Volatile FX |
- * | Transaction detail | 10m | Rarely changes after settlement |
+ * | Transaction detail | 7d | Immutable ledger snapshot; refreshed on invalidation / pull-to-refresh |
  * | Communication prefs | 5m | Settings; PATCH updates cache |
  * | Profile row (`AuthUser`) | n/a TTL | [`profileSnapshot.ts`](./profileSnapshot.ts) — instant header; refreshed with profile fetch |
  * | Recipients | 60m | Low-volatility directory |
@@ -37,7 +37,8 @@ export const CacheTTL = {
   DASHBOARD_COMBINED_TX: 60 * 1000,
   /** Full history combined feed (`TransactionsScreen`). */
   COMBINED_TX_LIST: 60 * 1000,
-  TRANSACTION_DETAIL: 10 * 60 * 1000,
+  /** Per-tx detail row + React Query detail cache (see `use-transactions.ts`). */
+  TRANSACTION_DETAIL: 7 * 24 * 60 * 60 * 1000,
   COMMUNICATION_PREFS: 5 * 60 * 1000,
 } as const
 

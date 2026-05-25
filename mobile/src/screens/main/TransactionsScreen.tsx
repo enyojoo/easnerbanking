@@ -28,7 +28,7 @@ import ScreenWrapper from '../../components/ScreenWrapper'
 import { PremiumModalSheet } from '../../components/premium'
 import { GroupedListCardSkeleton } from '../../components/skeletons'
 import { FilterChip, SectionCard } from '../../components/ui'
-import { useCurrenciesCatalog, useTransactionsList, TRANSACTIONS_LEDGER_PAGE_SIZE } from '../../hooks/queries'
+import { useCurrenciesCatalog, useTransactionsList, prefetchRecentTransactionDetailsInBackground, prefetchTransactionDetail, TRANSACTIONS_LEDGER_PAGE_SIZE } from '../../hooks/queries'
 import { NavigationProps, Transaction } from '../../types'
 import { analytics } from '../../lib/analytics'
 import { useBalance } from '../../contexts/BalanceContext'
@@ -192,6 +192,7 @@ const TransactionItem = React.memo(function TransactionItem({
   index, 
   isLast,
   onPress,
+  onPrefetch,
   formatAmount,
   formatDate,
   skipRowEntranceAnim,
@@ -200,6 +201,7 @@ const TransactionItem = React.memo(function TransactionItem({
   index: number
   isLast: boolean
   onPress: () => void
+  onPrefetch?: () => void
   formatAmount: (amount: number, currency: string, isReceived?: boolean) => string
   formatDate: (dateString: string) => string
   skipRowEntranceAnim: boolean
@@ -229,6 +231,7 @@ const TransactionItem = React.memo(function TransactionItem({
   }, [slideAnim, opacityAnim, skipRowEntranceAnim])
 
   const handlePressIn = () => {
+    onPrefetch?.()
     Animated.spring(scaleAnim, {
       toValue: 0.98,
       useNativeDriver: true,
@@ -470,20 +473,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
 
   useEffect(() => {
     if (!scope || queryRows.length === 0) return
-    const recentRows = queryRows.slice(0, 30)
-    for (const row of recentRows) {
-      const txId = transactionDetailLookupId(row)
-      if (!txId) continue
-      void qc.prefetchQuery({
-        queryKey: qk.transactions.detail(scope, txId),
-        queryFn: () =>
-          apiFetch<{ transaction?: CombinedTransaction }>(
-            `/api/transactions/${encodeURIComponent(txId)}`,
-            { headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS } },
-          ),
-        staleTime: 45_000,
-      })
-    }
+    prefetchRecentTransactionDetailsInBackground(qc, scope, queryRows, 30)
   }, [qc, queryRows, scope])
 
   // Refresh stale data when screen comes into focus
@@ -883,6 +873,12 @@ function TransactionsContent({ navigation }: NavigationProps) {
                               index={rowIdx}
                               isLast={isLast}
                               skipRowEntranceAnim={skipRowEntranceAnim}
+                              onPrefetch={() => {
+                                if (!scope) return
+                                const lookupId = transactionDetailLookupId(tx)
+                                if (!lookupId) return
+                                void prefetchTransactionDetail(qc, scope, lookupId)
+                              }}
                               onPress={() => {
                                 const lookupId = transactionDetailLookupId(tx)
                                 if (regularWidth) {

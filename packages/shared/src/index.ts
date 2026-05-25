@@ -160,6 +160,7 @@ export {
   deriveEasnerInboundRemitterDisplayName,
   isEasnerProductReceiveTitle,
   isEasnerProductSendTitle,
+  isEasetagReceiveTitle,
 } from "./transactions/product-label"
 export type { EasnerLedgerDirection } from "./transactions/product-label"
 export {

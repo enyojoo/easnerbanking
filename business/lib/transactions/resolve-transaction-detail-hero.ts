@@ -3,6 +3,7 @@ import {
   formatTransactionDetailHeroTitle,
   isEasnerProductReceiveTitle,
   isEasnerProductSendTitle,
+  isEasetagReceiveTitle,
 } from "@easner/shared"
 
 export function resolveTransactionDetailHeroTitle(transaction: Transaction): string {
@@ -13,8 +14,8 @@ export function resolveTransactionDetailHeroTitle(transaction: Transaction): str
   const isCredit = transaction.direction === "credit"
   const isEasetag = transaction.paymentScheme?.toLowerCase() === "easetag"
 
-  if (isEasetag || isEasnerProductSendTitle(description)) {
-    return description || (isCredit ? "Easetag Deposit" : "Easetag Transfer")
+  if (isEasetag || isEasnerProductSendTitle(description) || isEasetagReceiveTitle(description)) {
+    return description || (isCredit ? "Easetag Received" : "Easetag Transfer")
   }
 
   if (

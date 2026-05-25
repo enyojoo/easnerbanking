@@ -1,8 +1,18 @@
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
-import { qk, type TxFilters } from '@easner/shared'
+import {
+  useInfiniteQuery,
+  useQuery,
+  type QueryClient,
+  type UseQueryOptions,
+} from '@tanstack/react-query'
+import { qk, type Scope, type TxFilters } from '@easner/shared'
 import { apiFetch } from '../../query/api-client'
 import { useScope } from '../../query/scope'
 import { NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
+import {
+  readCachedTransactionDetail,
+  writeCachedTransactionDetail,
+} from '../../lib/transactionDetailCache'
+import { CacheTTL } from '../../lib/userCache'
 import type { Transaction } from '../../types'
 
 /**
@@ -68,6 +78,111 @@ interface TransactionsResponse {
  */
 export const TRANSACTIONS_LEDGER_PAGE_SIZE = 200
 
+/** Detail rows are immutable ledger snapshots — keep warm for 7d (disk + memory). */
+export const TRANSACTION_DETAIL_STALE_MS = CacheTTL.TRANSACTION_DETAIL
+export const TRANSACTION_DETAIL_GC_MS = CacheTTL.TRANSACTION_DETAIL
+
+/**
+ * When prefetching from list rows / press-in, always hit the network in the
+ * background even if the 7d display cache is still fresh.
+ */
+export const TRANSACTION_DETAIL_BACKGROUND_REFETCH_MS = 0
+
+export type TransactionDetailResponse = { transaction?: MobileTransactionRow }
+
+export function unwrapTransactionDetailPayload(
+  data: TransactionDetailResponse | MobileTransactionRow | undefined,
+): MobileTransactionRow | null {
+  if (!data) return null
+  return ((data as TransactionDetailResponse).transaction ?? data) as MobileTransactionRow
+}
+
+async function fetchTransactionDetail(scope: Scope, txId: string): Promise<TransactionDetailResponse> {
+  const body = await apiFetch<TransactionDetailResponse>(
+    `/api/transactions/${encodeURIComponent(txId)}`,
+    {
+      headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
+    },
+  )
+  void writeCachedTransactionDetail(txId, body).catch(() => {
+    // Best-effort disk cache for instant reopen after stale navigation.
+  })
+  return body
+}
+
+export function transactionDetailQueryOptions(
+  scope: Scope,
+  txId: string,
+): UseQueryOptions<TransactionDetailResponse, Error, TransactionDetailResponse> {
+  return {
+    queryKey: qk.transactions.detail(scope, txId),
+    queryFn: () => fetchTransactionDetail(scope, txId),
+    staleTime: TRANSACTION_DETAIL_STALE_MS,
+    gcTime: TRANSACTION_DETAIL_GC_MS,
+    meta: { safePersist: true, freshness: 'operational' },
+    placeholderData: (previousData) => previousData,
+    // Global mobile client sets refetchOnMount: false — override here so cached
+    // detail renders instantly, then enrichment refreshes in the background.
+    refetchOnMount: 'always',
+    refetchOnReconnect: 'always',
+    refetchOnWindowFocus: false,
+  }
+}
+
+/** Warm detail cache from disk before the network round-trip (e.g. on press-in). */
+export async function seedTransactionDetailFromDisk(
+  qc: QueryClient,
+  scope: Scope,
+  txId: string,
+): Promise<void> {
+  if (!txId.trim()) return
+  const key = qk.transactions.detail(scope, txId)
+  if (qc.getQueryData(key)) return
+  const cached = await readCachedTransactionDetail<TransactionDetailResponse>(txId)
+  if (!cached) return
+  qc.setQueryData(key, cached)
+}
+
+export function prefetchTransactionDetail(
+  qc: QueryClient,
+  scope: Scope,
+  txId: string,
+): Promise<void> {
+  if (!txId.trim()) return Promise.resolve()
+  void seedTransactionDetailFromDisk(qc, scope, txId)
+  return qc
+    .prefetchQuery({
+      ...transactionDetailQueryOptions(scope, txId),
+      staleTime: TRANSACTION_DETAIL_BACKGROUND_REFETCH_MS,
+    })
+    .then(() => undefined)
+}
+
+/** Prefer ledger UUID for detail API — list `transaction_id` may be display-only (ETID…). */
+export function transactionDetailLookupId(row: {
+  ledger_row_id?: string
+  transaction_id?: string
+  id?: string
+}): string {
+  const ledger = typeof row.ledger_row_id === 'string' ? row.ledger_row_id.trim() : ''
+  if (ledger) return ledger
+  return String(row.transaction_id || row.id || '').trim()
+}
+
+/** Prefetch enriched detail for recent ledger rows without blocking UI. */
+export function prefetchRecentTransactionDetailsInBackground(
+  qc: QueryClient,
+  scope: Scope,
+  rows: Array<{ ledger_row_id?: string; transaction_id?: string; id?: string }>,
+  limit = 30,
+): void {
+  for (const row of rows.slice(0, limit)) {
+    const txId = transactionDetailLookupId(row)
+    if (!txId) continue
+    void prefetchTransactionDetail(qc, scope, txId)
+  }
+}
+
 export function useTransactionsList(filters: TxFilters = {}, pageSize = TRANSACTIONS_LEDGER_PAGE_SIZE) {
   const { scope } = useScope()
   /** `limit` is part of the cache key — keep one page size for main ledger consumers (dashboard + list tab). */
@@ -100,20 +215,12 @@ export function useTransactionsList(filters: TxFilters = {}, pageSize = TRANSACT
 export function useTransactionDetail(txId: string | null) {
   const { scope } = useScope()
   return useQuery({
-    queryKey:
-      scope && txId
-        ? qk.transactions.detail(scope, txId)
-        : ['transactions', 'detail', 'disabled'],
+    ...(scope && txId
+      ? transactionDetailQueryOptions(scope, txId)
+      : {
+          queryKey: ['transactions', 'detail', 'disabled'] as const,
+          queryFn: async () => ({}) as TransactionDetailResponse,
+        }),
     enabled: Boolean(scope) && Boolean(txId),
-    queryFn: () =>
-      apiFetch<{ transaction?: MobileTransactionRow }>(
-        `/api/transactions/${encodeURIComponent(txId!)}`,
-        {
-          headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
-        },
-      ),
-    staleTime: 45_000,
-    gcTime: 10 * 60_000,
-    meta: { safePersist: false, freshness: 'operational' },
   })
 }

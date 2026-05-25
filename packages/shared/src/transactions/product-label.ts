@@ -258,3 +258,11 @@ export function isEasnerProductSendTitle(name: string | null | undefined): boole
   if (/^Sent to @/i.test(n)) return true
   return false
 }
+
+/** Inbound Easetag P2P titles from {@link toEasnerTransactionPrimaryLabel}. */
+export function isEasetagReceiveTitle(name: string | null | undefined): boolean {
+  const n = String(name ?? "").trim()
+  if (n === "Easetag Received") return true
+  if (/^Received from @/i.test(n)) return true
+  return false
+}

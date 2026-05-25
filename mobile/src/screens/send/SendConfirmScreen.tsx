@@ -37,6 +37,7 @@ import { useBalance } from '../../contexts/BalanceContext'
 import { useScope } from '../../query/scope'
 import { apiFetch } from '../../query/api-client'
 import { invalidateTransactionsFeed } from '../../query/refresh-user-feeds'
+import { prefetchTransactionDetail } from '../../hooks/queries'
 import { executeBalanceSend } from '../../hooks/executeBalanceSend'
 import { NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
 import { consumeBalanceSendPinVerified } from '../../lib/sendFlowPostPinGate'
@@ -410,15 +411,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           }
 
           if (scope) {
-            void qc
-              .prefetchQuery({
-                queryKey: qk.transactions.detail(scope, txId),
-                queryFn: () =>
-                  apiFetch<{ transaction?: unknown }>(`/api/transactions/${encodeURIComponent(txId)}`, {
-                    headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
-                  }),
-              })
-              .catch(() => {})
+            void prefetchTransactionDetail(qc, scope, txId).catch(() => {})
           }
 
           navigation.dispatch(
