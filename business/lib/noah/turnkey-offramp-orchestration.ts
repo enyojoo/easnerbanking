@@ -212,6 +212,11 @@ export async function executeTurnkeyOfframpPayout(
 
   const destinationAddress = pickDestinationAddress(workflowRaw)?.trim() || ""
   if (!destinationAddress) {
+    console.warn("[noah_global_payout]", {
+      stage: "workflow_missing_destination",
+      responseKeys: Object.keys(workflowRaw),
+      hasConditions: Array.isArray(workflowRaw.Conditions),
+    })
     return { ok: false, error: "Noah did not return a deposit address for this payout." }
   }
 

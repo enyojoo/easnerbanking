@@ -61,12 +61,49 @@ export async function startOnchainDepositToPaymentWorkflow(
   })
 }
 
+function extractWorkflowAddress(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) return value.trim()
+  if (value && typeof value === "object") {
+    const o = value as Record<string, unknown>
+    const addr = o.Address ?? o.address
+    if (typeof addr === "string" && addr.trim()) return addr.trim()
+  }
+  return null
+}
+
+function pickDestinationFromConditions(conditions: unknown): string | null {
+  if (!Array.isArray(conditions)) return null
+  for (const item of conditions) {
+    if (!item || typeof item !== "object") continue
+    const c = item as Record<string, unknown>
+    const addr = extractWorkflowAddress(c.DestinationAddress ?? c.destinationAddress)
+    if (addr) return addr
+  }
+  return null
+}
+
+/** Parse Noah onchain-deposit workflow response per MCP/docs (address may live under Conditions[]). */
 export function pickDestinationAddress(workflowRaw: Record<string, unknown>): string | null {
-  const top = workflowRaw.DestinationAddress ?? workflowRaw.destinationAddress
-  if (typeof top === "string" && top.trim()) return top.trim()
+  const top = extractWorkflowAddress(workflowRaw.DestinationAddress ?? workflowRaw.destinationAddress)
+  if (top) return top
+
+  const fromConditions = pickDestinationFromConditions(workflowRaw.Conditions ?? workflowRaw.conditions)
+  if (fromConditions) return fromConditions
+
   const nested = workflowRaw.Workflow as Record<string, unknown> | undefined
-  const a = nested?.DestinationAddress ?? nested?.destinationAddress
-  if (typeof a === "string" && a.trim()) return a.trim()
+  if (nested) {
+    const fromWorkflow = extractWorkflowAddress(nested.DestinationAddress ?? nested.destinationAddress)
+    if (fromWorkflow) return fromWorkflow
+    const fromNestedConditions = pickDestinationFromConditions(nested.Conditions ?? nested.conditions)
+    if (fromNestedConditions) return fromNestedConditions
+  }
+
+  const trigger = workflowRaw.Trigger as Record<string, unknown> | undefined
+  if (trigger) {
+    const fromTriggerConditions = pickDestinationFromConditions(trigger.Conditions ?? trigger.conditions)
+    if (fromTriggerConditions) return fromTriggerConditions
+  }
+
   return null
 }
 

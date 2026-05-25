@@ -6,11 +6,40 @@ vi.mock("@/lib/noah/http", () => ({
   noahFetch: (...args: unknown[]) => noahFetchMock(...args),
 }))
 
-import { pickTriggerCryptoAmount, startOnchainDepositToPaymentWorkflow } from "@/lib/terminal/automated-payout-workflow"
+import { pickDestinationAddress, pickTriggerCryptoAmount, startOnchainDepositToPaymentWorkflow } from "@/lib/terminal/automated-payout-workflow"
 
 describe("pickTriggerCryptoAmount", () => {
   it("prefers crypto authorized amount for GTEQ trigger", () => {
     expect(pickTriggerCryptoAmount("3.500000", "3.1")).toBe("3.500000")
+  })
+})
+
+describe("pickDestinationAddress", () => {
+  it("reads top-level string DestinationAddress", () => {
+    expect(pickDestinationAddress({ DestinationAddress: "addr-top" })).toBe("addr-top")
+  })
+
+  it("reads Noah Conditions[].DestinationAddress (documented workflow response)", () => {
+    expect(
+      pickDestinationAddress({
+        SourceAddress: "turnkey-vault",
+        Conditions: [
+          {
+            Network: "Solana",
+            CryptoCurrency: "USDC",
+            DestinationAddress: "noah-deposit-solana",
+          },
+        ],
+      }),
+    ).toBe("noah-deposit-solana")
+  })
+
+  it("reads nested DestinationAddress object Address field", () => {
+    expect(
+      pickDestinationAddress({
+        Conditions: [{ DestinationAddress: { Address: "nested-obj-addr" } }],
+      }),
+    ).toBe("nested-obj-addr")
   })
 })
 
