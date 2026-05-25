@@ -654,10 +654,14 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           android_ripple={ripple.neutral}
           style={[styles.cta, sendingAfterPin && styles.ctaDisabled]}
           onPress={() => void onConfirmPress()}
-          disabled={sendingAfterPin}
+          disabled={sendingAfterPin || (quoteLoading && !easetagUi)}
         >
           <LinearGradient
-            colors={sendingAfterPin ? [colors.neutral[400], colors.neutral[400]] : colors.primary.gradient}
+            colors={
+              sendingAfterPin || (quoteLoading && !easetagUi)
+                ? [colors.neutral[400], colors.neutral[400]]
+                : colors.primary.gradient
+            }
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.ctaGradient}
@@ -666,6 +670,11 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
               <View style={styles.ctaSendingRow}>
                 <ActivityIndicator color="#fff" size="small" />
                 <Text style={styles.ctaText}>Sending…</Text>
+              </View>
+            ) : quoteLoading && !easetagUi ? (
+              <View style={styles.ctaSendingRow}>
+                <ActivityIndicator color="#fff" size="small" />
+                <Text style={styles.ctaText}>Loading quote…</Text>
               </View>
             ) : (
               <Text style={styles.ctaText}>Confirm & Send</Text>

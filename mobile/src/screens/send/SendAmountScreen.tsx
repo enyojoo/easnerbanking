@@ -55,6 +55,7 @@ import {
   findPayoutFieldsSchema,
   formatSendRateLabel,
   getCurrencySymbol,
+  normalizePayoutReceiveAmountForCurrency,
   resolveEffectivePayoutMin,
   resolvePayoutCountryCode,
   getSendAmountNoteFieldUi,
@@ -597,7 +598,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     hasNoahRateForPair,
   ])
 
-  const receiveAmount = flowAmounts.receiveAmount
+  const receiveAmount = normalizePayoutReceiveAmountForCurrency(
+    receiveCurrency,
+    flowAmounts.receiveAmount,
+  )
   const sendingAmount = flowAmounts.sendAmount
   const exchangeRate = flowAmounts.forwardRate
 
@@ -1251,7 +1255,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       receiveAmount: enteredAmountValue,
                       forwardRate: 1,
                     }
-              let receiveAmountValue = navAmounts.receiveAmount
+              let receiveAmountValue = normalizePayoutReceiveAmountForCurrency(
+                receiveCurrency,
+                navAmounts.receiveAmount,
+              )
               const quoteStashMeta = {
                 amountEntryMode,
                 entryAmount: amountEntryMode === 'send' ? navAmounts.sendAmount : receiveAmountValue,
@@ -1290,36 +1297,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
               if (selectedPaymentMethod === 'balance') {
                 const transactionId = generateTransactionId()
-                const needsNoahQuote =
-                  !isEasetagRecipient &&
-                  !recipient.wallet_network?.trim() &&
-                  receiveAmountValue > 0 &&
-                  Boolean(recipient.id)
-
-                if (needsNoahQuote && !isStashedPayoutQuoteFresh(quoteStashMeta)) {
-                  try {
-                    const pq = await noahService.createPayoutQuote({
-                      recipientId: recipient.id,
-                      receiveAmount: receiveAmountValue,
-                      sourceBalanceCurrency: selectedBalanceCurrency,
-                      amountEntryMode,
-                      ...(amountEntryMode === 'send' && navAmounts.sendAmount > 0
-                        ? { sendAmount: navAmounts.sendAmount }
-                        : {}),
-                      ...(note.trim() ? { note: note.trim() } : {}),
-                      ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
-                    })
-                    stashSendPayoutQuote(pq, quoteStashMeta)
-                    receiveAmountValue = pq.receiveAmount
-                    calculatedSendingAmount = pq.sendAmount
-                    calculatedTotalAmount = pq.totalDebited
-                  } catch (e) {
-                    const msg =
-                      e instanceof Error ? e.message : 'Could not get a payout quote. Try again.'
-                    showError(msg)
-                    return
-                  }
-                } else if (stashedQuote) {
+                if (stashedQuote) {
                   receiveAmountValue = stashedQuote.receiveAmount
                   calculatedSendingAmount = stashedQuote.sendAmount
                   calculatedTotalAmount = stashedQuote.totalDebited
