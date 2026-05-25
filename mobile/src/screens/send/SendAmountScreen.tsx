@@ -712,6 +712,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     receiveAmount > 0 &&
     Boolean(recipient?.id)
 
+  const payoutQuotePrefetchSeqRef = useRef(0)
+
   const payoutQuotePrefetchKey = useMemo(() => {
     if (!needsBackgroundPayoutQuote || !recipient?.id) return ''
     return [
@@ -736,6 +738,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   useEffect(() => {
     if (!payoutQuotePrefetchKey) return
     let cancelled = false
+    const seq = ++payoutQuotePrefetchSeqRef.current
     const timer = setTimeout(() => {
       void (async () => {
         try {
@@ -748,7 +751,12 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             ...(note.trim() ? { note: note.trim() } : {}),
             ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
           })
-          if (!cancelled) stashSendPayoutQuote(pq)
+          if (cancelled || seq !== payoutQuotePrefetchSeqRef.current) return
+          stashSendPayoutQuote(pq, {
+            amountEntryMode,
+            entryAmount: amountEntryMode === 'send' ? sendingAmount : receiveAmount,
+            receiveCurrency,
+          })
         } catch {
           // silent — confirm refreshes if needed
         }
@@ -758,7 +766,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       cancelled = true
       clearTimeout(timer)
     }
-  }, [payoutQuotePrefetchKey, recipient, receiveAmount, selectedBalanceCurrency, amountEntryMode, sendingAmount, note, paymentPurpose])
+  }, [payoutQuotePrefetchKey, recipient, receiveAmount, receiveCurrency, selectedBalanceCurrency, amountEntryMode, sendingAmount, note, paymentPurpose])
 
   const sendButtonDisabled =
     !sendAmount ||
@@ -1244,6 +1252,11 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       forwardRate: 1,
                     }
               let receiveAmountValue = navAmounts.receiveAmount
+              const quoteStashMeta = {
+                amountEntryMode,
+                entryAmount: amountEntryMode === 'send' ? navAmounts.sendAmount : receiveAmountValue,
+                receiveCurrency,
+              }
 
               if (
                 (selectedPaymentMethod === 'balance' || selectedPaymentMethod === 'otherCurrency') &&
@@ -1262,13 +1275,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 }
               }
 
-              const stashedQuote =
-                isStashedPayoutQuoteFresh(receiveAmountValue, {
-                  amountEntryMode,
-                  sendAmount: navAmounts.sendAmount,
-                })
-                  ? peekSendPayoutQuote()
-                  : null
+              const stashedQuote = isStashedPayoutQuoteFresh(quoteStashMeta)
+                ? peekSendPayoutQuote()
+                : null
               let calculatedSendingAmount =
                 stashedQuote?.noah?.rate && stashedQuote.noah.rate > 0
                   ? receiveAmountValue / stashedQuote.noah.rate
@@ -1287,13 +1296,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   receiveAmountValue > 0 &&
                   Boolean(recipient.id)
 
-                if (
-                  needsNoahQuote &&
-                  !isStashedPayoutQuoteFresh(receiveAmountValue, {
-                    amountEntryMode,
-                    sendAmount: navAmounts.sendAmount,
-                  })
-                ) {
+                if (needsNoahQuote && !isStashedPayoutQuoteFresh(quoteStashMeta)) {
                   try {
                     const pq = await noahService.createPayoutQuote({
                       recipientId: recipient.id,
@@ -1306,7 +1309,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       ...(note.trim() ? { note: note.trim() } : {}),
                       ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
                     })
-                    stashSendPayoutQuote(pq)
+                    stashSendPayoutQuote(pq, quoteStashMeta)
                     receiveAmountValue = pq.receiveAmount
                     calculatedSendingAmount = pq.sendAmount
                     calculatedTotalAmount = pq.totalDebited

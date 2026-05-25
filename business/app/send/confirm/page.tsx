@@ -414,9 +414,11 @@ export default function SendConfirmPage() {
   const easnerFee = pq?.easnerFee ?? 0
   const easnerFeeCurrency = pq?.easnerFeeCurrency ?? state.sendCurrency
   const youSendAmount =
-    hasFx && pq?.midRate && pq.midRate > 0
-      ? state.amount / pq.midRate
-      : state.sendAmount
+    state.amountEntryMode === "send" && state.sendAmount > 0
+      ? state.sendAmount
+      : hasFx && pq?.midRate && pq.midRate > 0
+        ? state.amount / pq.midRate
+        : state.sendAmount
   const exchangeRate =
     hasFx && pq?.midRate && pq.midRate > 0
       ? pq.midRate

@@ -1,15 +1,37 @@
 import type { PayoutQuote } from './noahService'
 
 /** Inline — avoid `@easner/shared` barrel (pulls flag assets into Metro on EAS). */
-function payoutReceiveAmountsMatch(a: number, b: number): boolean {
+function normalizeReceiveForCurrency(currency: string, amount: number): number {
+  const cur = currency.trim().toUpperCase()
+  const normalized = Math.round(amount * 100) / 100
+  if (!Number.isFinite(normalized) || normalized <= 0) return 0
+  const zeroDecimal = new Set(['NGN', 'KES', 'GHS', 'UGX', 'RWF', 'XOF', 'XAF'])
+  if (zeroDecimal.has(cur)) return Math.round(normalized)
+  return normalized
+}
+
+function entryAmountsMatch(a: number, b: number, currency: string): boolean {
+  return normalizeReceiveForCurrency(currency, a) === normalizeReceiveForCurrency(currency, b)
+}
+
+function sendEntryAmountsMatch(a: number, b: number): boolean {
   const norm = (n: number) => Math.round(n * 100) / 100
   return norm(a) === norm(b)
 }
 
-let stashed: PayoutQuote | null = null
+export type SendPayoutQuoteStashMeta = {
+  amountEntryMode: 'send' | 'receive'
+  /** Send-side principal when mode=send; receive fiat when mode=receive. */
+  entryAmount: number
+  receiveCurrency: string
+}
 
-export function stashSendPayoutQuote(quote: PayoutQuote): void {
+let stashed: PayoutQuote | null = null
+let stashedMeta: SendPayoutQuoteStashMeta | null = null
+
+export function stashSendPayoutQuote(quote: PayoutQuote, meta: SendPayoutQuoteStashMeta): void {
   stashed = quote
+  stashedMeta = meta
 }
 
 export function peekSendPayoutQuote(): PayoutQuote | null {
@@ -18,18 +40,18 @@ export function peekSendPayoutQuote(): PayoutQuote | null {
 
 export function clearSendPayoutQuote(): void {
   stashed = null
+  stashedMeta = null
 }
 
-export function isStashedPayoutQuoteFresh(
-  receiveAmount: number,
-  options?: { amountEntryMode?: 'send' | 'receive'; sendAmount?: number },
-): boolean {
-  if (!stashed?.expiresAt || !stashed.noah?.formSessionId) return false
+export function isStashedPayoutQuoteFresh(input: SendPayoutQuoteStashMeta): boolean {
+  if (!stashed?.expiresAt || !stashed.noah?.formSessionId || !stashedMeta) return false
   if (new Date(stashed.expiresAt).getTime() <= Date.now()) return false
-  if (options?.amountEntryMode === 'send') {
-    const sendAmount = options.sendAmount
-    if (sendAmount == null || !(sendAmount > 0)) return false
-    return payoutReceiveAmountsMatch(stashed.sendAmount, sendAmount)
+  if (stashedMeta.amountEntryMode !== input.amountEntryMode) return false
+  if (stashedMeta.receiveCurrency.trim().toUpperCase() !== input.receiveCurrency.trim().toUpperCase()) {
+    return false
   }
-  return payoutReceiveAmountsMatch(stashed.receiveAmount, receiveAmount)
+  if (input.amountEntryMode === 'send') {
+    return sendEntryAmountsMatch(stashedMeta.entryAmount, input.entryAmount)
+  }
+  return entryAmountsMatch(stashed.receiveAmount, input.entryAmount, input.receiveCurrency)
 }

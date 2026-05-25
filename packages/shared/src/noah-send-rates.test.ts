@@ -6,7 +6,9 @@ import {
   noahSendRatesQueryPath,
   noahWalletRowsToRateMap,
   normalizePayoutReceiveAmount,
+  normalizePayoutReceiveAmountForCurrency,
   payoutReceiveAmountsMatch,
+  payoutReceiveAmountsMatchForCurrency,
 } from "./noah-send-rates"
 
 describe("noahSendRatesQueryPath", () => {
@@ -86,11 +88,11 @@ describe("convertNoahSendFlowAmounts", () => {
       rateMap: map,
     })
     expect(fromSend.receiveAmount).toBe(
-      normalizePayoutReceiveAmount(fromReceive.sendAmount * 1352.815),
+      normalizePayoutReceiveAmountForCurrency("NGN", fromReceive.sendAmount * 1352.815),
     )
   })
 
-  it("send-entered: normalizes receive to 2dp for Noah prepare", () => {
+  it("send-entered: normalizes NGN receive to whole units for Noah prepare", () => {
     const o = convertNoahSendFlowAmounts({
       direction: "send",
       amount: 7.39,
@@ -98,10 +100,24 @@ describe("convertNoahSendFlowAmounts", () => {
       receiveCurrency: "NGN",
       rateMap: map,
     })
-    expect(o.receiveAmount).toBe(
-      normalizePayoutReceiveAmount(7.39 * 1352.815),
-    )
-    expect(o.receiveAmount).toBe(9997.3)
+    expect(o.receiveAmount).toBe(9997)
+  })
+})
+
+describe("normalizePayoutReceiveAmountForCurrency", () => {
+  it("rounds NGN to whole naira", () => {
+    expect(normalizePayoutReceiveAmountForCurrency("NGN", 6530.85)).toBe(6531)
+    expect(normalizePayoutReceiveAmountForCurrency("NGN", 6530)).toBe(6530)
+  })
+
+  it("keeps USD at two decimal places", () => {
+    expect(normalizePayoutReceiveAmountForCurrency("USD", 5.555)).toBe(5.56)
+  })
+})
+
+describe("payoutReceiveAmountsMatchForCurrency", () => {
+  it("treats fractional NGN as equal after integer rounding", () => {
+    expect(payoutReceiveAmountsMatchForCurrency(6530.85, 6531, "NGN")).toBe(true)
   })
 })
 

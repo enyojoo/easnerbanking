@@ -37,10 +37,52 @@ export function normalizePayoutReceiveAmount(amount: number): number {
   return Math.round(amount * 100) / 100
 }
 
+/**
+ * Noah BankLocal / mobile corridors (e.g. NGN) reject fractional destination fiat.
+ * Round to whole units before prepare and when comparing stash freshness.
+ */
+export const ZERO_DECIMAL_PAYOUT_CURRENCIES = new Set([
+  "NGN",
+  "KES",
+  "GHS",
+  "UGX",
+  "RWF",
+  "XOF",
+  "XAF",
+])
+
+export function isZeroDecimalPayoutCurrency(currency: string): boolean {
+  return ZERO_DECIMAL_PAYOUT_CURRENCIES.has(currency.trim().toUpperCase())
+}
+
+export function normalizePayoutReceiveAmountForCurrency(
+  currency: string,
+  amount: number,
+): number {
+  const normalized = normalizePayoutReceiveAmount(amount)
+  if (!Number.isFinite(normalized) || normalized <= 0) return 0
+  if (isZeroDecimalPayoutCurrency(currency)) {
+    return Math.round(normalized)
+  }
+  return normalized
+}
+
 /** Match wallet balance / send-side display precision. */
 export function normalizePayoutSendAmount(amount: number): number {
   if (!Number.isFinite(amount) || amount <= 0) return 0
   return Math.round(amount * 100) / 100
+}
+
+/** Compare receive amounts after corridor-aware normalization. */
+export function payoutReceiveAmountsMatchForCurrency(
+  a: number,
+  b: number,
+  currency: string,
+): boolean {
+  return (
+    normalizePayoutReceiveAmountForCurrency(currency, a) ===
+    normalizePayoutReceiveAmountForCurrency(currency, b)
+  )
 }
 
 /** Compare receive amounts after Noah prepare normalization. */
@@ -124,13 +166,13 @@ export function convertNoahSendFlowAmounts(input: {
     return { sendAmount: 0, receiveAmount: 0, forwardRate: 1 }
   }
   if (send === receive) {
-    const normalized = normalizePayoutReceiveAmount(amount)
+    const normalized = normalizePayoutReceiveAmountForCurrency(receive, amount)
     return { sendAmount: normalized, receiveAmount: normalized, forwardRate: 1 }
   }
 
   const forwardRate = getNoahSendConversionRate(rateMap, send, receive)
   if (direction === "receive") {
-    const receiveAmount = normalizePayoutReceiveAmount(amount)
+    const receiveAmount = normalizePayoutReceiveAmountForCurrency(receive, amount)
     const sendAmount =
       forwardRate > 0
         ? normalizePayoutSendAmount(receiveAmount / forwardRate)
@@ -140,7 +182,7 @@ export function convertNoahSendFlowAmounts(input: {
   const sendAmount = normalizePayoutSendAmount(amount)
   const receiveAmount =
     forwardRate > 0
-      ? normalizePayoutReceiveAmount(sendAmount * forwardRate)
+      ? normalizePayoutReceiveAmountForCurrency(receive, sendAmount * forwardRate)
       : 0
   return { sendAmount, receiveAmount, forwardRate }
 }

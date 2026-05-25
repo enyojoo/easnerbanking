@@ -8,6 +8,7 @@ import { logNoahPayoutFailure } from "@/lib/noah/log-noah-payout-failure"
 import { payoutCorridorGate } from "@/lib/payout-corridor-validation"
 import {
   normalizePayoutReceiveAmount,
+  normalizePayoutReceiveAmountForCurrency,
   validatePayoutAmountAgainstLimits,
   type PayoutFieldsSchemaHint,
 } from "@easner/shared"
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
   } | null
 
   const amountEntryMode = body?.amountEntryMode === "send" ? "send" : "receive"
-  const receiveAmount = normalizePayoutReceiveAmount(Number(body?.receiveAmount))
+  let receiveAmount = normalizePayoutReceiveAmount(Number(body?.receiveAmount))
   const sendAmountInput = Number(body?.sendAmount)
   const sendBudget =
     amountEntryMode === "send" &&
@@ -61,9 +62,6 @@ export async function POST(request: Request) {
 
   if (!recipientId && !inlineRecipient) {
     return NextResponse.json({ error: "recipientId or recipient is required." }, { status: 400 })
-  }
-  if (!Number.isFinite(receiveAmount) || receiveAmount <= 0) {
-    return NextResponse.json({ error: "receiveAmount must be positive." }, { status: 400 })
   }
 
   const admin = createSupabaseAdmin()
@@ -79,6 +77,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Recipient not found." }, { status: 404 })
     }
     gateRow = data as RecipientSellPrepareRow
+  }
+
+  if (gateRow?.currency) {
+    receiveAmount = normalizePayoutReceiveAmountForCurrency(gateRow.currency, receiveAmount)
+  }
+
+  if (!Number.isFinite(receiveAmount) || receiveAmount <= 0) {
+    return NextResponse.json({ error: "receiveAmount must be positive." }, { status: 400 })
   }
 
   if (gateRow) {

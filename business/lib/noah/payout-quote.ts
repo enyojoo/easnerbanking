@@ -1,7 +1,7 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { getNoahEurCryptoTicker, getNoahUsdCryptoTicker } from "@/lib/noah/config"
 import { findNoahRate, isNoahRateFresh, listNoahRates } from "@/lib/fx/noah-rates"
-import { normalizePayoutReceiveAmount } from "@easner/shared"
+import { normalizePayoutReceiveAmount, normalizePayoutReceiveAmountForCurrency } from "@easner/shared"
 import {
   prepareSellFromRecipientRow,
   resolveRecipientPayoutCountry,
@@ -10,10 +10,7 @@ import {
 } from "@/lib/terminal/recipient-sell-prepare"
 import { NoProviderForCorridorError, selectProviderForCorridor } from "@/lib/payout-providers"
 import { mapNoahPrepareError } from "@/lib/noah/noah-prepare-errors"
-import {
-  resolvePrepareForSendEntry,
-  seedQuoteReceiveForSendBudget,
-} from "@/lib/noah/payout-quote-send-budget"
+import { seedQuoteReceiveForSendBudget } from "@/lib/noah/payout-quote-send-budget"
 
 /** Easner fee slice on payout quotes (Noah prepare is authoritative; no DB pricing engine). */
 export type EasnerPayoutQuoteSlice = {
@@ -201,6 +198,8 @@ export async function buildPayoutQuote(input: {
       clientReceiveAmount: receiveAmount,
       dbRate: dbRow && isNoahRateFresh(dbRow) ? dbRow.rate : null,
     })
+  } else {
+    quoteReceiveAmount = normalizePayoutReceiveAmountForCurrency(receiveCurrency, quoteReceiveAmount)
   }
 
   let prep: Awaited<ReturnType<typeof prepareSellFromRecipientRow>>["prep"]
@@ -225,34 +224,10 @@ export async function buildPayoutQuote(input: {
     }
   }
 
-  const runPrepareWithSessionRetry = async (fiatAmount: number) => {
-    try {
-      return await runPrepare(fiatAmount)
-    } catch (e) {
-      const msg = e instanceof Error ? e.message.toLowerCase() : String(e).toLowerCase()
-      const expired =
-        msg.includes("formsession") || (msg.includes("session") && msg.includes("expired"))
-      if (expired) {
-        return await runPrepare(fiatAmount)
-      }
-      throw e
-    }
-  }
-
   try {
-    if (sendBudget != null) {
-      const resolved = await resolvePrepareForSendEntry({
-        initialReceive: quoteReceiveAmount,
-        runPrepare: runPrepareWithSessionRetry,
-      })
-      quoteReceiveAmount = resolved.receiveAmount
-      prep = resolved.prepared.prep
-      channelId = resolved.prepared.channelId
-    } else {
-      const prepared = await executePrepare(quoteReceiveAmount)
-      prep = prepared.prep
-      channelId = prepared.channelId
-    }
+    const prepared = await executePrepare(quoteReceiveAmount)
+    prep = prepared.prep
+    channelId = prepared.channelId
   } catch (e) {
     throw e instanceof Error ? e : new Error(mapNoahPrepareError(e))
   }

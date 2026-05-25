@@ -15,7 +15,6 @@ import {
   getGlobalPayoutProcessingTime,
   getGlobalPayoutTransferMethod,
   getSendAmountNoteFieldUi,
-  payoutReceiveAmountsMatch,
   qk,
 } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -111,13 +110,40 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
 
   const amountScreenSendAmount = params.amountScreenSendAmount ?? params.calculatedSendingAmount ?? 0
   const amountEntryMode = params.amountEntryMode ?? 'receive'
+  const quoteStashMeta = useMemo(
+    () => ({
+      amountEntryMode,
+      entryAmount: amountEntryMode === 'send' ? amountScreenSendAmount : receiveAmountValue,
+      receiveCurrency,
+    }),
+    [amountEntryMode, amountScreenSendAmount, receiveAmountValue, receiveCurrency],
+  )
+
+  const [quotedReceiveAmount, setQuotedReceiveAmount] = useState(() => {
+    const stashed = peekSendPayoutQuote()
+    const meta = {
+      amountEntryMode: params.amountEntryMode ?? 'receive',
+      entryAmount:
+        (params.amountEntryMode ?? 'receive') === 'send'
+          ? (params.amountScreenSendAmount ?? params.calculatedSendingAmount ?? 0)
+          : (params.receiveAmountValue ?? 0),
+      receiveCurrency: params.receiveCurrency ?? params.recipient?.currency ?? '',
+    }
+    if (stashed && isStashedPayoutQuoteFresh(meta)) return stashed.receiveAmount
+    return params.receiveAmountValue ?? 0
+  })
 
   const [pricing, setPricing] = useState(() => {
     const stashed = peekSendPayoutQuote()
-    const useStashed =
-      stashed &&
-      (params.receiveAmountValue ?? 0) > 0 &&
-      payoutReceiveAmountsMatch(stashed.receiveAmount, params.receiveAmountValue ?? 0)
+    const meta = {
+      amountEntryMode: params.amountEntryMode ?? 'receive',
+      entryAmount:
+        (params.amountEntryMode ?? 'receive') === 'send'
+          ? (params.amountScreenSendAmount ?? params.calculatedSendingAmount ?? 0)
+          : (params.receiveAmountValue ?? 0),
+      receiveCurrency: params.receiveCurrency ?? params.recipient?.currency ?? '',
+    }
+    const useStashed = stashed && isStashedPayoutQuoteFresh(meta)
     if (useStashed) {
       const easnerFeeAmt =
         stashed.easner.pricingTotals?.total_easner_fee ?? stashed.easner.totalFeeAmount ?? 0
@@ -203,10 +229,20 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     return Number.isFinite(rate) && rate > 0 ? rate : 0
   }, [pricingQuoteResult?.providerRate, payoutSession?.formSessionId, calculatedTotalAmount])
   const youSendAmount = useMemo(() => {
+    if (amountEntryMode === 'send' && amountScreenSendAmount > 0) {
+      return amountScreenSendAmount
+    }
     if (!hasFx) return calculatedSendingAmount
-    if (customerRate > 0) return receiveAmountValue / customerRate
+    if (customerRate > 0) return quotedReceiveAmount / customerRate
     return calculatedSendingAmount
-  }, [hasFx, customerRate, receiveAmountValue, calculatedSendingAmount])
+  }, [
+    amountEntryMode,
+    amountScreenSendAmount,
+    hasFx,
+    customerRate,
+    quotedReceiveAmount,
+    calculatedSendingAmount,
+  ])
   const processingFee = easnerFee || calculatedFeeAmount
   const exchangeFee = useMemo(
     () =>
@@ -239,17 +275,15 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   useEffect(() => {
     if (!recipient || easetagUi) return
     if (!recipient.id || !(receiveAmountValue > 0)) return
-    if (isStashedPayoutQuoteFresh(receiveAmountValue, { amountEntryMode, sendAmount: amountScreenSendAmount })) {
+    if (isStashedPayoutQuoteFresh(quoteStashMeta)) {
       const stashed = peekSendPayoutQuote()
       if (stashed) {
+        setQuotedReceiveAmount(stashed.receiveAmount)
         const easnerFeeAmt =
           stashed.easner.pricingTotals?.total_easner_fee ?? stashed.easner.totalFeeAmount ?? 0
         setPricing((prev) => ({
           ...prev,
-          calculatedSendingAmount:
-            stashed.noah.rate && stashed.noah.rate > 0
-              ? receiveAmountValue / stashed.noah.rate
-              : amountScreenSendAmount,
+          calculatedSendingAmount: amountScreenSendAmount,
           calculatedFeeAmount: easnerFeeAmt,
           calculatedTotalAmount: stashed.totalDebited,
           noahFee: stashed.noah.totalFee,
@@ -285,16 +319,14 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           ...(sendPaymentPurpose ? { paymentPurpose: sendPaymentPurpose } : {}),
         })
         if (cancelled) return
+        setQuotedReceiveAmount(pq.receiveAmount)
         const easnerFeeAmt =
           pq.easner.pricingTotals?.total_easner_fee ??
           pq.easner.totalFeeAmount ??
           0
         setPricing((prev) => ({
           ...prev,
-          calculatedSendingAmount:
-            pq.noah.rate && pq.noah.rate > 0
-              ? receiveAmountValue / pq.noah.rate
-              : amountScreenSendAmount,
+          calculatedSendingAmount: amountScreenSendAmount,
           noahFee: pq.noah.totalFee,
           easnerFee: easnerFeeAmt,
           calculatedFeeAmount: easnerFeeAmt,
@@ -320,7 +352,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     return () => {
       cancelled = true
     }
-  }, [easetagUi, recipient?.id, recipient?.currency, selectedBalanceCurrency, receiveAmountValue, amountEntryMode, amountScreenSendAmount, sendNote, sendPaymentPurpose])
+  }, [easetagUi, recipient?.id, recipient?.currency, selectedBalanceCurrency, receiveAmountValue, quoteStashMeta, amountScreenSendAmount, sendNote, sendPaymentPurpose])
 
   useFocusEffect(
     useCallback(() => {
@@ -333,7 +365,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
         setSendingAfterPin(true)
         try {
           const reviewSnapshot =
-            !easetagUi && calculatedTotalAmount > 0 && receiveAmountValue > 0
+            !easetagUi && calculatedTotalAmount > 0 && quotedReceiveAmount > 0
               ? {
                   you_send_amount: youSendAmount,
                   total_debited: calculatedTotalAmount,
@@ -341,7 +373,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                   processing_fee: processingFee,
                   exchange_rate: hasFx && customerRate > 0 ? customerRate : 1,
                   send_currency: selectedBalanceCurrency,
-                  receive_amount: receiveAmountValue,
+                  receive_amount: quotedReceiveAmount,
                   receive_currency: receiveCurrency,
                   transfer_method: transferMethod,
                   processing_time: processingTime,
@@ -352,7 +384,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
             {
               recipient,
               calculatedTotalAmount,
-              receiveAmountValue,
+              receiveAmountValue: quotedReceiveAmount,
               selectedBalanceCurrency,
               ...(payoutSession ? { payoutSession } : {}),
               ...(reviewSnapshot ? { reviewSnapshot } : {}),
@@ -423,7 +455,15 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       navigation,
       payoutSession,
       qc,
-      receiveAmountValue,
+      quotedReceiveAmount,
+      youSendAmount,
+      exchangeFee,
+      processingFee,
+      hasFx,
+      customerRate,
+      transferMethod,
+      processingTime,
+      easetagUi,
       recipient,
       sendReservedDebitEtid,
       scope,
@@ -564,7 +604,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
               ) : null}
               <Row
                 label="Recipient gets"
-                value={formatMoneyDisplay(receiveAmountValue, receiveCurrency)}
+                value={formatMoneyDisplay(quotedReceiveAmount, receiveCurrency)}
               />
               {arrivalHint && !easetagUi ? (
                 <Row label="Arrival" value={arrivalHint} />
