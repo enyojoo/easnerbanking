@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   isEasetagChainSettlementTransaction,
+  isNoahGlobalPayoutOrchestrationInHiddenFromFeed,
   isTurnkeyNoahBankOnrampChainMirror,
   isTurnkeyTransactionHiddenFromFeed,
 } from "@/lib/transactions/transaction-feed-filters"
@@ -41,6 +42,61 @@ describe("isTurnkeyTransactionHiddenFromFeed", () => {
         CryptoCurrency: "USDC",
         Orchestration: { RuleExecutionID: "abc" },
       }),
+    ).toBe(true)
+  })
+})
+
+describe("isNoahGlobalPayoutOrchestrationInHiddenFromFeed", () => {
+  const settlementHashes = new Set(["sig-global-payout"])
+
+  it("hides Noah IN when signature matches Turnkey global payout settlement", () => {
+    expect(
+      isNoahGlobalPayoutOrchestrationInHiddenFromFeed(
+        {
+          provider: "noah",
+          direction: "in",
+          tx_hash: "sig-global-payout",
+          payload: {
+            Direction: "In",
+            Network: "Solana",
+            CryptoCurrency: "USDC",
+          },
+          metadata: { source: "webhook_transaction" },
+        },
+        settlementHashes,
+      ),
+    ).toBe(true)
+  })
+
+  it("shows organic Noah stablecoin deposit without matching settlement hash", () => {
+    expect(
+      isNoahGlobalPayoutOrchestrationInHiddenFromFeed(
+        {
+          provider: "noah",
+          direction: "in",
+          tx_hash: "organic-deposit",
+          payload: {
+            Direction: "In",
+            Network: "Solana",
+            CryptoCurrency: "USDC",
+          },
+          metadata: { source: "webhook_transaction" },
+        },
+        settlementHashes,
+      ),
+    ).toBe(false)
+  })
+
+  it("hides when metadata already tagged", () => {
+    expect(
+      isNoahGlobalPayoutOrchestrationInHiddenFromFeed(
+        {
+          provider: "noah",
+          direction: "in",
+          metadata: { global_payout_orchestration_in_leg: true },
+        },
+        new Set(),
+      ),
     ).toBe(true)
   })
 })

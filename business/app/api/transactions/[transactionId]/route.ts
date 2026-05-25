@@ -20,6 +20,7 @@ import {
   isGlobalPayoutOffRampRow,
 } from "@/lib/transactions/global-payout-detail"
 import {
+  isNoahGlobalPayoutOrchestrationInHiddenFromFeed,
   isTurnkeyNoahBankOnrampChainMirror,
   isTurnkeyTransactionHiddenFromFeed,
 } from "@/lib/transactions/transaction-feed-filters"
@@ -270,6 +271,32 @@ export async function GET(request: Request, routeCtx: Props) {
   const rec = row as Record<string, unknown>
   if (isTurnkeyTransactionHiddenFromFeed(rec.metadata, rec.payload)) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
+  }
+
+  const noahInTxHash = String(rec.tx_hash ?? "").trim()
+  if (
+    noahInTxHash &&
+    String(rec.provider ?? "").toLowerCase() === "noah" &&
+    String(rec.direction ?? "").toLowerCase() === "in"
+  ) {
+    let tkQ = admin
+      .from("transactions")
+      .select("metadata")
+      .eq("provider", "turnkey")
+      .eq("direction", "out")
+      .eq("tx_hash", noahInTxHash)
+    if (scope === "business") {
+      tkQ = tkQ.eq("business_id", businessId as string)
+    } else {
+      tkQ = tkQ.eq("user_id", userId).is("business_id", null)
+    }
+    const { data: tkRow } = await tkQ.maybeSingle()
+    const tkMeta = (tkRow?.metadata || {}) as Record<string, unknown>
+    const globalPayoutHashes =
+      tkMeta.global_payout_settlement_leg === true ? new Set([noahInTxHash]) : new Set<string>()
+    if (isNoahGlobalPayoutOrchestrationInHiddenFromFeed(rec, globalPayoutHashes)) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 })
+    }
   }
 
   const txHashForMirror = String(rec.tx_hash ?? "").trim()

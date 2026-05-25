@@ -16,20 +16,195 @@ export function isNoahGlobalPayoutSellTx(tx: Record<string, unknown>): boolean {
   return Boolean(String(tx.CryptoCurrency ?? "").trim())
 }
 
+/** On-chain Noah IN that may be global-payout orchestration (Turnkey → Noah), not a user deposit. */
+export function isNoahGlobalPayoutOrchestrationInLegShape(tx: Record<string, unknown>): boolean {
+  if (String(tx.Direction ?? "").toUpperCase() !== "IN") return false
+  if (tx.FiatPayment) return false
+  const net = String(tx.Network ?? "")
+  if (!net || net === "OffNetwork") return false
+  const crypto = String(tx.CryptoCurrency ?? "").toUpperCase()
+  return crypto.includes("USDC") || crypto.includes("EURC")
+}
+
 /**
  * Noah received USDC/EURC from Turnkey before fiat payout — internal orchestration leg, not user-facing credit.
  * Mirrors bank-on-ramp orchestration Out (Solana) which we suppress on the other side of the flow.
  */
 export function isNoahGlobalPayoutOrchestrationInLeg(tx: Record<string, unknown>): boolean {
-  if (String(tx.Direction ?? "").toUpperCase() !== "IN") return false
-  if (!pickNoahOrchestrationRuleExecutionId(tx)) return false
-  if (tx.FiatPayment) return false
-  const net = String(tx.Network ?? "")
-  if (!net || net === "OffNetwork") return false
-  const crypto = String(tx.CryptoCurrency ?? "").toUpperCase()
-  if (!crypto.includes("USDC") && !crypto.includes("EURC")) return false
-  const externalId = String(tx.ExternalID ?? tx.externalID ?? tx.ExternalId ?? "").trim()
-  return Boolean(externalId)
+  return isNoahGlobalPayoutOrchestrationInLegShape(tx)
+}
+
+export function pickNoahWebhookTxHash(tx: Record<string, unknown>): string | null {
+  const h = tx.TxHash ?? tx.TransactionHash ?? tx.txHash ?? tx.Hash ?? tx.PublicID
+  return h != null && String(h).trim() ? String(h).trim() : null
+}
+
+function applyLedgerScope<T extends { eq: (col: string, val: string) => T; is: (col: string, val: null) => T }>(
+  query: T,
+  scope: { userId: string; businessId: string | null },
+): T {
+  if (scope.businessId) return query.eq("business_id", scope.businessId)
+  return query.eq("user_id", scope.userId).is("business_id", null)
+}
+
+export type ResolvedGlobalPayoutOutRow = {
+  id: string
+  metadata: Record<string, unknown>
+  easnerPayoutId: string
+}
+
+/**
+ * Resolve the user-facing global payout OUT row for a Noah orchestration IN webhook.
+ * Pending IN events often lack ExternalID/Orchestration; match Turnkey settlement hash instead.
+ */
+export async function resolveGlobalPayoutOutRowForOrchestrationIn(
+  admin: SupabaseClient,
+  input: {
+    externalId: string | null
+    solanaTxHash: string | null
+    ruleExecutionId: string | null
+    userId: string
+    businessId: string | null
+  },
+): Promise<ResolvedGlobalPayoutOutRow | null> {
+  const scope = { userId: input.userId, businessId: input.businessId }
+
+  if (input.externalId) {
+    const pending = await findPendingGlobalPayoutByExternalId(admin, input.externalId)
+    if (pending) {
+      return {
+        id: pending.id,
+        metadata: pending.metadata,
+        easnerPayoutId: input.externalId,
+      }
+    }
+  }
+
+  const solanaTxHash = String(input.solanaTxHash || "").trim()
+  if (solanaTxHash) {
+    let tkQ = admin
+      .from("transactions")
+      .select("metadata")
+      .eq("provider", "turnkey")
+      .eq("tx_hash", solanaTxHash)
+    tkQ = applyLedgerScope(tkQ, scope)
+    const { data: tkRow } = await tkQ.maybeSingle()
+    const tkMeta = (tkRow?.metadata || {}) as Record<string, unknown>
+    if (tkMeta.global_payout_settlement_leg === true) {
+      const easnerPayoutId = String(tkMeta.easner_payout_id || "").trim()
+      if (easnerPayoutId) {
+        const pending = await findPendingGlobalPayoutByExternalId(admin, easnerPayoutId)
+        if (pending) {
+          return { id: pending.id, metadata: pending.metadata, easnerPayoutId }
+        }
+      }
+    }
+
+    let outByHashQ = admin
+      .from("transactions")
+      .select("id, metadata")
+      .eq("provider", "noah")
+      .eq("direction", "out")
+      .filter("metadata->>turnkey_tx_hash", "eq", solanaTxHash)
+    outByHashQ = applyLedgerScope(outByHashQ, scope)
+    const { data: outByHash } = await outByHashQ.maybeSingle()
+    if (outByHash?.id) {
+      const meta = (outByHash.metadata || {}) as Record<string, unknown>
+      const easnerPayoutId = String(meta.easner_payout_id || "").trim()
+      if (easnerPayoutId && meta.payout_type === "global_fiat") {
+        return { id: String(outByHash.id), metadata: meta, easnerPayoutId }
+      }
+    }
+  }
+
+  const ruleExecutionId = String(input.ruleExecutionId || "").trim()
+  if (ruleExecutionId) {
+    let outByRuleQ = admin
+      .from("transactions")
+      .select("id, metadata")
+      .eq("provider", "noah")
+      .eq("direction", "out")
+      .filter("metadata->>noah_rule_execution_id", "eq", ruleExecutionId)
+    outByRuleQ = applyLedgerScope(outByRuleQ, scope)
+    const { data: outByRule } = await outByRuleQ.maybeSingle()
+    if (outByRule?.id) {
+      const meta = (outByRule.metadata || {}) as Record<string, unknown>
+      const easnerPayoutId = String(meta.easner_payout_id || "").trim()
+      if (easnerPayoutId && meta.payout_type === "global_fiat") {
+        return { id: String(outByRule.id), metadata: meta, easnerPayoutId }
+      }
+    }
+  }
+
+  return null
+}
+
+/** Hide an internal Noah orchestration IN row created before linkage (pending webhook race). */
+export async function suppressNoahGlobalPayoutOrchestrationInLedgerRow(
+  admin: SupabaseClient,
+  input: {
+    noahTransactionId: string
+    userId: string
+    businessId: string | null
+    linkedOutRowId?: string
+    easnerPayoutId?: string
+    ruleExecutionId?: string | null
+    solanaTxHash?: string | null
+  },
+): Promise<void> {
+  const noahTransactionId = String(input.noahTransactionId || "").trim()
+  if (!noahTransactionId) return
+
+  let q = admin
+    .from("transactions")
+    .select("id, metadata")
+    .eq("provider", "noah")
+    .eq("provider_transaction_id", noahTransactionId)
+  q = applyLedgerScope(q, { userId: input.userId, businessId: input.businessId })
+  const { data: row } = await q.maybeSingle()
+  if (!row?.id) return
+
+  const prior = (row.metadata || {}) as Record<string, unknown>
+  const patch: Record<string, unknown> = {
+    ...prior,
+    flow: "global_fiat_offramp",
+    global_payout_orchestration_in_leg: true,
+    suppress_in_feed: true,
+  }
+  if (input.linkedOutRowId) patch.linked_global_payout_out_row_id = input.linkedOutRowId
+  if (input.easnerPayoutId) patch.easner_payout_id = input.easnerPayoutId
+  if (input.ruleExecutionId) patch.noah_rule_execution_id = input.ruleExecutionId
+  if (input.solanaTxHash) patch.noah_on_chain_tx_hash = input.solanaTxHash
+
+  await admin
+    .from("transactions")
+    .update({ metadata: patch, updated_at: new Date().toISOString() })
+    .eq("id", row.id)
+}
+
+/** Resolve Turnkey global-payout settlement signatures for Noah IN rows (list feed safety net). */
+export async function collectGlobalPayoutSettlementTxHashesForScope(
+  admin: SupabaseClient,
+  txHashes: string[],
+  scope: { userId: string; businessId: string | null },
+): Promise<Set<string>> {
+  const unique = [...new Set(txHashes.map((h) => String(h || "").trim()).filter(Boolean))]
+  if (unique.length === 0) return new Set()
+
+  const matched = new Set<string>()
+  for (const hash of unique) {
+    let q = admin
+      .from("transactions")
+      .select("metadata")
+      .eq("provider", "turnkey")
+      .eq("direction", "out")
+      .eq("tx_hash", hash)
+    q = applyLedgerScope(q, scope)
+    const { data } = await q.maybeSingle()
+    const meta = (data?.metadata || {}) as Record<string, unknown>
+    if (meta.global_payout_settlement_leg === true) matched.add(hash)
+  }
+  return matched
 }
 
 export type NoahGlobalPayoutPayOutEnrichment = {

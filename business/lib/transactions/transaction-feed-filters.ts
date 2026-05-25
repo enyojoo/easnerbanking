@@ -1,6 +1,10 @@
 import {
   isNoahBankOnrampOrchestrationOutLeg,
 } from "@/lib/noah/bank-onramp-tx"
+import {
+  isNoahGlobalPayoutOrchestrationInLegShape,
+  pickNoahWebhookTxHash,
+} from "@/lib/noah/global-payout-ledger"
 
 /** Rows tagged for internal Easetag chain settlement should not appear in public activity lists. */
 export function isTurnkeyTransactionHiddenFromFeed(
@@ -73,4 +77,39 @@ export function isTurnkeyNoahBankOnrampChainMirror(
     return false
   }
   return m.source === "turnkey_onchain_backfill" || m.source === "turnkey_webhook"
+}
+
+/**
+ * Noah Solana IN that mirrors Turnkey global-payout settlement (internal orchestration leg).
+ * Same pattern as {@link isTurnkeyNoahBankOnrampChainMirror} for VA bank on-ramp.
+ */
+export function isNoahGlobalPayoutOrchestrationInHiddenFromFeed(
+  row: {
+    provider?: unknown
+    direction?: unknown
+    metadata?: unknown
+    payload?: unknown
+    tx_hash?: unknown
+  },
+  globalPayoutSettlementTxHashes: ReadonlySet<string>,
+): boolean {
+  if (String(row.provider ?? "").toLowerCase() !== "noah") return false
+  if (String(row.direction ?? "").toLowerCase() !== "in") return false
+
+  const meta = (row.metadata as Record<string, unknown> | undefined) ?? {}
+  if (meta.global_payout_orchestration_in_leg === true || meta.suppress_in_feed === true) {
+    return true
+  }
+  if (meta.payout_type === "global_fiat" && meta.flow === "global_fiat_offramp") {
+    return true
+  }
+
+  const payload = row.payload as Record<string, unknown> | undefined
+  if (!payload || !isNoahGlobalPayoutOrchestrationInLegShape(payload)) return false
+
+  const hash =
+    String(row.tx_hash ?? "").trim() || pickNoahWebhookTxHash(payload) || ""
+  if (hash && globalPayoutSettlementTxHashes.has(hash)) return true
+
+  return false
 }

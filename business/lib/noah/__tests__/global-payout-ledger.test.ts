@@ -2,10 +2,35 @@ import { describe, expect, it } from "vitest"
 import {
   extractNoahGlobalPayoutPayOutEnrichment,
   isNoahGlobalPayoutOrchestrationInLeg,
+  isNoahGlobalPayoutOrchestrationInLegShape,
   isNoahGlobalPayoutSellTx,
   pendingGlobalPayoutProviderTransactionId,
   pickNoahGlobalPayoutLedgerFields,
 } from "@/lib/noah/global-payout-ledger"
+
+describe("isNoahGlobalPayoutOrchestrationInLegShape", () => {
+  it("matches Solana IN USDC without ExternalID or Orchestration (pending webhook)", () => {
+    expect(
+      isNoahGlobalPayoutOrchestrationInLegShape({
+        Direction: "In",
+        Network: "Solana",
+        CryptoCurrency: "USDC",
+        PublicID: "sig-abc",
+      }),
+    ).toBe(true)
+  })
+
+  it("rejects OffNetwork fiat pay-in shape", () => {
+    expect(
+      isNoahGlobalPayoutOrchestrationInLegShape({
+        Direction: "In",
+        Network: "OffNetwork",
+        CryptoCurrency: "USDC",
+        FiatPayment: { Amount: "100", FiatCurrency: "USD" },
+      }),
+    ).toBe(false)
+  })
+})
 
 describe("isNoahGlobalPayoutOrchestrationInLeg", () => {
   it("matches Solana IN orchestration leg for global payout", () => {
@@ -20,6 +45,17 @@ describe("isNoahGlobalPayoutOrchestrationInLeg", () => {
     ).toBe(true)
   })
 
+  it("matches pending IN before ExternalID is present", () => {
+    expect(
+      isNoahGlobalPayoutOrchestrationInLeg({
+        Direction: "In",
+        Network: "Solana",
+        CryptoCurrency: "USDC",
+        PublicID: "sig-abc",
+      }),
+    ).toBe(true)
+  })
+
   it("rejects OffNetwork OUT fiat payout shape", () => {
     expect(
       isNoahGlobalPayoutOrchestrationInLeg({
@@ -29,17 +65,6 @@ describe("isNoahGlobalPayoutOrchestrationInLeg", () => {
         ExternalID: "56ed5056-71fa-44c1-96cc-4b404197f11f",
         FiatPayment: { Amount: "5000", FiatCurrency: "NGN" },
         Orchestration: { RuleExecutionID: "9ddfacd4-57de-11f1-a03a-ea31bc6f4dc9" },
-      }),
-    ).toBe(false)
-  })
-
-  it("rejects orchestration IN without ExternalID (bank on-ramp shape)", () => {
-    expect(
-      isNoahGlobalPayoutOrchestrationInLeg({
-        Direction: "In",
-        Network: "Solana",
-        CryptoCurrency: "USDC",
-        Orchestration: { RuleExecutionID: "rule-1" },
       }),
     ).toBe(false)
   })

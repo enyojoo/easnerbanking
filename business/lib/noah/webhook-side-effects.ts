@@ -8,7 +8,19 @@ import { resolveNoahCustomerTarget } from "@/lib/noah/resolve-noah-customer-targ
 import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
 import { mapNoahVerificationToKycStatus } from "@/lib/noah/map-kyc"
 import { pickTxAmountAndCurrency } from "@/lib/noah/map-transactions"
-import { pickNoahGlobalPayoutLedgerFields, isNoahGlobalPayoutSellTx, isNoahGlobalPayoutOrchestrationInLeg, extractNoahGlobalPayoutPayOutEnrichment, buildNoahGlobalPayoutPayOutMetadata, findPendingGlobalPayoutByExternalId, linkPendingGlobalPayoutToNoahTransactionId, linkGlobalPayoutOutRowFromOrchestrationIn, settlementWalletCurrencyForNoahCrypto } from "@/lib/noah/global-payout-ledger"
+import {
+  pickNoahGlobalPayoutLedgerFields,
+  isNoahGlobalPayoutSellTx,
+  isNoahGlobalPayoutOrchestrationInLegShape,
+  extractNoahGlobalPayoutPayOutEnrichment,
+  buildNoahGlobalPayoutPayOutMetadata,
+  findPendingGlobalPayoutByExternalId,
+  linkPendingGlobalPayoutToNoahTransactionId,
+  linkGlobalPayoutOutRowFromOrchestrationIn,
+  resolveGlobalPayoutOutRowForOrchestrationIn,
+  suppressNoahGlobalPayoutOrchestrationInLedgerRow,
+  settlementWalletCurrencyForNoahCrypto,
+} from "@/lib/noah/global-payout-ledger"
 import {
   buildNoahBankPayInLedgerMetadata,
   buildNoahOrchestrationOutLegMetadata,
@@ -200,17 +212,33 @@ export async function applyNoahWebhookSideEffects(
         const ruleExecutionId = pickNoahOrchestrationRuleExecutionId(txData)
         const isOrchestrationOut = isNoahBankOnrampOrchestrationOutLeg(txData)
         const payInEnrichment = extractNoahBankPayInEnrichment(txData)
-        const globalPayoutOrchestrationIn =
-          isNoahGlobalPayoutOrchestrationInLeg(txData) && externalId
-            ? await findPendingGlobalPayoutByExternalId(admin, externalId)
+        const solanaTxHash = pickTxHash(txData)
+        const globalPayoutOutRow =
+          isNoahGlobalPayoutOrchestrationInLegShape(txData)
+            ? await resolveGlobalPayoutOutRowForOrchestrationIn(admin, {
+                externalId,
+                solanaTxHash,
+                ruleExecutionId,
+                userId,
+                businessId,
+              })
             : null
 
-        if (globalPayoutOrchestrationIn) {
+        if (globalPayoutOutRow) {
           await linkGlobalPayoutOutRowFromOrchestrationIn(admin, {
-            outRowId: globalPayoutOrchestrationIn.id,
-            priorMetadata: globalPayoutOrchestrationIn.metadata,
+            outRowId: globalPayoutOutRow.id,
+            priorMetadata: globalPayoutOutRow.metadata,
             ruleExecutionId,
-            solanaTxHash: pickTxHash(txData),
+            solanaTxHash,
+          })
+          await suppressNoahGlobalPayoutOrchestrationInLedgerRow(admin, {
+            noahTransactionId: id,
+            userId,
+            businessId,
+            linkedOutRowId: globalPayoutOutRow.id,
+            easnerPayoutId: globalPayoutOutRow.easnerPayoutId,
+            ruleExecutionId,
+            solanaTxHash,
           })
         } else {
         let metadata: Record<string, unknown> = { source: "webhook_transaction" }

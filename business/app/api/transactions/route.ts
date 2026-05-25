@@ -15,13 +15,28 @@ import { enrichBankDepositLedgerRows } from "@/lib/transactions/enrich-bank-depo
 import { mapRowToBusinessTransaction } from "@/lib/transactions/map-row-to-business"
 import { resolveGlobalPayoutOffRampDetail } from "@/lib/transactions/resolve-global-payout-off-ramp"
 import {
+  isNoahGlobalPayoutOrchestrationInHiddenFromFeed,
   isTurnkeyNoahBankOnrampChainMirror,
   isTurnkeyTransactionHiddenFromFeed,
 } from "@/lib/transactions/transaction-feed-filters"
 import { collectNoahBankOnrampOnChainTxHashesForScope } from "@/lib/noah/noah-bank-onramp-chain-suppression"
+import { collectGlobalPayoutSettlementTxHashesForScope } from "@/lib/noah/global-payout-ledger"
 
 const LEDGER_SELECT =
   "id, easner_transaction_id, provider, provider_transaction_id, status, amount, currency, direction, metadata, payload, created_at, updated_at, occurred_at, settled_at, tx_hash, wallet_address, counterparty_address, asset, chain, base_currency, base_amount"
+
+function collectGlobalPayoutSettlementTxHashes(rows: Record<string, unknown>[]): Set<string> {
+  const hashes = new Set<string>()
+  for (const row of rows) {
+    if (String(row.provider ?? "").toLowerCase() !== "turnkey") continue
+    if (String(row.direction ?? "").toLowerCase() !== "out") continue
+    const meta = (row.metadata as Record<string, unknown> | undefined) ?? {}
+    if (meta.global_payout_settlement_leg !== true) continue
+    const hash = String(row.tx_hash ?? "").trim()
+    if (hash) hashes.add(hash)
+  }
+  return hashes
+}
 
 function mapNoahTxStatusFromLedger(st: string): string {
   const lower = st.toLowerCase()
@@ -157,11 +172,31 @@ export async function GET(request: Request) {
   }
 
   const rawRows = (rows ?? []) as Record<string, unknown>[]
+  const globalPayoutSettlementHashes = collectGlobalPayoutSettlementTxHashes(rawRows)
+  const noahGlobalPayoutInHashes = rawRows
+    .filter(
+      (r) =>
+        String(r.provider ?? "").toLowerCase() === "noah" &&
+        String(r.direction ?? "").toLowerCase() === "in" &&
+        String(r.tx_hash ?? "").trim(),
+    )
+    .map((r) => String(r.tx_hash ?? "").trim())
+  if (noahGlobalPayoutInHashes.length > 0) {
+    const fromDb = await collectGlobalPayoutSettlementTxHashesForScope(admin, noahGlobalPayoutInHashes, {
+      userId: user.id,
+      businessId: scope === "business" ? (businessId as string) : null,
+    })
+    for (const hash of fromDb) globalPayoutSettlementHashes.add(hash)
+  }
   const rowsAfterMetadataFilter = rawRows.filter(
     (r) => !isTurnkeyTransactionHiddenFromFeed(r.metadata, r.payload),
   )
 
-  const turnkeyInboundHashes = rowsAfterMetadataFilter
+  const rowsAfterGlobalPayoutInFilter = rowsAfterMetadataFilter.filter(
+    (r) => !isNoahGlobalPayoutOrchestrationInHiddenFromFeed(r, globalPayoutSettlementHashes),
+  )
+
+  const turnkeyInboundHashes = rowsAfterGlobalPayoutInFilter
     .filter((r) => String(r.provider ?? "").toLowerCase() === "turnkey" && String(r.direction ?? "").toLowerCase() === "in")
     .map((r) => String(r.tx_hash ?? "").trim())
     .filter(Boolean)
@@ -173,7 +208,7 @@ export async function GET(request: Request) {
         })
       : new Set<string>()
 
-  const rowsFiltered = rowsAfterMetadataFilter.filter(
+  const rowsFiltered = rowsAfterGlobalPayoutInFilter.filter(
     (r) => !isTurnkeyNoahBankOnrampChainMirror(r, noahOnChainHashes),
   )
 
