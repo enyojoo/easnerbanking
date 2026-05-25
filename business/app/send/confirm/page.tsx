@@ -227,7 +227,7 @@ export default function SendConfirmPage() {
             : ""
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
-          Idempotency-Key: `biz-easetag-${plannedEtid || state.transactionId || Date.now()}`,
+          "Idempotency-Key": `biz-easetag-${plannedEtid || state.transactionId || Date.now()}`,
         }
         if (businessId) {
           headers["X-Easner-Noah-Scope"] = "business"
