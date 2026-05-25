@@ -64,16 +64,14 @@ import { prefetchReceiveDepositQueries } from '../../hooks/queries/use-receive-d
 import {
   markRecentMoneyActivity,
   qk,
-  isEasnerProductReceiveTitle,
-  resolveInboundTransactionListLabel,
-  resolveTransactionListLabel,
 } from '@easner/shared'
+import { getTransactionListName } from '../../lib/transactionListLabel'
 import { AvatarImage } from '../../components/AvatarImage'
 import { avatarImageUri, warmAvatarCache } from '../../lib/avatarCache'
 import { buildGroupedActivityItems } from '../../lib/transactionListGrouping'
 
 const DASHBOARD_SELECTED_CURRENCY_KEY_PREFIX = 'easner_dashboard_selected_currency_'
-const DASHBOARD_RECENT_TX_CACHE_KEY_PREFIX = 'easner_dashboard_recent_tx_'
+const DASHBOARD_RECENT_TX_CACHE_KEY_PREFIX = 'easner_dashboard_recent_tx_v2_'
 const DASHBOARD_RECENT_TX_CACHE_TTL_MS = 60 * 60 * 1000
 /** Recent activity rows shown on Home (UI only). Ledger fetch uses {@link TRANSACTIONS_LEDGER_PAGE_SIZE}. */
 const DASHBOARD_RECENT_TX_LIMIT = 4
@@ -476,35 +474,8 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     return `${month} ${day}, ${year} • ${displayHours}:${minutes} ${ampm}`
   }
 
-  const getTransactionName = (transaction: DashboardTransaction): string => {
-    const transactionType = transaction.transaction_type || transaction.type || 'send'
-
-    if (transactionType === 'receive') {
-      const senderDisplay = String(transaction.sender_display_name ?? '').trim()
-      const apiName = String(transaction.name ?? '').trim()
-      if (senderDisplay && !isEasnerProductReceiveTitle(senderDisplay)) return senderDisplay
-      if (apiName && !isEasnerProductReceiveTitle(apiName)) return apiName
-      return resolveInboundTransactionListLabel({
-        name: transaction.name,
-        source_type: transaction.source_type,
-        source_liquidation_address_id: transaction.source_liquidation_address_id,
-        metadata: transaction.metadata,
-        payload: transaction.payload,
-      })
-    }
-
-    const displayDescription = String(transaction.display_description ?? '').trim()
-    if (displayDescription) return displayDescription
-
-    return resolveTransactionListLabel(transactionType, {
-      name: transaction.name,
-      source_type: transaction.source_type,
-      source_liquidation_address_id: transaction.source_liquidation_address_id,
-      metadata: transaction.metadata,
-      payload: transaction.payload,
-      recipient_full_name: transaction.recipient?.full_name,
-    })
-  }
+  const getTransactionName = (transaction: DashboardTransaction): string =>
+    getTransactionListName(transaction)
 
   const getTransactionIconType = (transaction: DashboardTransaction): string => {
     const transactionType = transaction.transaction_type || transaction.type

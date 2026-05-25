@@ -56,11 +56,8 @@ import { formatSignedCurrency, getTransactionStatusDisplay } from '../../utils/f
 import {
   markRecentMoneyActivity,
   qk,
-  isEasnerProductReceiveTitle,
-  resolveInboundTransactionListLabel,
-  resolveOutboundTransactionListLabel,
-  resolveTransactionListLabel,
 } from '@easner/shared'
+import { getTransactionListName } from '../../lib/transactionListLabel'
 import { useFocusEffect } from '@react-navigation/native'
 import { apiPost } from '../../lib/apiClient'
 import { useAuth } from '../../contexts/AuthContext'
@@ -183,30 +180,9 @@ function formatRangeLabel(from: Date | null, to: Date | null): string {
 }
 
 function getTransactionName(item: CombinedTransaction, transactionType: string): string {
-  if (transactionType === 'card_funding') {
-    return 'Card Top-Up'
-  }
-  if (transactionType === 'receive') {
-    const senderDisplay = String(
-      (item as { sender_display_name?: string }).sender_display_name ?? '',
-    ).trim()
-    const apiName = String(item.name ?? '').trim()
-    if (senderDisplay && !isEasnerProductReceiveTitle(senderDisplay)) return senderDisplay
-    if (apiName && !isEasnerProductReceiveTitle(apiName)) return apiName
-  }
-  if (transactionType === 'send') {
-    const displayDescription = String(
-      (item as { display_description?: string }).display_description ?? '',
-    ).trim()
-    if (displayDescription) return displayDescription
-  }
-  return resolveTransactionListLabel(transactionType, {
-    name: item.name,
-    source_type: item.source_type,
-    source_liquidation_address_id: item.source_liquidation_address_id,
-    metadata: item.metadata,
-    payload: (item as { payload?: Record<string, unknown> }).payload,
-    recipient_full_name: item.recipient?.full_name,
+  return getTransactionListName({
+    ...item,
+    transaction_type: transactionType,
   })
 }
 
