@@ -304,7 +304,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       return
     }
     let cancelled = false
-    setPricing((prev) => ({ ...prev, quoteLoading: true, quoteError: null }))
+    setPricing((prev) => ({ ...prev, quoteError: null }))
     void (async () => {
       try {
         const pq = await noahService.createPayoutQuote({
@@ -652,13 +652,13 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
 
         <Pressable
           android_ripple={ripple.neutral}
-          style={[styles.cta, sendingAfterPin && styles.ctaDisabled]}
+          style={[styles.cta, (sendingAfterPin || (!easetagUi && !quoteReady)) && styles.ctaDisabled]}
           onPress={() => void onConfirmPress()}
-          disabled={sendingAfterPin || (quoteLoading && !easetagUi)}
+          disabled={sendingAfterPin || (!easetagUi && !quoteReady)}
         >
           <LinearGradient
             colors={
-              sendingAfterPin || (quoteLoading && !easetagUi)
+              sendingAfterPin || (!easetagUi && !quoteReady)
                 ? [colors.neutral[400], colors.neutral[400]]
                 : colors.primary.gradient
             }
@@ -670,11 +670,6 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
               <View style={styles.ctaSendingRow}>
                 <ActivityIndicator color="#fff" size="small" />
                 <Text style={styles.ctaText}>Sending…</Text>
-              </View>
-            ) : quoteLoading && !easetagUi ? (
-              <View style={styles.ctaSendingRow}>
-                <ActivityIndicator color="#fff" size="small" />
-                <Text style={styles.ctaText}>Loading quote…</Text>
               </View>
             ) : (
               <Text style={styles.ctaText}>Confirm & Send</Text>

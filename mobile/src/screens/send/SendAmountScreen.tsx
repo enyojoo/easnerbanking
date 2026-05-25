@@ -765,7 +765,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
           // silent — confirm refreshes if needed
         }
       })()
-    }, 450)
+    }, 200)
     return () => {
       cancelled = true
       clearTimeout(timer)
