@@ -15,6 +15,7 @@ export function isTurnkeyTransactionHiddenFromFeed(
   }
   const m = metadata as Record<string, unknown>
   if (m.easetag_settlement_leg === true || m.suppress_in_feed === true) return true
+  if (m.global_payout_settlement_leg === true) return true
   if (m.noah_orchestration_settlement_leg === true) return true
   if (payload && typeof payload === "object" && isNoahBankOnrampOrchestrationOutLeg(payload as Record<string, unknown>)) {
     return true

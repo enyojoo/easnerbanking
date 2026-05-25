@@ -36,7 +36,6 @@ import {
 import { generateTransactionId } from "@/lib/transaction-id"
 import { CurrencyFlag } from "@/components/flags"
 import { useBusinessProfile } from "@/lib/use-business-profile"
-import { isEasetagLedgerP2PEnabled } from "@/lib/ledger/easetag-transfer"
 import {
   type SendFlowState,
   SEND_FLOW_STATE_KEY,
@@ -303,12 +302,11 @@ export default function SendPage() {
   }, [recipient, sourceAccountId, paymentMethod, suggestedAccount])
 
   const isBalanceSource = paymentMethod === "balance"
-  /** Easenet + internal ledger: need org context loaded before Continue (Noah scope on transfer). */
-  const needsProfileBeforeEasenetLedgerSend =
+  /** Easenet balance send: need org context loaded before Continue (Noah scope on transfer). */
+  const needsProfileBeforeEasenetSend =
     isBalanceSource &&
     recipient !== null &&
-    Boolean(recipient.payeeEasetag?.trim()) &&
-    isEasetagLedgerP2PEnabled()
+    Boolean(recipient.payeeEasetag?.trim())
   const hasValidOtherCurrencySelection =
     showManualSendPaymentOptions &&
     Boolean(otherCurrency) &&
@@ -403,7 +401,7 @@ export default function SendPage() {
     isBalanceSource &&
     tier1Complete &&
     !payoutReceiveBelowMin &&
-    (!needsProfileBeforeEasenetLedgerSend || (hasData && !profileLoading))
+    (!needsProfileBeforeEasenetSend || (hasData && !profileLoading))
 
   const canContinueOtherCurrency =
     recipient !== null &&

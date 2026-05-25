@@ -81,12 +81,15 @@ export default function StablecoinScreen({ navigation, route }: NavigationProps)
         const token = (await supabase.auth.getSession()).data.session?.access_token
         if (!token) throw new Error('Not authenticated')
         const scopeHeaders = await getNoahScopeHeaders()
-        const res = await fetch(`${getApiBaseUrl()}/api/noah/wallets`, {
+        const res = await fetch(`${getApiBaseUrl()}/api/wallets/deposit-addresses`, {
           headers: { Authorization: `Bearer ${token}`, ...scopeHeaders },
         })
-        const data = (await res.json().catch(() => ({}))) as { wallets?: Array<{ address?: string }>; error?: string }
+        const data = (await res.json().catch(() => ({}))) as {
+          USD?: { address?: string }
+          error?: string
+        }
         if (!res.ok) throw new Error(data.error || 'Could not load wallet')
-        const addr = data.wallets?.[0]?.address?.trim()
+        const addr = data.USD?.address?.trim()
         if (!addr) throw new Error('No deposit address found')
         if (!cancelled) setAddress(addr)
       } catch (e: unknown) {

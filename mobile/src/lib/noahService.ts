@@ -2,7 +2,6 @@
 // Noah REST API: https://docs.noah.com/
 
 import * as FileSystem from 'expo-file-system/legacy'
-import Constants from 'expo-constants'
 import type { Session } from '@supabase/supabase-js'
 import { getApiBaseUrl, getNoahScopeHeaders } from './apiClient'
 import { getSessionReliable } from './authSession'
@@ -772,7 +771,7 @@ export const noahService = {
   },
 
   /**
-   * Prepare Noah crypto→fiat sell (validates beneficiary; use FormSessionID on /transactions/sell).
+   * Prepare Noah crypto→fiat sell quote (validates beneficiary; execute re-prepares at payout time).
    */
   async prepareSellPayout(input: {
     fiatAmount: string
@@ -907,95 +906,53 @@ export const noahService = {
     destinationEasetag: string
     amount: string
     currency: string
-    cryptoCurrency?: string
-    /** Same `ETID`+8 digits as review; passed as `reserved_debit_etid` for ledger P2P (no DB reservation row). */
+    /** Same `ETID`+8 digits as review; passed as `reserved_debit_etid` for ledger P2P. */
     reservedDebitEtid?: string
     note?: string
   }): Promise<NoahTransfer> {
     const session = await requireAuthSession()
     const scopeHeaders = await getNoahScopeHeaders()
-    const useLedger =
-      Constants.expoConfig?.extra?.easetagLedgerP2pEnabled === true ||
-      process.env.EXPO_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true' ||
-      process.env.NEXT_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true'
-
-    if (useLedger) {
-      const response = await fetch(`${apiUrl()}/api/wallets/easetag-transfer`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-          ...scopeHeaders,
-          'Idempotency-Key': `mobile-easetag-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        },
-        body: JSON.stringify({
-          destination_easetag: input.destinationEasetag.replace(/^@/, '').trim(),
-          amount: input.amount,
-          currency: String(input.currency || 'usd').toUpperCase(),
-          ...(input.reservedDebitEtid?.trim()
-            ? { reserved_debit_etid: input.reservedDebitEtid.trim().toUpperCase() }
-            : {}),
-          ...(input.note?.trim() ? { note: input.note.trim() } : {}),
-        }),
-      })
-      const data = (await response.json().catch(() => ({}))) as Record<string, unknown>
-      if (!response.ok || !data.ok) {
-        const detail = typeof data.detail === 'string' ? data.detail.trim() : ''
-        const err = typeof data.error === 'string' ? data.error : 'Wallet transfer failed'
-        throw new Error(detail ? `${err}: ${detail}` : err)
-      }
-      const etid =
-        typeof data.easner_transaction_id === 'string' ? data.easner_transaction_id.trim() : ''
-      const legacyId = String(data.debit_provider_transaction_id ?? data.transfer_group_id ?? '')
-      const detailId = etid || legacyId
-      return {
-        id: detailId,
-        amount: input.amount,
-        currency: input.currency,
-        status: 'settled',
-        transaction_id: detailId,
-        ...(etid ? { easner_transaction_id: etid } : {}),
-      }
-    }
-
-    const response = await fetch(`${apiUrl()}/api/noah/transfers/w2w`, {
+    const etid = input.reservedDebitEtid?.trim().toUpperCase() ?? ''
+    const response = await fetch(`${apiUrl()}/api/wallets/easetag-transfer`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
         ...scopeHeaders,
+        'Idempotency-Key': etid || `mobile-easetag-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
       body: JSON.stringify({
-        destinationEasetag: input.destinationEasetag.replace(/^@/, '').trim(),
+        destination_easetag: input.destinationEasetag.replace(/^@/, '').trim(),
         amount: input.amount,
-        currency: input.currency,
-        cryptoCurrency: input.cryptoCurrency,
+        currency: String(input.currency || 'usd').toUpperCase(),
+        ...(etid ? { reserved_debit_etid: etid } : {}),
+        ...(input.note?.trim() ? { note: input.note.trim() } : {}),
       }),
     })
-    const data = await response.json().catch(() => ({})) as Record<string, unknown>
+    const data = (await response.json().catch(() => ({}))) as Record<string, unknown>
     if (!response.ok || !data.ok) {
-      throw new Error(typeof data.error === 'string' ? data.error : 'Wallet transfer failed')
+      const detail = typeof data.detail === 'string' ? data.detail.trim() : ''
+      const err = typeof data.error === 'string' ? data.error : 'Easetag transfer failed'
+      throw new Error(detail ? `${err}: ${detail}` : err)
     }
-    const etid = typeof data.easner_transaction_id === 'string' ? data.easner_transaction_id.trim() : ''
-    const tx = data.transaction as Record<string, unknown> | undefined
-    const id = String(tx?.ID ?? tx?.id ?? '')
-    const status = String(tx?.Status ?? tx?.status ?? 'pending').toLowerCase()
-    const detailId = etid || id
+    const serverEtid =
+      typeof data.easner_transaction_id === 'string' ? data.easner_transaction_id.trim() : ''
+    const legacyId = String(data.debit_provider_transaction_id ?? data.transfer_group_id ?? '')
+    const detailId = serverEtid || legacyId
     return {
       id: detailId,
       amount: input.amount,
       currency: input.currency,
-      status,
+      status: 'settled',
       transaction_id: detailId,
-      ...(etid ? { easner_transaction_id: etid } : {}),
+      ...(serverEtid ? { easner_transaction_id: serverEtid } : {}),
     }
   },
 
-  /** Global Payout sell execute (form session from `/api/noah/payouts/quote`). */
+  /** Global fiat off-ramp execute (quote from `/api/noah/payouts/quote`; server re-prepares at execute). */
   async createTransfer(transferData: {
     amount: string
     currency: string
-    sourceWalletId: string
     formSessionId: string
     cryptoAuthorizedAmount: string
     cryptoCurrency: string
@@ -1004,18 +961,34 @@ export const noahService = {
     recipientId?: string
     note?: string
     paymentPurpose?: string
+    /** Same ETID as review screen; idempotency for PIN retry. */
+    reservedDebitEtid?: string
   }): Promise<NoahTransfer> {
     const session = await requireAuthSession()
     const scopeHeaders = await getNoahScopeHeaders()
+    const etid = transferData.reservedDebitEtid?.trim().toUpperCase() ?? ''
 
     const response = await fetch(`${apiUrl()}/api/noah/transfers`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session.access_token}`,
+        ...(etid ? { 'Idempotency-Key': etid } : {}),
         ...scopeHeaders,
       },
-      body: JSON.stringify(transferData),
+      body: JSON.stringify({
+        amount: transferData.amount,
+        currency: transferData.currency,
+        formSessionId: transferData.formSessionId,
+        cryptoAuthorizedAmount: transferData.cryptoAuthorizedAmount,
+        cryptoCurrency: transferData.cryptoCurrency,
+        countryCode: transferData.countryCode,
+        ...(transferData.channelId ? { channelId: transferData.channelId } : {}),
+        ...(transferData.recipientId ? { recipientId: transferData.recipientId } : {}),
+        ...(transferData.note ? { note: transferData.note } : {}),
+        ...(transferData.paymentPurpose ? { paymentPurpose: transferData.paymentPurpose } : {}),
+        ...(etid ? { reservedDebitEtid: etid } : {}),
+      }),
     })
 
     if (!response.ok) {

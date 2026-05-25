@@ -9,6 +9,8 @@ import { Connection } from "@solana/web3.js"
 import { resolveWalletOwnerIdForEasnerContext } from "@/lib/wallet/resolve-wallet-owner"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
+import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
+import { pendingGlobalPayoutProviderTransactionId } from "@/lib/noah/global-payout-ledger"
 
 export type TurnkeySendInput = {
   ctx: NoahAccountContext
@@ -25,6 +27,12 @@ export type TurnkeySendInput = {
   destinationTokenAccountOwner?: string
   /** Tags turnkey ledger rows for Easetag chain settlement (hidden from activity feed). */
   easetagSettlement?: { transferGroupId: string }
+  /** Standard Model global fiat off-ramp chain leg (hidden from activity feed). */
+  globalPayout?: {
+    easnerPayoutId: string
+    noahWorkflowId?: string | null
+    formSessionId?: string
+  }
 }
 
 type TurnkeyClientLike = Record<string, (...args: any[]) => Promise<any>>
@@ -486,6 +494,21 @@ export async function createTurnkeySend(
         }
       : {}
 
+  const globalPayoutMeta =
+    input.globalPayout?.easnerPayoutId != null && String(input.globalPayout.easnerPayoutId).trim()
+      ? {
+          global_payout_settlement_leg: true,
+          suppress_in_feed: true,
+          easner_payout_id: String(input.globalPayout.easnerPayoutId).trim(),
+          ...(input.globalPayout.noahWorkflowId
+            ? { noah_workflow_id: String(input.globalPayout.noahWorkflowId).trim() }
+            : {}),
+          ...(input.globalPayout.formSessionId
+            ? { form_session_id: String(input.globalPayout.formSessionId).trim() }
+            : {}),
+        }
+      : {}
+
   await upsertLedgerTransaction(admin, {
     userId: scopeOwner.userId,
     businessId: scopeOwner.businessId,
@@ -504,6 +527,7 @@ export async function createTurnkeySend(
       turnkey_sponsor_requested: sponsor ? "true" : "false",
       turnkey_solana_caip2: caip2,
       ...easetagMeta,
+      ...globalPayoutMeta,
     },
     txHash: parsed.txHash,
     walletAddress: sender.sourceAddress,
@@ -553,6 +577,12 @@ export async function createTurnkeySend(
       providerTransactionId: parsed.providerTransactionId,
       ...(lastPollPayload != null ? { statusResponse: lastPollPayload } : {}),
     })
+    if (reconciled.status === "settled" && input.globalPayout?.easnerPayoutId) {
+      await applyGlobalPayoutTurnkeySettleDebit(admin, {
+        providerTransactionId: parsed.providerTransactionId,
+        easnerPayoutId: String(input.globalPayout.easnerPayoutId).trim(),
+      }).catch((e) => console.warn("global_payout_turnkey_settle_debit:", e))
+    }
   } catch {
     // Best-effort reconciliation.
   }
@@ -656,6 +686,70 @@ export async function pollUntilTurnkeySendTerminal(
   return last
 }
 
+async function applyGlobalPayoutTurnkeySettleDebit(
+  admin: SupabaseClient,
+  params: { providerTransactionId: string; easnerPayoutId?: string },
+): Promise<void> {
+  const { data: existing } = await admin
+    .from("transactions")
+    .select("id, user_id, business_id, amount, currency, metadata")
+    .eq("provider", "turnkey")
+    .eq("provider_transaction_id", params.providerTransactionId)
+    .maybeSingle()
+  if (!existing?.id) return
+
+  const meta = (existing.metadata || {}) as Record<string, unknown>
+  if (meta.global_payout_settlement_leg !== true) return
+  if (meta.balance_delta_applied === true) return
+
+  const amt = Number(existing.amount ?? 0)
+  if (!Number.isFinite(amt) || amt <= 0) return
+
+  const currency = String(existing.currency || "USD").toUpperCase() as "USD" | "EUR"
+  const businessId = existing.business_id ? String(existing.business_id) : null
+  const userId = String(existing.user_id || "")
+
+  await applyWalletBalanceDelta(admin, {
+    businessId,
+    userId: businessId ? null : userId,
+    currency,
+    delta: -amt,
+  })
+
+  await admin
+    .from("transactions")
+    .update({
+      metadata: { ...meta, balance_delta_applied: true },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", existing.id)
+
+  if (params.easnerPayoutId) {
+    const pendingId = pendingGlobalPayoutProviderTransactionId(params.easnerPayoutId)
+    const { data: payoutRow } = await admin
+      .from("transactions")
+      .select("metadata")
+      .eq("provider", "noah")
+      .eq("provider_transaction_id", pendingId)
+      .maybeSingle()
+    if (payoutRow) {
+      const payoutMeta = (payoutRow.metadata || {}) as Record<string, unknown>
+      await admin
+        .from("transactions")
+        .update({
+          metadata: {
+            ...payoutMeta,
+            turnkey_settled: true,
+            balance_delta_applied: true,
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("provider", "noah")
+        .eq("provider_transaction_id", pendingId)
+    }
+  }
+}
+
 export async function reconcileTurnkeySendStatus(
   admin: SupabaseClient,
   params: { subOrgId: string; providerTransactionId: string; statusResponse?: unknown },
@@ -699,9 +793,19 @@ export async function reconcileTurnkeySendStatus(
       chain: existing.chain ? String(existing.chain) : null,
       settledAt: status === "settled" ? new Date().toISOString() : null,
       payload: (res || {}) as Record<string, unknown>,
-      metadata: { source: "turnkey_send_status" },
+      metadata: (existing.metadata as Record<string, unknown> | null) ?? { source: "turnkey_send_status" },
       baseCurrency: String(existing.currency ?? "USD"),
     })
+
+    if (status === "settled") {
+      const meta = (existing.metadata || {}) as Record<string, unknown>
+      const easnerPayoutId =
+        typeof meta.easner_payout_id === "string" ? meta.easner_payout_id.trim() : undefined
+      await applyGlobalPayoutTurnkeySettleDebit(admin, {
+        providerTransactionId: params.providerTransactionId,
+        easnerPayoutId,
+      }).catch((e) => console.warn("global_payout_turnkey_settle_debit:", e))
+    }
   }
 
   return { status, txHash }

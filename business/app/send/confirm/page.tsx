@@ -24,7 +24,6 @@ import { SendSelectedRecipientSummary } from "@/components/send/send-selected-re
 import { generateTransactionId, isEasnerClientTransactionIdFormat } from "@/lib/transaction-id"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { dataCache, CACHE_KEYS, requestBusinessAccountsRefresh } from "@/lib/cache"
-import { isEasetagLedgerP2PEnabled } from "@/lib/ledger/easetag-transfer"
 import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { refetchBusinessMoneyQueries } from "@/lib/query/refresh-after-money-move"
 import { useScope } from "@/lib/query/scope"
@@ -221,38 +220,28 @@ export default function SendConfirmPage() {
       setIsAuthorizing(true)
       try {
         const tag = state.recipient.payeeEasetag!.trim().replace(/^@+/, "")
-        const ledger = isEasetagLedgerP2PEnabled()
-        const path = ledger ? "/api/wallets/easetag-transfer" : "/api/noah/transfers/w2w"
         const plannedEtid =
-          ledger &&
           typeof state.transactionId === "string" &&
           isEasnerClientTransactionIdFormat(state.transactionId)
             ? state.transactionId.trim().toUpperCase()
             : ""
-        const body = ledger
-          ? {
-              destination_easetag: tag,
-              amount: state.sendAmount,
-              currency: state.sendCurrency.toUpperCase(),
-              ...(plannedEtid ? { reserved_debit_etid: plannedEtid } : {}),
-              ...(state.note ? { note: state.note } : {}),
-            }
-          : {
-              destinationEasetag: tag,
-              amount: state.sendAmount,
-              currency: state.sendCurrency.toLowerCase(),
-            }
-        const headers: Record<string, string> = { "Content-Type": "application/json" }
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+          Idempotency-Key: `biz-easetag-${plannedEtid || state.transactionId || Date.now()}`,
+        }
         if (businessId) {
           headers["X-Easner-Noah-Scope"] = "business"
         }
-        if (ledger) {
-          headers["Idempotency-Key"] = `biz-send-${Date.now()}-${Math.random().toString(36).slice(2)}`
-        }
-        const res = await fetchWithSession(path, {
+        const res = await fetchWithSession("/api/wallets/easetag-transfer", {
           method: "POST",
           headers,
-          body: JSON.stringify(body),
+          body: JSON.stringify({
+            destination_easetag: tag,
+            amount: state.sendAmount,
+            currency: state.sendCurrency.toUpperCase(),
+            ...(plannedEtid ? { reserved_debit_etid: plannedEtid } : {}),
+            ...(state.note ? { note: state.note } : {}),
+          }),
         })
         const data = (await res.json().catch(() => ({}))) as {
           ok?: boolean
@@ -264,29 +253,20 @@ export default function SendConfirmPage() {
           easner_transaction_id?: string
         }
         if (!res.ok || !data.ok) {
-          const err = typeof data.error === "string" ? data.error : "Wallet transfer failed"
+          const err = typeof data.error === "string" ? data.error : "Easetag transfer failed"
           const hint = typeof data.hint === "string" ? data.hint : ""
           setAuthorizeError(hint ? `${err} — ${hint}` : err)
           return
         }
-        const tx = data.transaction
         const serverEtid = String(data.easner_transaction_id ?? "").trim().toUpperCase()
         const planned = plannedEtid || String(state.transactionId ?? "").trim().toUpperCase()
-        const id = ledger
-          ? String(
-              serverEtid ||
-                data.debit_provider_transaction_id ||
-                data.transfer_group_id ||
-                planned ||
-                generateTransactionId(),
-            )
-          : String(
-              data.easner_transaction_id ??
-                tx?.ID ??
-                tx?.id ??
-                state.transactionId ??
-                generateTransactionId(),
-            )
+        const id = String(
+          serverEtid ||
+            data.debit_provider_transaction_id ||
+            data.transfer_group_id ||
+            planned ||
+            generateTransactionId(),
+        )
         if (user?.id) {
           dataCache.invalidate(CACHE_KEYS.TRANSACTIONS_LIST(user.id))
         }
@@ -318,21 +298,13 @@ export default function SendConfirmPage() {
       const scopeHeaders: Record<string, string> = {}
       if (businessId) scopeHeaders["X-Easner-Noah-Scope"] = "business"
 
-      const walletsRes = await fetchWithSession("/api/noah/wallets", { headers: scopeHeaders })
-      const walletsData = (await walletsRes.json().catch(() => ({}))) as {
-        wallets?: Array<{ sourceWalletId?: string; walletId?: string }>
-      }
-      if (!walletsRes.ok) {
-        throw new Error("Failed to load wallet for payout.")
-      }
-      const wallet = walletsData.wallets?.[0]
-      const sourceWalletId = String(wallet?.sourceWalletId || wallet?.walletId || "").trim()
-      if (!sourceWalletId) {
-        throw new Error("No source wallet id from Noah.")
-      }
+      const payoutEtid =
+        typeof state.transactionId === "string" &&
+        isEasnerClientTransactionIdFormat(state.transactionId)
+          ? state.transactionId.trim().toUpperCase()
+          : ""
 
       const transferBody = {
-        sourceWalletId,
         amount: state.amount.toFixed(2),
         currency: state.receiveCurrency.toLowerCase(),
         formSessionId: pq.formSessionId,
@@ -341,13 +313,18 @@ export default function SendConfirmPage() {
         countryCode: state.recipient.countryCode?.toUpperCase(),
         ...(state.payoutQuote?.channelId ? { channelId: state.payoutQuote.channelId } : {}),
         recipientId: state.recipient.id,
+        ...(payoutEtid ? { reservedDebitEtid: payoutEtid } : {}),
         ...(state.note ? { note: state.note } : {}),
         ...(state.paymentPurpose ? { paymentPurpose: state.paymentPurpose } : {}),
       }
 
       const transferRes = await fetchWithSession("/api/noah/transfers", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...scopeHeaders },
+        headers: {
+          "Content-Type": "application/json",
+          ...(payoutEtid ? { "Idempotency-Key": payoutEtid } : {}),
+          ...scopeHeaders,
+        },
         body: JSON.stringify(transferBody),
       })
       const transferData = (await transferRes.json().catch(() => ({}))) as {

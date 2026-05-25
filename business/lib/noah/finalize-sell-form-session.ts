@@ -264,16 +264,20 @@ type PrepareBodyInput = {
 }
 
 function buildPrepareBody(input: PrepareBodyInput): Record<string, unknown> {
-  return {
+  const body: Record<string, unknown> = {
     ChannelID: input.channelId,
     CryptoCurrency: input.cryptoCurrency,
     FiatAmount: input.fiatAmount,
     FormSessionID: input.formSessionId,
-    Form: input.form,
     DelayedSell: input.delayedSell,
     ...(input.customerId ? { CustomerID: input.customerId } : {}),
     ...(input.paymentMethodId ? { PaymentMethodID: input.paymentMethodId } : {}),
   }
+  // Omit empty Form — Noah rejects `{}` on seal steps ("invalid request").
+  if (Object.keys(input.form).length > 0) {
+    body.Form = input.form
+  }
+  return body
 }
 
 async function postSellPrepare(body: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -336,13 +340,11 @@ export function assertSellFormSessionReady(prep: SellPrepareResult): void {
 }
 
 /**
- * Noah Reliance sell often leaves a pending form step (e.g. Cob = beneficiary confirmation)
- * after the first prepare when DelayedSell is true. Follow-up prepare calls with FormSessionID
+ * Standard Model prepare may leave a pending form step (e.g. Cob = beneficiary confirmation)
+ * after the first call when DelayedSell is true. Follow-up prepare calls with FormSessionID
  * submit the Ack/DataEntry payload until the form session is complete (NextStep cleared).
  *
- * Per Noah docs, `DelayedSell` is a flag on the original prepare ("defer balance check until
- * the final sell request"), not a separate commit phase — once the session is complete, the
- * caller goes straight to `POST /transactions/sell`.
+ * Execute uses a fresh prepare at payout time, then onchain-deposit-to-payment-method (not sell).
  */
 export async function finalizeSellFormSessionAfterPrepare(input: {
   channelId: string

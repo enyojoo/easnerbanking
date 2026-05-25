@@ -1,6 +1,6 @@
 # Noah Global Payout corridors
 
-Fiat payouts use Noah Reliance **sell** flow: `GET /channels/sell` → `POST /transactions/sell/prepare` → `POST /transactions/sell`.
+Fiat payouts use Noah **Standard Model**: `GET /channels/sell` → `POST /transactions/sell/prepare` (quote + fresh execute prep) → `POST /workflows/onchain-deposit-to-payment-method` → Turnkey SPL send to Noah `DestinationAddress`. Balance debits on Turnkey chain settle; Noah Transaction OUT webhook settles the app-facing row.
 
 ## Ops scripts
 
@@ -19,8 +19,8 @@ cd business && node --env-file=.env.local --import tsx scripts/apply-payout-corr
 | Step | API | Notes |
 |------|-----|-------|
 | Catalog | `GET /api/send-destinations` | `fields_schema` per corridor (bank enums, reference rules, CA purpose list) |
-| Quote | `POST /api/noah/payouts/quote` | `note`, `paymentPurpose` → prepare `Form` |
-| Execute | `POST /api/noah/transfers` | `countryCode` required for form-session sell; `payoutCorridorGate` on execute |
+| Quote | `POST /api/noah/payouts/quote` | `note`, `paymentPurpose` → prepare `Form`; `executionModel: turnkey_workflow` |
+| Execute | `POST /api/noah/transfers` | Server re-prepares at execute; `Idempotency-Key` / `reservedDebitEtid` for PIN retry; returns `{ status: "pending" }` |
 
 ## Send amount UX
 

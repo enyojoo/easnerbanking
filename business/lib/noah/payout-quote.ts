@@ -51,6 +51,8 @@ export type PayoutQuoteResult = {
   /** Empty when no persisted Easner quote (apply/validate not used). */
   pricingQuoteId: string
   expiresAt: string
+  /** Execute path for balance sends (Standard Model). Quote FormSessionID is not durable. */
+  executionModel: "turnkey_workflow"
 }
 
 const QUOTE_TTL_MS = 15 * 60 * 1000
@@ -239,5 +241,6 @@ export async function buildPayoutQuote(input: {
     easner,
     pricingQuoteId: "",
     expiresAt: easner.expiresAt,
+    executionModel: "turnkey_workflow",
   }
 }

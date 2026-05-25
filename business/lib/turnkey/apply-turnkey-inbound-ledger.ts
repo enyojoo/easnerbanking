@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { findEasetagSettlementForChainSuppression, updateEasetagSettlementSettled } from "@/lib/ledger/easetag-settlement"
+import { findGlobalPayoutSettlementForChainSuppression } from "@/lib/noah/global-payout-ledger"
 import { reconcileNoahBankOnrampCreditForSolanaTx } from "@/lib/noah/credit-bank-onramp-wallet"
 import {
   findNoahBankOnrampChainSettlementForSuppression,
@@ -102,6 +103,14 @@ export async function applyTurnkeyInboundLedgerEvent(
         () => {},
       )
     }
+    return { kind: "suppressed_easetag" }
+  }
+
+  const globalPayoutSuppressed = await findGlobalPayoutSettlementForChainSuppression(admin, {
+    turnkeySendStatusId: input.providerTransactionId,
+    txHash,
+  })
+  if (globalPayoutSuppressed && direction === "out") {
     return { kind: "suppressed_easetag" }
   }
 

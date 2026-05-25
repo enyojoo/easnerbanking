@@ -77,17 +77,17 @@ export default function StablecoinAuthorizePage() {
     ;(async () => {
       setLoadError(null)
       try {
-        const res = await fetchWithSession("/api/noah/wallets", {
+        const res = await fetchWithSession("/api/wallets/deposit-addresses", {
           headers: { "X-Easner-Noah-Scope": "business" },
         })
         const data = (await res.json().catch(() => ({}))) as {
-          wallets?: Array<{ address?: string }>
+          USD?: { address?: string }
           error?: string
         }
         if (!res.ok) {
           throw new Error(data.error || "Could not load wallet")
         }
-        const addr = data.wallets?.[0]?.address?.trim()
+        const addr = data.USD?.address?.trim()
         if (!addr) {
           throw new Error("No deposit address found")
         }

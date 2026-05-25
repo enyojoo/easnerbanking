@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, Pressable, StyleSheet, ScrollView, Animated, ActivityIndicator } from 'react-native'
 import { ArrowLeft } from 'lucide-react-native'
-import Constants from 'expo-constants'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -180,15 +179,8 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
         )
       : null
   const arrivalHint = formatPayoutArrivalHint(payoutHints?.processing_seconds)
-  const useLedger =
-    Constants.expoConfig?.extra?.easetagLedgerP2pEnabled === true ||
-    process.env.EXPO_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true' ||
-    process.env.NEXT_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true'
-  const ledgerReservedDebitEtid =
-    useLedger &&
-    easetagUi &&
-    paramTransactionId &&
-    isEasnerClientTransactionIdFormat(paramTransactionId)
+  const sendReservedDebitEtid =
+    paramTransactionId && isEasnerClientTransactionIdFormat(paramTransactionId)
       ? paramTransactionId.toUpperCase()
       : undefined
 
@@ -306,7 +298,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
               receiveAmountValue,
               selectedBalanceCurrency,
               ...(payoutSession ? { payoutSession } : {}),
-              ...(ledgerReservedDebitEtid ? { reservedDebitEtid: ledgerReservedDebitEtid } : {}),
+              ...(sendReservedDebitEtid ? { reservedDebitEtid: sendReservedDebitEtid } : {}),
               ...(sendNote ? { note: sendNote } : {}),
               ...(sendPaymentPurpose ? { paymentPurpose: sendPaymentPurpose } : {}),
             },
@@ -375,7 +367,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       qc,
       receiveAmountValue,
       recipient,
-      ledgerReservedDebitEtid,
+      sendReservedDebitEtid,
       scope,
       selectedBalanceCurrency,
       showError,

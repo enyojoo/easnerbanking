@@ -1,8 +1,6 @@
 import * as Haptics from 'expo-haptics'
 import type { QueryClient } from '@tanstack/react-query'
 import { qk, scopeKey, type Scope } from '@easner/shared'
-import { getApiBaseUrl, getNoahScopeHeaders } from '../lib/apiClient'
-import { supabase } from '../lib/supabase'
 import { noahService, type NoahTransfer } from '../lib/noahService'
 import type { Recipient, User } from '../types'
 import { recipientService } from '../lib/recipientService'
@@ -164,33 +162,6 @@ export async function executeBalanceSend(
       ...(note?.trim() ? { note: note.trim() } : {}),
     })
   } else {
-    const {
-      data: { session: walletSession },
-    } = await supabase.auth.getSession()
-    const scopeHeaders = await getNoahScopeHeaders()
-    const walletsResponse = await fetch(`${getApiBaseUrl()}/api/noah/wallets`, {
-      headers: {
-        Authorization: `Bearer ${walletSession?.access_token}`,
-        ...scopeHeaders,
-      },
-    })
-
-    if (!walletsResponse.ok) {
-      throw new Error('Failed to fetch wallet. Please try again.')
-    }
-
-    const walletsData = await walletsResponse.json()
-    const wallet = walletsData.wallets?.[0]
-
-    if (!wallet) {
-      throw new Error('No wallet found. Please set up your account first.')
-    }
-
-    const sourceWalletId = String(wallet.sourceWalletId || wallet.walletId || '')
-    if (!sourceWalletId) {
-      throw new Error('No source wallet id from Noah.')
-    }
-
     if (!canUseFiatBalance) {
       throw new Error('Balance send supports USD or EUR funding only.')
     } else {
@@ -216,13 +187,13 @@ export async function executeBalanceSend(
       transfer = await noahService.createTransfer({
         amount: receiveAmountValue.toFixed(2),
         currency: recipient.currency.toLowerCase(),
-        sourceWalletId,
         formSessionId: payoutSession.formSessionId,
         cryptoAuthorizedAmount: payoutSession.cryptoAuthorizedAmount,
         cryptoCurrency: payoutSession.cryptoCurrency,
         countryCode,
         ...(payoutSession.channelId ? { channelId: payoutSession.channelId } : {}),
         recipientId: recipient.id,
+        ...(reservedDebitEtid?.trim() ? { reservedDebitEtid: reservedDebitEtid.trim() } : {}),
         ...(note?.trim() ? { note: note.trim() } : {}),
         ...(input.paymentPurpose?.trim() ? { paymentPurpose: input.paymentPurpose.trim() } : {}),
       })
@@ -239,7 +210,11 @@ export async function executeBalanceSend(
   }
 
   const providerTxRef = transfer.transaction_id || transfer.id
-  if (selectedBalanceCurrency === 'USD' || selectedBalanceCurrency === 'EUR') {
+  const isGlobalFiatPayout = Boolean(payoutSession?.formSessionId?.trim())
+  if (
+    !isGlobalFiatPayout &&
+    (selectedBalanceCurrency === 'USD' || selectedBalanceCurrency === 'EUR')
+  ) {
     ctx.updateBalanceOptimistically(
       selectedBalanceCurrency as 'USD' | 'EUR',
       calculatedTotalAmount,

@@ -17,7 +17,6 @@ import type { MobileTransactionRow } from '../queries/use-transactions'
 export interface PersonalTransferInput {
   amount: string
   currency: string
-  sourceWalletId: string
   formSessionId: string
   cryptoAuthorizedAmount: string
   cryptoCurrency: string
@@ -26,6 +25,7 @@ export interface PersonalTransferInput {
   recipientId?: string
   note?: string
   memo?: string
+  reservedDebitEtid?: string
   idempotencyKey?: string
 }
 
@@ -54,7 +54,6 @@ export function useCreateTransfer() {
         body: {
           amount: input.amount,
           currency: input.currency,
-          sourceWalletId: input.sourceWalletId,
           formSessionId: input.formSessionId,
           cryptoAuthorizedAmount: input.cryptoAuthorizedAmount,
           cryptoCurrency: input.cryptoCurrency,
@@ -62,8 +61,12 @@ export function useCreateTransfer() {
           ...(input.channelId ? { channelId: input.channelId } : {}),
           ...(input.recipientId ? { recipientId: input.recipientId } : {}),
           ...(input.note ? { note: input.note } : {}),
+          ...(input.reservedDebitEtid ? { reservedDebitEtid: input.reservedDebitEtid } : {}),
         },
-        headers: input.idempotencyKey ? { 'Idempotency-Key': input.idempotencyKey } : undefined,
+        headers:
+          input.idempotencyKey || input.reservedDebitEtid
+            ? { 'Idempotency-Key': input.idempotencyKey ?? input.reservedDebitEtid! }
+            : undefined,
       }),
     onMutate: async (input) => {
       // Temporarily speed fallback polling right after money movement.

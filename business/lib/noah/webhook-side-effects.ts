@@ -8,7 +8,7 @@ import { resolveNoahCustomerTarget } from "@/lib/noah/resolve-noah-customer-targ
 import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
 import { mapNoahVerificationToKycStatus } from "@/lib/noah/map-kyc"
 import { pickTxAmountAndCurrency } from "@/lib/noah/map-transactions"
-import { pickNoahGlobalPayoutLedgerFields, isNoahGlobalPayoutSellTx } from "@/lib/noah/global-payout-ledger"
+import { pickNoahGlobalPayoutLedgerFields, isNoahGlobalPayoutSellTx, findPendingGlobalPayoutByExternalId, linkPendingGlobalPayoutToNoahTransactionId, settlementWalletCurrencyForNoahCrypto } from "@/lib/noah/global-payout-ledger"
 import {
   buildNoahBankPayInLedgerMetadata,
   buildNoahOrchestrationOutLegMetadata,
@@ -259,19 +259,40 @@ export async function applyNoahWebhookSideEffects(
         let ledgerAsset: string | undefined
 
         if (isGlobalPayoutSell) {
-          const { data: existingTx } = await admin
-            .from("transactions")
-            .select("metadata")
-            .eq("provider", "noah")
-            .eq("provider_transaction_id", id)
-            .maybeSingle()
-          const priorMeta = (existingTx?.metadata as Record<string, unknown> | null) ?? {}
+          let priorMeta: Record<string, unknown> = {}
+          if (externalId) {
+            const pending = await findPendingGlobalPayoutByExternalId(admin, externalId)
+            if (pending) {
+              priorMeta = pending.metadata
+              if (pending.id) {
+                await linkPendingGlobalPayoutToNoahTransactionId(admin, {
+                  pendingRowId: pending.id,
+                  noahTransactionId: id,
+                })
+              }
+            }
+          }
+          if (!Object.keys(priorMeta).length) {
+            const { data: existingTx } = await admin
+              .from("transactions")
+              .select("metadata")
+              .eq("provider", "noah")
+              .eq("provider_transaction_id", id)
+              .maybeSingle()
+            priorMeta = (existingTx?.metadata as Record<string, unknown> | null) ?? {}
+          }
           const priorCrypto =
             typeof priorMeta.crypto_authorized_amount === "string"
               ? priorMeta.crypto_authorized_amount
               : undefined
+          const sourceBalanceCurrency =
+            typeof priorMeta.execution_model === "string" &&
+            priorMeta.payout_type === "global_fiat"
+              ? settlementWalletCurrencyForNoahCrypto(String(txData.CryptoCurrency ?? ""))
+              : undefined
           const ledger = pickNoahGlobalPayoutLedgerFields(txData, {
             cryptoAuthorizedAmount: priorCrypto,
+            sourceBalanceCurrency,
           })
           ledgerAmount = ledger.amount > 0 ? ledger.amount : amount
           ledgerCurrency = ledger.currency
@@ -279,10 +300,14 @@ export async function applyNoahWebhookSideEffects(
           ledgerAsset = ledger.asset ?? undefined
           metadata = {
             ...metadata,
+            ...priorMeta,
             payout_type: "global_fiat",
+            execution_model: priorMeta.execution_model ?? "turnkey_workflow",
             receive_amount: ledger.receiveAmount,
             receive_currency: ledger.receiveCurrency,
             crypto_asset: ledger.asset,
+            noah_transaction_id: id,
+            ...(externalId ? { easner_payout_id: externalId } : {}),
             ...(priorCrypto ? { crypto_authorized_amount: priorCrypto } : {}),
           }
         }
