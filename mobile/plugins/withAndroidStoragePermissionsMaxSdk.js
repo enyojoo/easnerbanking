@@ -1,4 +1,4 @@
-const { withAndroidManifest } = require('@expo/config-plugins')
+const { withAndroidManifest } = require('expo/config-plugins')
 
 /** Expo FileSystem (32) vs Intercom (28) maxSdkVersion conflicts on storage permissions. */
 const STORAGE_PERMS = [

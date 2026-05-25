@@ -171,3 +171,8 @@ function linkExpoToRoot() {
 
 linkExpoToRoot()
 
+/** Config plugins resolve from mobile/plugins; ensure hoisted @expo packages exist under mobile/node_modules. */
+for (const name of ['@expo/config-plugins', '@expo/config']) {
+  linkDep(name)
+}
+

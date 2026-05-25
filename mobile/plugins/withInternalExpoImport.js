@@ -1,4 +1,4 @@
-const { withAppDelegate } = require('@expo/config-plugins')
+const { withAppDelegate } = require('expo/config-plugins')
 
 /**
  * SDK 56+ ExpoModulesProvider uses `internal import` for autolinked modules.

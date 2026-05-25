@@ -1,4 +1,4 @@
-const { withAppBuildGradle } = require('@expo/config-plugins')
+const { withAppBuildGradle } = require('expo/config-plugins')
 
 /**
  * RN 0.83+ ships hermesc via the `hermes-compiler` package, not react-native/sdks/hermesc.

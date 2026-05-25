@@ -1,6 +1,10 @@
 import type { PayoutQuote } from './noahService'
 
-import { payoutReceiveAmountsMatch } from '@easner/shared'
+/** Inline — avoid `@easner/shared` barrel (pulls flag assets into Metro on EAS). */
+function payoutReceiveAmountsMatch(a: number, b: number): boolean {
+  const norm = (n: number) => Math.round(n * 100) / 100
+  return norm(a) === norm(b)
+}
 
 let stashed: PayoutQuote | null = null
 
