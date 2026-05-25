@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 import {
-  resolvePrepareWithinSendBudget,
+  resolvePrepareForSendEntry,
   seedQuoteReceiveForSendBudget,
 } from "@/lib/noah/payout-quote-send-budget"
 
@@ -30,45 +30,21 @@ describe("seedQuoteReceiveForSendBudget", () => {
   })
 })
 
-describe("resolvePrepareWithinSendBudget", () => {
-  it("returns first prepare when already within budget", async () => {
+describe("resolvePrepareForSendEntry", () => {
+  it("returns first successful prepare without capping total debited", async () => {
     const runPrepare = vi.fn(async (amount: number) => ({
       channelId: "ch",
-      prep: { cryptoAuthorizedAmount: String(amount / 1300) },
+      prep: { cryptoAuthorizedAmount: String(amount / 1200 + 0.35) },
     }))
 
-    const result = await resolvePrepareWithinSendBudget({
-      sendBudget: 5,
-      initialReceive: 6500,
-      runPrepare,
-    })
-
-    expect(result.receiveAmount).toBe(6500)
-    expect(runPrepare).toHaveBeenCalledTimes(1)
-  })
-
-  it("binary-searches down when first prepare exceeds budget", async () => {
-    const runPrepare = vi.fn(async (amount: number) => {
-      if (amount > 6800) {
-        throw new Error("bad request")
-      }
-      return {
-        channelId: "ch",
-        prep: { cryptoAuthorizedAmount: (amount / 1200).toFixed(2) },
-      }
-    })
-
-    const result = await resolvePrepareWithinSendBudget({
-      sendBudget: 5,
+    const result = await resolvePrepareForSendEntry({
       initialReceive: 6677.64,
       runPrepare,
     })
 
-    expect(result.receiveAmount).toBeLessThanOrEqual(6750)
-    expect(Number.parseFloat(result.prepared.prep.cryptoAuthorizedAmount)).toBeLessThanOrEqual(
-      5.01,
-    )
-    expect(runPrepare.mock.calls.length).toBeGreaterThan(1)
+    expect(result.receiveAmount).toBe(6677.64)
+    expect(Number.parseFloat(result.prepared.prep.cryptoAuthorizedAmount)).toBeGreaterThan(5)
+    expect(runPrepare).toHaveBeenCalledTimes(1)
   })
 
   it("walks down when initial prepare fails", async () => {
@@ -78,44 +54,16 @@ describe("resolvePrepareWithinSendBudget", () => {
       }
       return {
         channelId: "ch",
-        prep: { cryptoAuthorizedAmount: "4.95" },
+        prep: { cryptoAuthorizedAmount: "5.40" },
       }
     })
 
-    const result = await resolvePrepareWithinSendBudget({
-      sendBudget: 5,
+    const result = await resolvePrepareForSendEntry({
       initialReceive: 6677.64,
       runPrepare,
     })
 
     expect(result.receiveAmount).toBeLessThanOrEqual(6600)
-    expect(Number.parseFloat(result.prepared.prep.cryptoAuthorizedAmount)).toBeLessThanOrEqual(5.01)
-  })
-
-  it("walks down when scaled retry fails after first over-budget prepare", async () => {
-    const runPrepare = vi.fn(async (amount: number) => {
-      if (amount > 6500) {
-        return {
-          channelId: "ch",
-          prep: { cryptoAuthorizedAmount: "5.40" },
-        }
-      }
-      if (amount > 6200) {
-        throw new Error("bad request")
-      }
-      return {
-        channelId: "ch",
-        prep: { cryptoAuthorizedAmount: "4.98" },
-      }
-    })
-
-    const result = await resolvePrepareWithinSendBudget({
-      sendBudget: 5,
-      initialReceive: 6677.64,
-      runPrepare,
-    })
-
-    expect(result.receiveAmount).toBeLessThanOrEqual(6200)
-    expect(Number.parseFloat(result.prepared.prep.cryptoAuthorizedAmount)).toBeLessThanOrEqual(5.01)
+    expect(runPrepare.mock.calls.length).toBeGreaterThan(1)
   })
 })

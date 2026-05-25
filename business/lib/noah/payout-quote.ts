@@ -11,7 +11,7 @@ import {
 import { NoProviderForCorridorError, selectProviderForCorridor } from "@/lib/payout-providers"
 import { mapNoahPrepareError } from "@/lib/noah/noah-prepare-errors"
 import {
-  resolvePrepareWithinSendBudget,
+  resolvePrepareForSendEntry,
   seedQuoteReceiveForSendBudget,
 } from "@/lib/noah/payout-quote-send-budget"
 
@@ -111,7 +111,7 @@ export async function buildPayoutQuote(input: {
   recipient?: RecipientSellPrepareRow
   receiveFiatAmount: number
   sourceBalanceCurrency: string
-  /** When user entered send-side amount, cap Noah crypto authorization to this budget. */
+  /** When user entered send-side principal (USD/EUR); Noah total debited may exceed this. */
   sendBudget?: number
   /** Note → Reference (US/EUR); CA PaymentPurpose; Africa optional reference. */
   prepareOverrides?: SellPrepareOverrides
@@ -241,8 +241,7 @@ export async function buildPayoutQuote(input: {
 
   try {
     if (sendBudget != null) {
-      const resolved = await resolvePrepareWithinSendBudget({
-        sendBudget,
+      const resolved = await resolvePrepareForSendEntry({
         initialReceive: quoteReceiveAmount,
         runPrepare: runPrepareWithSessionRetry,
       })
