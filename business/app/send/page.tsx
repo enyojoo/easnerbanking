@@ -104,6 +104,7 @@ export default function SendPage() {
   const [amountFieldError, setAmountFieldError] = useState<string | null>(null)
   const [sourceSheetOpen, setSourceSheetOpen] = useState(false)
   const payoutQuoteCacheRef = useRef<{ key: string; quote: PayoutQuoteResult } | null>(null)
+  const payoutQuoteInflightRef = useRef<Promise<PayoutQuoteResult | null> | null>(null)
   const [payoutQuotePreview, setPayoutQuotePreview] = useState<PayoutQuoteResult | null>(null)
   const [noahFxRates, setNoahFxRates] = useState<Record<string, number>>({})
   const [noahRateRows, setNoahRateRows] = useState<NoahWalletRateRow[]>([])
@@ -512,42 +513,48 @@ export default function SendPage() {
     ].join("|")
   }, [recipient?.id, amountEntryMode, sendAmount, receiveAmount, sendCurrency, note, paymentPurpose])
 
-  useEffect(() => {
-    if (!needsPayoutQuoteBeforeConfirm || !payoutQuoteCacheKey || !recipient?.id) return
-    let cancelled = false
-    const timer = window.setTimeout(() => {
-      void (async () => {
-        try {
-          const headers: Record<string, string> = { "Content-Type": "application/json" }
-          if (businessId) headers["X-Easner-Noah-Scope"] = "business"
-          const res = await fetchWithSession("/api/noah/payouts/quote", {
-            method: "POST",
-            headers,
-            body: JSON.stringify({
-              recipientId: recipient.id,
-              receiveAmount,
-              sourceBalanceCurrency: sendCurrency,
-              amountEntryMode,
-              ...(amountEntryMode === "send" && sendAmount > 0 ? { sendAmount } : {}),
-              ...(note.trim() ? { note: note.trim() } : {}),
-              ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
-            }),
-          })
-          const data = (await res.json().catch(() => ({}))) as {
-            ok?: boolean
-            quote?: PayoutQuoteResult
-          }
-          if (!res.ok || !data.ok || !data.quote || cancelled) return
-          payoutQuoteCacheRef.current = { key: payoutQuoteCacheKey, quote: data.quote }
-          setPayoutQuotePreview(data.quote)
-        } catch {
-          if (!cancelled) setPayoutQuotePreview(null)
+  const fetchPayoutQuote = useCallback(async (): Promise<PayoutQuoteResult | null> => {
+    if (!needsPayoutQuoteBeforeConfirm || !payoutQuoteCacheKey || !recipient?.id) return null
+    const cached = payoutQuoteCacheRef.current
+    if (cached?.key === payoutQuoteCacheKey) return cached.quote
+    if (payoutQuoteInflightRef.current) return payoutQuoteInflightRef.current
+
+    const promise = (async () => {
+      try {
+        const headers: Record<string, string> = { "Content-Type": "application/json" }
+        if (businessId) headers["X-Easner-Noah-Scope"] = "business"
+        const res = await fetchWithSession("/api/noah/payouts/quote", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            recipientId: recipient.id,
+            receiveAmount,
+            sourceBalanceCurrency: sendCurrency,
+            amountEntryMode,
+            ...(amountEntryMode === "send" && sendAmount > 0 ? { sendAmount } : {}),
+            ...(note.trim() ? { note: note.trim() } : {}),
+            ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+          }),
+        })
+        const data = (await res.json().catch(() => ({}))) as {
+          ok?: boolean
+          quote?: PayoutQuoteResult
         }
-      })()
-    }, 450)
-    return () => {
-      cancelled = true
-      window.clearTimeout(timer)
+        if (!res.ok || !data.ok || !data.quote) return null
+        payoutQuoteCacheRef.current = { key: payoutQuoteCacheKey, quote: data.quote }
+        setPayoutQuotePreview(data.quote)
+        return data.quote
+      } catch {
+        setPayoutQuotePreview(null)
+        return null
+      }
+    })()
+
+    payoutQuoteInflightRef.current = promise
+    try {
+      return await promise
+    } finally {
+      payoutQuoteInflightRef.current = null
     }
   }, [
     needsPayoutQuoteBeforeConfirm,
@@ -562,7 +569,12 @@ export default function SendPage() {
     businessId,
   ])
 
-  const handleContinue = () => {
+  useEffect(() => {
+    if (!needsPayoutQuoteBeforeConfirm || !payoutQuoteCacheKey || !recipient?.id) return
+    void fetchPayoutQuote()
+  }, [needsPayoutQuoteBeforeConfirm, payoutQuoteCacheKey, recipient?.id, fetchPayoutQuote])
+
+  const handleContinue = async () => {
     if (!canContinue || !recipient) return
     if (isEasetagRecipient && paymentMethod === "otherCurrency") {
       setAmountFieldError("Easetag sends are only supported from your balance.")
@@ -624,10 +636,12 @@ export default function SendPage() {
     }
     let flowState = state
     if (needsPayoutQuoteBeforeConfirm) {
-      const cached = payoutQuoteCacheRef.current
-      if (cached?.key === payoutQuoteCacheKey) {
-        flowState = mapPayoutQuoteToFlowState(state, cached.quote)
+      const quote = await fetchPayoutQuote()
+      if (!quote?.noah?.formSessionId) {
+        setAmountFieldError("Could not load payout quote. Try again.")
+        return
       }
+      flowState = mapPayoutQuoteToFlowState(state, quote)
     }
 
     persistSendFlowState(flowState)

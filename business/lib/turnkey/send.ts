@@ -33,6 +33,11 @@ export type TurnkeySendInput = {
     noahWorkflowId?: string | null
     formSessionId?: string
   }
+  /**
+   * Max ms to poll Turnkey for on-chain terminal status.
+   * `0` returns `pending` immediately after broadcast submit (global payout execute path).
+   */
+  settlementPollTimeoutMs?: number
 }
 
 type TurnkeyClientLike = Record<string, (...args: any[]) => Promise<any>>
@@ -543,8 +548,22 @@ export async function createTurnkeySend(
     txHash: parsed.txHash,
   }
   let lastPollPayload: unknown = null
+
+  if (input.settlementPollTimeoutMs === 0) {
+    return {
+      providerTransactionId: parsed.providerTransactionId,
+      ledgerId: parsed.providerTransactionId,
+      status: "pending",
+      txHash: parsed.txHash,
+      subOrgId: sender.subOrgId,
+      chainFailureDetail: null,
+    }
+  }
+
   try {
-    const pollMs = Number(process.env.TURNKEY_SOL_SEND_POLL_TIMEOUT_MS)
+    const pollMs =
+      input.settlementPollTimeoutMs ??
+      Number(process.env.TURNKEY_SOL_SEND_POLL_TIMEOUT_MS)
     const pollTimeoutMs =
       Number.isFinite(pollMs) && pollMs >= 5_000 ? Math.min(pollMs, 180_000) : 90_000
     const intervalMsRaw = Number(process.env.TURNKEY_SOL_SEND_POLL_INTERVAL_MS)

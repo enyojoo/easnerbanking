@@ -21,6 +21,8 @@ type Props = {
   copiedKey?: string | null
   onCopy?: (text: string, key: string) => void
   showFeeBreakdown?: boolean
+  /** Detail view: hero already shows receive amount. Confirm/review keeps this row. */
+  showRecipientGets?: boolean
 }
 
 function recipientSubtitle(snapshot: GlobalPayoutRecipientSnapshot): string {
@@ -43,6 +45,7 @@ export function PayoutReviewDetailsRows({
   copiedKey,
   onCopy,
   showFeeBreakdown = true,
+  showRecipientGets = true,
 }: Props) {
   const hasFx =
     payoutReview.receive_currency.toUpperCase() !== payoutReview.send_currency.toUpperCase()
@@ -126,12 +129,14 @@ export function PayoutReviewDetailsRows({
           </>
         ) : null}
 
-        <div className="flex items-center justify-between border-b pb-4">
-          <span className="text-sm text-muted-foreground">Recipient gets</span>
-          <span className="font-semibold">
-            {formatMoneyDisplay(payoutReview.receive_amount, payoutReview.receive_currency)}
-          </span>
-        </div>
+        {showRecipientGets ? (
+          <div className="flex items-center justify-between border-b pb-4">
+            <span className="text-sm text-muted-foreground">Recipient gets</span>
+            <span className="font-semibold">
+              {formatMoneyDisplay(payoutReview.receive_amount, payoutReview.receive_currency)}
+            </span>
+          </div>
+        ) : null}
 
         <div className="flex items-center justify-between gap-3 border-b pb-4">
           <span className="shrink-0 text-sm text-muted-foreground">Recipient</span>

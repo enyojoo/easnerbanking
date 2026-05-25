@@ -962,7 +962,7 @@ export const noahService = {
     }
   },
 
-  /** Global fiat off-ramp execute (quote from `/api/noah/payouts/quote`; server re-prepares at execute). */
+  /** Global fiat off-ramp execute (quote from `/api/noah/payouts/quote`; server uses quoted session when provided). */
   async createTransfer(transferData: {
     amount: string
     currency: string

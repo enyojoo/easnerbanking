@@ -65,9 +65,9 @@ import {
 import { usePayoutMinEnforcement } from '../../hooks/usePayoutMinEnforcement'
 import { noahService } from '../../lib/noahService'
 import {
+  ensureSendPayoutQuoteStashed,
   isStashedPayoutQuoteFresh,
   peekSendPayoutQuote,
-  stashSendPayoutQuote,
 } from '../../lib/sendFlowPayoutQuote'
 import { getPayoutCorridorCache, isRecipientPayoutCorridorActive, refreshPayoutCorridors } from '../../lib/payoutCorridors'
 import {
@@ -716,8 +716,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     receiveAmount > 0 &&
     Boolean(recipient?.id)
 
-  const payoutQuotePrefetchSeqRef = useRef(0)
-
   const payoutQuotePrefetchKey = useMemo(() => {
     if (!needsBackgroundPayoutQuote || !recipient?.id) return ''
     return [
@@ -740,36 +738,25 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   ])
 
   useEffect(() => {
-    if (!payoutQuotePrefetchKey) return
-    let cancelled = false
-    const seq = ++payoutQuotePrefetchSeqRef.current
-    const timer = setTimeout(() => {
-      void (async () => {
-        try {
-          const pq = await noahService.createPayoutQuote({
-            recipientId: recipient!.id,
-            receiveAmount,
-            sourceBalanceCurrency: selectedBalanceCurrency,
-            amountEntryMode,
-            ...(amountEntryMode === 'send' && sendingAmount > 0 ? { sendAmount: sendingAmount } : {}),
-            ...(note.trim() ? { note: note.trim() } : {}),
-            ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
-          })
-          if (cancelled || seq !== payoutQuotePrefetchSeqRef.current) return
-          stashSendPayoutQuote(pq, {
-            amountEntryMode,
-            entryAmount: amountEntryMode === 'send' ? sendingAmount : receiveAmount,
-            receiveCurrency,
-          })
-        } catch {
-          // silent — confirm refreshes if needed
-        }
-      })()
-    }, 200)
-    return () => {
-      cancelled = true
-      clearTimeout(timer)
+    if (!payoutQuotePrefetchKey || !recipient?.id) return
+    const meta = {
+      amountEntryMode,
+      entryAmount: amountEntryMode === 'send' ? sendingAmount : receiveAmount,
+      receiveCurrency,
     }
+    void ensureSendPayoutQuoteStashed(
+      () =>
+        noahService.createPayoutQuote({
+          recipientId: recipient!.id,
+          receiveAmount,
+          sourceBalanceCurrency: selectedBalanceCurrency,
+          amountEntryMode,
+          ...(amountEntryMode === 'send' && sendingAmount > 0 ? { sendAmount: sendingAmount } : {}),
+          ...(note.trim() ? { note: note.trim() } : {}),
+          ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+        }),
+      meta,
+    )
   }, [payoutQuotePrefetchKey, recipient, receiveAmount, receiveCurrency, selectedBalanceCurrency, amountEntryMode, sendingAmount, note, paymentPurpose])
 
   const sendButtonDisabled =
@@ -1282,9 +1269,40 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 }
               }
 
-              const stashedQuote = isStashedPayoutQuoteFresh(quoteStashMeta)
-                ? peekSendPayoutQuote()
-                : null
+              const stashedQuote =
+                selectedPaymentMethod === 'balance' &&
+                !isEasetagRecipient &&
+                !recipient?.wallet_network?.trim() &&
+                receiveAmountValue > 0
+                  ? await ensureSendPayoutQuoteStashed(
+                      () =>
+                        noahService.createPayoutQuote({
+                          recipientId: recipient.id,
+                          receiveAmount: receiveAmountValue,
+                          sourceBalanceCurrency: selectedBalanceCurrency,
+                          amountEntryMode,
+                          ...(amountEntryMode === 'send' && navAmounts.sendAmount > 0
+                            ? { sendAmount: navAmounts.sendAmount }
+                            : {}),
+                          ...(note.trim() ? { note: note.trim() } : {}),
+                          ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+                        }),
+                      quoteStashMeta,
+                    )
+                  : isStashedPayoutQuoteFresh(quoteStashMeta)
+                    ? peekSendPayoutQuote()
+                    : null
+
+              if (
+                selectedPaymentMethod === 'balance' &&
+                !isEasetagRecipient &&
+                !recipient?.wallet_network?.trim() &&
+                receiveAmountValue > 0 &&
+                !stashedQuote?.noah?.formSessionId
+              ) {
+                showError('Could not load payout quote. Try again.')
+                return
+              }
               let calculatedSendingAmount =
                 stashedQuote?.noah?.rate && stashedQuote.noah.rate > 0
                   ? receiveAmountValue / stashedQuote.noah.rate
@@ -1314,6 +1332,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   amountEntryMode,
                   amountScreenSendAmount: navAmounts.sendAmount,
                   transactionId,
+                  ...(stashedQuote
+                    ? {
+                        pricingQuoteId: stashedQuote.pricingQuoteId,
+                        pricingQuoteExpiry: stashedQuote.expiresAt,
+                        pricingQuoteResult: stashedQuote.easner,
+                      }
+                    : {}),
                   ...(note.trim() ? { note: note.trim() } : {}),
                   ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
                 } as never)

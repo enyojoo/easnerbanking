@@ -275,6 +275,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   useEffect(() => {
     if (!recipient || easetagUi) return
     if (!recipient.id || !(receiveAmountValue > 0)) return
+    if (payoutSession?.formSessionId) return
     if (isStashedPayoutQuoteFresh(quoteStashMeta)) {
       const stashed = peekSendPayoutQuote()
       if (stashed) {

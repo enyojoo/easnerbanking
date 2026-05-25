@@ -1043,15 +1043,6 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                         )}
                       </Text>
                     </View>
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Recipient gets</Text>
-                      <Text style={styles.summaryValue}>
-                        {formatMoneyDisplay(
-                          transaction.payout_review.receive_amount,
-                          transaction.payout_review.receive_currency,
-                        )}
-                      </Text>
-                    </View>
                     {transaction.recipient_snapshot ? (
                       <View style={styles.summaryRow}>
                         <Text style={styles.summaryLabel}>Recipient</Text>

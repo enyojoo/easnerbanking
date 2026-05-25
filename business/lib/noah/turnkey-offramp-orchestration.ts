@@ -46,6 +46,12 @@ export type ExecuteTurnkeyOfframpPayoutInput = {
   idempotencyKey?: string
   reviewSnapshot?: GlobalPayoutReviewSnapshot
   sendNote?: string
+  /** From `/api/noah/payouts/quote` — skip duplicate Noah prepare at execute. */
+  quotedSession?: {
+    formSessionId: string
+    cryptoAuthorizedAmount: string
+    channelId?: string
+  }
 }
 
 export type ExecuteTurnkeyOfframpPayoutResult =
@@ -150,22 +156,34 @@ export async function executeTurnkeyOfframpPayout(
   const easnerTransactionId = generateTransactionId()
   const walletCurrency = settlementWalletCurrencyForNoahCrypto(cryptoCurrency) as "USD" | "EUR"
 
-  let prep: Awaited<ReturnType<typeof prepareSellFromRecipientRow>>
-  try {
-    prep = await prepareSellFromRecipientRow({
-      row: recipientRow,
-      fiatAmount,
-      cryptoCurrency,
-      noahCustomerId: ctx.noahCustomerId,
-      overrides,
-    })
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    return { ok: false, error: msg || "prepare_failed" }
+  const quotedFormSessionId = String(input.quotedSession?.formSessionId || "").trim()
+  const quotedCryptoAuthorized = String(input.quotedSession?.cryptoAuthorizedAmount || "").trim()
+  const quotedChannelId = String(input.quotedSession?.channelId || channelId || "").trim()
+
+  let formSessionId = quotedFormSessionId
+  let cryptoAuthorizedAmount = quotedCryptoAuthorized
+  let resolvedChannelId = quotedChannelId || channelId
+
+  if (!formSessionId || !cryptoAuthorizedAmount) {
+    let prep: Awaited<ReturnType<typeof prepareSellFromRecipientRow>>
+    try {
+      prep = await prepareSellFromRecipientRow({
+        row: recipientRow,
+        fiatAmount,
+        cryptoCurrency,
+        noahCustomerId: ctx.noahCustomerId,
+        overrides,
+      })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      return { ok: false, error: msg || "prepare_failed" }
+    }
+
+    formSessionId = String(prep.prep.formSessionId || "").trim()
+    cryptoAuthorizedAmount = String(prep.prep.cryptoAuthorizedAmount || "").trim()
+    resolvedChannelId = channelId || prep.channelId
   }
 
-  const formSessionId = String(prep.prep.formSessionId || "").trim()
-  const cryptoAuthorizedAmount = String(prep.prep.cryptoAuthorizedAmount || "").trim()
   if (!formSessionId || !cryptoAuthorizedAmount) {
     return { ok: false, error: "Could not prepare payout session. Go back and get a fresh quote." }
   }
@@ -199,7 +217,7 @@ export async function executeTurnkeyOfframpPayout(
 
   const cryptoTrigger = pickTriggerCryptoAmount(
     cryptoAuthorizedAmount,
-    prep.prep.cryptoAmountEstimate || "",
+    cryptoAuthorizedAmount,
   )
 
   let workflowRaw: Record<string, unknown>
@@ -230,7 +248,7 @@ export async function executeTurnkeyOfframpPayout(
   }
 
   const noahWorkflowId = pickNoahWorkflowIdFromResponse(workflowRaw)
-  const resolvedChannelId = channelId || prep.channelId
+  resolvedChannelId = resolvedChannelId || channelId
   const asset = assetForCrypto(cryptoCurrency)
   const now = new Date().toISOString()
 
@@ -287,6 +305,7 @@ export async function executeTurnkeyOfframpPayout(
       chain: "solana",
       destinationAddress,
       amount: cryptoAmount,
+      settlementPollTimeoutMs: 0,
       globalPayout: {
         easnerPayoutId,
         noahWorkflowId,

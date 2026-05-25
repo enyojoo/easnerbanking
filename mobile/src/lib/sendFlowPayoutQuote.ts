@@ -55,3 +55,35 @@ export function isStashedPayoutQuoteFresh(input: SendPayoutQuoteStashMeta): bool
   }
   return entryAmountsMatch(stashed.receiveAmount, input.entryAmount, input.receiveCurrency)
 }
+
+let inflightQuote: Promise<PayoutQuote | null> | null = null
+let inflightQuoteKey = ''
+
+/** Deduped quote fetch — used for background prefetch and Continue gate. */
+export async function ensureSendPayoutQuoteStashed(
+  fetchQuote: () => Promise<PayoutQuote>,
+  meta: SendPayoutQuoteStashMeta,
+): Promise<PayoutQuote | null> {
+  if (isStashedPayoutQuoteFresh(meta)) return peekSendPayoutQuote()
+
+  const key = [
+    meta.amountEntryMode,
+    meta.entryAmount,
+    meta.receiveCurrency,
+  ].join('|')
+  if (inflightQuote && inflightQuoteKey === key) return inflightQuote
+
+  inflightQuoteKey = key
+  inflightQuote = fetchQuote()
+    .then((quote) => {
+      stashSendPayoutQuote(quote, meta)
+      return quote
+    })
+    .catch(() => null)
+    .finally(() => {
+      inflightQuote = null
+      inflightQuoteKey = ''
+    })
+
+  return inflightQuote
+}

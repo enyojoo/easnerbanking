@@ -139,6 +139,7 @@ export default function SendConfirmPage() {
     if (!state || isEasenetRecipient(state.recipient) || isWalletRecipient(state.recipient) || !(state.amount > 0))
       return
     if (isPayoutQuoteFresh(state.payoutQuote, state.amount)) return
+    if (state.payoutQuote?.formSessionId) return
     let cancelled = false
     setPayoutQuoteError(null)
     void (async () => {
@@ -197,11 +198,11 @@ export default function SendConfirmPage() {
 
   const quoteCountdown = useQuoteCountdown(state?.payoutQuote?.expiresAt)
 
-  const finishSend = async (transactionId: string) => {
+  const finishSend = (transactionId: string) => {
     if (!state) return
     sessionStorage.removeItem(SEND_FLOW_STATE_KEY_LOCAL)
-    await refetchBusinessMoneyQueries(qc, scope)
     router.push(transactionWebDetailPath(transactionId))
+    void refetchBusinessMoneyQueries(qc, scope)
   }
 
   const handleAuthorizeSuccess = async () => {

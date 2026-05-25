@@ -259,6 +259,7 @@ export function TransactionDetailsPanel({
           sendNote={transaction.sendNote}
           copiedKey={copiedKey}
           onCopy={handleCopy}
+          showRecipientGets={false}
         />
       ) : (
         <TransactionSummaryDetails

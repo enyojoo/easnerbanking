@@ -73,6 +73,8 @@ export async function POST(request: Request) {
   const idempotencyKey = String(
     body?.idempotencyKey || body?.reservedDebitEtid || request.headers.get("idempotency-key") || "",
   ).trim()
+  const formSessionId = String(body?.formSessionId || "").trim()
+  const cryptoAuthorizedAmount = String(body?.cryptoAuthorizedAmount || "").trim()
 
   const isValidPayout =
     Boolean(fiatCurrency) &&
@@ -166,6 +168,15 @@ export async function POST(request: Request) {
       reviewSnapshot: reviewSnapshot ?? undefined,
       sendNote: sendNote || undefined,
       idempotencyKey: idempotencyKey || undefined,
+      ...(formSessionId && cryptoAuthorizedAmount
+        ? {
+            quotedSession: {
+              formSessionId,
+              cryptoAuthorizedAmount,
+              ...(channelId ? { channelId } : {}),
+            },
+          }
+        : {}),
     })
 
     if (!result.ok) {
