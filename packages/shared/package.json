@@ -20,6 +20,26 @@
       "require": "./src/verified-identity.ts",
       "types": "./src/verified-identity.ts"
     },
+    "./format-display-name": {
+      "import": "./src/format-display-name.ts",
+      "require": "./src/format-display-name.ts",
+      "types": "./src/format-display-name.ts"
+    },
+    "./transactions/verification-deposit": {
+      "import": "./src/transactions/verification-deposit.ts",
+      "require": "./src/transactions/verification-deposit.ts",
+      "types": "./src/transactions/verification-deposit.ts"
+    },
+    "./transactions/bank-deposit-inbound-label": {
+      "import": "./src/transactions/bank-deposit-inbound-label.ts",
+      "require": "./src/transactions/bank-deposit-inbound-label.ts",
+      "types": "./src/transactions/bank-deposit-inbound-label.ts"
+    },
+    "./transactions/bank-deposit-scheme": {
+      "import": "./src/transactions/bank-deposit-scheme.ts",
+      "require": "./src/transactions/bank-deposit-scheme.ts",
+      "types": "./src/transactions/bank-deposit-scheme.ts"
+    },
     "./warm-flags": {
       "import": "./src/flags/warm-flags.native.ts",
       "require": "./src/flags/warm-flags.native.ts",

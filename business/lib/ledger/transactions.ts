@@ -97,7 +97,7 @@ export async function upsertLedgerTransaction(
 
   const { data: existing, error: existingErr } = await admin
     .from("transactions")
-    .select("id,status,metadata")
+    .select("id,status,metadata,payload,settled_at")
     .eq("provider", provider)
     .eq("provider_transaction_id", providerTransactionId)
     .maybeSingle()
@@ -109,8 +109,17 @@ export async function upsertLedgerTransaction(
   )
 
   const previousStatus = existing?.status ? String(existing.status) : null
-  const nextStatus = status
+  const isStatusDowngradeFromSettled =
+    previousStatus === "settled" &&
+    (status === "pending" || status === "processing" || status === "unknown")
+  const nextStatus = isStatusDowngradeFromSettled ? "settled" : status
   const becameSettled = previousStatus !== "settled" && nextStatus === "settled"
+  const payload = isStatusDowngradeFromSettled
+    ? ((existing?.payload as Record<string, unknown> | null | undefined) ?? input.payload ?? null)
+    : (input.payload ?? null)
+  const settledAt = isStatusDowngradeFromSettled
+    ? (existing?.settled_at != null ? String(existing.settled_at) : input.settledAt ?? null)
+    : (input.settledAt ?? null)
 
   const record = {
     user_id: input.userId,
@@ -118,11 +127,11 @@ export async function upsertLedgerTransaction(
     provider,
     provider_transaction_id: providerTransactionId,
     provider_event_id: input.providerEventId ?? null,
-    status,
+    status: nextStatus,
     amount,
     currency,
     direction,
-    payload: input.payload ?? null,
+    payload,
     metadata: mergedMetadata,
     easner_transaction_id:
       typeof mergedMetadata.easner_transaction_id === "string" && mergedMetadata.easner_transaction_id.trim()
@@ -134,7 +143,7 @@ export async function upsertLedgerTransaction(
     chain: input.chain ?? null,
     counterparty_address: input.counterpartyAddress ?? null,
     occurred_at: input.occurredAt ?? null,
-    settled_at: input.settledAt ?? null,
+    settled_at: settledAt,
     amount_minor: input.amountMinor ?? null,
     base_currency: baseCurrency,
     base_amount: baseAmount,

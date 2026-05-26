@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   buildVerificationDepositMetadataFields,
+  classifyVerificationDeposit,
   deriveBankDepositNarrationLabel,
 } from "@easner/shared"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
@@ -16,19 +17,20 @@ import {
   buildNoahGlobalPayoutPayOutMetadata,
   findPendingGlobalPayoutByExternalId,
   linkPendingGlobalPayoutToNoahTransactionId,
-  linkGlobalPayoutOutRowFromOrchestrationIn,
-  resolveGlobalPayoutOutRowForOrchestrationIn,
-  suppressNoahGlobalPayoutOrchestrationInLedgerRow,
+  handleNoahGlobalPayoutOrchestrationInWebhook,
+  pickNoahGlobalPayoutOrchestrationRuleExecutionId,
   settlementWalletCurrencyForNoahCrypto,
 } from "@/lib/noah/global-payout-ledger"
 import {
   buildNoahBankPayInLedgerMetadata,
   buildNoahOrchestrationOutLegMetadata,
+  buildNoahVerificationFiatDepositLedgerMetadata,
   extractFiatDepositEnrichment,
   extractNoahBankPayInEnrichment,
   isNoahBankOnrampFiatPayIn,
   isNoahBankOnrampOrchestrationInLeg,
   isNoahBankOnrampOrchestrationOutLeg,
+  isVerificationFiatDeposit,
   mergePayInMetadataWithLifecycle,
   pickNoahOrchestrationRuleExecutionId,
 } from "@/lib/noah/bank-onramp-tx"
@@ -100,48 +102,77 @@ export async function applyNoahWebhookSideEffects(
           fiatUserId = (await resolveBusinessOrgOwnerUserId(admin, fiatParsed.businessId)) ?? ""
         }
         if (fiatUserId) {
-          const existing = await findBankOnrampPayInTransaction(admin, {
-            depositId: fiatEnrichment.depositId,
-            userId: fiatUserId,
-            businessId: fiatBusinessId,
-          })
-          if (existing) {
-            const patch: Record<string, unknown> = {}
-            if (fiatEnrichment.senderDisplayName) {
-              patch.sender_name = fiatEnrichment.senderDisplayName
-              patch.remitter_name = fiatEnrichment.senderDisplayName
-              patch.noah_fiat_deposit_sender_name = fiatEnrichment.senderDisplayName
-            }
-            if (fiatEnrichment.paymentReference) {
-              patch.payment_reference = fiatEnrichment.paymentReference
-              patch.reference = fiatEnrichment.paymentReference
-              const depositNarration = deriveBankDepositNarrationLabel({
-                paymentReference: fiatEnrichment.paymentReference,
+          if (isVerificationFiatDeposit(fiatEnrichment)) {
+            if (fiatEnrichment.status === "settled") {
+              const occurred = String(p.Occurred ?? data.Created ?? new Date().toISOString())
+              const metadata = buildNoahVerificationFiatDepositLedgerMetadata(data, fiatEnrichment, {
+                occurredAt: fiatEnrichment.processingAt,
+                completedAt: occurred,
               })
-              if (depositNarration) {
-                patch.deposit_narration = depositNarration
-                patch.narration = depositNarration
+              await upsertLedgerTransaction(admin, {
+                userId: fiatUserId,
+                businessId: fiatBusinessId,
+                provider: "noah",
+                providerTransactionId: fiatEnrichment.depositId,
+                status: "settled",
+                amount: fiatEnrichment.fiatAmount,
+                currency: fiatEnrichment.fiatCurrency,
+                direction: "in",
+                payload: data,
+                metadata,
+                occurredAt: fiatEnrichment.processingAt ?? occurred,
+                settledAt: occurred,
+                baseCurrency: fiatEnrichment.fiatCurrency,
+              })
+            }
+          } else {
+            const existing = await findBankOnrampPayInTransaction(admin, {
+              depositId: fiatEnrichment.depositId,
+              userId: fiatUserId,
+              businessId: fiatBusinessId,
+            })
+            if (existing) {
+              const patch: Record<string, unknown> = {}
+              if (fiatEnrichment.senderDisplayName) {
+                patch.sender_name = fiatEnrichment.senderDisplayName
+                patch.remitter_name = fiatEnrichment.senderDisplayName
+                patch.noah_fiat_deposit_sender_name = fiatEnrichment.senderDisplayName
               }
+              if (fiatEnrichment.paymentReference) {
+                patch.payment_reference = fiatEnrichment.paymentReference
+                patch.reference = fiatEnrichment.paymentReference
+                const depositNarration = deriveBankDepositNarrationLabel({
+                  paymentReference: fiatEnrichment.paymentReference,
+                })
+                if (depositNarration) {
+                  patch.deposit_narration = depositNarration
+                  patch.narration = depositNarration
+                }
+              }
+              if (fiatEnrichment.paymentMethodType) {
+                patch.noah_payment_method_type = fiatEnrichment.paymentMethodType
+              }
+              const verificationFields = buildVerificationDepositMetadataFields({
+                payload: data,
+                metadata: {
+                  ...(existing.metadata ?? {}),
+                  ...patch,
+                  fiat_deposit_amount: fiatEnrichment.fiatAmount,
+                },
+                fiatAmount: fiatEnrichment.fiatAmount,
+                fiatDepositSenderName: fiatEnrichment.senderDisplayName,
+              })
+              patch.deposit_kind = verificationFields.deposit_kind
+              patch.verification_bank_name = verificationFields.verification_bank_name
+              const merged = mergePayInMetadataWithLifecycle(existing.metadata, patch, {
+                processing_at: fiatEnrichment.processingAt,
+                noah_fiat_deposit_id: fiatEnrichment.depositId,
+              })
+              await admin
+                .from("transactions")
+                .update({ metadata: merged, updated_at: new Date().toISOString() })
+                .eq("id", existing.id)
             }
-            if (fiatEnrichment.paymentMethodType) {
-              patch.noah_payment_method_type = fiatEnrichment.paymentMethodType
-            }
-            const verificationFields = buildVerificationDepositMetadataFields({
-              payload: data,
-              metadata: { ...(existing.metadata ?? {}), ...patch, fiat_deposit_amount: fiatEnrichment.fiatAmount },
-              fiatAmount: fiatEnrichment.fiatAmount,
-              fiatDepositSenderName: fiatEnrichment.senderDisplayName,
-            })
-            patch.deposit_kind = verificationFields.deposit_kind
-            patch.verification_bank_name = verificationFields.verification_bank_name
-            const merged = mergePayInMetadataWithLifecycle(existing.metadata, patch, {
-              processing_at: fiatEnrichment.processingAt,
-              noah_fiat_deposit_id: fiatEnrichment.depositId,
-            })
-            await admin
-              .from("transactions")
-              .update({ metadata: merged, updated_at: new Date().toISOString() })
-              .eq("id", existing.id)
           }
         }
       }
@@ -210,37 +241,32 @@ export async function applyNoahWebhookSideEffects(
       }
 
       if (userId && id) {
-        const ruleExecutionId = pickNoahOrchestrationRuleExecutionId(txData)
+        const ruleExecutionId = pickNoahGlobalPayoutOrchestrationRuleExecutionId(txData)
         const isOrchestrationOut = isNoahBankOnrampOrchestrationOutLeg(txData)
         const payInEnrichment = extractNoahBankPayInEnrichment(txData)
         const solanaTxHash = pickTxHash(txData)
-        const globalPayoutOutRow =
-          isNoahGlobalPayoutOrchestrationInLegShape(txData)
-            ? await resolveGlobalPayoutOutRowForOrchestrationIn(admin, {
-                externalId,
-                solanaTxHash,
-                ruleExecutionId,
-                userId,
-                businessId,
-              })
-            : null
 
-        if (globalPayoutOutRow) {
-          await linkGlobalPayoutOutRowFromOrchestrationIn(admin, {
-            outRowId: globalPayoutOutRow.id,
-            priorMetadata: globalPayoutOutRow.metadata,
-            ruleExecutionId,
-            solanaTxHash,
-          })
-          await suppressNoahGlobalPayoutOrchestrationInLedgerRow(admin, {
+        if (isNoahGlobalPayoutOrchestrationInLegShape(txData)) {
+          await handleNoahGlobalPayoutOrchestrationInWebhook(admin, {
             noahTransactionId: id,
+            txData,
+            status,
             userId,
             businessId,
-            linkedOutRowId: globalPayoutOutRow.id,
-            easnerPayoutId: globalPayoutOutRow.easnerPayoutId,
+            externalId,
             ruleExecutionId,
             solanaTxHash,
           })
+        } else if (
+          isNoahBankOnrampFiatPayIn(txData) &&
+          payInEnrichment &&
+          classifyVerificationDeposit({
+            payload: txData,
+            fiatAmount: payInEnrichment.fiatAmount,
+            settledStablecoinAmount: payInEnrichment.settledStablecoinAmount,
+          }) === "verification"
+        ) {
+          // Verification microdeposits: ledger row is FiatDeposit-first only.
         } else {
         let metadata: Record<string, unknown> = { source: "webhook_transaction" }
         if (autopayoutConfigId) {
@@ -252,12 +278,17 @@ export async function applyNoahWebhookSideEffects(
             ...metadata,
             ...buildNoahOrchestrationOutLegMetadata(txData, ruleExecutionId),
           }
-        } else if (isNoahBankOnrampOrchestrationInLeg(txData) && ruleExecutionId) {
+        } else if (
+          isNoahBankOnrampOrchestrationInLeg(txData) &&
+          ruleExecutionId &&
+          !isNoahGlobalPayoutOrchestrationInLegShape(txData)
+        ) {
           metadata = {
             ...metadata,
             flow: "bank_onramp",
             noah_rule_execution_id: ruleExecutionId,
             noah_orchestration_settlement_in_leg: true,
+            suppress_in_feed: true,
           }
         } else if (payInEnrichment) {
           const occurredAt = String(txData.Created ?? txData.Updated ?? new Date().toISOString())

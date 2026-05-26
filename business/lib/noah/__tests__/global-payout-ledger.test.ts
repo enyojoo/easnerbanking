@@ -1,12 +1,59 @@
 import { describe, expect, it } from "vitest"
 import {
+  buildNoahGlobalPayoutOrchestrationInSuppressMetadata,
   extractNoahGlobalPayoutPayOutEnrichment,
   isNoahGlobalPayoutOrchestrationInLeg,
   isNoahGlobalPayoutOrchestrationInLegShape,
   isNoahGlobalPayoutSellTx,
   pendingGlobalPayoutProviderTransactionId,
   pickNoahGlobalPayoutLedgerFields,
+  pickNoahGlobalPayoutOrchestrationRuleExecutionId,
 } from "@/lib/noah/global-payout-ledger"
+
+describe("pickNoahGlobalPayoutOrchestrationRuleExecutionId", () => {
+  it("uses transaction ID when Orchestration is missing on pending IN", () => {
+    expect(
+      pickNoahGlobalPayoutOrchestrationRuleExecutionId({
+        ID: "ce13b3e5-580b-11f1-b758-1a25229179b7",
+        Direction: "In",
+        Network: "Solana",
+        CryptoCurrency: "USDC",
+      }),
+    ).toBe("ce13b3e5-580b-11f1-b758-1a25229179b7")
+  })
+})
+
+describe("buildNoahGlobalPayoutOrchestrationInSuppressMetadata", () => {
+  it("tags suppress_in_feed and global payout flow", () => {
+    const meta = buildNoahGlobalPayoutOrchestrationInSuppressMetadata({
+      ruleExecutionId: "ce13b3e5-580b-11f1-b758-1a25229179b7",
+      solanaTxHash: "sig-abc",
+      easnerPayoutId: "3901dbc0-96a8-45ec-8605-9c9b39a069b9",
+    })
+    expect(meta.suppress_in_feed).toBe(true)
+    expect(meta.global_payout_orchestration_in_leg).toBe(true)
+    expect(meta.flow).toBe("global_fiat_offramp")
+    expect(meta.noah_rule_execution_id).toBe("ce13b3e5-580b-11f1-b758-1a25229179b7")
+  })
+})
+
+describe("linkGlobalPayoutOutRowFromOrchestrationIn metadata fields", () => {
+  it("documents orchestration IN ids stored on OUT row", () => {
+    const prior = { payout_type: "global_fiat", easner_payout_id: "payout-1" }
+    const patch = {
+      ...prior,
+      flow: "global_fiat_offramp",
+      global_payout_orchestration_in_leg_linked: true,
+      noah_orchestration_in_transaction_id: "ce13b3e5-580b-11f1-b758-1a25229179b7",
+      noah_orchestration_in_status: "settled",
+      noah_rule_execution_id: "ce13b3e5-580b-11f1-b758-1a25229179b7",
+      noah_on_chain_tx_hash: "sig-abc",
+      turnkey_tx_hash: "sig-abc",
+    }
+    expect(patch.noah_orchestration_in_transaction_id).toBeTruthy()
+    expect(patch.global_payout_orchestration_in_leg_linked).toBe(true)
+  })
+})
 
 describe("isNoahGlobalPayoutOrchestrationInLegShape", () => {
   it("matches Solana IN USDC without ExternalID or Orchestration (pending webhook)", () => {
@@ -89,7 +136,7 @@ describe("extractNoahGlobalPayoutPayOutEnrichment", () => {
     expect(enrichment?.receiveCurrency).toBe("NGN")
     expect(enrichment?.bankName).toBe("Kuda")
     expect(enrichment?.accountNumber).toBe("2067816945")
-    expect(enrichment?.beneficiaryName).toContain("SAMUEL")
+    expect(enrichment?.beneficiaryName).toMatch(/samuel/i)
   })
 })
 

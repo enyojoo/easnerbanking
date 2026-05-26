@@ -34,6 +34,41 @@ export function isNoahGlobalPayoutOrchestrationInLeg(tx: Record<string, unknown>
   return isNoahGlobalPayoutOrchestrationInLegShape(tx)
 }
 
+/**
+ * Pending Noah IN webhooks often omit Orchestration; ID is the rule execution id.
+ */
+export function pickNoahGlobalPayoutOrchestrationRuleExecutionId(
+  tx: Record<string, unknown>,
+): string | null {
+  return (
+    pickNoahOrchestrationRuleExecutionId(tx) ??
+    (isNoahGlobalPayoutOrchestrationInLegShape(tx) && tx.ID != null && String(tx.ID).trim()
+      ? String(tx.ID).trim()
+      : null)
+  )
+}
+
+export function buildNoahGlobalPayoutOrchestrationInSuppressMetadata(input: {
+  priorMetadata?: Record<string, unknown> | null
+  linkedOutRowId?: string | null
+  easnerPayoutId?: string | null
+  ruleExecutionId?: string | null
+  solanaTxHash?: string | null
+}): Record<string, unknown> {
+  const patch: Record<string, unknown> = {
+    ...(input.priorMetadata ?? {}),
+    source: "webhook_transaction",
+    flow: "global_fiat_offramp",
+    global_payout_orchestration_in_leg: true,
+    suppress_in_feed: true,
+  }
+  if (input.linkedOutRowId) patch.linked_global_payout_out_row_id = input.linkedOutRowId
+  if (input.easnerPayoutId) patch.easner_payout_id = input.easnerPayoutId
+  if (input.ruleExecutionId) patch.noah_rule_execution_id = input.ruleExecutionId
+  if (input.solanaTxHash) patch.noah_on_chain_tx_hash = input.solanaTxHash
+  return patch
+}
+
 export function pickNoahWebhookTxHash(tx: Record<string, unknown>): string | null {
   const h = tx.TxHash ?? tx.TransactionHash ?? tx.txHash ?? tx.Hash ?? tx.PublicID
   return h != null && String(h).trim() ? String(h).trim() : null
@@ -165,16 +200,13 @@ export async function suppressNoahGlobalPayoutOrchestrationInLedgerRow(
   if (!row?.id) return
 
   const prior = (row.metadata || {}) as Record<string, unknown>
-  const patch: Record<string, unknown> = {
-    ...prior,
-    flow: "global_fiat_offramp",
-    global_payout_orchestration_in_leg: true,
-    suppress_in_feed: true,
-  }
-  if (input.linkedOutRowId) patch.linked_global_payout_out_row_id = input.linkedOutRowId
-  if (input.easnerPayoutId) patch.easner_payout_id = input.easnerPayoutId
-  if (input.ruleExecutionId) patch.noah_rule_execution_id = input.ruleExecutionId
-  if (input.solanaTxHash) patch.noah_on_chain_tx_hash = input.solanaTxHash
+  const patch = buildNoahGlobalPayoutOrchestrationInSuppressMetadata({
+    priorMetadata: prior,
+    linkedOutRowId: input.linkedOutRowId,
+    easnerPayoutId: input.easnerPayoutId,
+    ruleExecutionId: input.ruleExecutionId,
+    solanaTxHash: input.solanaTxHash,
+  })
 
   await admin
     .from("transactions")
@@ -430,6 +462,8 @@ export async function linkGlobalPayoutOutRowFromOrchestrationIn(
     priorMetadata: Record<string, unknown>
     ruleExecutionId: string | null
     solanaTxHash: string | null
+    noahOrchestrationInTransactionId?: string | null
+    orchestrationInStatus?: string | null
   },
 ): Promise<void> {
   const patch: Record<string, unknown> = {
@@ -446,6 +480,12 @@ export async function linkGlobalPayoutOutRowFromOrchestrationIn(
       patch.turnkey_tx_hash = input.solanaTxHash
     }
   }
+  if (input.noahOrchestrationInTransactionId) {
+    patch.noah_orchestration_in_transaction_id = input.noahOrchestrationInTransactionId
+  }
+  if (input.orchestrationInStatus) {
+    patch.noah_orchestration_in_status = input.orchestrationInStatus
+  }
   await admin
     .from("transactions")
     .update({
@@ -454,4 +494,84 @@ export async function linkGlobalPayoutOutRowFromOrchestrationIn(
       updated_at: new Date().toISOString(),
     })
     .eq("id", input.outRowId)
+}
+
+/**
+ * Remove a mistaken Noah orchestration IN ledger row (legacy ingest). Raw webhook stays in event_inbox.
+ */
+export async function deleteNoahGlobalPayoutOrchestrationInLedgerRowIfPresent(
+  admin: SupabaseClient,
+  input: {
+    noahTransactionId: string
+    userId: string
+    businessId: string | null
+  },
+): Promise<boolean> {
+  const noahTransactionId = String(input.noahTransactionId || "").trim()
+  if (!noahTransactionId) return false
+
+  let q = admin
+    .from("transactions")
+    .select("id, metadata, payload")
+    .eq("provider", "noah")
+    .eq("provider_transaction_id", noahTransactionId)
+    .eq("direction", "in")
+  q = applyLedgerScope(q, { userId: input.userId, businessId: input.businessId })
+  const { data: row } = await q.maybeSingle()
+  if (!row?.id) return false
+
+  const meta = (row.metadata || {}) as Record<string, unknown>
+  const payload = (row.payload || {}) as Record<string, unknown>
+  const isOrchestrationIn =
+    meta.global_payout_orchestration_in_leg === true ||
+    isNoahGlobalPayoutOrchestrationInLegShape(payload)
+  if (!isOrchestrationIn) return false
+
+  const { error } = await admin.from("transactions").delete().eq("id", row.id)
+  if (error) throw error
+  return true
+}
+
+/**
+ * Global payout orchestration IN: patch OUT only, delete any legacy IN row — no new IN ledger insert.
+ */
+export async function handleNoahGlobalPayoutOrchestrationInWebhook(
+  admin: SupabaseClient,
+  input: {
+    noahTransactionId: string
+    txData: Record<string, unknown>
+    status: string
+    userId: string
+    businessId: string | null
+    externalId: string | null
+    ruleExecutionId: string | null
+    solanaTxHash: string | null
+  },
+): Promise<{ linkedOutRowId: string | null; deletedInRow: boolean }> {
+  const globalPayoutOutRow = await resolveGlobalPayoutOutRowForOrchestrationIn(admin, {
+    externalId: input.externalId,
+    solanaTxHash: input.solanaTxHash,
+    ruleExecutionId: input.ruleExecutionId,
+    userId: input.userId,
+    businessId: input.businessId,
+  })
+
+  if (globalPayoutOutRow) {
+    await linkGlobalPayoutOutRowFromOrchestrationIn(admin, {
+      outRowId: globalPayoutOutRow.id,
+      priorMetadata: globalPayoutOutRow.metadata,
+      ruleExecutionId: input.ruleExecutionId,
+      solanaTxHash: input.solanaTxHash,
+      noahOrchestrationInTransactionId: input.noahTransactionId,
+      orchestrationInStatus: input.status,
+    })
+  }
+
+  const deletedInRow = await deleteNoahGlobalPayoutOrchestrationInLedgerRowIfPresent(admin, {
+    noahTransactionId: input.noahTransactionId,
+    userId: input.userId,
+    businessId: input.businessId,
+  })
+
+  return { linkedOutRowId: globalPayoutOutRow?.id ?? null, deletedInRow }
 }

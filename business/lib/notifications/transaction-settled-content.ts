@@ -6,6 +6,7 @@ import {
   formatMoneyDisplay,
   isBankOnrampDepositFlow,
   isGlobalPayoutOffRampFlow,
+  formatVerificationDepositPushBody,
   isVerificationDepositMetadata,
   toEasnerTransactionProductCategory,
 } from "@easner/shared"
@@ -172,7 +173,11 @@ export function buildTransactionSettledPushContent(input: TransactionSettledCont
       })
       return {
         title: "Bank verification credit",
-        body: `Received ${amountText} from ${bank} — not added to your balance. Confirm in your bank app if required.`,
+        body: formatVerificationDepositPushBody({
+          amount: input.amount,
+          currency: input.currency,
+          bankName: bank,
+        }),
       }
     }
     if (isBankOnrampDepositFlow(meta)) {

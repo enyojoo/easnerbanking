@@ -48,7 +48,9 @@ export function deriveBankDepositPaymentRail(ctx: BankDepositSchemeContext): str
   if (fromType) return fromType
 
   const fpm = payload.FiatPaymentMethod as Record<string, unknown> | undefined
-  const pmId = String(fpm?.ID ?? fpm?.PaymentMethodID ?? "").trim()
+  const pmId = String(
+    fpm?.ID ?? fpm?.PaymentMethodID ?? payload.PaymentMethodID ?? "",
+  ).trim()
   const fromId = pmId ? parseRailTokenFromPaymentMethodId(pmId) : null
   if (fromId) return fromId
 

@@ -5,10 +5,10 @@ import { resolveLedgerListScope } from "@/lib/transactions-ledger-scope"
 import { displayEasnerTransactionId } from "@/lib/easner-transaction-id"
 import {
   deriveBankDepositInboundDisplayLabel,
-  deriveVerificationBankName,
   isEasnerProductReceiveTitle,
   isVerificationDepositMetadata,
   toEasnerTransactionPrimaryLabel,
+  VERIFICATION_DEPOSIT_LIST_LABEL,
 } from "@easner/shared"
 import { isNoahBankOnrampFiatPayIn } from "@/lib/noah/bank-onramp-tx"
 import { enrichBankDepositLedgerRows } from "@/lib/transactions/enrich-bank-deposit-ledger-rows"
@@ -74,35 +74,35 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
     !isVerification && payload && isNoahBankOnrampFiatPayIn(payload)
       ? deriveBankDepositInboundDisplayLabel({ metadata: meta })
       : undefined
-  const name =
-    bankLabel ??
-    toEasnerTransactionPrimaryLabel({
-      provider: String(row.provider ?? "noah"),
-      direction: dirRaw === "in" ? "in" : "out",
-      metadata: meta ?? null,
-      payload,
-    })
+  const name = isVerification
+    ? VERIFICATION_DEPOSIT_LIST_LABEL
+    : bankLabel ??
+      toEasnerTransactionPrimaryLabel({
+        provider: String(row.provider ?? "noah"),
+        direction: dirRaw === "in" ? "in" : "out",
+        metadata: meta ?? null,
+        payload,
+      })
   const globalPayout = resolveGlobalPayoutOffRampDetail(row)
   const displayAmount = globalPayout?.displayAmount ?? amount
   const displayCurrency = globalPayout?.displayCurrency ?? currency
   const displayName = globalPayout?.displayDescription ?? name
-  const listSenderName = isVerification
-    ? deriveVerificationBankName({ metadata: meta, payload })
-    : bankLabel && !isEasnerProductReceiveTitle(bankLabel)
-      ? bankLabel
-      : undefined
+  const listSenderName =
+    !isVerification && bankLabel && !isEasnerProductReceiveTitle(bankLabel) ? bankLabel : undefined
   const isEasetagP2p = String(meta?.source ?? "").toLowerCase() === "easetag_p2p"
   const sourceType =
     isEasetagP2p
       ? "easetag_p2p"
       : String(meta?.source_type ?? "").trim() ||
-        (payload && String(payload.Direction ?? "") === "In" && String(payload.Network ?? "") === "OffNetwork"
+        (payload && payload.FiatAmount != null && !payload.FiatPayment
           ? "virtual_account"
-          : payload &&
-              String(payload.Direction ?? "") === "In" &&
-              String(payload.Network ?? "") !== "OffNetwork"
-            ? "liquidation_address"
-            : undefined)
+          : payload && String(payload.Direction ?? "") === "In" && String(payload.Network ?? "") === "OffNetwork"
+            ? "virtual_account"
+            : payload &&
+                String(payload.Direction ?? "") === "In" &&
+                String(payload.Network ?? "") !== "OffNetwork"
+              ? "liquidation_address"
+              : undefined)
 
   return {
     id: idForUi,

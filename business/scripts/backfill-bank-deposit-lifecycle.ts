@@ -1,7 +1,10 @@
 /**
  * Backfill `metadata.processing_at` / `completed_at` on Noah bank pay-in rows from `event_inbox` FiatDeposit webhooks.
  *
- * Usage: npx tsx business/scripts/backfill-bank-deposit-lifecycle.ts [--dry-run]
+ * For full metadata (sender, narration, deposit_kind), use `backfill-bank-deposit-pay-in.ts`.
+ *
+ * Usage:
+ *   cd business && node --env-file=.env.local --import tsx scripts/backfill-bank-deposit-lifecycle.ts --dry-run
  */
 import { createClient } from "@supabase/supabase-js"
 import {

@@ -14,6 +14,11 @@ vi.mock("@easner/shared", () => ({
     String(meta?.deposit_kind ?? "").toLowerCase() === "verification",
   deriveVerificationBankName: (input: { metadata?: Record<string, unknown> | null }) =>
     String(input.metadata?.verification_bank_name ?? "Your bank"),
+  formatVerificationDepositPushBody: (input: {
+    amount: number
+    currency: string
+    bankName: string
+  }) => `Received $${input.amount.toFixed(2)} from ${input.bankName}`,
   deriveEasnerInboundRemitterDisplayName: () => undefined,
   formatDisplayPersonName: (n: string) =>
     n === "SAMUEL ODIBA ENYOJO"
@@ -45,9 +50,7 @@ describe("buildTransactionSettledPushContent", () => {
       },
     })
     expect(title).toBe("Bank verification credit")
-    expect(body).toContain("$0.32")
-    expect(body).toContain("Chase")
-    expect(body).toContain("not added to your balance")
+    expect(body).toBe("Received $0.32 from Chase")
   })
 
   it("still uses bank deposit push for funding onramp", () => {

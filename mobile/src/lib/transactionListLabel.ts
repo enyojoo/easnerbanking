@@ -1,7 +1,9 @@
 import {
   isEasnerProductReceiveTitle,
+  isVerificationDepositMetadata,
   resolveInboundTransactionListLabel,
   resolveTransactionListLabel,
+  VERIFICATION_DEPOSIT_LIST_LABEL,
 } from '@easner/shared'
 
 export type TransactionListRow = {
@@ -30,6 +32,9 @@ export function getTransactionListName(row: TransactionListRow): string {
   }
 
   if (transactionType === 'receive') {
+    if (isVerificationDepositMetadata(row.metadata)) {
+      return VERIFICATION_DEPOSIT_LIST_LABEL
+    }
     const senderDisplay = String(row.sender_display_name ?? '').trim()
     const apiName = String(row.name ?? '').trim()
     if (senderDisplay && !isEasnerProductReceiveTitle(senderDisplay)) return senderDisplay

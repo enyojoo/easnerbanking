@@ -43,11 +43,60 @@ const sharedMock = vi.hoisted(() => {
     if (ref == null) return undefined
     return parseSentFromNarrationLabel(String(ref)) ?? undefined
   }
+  const deriveVerificationDepositNarrationLabel = (input: {
+    paymentReference?: string | null
+    verificationBankName?: string | null
+    fiatDepositSenderName?: string | null
+    metadata?: Record<string, unknown> | null
+  }) => {
+    const meta = input.metadata || {}
+    if (typeof meta.deposit_narration === "string" && meta.deposit_narration.trim()) {
+      return meta.deposit_narration.trim()
+    }
+    const sentFrom = parseSentFromNarrationLabel(input.paymentReference)
+    if (sentFrom) return sentFrom
+    const bank =
+      String(input.verificationBankName ?? "").trim() ||
+      formatVerificationBankDisplayName(input.fiatDepositSenderName) ||
+      "Your bank"
+    return `Sent from ${bank}`
+  }
+  const formatVerificationBankDisplayName = (raw: string | null | undefined) => {
+    const s = String(raw ?? "")
+      .trim()
+      .replace(/_XTRANSFR/gi, "")
+      .replace(/ACCTVERIFY/gi, "")
+      .replace(/_/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+    if (!s) return "Your bank"
+    const known: Record<string, string> = { PNC: "PNC", TD: "TD", CHASE: "Chase" }
+    const formatStem = (stem: string) => {
+      const t = stem.trim()
+      if (!t) return ""
+      const upper = t.toUpperCase()
+      if (known[upper]) return known[upper]
+      if (t === upper && /^[A-Z]{2,6}$/.test(t)) return t
+      return formatDisplayPersonName(t)
+    }
+    const words = s.split(/\s+/)
+    if (words.length >= 2 && /^bank$/i.test(words[words.length - 1]!)) {
+      const stem = formatStem(words.slice(0, -1).join(" "))
+      return stem ? `${stem} Bank` : "Your bank"
+    }
+    if (!s.includes(" ") && /bank$/i.test(s) && s.length > 4) {
+      const stem = formatStem(s.slice(0, -4))
+      return stem ? `${stem} Bank` : "Your bank"
+    }
+    return formatDisplayPersonName(s) || "Your bank"
+  }
   return {
     formatDisplayPersonName,
+    formatVerificationBankDisplayName,
     parseSentFromNarrationLabel,
     deriveBankDepositInboundDisplayLabel,
     deriveBankDepositNarrationLabel,
+    deriveVerificationDepositNarrationLabel,
     deriveBankDepositPaymentRail: () => "ach",
     deriveBankDepositSchemeLabel: () => "ACH",
     buildVerificationDepositMetadataFields: (input: {
@@ -70,7 +119,9 @@ vi.mock("@easner/shared", () => sharedMock)
 
 import {
   buildNoahBankPayInLedgerMetadata,
+  buildNoahVerificationFiatDepositLedgerMetadata,
   deriveNoahBankPayInRemitterName,
+  extractFiatDepositEnrichment,
   extractNoahBankPayInEnrichment,
   isNoahBankOnrampFiatPayIn,
   isNoahBankOnrampOrchestrationOutLeg,
@@ -144,5 +195,29 @@ describe("bank-onramp-tx", () => {
     })
     expect(meta.deposit_kind).toBe("verification")
     expect(meta.verification_bank_name).toBeTruthy()
+  })
+
+  it("builds verification metadata from FiatDeposit webhook payload", () => {
+    const fiatDeposit = {
+      ID: "4e821cbc-7fa6-590a-909a-650306f1d64f",
+      Sender: { FullName: "PNCBANK_XTRANSFR" },
+      Status: "Settled",
+      FiatAmount: "0.2",
+      FiatCurrency: "USD",
+      Reference: "ACH Credit 063106148847119 PNCBANK_XTRANSFR ACCTVERIFY",
+      PaymentMethodType: "BankAch",
+      Created: "2026-05-26T08:01:48Z",
+    } as Record<string, unknown>
+    const e = extractFiatDepositEnrichment(fiatDeposit)!
+    const meta = buildNoahVerificationFiatDepositLedgerMetadata(fiatDeposit, e, {
+      completedAt: "2026-05-26T08:01:48Z",
+    })
+    expect(meta.source).toBe("webhook_fiat_deposit")
+    expect(meta.deposit_kind).toBe("verification")
+    expect(meta.payment_reference).toContain("PNCBANK_XTRANSFR")
+    expect(meta.reference).toContain("PNCBANK_XTRANSFR")
+    expect(meta.deposit_narration).toBe("Sent from PNC Bank")
+    expect(meta.narration).toBe("Sent from PNC Bank")
+    expect(meta.settled_amount).toBe(0)
   })
 })

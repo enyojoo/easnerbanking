@@ -6,6 +6,7 @@ import { formatDisplayPersonName } from "../format-display-name"
 import { deriveBankDepositInboundDisplayLabel } from "./bank-deposit-inbound-label"
 import {
   ACCOUNT_VERIFICATION_LIST_LABEL,
+  VERIFICATION_DEPOSIT_LIST_LABEL,
   VERIFICATION_DEPOSIT_PRODUCT_LABEL,
   deriveVerificationBankName,
   isVerificationDeposit,
@@ -215,7 +216,7 @@ export function toEasnerTransactionPrimaryLabel(input: {
     return direction === "in" ? "Stablecoin Deposit" : "Stablecoin Transfer"
   }
   if (direction === "in" && isVerificationDepositMetadata(meta)) {
-    return ACCOUNT_VERIFICATION_LIST_LABEL
+    return VERIFICATION_DEPOSIT_LIST_LABEL
   }
   if (direction === "in") {
     return deriveEasnerInboundRemitterDisplayName({
@@ -245,6 +246,7 @@ export function isEasnerProductReceiveTitle(name: string | null | undefined): bo
     n === "Stablecoin Deposit" ||
     n === "Bank Deposit" ||
     n === ACCOUNT_VERIFICATION_LIST_LABEL ||
+    n === VERIFICATION_DEPOSIT_LIST_LABEL ||
     n === VERIFICATION_DEPOSIT_PRODUCT_LABEL
   )
 }

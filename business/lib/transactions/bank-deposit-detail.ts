@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { isBankOnrampDepositFlow } from "@easner/shared"
-import { isNoahBankOnrampFiatPayIn } from "@/lib/noah/bank-onramp-tx"
+import { isBankOnrampFiatDepositPayload } from "@/lib/noah/bank-onramp-tx"
 import { fetchFiatDepositLifecycleFromWebhooks } from "@/lib/noah/fiat-deposit-webhook-timestamps"
 import { resolveBankDepositPayInDetail } from "@/lib/transactions/resolve-bank-deposit-pay-in"
 
@@ -8,7 +8,7 @@ export function isBankOnrampPayInRow(row: Record<string, unknown>): boolean {
   const meta = row.metadata as Record<string, unknown> | null | undefined
   const payload = row.payload as Record<string, unknown> | null | undefined
   if (isBankOnrampDepositFlow(meta)) return true
-  if (payload && isNoahBankOnrampFiatPayIn(payload)) return true
+  if (payload && isBankOnrampFiatDepositPayload(payload)) return true
   return false
 }
 

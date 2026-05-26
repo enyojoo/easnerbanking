@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { formatDisplayPersonName } from "@easner/shared"
+import { formatDisplayPersonName } from "@easner/shared/format-display-name"
 
 export type FiatDepositWebhookTimestamps = {
   processingAt: string | null

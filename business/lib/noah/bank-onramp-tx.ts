@@ -3,15 +3,22 @@
  * Fiat pay-in (OffNetwork + FiatPayment) is user-facing; orchestrated on-chain Out is internal.
  */
 
+import { formatDisplayPersonName } from "@easner/shared/format-display-name"
 import {
-  buildVerificationDepositMetadataFields,
   deriveBankDepositInboundDisplayLabel,
   deriveBankDepositNarrationLabel,
+  parseSentFromNarrationLabel,
+} from "@easner/shared/transactions/bank-deposit-inbound-label"
+import {
   deriveBankDepositPaymentRail,
   deriveBankDepositSchemeLabel,
-  formatDisplayPersonName,
-  parseSentFromNarrationLabel,
-} from "@easner/shared"
+} from "@easner/shared/transactions/bank-deposit-scheme"
+import {
+  buildVerificationDepositMetadataFields,
+  classifyVerificationDepositFromFiatDeposit,
+  deriveVerificationDepositNarrationLabel,
+  formatVerificationBankDisplayName,
+} from "@easner/shared/transactions/verification-deposit"
 
 function breakdownAmount(tx: Record<string, unknown>, type: string): number | null {
   const items = tx.Breakdown
@@ -37,6 +44,15 @@ export function isNoahBankOnrampFiatPayIn(tx: Record<string, unknown>): boolean 
   if (String(tx.Direction ?? "") !== "In") return false
   if (String(tx.Network ?? "") !== "OffNetwork") return false
   return !!tx.FiatPayment
+}
+
+/** Noah FiatDeposit webhook `Data` object stored as ledger `payload`. */
+export function isNoahFiatDepositWebhookPayload(payload: Record<string, unknown>): boolean {
+  return payload.FiatAmount != null && !payload.FiatPayment
+}
+
+export function isBankOnrampFiatDepositPayload(payload: Record<string, unknown>): boolean {
+  return isNoahBankOnrampFiatPayIn(payload) || isNoahFiatDepositWebhookPayload(payload)
 }
 
 /**
@@ -239,11 +255,13 @@ export function extractFiatDepositEnrichment(data: Record<string, unknown>): Fia
     fiatCurrency: String(data.FiatCurrency ?? "USD").toUpperCase(),
     senderDisplayName: fullName,
     paymentReference:
-      data.PaymentSystemID != null && String(data.PaymentSystemID).trim()
-        ? String(data.PaymentSystemID).trim()
-        : data.Reference != null && String(data.Reference).trim()
-          ? String(data.Reference).trim()
-          : null,
+      data.Reference != null && String(data.Reference).trim()
+        ? String(data.Reference).trim()
+        : data.Description != null && String(data.Description).trim()
+          ? String(data.Description).trim()
+          : data.PaymentSystemID != null && String(data.PaymentSystemID).trim()
+            ? String(data.PaymentSystemID).trim()
+            : null,
     paymentMethodType:
       data.PaymentMethodType != null && String(data.PaymentMethodType).trim()
         ? String(data.PaymentMethodType).trim()
@@ -251,6 +269,79 @@ export function extractFiatDepositEnrichment(data: Record<string, unknown>): Fia
     processingAt: pickIsoTimestamp(data.Created, data.Occurred),
     status: String(data.Status ?? "").toLowerCase(),
   }
+}
+
+export function isVerificationFiatDeposit(enrichment: FiatDepositEnrichment): boolean {
+  return classifyVerificationDepositFromFiatDeposit({ fiatAmount: enrichment.fiatAmount }) === "verification"
+}
+
+/** Ledger metadata for Noah FiatDeposit verification microdeposits (FiatDeposit-first ingest). */
+export function buildNoahVerificationFiatDepositLedgerMetadata(
+  data: Record<string, unknown>,
+  enrichment: FiatDepositEnrichment,
+  opts?: { occurredAt?: string | null; completedAt?: string | null },
+): Record<string, unknown> {
+  const sender = data.Sender as Record<string, unknown> | undefined
+  const rawSender =
+    sender?.FullName != null && String(sender.FullName).trim() ? String(sender.FullName).trim() : ""
+  const verificationBankName = formatVerificationBankDisplayName(rawSender)
+  const paymentReference = enrichment.paymentReference
+  const depositNarration = deriveVerificationDepositNarrationLabel({
+    paymentReference,
+    verificationBankName,
+    fiatDepositSenderName: rawSender || null,
+  })
+
+  const schemeCtx = {
+    metadata: {
+      fiat_deposit_currency: enrichment.fiatCurrency,
+      noah_payment_method_type: enrichment.paymentMethodType,
+    },
+    payload: data,
+  }
+  const sourcePaymentRail = deriveBankDepositPaymentRail(schemeCtx)
+  const depositSchemeLabel = deriveBankDepositSchemeLabel({
+    metadata: { ...schemeCtx.metadata, source_payment_rail: sourcePaymentRail },
+    payload: data,
+  })
+
+  const processingAt = enrichment.processingAt
+  const completedAt =
+    enrichment.status === "settled"
+      ? pickIsoTimestamp(opts?.completedAt, opts?.occurredAt, data.Created)
+      : null
+
+  const base: Record<string, unknown> = {
+    source: "webhook_fiat_deposit",
+    source_type: "virtual_account",
+    flow: "bank_onramp",
+    deposit_kind: "verification",
+    verification_bank_name: verificationBankName,
+    fiat_deposit_amount: enrichment.fiatAmount,
+    fiat_deposit_currency: enrichment.fiatCurrency,
+    fee_amount: 0,
+    settled_amount: 0,
+    posted_amount: 0,
+    settled_currency: enrichment.fiatCurrency,
+    sender_name: verificationBankName,
+    remitter_name: verificationBankName,
+    noah_fiat_deposit_sender_name: rawSender || null,
+    payment_reference: paymentReference,
+    reference: paymentReference,
+    ...(depositNarration ? { deposit_narration: depositNarration, narration: depositNarration } : {}),
+    noah_fiat_deposit_id: enrichment.depositId,
+    noah_payment_method_type: enrichment.paymentMethodType,
+    source_payment_rail: sourcePaymentRail,
+    deposit_scheme_label: depositSchemeLabel,
+    destination_payment_rail: "crypto",
+    processing_at: processingAt,
+    completed_at: completedAt,
+  }
+  return mergePayInMetadataWithLifecycle({}, base, {
+    processing_at: processingAt,
+    completed_at: completedAt,
+    noah_fiat_deposit_id: enrichment.depositId,
+  })
 }
 
 export function buildNoahBankPayInLedgerMetadata(
