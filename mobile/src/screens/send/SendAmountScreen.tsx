@@ -573,10 +573,17 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       }
     }
     if (!hasNoahRateForPair) {
+      const fallback = convertNoahSendFlowAmounts({
+        direction: amountEntryMode,
+        amount: enteredAmount,
+        sendCurrency,
+        receiveCurrency,
+        rateMap: noahRateMap,
+      })
       return {
-        sendAmount: 0,
-        receiveAmount: amountEntryMode === 'receive' ? enteredAmount : 0,
-        forwardRate: 0,
+        sendAmount: fallback.sendAmount,
+        receiveAmount: fallback.receiveAmount,
+        forwardRate: fallback.forwardRate,
       }
     }
     return convertNoahSendFlowAmounts({
@@ -632,7 +639,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       (selectedPaymentMethod === 'otherCurrency' && Boolean(selectedOtherCurrency)))
 
   const payoutMinSeedKey = recipient
-    ? `${recipient.id}:${receiveCurrency}:${payoutRail}:${selectedPaymentMethod}:${selectedOtherCurrency ?? ''}`
+    ? `${recipient.id}:${receiveCurrency}:${payoutRail}:${selectedPaymentMethod}:${selectedOtherCurrency ?? ''}:${amountEntryMode}`
     : null
 
   usePayoutMinEnforcement({

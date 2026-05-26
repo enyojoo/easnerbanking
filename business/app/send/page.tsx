@@ -386,7 +386,7 @@ export default function SendPage() {
       (paymentMethod === "otherCurrency" && Boolean(otherCurrency)))
 
   const payoutMinSeedKey = recipient
-    ? `${recipient.id}:${receiveCurrency}:${payoutRail}:${paymentMethod}:${otherCurrency ?? ""}`
+    ? `${recipient.id}:${receiveCurrency}:${payoutRail}:${paymentMethod}:${otherCurrency ?? ""}:${amountEntryMode}`
     : null
 
   usePayoutMinEnforcement({

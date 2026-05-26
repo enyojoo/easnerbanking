@@ -10,11 +10,11 @@ describe("getBusinessPayoutMin", () => {
   it("returns policy floors for major payout currencies", () => {
     expect(getBusinessPayoutMin("USD")).toBe(10)
     expect(getBusinessPayoutMin("EUR")).toBe(10)
-    expect(getBusinessPayoutMin("NGN")).toBe(5000)
+    expect(getBusinessPayoutMin("NGN")).toBe(1000)
   })
 
-  it("uses a lower mobile floor for KES when configured", () => {
-    expect(getBusinessPayoutMin("KES", "bank_transfer")).toBe(1000)
+  it("uses KES 500 for bank and mobile", () => {
+    expect(getBusinessPayoutMin("KES", "bank_transfer")).toBe(500)
     expect(getBusinessPayoutMin("KES", "mobile_money")).toBe(500)
   })
 })
@@ -32,7 +32,7 @@ describe("resolveEffectivePayoutMin", () => {
         hints: { limits: { min: "50" } } as PayoutFieldsSchemaHint,
         currencyCode: "NGN",
       }),
-    ).toBe(5000)
+    ).toBe(1000)
   })
 
   it("applies business min when Noah min is zero", () => {

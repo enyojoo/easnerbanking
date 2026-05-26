@@ -4,12 +4,13 @@ import { useEffect, useRef } from "react"
 import {
   computeEnteredAmountForReceiveMin,
   computePayoutReceiveAmount,
+  payoutReceiveMeetsMin,
   PAYOUT_MIN_ENFORCE_DEBOUNCE_MS,
 } from "../payout-min-enforcement"
 
 export function usePayoutMinEnforcement(input: {
   enabled: boolean
-  /** When this changes (recipient, rail, pay source), min is applied immediately. */
+  /** When this changes (recipient, rail, pay source, entry mode), min is applied immediately. */
   seedKey: string | null
   minReceive: number | null
   amountEntryMode: "send" | "receive"
@@ -33,8 +34,12 @@ export function usePayoutMinEnforcement(input: {
       sendCurrency: input.sendCurrency,
       receiveCurrency: input.receiveCurrency,
       rateMap: input.rateMap,
+      manualQuote: input.manualQuote,
+      useManualQuote: input.useManualQuote,
     })
-    onApplyRef.current(next)
+    if (next > 0) {
+      onApplyRef.current(next)
+    }
   }
 
   const lastSeedKey = useRef<string | null>(null)
@@ -52,10 +57,13 @@ export function usePayoutMinEnforcement(input: {
     input.sendCurrency,
     input.receiveCurrency,
     input.rateMap,
+    input.manualQuote,
+    input.useManualQuote,
   ])
 
   useEffect(() => {
     if (!input.enabled || input.minReceive == null) return
+    if (input.enteredAmount <= 0) return
 
     const currentReceive = computePayoutReceiveAmount({
       amountEntryMode: input.amountEntryMode,
@@ -67,7 +75,15 @@ export function usePayoutMinEnforcement(input: {
       useManualQuote: input.useManualQuote,
     })
 
-    if (currentReceive > 0 && currentReceive >= input.minReceive) return
+    if (
+      payoutReceiveMeetsMin({
+        receiveAmount: currentReceive,
+        minReceive: input.minReceive,
+        receiveCurrency: input.receiveCurrency,
+      })
+    ) {
+      return
+    }
 
     const timer = setTimeout(() => {
       const latestReceive = computePayoutReceiveAmount({
@@ -79,12 +95,16 @@ export function usePayoutMinEnforcement(input: {
         manualQuote: input.manualQuote,
         useManualQuote: input.useManualQuote,
       })
-      if (input.minReceive != null && latestReceive > 0 && latestReceive >= input.minReceive) {
+      if (
+        payoutReceiveMeetsMin({
+          receiveAmount: latestReceive,
+          minReceive: input.minReceive,
+          receiveCurrency: input.receiveCurrency,
+        })
+      ) {
         return
       }
-      if (input.minReceive != null) {
-        applyMin(input.minReceive)
-      }
+      applyMin(input.minReceive)
     }, debounceMs)
 
     return () => clearTimeout(timer)

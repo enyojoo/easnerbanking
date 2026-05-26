@@ -22,16 +22,14 @@ const PAYOUT_BUSINESS_MIN_BANK: Record<string, number> = {
   EUR: 10,
   GBP: 10,
   CAD: 10,
-  NGN: 5000,
-  KES: 1000,
+  NGN: 1000,
+  KES: 500,
   GHS: 50,
   ZAR: 100,
 }
 
 /** Optional lower floor for mobile money where it differs from bank (same currency). */
-const PAYOUT_BUSINESS_MIN_MOBILE: Record<string, number> = {
-  KES: 500,
-}
+const PAYOUT_BUSINESS_MIN_MOBILE: Record<string, number> = {}
 
 function normalizeCurrency(currencyCode: string): string {
   return String(currencyCode || "").trim().toUpperCase()
