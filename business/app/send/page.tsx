@@ -6,6 +6,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Skeleton } from "@/components/ui/skeleton"
 import { SendRecipientPicker } from "@/components/send-recipient-picker"
 import { formatSendRateLabel } from "@easner/shared"
 import { getCurrencySymbol } from "@/lib/utils"
@@ -108,6 +109,7 @@ export default function SendPage() {
   const [payoutQuotePreview, setPayoutQuotePreview] = useState<PayoutQuoteResult | null>(null)
   const [noahFxRates, setNoahFxRates] = useState<Record<string, number>>({})
   const [noahRateRows, setNoahRateRows] = useState<NoahWalletRateRow[]>([])
+  const [noahRatesLoading, setNoahRatesLoading] = useState(false)
 
   useEffect(() => {
     const raw = sessionStorage.getItem(SEND_FLOW_STATE_KEY)
@@ -218,8 +220,12 @@ export default function SendPage() {
 
   useEffect(() => {
     const dest = (recipient?.currency || "").trim().toUpperCase()
-    if (!dest || dest.length !== 3) return
+    if (!dest || dest.length !== 3) {
+      setNoahRatesLoading(false)
+      return
+    }
     let cancelled = false
+    setNoahRatesLoading(true)
     void (async () => {
       try {
         const res = await fetchWithSession(noahSendRatesQueryPath(dest))
@@ -235,6 +241,8 @@ export default function SendPage() {
           setNoahFxRates({})
           setNoahRateRows([])
         }
+      } finally {
+        if (!cancelled) setNoahRatesLoading(false)
       }
     })()
     return () => {
@@ -253,16 +261,17 @@ export default function SendPage() {
     if (!recipient || enteredAmount <= 0) {
       return { sendAmount: 0, receiveAmount: 0, forwardRate: 1 }
     }
-    if (
-      otherCurrency &&
-      manualSend.quote &&
-      sendCurrency !== receiveCurrency
-    ) {
-      return {
-        sendAmount: manualSend.quote.sendAmount,
-        receiveAmount: manualSend.quote.receiveAmount,
-        forwardRate: manualSend.quote.exchangeRate,
+    const crossCurrency = sendCurrency !== receiveCurrency
+    if (otherCurrency && crossCurrency) {
+      if (manualSend.quote) {
+        return {
+          sendAmount: manualSend.quote.sendAmount,
+          receiveAmount: manualSend.quote.receiveAmount,
+          forwardRate: manualSend.quote.exchangeRate,
+        }
       }
+      // Don't preview Noah/reference rates while the manual quote is in flight.
+      return { sendAmount: 0, receiveAmount: 0, forwardRate: 1 }
     }
     return convertNoahSendFlowAmounts({
       direction: amountEntryMode,
@@ -309,6 +318,20 @@ export default function SendPage() {
 
   const hasValidNoahRateForPair =
     !needsNoahRateForSend || isNoahSendRateRowFresh(activeNoahRateRow)
+
+  const manualQuoteEnabled =
+    paymentMethod === "otherCurrency" &&
+    Boolean(otherCurrency) &&
+    sendCurrency !== receiveCurrency &&
+    enteredAmount > 0
+
+  const manualQuoteLoading = manualQuoteEnabled && manualSend.quoteLoading && !manualSend.quote
+
+  const exchangePreviewReady =
+    sendCurrency === receiveCurrency ||
+    (manualQuoteEnabled
+      ? Boolean(manualSend.quote)
+      : !needsNoahRateForSend || hasValidNoahRateForPair)
 
   const displayBalanceForSource =
     sourceAccount && paymentMethod === "balance"
@@ -440,7 +463,8 @@ export default function SendPage() {
     hasValidOtherCurrencySelection &&
     tier1Complete &&
     !manualAmountOutOfRange &&
-    !payoutReceiveBelowMin
+    !payoutReceiveBelowMin &&
+    exchangePreviewReady
 
   const canContinue = isBalanceSource ? canContinueBalance : canContinueOtherCurrency
 
@@ -685,7 +709,15 @@ export default function SendPage() {
             </Label>
             {receiveCurrency !== sendCurrency ? (
               <div className="flex min-w-0 flex-1 items-center justify-end text-sm text-muted-foreground">
-                {needsNoahRateForSend && !hasValidNoahRateForPair ? (
+                {manualQuoteLoading ? (
+                  <Skeleton className="h-4 w-52 max-w-full" />
+                ) : manualQuoteEnabled && !manualSend.quote ? (
+                  <span className="text-destructive text-xs">
+                    {manualSend.quoteError ?? "Exchange rate unavailable. Try again shortly."}
+                  </span>
+                ) : needsNoahRateForSend && noahRatesLoading ? (
+                  <Skeleton className="h-4 w-52 max-w-full" />
+                ) : needsNoahRateForSend && !hasValidNoahRateForPair ? (
                   <span className="text-destructive text-xs">
                     Exchange rate unavailable. Try again shortly.
                   </span>

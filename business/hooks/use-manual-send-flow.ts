@@ -22,6 +22,7 @@ export function useManualSendFlow(input: {
 }) {
   const [catalog, setCatalog] = useState<ManualSendCatalogResponse | null>(null)
   const [quote, setQuote] = useState<ManualQuoteResponse | null>(null)
+  const [quoteLoading, setQuoteLoading] = useState(false)
   const [quoteError, setQuoteError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -51,13 +52,19 @@ export function useManualSendFlow(input: {
   useEffect(() => {
     if (!input.enabled || !input.otherCurrency || !input.receiveCurrency) {
       setQuote(null)
+      setQuoteLoading(false)
+      setQuoteError(null)
       return
     }
     if (input.enteredAmount <= 0) {
       setQuote(null)
+      setQuoteLoading(false)
+      setQuoteError(null)
       return
     }
     let cancelled = false
+    setQuoteLoading(true)
+    setQuoteError(null)
     void fetchManualQuote({
       direction: input.amountEntryMode,
       amount: input.enteredAmount,
@@ -75,6 +82,9 @@ export function useManualSendFlow(input: {
           setQuote(null)
           setQuoteError(e instanceof Error ? e.message : String(e))
         }
+      })
+      .finally(() => {
+        if (!cancelled) setQuoteLoading(false)
       })
     return () => {
       cancelled = true
@@ -115,6 +125,7 @@ export function useManualSendFlow(input: {
     paymentMethodsByCurrency,
     payInOptions,
     quote,
+    quoteLoading,
     quoteError,
     defaultPaymentMethodId,
     authorizePathForPaymentMethodId,

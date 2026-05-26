@@ -20,6 +20,7 @@ import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Path } from 'react-native-svg'
 import ScreenWrapper from '../../components/ScreenWrapper'
+import SkeletonLoader from '../../components/SkeletonLoader'
 import { NavigationProps } from '../../types'
 import {
   colors,
@@ -163,10 +164,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     isEasetagRecipient &&
     selectedPaymentMethod === 'balance' &&
     String(selectedBalanceCurrency).toUpperCase() === String((recipient?.currency || '').trim().toUpperCase())
-  const { data: exchangeRatesFromContext = [], isFetched: noahRatesFetched } = useNoahSendExchangeRates(
-    recipient?.currency,
-    { enabled: !skipNoahExchangeRatesForEasetagP2p },
-  )
+  const {
+    data: exchangeRatesFromContext = [],
+    isFetched: noahRatesFetched,
+    isFetching: noahRatesFetching,
+  } = useNoahSendExchangeRates(recipient?.currency, {
+    enabled: !skipNoahExchangeRatesForEasetagP2p,
+  })
   const exchangeRates = exchangeRatesFromContext || []
 
   useEffect(() => {
@@ -553,13 +557,32 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     showCrossCurrencyExchangeUi &&
     enteredAmount > 0
 
-  const { data: manualQuote } = useManualQuote({
+  const { data: manualQuote, isFetching: manualQuoteFetching } = useManualQuote({
     enabled: manualQuoteEnabled,
     direction: amountEntryMode,
     amount: enteredAmount,
     fromCurrency: sendCurrency,
     toCurrency: receiveCurrency,
   })
+
+  const isWalletRecipient = Boolean(recipient?.wallet_network?.trim())
+
+  const needsNoahRateForSend =
+    selectedPaymentMethod === 'balance' &&
+    !isEasetagRecipient &&
+    !isWalletRecipient &&
+    showCrossCurrencyExchangeUi
+
+  const noahRatesLoading =
+    needsNoahRateForSend && !hasNoahRateForPair && (!noahRatesFetched || noahRatesFetching)
+
+  const manualQuoteLoading = manualQuoteEnabled && !manualQuote && manualQuoteFetching
+
+  const exchangePreviewReady =
+    !showCrossCurrencyExchangeUi ||
+    (selectedPaymentMethod === 'otherCurrency'
+      ? !manualQuoteEnabled || Boolean(manualQuote)
+      : !needsNoahRateForSend || hasNoahRateForPair)
 
   const flowAmounts = useMemo(() => {
     if (!showCrossCurrencyExchangeUi || enteredAmount <= 0) {
@@ -766,6 +789,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     )
   }, [payoutQuotePrefetchKey, recipient, receiveAmount, receiveCurrency, selectedBalanceCurrency, amountEntryMode, sendingAmount, note, paymentPurpose])
 
+  const exchangeInfoAmountPositive =
+    !!(recipient && sendAmount && Number.parseFloat(sendAmount.replace(/,/g, '')) > 0)
+
   const sendButtonDisabled =
     !sendAmount ||
     sendAmount === '0.00' ||
@@ -775,10 +801,14 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     !selectedPaymentMethod ||
     (selectedPaymentMethod === 'otherCurrency' && (!selectedOtherCurrency || !selectedOtherPaymentMethod)) ||
     verificationBlocksSend ||
-    hasInsufficientBalance
+    hasInsufficientBalance ||
+    (exchangeInfoAmountPositive && showCrossCurrencyExchangeUi && !exchangePreviewReady)
 
-  const exchangeInfoAmountPositive =
-    !!(recipient && sendAmount && Number.parseFloat(sendAmount.replace(/,/g, '')) > 0)
+  const showExchangePreviewSkeleton =
+    exchangeInfoAmountPositive &&
+    showCrossCurrencyExchangeUi &&
+    !exchangePreviewReady &&
+    (noahRatesLoading || manualQuoteLoading)
 
   return (
     <ScreenWrapper>
@@ -967,7 +997,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 <View style={styles.exchangeInfoSlot}>
                   {!exchangeInfoAmountPositive ? (
                     <Text style={[styles.exchangeInfoText, styles.exchangeInfoPlaceholder]}> </Text>
-                  ) : showCrossCurrencyExchangeUi && hasNoahRateForPair ? (
+                  ) : showExchangePreviewSkeleton ? (
+                    <SkeletonLoader width={220} height={14} borderRadius={7} />
+                  ) : showCrossCurrencyExchangeUi && exchangePreviewReady ? (
                     <View style={styles.exchangeInfoColumn}>
                       <View style={styles.exchangeInfoInline}>
                         <Pressable
@@ -987,6 +1019,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                         </Text>
                       </View>
                     </View>
+                  ) : needsNoahRateForSend && !noahRatesLoading && !hasNoahRateForPair ? (
+                    <Text style={[styles.exchangeInfoText, styles.exchangeInfoUnavailable]}>
+                      Exchange rate unavailable. Try again shortly.
+                    </Text>
                   ) : null}
                 </View>
                 </View>
@@ -1891,6 +1927,10 @@ const styles = StyleSheet.create({
   },
   exchangeInfoPlaceholder: {
     opacity: 0,
+  },
+  exchangeInfoUnavailable: {
+    color: colors.semantic.destructive,
+    textAlign: 'center',
   },
   exchangeInfoInline: {
     flexDirection: 'row',
