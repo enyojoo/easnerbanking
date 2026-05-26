@@ -4,8 +4,7 @@ import type React from "react"
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { ChevronDown, ChevronRight, LogOut, Menu, Moon, Sun, X } from "lucide-react"
-import { useTheme } from "next-themes"
+import { ChevronDown, ChevronRight, LogOut, Menu, X } from "lucide-react"
 import { BrandLogo } from "@easner/shared"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/lib/auth-context"
@@ -51,45 +50,6 @@ function getInitialOpenGroups(pathname: string | null): Set<string> {
     next.add("business")
   }
   return next
-}
-
-function OfficeAppearanceSwitcher() {
-  const { resolvedTheme, setTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
-
-  if (!mounted) {
-    return <div className="h-9 w-full rounded-lg bg-muted/50" aria-hidden />
-  }
-
-  const isDark = resolvedTheme === "dark"
-
-  return (
-    <div className="flex gap-1" role="group" aria-label="Theme">
-      <Button
-        type="button"
-        variant={!isDark ? "secondary" : "ghost"}
-        size="sm"
-        className="h-9 flex-1 rounded-lg px-0"
-        onClick={() => setTheme("light")}
-        aria-label="Light mode"
-        aria-pressed={!isDark}
-      >
-        <Sun className="h-4 w-4 shrink-0 stroke-[1.5]" />
-      </Button>
-      <Button
-        type="button"
-        variant={isDark ? "secondary" : "ghost"}
-        size="sm"
-        className="h-9 flex-1 rounded-lg px-0"
-        onClick={() => setTheme("dark")}
-        aria-label="Dark mode"
-        aria-pressed={isDark}
-      >
-        <Moon className="h-4 w-4 shrink-0 stroke-[1.5]" />
-      </Button>
-    </div>
-  )
 }
 
 export function OfficeDashboardLayout({ children }: OfficeDashboardLayoutProps) {
@@ -233,20 +193,15 @@ export function OfficeDashboardLayout({ children }: OfficeDashboardLayoutProps) 
           </Link>
         </nav>
 
-        <div className="mt-auto border-t border-sidebar-border">
-          <div className="px-3 py-3">
-            <OfficeAppearanceSwitcher />
-          </div>
-          <div className="border-t border-sidebar-border px-3 py-4">
-            <Button
-              variant="ghost"
-              className="h-auto w-full justify-start gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-              onClick={handleLogout}
-            >
-              <LogOut className="h-[18px] w-[18px] shrink-0 stroke-[1.5]" />
-              <span className="truncate">Logout</span>
-            </Button>
-          </div>
+        <div className="mt-auto border-t border-sidebar-border px-3 py-4">
+          <Button
+            variant="ghost"
+            className="h-auto w-full justify-start gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+            onClick={handleLogout}
+          >
+            <LogOut className="h-[18px] w-[18px] shrink-0 stroke-[1.5]" />
+            <span className="truncate">Logout</span>
+          </Button>
         </div>
       </div>
 

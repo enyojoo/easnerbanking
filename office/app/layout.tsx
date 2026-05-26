@@ -27,17 +27,11 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
+    <html lang="en">
+      <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
         <AuthProvider>
           <OfficeQueryProvider>
-            <ThemeProvider
-              attribute="class"
-              defaultTheme="light"
-              enableSystem
-              disableTransitionOnChange
-              storageKey="easner-office-theme"
-            >
+            <ThemeProvider>
               <DesktopMinViewportGate product="office">
                 <ProtectedRouteWrapper>{children}</ProtectedRouteWrapper>
               </DesktopMinViewportGate>

@@ -12,7 +12,7 @@ function Toaster(props: ToasterProps) {
       position="top-right"
       closeButton
       richColors={false}
-      theme="system"
+      theme="light"
       toastOptions={{
         classNames: {
           toast:

@@ -7,8 +7,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
-
 :root {
   --background: 42 33% 95%;
   --foreground: 210 12% 8%;
@@ -87,64 +85,6 @@
   --shadow-soft: 0 8px 30px rgba(15, 17, 16, 0.06);
   --shadow-card: 0 10px 30px rgba(15, 17, 16, 0.08);
   --shadow-lift: 0 16px 40px rgba(15, 17, 16, 0.12);
-}
-
-.dark {
-  --background: 210 10% 8%;
-  --foreground: 40 24% 93%;
-
-  --card: 210 10% 11%;
-  --card-foreground: 40 24% 93%;
-
-  --popover: 210 10% 11%;
-  --popover-foreground: 40 24% 93%;
-
-  --primary: 206 93% 60%;
-  --primary-foreground: 40 30% 96%;
-  --primary-hover: 206 93% 52%;
-  --surface-tint: 206 40% 18%;
-
-  --secondary: 210 8% 15%;
-  --secondary-foreground: 40 24% 93%;
-
-  --muted: 210 7% 16%;
-  --muted-foreground: 40 10% 70%;
-
-  /* Quiet neutral hover surface in dark mode (see light-mode note). */
-  --accent: 210 7% 16%;
-  --accent-foreground: 40 24% 93%;
-
-  --destructive: 0 40% 35%;
-  --destructive-foreground: 40 30% 96%;
-
-  --warning: 37 55% 48%;
-  --warning-foreground: 40 30% 96%;
-
-  --success: 156 80% 34%;
-  --success-foreground: 40 30% 96%;
-
-  --border: 210 7% 18%;
-  --input: 210 7% 18%;
-  --ring: 206 93% 60%;
-
-  --chart-1: 206 93% 60%;
-  --chart-2: 40 24% 93%;
-  --chart-3: 210 10% 28%;
-  --chart-4: 37 55% 48%;
-  --chart-5: 210 5% 55%;
-
-  --sidebar: 210 10% 10%;
-  --sidebar-foreground: 40 24% 93%;
-  --sidebar-primary: 206 93% 60%;
-  --sidebar-primary-foreground: 40 30% 96%;
-  --sidebar-accent: 210 7% 16%;
-  --sidebar-accent-foreground: 40 24% 93%;
-  --sidebar-border: 210 7% 18%;
-  --sidebar-ring: 206 93% 60%;
-
-  --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.35);
-  --shadow-card: 0 14px 36px rgba(0, 0, 0, 0.45);
-  --shadow-lift: 0 20px 48px rgba(0, 0, 0, 0.55);
 }
 
 @theme inline {
