@@ -341,7 +341,7 @@ export function OfficeRatesPanel() {
 
   return (
     <PlatformControlTabShell
-      title="Currencies & exchange rates"
+      title="P2P rates"
       description={`Last update: ${lastRatesUpdate}`}
       actions={
         <>

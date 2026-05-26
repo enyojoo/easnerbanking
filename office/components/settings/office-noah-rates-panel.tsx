@@ -243,7 +243,7 @@ export function OfficeNoahRatesPanel() {
 
   return (
     <PlatformControlTabShell
-      title="Noah rates (global payout)"
+      title="Noah rates"
       actions={
         <Button type="button" size="sm" onClick={() => void handleSyncRates()} disabled={syncing || loading}>
           {syncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}

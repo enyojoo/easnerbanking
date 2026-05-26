@@ -64,7 +64,7 @@ export function EventInboxPanel() {
     <div className="space-y-6">
       <h2 className="text-lg font-semibold text-gray-900">Webhook inbox</h2>
 
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
           <span className="inline-flex items-center gap-1.5">
             <span className="text-muted-foreground">Received</span>
@@ -80,7 +80,7 @@ export function EventInboxPanel() {
           </span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
           <Select value={providerFilter} onValueChange={(v) => setProviderFilter(v as (typeof PROVIDERS)[number])}>
             <SelectTrigger className="w-[180px] bg-white">
               <SelectValue placeholder="Provider" />
