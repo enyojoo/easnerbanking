@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireOfficeAdmin } from "@/lib/api/admin-auth"
 import { loadOfficeLedgerTransactions } from "@/lib/admin/office-load-transactions"
-import { prepareOfficeUserVisibleTransactions } from "@/lib/admin/office-user-visible-transactions"
+import { prepareOfficeUserVisibleTransactionsWithSummary } from "@/lib/admin/office-user-visible-transactions"
 
 /**
  * Office ledger: list provider transactions (service role). Optional `userId` filter.
@@ -24,9 +24,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  const transactions = (await prepareOfficeUserVisibleTransactions(admin, data)).slice(0, limit)
+  const { transactions, summary } = await prepareOfficeUserVisibleTransactionsWithSummary(admin, data)
 
-  return NextResponse.json({ transactions })
+  return NextResponse.json({ transactions: transactions.slice(0, limit), summary })
 }
 
 /**

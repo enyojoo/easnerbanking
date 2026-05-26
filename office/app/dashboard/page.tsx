@@ -238,8 +238,10 @@ export default function AdminDashboardPage() {
                             <span className="text-xs text-gray-500">{activity.time}</span>
                           </div>
                         </div>
-                        {activity.user ? (
-                          <p className="text-xs text-gray-600 mt-1">User: {activity.user}</p>
+                        {(activity.who || activity.user) ? (
+                          <p className="text-xs text-gray-600 mt-1">
+                            Who: {activity.who || activity.user}
+                          </p>
                         ) : null}
                       </div>
                     </div>

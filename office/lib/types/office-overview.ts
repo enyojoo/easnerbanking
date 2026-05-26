@@ -52,7 +52,10 @@ export type OfficeOverviewActivity = {
   productLabel?: string
   statusLabel?: string
   time: string
+  who?: string
+  /** @deprecated Use `who` */
   user?: string
+  userKind?: "business" | "individual"
   amount?: string
 }
 
@@ -65,7 +68,10 @@ export type OfficeOverviewRecentTransaction = {
   status: string
   statusLabel: string
   label: string
+  who: string
+  /** @deprecated Use `who` */
   user: string
+  userKind?: "business" | "individual"
   amount: number
   currency: string
   amountFormatted: string

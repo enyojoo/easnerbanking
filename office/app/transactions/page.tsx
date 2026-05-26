@@ -48,14 +48,37 @@ interface ProviderLedgerTx {
   currency?: string | null
   displayAmount?: number
   displayCurrency?: string
+  balanceAmount?: number
+  balanceCurrency?: string | null
+  balanceFormatted?: string
+  flowLabel?: "Pay-in" | "Payout"
   label?: string
   amountFormatted?: string
+  who?: string
   tx_hash?: string | null
   user?: {
     first_name: string
     last_name: string
     email: string
   }
+  business?: {
+    id: string
+    name: string | null
+  } | null
+}
+
+type VolumeBalanceSide = {
+  moneyIn: number
+  moneyOut: number
+  total: number
+}
+
+type TransactionsSummary = {
+  volumeBalance: {
+    USD: VolumeBalanceSide
+    EUR: VolumeBalanceSide
+  }
+  transactionCount: number
 }
 
 const STATUS_FILTER_LABELS: Record<string, string> = {
@@ -133,19 +156,49 @@ function transactionAmountFormatted(tx: ProviderLedgerTx): string {
   return formatMoneyDisplay(Number(tx.displayAmount ?? tx.amount ?? 0) || 0, tx.displayCurrency || tx.currency || "USD")
 }
 
+function transactionBalanceFormatted(tx: ProviderLedgerTx): string {
+  const formatted = String(tx.balanceFormatted || "").trim()
+  if (formatted) return formatted
+  const balanceCurrency = tx.balanceCurrency
+  const balanceAmount = Number(tx.balanceAmount ?? 0)
+  if (!balanceCurrency || !Number.isFinite(balanceAmount) || balanceAmount <= 0) return ""
+  return formatMoneyDisplay(balanceAmount, balanceCurrency)
+}
+
+function shouldShowBalanceLeg(tx: ProviderLedgerTx): boolean {
+  const balance = transactionBalanceFormatted(tx)
+  if (!balance) return false
+  const displayCurrency = String(tx.displayCurrency || tx.currency || "").toUpperCase()
+  const balanceCurrency = String(tx.balanceCurrency || "").toUpperCase()
+  if (!balanceCurrency) return false
+  if (displayCurrency === balanceCurrency && Math.abs(Number(tx.displayAmount ?? tx.amount ?? 0) - Number(tx.balanceAmount ?? 0)) < 0.01) {
+    return false
+  }
+  return true
+}
+
+function formatVolumeBalanceSide(side: VolumeBalanceSide | undefined, currency: "USD" | "EUR"): string {
+  if (!side) return formatMoneyDisplay(0, currency)
+  return formatMoneyDisplay(side.total, currency)
+}
+
 export default function AdminTransactionsPage() {
   const { enabled: transactionsEnabled } = useOfficeAdminEnabled()
   const transactionsQuery = useQuery({
     queryKey: officeKeys.transactions(),
     enabled: transactionsEnabled,
     staleTime: 60_000,
-    queryFn: async (): Promise<ProviderLedgerTx[]> => {
+    queryFn: async (): Promise<{ transactions: ProviderLedgerTx[]; summary: TransactionsSummary }> => {
       const r = await officeFetch("/api/admin/office/transactions?limit=200")
-      const body = (await r.json()) as { transactions?: ProviderLedgerTx[]; error?: string }
+      const body = (await r.json()) as {
+        transactions?: ProviderLedgerTx[]
+        summary?: TransactionsSummary
+        error?: string
+      }
       if (!r.ok || body.error) {
         throw new Error(typeof body.error === "string" ? body.error : r.statusText || "Failed to load transactions")
       }
-      return (body.transactions ?? []).map((t) => ({
+      const transactions = (body.transactions ?? []).map((t) => ({
         ...t,
         id: String(t.id || ""),
         provider: t.provider ?? null,
@@ -160,8 +213,13 @@ export default function AdminTransactionsPage() {
         currency: t.currency ?? null,
         displayAmount: t.displayAmount ?? undefined,
         displayCurrency: t.displayCurrency ?? undefined,
+        balanceAmount: t.balanceAmount ?? undefined,
+        balanceCurrency: t.balanceCurrency ?? undefined,
+        balanceFormatted: t.balanceFormatted ?? undefined,
+        flowLabel: t.flowLabel ?? undefined,
         label: t.label ?? undefined,
         amountFormatted: t.amountFormatted ?? undefined,
+        who: t.who ?? undefined,
         tx_hash: t.tx_hash ?? null,
         user: t.user
           ? {
@@ -171,10 +229,19 @@ export default function AdminTransactionsPage() {
             }
           : undefined,
       }))
+      const summary = body.summary ?? {
+        volumeBalance: {
+          USD: { moneyIn: 0, moneyOut: 0, total: 0 },
+          EUR: { moneyIn: 0, moneyOut: 0, total: 0 },
+        },
+        transactionCount: transactions.length,
+      }
+      return { transactions, summary }
     },
   })
 
-  const transactions = transactionsQuery.data ?? []
+  const transactions = transactionsQuery.data?.transactions ?? []
+  const summary = transactionsQuery.data?.summary
   const transactionsLoading = transactionsQuery.isPending && transactions.length === 0
 
   const [searchTerm, setSearchTerm] = useState("")
@@ -188,6 +255,7 @@ export default function AdminTransactionsPage() {
       searchTerm === "" ||
       transaction.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       String(transaction.label || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(transaction.who || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       String(transaction.provider_transaction_id || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       String(transaction.easner_transaction_id || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       String(transaction.user?.email || "").toLowerCase().includes(searchTerm.toLowerCase())
@@ -233,7 +301,7 @@ export default function AdminTransactionsPage() {
 
   const handleExport = () => {
     const csvContent = [
-      ["ID", "Label", "Easner ID", "Provider", "Provider Tx ID", "Direction", "Amount", "Status", "Ledger Status", "Date", "User"].join(","),
+      ["ID", "Label", "Easner ID", "Provider", "Provider Tx ID", "Direction", "Payout amount", "Balance amount", "Status", "Ledger Status", "Date", "Who"].join(","),
       ...filteredTransactions.map((t) => {
         const { label: statusLabel } = ledgerTransactionStatusDisplay(t.status)
         return [
@@ -244,10 +312,11 @@ export default function AdminTransactionsPage() {
           t.provider_transaction_id || "",
           formatDirectionLabel(t.direction),
           transactionAmountFormatted(t),
+          transactionBalanceFormatted(t),
           statusLabel,
           t.status,
           formatTimestamp(t.occurred_at || t.created_at),
-          `${t.user?.first_name} ${t.user?.last_name}`,
+          t.who || "",
         ].join(",")
       }),
     ].join("\n")
@@ -272,6 +341,46 @@ export default function AdminTransactionsPage() {
             <Download className="h-4 w-4 mr-2" />
             Export Data
           </Button>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <Card>
+            <CardContent className="pt-6">
+              <p className="text-sm text-gray-500">USD balance volume</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums">
+                {formatVolumeBalanceSide(summary?.volumeBalance.USD, "USD")}
+              </p>
+              {summary?.volumeBalance.USD ? (
+                <p className="mt-1 text-xs text-gray-500">
+                  In {formatMoneyDisplay(summary.volumeBalance.USD.moneyIn, "USD")} · Out{" "}
+                  {formatMoneyDisplay(summary.volumeBalance.USD.moneyOut, "USD")}
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <p className="text-sm text-gray-500">EUR balance volume</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums">
+                {formatVolumeBalanceSide(summary?.volumeBalance.EUR, "EUR")}
+              </p>
+              {summary?.volumeBalance.EUR ? (
+                <p className="mt-1 text-xs text-gray-500">
+                  In {formatMoneyDisplay(summary.volumeBalance.EUR.moneyIn, "EUR")} · Out{" "}
+                  {formatMoneyDisplay(summary.volumeBalance.EUR.moneyOut, "EUR")}
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <p className="text-sm text-gray-500">User-visible transactions</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums">
+                {(summary?.transactionCount ?? transactions.length).toLocaleString()}
+              </p>
+              <p className="mt-1 text-xs text-gray-500">Excludes internal orchestration legs</p>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Search and Filters */}
@@ -434,7 +543,7 @@ export default function AdminTransactionsPage() {
                 <TableRow>
                   <TableHead>Transaction</TableHead>
                   <TableHead>Date</TableHead>
-                  <TableHead>User</TableHead>
+                  <TableHead>Who</TableHead>
                   <TableHead>Direction</TableHead>
                   <TableHead>Amount</TableHead>
                   <TableHead>Status</TableHead>
@@ -459,17 +568,24 @@ export default function AdminTransactionsPage() {
                     <TableCell>{formatDate(transaction.occurred_at || transaction.created_at)}</TableCell>
                     <TableCell>
                       <div>
-                        <div className="font-medium">
-                          {transaction.user?.first_name} {transaction.user?.last_name}
-                        </div>
-                        <div className="text-sm text-gray-500">{transaction.user?.email}</div>
+                        <div className="font-medium">{transaction.who || "—"}</div>
+                        {transaction.user?.email && !transaction.business_id ? (
+                          <div className="text-sm text-gray-500">{transaction.user.email}</div>
+                        ) : null}
                       </div>
                     </TableCell>
                     <TableCell>
                       <span className="font-medium">{formatDirectionLabel(transaction.direction)}</span>
                     </TableCell>
-                    <TableCell className="font-medium tabular-nums">
-                      {transactionAmountFormatted(transaction)}
+                    <TableCell>
+                      <div className="space-y-0.5">
+                        <div className="font-medium tabular-nums">{transactionAmountFormatted(transaction)}</div>
+                        {shouldShowBalanceLeg(transaction) ? (
+                          <div className="text-xs text-gray-500 tabular-nums">
+                            {transactionBalanceFormatted(transaction)} balance
+                          </div>
+                        ) : null}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <TransactionStatusBadge ledgerStatus={transaction.status} />
@@ -506,11 +622,11 @@ export default function AdminTransactionsPage() {
                                   </p>
                                 </div>
                                 <div>
-                                  <label className="text-sm font-medium text-gray-600">User</label>
-                                  <p>
-                                    {selectedTransaction.user?.first_name} {selectedTransaction.user?.last_name}
-                                  </p>
-                                  <p className="text-sm text-gray-500">{selectedTransaction.user?.email}</p>
+                                  <label className="text-sm font-medium text-gray-600">Who</label>
+                                  <p className="font-medium">{selectedTransaction.who || "—"}</p>
+                                  {selectedTransaction.user?.email && !selectedTransaction.business_id ? (
+                                    <p className="text-sm text-gray-500">{selectedTransaction.user.email}</p>
+                                  ) : null}
                                 </div>
                                 <div>
                                   <label className="text-sm font-medium text-gray-600">Date</label>
@@ -539,10 +655,24 @@ export default function AdminTransactionsPage() {
                                   <p className="font-medium">{formatDirectionLabel(selectedTransaction.direction)}</p>
                                 </div>
                                 <div>
-                                  <label className="text-sm font-medium text-gray-600">Amount</label>
+                                  <label className="text-sm font-medium text-gray-600">
+                                    {selectedTransaction.flowLabel === "Pay-in" ? "Pay-in amount" : "Payout amount"}
+                                  </label>
                                   <p className="font-medium tabular-nums">
                                     {transactionAmountFormatted(selectedTransaction)}
                                   </p>
+                                </div>
+                                {shouldShowBalanceLeg(selectedTransaction) ? (
+                                  <div>
+                                    <label className="text-sm font-medium text-gray-600">Balance debited</label>
+                                    <p className="font-medium tabular-nums">
+                                      {transactionBalanceFormatted(selectedTransaction)}
+                                    </p>
+                                  </div>
+                                ) : null}
+                                <div>
+                                  <label className="text-sm font-medium text-gray-600">Flow</label>
+                                  <p className="font-medium">{selectedTransaction.flowLabel || "—"}</p>
                                 </div>
                               </div>
                             </div>

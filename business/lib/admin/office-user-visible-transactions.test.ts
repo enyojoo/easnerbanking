@@ -17,7 +17,26 @@ vi.mock("@/lib/admin/office-overview-compute", () => ({
     const tag = tx.metadata?.sender_easetag
     return typeof tag === "string" ? `Received from @${tag}` : "Bank Deposit"
   },
+  activityAccountLabel: (tx: { business_id?: string | null; business?: { name?: string | null }; user?: { full_name?: string | null; email?: string | null } }) => {
+    const businessName = String(tx.business?.name ?? "").trim()
+    if (tx.business_id && businessName) {
+      return { label: businessName, kind: "business" as const }
+    }
+    const fullName = String(tx.user?.full_name ?? "").trim()
+    return { label: fullName || String(tx.user?.email ?? "").trim() || undefined, kind: "individual" as const }
+  },
   formatOfficeTxAmount: () => "$25.00",
+  formatOfficeTxBalanceAmount: () => "$50.00",
+  officeTxFlowLabel: () => "Payout" as const,
+  computeProviderLedgerDashboardExtras: () => ({
+    volumeBalance: {
+      USD: { moneyIn: 0, moneyOut: 50, total: 50 },
+      EUR: { moneyIn: 0, moneyOut: 0, total: 0 },
+    },
+    totalVolumeUsd: 50,
+    topCurrencies: [],
+    processingBuckets: [],
+  }),
   resolveOfficeTxPresentation: () => ({
     displayAmount: 25,
     displayCurrency: "USD",
@@ -26,7 +45,7 @@ vi.mock("@/lib/admin/office-overview-compute", () => ({
   }),
 }))
 
-import { filterUserVisibleOfficeLedgerRows, enrichOfficeLedgerForUserDisplay } from "./office-user-visible-transactions"
+import { filterSupersededPendingGlobalPayoutRows, filterUserVisibleOfficeLedgerRows, enrichOfficeLedgerForUserDisplay } from "./office-user-visible-transactions"
 
 describe("filterUserVisibleOfficeLedgerRows", () => {
   it("drops suppress_in_feed orchestration legs", async () => {
@@ -56,6 +75,25 @@ describe("filterUserVisibleOfficeLedgerRows", () => {
 
     const visible = await filterUserVisibleOfficeLedgerRows(admin, rows)
     expect(visible.map((r) => r.id)).toEqual(["visible"])
+  })
+})
+
+describe("filterSupersededPendingGlobalPayoutRows", () => {
+  it("drops pending placeholder when settled Noah payout exists", () => {
+    const rows = [
+      {
+        id: "pending",
+        provider_transaction_id: "global_payout_pending:payout-1",
+        metadata: { payout_type: "global_fiat", easner_payout_id: "payout-1" },
+      },
+      {
+        id: "settled",
+        provider_transaction_id: "noah-tx-1",
+        metadata: { payout_type: "global_fiat", easner_payout_id: "payout-1" },
+      },
+    ] as never[]
+
+    expect(filterSupersededPendingGlobalPayoutRows(rows).map((r) => r.id)).toEqual(["settled"])
   })
 })
 
@@ -93,5 +131,48 @@ describe("enrichOfficeLedgerForUserDisplay", () => {
 
     expect(enriched.label).toContain("@jane")
     expect(enriched.amountFormatted).toMatch(/^\$/)
+    expect(enriched.balanceFormatted).toMatch(/^\$/)
+    expect(enriched.flowLabel).toBe("Payout")
+    expect(enriched.who).toBeTruthy()
+  })
+
+  it("uses business name for who on business transactions", () => {
+    const enriched = enrichOfficeLedgerForUserDisplay({
+      id: "biz-1",
+      user_id: "u1",
+      business_id: "b1",
+      provider: "noah",
+      provider_transaction_id: "p1",
+      provider_event_id: null,
+      easner_transaction_id: null,
+      status: "settled",
+      amount: 50,
+      currency: "USD",
+      direction: "out",
+      metadata: { payout_type: "global_fiat" },
+      payload: null,
+      created_at: new Date().toISOString(),
+      updated_at: null,
+      occurred_at: null,
+      settled_at: null,
+      tx_hash: null,
+      wallet_address: null,
+      asset: null,
+      chain: null,
+      counterparty_address: null,
+      base_currency: "USD",
+      base_amount: 50,
+      fx_rate: null,
+      fx_rate_as_of: null,
+      user: {
+        email: "owner@example.com",
+        full_name: "Jane Owner",
+        first_name: "Jane",
+        last_name: "Owner",
+      },
+      business: { id: "b1", name: "Acme Payments Ltd" },
+    })
+
+    expect(enriched.who).toBe("Acme Payments Ltd")
   })
 })

@@ -28,6 +28,7 @@ vi.mock("@easner/shared", () => ({
 import {
   activityPrimaryLabel,
   activityStatusSuffix,
+  activityAccountLabel,
   computeProviderLedgerDashboardExtras,
   extractCurrencyBuckets,
   formatOfficeTxAmount,
@@ -165,5 +166,33 @@ describe("office-overview-compute", () => {
       metadata: { source: "easetag_p2p", sender_easetag: "jane" },
     })
     expect(label).toContain("@jane")
+  })
+
+  it("activityAccountLabel prefers business name over owner", () => {
+    const account = activityAccountLabel({
+      id: "biz-tx",
+      business_id: "biz-1",
+      business: { id: "biz-1", name: "Acme Payments Ltd" },
+      user: {
+        first_name: "Jane",
+        last_name: "Owner",
+        email: "jane@example.com",
+        full_name: "Jane Owner",
+      },
+    })
+    expect(account).toEqual({ label: "Acme Payments Ltd", kind: "business" })
+  })
+
+  it("activityAccountLabel falls back to individual user", () => {
+    const account = activityAccountLabel({
+      id: "ind-tx",
+      user: {
+        first_name: null,
+        last_name: null,
+        email: "alex@example.com",
+        full_name: "Alex Individual",
+      },
+    })
+    expect(account).toEqual({ label: "Alex Individual", kind: "individual" })
   })
 })

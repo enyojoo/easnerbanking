@@ -12,6 +12,7 @@ export type TxRow = {
   direction?: string | null
   provider?: string | null
   user_id?: string | null
+  business_id?: string | null
   metadata?: Record<string, unknown> | null
   payload?: Record<string, unknown> | null
   base_currency?: string | null
@@ -22,6 +23,10 @@ export type TxRow = {
     last_name?: string | null
     email?: string | null
     full_name?: string | null
+  } | null
+  business?: {
+    id: string
+    name: string | null
   } | null
 }
 
@@ -80,6 +85,8 @@ function roundAmount(n: number): number {
 
 function asBalanceCurrency(raw: string | null | undefined): BalanceCurrencyCode | null {
   const code = String(raw || "").trim().toUpperCase()
+  if (code === "USDC") return "USD"
+  if (code === "EURC") return "EUR"
   return BALANCE_CURRENCIES.has(code as BalanceCurrencyCode) ? (code as BalanceCurrencyCode) : null
 }
 
@@ -98,11 +105,24 @@ export function resolveOfficeTxPresentation(tx: TxRow): OfficeTxPresentation {
   const direction = normalizeDirection(tx.direction)
 
   if (global) {
-    const balanceCurrency = asBalanceCurrency(global.ledgerCurrency)
+    const meta = tx.metadata || {}
+    const balanceCurrency =
+      asBalanceCurrency(global.ledgerCurrency) ??
+      asBalanceCurrency(String(meta.send_currency ?? "")) ??
+      asBalanceCurrency(tx.base_currency) ??
+      asBalanceCurrency(tx.currency)
+    const balanceAmount = Number(
+      meta.total_debited ??
+        global.ledgerAmount ??
+        meta.crypto_authorized_amount ??
+        tx.base_amount ??
+        tx.amount ??
+        0,
+    )
     return {
       displayAmount: global.displayAmount,
       displayCurrency: String(global.displayCurrency || "").toUpperCase(),
-      balanceAmount: global.ledgerAmount,
+      balanceAmount: Number.isFinite(balanceAmount) ? balanceAmount : 0,
       balanceCurrency,
     }
   }
@@ -172,6 +192,33 @@ export function formatOfficeTxAmount(tx: TxRow): string {
   if (!Number.isFinite(amount) || amount < 0 || !displayCurrency) return ""
   if (amount === 0) return ""
   return formatMoneyDisplay(amount, displayCurrency)
+}
+
+export function formatOfficeTxBalanceAmount(tx: TxRow): string {
+  const { balanceAmount, balanceCurrency } = resolveOfficeTxPresentation(tx)
+  if (!balanceCurrency || !Number.isFinite(balanceAmount) || balanceAmount <= 0) return ""
+  return formatMoneyDisplay(balanceAmount, balanceCurrency)
+}
+
+export function officeTxFlowLabel(tx: TxRow): "Pay-in" | "Payout" {
+  return normalizeDirection(tx.direction) === "in" ? "Pay-in" : "Payout"
+}
+
+export function activityAccountLabel(tx: TxRow): {
+  label: string | undefined
+  kind: "business" | "individual"
+} {
+  const businessName = String(tx.business?.name ?? "").trim()
+  if (tx.business_id && businessName) {
+    return { label: businessName, kind: "business" }
+  }
+
+  const u = tx.user
+  const fromParts = u ? [u.first_name, u.last_name].filter(Boolean).join(" ").trim() : ""
+  const userLabel = u
+    ? fromParts || (typeof u.full_name === "string" ? u.full_name.trim() : "") || u.email || undefined
+    : undefined
+  return { label: userLabel, kind: "individual" }
 }
 
 export function activityPrimaryLabel(tx: TxRow): string {
@@ -336,12 +383,7 @@ export function processRecentActivity(transactions: TxRow[], limit = 10) {
     const amount = formatOfficeTxAmount(tx)
     const primary = activityPrimaryLabel(tx)
     const message = primary
-
-    const u = tx.user
-    const fromParts = u ? [u.first_name, u.last_name].filter(Boolean).join(" ").trim() : ""
-    const userLabel = u
-      ? fromParts || (typeof u.full_name === "string" ? u.full_name.trim() : "") || u.email || undefined
-      : undefined
+    const account = activityAccountLabel(tx)
 
     const pres = resolveOfficeTxPresentation(tx)
 
@@ -351,7 +393,9 @@ export function processRecentActivity(transactions: TxRow[], limit = 10) {
       message,
       productLabel: primary,
       statusLabel: activityStatusSuffix(status),
-      user: userLabel,
+      user: account.label,
+      userKind: account.kind,
+      who: account.label,
       amount,
       displayAmount: pres.displayAmount,
       displayCurrency: pres.displayCurrency,
@@ -371,11 +415,7 @@ export function buildRecentTransactionsPreview(transactions: TxRow[], limit = 10
     })
     .slice(0, limit)
     .map((tx) => {
-      const u = tx.user
-      const fromParts = u ? [u.first_name, u.last_name].filter(Boolean).join(" ").trim() : ""
-      const userLabel = u
-        ? fromParts || (typeof u.full_name === "string" ? u.full_name.trim() : "") || u.email || "—"
-        : "—"
+      const account = activityAccountLabel(tx)
       const direction = normalizeDirection(tx.direction)
       const pres = resolveOfficeTxPresentation(tx)
       const amountFormatted = formatOfficeTxAmount(tx)
@@ -393,7 +433,9 @@ export function buildRecentTransactionsPreview(transactions: TxRow[], limit = 10
         status: normalizeStatus(tx.status),
         statusLabel: activityStatusSuffix(tx.status),
         label: activityPrimaryLabel(tx),
-        user: userLabel,
+        user: account.label || "—",
+        userKind: account.kind,
+        who: account.label || "—",
         amount: pres.displayAmount,
         currency: pres.displayCurrency,
         amountFormatted,
