@@ -226,6 +226,16 @@ export {
   buildGlobalPayoutLifecycle,
   formatGlobalPayoutCompletedDescription,
 } from "./transactions/global-payout-lifecycle"
+export {
+  ledgerStatusMatchesUserFilter,
+  ledgerTransactionStatusDisplay,
+  mapLedgerStatusToUserStatus,
+} from "./transactions/ledger-status-display"
+export type {
+  LedgerTransactionStatusDisplay,
+  LedgerTransactionStatusTone,
+  UserTransactionStatus,
+} from "./transactions/ledger-status-display"
 export type {
   BuildGlobalPayoutLifecycleInput,
   GlobalPayoutLifecycleStep,

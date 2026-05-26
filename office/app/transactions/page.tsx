@@ -1,31 +1,33 @@
 "use client"
 
 import { useState } from "react"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@tanstack/react-query"
 import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layout"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Checkbox } from "@/components/ui/checkbox"
 import {
   Search,
   Download,
   Filter,
   Eye,
-  MoreHorizontal,
   CheckCircle,
   Clock,
   XCircle,
   AlertCircle,
   X,
 } from "lucide-react"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  ledgerStatusMatchesUserFilter,
+  ledgerTransactionStatusDisplay,
+  type LedgerTransactionStatusTone,
+} from "@easner/shared"
 import { officeFetch } from "@/lib/api-client"
 import { officeKeys } from "@/lib/query/keys"
 import { useOfficeAdminEnabled } from "@/hooks/queries"
@@ -51,9 +53,60 @@ interface ProviderLedgerTx {
   }
 }
 
+const STATUS_FILTER_LABELS: Record<string, string> = {
+  completed: "Completed",
+  pending: "Pending",
+  processing: "Processing",
+  failed: "Failed",
+}
+
+function statusToneBadgeVariant(
+  tone: LedgerTransactionStatusTone,
+): "emerald" | "amber" | "oxblood" | "slate" | "outline" {
+  switch (tone) {
+    case "completed":
+      return "emerald"
+    case "pending":
+      return "amber"
+    case "processing":
+      return "outline"
+    case "failed":
+      return "oxblood"
+    case "cancelled":
+      return "slate"
+    default:
+      return "outline"
+  }
+}
+
+function statusToneIcon(tone: LedgerTransactionStatusTone) {
+  switch (tone) {
+    case "completed":
+      return <CheckCircle className="h-3 w-3 mr-1" />
+    case "pending":
+      return <Clock className="h-3 w-3 mr-1" />
+    case "processing":
+      return <AlertCircle className="h-3 w-3 mr-1" />
+    case "failed":
+    case "cancelled":
+      return <XCircle className="h-3 w-3 mr-1" />
+    default:
+      return <AlertCircle className="h-3 w-3 mr-1" />
+  }
+}
+
+function TransactionStatusBadge({ ledgerStatus }: { ledgerStatus: string }) {
+  const { label, tone } = ledgerTransactionStatusDisplay(ledgerStatus)
+  return (
+    <Badge variant={statusToneBadgeVariant(tone)} className="inline-flex items-center">
+      {statusToneIcon(tone)}
+      {label}
+    </Badge>
+  )
+}
+
 export default function AdminTransactionsPage() {
   const { enabled: transactionsEnabled } = useOfficeAdminEnabled()
-  const queryClient = useQueryClient()
   const transactionsQuery = useQuery({
     queryKey: officeKeys.transactions(),
     enabled: transactionsEnabled,
@@ -91,27 +144,11 @@ export default function AdminTransactionsPage() {
 
   const transactions = transactionsQuery.data ?? []
   const transactionsLoading = transactionsQuery.isPending && transactions.length === 0
-  const updateStatus = useMutation({
-    mutationFn: async ({ transactionId, newStatus }: { transactionId: string; newStatus: string }) => {
-      const r = await officeFetch("/api/admin/office/transactions", {
-        method: "PATCH",
-        body: JSON.stringify({ transactionId, status: newStatus }),
-      })
-      const body = (await r.json()) as { error?: string }
-      if (!r.ok || body.error) {
-        throw new Error(typeof body.error === "string" ? body.error : r.statusText || "Status update failed")
-      }
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: officeKeys.transactions() })
-    },
-  })
 
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [directionFilter, setDirectionFilter] = useState<"all" | "in" | "out">("all")
   const [currencyFilter, setCurrencyFilter] = useState("all")
-  const [selectedTransactions, setSelectedTransactions] = useState<string[]>([])
   const [selectedTransaction, setSelectedTransaction] = useState<ProviderLedgerTx | null>(null)
 
   const filteredTransactions = transactions.filter((transaction) => {
@@ -122,7 +159,7 @@ export default function AdminTransactionsPage() {
       String(transaction.easner_transaction_id || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       String(transaction.user?.email || "").toLowerCase().includes(searchTerm.toLowerCase())
 
-    const matchesStatus = statusFilter === "all" || transaction.status === statusFilter
+    const matchesStatus = ledgerStatusMatchesUserFilter(transaction.status, statusFilter)
     const matchesDirection =
       directionFilter === "all" || (transaction.direction || "out") === directionFilter
     const matchesCurrency =
@@ -161,79 +198,12 @@ export default function AdminTransactionsPage() {
     return `${month} ${day}, ${year}`
   }
 
-  const getStatusBadge = (status: string) => {
-    const statusConfig: Record<
-      string,
-      { variant: "emerald" | "amber" | "oxblood" | "slate" | "outline"; icon: React.ReactNode }
-    > = {
-      pending: { variant: "amber", icon: <Clock className="h-3 w-3 mr-1" /> },
-      processing: { variant: "outline", icon: <AlertCircle className="h-3 w-3 mr-1" /> },
-      completed: { variant: "emerald", icon: <CheckCircle className="h-3 w-3 mr-1" /> },
-      confirmed: { variant: "outline", icon: <CheckCircle className="h-3 w-3 mr-1" /> },
-      converting: { variant: "amber", icon: <Clock className="h-3 w-3 mr-1" /> },
-      converted: { variant: "outline", icon: <AlertCircle className="h-3 w-3 mr-1" /> },
-      deposited: { variant: "emerald", icon: <CheckCircle className="h-3 w-3 mr-1" /> },
-      failed: { variant: "oxblood", icon: <XCircle className="h-3 w-3 mr-1" /> },
-      cancelled: { variant: "slate", icon: <XCircle className="h-3 w-3 mr-1" /> },
-    }
-
-    const config = statusConfig[status] || statusConfig.pending
-
-    return (
-      <Badge variant={config.variant} className="inline-flex items-center">
-        {config.icon}
-        {status.charAt(0).toUpperCase() + status.slice(1)}
-      </Badge>
-    )
-  }
-
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      setSelectedTransactions(filteredTransactions.map((t: any) => t.id))
-    } else {
-      setSelectedTransactions([])
-    }
-  }
-
-  const handleSelectTransaction = (transactionId: string, checked: boolean) => {
-    if (checked) {
-      setSelectedTransactions([...selectedTransactions, transactionId])
-    } else {
-      setSelectedTransactions(selectedTransactions.filter((id) => id !== transactionId))
-    }
-  }
-
-  const handleStatusUpdate = async (transactionId: string, newStatus: string) => {
-    try {
-      await updateStatus.mutateAsync({ transactionId, newStatus })
-
-      // Update selectedTransaction if it's the one being updated
-      if (selectedTransaction?.id === transactionId) {
-        setSelectedTransaction((prev) => (prev ? { ...prev, status: newStatus as any } : null))
-      }
-    } catch (err) {
-      console.error("Error updating transaction status:", err)
-    }
-  }
-
-  const handleBulkStatusUpdate = async (newStatus: string) => {
-    try {
-      await Promise.all(
-        selectedTransactions.map(async (transactionId) => {
-          await updateStatus.mutateAsync({ transactionId, newStatus })
-        })
-      )
-      setSelectedTransactions([])
-    } catch (err) {
-      console.error("Error updating transaction statuses:", err)
-    }
-  }
-
   const handleExport = () => {
     const csvContent = [
-      ["ID", "Easner ID", "Provider", "Provider Tx ID", "Direction", "Amount", "Currency", "Status", "Date", "User"].join(","),
-      ...filteredTransactions.map((t: any) =>
-        [
+      ["ID", "Easner ID", "Provider", "Provider Tx ID", "Direction", "Amount", "Currency", "Status", "Ledger Status", "Date", "User"].join(","),
+      ...filteredTransactions.map((t) => {
+        const { label } = ledgerTransactionStatusDisplay(t.status)
+        return [
           t.id,
           t.easner_transaction_id || "",
           t.provider || "",
@@ -241,11 +211,12 @@ export default function AdminTransactionsPage() {
           t.direction || "",
           t.amount ?? "",
           t.currency ?? "",
+          label,
           t.status,
           formatTimestamp(t.occurred_at || t.created_at),
           `${t.user?.first_name} ${t.user?.last_name}`,
-        ].join(","),
-      ),
+        ].join(",")
+      }),
     ].join("\n")
 
     const blob = new Blob([csvContent], { type: "text/csv" })
@@ -262,7 +233,7 @@ export default function AdminTransactionsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Transaction Management</h1>
-            <p className="text-gray-600">Monitor and manage all platform transactions</p>
+            <p className="text-gray-600">Monitor platform transactions</p>
           </div>
           <Button onClick={handleExport} variant="outline">
             <Download className="h-4 w-4 mr-2" />
@@ -318,15 +289,10 @@ export default function AdminTransactionsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="processing">Processing</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="confirmed">Confirmed</SelectItem>
-                <SelectItem value="converting">Converting</SelectItem>
-                <SelectItem value="converted">Converted</SelectItem>
-                <SelectItem value="deposited">Deposited</SelectItem>
                 <SelectItem value="failed">Failed</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
               </SelectContent>
             </Select>
 
@@ -381,7 +347,7 @@ export default function AdminTransactionsPage() {
               )}
               {statusFilter !== "all" && (
                 <Badge variant="slate">
-                  Status: {statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}
+                  Status: {STATUS_FILTER_LABELS[statusFilter] ?? statusFilter}
                   <button
                     onClick={() => setStatusFilter("all")}
                     className="ml-2 rounded-full p-0.5 hover:bg-muted"
@@ -419,31 +385,6 @@ export default function AdminTransactionsPage() {
           )}
         </div>
 
-        {/* Bulk Actions */}
-        {selectedTransactions.length > 0 && (
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">{selectedTransactions.length} transaction(s) selected</span>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => handleBulkStatusUpdate("processing")}>
-                    Payment Received
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => handleBulkStatusUpdate("completed")}>
-                    Transfer Complete
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => handleBulkStatusUpdate("failed")}>
-                    Mark Failed
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => handleBulkStatusUpdate("cancelled")}>
-                    Cancel Transfer
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         {/* Transactions Table */}
         <Card>
           <CardContent>
@@ -458,33 +399,17 @@ export default function AdminTransactionsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-12">
-                    <Checkbox
-                      checked={
-                        selectedTransactions.length === filteredTransactions.length && filteredTransactions.length > 0
-                      }
-                      onCheckedChange={handleSelectAll}
-                    />
-                  </TableHead>
                   <TableHead>Transaction ID</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>User</TableHead>
                   <TableHead>Amount</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead className="w-[4.5rem]">View</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredTransactions.map((transaction: any) => (
+                {filteredTransactions.map((transaction: ProviderLedgerTx) => (
                   <TableRow key={transaction.id}>
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedTransactions.includes(transaction.id)}
-                        onCheckedChange={(checked) =>
-                          handleSelectTransaction(transaction.id, checked as boolean)
-                        }
-                      />
-                    </TableCell>
                     <TableCell className="font-mono text-sm">
                       {transaction.easner_transaction_id || transaction.provider_transaction_id || transaction.id}
                     </TableCell>
@@ -511,156 +436,84 @@ export default function AdminTransactionsPage() {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>{getStatusBadge(transaction.status)}</TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button variant="outline" size="sm" onClick={() => setSelectedTransaction(transaction)}>
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
-                            <DialogHeader>
-                              <DialogTitle>Transaction Details</DialogTitle>
-                            </DialogHeader>
-                            {selectedTransaction && (
-                              <div className="overflow-y-auto flex-1 pr-2 -mr-2 space-y-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                    <label className="text-sm font-medium text-gray-600">ID</label>
-                                    <p className="font-mono text-xs break-all">{selectedTransaction.id}</p>
-                                  </div>
-                                  <div>
-                                    <label className="text-sm font-medium text-gray-600">Status</label>
-                                    <div className="mt-1">{getStatusBadge(selectedTransaction.status)}</div>
-                                  </div>
-                                  <div>
-                                    <label className="text-sm font-medium text-gray-600">User</label>
-                                    <p>
-                                      {selectedTransaction.user?.first_name} {selectedTransaction.user?.last_name}
-                                    </p>
-                                    <p className="text-sm text-gray-500">{selectedTransaction.user?.email}</p>
-                                  </div>
-                                  <div>
-                                    <label className="text-sm font-medium text-gray-600">Date</label>
-                                    <p>{formatTimestamp(selectedTransaction.created_at)}</p>
-                                  </div>
-                                  <div>
-                                    <label className="text-sm font-medium text-gray-600">Provider</label>
-                                    <p className="font-medium">{String(selectedTransaction.provider || "—")}</p>
-                                  </div>
-                                  <div>
-                                    <label className="text-sm font-medium text-gray-600">Easner Tx ID</label>
-                                    <p className="font-mono text-xs break-all">{selectedTransaction.easner_transaction_id || "—"}</p>
-                                  </div>
-                                  <div>
-                                    <label className="text-sm font-medium text-gray-600">Provider Tx ID</label>
-                                    <p className="font-mono text-xs break-all">{selectedTransaction.provider_transaction_id || "—"}</p>
-                                  </div>
-                                  {selectedTransaction.tx_hash ? (
-                                    <div className="col-span-2">
-                                      <label className="text-sm font-medium text-gray-600">Tx hash</label>
-                                      <p className="font-mono text-xs break-all">{selectedTransaction.tx_hash}</p>
-                                    </div>
-                                  ) : null}
-                                  <div>
-                                    <label className="text-sm font-medium text-gray-600">Direction</label>
-                                    <p className="font-medium">{String(selectedTransaction.direction || "out").toUpperCase()}</p>
-                                  </div>
-                                  <div>
-                                    <label className="text-sm font-medium text-gray-600">Amount</label>
-                                    <p className="font-medium">
-                                      {(Number(selectedTransaction.amount || 0) || 0).toLocaleString("en-US", {
-                                        minimumFractionDigits: 2,
-                                        maximumFractionDigits: 2,
-                                      })}{" "}
-                                      {String(selectedTransaction.currency || "").toUpperCase()}
-                                    </p>
-                                  </div>
+                      <TransactionStatusBadge ledgerStatus={transaction.status} />
+                    </TableCell>
+                    <TableCell>
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button variant="outline" size="sm" onClick={() => setSelectedTransaction(transaction)}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+                          <DialogHeader>
+                            <DialogTitle>Transaction Details</DialogTitle>
+                          </DialogHeader>
+                          {selectedTransaction && (
+                            <div className="overflow-y-auto flex-1 pr-2 -mr-2 space-y-4">
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <label className="text-sm font-medium text-gray-600">ID</label>
+                                  <p className="font-mono text-xs break-all">{selectedTransaction.id}</p>
                                 </div>
-
-                                <div className="border-t pt-4">
-                                  <label className="text-sm font-medium text-gray-600">Update Status</label>
-                                  <div className="grid grid-cols-2 gap-2 mt-2">
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() =>
-                                        handleStatusUpdate(selectedTransaction.id, "processing")
-                                      }
-                                      disabled={selectedTransaction.status === "processing"}
-                                    >
-                                      Payment Received
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() =>
-                                        handleStatusUpdate(selectedTransaction.id, "completed")
-                                      }
-                                      disabled={selectedTransaction.status === "completed"}
-                                      className="text-primary hover:text-primary"
-                                    >
-                                      Transfer Complete
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => handleStatusUpdate(selectedTransaction.id, "failed")}
-                                      disabled={selectedTransaction.status === "failed"}
-                                      className="text-destructive hover:text-destructive"
-                                    >
-                                      Mark Failed
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => handleStatusUpdate(selectedTransaction.id, "cancelled")}
-                                      disabled={selectedTransaction.status === "cancelled"}
-                                      className="text-gray-600 hover:text-gray-700"
-                                    >
-                                      Cancel Transfer
-                                    </Button>
+                                <div>
+                                  <label className="text-sm font-medium text-gray-600">Status</label>
+                                  <div className="mt-1">
+                                    <TransactionStatusBadge ledgerStatus={selectedTransaction.status} />
                                   </div>
+                                  <p className="mt-1 text-xs text-gray-500 font-mono">
+                                    Ledger: {selectedTransaction.status}
+                                  </p>
+                                </div>
+                                <div>
+                                  <label className="text-sm font-medium text-gray-600">User</label>
+                                  <p>
+                                    {selectedTransaction.user?.first_name} {selectedTransaction.user?.last_name}
+                                  </p>
+                                  <p className="text-sm text-gray-500">{selectedTransaction.user?.email}</p>
+                                </div>
+                                <div>
+                                  <label className="text-sm font-medium text-gray-600">Date</label>
+                                  <p>{formatTimestamp(selectedTransaction.created_at)}</p>
+                                </div>
+                                <div>
+                                  <label className="text-sm font-medium text-gray-600">Provider</label>
+                                  <p className="font-medium">{String(selectedTransaction.provider || "—")}</p>
+                                </div>
+                                <div>
+                                  <label className="text-sm font-medium text-gray-600">Easner Tx ID</label>
+                                  <p className="font-mono text-xs break-all">{selectedTransaction.easner_transaction_id || "—"}</p>
+                                </div>
+                                <div>
+                                  <label className="text-sm font-medium text-gray-600">Provider Tx ID</label>
+                                  <p className="font-mono text-xs break-all">{selectedTransaction.provider_transaction_id || "—"}</p>
+                                </div>
+                                {selectedTransaction.tx_hash ? (
+                                  <div className="col-span-2">
+                                    <label className="text-sm font-medium text-gray-600">Tx hash</label>
+                                    <p className="font-mono text-xs break-all">{selectedTransaction.tx_hash}</p>
+                                  </div>
+                                ) : null}
+                                <div>
+                                  <label className="text-sm font-medium text-gray-600">Direction</label>
+                                  <p className="font-medium">{String(selectedTransaction.direction || "out").toUpperCase()}</p>
+                                </div>
+                                <div>
+                                  <label className="text-sm font-medium text-gray-600">Amount</label>
+                                  <p className="font-medium">
+                                    {(Number(selectedTransaction.amount || 0) || 0).toLocaleString("en-US", {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2,
+                                    })}{" "}
+                                    {String(selectedTransaction.currency || "").toUpperCase()}
+                                  </p>
                                 </div>
                               </div>
-                            )}
-                          </DialogContent>
-                        </Dialog>
-
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="sm">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                            onClick={() => handleStatusUpdate(transaction.id, "processing")}
-                            >
-                              Payment Received
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                            onClick={() => handleStatusUpdate(transaction.id, "completed")}
-                            >
-                              Transfer Complete
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                            onClick={() => handleStatusUpdate(transaction.id, "failed")}
-                              className="text-destructive focus:text-destructive"
-                            >
-                              Mark as Failed
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                            onClick={() => handleStatusUpdate(transaction.id, "cancelled")}
-                              className="text-gray-600"
-                            >
-                              Cancel Transfer
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
+                            </div>
+                          )}
+                        </DialogContent>
+                      </Dialog>
                     </TableCell>
                   </TableRow>
                 ))}
