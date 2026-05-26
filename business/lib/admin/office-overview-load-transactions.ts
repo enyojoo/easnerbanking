@@ -1,5 +1,8 @@
 import type { createSupabaseAdmin } from "@/lib/supabase/admin"
 import type { TxRow } from "./office-overview-compute"
+import { enrichBankDepositLedgerRows } from "@/lib/transactions/enrich-bank-deposit-ledger-rows"
+import { filterUserVisibleOfficeLedgerRows } from "./office-user-visible-transactions"
+import type { OfficeLedgerTransaction } from "./office-load-transactions"
 
 type AdminClient = ReturnType<typeof createSupabaseAdmin>
 
@@ -37,13 +40,13 @@ export async function loadTransactionsForOverview(
 
   const sinceMs = new Date(sinceIso).getTime()
   const untilMs = new Date(untilIso).getTime()
-  const rows = ((txRes.data || []) as Omit<TxRow, "user">[]).filter((t) => {
+  const windowRows = ((txRes.data || []) as Omit<TxRow, "user">[]).filter((t) => {
     const at = t.occurred_at || t.created_at
     if (!at) return false
     const ms = new Date(at).getTime()
     return Number.isFinite(ms) && ms >= sinceMs && ms <= untilMs
-  }).slice(0, limit)
-  const userIds = [...new Set(rows.map((t) => t.user_id).filter((id): id is string => Boolean(id)))]
+  })
+  const userIds = [...new Set(windowRows.map((t) => t.user_id).filter((id): id is string => Boolean(id)))]
 
   const userById = new Map<string, UserProfileRow>()
 
@@ -60,7 +63,7 @@ export async function loadTransactionsForOverview(
     }
   }
 
-  const data: TxRow[] = rows.map((t) => {
+  const withUsers: TxRow[] = windowRows.map((t) => {
     const uid = t.user_id ? String(t.user_id) : ""
     const p = uid ? userById.get(uid) : undefined
     return {
@@ -75,6 +78,20 @@ export async function loadTransactionsForOverview(
         : null,
     }
   })
+
+  const visible = await filterUserVisibleOfficeLedgerRows(admin, withUsers as OfficeLedgerTransaction[])
+  const enrichedRows = (await enrichBankDepositLedgerRows(
+    admin,
+    visible as Record<string, unknown>[],
+  )) as TxRow[]
+
+  const data = [...enrichedRows]
+    .sort((a, b) => {
+      const da = new Date(a.occurred_at || a.created_at || 0).getTime()
+      const db = new Date(b.occurred_at || b.created_at || 0).getTime()
+      return db - da
+    })
+    .slice(0, limit)
 
   return { data, error: null }
 }

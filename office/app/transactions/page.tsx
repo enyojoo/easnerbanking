@@ -24,6 +24,7 @@ import {
   X,
 } from "lucide-react"
 import {
+  formatMoneyDisplay,
   ledgerStatusMatchesUserFilter,
   ledgerTransactionStatusDisplay,
   type LedgerTransactionStatusTone,
@@ -45,6 +46,10 @@ interface ProviderLedgerTx {
   direction?: "in" | "out" | null
   amount?: number | null
   currency?: string | null
+  displayAmount?: number
+  displayCurrency?: string
+  label?: string
+  amountFormatted?: string
   tx_hash?: string | null
   user?: {
     first_name: string
@@ -105,6 +110,29 @@ function TransactionStatusBadge({ ledgerStatus }: { ledgerStatus: string }) {
   )
 }
 
+function formatDirectionLabel(direction: string | null | undefined): string {
+  return String(direction || "out").toLowerCase() === "in" ? "In" : "Out"
+}
+
+function formatProviderLabel(provider: string | null | undefined): string {
+  const raw = String(provider || "").trim()
+  if (!raw) return "—"
+  if (raw.toLowerCase() === "easner_internal") return "EASETAG"
+  return raw
+}
+
+function transactionLabel(tx: ProviderLedgerTx): string {
+  const label = String(tx.label || "").trim()
+  if (label) return label
+  return tx.easner_transaction_id || tx.provider_transaction_id || tx.id
+}
+
+function transactionAmountFormatted(tx: ProviderLedgerTx): string {
+  const formatted = String(tx.amountFormatted || "").trim()
+  if (formatted) return formatted
+  return formatMoneyDisplay(Number(tx.displayAmount ?? tx.amount ?? 0) || 0, tx.displayCurrency || tx.currency || "USD")
+}
+
 export default function AdminTransactionsPage() {
   const { enabled: transactionsEnabled } = useOfficeAdminEnabled()
   const transactionsQuery = useQuery({
@@ -130,6 +158,10 @@ export default function AdminTransactionsPage() {
         direction: (t.direction as "in" | "out" | null) ?? null,
         amount: t.amount ?? null,
         currency: t.currency ?? null,
+        displayAmount: t.displayAmount ?? undefined,
+        displayCurrency: t.displayCurrency ?? undefined,
+        label: t.label ?? undefined,
+        amountFormatted: t.amountFormatted ?? undefined,
         tx_hash: t.tx_hash ?? null,
         user: t.user
           ? {
@@ -155,6 +187,7 @@ export default function AdminTransactionsPage() {
     const matchesSearch =
       searchTerm === "" ||
       transaction.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(transaction.label || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       String(transaction.provider_transaction_id || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       String(transaction.easner_transaction_id || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       String(transaction.user?.email || "").toLowerCase().includes(searchTerm.toLowerCase())
@@ -164,14 +197,14 @@ export default function AdminTransactionsPage() {
       directionFilter === "all" || (transaction.direction || "out") === directionFilter
     const matchesCurrency =
       currencyFilter === "all" ||
-      String(transaction.currency || "").toUpperCase() === currencyFilter
+      String(transaction.displayCurrency || transaction.currency || "").toUpperCase() === currencyFilter
 
     return matchesSearch && matchesStatus && matchesDirection && matchesCurrency
   })
   const currencyOptions = Array.from(
     new Set(
       transactions
-        .map((t) => String(t.currency || "").toUpperCase())
+        .map((t) => String(t.displayCurrency || t.currency || "").toUpperCase())
         .filter((code) => code.length > 0),
     ),
   ).sort()
@@ -200,18 +233,18 @@ export default function AdminTransactionsPage() {
 
   const handleExport = () => {
     const csvContent = [
-      ["ID", "Easner ID", "Provider", "Provider Tx ID", "Direction", "Amount", "Currency", "Status", "Ledger Status", "Date", "User"].join(","),
+      ["ID", "Label", "Easner ID", "Provider", "Provider Tx ID", "Direction", "Amount", "Status", "Ledger Status", "Date", "User"].join(","),
       ...filteredTransactions.map((t) => {
-        const { label } = ledgerTransactionStatusDisplay(t.status)
+        const { label: statusLabel } = ledgerTransactionStatusDisplay(t.status)
         return [
           t.id,
+          transactionLabel(t),
           t.easner_transaction_id || "",
-          t.provider || "",
+          formatProviderLabel(t.provider),
           t.provider_transaction_id || "",
-          t.direction || "",
-          t.amount ?? "",
-          t.currency ?? "",
-          label,
+          formatDirectionLabel(t.direction),
+          transactionAmountFormatted(t),
+          statusLabel,
           t.status,
           formatTimestamp(t.occurred_at || t.created_at),
           `${t.user?.first_name} ${t.user?.last_name}`,
@@ -264,7 +297,7 @@ export default function AdminTransactionsPage() {
             <div className="relative flex-1 min-w-[300px]">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
               <Input
-                placeholder="Search by ID or email..."
+                placeholder="Search by label, ID or email..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-12 h-12 text-base"
@@ -399,9 +432,10 @@ export default function AdminTransactionsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Transaction ID</TableHead>
+                  <TableHead>Transaction</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>User</TableHead>
+                  <TableHead>Direction</TableHead>
                   <TableHead>Amount</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="w-[4.5rem]">View</TableHead>
@@ -410,8 +444,17 @@ export default function AdminTransactionsPage() {
               <TableBody>
                 {filteredTransactions.map((transaction: ProviderLedgerTx) => (
                   <TableRow key={transaction.id}>
-                    <TableCell className="font-mono text-sm">
-                      {transaction.easner_transaction_id || transaction.provider_transaction_id || transaction.id}
+                    <TableCell>
+                      <div className="min-w-0">
+                        <div className="font-medium truncate max-w-[280px]" title={transactionLabel(transaction)}>
+                          {transactionLabel(transaction)}
+                        </div>
+                        {(transaction.easner_transaction_id || transaction.provider_transaction_id) && (
+                          <div className="font-mono text-xs text-gray-500 truncate max-w-[280px]">
+                            {transaction.easner_transaction_id || transaction.provider_transaction_id}
+                          </div>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>{formatDate(transaction.occurred_at || transaction.created_at)}</TableCell>
                     <TableCell>
@@ -423,18 +466,10 @@ export default function AdminTransactionsPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="space-y-0.5">
-                        <div className="font-medium">
-                          {(Number(transaction.amount || 0) || 0).toLocaleString("en-US", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}{" "}
-                          {String(transaction.currency || "").toUpperCase()}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {String(transaction.provider || "").toUpperCase()} • {(transaction.direction || "out").toUpperCase()}
-                        </div>
-                      </div>
+                      <span className="font-medium">{formatDirectionLabel(transaction.direction)}</span>
+                    </TableCell>
+                    <TableCell className="font-medium tabular-nums">
+                      {transactionAmountFormatted(transaction)}
                     </TableCell>
                     <TableCell>
                       <TransactionStatusBadge ledgerStatus={transaction.status} />
@@ -453,6 +488,10 @@ export default function AdminTransactionsPage() {
                           {selectedTransaction && (
                             <div className="overflow-y-auto flex-1 pr-2 -mr-2 space-y-4">
                               <div className="grid grid-cols-2 gap-4">
+                                <div className="col-span-2">
+                                  <label className="text-sm font-medium text-gray-600">Transaction</label>
+                                  <p className="font-medium">{transactionLabel(selectedTransaction)}</p>
+                                </div>
                                 <div>
                                   <label className="text-sm font-medium text-gray-600">ID</label>
                                   <p className="font-mono text-xs break-all">{selectedTransaction.id}</p>
@@ -479,7 +518,7 @@ export default function AdminTransactionsPage() {
                                 </div>
                                 <div>
                                   <label className="text-sm font-medium text-gray-600">Provider</label>
-                                  <p className="font-medium">{String(selectedTransaction.provider || "—")}</p>
+                                  <p className="font-medium">{formatProviderLabel(selectedTransaction.provider)}</p>
                                 </div>
                                 <div>
                                   <label className="text-sm font-medium text-gray-600">Easner Tx ID</label>
@@ -497,16 +536,12 @@ export default function AdminTransactionsPage() {
                                 ) : null}
                                 <div>
                                   <label className="text-sm font-medium text-gray-600">Direction</label>
-                                  <p className="font-medium">{String(selectedTransaction.direction || "out").toUpperCase()}</p>
+                                  <p className="font-medium">{formatDirectionLabel(selectedTransaction.direction)}</p>
                                 </div>
                                 <div>
                                   <label className="text-sm font-medium text-gray-600">Amount</label>
-                                  <p className="font-medium">
-                                    {(Number(selectedTransaction.amount || 0) || 0).toLocaleString("en-US", {
-                                      minimumFractionDigits: 2,
-                                      maximumFractionDigits: 2,
-                                    })}{" "}
-                                    {String(selectedTransaction.currency || "").toUpperCase()}
+                                  <p className="font-medium tabular-nums">
+                                    {transactionAmountFormatted(selectedTransaction)}
                                   </p>
                                 </div>
                               </div>

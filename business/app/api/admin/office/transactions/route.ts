@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireOfficeAdmin } from "@/lib/api/admin-auth"
 import { loadOfficeLedgerTransactions } from "@/lib/admin/office-load-transactions"
+import { prepareOfficeUserVisibleTransactions } from "@/lib/admin/office-user-visible-transactions"
 
 /**
  * Office ledger: list provider transactions (service role). Optional `userId` filter.
@@ -14,15 +15,18 @@ export async function GET(request: Request) {
   const userId = url.searchParams.get("userId")?.trim() || undefined
   const limitRaw = Number(url.searchParams.get("limit") || "200")
   const limit = Number.isFinite(limitRaw) ? limitRaw : 200
+  const fetchLimit = Math.min(Math.max(limit * 3, limit), 500)
 
   const admin = createSupabaseAdmin()
-  const { data, error } = await loadOfficeLedgerTransactions(admin, { userId, limit })
+  const { data, error } = await loadOfficeLedgerTransactions(admin, { userId, limit: fetchLimit })
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ transactions: data })
+  const transactions = (await prepareOfficeUserVisibleTransactions(admin, data)).slice(0, limit)
+
+  return NextResponse.json({ transactions })
 }
 
 /**
