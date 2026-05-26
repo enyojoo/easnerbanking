@@ -150,6 +150,10 @@ function transactionLabel(tx: ProviderLedgerTx): string {
   return tx.easner_transaction_id || tx.provider_transaction_id || tx.id
 }
 
+function transactionIdDisplay(tx: ProviderLedgerTx): string {
+  return tx.easner_transaction_id || tx.provider_transaction_id || tx.id
+}
+
 function transactionAmountFormatted(tx: ProviderLedgerTx): string {
   const formatted = String(tx.amountFormatted || "").trim()
   if (formatted) return formatted
@@ -541,7 +545,7 @@ export default function AdminTransactionsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Transaction</TableHead>
+                  <TableHead>Easner ID</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Who</TableHead>
                   <TableHead>Direction</TableHead>
@@ -554,15 +558,8 @@ export default function AdminTransactionsPage() {
                 {filteredTransactions.map((transaction: ProviderLedgerTx) => (
                   <TableRow key={transaction.id}>
                     <TableCell>
-                      <div className="min-w-0">
-                        <div className="font-medium truncate max-w-[280px]" title={transactionLabel(transaction)}>
-                          {transactionLabel(transaction)}
-                        </div>
-                        {(transaction.easner_transaction_id || transaction.provider_transaction_id) && (
-                          <div className="font-mono text-xs text-gray-500 truncate max-w-[280px]">
-                            {transaction.easner_transaction_id || transaction.provider_transaction_id}
-                          </div>
-                        )}
+                      <div className="font-mono text-sm truncate max-w-[280px]" title={transactionIdDisplay(transaction)}>
+                        {transactionIdDisplay(transaction)}
                       </div>
                     </TableCell>
                     <TableCell>{formatDate(transaction.occurred_at || transaction.created_at)}</TableCell>
@@ -604,10 +601,12 @@ export default function AdminTransactionsPage() {
                           {selectedTransaction && (
                             <div className="overflow-y-auto flex-1 pr-2 -mr-2 space-y-4">
                               <div className="grid grid-cols-2 gap-4">
-                                <div className="col-span-2">
-                                  <label className="text-sm font-medium text-gray-600">Transaction</label>
-                                  <p className="font-medium">{transactionLabel(selectedTransaction)}</p>
-                                </div>
+                                {String(selectedTransaction.label || "").trim() ? (
+                                  <div className="col-span-2">
+                                    <label className="text-sm font-medium text-gray-600">Transaction</label>
+                                    <p className="font-medium">{selectedTransaction.label}</p>
+                                  </div>
+                                ) : null}
                                 <div>
                                   <label className="text-sm font-medium text-gray-600">ID</label>
                                   <p className="font-mono text-xs break-all">{selectedTransaction.id}</p>
