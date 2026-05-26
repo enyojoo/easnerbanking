@@ -7,7 +7,7 @@ import {
   processRecentActivity,
   parseOverviewWindow,
 } from "@/lib/admin/office-overview-compute"
-import { loadTransactionsForOverview } from "@/lib/admin/office-overview-load-transactions"
+import { loadAllTimeUserVisibleTransactions, loadTransactionsForOverview } from "@/lib/admin/office-overview-load-transactions"
 
 export async function GET(request: Request) {
   const auth = await requireOfficeAdmin(request)
@@ -20,8 +20,9 @@ export async function GET(request: Request) {
 
   const admin = createSupabaseAdmin()
 
-  const [txLoad, usersTotalRes, usersNewRes, orgsTotalRes, orgsNewRes, customersRes, invoicesRes, terminalSessionsRes] =
+  const [txVolumeLoad, txActivityLoad, usersTotalRes, usersNewRes, orgsTotalRes, orgsNewRes, customersRes, invoicesRes, terminalSessionsRes] =
     await Promise.all([
+      loadAllTimeUserVisibleTransactions(admin, 500),
       loadTransactionsForOverview(admin, sinceIso, untilIso, 500),
       admin.from("users").select("id", { count: "exact", head: true }),
       admin.from("users").select("id", { count: "exact", head: true }).gte("created_at", sinceIso).lte("created_at", untilIso),
@@ -36,20 +37,25 @@ export async function GET(request: Request) {
       admin.from("terminal_sessions").select("id", { count: "exact", head: true }),
     ])
 
-  if (txLoad.error) {
-    console.error("office overview transactions:", txLoad.error)
-    return NextResponse.json({ error: txLoad.error.message }, { status: 500 })
+  if (txVolumeLoad.error) {
+    console.error("office overview volume transactions:", txVolumeLoad.error)
+    return NextResponse.json({ error: txVolumeLoad.error.message }, { status: 500 })
+  }
+  if (txActivityLoad.error) {
+    console.error("office overview activity transactions:", txActivityLoad.error)
+    return NextResponse.json({ error: txActivityLoad.error.message }, { status: 500 })
   }
 
-  const transactions = txLoad.data
-  const pendingTransactions = transactions.filter(
+  const volumeTransactions = txVolumeLoad.data
+  const activityTransactions = txActivityLoad.data
+  const pendingTransactions = volumeTransactions.filter(
     (t) => String(t.status || "").toLowerCase() === "pending" || String(t.status || "").toLowerCase() === "processing",
   ).length
 
   const { volumeBalance, totalVolumeUsd, topCurrencies, processingBuckets } =
-    computeProviderLedgerDashboardExtras(transactions)
-  const recentActivity = processRecentActivity(transactions, 10)
-  const recentTransactions = buildRecentTransactionsPreview(transactions, 10)
+    computeProviderLedgerDashboardExtras(volumeTransactions)
+  const recentActivity = processRecentActivity(activityTransactions, 10)
+  const recentTransactions = buildRecentTransactionsPreview(activityTransactions, 10)
 
   const usersListRes = await admin.from("users").select("id,email,noah_kyc_status")
   const usersList = usersListRes.data || []
@@ -68,12 +74,15 @@ export async function GET(request: Request) {
       since: sinceIso,
       until: untilIso,
     },
+    volumeWindow: {
+      preset: "all",
+    },
     kpis: {
       totalUsers: usersTotalRes.count ?? 0,
       newUsersInWindow: usersNewRes.count ?? 0,
       totalBusinesses: orgsTotalRes.count ?? 0,
       newBusinessesInWindow: orgsNewRes.count ?? 0,
-      transactionCount: transactions.length,
+      transactionCount: volumeTransactions.length,
       transactionVolumeUsd: totalVolumeUsd,
       volumeBalance,
       pendingTransactions,

@@ -79,6 +79,11 @@ type TransactionsSummary = {
     EUR: VolumeBalanceSide
   }
   transactionCount: number
+  window?: {
+    preset: string
+    since: string | null
+    until: string | null
+  }
 }
 
 const STATUS_FILTER_LABELS: Record<string, string> = {
@@ -333,6 +338,15 @@ export default function AdminTransactionsPage() {
     a.click()
   }
 
+  const summaryWindowLabel =
+    summary?.window?.preset === "all"
+      ? "all time"
+      : summary?.window?.preset === "7d"
+        ? "last 7 days"
+        : summary?.window?.preset
+          ? `window (${summary.window.preset})`
+          : "all time"
+
   return (
     <OfficeDashboardLayout>
       <div className="p-6 space-y-6">
@@ -350,35 +364,35 @@ export default function AdminTransactionsPage() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <Card>
             <CardContent className="pt-6">
-              <p className="text-sm text-gray-500">USD balance volume</p>
+              <p className="text-sm text-gray-500">USD balance volume · {summaryWindowLabel}</p>
               <p className="mt-1 text-xl font-semibold tabular-nums">
                 {formatVolumeBalanceSide(summary?.volumeBalance.USD, "USD")}
               </p>
               {summary?.volumeBalance.USD ? (
                 <p className="mt-1 text-xs text-gray-500">
                   In {formatMoneyDisplay(summary.volumeBalance.USD.moneyIn, "USD")} · Out{" "}
-                  {formatMoneyDisplay(summary.volumeBalance.USD.moneyOut, "USD")}
+                  {formatMoneyDisplay(summary.volumeBalance.USD.moneyOut, "USD")} · gross in + out
                 </p>
               ) : null}
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-6">
-              <p className="text-sm text-gray-500">EUR balance volume</p>
+              <p className="text-sm text-gray-500">EUR balance volume · {summaryWindowLabel}</p>
               <p className="mt-1 text-xl font-semibold tabular-nums">
                 {formatVolumeBalanceSide(summary?.volumeBalance.EUR, "EUR")}
               </p>
               {summary?.volumeBalance.EUR ? (
                 <p className="mt-1 text-xs text-gray-500">
                   In {formatMoneyDisplay(summary.volumeBalance.EUR.moneyIn, "EUR")} · Out{" "}
-                  {formatMoneyDisplay(summary.volumeBalance.EUR.moneyOut, "EUR")}
+                  {formatMoneyDisplay(summary.volumeBalance.EUR.moneyOut, "EUR")} · gross in + out
                 </p>
               ) : null}
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-6">
-              <p className="text-sm text-gray-500">User-visible transactions</p>
+              <p className="text-sm text-gray-500">User-visible transactions · {summaryWindowLabel}</p>
               <p className="mt-1 text-xl font-semibold tabular-nums">
                 {(summary?.transactionCount ?? transactions.length).toLocaleString()}
               </p>

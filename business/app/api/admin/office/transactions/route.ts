@@ -2,7 +2,9 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireOfficeAdmin } from "@/lib/api/admin-auth"
 import { loadOfficeLedgerTransactions } from "@/lib/admin/office-load-transactions"
-import { prepareOfficeUserVisibleTransactionsWithSummary } from "@/lib/admin/office-user-visible-transactions"
+import { computeProviderLedgerDashboardExtras, parseOverviewWindow } from "@/lib/admin/office-overview-compute"
+import { loadAllTimeUserVisibleTransactions, loadTransactionsForOverview } from "@/lib/admin/office-overview-load-transactions"
+import { prepareOfficeUserVisibleTransactions } from "@/lib/admin/office-user-visible-transactions"
 
 /**
  * Office ledger: list provider transactions (service role). Optional `userId` filter.
@@ -18,15 +20,45 @@ export async function GET(request: Request) {
   const fetchLimit = Math.min(Math.max(limit * 3, limit), 500)
 
   const admin = createSupabaseAdmin()
-  const { data, error } = await loadOfficeLedgerTransactions(admin, { userId, limit: fetchLimit })
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  const summaryParams = new URLSearchParams(url.searchParams)
+  const presetParam = summaryParams.get("preset")?.toLowerCase()
+  const hasCustomWindow = Boolean(summaryParams.get("since") || (presetParam && presetParam !== "all"))
+
+  let volumeLoad
+  let summaryWindow: { preset: string; since: string | null; until: string | null }
+
+  if (hasCustomWindow) {
+    const { preset, since, until } = parseOverviewWindow(summaryParams)
+    const sinceIso = since.toISOString()
+    const untilIso = until.toISOString()
+    volumeLoad = await loadTransactionsForOverview(admin, sinceIso, untilIso, 500)
+    summaryWindow = { preset, since: sinceIso, until: untilIso }
+  } else {
+    volumeLoad = await loadAllTimeUserVisibleTransactions(admin, 500)
+    summaryWindow = { preset: "all", since: null, until: null }
   }
 
-  const { transactions, summary } = await prepareOfficeUserVisibleTransactionsWithSummary(admin, data)
+  const listLoad = await loadOfficeLedgerTransactions(admin, { userId, limit: fetchLimit })
 
-  return NextResponse.json({ transactions: transactions.slice(0, limit), summary })
+  if (listLoad.error) {
+    return NextResponse.json({ error: listLoad.error.message }, { status: 500 })
+  }
+  if (volumeLoad.error) {
+    return NextResponse.json({ error: volumeLoad.error.message }, { status: 500 })
+  }
+
+  const transactions = await prepareOfficeUserVisibleTransactions(admin, listLoad.data)
+  const { volumeBalance } = computeProviderLedgerDashboardExtras(volumeLoad.data)
+
+  return NextResponse.json({
+    transactions: transactions.slice(0, limit),
+    summary: {
+      volumeBalance,
+      transactionCount: volumeLoad.data.length,
+      window: summaryWindow,
+    },
+  })
 }
 
 /**

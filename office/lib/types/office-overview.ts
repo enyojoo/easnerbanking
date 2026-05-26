@@ -5,6 +5,10 @@ export type OfficeOverviewWindow = {
   until: string
 }
 
+export type OfficeVolumeWindow = {
+  preset: string
+}
+
 export type OfficeVolumeBalanceSide = {
   moneyIn: number
   moneyOut: number
@@ -83,6 +87,7 @@ export type OfficeOverviewRecentTransaction = {
 
 export type OfficeOverviewResponse = {
   window: OfficeOverviewWindow
+  volumeWindow?: OfficeVolumeWindow
   kpis: OfficeOverviewKpis
   topCurrencies: OfficeOverviewTopCurrency[]
   processingBuckets: OfficeOverviewProcessingBucket[]

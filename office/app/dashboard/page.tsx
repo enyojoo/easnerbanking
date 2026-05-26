@@ -112,14 +112,16 @@ export default function AdminDashboardPage() {
   }
 
   const kpis = overview?.kpis
-  const windowLabel = overview?.window?.preset === "7d" ? "last 7 days" : `window (${overview?.window?.preset ?? ""})`
+  const activityWindowLabel =
+    overview?.window?.preset === "7d" ? "last 7 days" : `window (${overview?.window?.preset ?? ""})`
+  const volumeWindowLabel = overview?.volumeWindow?.preset === "all" ? "all time" : activityWindowLabel
 
   return (
     <OfficeDashboardLayout>
       <div className="p-6 space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-sm text-gray-600 mt-1">Ledger and merchant metrics for the {windowLabel}</p>
+          <p className="text-sm text-gray-600 mt-1">Recent activity for the {activityWindowLabel}</p>
         </div>
 
         {loadError && <p className="text-sm text-destructive">{loadError}</p>}
@@ -143,6 +145,7 @@ export default function AdminDashboardPage() {
                   <div className="text-2xl font-bold text-gray-900">
                     {(kpis?.transactionCount ?? 0).toLocaleString()}
                   </div>
+                  <p className="mt-1 text-xs text-gray-500">User-visible · {volumeWindowLabel}</p>
                 </CardContent>
               </Card>
 
@@ -153,6 +156,9 @@ export default function AdminDashboardPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-gray-900">{formatVolumeBalance(kpis?.volumeBalance)}</div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    USD + EUR balance throughput · {volumeWindowLabel} · gross in + out
+                  </p>
                 </CardContent>
               </Card>
 
@@ -215,6 +221,7 @@ export default function AdminDashboardPage() {
           <Card>
             <CardHeader>
               <CardTitle>Recent activity</CardTitle>
+              <p className="text-xs text-muted-foreground font-normal mt-1">{activityWindowLabel}</p>
             </CardHeader>
             <CardContent className="max-h-80 overflow-y-auto">
               {loading && !overview ? (
@@ -258,7 +265,7 @@ export default function AdminDashboardPage() {
             <CardHeader>
               <CardTitle>Top currencies</CardTitle>
               <p className="text-xs text-muted-foreground font-normal mt-1">
-                Total volume by currency in this window (pay-in and payout combined per currency).
+                Total volume by currency · {volumeWindowLabel} (pay-in and payout combined per currency).
               </p>
             </CardHeader>
             <CardContent className="max-h-80 overflow-y-auto">

@@ -35,6 +35,11 @@ export type OfficeUserVisibleTransaction = OfficeLedgerTransaction & {
 export type OfficeTransactionsSummary = {
   volumeBalance: VolumeBalanceKpi
   transactionCount: number
+  window?: {
+    preset: string
+    since: string | null
+    until: string | null
+  }
 }
 
 type LedgerScope = { userId: string; businessId: string | null }
