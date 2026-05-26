@@ -53,6 +53,7 @@
     "react-dom": "19.2.3",
     "glob": "^13.0.6",
     "rimraf": "^5.0.10",
+    "expo-crypto": "56.0.3",
     "react-native-quick-base64": "3.0.0",
     "expo": "56.0.5",
     "@expo/metro-runtime": "56.0.13",
