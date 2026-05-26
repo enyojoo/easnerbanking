@@ -54,15 +54,20 @@ export interface Recipient {
 export interface Transaction {
   id: string
   user_id: string
+  business_id?: string | null
   provider: string
-  noah_transaction_id?: string | null
   provider_transaction_id?: string | null
+  provider_event_id?: string | null
+  easner_transaction_id?: string | null
   status: string
   amount?: number | null
   currency?: string | null
   direction?: "in" | "out" | null
   payload?: any
   metadata?: any
+  occurred_at?: string | null
+  settled_at?: string | null
+  tx_hash?: string | null
   created_at: string
   updated_at: string
   user?: {

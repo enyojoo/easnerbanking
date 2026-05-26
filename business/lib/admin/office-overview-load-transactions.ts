@@ -19,19 +19,30 @@ export async function loadTransactionsForOverview(
   untilIso: string,
   limit: number,
 ): Promise<{ data: TxRow[]; error: { message: string } | null }> {
+  const fetchLimit = Math.min(limit * 3, 1500)
   const txRes = await admin
     .from("transactions")
-    .select("id, created_at, updated_at, status, currency, amount, direction, user_id")
+    .select(
+      "id, created_at, updated_at, occurred_at, status, currency, amount, direction, user_id, provider, metadata, payload, base_currency, base_amount, easner_transaction_id",
+    )
     .gte("created_at", sinceIso)
     .lte("created_at", untilIso)
+    .order("occurred_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
-    .limit(limit)
+    .limit(fetchLimit)
 
   if (txRes.error) {
     return { data: [], error: txRes.error }
   }
 
-  const rows = (txRes.data || []) as Omit<TxRow, "user">[]
+  const sinceMs = new Date(sinceIso).getTime()
+  const untilMs = new Date(untilIso).getTime()
+  const rows = ((txRes.data || []) as Omit<TxRow, "user">[]).filter((t) => {
+    const at = t.occurred_at || t.created_at
+    if (!at) return false
+    const ms = new Date(at).getTime()
+    return Number.isFinite(ms) && ms >= sinceMs && ms <= untilMs
+  }).slice(0, limit)
   const userIds = [...new Set(rows.map((t) => t.user_id).filter((id): id is string => Boolean(id)))]
 
   const userById = new Map<string, UserProfileRow>()

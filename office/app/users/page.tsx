@@ -230,27 +230,28 @@ export default function AdminUsersPage() {
 
   const fetchUserTransactions = useCallback(async (userId: string) => {
     try {
-      const { data, error } = await supabase
-        .from("transactions")
-        .select(`
-          id,
-          created_at,
-          provider,
-          noah_transaction_id,
-          direction,
-          amount,
-          currency,
-          status
-        `)
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-
-      if (error) throw error
-      const transformedData = (data || []).map((tx: any) => ({
+      const r = await officeFetch(`/api/admin/office/transactions?userId=${encodeURIComponent(userId)}&limit=100`)
+      const body = (await r.json()) as {
+        transactions?: Array<{
+          id: string
+          created_at: string
+          occurred_at?: string | null
+          provider?: string | null
+          provider_transaction_id?: string | null
+          easner_transaction_id?: string | null
+          direction?: string | null
+          amount?: number | null
+          currency?: string | null
+          status?: string | null
+        }>
+        error?: string
+      }
+      if (!r.ok || body.error) throw new Error(body.error || r.statusText)
+      const transformedData = (body.transactions ?? []).map((tx) => ({
         id: tx.id,
-        created_at: tx.created_at,
+        created_at: tx.occurred_at || tx.created_at,
         provider: tx.provider ?? null,
-        provider_tx_id: tx.noah_transaction_id ?? null,
+        provider_tx_id: tx.easner_transaction_id || tx.provider_transaction_id || null,
         direction: tx.direction ?? null,
         amount: tx.amount ?? null,
         currency: tx.currency ?? null,

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireOfficeAdmin } from "@/lib/api/admin-auth"
 import {
+  buildRecentTransactionsPreview,
   computeProviderLedgerDashboardExtras,
   processRecentActivity,
   parseOverviewWindow,
@@ -45,8 +46,10 @@ export async function GET(request: Request) {
     (t) => String(t.status || "").toLowerCase() === "pending" || String(t.status || "").toLowerCase() === "processing",
   ).length
 
-  const { usdVolume, topCurrencies, processingBuckets } = computeProviderLedgerDashboardExtras(transactions)
+  const { volumeBalance, totalVolumeUsd, topCurrencies, processingBuckets } =
+    computeProviderLedgerDashboardExtras(transactions)
   const recentActivity = processRecentActivity(transactions, 10)
+  const recentTransactions = buildRecentTransactionsPreview(transactions, 10)
 
   const usersListRes = await admin.from("users").select("id,email,noah_kyc_status")
   const usersList = usersListRes.data || []
@@ -71,7 +74,8 @@ export async function GET(request: Request) {
       totalBusinesses: orgsTotalRes.count ?? 0,
       newBusinessesInWindow: orgsNewRes.count ?? 0,
       transactionCount: transactions.length,
-      transactionVolumeUsd: usdVolume,
+      transactionVolumeUsd: totalVolumeUsd,
+      volumeBalance,
       pendingTransactions,
       activeUsers,
       verifiedUsers,
@@ -82,8 +86,9 @@ export async function GET(request: Request) {
     topCurrencies,
     processingBuckets,
     recentActivity,
+    recentTransactions,
     links: {
-      platformHealth: "/platform-control?tab=platform",
+      platformHealth: "/platform-control?tab=webhooks",
       currencies: "/platform-control?tab=platform",
       fiatSend: "/platform-control?tab=fiat",
       cryptoSend: "/platform-control?tab=crypto",

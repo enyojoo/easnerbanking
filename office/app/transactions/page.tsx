@@ -25,19 +25,24 @@ import {
   X,
 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { officeFetch } from "@/lib/api-client"
 import { officeKeys } from "@/lib/query/keys"
-import { supabase } from "@/lib/supabase"
+import { useAuth } from "@/lib/auth-context"
 
 interface ProviderLedgerTx {
   id: string
   provider?: string | null
-  noah_transaction_id?: string | null
+  provider_transaction_id?: string | null
+  easner_transaction_id?: string | null
+  business_id?: string | null
   status: string
   created_at: string
+  occurred_at?: string | null
   updated_at?: string
   direction?: "in" | "out" | null
   amount?: number | null
   currency?: string | null
+  tx_hash?: string | null
   user?: {
     first_name: string
     last_name: string
@@ -46,67 +51,55 @@ interface ProviderLedgerTx {
 }
 
 export default function AdminTransactionsPage() {
+  const { user, isAdmin, loading: authLoading } = useAuth()
   const queryClient = useQueryClient()
+  const transactionsEnabled = !authLoading && Boolean(user && isAdmin)
   const transactionsQuery = useQuery({
     queryKey: officeKeys.transactions(),
+    enabled: transactionsEnabled,
     staleTime: 60_000,
     queryFn: async (): Promise<ProviderLedgerTx[]> => {
-      const { data: rows, error } = await supabase
-        .from("transactions")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(200)
-      if (error) throw error
-      const list = rows || []
-      const userIds = [...new Set(list.map((t: { user_id?: string | null }) => t.user_id).filter(Boolean))] as string[]
-      const userById = new Map<string, { email: string | null; full_name: string | null }>()
-      if (userIds.length > 0) {
-        const { data: profiles, error: pe } = await supabase.from("users").select("id, email, full_name").in("id", userIds)
-        if (pe) throw pe
-        for (const u of profiles || []) {
-          const row = u as { id: string; email: string | null; full_name: string | null }
-          userById.set(row.id, { email: row.email ?? null, full_name: row.full_name ?? null })
-        }
+      const r = await officeFetch("/api/admin/office/transactions?limit=200")
+      const body = (await r.json()) as { transactions?: ProviderLedgerTx[]; error?: string }
+      if (!r.ok || body.error) {
+        throw new Error(typeof body.error === "string" ? body.error : r.statusText || "Failed to load transactions")
       }
-      return list.map((t: Record<string, unknown> & { user_id?: string | null }) => {
-        const uid = t.user_id ? String(t.user_id) : ""
-        const p = uid ? userById.get(uid) : undefined
-        const full = (p?.full_name || "").trim()
-        const parts = full ? full.split(/\s+/) : []
-        return {
-          ...(t as ProviderLedgerTx),
-          id: String(t.id || ""),
-          provider: (t.provider as string | null) ?? null,
-          noah_transaction_id: (t.noah_transaction_id as string | null) ?? null,
-          status: String(t.status || "pending"),
-          created_at: String(t.created_at || ""),
-          updated_at: (t.updated_at as string | undefined) ?? undefined,
-          direction: (t.direction as "in" | "out" | null) ?? null,
-          amount: (t.amount as number | null) ?? null,
-          currency: (t.currency as string | null) ?? null,
-          user: p
-            ? {
-                first_name: parts[0] || "",
-                last_name: parts.length > 1 ? parts.slice(1).join(" ") : "",
-                email: p.email || "",
-              }
-            : undefined,
-        }
-      })
+      return (body.transactions ?? []).map((t) => ({
+        ...t,
+        id: String(t.id || ""),
+        provider: t.provider ?? null,
+        provider_transaction_id: t.provider_transaction_id ?? null,
+        easner_transaction_id: t.easner_transaction_id ?? null,
+        status: String(t.status || "pending"),
+        created_at: String(t.created_at || ""),
+        occurred_at: t.occurred_at ?? null,
+        updated_at: t.updated_at ?? undefined,
+        direction: (t.direction as "in" | "out" | null) ?? null,
+        amount: t.amount ?? null,
+        currency: t.currency ?? null,
+        tx_hash: t.tx_hash ?? null,
+        user: t.user
+          ? {
+              first_name: t.user.first_name || "",
+              last_name: t.user.last_name || "",
+              email: t.user.email || "",
+            }
+          : undefined,
+      }))
     },
   })
 
   const transactions = transactionsQuery.data ?? []
   const updateStatus = useMutation({
     mutationFn: async ({ transactionId, newStatus }: { transactionId: string; newStatus: string }) => {
-      const { error } = await supabase
-        .from("transactions")
-        .update({
-          status: newStatus,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", transactionId)
-      if (error) throw error
+      const r = await officeFetch("/api/admin/office/transactions", {
+        method: "PATCH",
+        body: JSON.stringify({ transactionId, status: newStatus }),
+      })
+      const body = (await r.json()) as { error?: string }
+      if (!r.ok || body.error) {
+        throw new Error(typeof body.error === "string" ? body.error : r.statusText || "Status update failed")
+      }
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: officeKeys.transactions() })
@@ -124,7 +117,8 @@ export default function AdminTransactionsPage() {
     const matchesSearch =
       searchTerm === "" ||
       transaction.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      String(transaction.noah_transaction_id || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(transaction.provider_transaction_id || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(transaction.easner_transaction_id || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       String(transaction.user?.email || "").toLowerCase().includes(searchTerm.toLowerCase())
 
     const matchesStatus = statusFilter === "all" || transaction.status === statusFilter
@@ -236,17 +230,18 @@ export default function AdminTransactionsPage() {
 
   const handleExport = () => {
     const csvContent = [
-      ["ID", "Provider", "Provider Tx ID", "Direction", "Amount", "Currency", "Status", "Date", "User"].join(","),
+      ["ID", "Easner ID", "Provider", "Provider Tx ID", "Direction", "Amount", "Currency", "Status", "Date", "User"].join(","),
       ...filteredTransactions.map((t: any) =>
         [
           t.id,
+          t.easner_transaction_id || "",
           t.provider || "",
-          t.noah_transaction_id || "",
+          t.provider_transaction_id || "",
           t.direction || "",
           t.amount ?? "",
           t.currency ?? "",
           t.status,
-          formatTimestamp(t.created_at),
+          formatTimestamp(t.occurred_at || t.created_at),
           `${t.user?.first_name} ${t.user?.last_name}`,
         ].join(","),
       ),
@@ -482,9 +477,9 @@ export default function AdminTransactionsPage() {
                       />
                     </TableCell>
                     <TableCell className="font-mono text-sm">
-                      {transaction.noah_transaction_id || transaction.id}
+                      {transaction.easner_transaction_id || transaction.provider_transaction_id || transaction.id}
                     </TableCell>
-                    <TableCell>{formatDate(transaction.created_at)}</TableCell>
+                    <TableCell>{formatDate(transaction.occurred_at || transaction.created_at)}</TableCell>
                     <TableCell>
                       <div>
                         <div className="font-medium">
@@ -547,9 +542,19 @@ export default function AdminTransactionsPage() {
                                     <p className="font-medium">{String(selectedTransaction.provider || "—")}</p>
                                   </div>
                                   <div>
-                                    <label className="text-sm font-medium text-gray-600">Provider Tx ID</label>
-                                    <p className="font-mono text-xs break-all">{selectedTransaction.noah_transaction_id || "—"}</p>
+                                    <label className="text-sm font-medium text-gray-600">Easner Tx ID</label>
+                                    <p className="font-mono text-xs break-all">{selectedTransaction.easner_transaction_id || "—"}</p>
                                   </div>
+                                  <div>
+                                    <label className="text-sm font-medium text-gray-600">Provider Tx ID</label>
+                                    <p className="font-mono text-xs break-all">{selectedTransaction.provider_transaction_id || "—"}</p>
+                                  </div>
+                                  {selectedTransaction.tx_hash ? (
+                                    <div className="col-span-2">
+                                      <label className="text-sm font-medium text-gray-600">Tx hash</label>
+                                      <p className="font-mono text-xs break-all">{selectedTransaction.tx_hash}</p>
+                                    </div>
+                                  ) : null}
                                   <div>
                                     <label className="text-sm font-medium text-gray-600">Direction</label>
                                     <p className="font-medium">{String(selectedTransaction.direction || "out").toUpperCase()}</p>
