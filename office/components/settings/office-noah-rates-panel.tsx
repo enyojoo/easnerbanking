@@ -157,20 +157,6 @@ export function OfficeNoahRatesPanel() {
     })
   }, [rates, currencyByCode])
 
-  const lastRatesUpdate = useMemo(() => {
-    let maxMs = 0
-    for (const r of rates) {
-      for (const raw of [r.updated_at, r.as_of]) {
-        if (!raw) continue
-        const t = new Date(raw).getTime()
-        if (Number.isFinite(t) && t > maxMs) maxMs = t
-      }
-    }
-    return maxMs > 0
-      ? new Date(maxMs).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
-      : "—"
-  }, [rates])
-
   const totalStalePairs = useMemo(
     () => rates.filter((r) => r.status === "active" && isNoahRateRowStale(r)).length,
     [rates],
@@ -258,7 +244,6 @@ export function OfficeNoahRatesPanel() {
   return (
     <PlatformControlTabShell
       title="Noah rates (global payout)"
-      description={`Last update: ${lastRatesUpdate}. Customer send preview uses \`rate\`; execution debit stays on Noah prepare.`}
       actions={
         <Button type="button" size="sm" onClick={() => void handleSyncRates()} disabled={syncing || loading}>
           {syncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}

@@ -559,7 +559,6 @@ export function OfficePaymentMethodsPanel() {
   return (
     <PlatformControlTabShell
       title="Payment methods"
-      description="Instructions shown for manual / ops-assisted payouts. Automated send uses provider routing on Fiat and Crypto tabs."
       actions={
           <Dialog open={isAddPaymentMethodOpen} onOpenChange={setIsAddPaymentMethodOpen}>
             <DialogTrigger asChild>

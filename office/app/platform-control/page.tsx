@@ -56,9 +56,6 @@ function PlatformControlHubBody() {
       <div className="p-6 space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Platform control</h1>
-          <p className="text-gray-600 text-sm mt-1">
-            Platform configuration, fiat and crypto send catalogs, rates, and payment methods
-          </p>
         </div>
 
         <Tabs value={activeTab} onValueChange={onTabChange} className="space-y-6">

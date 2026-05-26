@@ -93,7 +93,6 @@ export function CryptoDestinationsAdminPanel() {
   return (
     <PlatformControlTabShell
       title="Crypto"
-      description="Stablecoins and on-chain assets users can send to wallet recipients. Disabled assets are hidden from send and recipient flows."
       actions={
         <Button
           type="button"

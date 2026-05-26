@@ -62,53 +62,50 @@ export function EventInboxPanel() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold text-gray-900">Webhook inbox</h2>
-        <p className="text-sm text-gray-600 mt-1">
-          Raw provider webhook deliveries (`event_inbox`) — dedupe, processing status, and errors.
-        </p>
-      </div>
+      <h2 className="text-lg font-semibold text-gray-900">Webhook inbox</h2>
 
-      <div className="flex flex-wrap gap-3">
-        <div className="flex flex-wrap items-center gap-2 text-sm rounded-lg border bg-muted/30 px-4 py-3">
-          <span className="text-muted-foreground">Received</span>
-          <span className="font-semibold">{(counts?.received ?? 0).toLocaleString()}</span>
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="text-muted-foreground">Received</span>
+            <span className="font-semibold">{(counts?.received ?? 0).toLocaleString()}</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="text-muted-foreground">Processed</span>
+            <span className="font-semibold">{(counts?.processed ?? 0).toLocaleString()}</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="text-muted-foreground">Failed</span>
+            <span className="font-semibold text-destructive">{(counts?.failed ?? 0).toLocaleString()}</span>
+          </span>
         </div>
-        <div className="flex flex-wrap items-center gap-2 text-sm rounded-lg border bg-muted/30 px-4 py-3">
-          <span className="text-muted-foreground">Processed</span>
-          <span className="font-semibold">{(counts?.processed ?? 0).toLocaleString()}</span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 text-sm rounded-lg border bg-muted/30 px-4 py-3">
-          <span className="text-muted-foreground">Failed</span>
-          <span className="font-semibold text-destructive">{(counts?.failed ?? 0).toLocaleString()}</span>
-        </div>
-      </div>
 
-      <div className="flex flex-wrap gap-3">
-        <Select value={providerFilter} onValueChange={(v) => setProviderFilter(v as (typeof PROVIDERS)[number])}>
-          <SelectTrigger className="w-[180px] bg-white">
-            <SelectValue placeholder="Provider" />
-          </SelectTrigger>
-          <SelectContent>
-            {PROVIDERS.map((p) => (
-              <SelectItem key={p} value={p}>
-                {p === "all" ? "All providers" : p}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as (typeof STATUSES)[number])}>
-          <SelectTrigger className="w-[180px] bg-white">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            {STATUSES.map((s) => (
-              <SelectItem key={s} value={s}>
-                {s === "all" ? "All statuses" : s}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex flex-wrap items-center gap-3">
+          <Select value={providerFilter} onValueChange={(v) => setProviderFilter(v as (typeof PROVIDERS)[number])}>
+            <SelectTrigger className="w-[180px] bg-white">
+              <SelectValue placeholder="Provider" />
+            </SelectTrigger>
+            <SelectContent>
+              {PROVIDERS.map((p) => (
+                <SelectItem key={p} value={p}>
+                  {p === "all" ? "All providers" : p}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as (typeof STATUSES)[number])}>
+            <SelectTrigger className="w-[180px] bg-white">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUSES.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {s === "all" ? "All statuses" : s}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <Card>
@@ -131,7 +128,6 @@ export function EventInboxPanel() {
                   <TableHead>Event type</TableHead>
                   <TableHead>Event ID</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Processed</TableHead>
                   <TableHead>Error</TableHead>
                 </TableRow>
               </TableHeader>
@@ -145,7 +141,6 @@ export function EventInboxPanel() {
                     <TableCell>
                       <Badge variant={statusVariant(row.status)}>{row.status}</Badge>
                     </TableCell>
-                    <TableCell className="text-sm whitespace-nowrap">{formatTs(row.processed_at)}</TableCell>
                     <TableCell className="text-xs text-destructive max-w-[240px] truncate" title={row.error || undefined}>
                       {row.error || "—"}
                     </TableCell>
@@ -153,7 +148,7 @@ export function EventInboxPanel() {
                 ))}
                 {events.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">
+                    <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-8">
                       No webhook events match these filters.
                     </TableCell>
                   </TableRow>

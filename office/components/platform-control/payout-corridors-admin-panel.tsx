@@ -80,7 +80,6 @@ export function PayoutCorridorsAdminPanel() {
   return (
     <PlatformControlTabShell
       title="Fiat"
-      description="Country and currency pairs users can send to (bank and mobile). Disabled rows are hidden from Business and Mobile send flows."
       actions={
         <Button
           type="button"

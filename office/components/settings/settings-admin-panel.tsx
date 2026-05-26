@@ -43,22 +43,15 @@ const GLOBAL_CURRENCY_CONTROL_LABELS: Record<"USD" | "EUR" | "GBP" | "NGN", stri
   NGN: "Nigerian Naira",
 }
 
-const SECTION_COPY: Record<
-  SettingsAdminSection,
-  { title: string; description: string }
-> = {
+const SECTION_COPY: Record<SettingsAdminSection, { title: string }> = {
   platform: {
     title: "Platform",
-    description: "Maintenance, registration, and security parameters.",
   },
   rates: {
     title: "Rates",
-    description: "Used for manual payout quotes when automated provider routing is not selected.",
   },
   "payment-methods": {
     title: "Payment methods",
-    description:
-      "Instructions shown for manual / ops-assisted payouts. Automated send uses provider routing on Fiat and Crypto tabs.",
   },
 }
 
@@ -290,18 +283,12 @@ export function SettingsAdminPanel({ section }: { section?: SettingsAdminSection
     )
   }
 
-  const headerCopy = section
-    ? SECTION_COPY[section]
-    : { title: "System Settings", description: "Configure platform settings and system parameters" }
+  const headerCopy = section ? SECTION_COPY[section] : { title: "System Settings" }
 
   const balanceCurrencyControls = (
             <Card>
               <CardHeader>
         <CardTitle>Global Currency Controls</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          USD/EUR stay visible in products but can be deactivated to limit actions. Other currencies must be made
-          available first.
-        </p>
       </CardHeader>
       <CardContent className="space-y-4">
                   {(["USD", "EUR", "GBP", "NGN"] as const).map((code) => {
@@ -461,7 +448,7 @@ export function SettingsAdminPanel({ section }: { section?: SettingsAdminSection
 
   if (section === "platform") {
     return (
-      <PlatformControlTabShell title={headerCopy.title} description={headerCopy.description}>
+      <PlatformControlTabShell title={headerCopy.title}>
         <Card>
           <CardHeader>
             <CardTitle>Platform Configuration</CardTitle>
