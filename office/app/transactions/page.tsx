@@ -159,6 +159,17 @@ function transactionIdDisplay(tx: ProviderLedgerTx): string {
   return tx.easner_transaction_id || tx.provider_transaction_id || tx.id
 }
 
+function WhoDisplay({ transaction }: { transaction: ProviderLedgerTx }) {
+  return (
+    <div>
+      <div className="font-medium">{transaction.who || "—"}</div>
+      {transaction.user?.email ? (
+        <div className="text-sm text-gray-500">{transaction.user.email}</div>
+      ) : null}
+    </div>
+  )
+}
+
 function transactionAmountFormatted(tx: ProviderLedgerTx): string {
   const formatted = String(tx.amountFormatted || "").trim()
   if (formatted) return formatted
@@ -578,12 +589,7 @@ export default function AdminTransactionsPage() {
                     </TableCell>
                     <TableCell>{formatDate(transaction.occurred_at || transaction.created_at)}</TableCell>
                     <TableCell>
-                      <div>
-                        <div className="font-medium">{transaction.who || "—"}</div>
-                        {transaction.user?.email && !transaction.business_id ? (
-                          <div className="text-sm text-gray-500">{transaction.user.email}</div>
-                        ) : null}
-                      </div>
+                      <WhoDisplay transaction={transaction} />
                     </TableCell>
                     <TableCell>
                       <span className="font-medium">{formatDirectionLabel(transaction.direction)}</span>
@@ -636,10 +642,7 @@ export default function AdminTransactionsPage() {
                                 </div>
                                 <div>
                                   <label className="text-sm font-medium text-gray-600">Who</label>
-                                  <p className="font-medium">{selectedTransaction.who || "—"}</p>
-                                  {selectedTransaction.user?.email && !selectedTransaction.business_id ? (
-                                    <p className="text-sm text-gray-500">{selectedTransaction.user.email}</p>
-                                  ) : null}
+                                  <WhoDisplay transaction={selectedTransaction} />
                                 </div>
                                 <div>
                                   <label className="text-sm font-medium text-gray-600">Date</label>
