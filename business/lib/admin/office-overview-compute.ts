@@ -1,4 +1,4 @@
-import { formatMoneyDisplay, toEasnerTransactionPrimaryLabel } from "@easner/shared"
+import { formatMoneyDisplay, isVerificationDepositMetadata, toEasnerTransactionPrimaryLabel } from "@easner/shared"
 import { resolveGlobalPayoutOffRampDetail } from "@/lib/transactions/resolve-global-payout-off-ramp"
 
 export type TxRow = {
@@ -25,12 +25,10 @@ export type TxRow = {
   } | null
 }
 
-export type CurrencyFlow = "pay_in" | "payout_balance" | "payout_local"
+export type CurrencyFlow = "pay_in" | "payout"
 
 export type TopCurrencyRow = {
   code: string
-  flow: CurrencyFlow
-  flowLabel: string
   count: number
   totalAmount: number
 }
@@ -113,7 +111,9 @@ export function resolveOfficeTxPresentation(tx: TxRow): OfficeTxPresentation {
     const displayCurrency = String(
       meta.fiat_deposit_currency ?? meta.settled_currency ?? tx.currency ?? "USD",
     ).toUpperCase()
-    const displayAmount = Number(meta.settled_amount ?? meta.fiat_deposit_amount ?? tx.amount ?? 0)
+    const displayAmount = Number(
+      meta.fiat_deposit_amount ?? meta.settled_amount ?? tx.amount ?? 0,
+    )
     const balanceCurrency =
       asBalanceCurrency(displayCurrency) ??
       asBalanceCurrency(tx.base_currency) ??
@@ -159,8 +159,19 @@ export function resolveOfficeTxPresentation(tx: TxRow): OfficeTxPresentation {
 
 export function formatOfficeTxAmount(tx: TxRow): string {
   const { displayAmount, displayCurrency } = resolveOfficeTxPresentation(tx)
-  if (!Number.isFinite(displayAmount) || displayAmount <= 0 || !displayCurrency) return ""
-  return formatMoneyDisplay(displayAmount, displayCurrency)
+  const meta = tx.metadata || {}
+  const direction = normalizeDirection(tx.direction)
+  let amount = displayAmount
+  if (
+    direction === "in" &&
+    isVerificationDepositMetadata(meta) &&
+    (!Number.isFinite(amount) || amount <= 0)
+  ) {
+    amount = Number(meta.fiat_deposit_amount ?? meta.fiat_amount ?? tx.amount ?? 0)
+  }
+  if (!Number.isFinite(amount) || amount < 0 || !displayCurrency) return ""
+  if (amount === 0) return ""
+  return formatMoneyDisplay(amount, displayCurrency)
 }
 
 export function activityPrimaryLabel(tx: TxRow): string {
@@ -211,7 +222,7 @@ export function extractCurrencyBuckets(tx: TxRow): CurrencyBucket[] {
   }
 
   if (pres.balanceCurrency) {
-    pushBucket(buckets, pres.balanceCurrency, "payout_balance", pres.balanceAmount)
+    pushBucket(buckets, pres.balanceCurrency, "payout", pres.balanceAmount)
   }
 
   const localCode = pres.displayCurrency
@@ -221,9 +232,9 @@ export function extractCurrencyBuckets(tx: TxRow): CurrencyBucket[] {
     pres.balanceCurrency &&
     localCode !== pres.balanceCurrency
   ) {
-    pushBucket(buckets, localCode, "payout_local", localAmount)
+    pushBucket(buckets, localCode, "payout", localAmount)
   } else if (!pres.balanceCurrency && localCode) {
-    pushBucket(buckets, localCode, "payout_local", localAmount)
+    pushBucket(buckets, localCode, "payout", localAmount)
   }
 
   return buckets
@@ -239,7 +250,7 @@ export function createEmptyVolumeBalance(): VolumeBalanceKpi {
 
 export function computeProviderLedgerDashboardExtras(transactions: TxRow[]) {
   const volumeBalance = createEmptyVolumeBalance()
-  const byKey = new Map<string, { code: string; flow: CurrencyFlow; count: number; totalAmount: number }>()
+  const byCode = new Map<string, { code: string; count: number; totalAmount: number }>()
 
   for (const t of transactions) {
     const pres = resolveOfficeTxPresentation(t)
@@ -256,16 +267,14 @@ export function computeProviderLedgerDashboardExtras(transactions: TxRow[]) {
     }
 
     for (const bucket of extractCurrencyBuckets(t)) {
-      const key = `${bucket.flow}:${bucket.code}`
-      const cur = byKey.get(key) || {
+      const cur = byCode.get(bucket.code) || {
         code: bucket.code,
-        flow: bucket.flow,
         count: 0,
         totalAmount: 0,
       }
       cur.count += 1
       cur.totalAmount += bucket.amount
-      byKey.set(key, cur)
+      byCode.set(bucket.code, cur)
     }
   }
 
@@ -276,17 +285,9 @@ export function computeProviderLedgerDashboardExtras(transactions: TxRow[]) {
     side.total = roundAmount(side.total)
   }
 
-  const flowLabels: Record<CurrencyFlow, string> = {
-    pay_in: "Pay-in",
-    payout_balance: "Payout (balance)",
-    payout_local: "Payout (local)",
-  }
-
-  const topCurrencies: TopCurrencyRow[] = Array.from(byKey.values())
+  const topCurrencies: TopCurrencyRow[] = Array.from(byCode.values())
     .map((v) => ({
       code: v.code,
-      flow: v.flow,
-      flowLabel: flowLabels[v.flow],
       count: v.count,
       totalAmount: roundAmount(v.totalAmount),
     }))
@@ -334,7 +335,7 @@ export function processRecentActivity(transactions: TxRow[], limit = 10) {
     const status = normalizeStatus(tx.status)
     const amount = formatOfficeTxAmount(tx)
     const primary = activityPrimaryLabel(tx)
-    const message = `${primary} · ${activityStatusSuffix(status)}`
+    const message = primary
 
     const u = tx.user
     const fromParts = u ? [u.first_name, u.last_name].filter(Boolean).join(" ").trim() : ""

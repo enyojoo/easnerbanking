@@ -5,6 +5,7 @@ vi.mock("@/lib/transactions/resolve-global-payout-off-ramp", () => ({
 }))
 
 vi.mock("@easner/shared", () => ({
+  isVerificationDepositMetadata: () => false,
   toEasnerTransactionPrimaryLabel: (input: {
     direction: string
     metadata?: Record<string, unknown> | null
@@ -54,7 +55,7 @@ describe("office-overview-compute", () => {
       },
     ])[0]
     expect(msg.message).toContain("Acme Corp")
-    expect(msg.message).toContain("Pending")
+    expect(msg.message).not.toContain("Pending")
     expect(msg.message).not.toContain("Transfer created")
     expect(msg.amount).toMatch(/^\$/)
     expect(msg.amount).not.toContain("USD")
@@ -79,7 +80,7 @@ describe("office-overview-compute", () => {
     expect(amount).not.toContain("NGN")
   })
 
-  it("aggregates pay-in, payout balance, and payout local separately", () => {
+  it("aggregates pay-in and payout into one row per currency", () => {
     const { topCurrencies, volumeBalance } = computeProviderLedgerDashboardExtras([
       {
         id: "in-1",
@@ -103,12 +104,11 @@ describe("office-overview-compute", () => {
         },
       },
     ])
-    const payIn = topCurrencies.find((r) => r.flow === "pay_in" && r.code === "USD")
-    const payoutNgn = topCurrencies.find((r) => r.flow === "payout_local" && r.code === "NGN")
-    const payoutUsd = topCurrencies.find((r) => r.flow === "payout_balance" && r.code === "USD")
-    expect(payIn?.count).toBe(1)
-    expect(payoutNgn?.totalAmount).toBe(80000)
-    expect(payoutUsd?.totalAmount).toBe(50)
+    const usd = topCurrencies.find((r) => r.code === "USD")
+    const ngn = topCurrencies.find((r) => r.code === "NGN")
+    expect(usd?.count).toBe(2)
+    expect(usd?.totalAmount).toBe(100)
+    expect(ngn?.totalAmount).toBe(80000)
     expect(volumeBalance.USD.moneyIn).toBe(50)
     expect(volumeBalance.USD.moneyOut).toBe(50)
     expect(volumeBalance.USD.total).toBe(100)

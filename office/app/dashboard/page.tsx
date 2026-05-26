@@ -1,12 +1,9 @@
 "use client"
 
 import { useCallback } from "react"
-import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
 import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import {
   Users,
   CreditCard,
@@ -31,6 +28,10 @@ import { useOfficeAdminEnabled } from "@/hooks/queries"
 
 const OFFICE_OVERVIEW_TTL_MS = 5 * 60 * 1000
 const OVERVIEW_PRESET = "7d" as const
+
+function stripActivityStatusSuffix(message: string): string {
+  return message.replace(/\s·\s(Completed|Failed|Cancelled|Canceled|Processing|Pending)$/i, "")
+}
 
 export default function AdminDashboardPage() {
   const { enabled } = useOfficeAdminEnabled()
@@ -113,25 +114,12 @@ export default function AdminDashboardPage() {
   const kpis = overview?.kpis
   const windowLabel = overview?.window?.preset === "7d" ? "last 7 days" : `window (${overview?.window?.preset ?? ""})`
 
-  const txStatusVariant = (status: string): "emerald" | "amber" | "oxblood" | "slate" => {
-    const s = status.toLowerCase()
-    if (s === "completed" || s === "settled" || s === "deposited") return "emerald"
-    if (s === "failed") return "oxblood"
-    if (s === "pending" || s === "processing" || s === "converting") return "amber"
-    return "slate"
-  }
-
   return (
     <OfficeDashboardLayout>
       <div className="p-6 space-y-6">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-            <p className="text-sm text-gray-600 mt-1">Ledger and merchant metrics for the {windowLabel}</p>
-          </div>
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/transactions">All transactions</Link>
-          </Button>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-sm text-gray-600 mt-1">Ledger and merchant metrics for the {windowLabel}</p>
         </div>
 
         {loadError && <p className="text-sm text-destructive">{loadError}</p>}
@@ -165,9 +153,6 @@ export default function AdminDashboardPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-gray-900">{formatVolumeBalance(kpis?.volumeBalance)}</div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    USD/EUR balance legs (pay-in + payout debits)
-                  </p>
                 </CardContent>
               </Card>
 
@@ -225,65 +210,6 @@ export default function AdminDashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Recent transactions */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Recent transactions</CardTitle>
-            <Button variant="ghost" size="sm" asChild>
-              <Link href="/transactions">View all</Link>
-            </Button>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
-            {loading && !overview ? (
-              <Skeleton className="h-40 w-full" />
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Label</TableHead>
-                    <TableHead>Flow</TableHead>
-                    <TableHead>User</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Balance leg</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Provider</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(overview?.recentTransactions ?? []).map((tx) => (
-                    <TableRow key={tx.id}>
-                      <TableCell className="text-sm font-medium max-w-[200px] truncate" title={tx.label}>
-                        {tx.label}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{tx.flowLabel}</Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-gray-600 max-w-[160px] truncate">{tx.user}</TableCell>
-                      <TableCell className="text-sm font-medium whitespace-nowrap">
-                        {tx.amountFormatted}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                        {tx.balanceFormatted ?? "—"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={txStatusVariant(tx.status)}>{tx.statusLabel}</Badge>
-                      </TableCell>
-                      <TableCell className="text-xs uppercase text-muted-foreground">{tx.provider}</TableCell>
-                    </TableRow>
-                  ))}
-                  {(!overview?.recentTransactions || overview.recentTransactions.length === 0) && (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-sm text-muted-foreground text-center py-6">
-                        No transactions in this window.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-
         {/* Activity + currencies */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
@@ -299,18 +225,22 @@ export default function AdminDashboardPage() {
                     <div key={activity.id} className="flex items-start space-x-3 p-3 bg-muted/40 rounded-lg">
                       <div className="flex-shrink-0 mt-0.5">{getActivityIcon(activity.type)}</div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-sm font-medium text-gray-900">{activity.message}</p>
-                          <span className="text-xs text-gray-500 shrink-0">{activity.time}</span>
-                        </div>
-                        {activity.user && (
-                          <div className="flex items-center justify-between mt-1">
-                            <p className="text-xs text-gray-600">User: {activity.user}</p>
-                            {activity.amount && (
-                              <span className="text-xs font-medium text-gray-900">{activity.amount}</span>
-                            )}
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-medium text-gray-900 min-w-0">
+                            {stripActivityStatusSuffix(activity.message)}
+                          </p>
+                          <div className="flex shrink-0 flex-col items-end gap-0.5 text-right">
+                            {activity.amount ? (
+                              <span className="text-xs font-medium text-gray-900 tabular-nums">
+                                {activity.amount}
+                              </span>
+                            ) : null}
+                            <span className="text-xs text-gray-500">{activity.time}</span>
                           </div>
-                        )}
+                        </div>
+                        {activity.user ? (
+                          <p className="text-xs text-gray-600 mt-1">User: {activity.user}</p>
+                        ) : null}
                       </div>
                     </div>
                   ))}
@@ -326,7 +256,7 @@ export default function AdminDashboardPage() {
             <CardHeader>
               <CardTitle>Top currencies</CardTitle>
               <p className="text-xs text-muted-foreground font-normal mt-1">
-                Pay-in currencies, USD/EUR balance on payout, and local payout totals (receive currency).
+                Total volume by currency in this window (pay-in and payout combined per currency).
               </p>
             </CardHeader>
             <CardContent className="max-h-80 overflow-y-auto">
@@ -336,28 +266,14 @@ export default function AdminDashboardPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Flow</TableHead>
                       <TableHead>Currency</TableHead>
-                      <TableHead>Transactions</TableHead>
+                      <TableHead className="w-[4.5rem]">TXN</TableHead>
                       <TableHead>Sum of amounts</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {(overview?.topCurrencies ?? []).map((row) => (
-                      <TableRow key={`${row.flow}:${row.code}`}>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              row.flow === "pay_in"
-                                ? "emerald"
-                                : row.flow === "payout_local"
-                                  ? "secondary"
-                                  : "outline"
-                            }
-                          >
-                            {row.flowLabel}
-                          </Badge>
-                        </TableCell>
+                      <TableRow key={row.code}>
                         <TableCell className="font-medium">{row.code}</TableCell>
                         <TableCell>{row.count}</TableCell>
                         <TableCell className="whitespace-nowrap">
@@ -367,7 +283,7 @@ export default function AdminDashboardPage() {
                     ))}
                     {(!overview?.topCurrencies || overview.topCurrencies.length === 0) && (
                       <TableRow>
-                        <TableCell colSpan={4} className="text-sm text-muted-foreground">
+                        <TableCell colSpan={3} className="text-sm text-muted-foreground">
                           No currency data in the current window.
                         </TableCell>
                       </TableRow>

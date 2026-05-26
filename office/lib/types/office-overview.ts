@@ -36,8 +36,6 @@ export type OfficeOverviewKpis = {
 
 export type OfficeOverviewTopCurrency = {
   code: string
-  flow: "pay_in" | "payout_balance" | "payout_local"
-  flowLabel: string
   count: number
   totalAmount: number
 }
