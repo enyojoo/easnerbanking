@@ -265,7 +265,7 @@ export default function AdminDashboardPage() {
             <CardHeader>
               <CardTitle>Top currencies</CardTitle>
               <p className="text-xs text-muted-foreground font-normal mt-1">
-                Total volume by currency · {volumeWindowLabel} (pay-in and payout combined per currency).
+                USD/EUR reflect balance volume · {volumeWindowLabel}. Local payout currencies are payout totals only.
               </p>
             </CardHeader>
             <CardContent className="max-h-80 overflow-y-auto">
@@ -283,7 +283,12 @@ export default function AdminDashboardPage() {
                   <TableBody>
                     {(overview?.topCurrencies ?? []).map((row) => (
                       <TableRow key={row.code}>
-                        <TableCell className="font-medium">{row.code}</TableCell>
+                        <TableCell className="font-medium">
+                          {row.code}
+                          {row.dataOnly ? (
+                            <span className="ml-1.5 text-xs font-normal text-muted-foreground">local payout</span>
+                          ) : null}
+                        </TableCell>
                         <TableCell>{row.count}</TableCell>
                         <TableCell className="whitespace-nowrap">
                           {formatMoneyDisplay(row.totalAmount, row.code)}

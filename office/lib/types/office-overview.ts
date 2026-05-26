@@ -42,6 +42,8 @@ export type OfficeOverviewTopCurrency = {
   code: string
   count: number
   totalAmount: number
+  /** Local payout fiat — informational; USD/EUR balance volume lives in volume KPIs. */
+  dataOnly?: boolean
 }
 
 export type OfficeOverviewProcessingBucket = {

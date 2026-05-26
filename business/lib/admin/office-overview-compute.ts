@@ -36,6 +36,8 @@ export type TopCurrencyRow = {
   code: string
   count: number
   totalAmount: number
+  /** Local payout fiat — informational; USD/EUR balance volume lives in volume KPIs. */
+  dataOnly?: boolean
 }
 
 export type BalanceCurrencyCode = "USD" | "EUR"
@@ -249,15 +251,25 @@ export function volumeUsdContribution(tx: TxRow): number {
   return balanceCurrency === "USD" && Number.isFinite(balanceAmount) ? balanceAmount : 0
 }
 
-type CurrencyBucket = { code: string; flow: CurrencyFlow; amount: number }
+type CurrencyBucket = { code: string; flow: CurrencyFlow; amount: number; dataOnly?: boolean }
 
-function pushBucket(buckets: CurrencyBucket[], code: string, flow: CurrencyFlow, amount: number) {
+function pushBucket(
+  buckets: CurrencyBucket[],
+  code: string,
+  flow: CurrencyFlow,
+  amount: number,
+  dataOnly = false,
+) {
   const normalized = String(code || "").trim().toUpperCase()
   if (!normalized || normalized === "—" || !Number.isFinite(amount) || amount <= 0) return
-  buckets.push({ code: normalized, flow, amount })
+  buckets.push({ code: normalized, flow, amount, dataOnly })
 }
 
-/** Pay-in currencies + payout balance (USD/EUR) + payout local receive totals. */
+/**
+ * Top-currency buckets for the dashboard table.
+ * Pay-ins use display currency. Cross-currency payouts use local receive fiat only —
+ * linked USD/EUR balance legs are excluded here and counted in `volumeBalance` instead.
+ */
 export function extractCurrencyBuckets(tx: TxRow): CurrencyBucket[] {
   const pres = resolveOfficeTxPresentation(tx)
   const direction = normalizeDirection(tx.direction)
@@ -268,19 +280,21 @@ export function extractCurrencyBuckets(tx: TxRow): CurrencyBucket[] {
     return buckets
   }
 
-  if (pres.balanceCurrency) {
-    pushBucket(buckets, pres.balanceCurrency, "payout", pres.balanceAmount)
-  }
-
   const localCode = pres.displayCurrency
   const localAmount = pres.displayAmount
-  if (
-    localCode &&
-    pres.balanceCurrency &&
+  const isCrossCurrencyPayout =
+    Boolean(pres.balanceCurrency) &&
+    Boolean(localCode) &&
     localCode !== pres.balanceCurrency
-  ) {
-    pushBucket(buckets, localCode, "payout", localAmount)
-  } else if (!pres.balanceCurrency && localCode) {
+
+  if (isCrossCurrencyPayout) {
+    pushBucket(buckets, localCode, "payout", localAmount, true)
+    return buckets
+  }
+
+  if (pres.balanceCurrency) {
+    pushBucket(buckets, pres.balanceCurrency, "payout", pres.balanceAmount)
+  } else if (localCode) {
     pushBucket(buckets, localCode, "payout", localAmount)
   }
 
@@ -297,7 +311,7 @@ export function createEmptyVolumeBalance(): VolumeBalanceKpi {
 
 export function computeProviderLedgerDashboardExtras(transactions: TxRow[]) {
   const volumeBalance = createEmptyVolumeBalance()
-  const byCode = new Map<string, { code: string; count: number; totalAmount: number }>()
+  const byCode = new Map<string, { code: string; count: number; totalAmount: number; dataOnly: boolean }>()
 
   for (const t of transactions) {
     const pres = resolveOfficeTxPresentation(t)
@@ -318,9 +332,11 @@ export function computeProviderLedgerDashboardExtras(transactions: TxRow[]) {
         code: bucket.code,
         count: 0,
         totalAmount: 0,
+        dataOnly: true,
       }
       cur.count += 1
       cur.totalAmount += bucket.amount
+      if (!bucket.dataOnly) cur.dataOnly = false
       byCode.set(bucket.code, cur)
     }
   }
@@ -337,6 +353,7 @@ export function computeProviderLedgerDashboardExtras(transactions: TxRow[]) {
       code: v.code,
       count: v.count,
       totalAmount: roundAmount(v.totalAmount),
+      dataOnly: v.dataOnly || undefined,
     }))
     .sort((a, b) => b.totalAmount - a.totalAmount || b.count - a.count)
     .slice(0, 20)

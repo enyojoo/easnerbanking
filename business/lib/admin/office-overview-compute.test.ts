@@ -107,12 +107,58 @@ describe("office-overview-compute", () => {
     ])
     const usd = topCurrencies.find((r) => r.code === "USD")
     const ngn = topCurrencies.find((r) => r.code === "NGN")
-    expect(usd?.count).toBe(2)
-    expect(usd?.totalAmount).toBe(100)
+    expect(usd?.count).toBe(1)
+    expect(usd?.totalAmount).toBe(50)
     expect(ngn?.totalAmount).toBe(80000)
+    expect(ngn?.dataOnly).toBe(true)
     expect(volumeBalance.USD.moneyIn).toBe(50)
     expect(volumeBalance.USD.moneyOut).toBe(50)
     expect(volumeBalance.USD.total).toBe(100)
+  })
+
+  it("excludes linked USD balance legs from top currencies on cross-currency payouts", () => {
+    const { topCurrencies, volumeBalance } = computeProviderLedgerDashboardExtras([
+      {
+        id: "in-usd-1",
+        direction: "in",
+        currency: "USD",
+        amount: 10,
+        metadata: { fiat_deposit_currency: "USD", fiat_deposit_amount: 10 },
+      },
+      {
+        id: "out-ngn-1",
+        direction: "out",
+        currency: "NGN",
+        amount: 80000,
+        metadata: {
+          receive_currency: "NGN",
+          receive_amount: 80000,
+          send_currency: "USD",
+          total_debited: 50,
+        },
+      },
+      {
+        id: "out-ngn-2",
+        direction: "out",
+        currency: "NGN",
+        amount: 40000,
+        metadata: {
+          receive_currency: "NGN",
+          receive_amount: 40000,
+          send_currency: "USD",
+          total_debited: 25,
+        },
+      },
+    ])
+    const usd = topCurrencies.find((r) => r.code === "USD")
+    const ngn = topCurrencies.find((r) => r.code === "NGN")
+    expect(usd?.count).toBe(1)
+    expect(usd?.totalAmount).toBe(10)
+    expect(ngn?.count).toBe(2)
+    expect(ngn?.totalAmount).toBe(120000)
+    expect(ngn?.dataOnly).toBe(true)
+    expect(volumeBalance.USD.moneyOut).toBe(75)
+    expect(volumeBalance.USD.total).toBe(85)
   })
 
   it("sums USD volume from balance leg on payout rows", () => {
@@ -151,7 +197,7 @@ describe("office-overview-compute", () => {
       amount: 1,
       metadata: { fiat_deposit_currency: "EUR", fiat_deposit_amount: 200 },
     })
-    expect(buckets).toEqual([{ code: "EUR", flow: "pay_in", amount: 200 }])
+    expect(buckets).toEqual([{ code: "EUR", flow: "pay_in", amount: 200, dataOnly: false }])
   })
 
   it("activityStatusSuffix maps settled to Completed", () => {
