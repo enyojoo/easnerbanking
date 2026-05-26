@@ -265,7 +265,7 @@ export default function AdminDashboardPage() {
             <CardHeader>
               <CardTitle>Top currencies</CardTitle>
               <p className="text-xs text-muted-foreground font-normal mt-1">
-                USD/EUR reflect balance volume · {volumeWindowLabel}. Local payout currencies are payout totals only.
+                USD/EUR reflect balance volume · {volumeWindowLabel}. Local payout and verification deposits are informational only.
               </p>
             </CardHeader>
             <CardContent className="max-h-80 overflow-y-auto">
@@ -286,7 +286,9 @@ export default function AdminDashboardPage() {
                         <TableCell className="font-medium">
                           {row.code}
                           {row.dataOnly ? (
-                            <span className="ml-1.5 text-xs font-normal text-muted-foreground">local payout</span>
+                            <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                              {row.code === "USD" || row.code === "EUR" ? "verification" : "local payout"}
+                            </span>
                           ) : null}
                         </TableCell>
                         <TableCell>{row.count}</TableCell>

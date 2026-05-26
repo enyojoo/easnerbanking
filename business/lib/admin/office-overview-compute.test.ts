@@ -5,7 +5,8 @@ vi.mock("@/lib/transactions/resolve-global-payout-off-ramp", () => ({
 }))
 
 vi.mock("@easner/shared", () => ({
-  isVerificationDepositMetadata: () => false,
+  isVerificationDepositMetadata: (metadata?: Record<string, unknown> | null) =>
+    String(metadata?.deposit_kind ?? "").toLowerCase() === "verification",
   toEasnerTransactionPrimaryLabel: (input: {
     direction: string
     metadata?: Record<string, unknown> | null
@@ -159,6 +160,54 @@ describe("office-overview-compute", () => {
     expect(ngn?.dataOnly).toBe(true)
     expect(volumeBalance.USD.moneyOut).toBe(75)
     expect(volumeBalance.USD.total).toBe(85)
+  })
+
+  it("excludes verification deposits from volume KPIs but keeps them informational in top currencies", () => {
+    const { topCurrencies, volumeBalance } = computeProviderLedgerDashboardExtras([
+      {
+        id: "in-funding",
+        direction: "in",
+        currency: "USD",
+        amount: 100,
+        metadata: { fiat_deposit_currency: "USD", fiat_deposit_amount: 100, deposit_kind: "funding" },
+      },
+      {
+        id: "in-verification",
+        direction: "in",
+        currency: "USD",
+        amount: 0.32,
+        metadata: {
+          fiat_deposit_currency: "USD",
+          fiat_deposit_amount: 0.32,
+          deposit_kind: "verification",
+        },
+      },
+    ])
+    const usd = topCurrencies.find((r) => r.code === "USD")
+    expect(volumeBalance.USD.moneyIn).toBe(100)
+    expect(volumeBalance.USD.total).toBe(100)
+    expect(usd?.count).toBe(2)
+    expect(usd?.totalAmount).toBe(100)
+    expect(usd?.dataOnly).toBeUndefined()
+  })
+
+  it("marks verification-only currency rows as dataOnly in top currencies", () => {
+    const { topCurrencies, volumeBalance } = computeProviderLedgerDashboardExtras([
+      {
+        id: "in-verification",
+        direction: "in",
+        currency: "USD",
+        amount: 0.32,
+        metadata: {
+          fiat_deposit_currency: "USD",
+          fiat_deposit_amount: 0.32,
+          deposit_kind: "verification",
+        },
+      },
+    ])
+    expect(volumeBalance.USD.total).toBe(0)
+    expect(topCurrencies[0]?.code).toBe("USD")
+    expect(topCurrencies[0]?.dataOnly).toBe(true)
   })
 
   it("sums USD volume from balance leg on payout rows", () => {

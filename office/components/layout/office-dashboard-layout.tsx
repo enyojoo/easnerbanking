@@ -104,10 +104,13 @@ export function OfficeDashboardLayout({ children }: OfficeDashboardLayoutProps) 
         )}
       >
         <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-6">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <BrandLogo size="sm" href="/dashboard" className="shrink-0 rounded-xl ring-1 ring-inset ring-primary/15" />
-            <span className="truncate font-sans text-sm font-medium tracking-tight text-foreground">Office</span>
-          </div>
+          <Link
+            href="/dashboard"
+            className="inline-flex min-w-0 items-center"
+            onClick={() => setSidebarOpen(false)}
+          >
+            <BrandLogo size="lg" className="h-8 w-auto max-w-[10rem]" />
+          </Link>
           <Button
             variant="ghost"
             size="icon-sm"

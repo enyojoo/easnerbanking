@@ -245,8 +245,13 @@ export function activityStatusSuffix(status: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
+function isVerificationDepositTx(tx: TxRow): boolean {
+  return isVerificationDepositMetadata(tx.metadata)
+}
+
 /** @deprecated Use volumeBalance KPI — kept for tests migrating off USD-only helper. */
 export function volumeUsdContribution(tx: TxRow): number {
+  if (isVerificationDepositTx(tx)) return 0
   const { balanceAmount, balanceCurrency } = resolveOfficeTxPresentation(tx)
   return balanceCurrency === "USD" && Number.isFinite(balanceAmount) ? balanceAmount : 0
 }
@@ -276,7 +281,13 @@ export function extractCurrencyBuckets(tx: TxRow): CurrencyBucket[] {
   const buckets: CurrencyBucket[] = []
 
   if (direction === "in") {
-    pushBucket(buckets, pres.displayCurrency, "pay_in", pres.displayAmount)
+    pushBucket(
+      buckets,
+      pres.displayCurrency,
+      "pay_in",
+      pres.displayAmount,
+      isVerificationDepositTx(tx),
+    )
     return buckets
   }
 
@@ -316,8 +327,9 @@ export function computeProviderLedgerDashboardExtras(transactions: TxRow[]) {
   for (const t of transactions) {
     const pres = resolveOfficeTxPresentation(t)
     const direction = normalizeDirection(t.direction)
+    const verificationDeposit = isVerificationDepositTx(t)
 
-    if (pres.balanceCurrency && pres.balanceAmount > 0) {
+    if (!verificationDeposit && pres.balanceCurrency && pres.balanceAmount > 0) {
       const side = volumeBalance[pres.balanceCurrency]
       if (direction === "in") {
         side.moneyIn += pres.balanceAmount
@@ -335,8 +347,12 @@ export function computeProviderLedgerDashboardExtras(transactions: TxRow[]) {
         dataOnly: true,
       }
       cur.count += 1
-      cur.totalAmount += bucket.amount
-      if (!bucket.dataOnly) cur.dataOnly = false
+      if (bucket.dataOnly) {
+        if (cur.dataOnly) cur.totalAmount += bucket.amount
+      } else {
+        cur.totalAmount += bucket.amount
+        cur.dataOnly = false
+      }
       byCode.set(bucket.code, cur)
     }
   }
