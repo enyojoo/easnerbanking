@@ -53,13 +53,22 @@
     "react-dom": "19.2.3",
     "glob": "^13.0.6",
     "rimraf": "^5.0.10",
-    "expo": "~56.0.4",
-    "expo-constants": "56.0.15",
+    "react-native-quick-base64": "3.0.0",
+    "expo": "56.0.5",
+    "@expo/metro-runtime": "56.0.13",
+    "expo-background-task": "56.0.15",
+    "expo-dev-client": "56.0.16",
+    "expo-image-manipulator": "56.0.15",
+    "expo-image-picker": "56.0.14",
+    "expo-notifications": "56.0.14",
+    "expo-sharing": "56.0.14",
+    "expo-task-manager": "56.0.15",
+    "expo-constants": "56.0.16",
     "expo-auth-session": {
-      "expo-constants": "56.0.15"
+      "expo-constants": "56.0.16"
     },
     "expo-linking": {
-      "expo-constants": "56.0.15"
+      "expo-constants": "56.0.16"
     },
     "easner-mobile": {
       "react": "19.2.3",
