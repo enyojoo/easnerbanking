@@ -1,7 +1,7 @@
 "use client"
 
-import { Suspense, useCallback } from "react"
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { Suspense, useEffect, useState } from "react"
+import { usePathname, useSearchParams } from "next/navigation"
 import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layout"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
@@ -29,21 +29,26 @@ function isPlatformControlTab(v: string | null): v is PlatformControlTab {
 const TAB_CONTENT_CLASS = "mt-0 focus-visible:outline-none"
 
 function PlatformControlHubBody() {
-  const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const raw = normalizeTab(searchParams.get("tab"))
-  const tab: PlatformControlTab = isPlatformControlTab(raw) ? raw : "platform"
+  const validTab: PlatformControlTab = isPlatformControlTab(raw) ? raw : "platform"
+  const [activeTab, setActiveTab] = useState<PlatformControlTab>(validTab)
 
-  const onTabChange = useCallback(
-    (value: string) => {
-      if (!isPlatformControlTab(value)) return
-      const next = new URLSearchParams(searchParams.toString())
-      next.set("tab", value)
-      router.replace(`${pathname}?${next.toString()}`, { scroll: false })
-    },
-    [pathname, router, searchParams],
-  )
+  useEffect(() => {
+    setActiveTab(validTab)
+  }, [validTab])
+
+  const onTabChange = (value: string) => {
+    if (!isPlatformControlTab(value)) return
+    if (value === activeTab) return
+    setActiveTab(value)
+    const next = new URLSearchParams(searchParams.toString())
+    next.set("tab", value)
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", `${pathname}?${next.toString()}`)
+    }
+  }
 
   return (
     <OfficeDashboardLayout>
@@ -55,7 +60,7 @@ function PlatformControlHubBody() {
           </p>
         </div>
 
-        <Tabs value={tab} onValueChange={onTabChange} className="space-y-6">
+        <Tabs value={activeTab} onValueChange={onTabChange} className="space-y-6">
           <TabsList className="flex flex-wrap h-auto gap-1 justify-start">
             <TabsTrigger value="platform">Platform</TabsTrigger>
             <TabsTrigger value="rates">P2P rates</TabsTrigger>
