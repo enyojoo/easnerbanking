@@ -92,16 +92,26 @@ export interface PricingQuoteTotals {
 export interface PayoutQuote {
   receiveAmount: number
   receiveCurrency: string
+  customerPrincipal: number
   sendAmount: number
   sendCurrency: string
   totalDebited: number
+  channelCost: number
+  marginAmount: number
   channelId?: string
   noah: {
     totalFee: number
     cryptoAuthorizedAmount: string
+    noahFloor: string
+    noahSendAmount: string
     cryptoCurrency: string
     formSessionId: string
     rate?: number
+    noahMid?: number
+    marginCaptureMode?: 'surplus_send' | 'split_debit'
+    channelCost?: number
+    marginAmount?: number
+    customerPrincipal?: number
   }
   easner: PricingQuote
   pricingQuoteId: string
@@ -977,6 +987,13 @@ export const noahService = {
     /** Same ETID as review screen; idempotency for PIN retry. */
     reservedDebitEtid?: string
     reviewSnapshot?: Record<string, unknown>
+    noahFloor?: string
+    noahSendAmount?: string
+    totalDebited?: string
+    marginAmount?: string
+    marginCaptureMode?: 'surplus_send' | 'split_debit'
+    customerRate?: number
+    noahMid?: number
   }): Promise<NoahTransfer> {
     const session = await requireAuthSession()
     const scopeHeaders = await getNoahScopeHeaders()
@@ -1004,6 +1021,13 @@ export const noahService = {
         ...(transferData.paymentPurpose ? { paymentPurpose: transferData.paymentPurpose } : {}),
         ...(etid ? { reservedDebitEtid: etid } : {}),
         ...(transferData.reviewSnapshot ? { reviewSnapshot: transferData.reviewSnapshot } : {}),
+        ...(transferData.noahFloor ? { noahFloor: transferData.noahFloor } : {}),
+        ...(transferData.noahSendAmount ? { noahSendAmount: transferData.noahSendAmount } : {}),
+        ...(transferData.totalDebited ? { totalDebited: transferData.totalDebited } : {}),
+        ...(transferData.marginAmount ? { marginAmount: transferData.marginAmount } : {}),
+        ...(transferData.marginCaptureMode ? { marginCaptureMode: transferData.marginCaptureMode } : {}),
+        ...(transferData.customerRate != null ? { customerRate: transferData.customerRate } : {}),
+        ...(transferData.noahMid != null ? { noahMid: transferData.noahMid } : {}),
       }),
     })
 

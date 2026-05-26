@@ -51,6 +51,13 @@ export async function POST(request: Request) {
         idempotencyKey?: string
         reservedDebitEtid?: string
         reviewSnapshot?: Record<string, unknown>
+        noahFloor?: string
+        noahSendAmount?: string
+        totalDebited?: string
+        marginAmount?: string
+        marginCaptureMode?: "surplus_send" | "split_debit"
+        customerRate?: number
+        noahMid?: number
       }
     | null
 
@@ -174,6 +181,13 @@ export async function POST(request: Request) {
               formSessionId,
               cryptoAuthorizedAmount,
               ...(channelId ? { channelId } : {}),
+              ...(body?.noahFloor ? { noahFloor: String(body.noahFloor) } : {}),
+              ...(body?.noahSendAmount ? { noahSendAmount: String(body.noahSendAmount) } : {}),
+              ...(body?.totalDebited ? { totalDebited: String(body.totalDebited) } : {}),
+              ...(body?.marginAmount ? { marginAmount: String(body.marginAmount) } : {}),
+              ...(body?.marginCaptureMode ? { marginCaptureMode: body.marginCaptureMode } : {}),
+              ...(body?.customerRate != null ? { customerRate: Number(body.customerRate) } : {}),
+              ...(body?.noahMid != null ? { noahMid: Number(body.noahMid) } : {}),
             },
           }
         : {}),

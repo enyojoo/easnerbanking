@@ -6,7 +6,12 @@ import {
   pendingGlobalPayoutProviderTransactionId,
   settlementWalletCurrencyForNoahCrypto,
 } from "@/lib/noah/global-payout-ledger"
+import {
+  assertMarginCaptureModeReady,
+  getGlobalPayoutMarginCaptureMode,
+} from "@/lib/noah/margin-capture-mode"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
+import { resolvePooledSolanaSourceAddress } from "@/lib/liquidity/platform-pool"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { generateTransactionId } from "@/lib/transaction-id"
 import {
@@ -27,8 +32,22 @@ import {
 import { createTurnkeySend } from "@/lib/turnkey/send"
 import { getTurnkeyDepositAddressesForContext } from "@/lib/wallet/turnkey-deposit-addresses"
 import { resolveTurnkeyAddressForNoahPair } from "@/lib/wallet/resolve-wallet-owner"
+import type { GlobalPayoutMarginCaptureMode } from "@easner/shared"
 
 const NOAH_OFFRAMP_NETWORK = "Solana"
+
+export type QuotedPayoutSession = {
+  formSessionId: string
+  cryptoAuthorizedAmount: string
+  channelId?: string
+  noahFloor?: string
+  noahSendAmount?: string
+  totalDebited?: string
+  marginAmount?: string
+  marginCaptureMode?: GlobalPayoutMarginCaptureMode
+  customerRate?: number
+  noahMid?: number
+}
 
 export type ExecuteTurnkeyOfframpPayoutInput = {
   admin: SupabaseClient
@@ -46,12 +65,7 @@ export type ExecuteTurnkeyOfframpPayoutInput = {
   idempotencyKey?: string
   reviewSnapshot?: GlobalPayoutReviewSnapshot
   sendNote?: string
-  /** From `/api/noah/payouts/quote` — skip duplicate Noah prepare at execute. */
-  quotedSession?: {
-    formSessionId: string
-    cryptoAuthorizedAmount: string
-    channelId?: string
-  }
+  quotedSession?: QuotedPayoutSession
 }
 
 export type ExecuteTurnkeyOfframpPayoutResult =
@@ -73,6 +87,11 @@ function assetForCrypto(cryptoCurrency: string): "USDC" | "EURC" {
   const c = cryptoCurrency.trim().toUpperCase()
   if (c.includes("EUR")) return "EURC"
   return "USDC"
+}
+
+function parsePositiveAmount(raw: string | undefined): number | null {
+  const n = Number.parseFloat(String(raw ?? ""))
+  return Number.isFinite(n) && n > 0 ? n : null
 }
 
 async function readAvailableBalance(
@@ -156,9 +175,10 @@ export async function executeTurnkeyOfframpPayout(
   const easnerTransactionId = generateTransactionId()
   const walletCurrency = settlementWalletCurrencyForNoahCrypto(cryptoCurrency) as "USD" | "EUR"
 
-  const quotedFormSessionId = String(input.quotedSession?.formSessionId || "").trim()
-  const quotedCryptoAuthorized = String(input.quotedSession?.cryptoAuthorizedAmount || "").trim()
-  const quotedChannelId = String(input.quotedSession?.channelId || channelId || "").trim()
+  const quoted = input.quotedSession
+  const quotedFormSessionId = String(quoted?.formSessionId || "").trim()
+  const quotedCryptoAuthorized = String(quoted?.cryptoAuthorizedAmount || "").trim()
+  const quotedChannelId = String(quoted?.channelId || channelId || "").trim()
 
   let formSessionId = quotedFormSessionId
   let cryptoAuthorizedAmount = quotedCryptoAuthorized
@@ -188,10 +208,29 @@ export async function executeTurnkeyOfframpPayout(
     return { ok: false, error: "Could not prepare payout session. Go back and get a fresh quote." }
   }
 
-  const cryptoAmount = Number.parseFloat(cryptoAuthorizedAmount)
-  if (!Number.isFinite(cryptoAmount) || cryptoAmount <= 0) {
+  const noahFloor = parsePositiveAmount(quoted?.noahFloor) ?? parsePositiveAmount(cryptoAuthorizedAmount)
+  if (noahFloor == null) {
     return { ok: false, error: "Invalid crypto authorized amount from prepare." }
   }
+
+  const marginCaptureMode =
+    quoted?.marginCaptureMode ?? getGlobalPayoutMarginCaptureMode()
+  try {
+    await assertMarginCaptureModeReady(admin, marginCaptureMode, walletCurrency)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return { ok: false, error: msg }
+  }
+
+  const totalDebited =
+    parsePositiveAmount(quoted?.totalDebited) ??
+    parsePositiveAmount(quoted?.noahSendAmount) ??
+    noahFloor
+  const marginAmount = parsePositiveAmount(quoted?.marginAmount) ?? Math.max(0, totalDebited - noahFloor)
+  const noahSendAmount =
+    marginCaptureMode === "split_debit"
+      ? noahFloor
+      : (parsePositiveAmount(quoted?.noahSendAmount) ?? totalDebited)
 
   const { available, err: balErr } = await readAvailableBalance(admin, {
     businessId,
@@ -199,7 +238,7 @@ export async function executeTurnkeyOfframpPayout(
     currency: walletCurrency,
   })
   if (balErr) return { ok: false, error: "insufficient_balance" }
-  if (available < cryptoAmount) return { ok: false, error: "insufficient_balance" }
+  if (available < totalDebited) return { ok: false, error: "insufficient_balance" }
 
   const sourceAddress = (
     await resolveTurnkeyAddressForNoahPair(admin, ctx, cryptoCurrency, NOAH_OFFRAMP_NETWORK)
@@ -215,10 +254,7 @@ export async function executeTurnkeyOfframpPayout(
     return { ok: false, error: "Your stablecoin deposit account is not ready yet. Try again shortly." }
   }
 
-  const cryptoTrigger = pickTriggerCryptoAmount(
-    cryptoAuthorizedAmount,
-    cryptoAuthorizedAmount,
-  )
+  const cryptoTrigger = pickTriggerCryptoAmount(cryptoAuthorizedAmount, cryptoAuthorizedAmount)
 
   let workflowRaw: Record<string, unknown>
   try {
@@ -264,6 +300,13 @@ export async function executeTurnkeyOfframpPayout(
     easner_transaction_id: easnerTransactionId,
     form_session_id: formSessionId,
     crypto_authorized_amount: cryptoAuthorizedAmount,
+    noah_floor: noahFloor,
+    noah_send_amount: noahSendAmount,
+    total_debited: totalDebited,
+    margin_amount: marginAmount,
+    margin_capture_mode: marginCaptureMode,
+    ...(quoted?.customerRate != null ? { customer_rate: quoted.customerRate } : {}),
+    ...(quoted?.noahMid != null ? { noah_mid: quoted.noahMid } : {}),
     crypto_asset: cryptoCurrency,
     fiat_currency: fiatCurrency,
     country_code: countryCode,
@@ -286,7 +329,7 @@ export async function executeTurnkeyOfframpPayout(
     provider: "noah",
     providerTransactionId: pendingProviderTransactionId(easnerPayoutId),
     status: "pending",
-    amount: cryptoAmount,
+    amount: totalDebited,
     currency: walletCurrency,
     direction: "out",
     payload: { workflowRaw, phase: "awaiting_chain_deposit" },
@@ -304,16 +347,41 @@ export async function executeTurnkeyOfframpPayout(
       asset,
       chain: "solana",
       destinationAddress,
-      amount: cryptoAmount,
+      amount: noahSendAmount,
       settlementPollTimeoutMs: 0,
       globalPayout: {
         easnerPayoutId,
         noahWorkflowId,
         formSessionId,
+        walletDebitAmount: totalDebited,
       },
     })
     turnkeySendId = send.providerTransactionId
     turnkeySendStatus = send.status
+
+    let marginTurnkeySendId: string | undefined
+    if (marginCaptureMode === "split_debit" && marginAmount > 0.000_001) {
+      const poolAddress = await resolvePooledSolanaSourceAddress(admin, { ledgerCurrency: walletCurrency })
+      if (!poolAddress) {
+        throw new Error("Platform liquidity pool address is not configured for margin routing.")
+      }
+      const marginSend = await createTurnkeySend(admin, {
+        ctx,
+        asset,
+        chain: "solana",
+        destinationAddress: poolAddress,
+        amount: marginAmount,
+        settlementPollTimeoutMs: 0,
+        globalPayout: {
+          easnerPayoutId,
+          noahWorkflowId,
+          formSessionId,
+          walletDebitAmount: 0,
+          marginLeg: true,
+        },
+      })
+      marginTurnkeySendId = marginSend.providerTransactionId
+    }
 
     await admin
       .from("transactions")
@@ -323,6 +391,7 @@ export async function executeTurnkeyOfframpPayout(
           turnkey_send_id: send.providerTransactionId,
           turnkey_tx_hash: send.txHash,
           turnkey_send_status: send.status,
+          ...(marginTurnkeySendId ? { margin_turnkey_send_id: marginTurnkeySendId } : {}),
         },
         updated_at: new Date().toISOString(),
       })
@@ -369,6 +438,9 @@ export async function executeTurnkeyOfframpPayout(
     formSessionIdPrefix: formSessionId.slice(0, 12),
     easnerPayoutId,
     executionModel: "turnkey_workflow",
+    marginCaptureMode,
+    totalDebited,
+    noahSendAmount,
     turnkeySendId,
   })
 

@@ -7,7 +7,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CommonActions, useFocusEffect } from '@react-navigation/native'
 import { useQueryClient } from '@tanstack/react-query'
 import {
-  computeBalancePayoutExchangeFee,
   findPayoutFieldsSchema,
   formatMoneyDisplay,
   formatPayoutArrivalHint,
@@ -45,7 +44,7 @@ import { hasPin } from '../../lib/pinAuth'
 import { analytics } from '../../lib/analytics'
 import type { PricingQuote } from '../../lib/noahService'
 import { noahService } from '../../lib/noahService'
-import type { PayoutPrepareSession } from '../../hooks/executeBalanceSend'
+import type { PayoutPrepareSession } from '../lib/payoutPrepareSession'
 import { resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
 import { isMobileMoneyRecipient } from '../../lib/recipientPayoutPreview'
 import { useEasenetRecipientHydration } from '../../hooks/useEasenetRecipientHydration'
@@ -57,6 +56,8 @@ import {
   isStashedPayoutQuoteFresh,
   peekSendPayoutQuote,
   clearSendPayoutQuote,
+  payoutDisplayAmountsFromQuote,
+  payoutPrepareSessionFromQuote,
 } from '../../lib/sendFlowPayoutQuote'
 import { useQuoteCountdown } from '../../hooks/useQuoteCountdown'
 
@@ -146,23 +147,19 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     }
     const useStashed = stashed && isStashedPayoutQuoteFresh(meta)
     if (useStashed) {
-      const easnerFeeAmt =
-        stashed.easner.pricingTotals?.total_easner_fee ?? stashed.easner.totalFeeAmount ?? 0
+      const display = payoutDisplayAmountsFromQuote(stashed)
+      const easnerFeeAmt = display.marginAmount
       return {
-        calculatedSendingAmount: amountScreenSendAmount,
+        calculatedSendingAmount: display.youSendAmount,
         calculatedFeeAmount: easnerFeeAmt,
-        calculatedTotalAmount: stashed.totalDebited,
+        calculatedTotalAmount: display.totalDebited,
         noahFee: stashed.noah.totalFee,
         easnerFee: easnerFeeAmt,
         pricingQuoteId: stashed.pricingQuoteId,
         pricingQuoteExpiry: stashed.expiresAt,
         pricingQuoteResult: stashed.easner,
-        payoutSession: {
-          formSessionId: stashed.noah.formSessionId,
-          cryptoAuthorizedAmount: stashed.noah.cryptoAuthorizedAmount,
-          cryptoCurrency: stashed.noah.cryptoCurrency,
-          ...(stashed.channelId ? { channelId: stashed.channelId } : {}),
-        },
+        payoutSession: payoutPrepareSessionFromQuote(stashed),
+        quoteDisplay: display,
         quoteLoading: false,
         quoteError: null as string | null,
       }
@@ -177,6 +174,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       pricingQuoteExpiry: params.pricingQuoteExpiry as string | undefined,
       pricingQuoteResult: (params.pricingQuoteResult ?? null) as PricingQuote | null,
       payoutSession: undefined as PayoutPrepareSession | undefined,
+      quoteDisplay: null as ReturnType<typeof payoutDisplayAmountsFromQuote> | null,
       quoteLoading: false,
       quoteError: null as string | null,
     }
@@ -191,6 +189,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     pricingQuoteExpiry,
     pricingQuoteResult,
     payoutSession,
+    quoteDisplay,
     quoteLoading,
     quoteError,
   } = pricing
@@ -225,35 +224,16 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     !easetagUi &&
     selectedBalanceCurrency.toUpperCase() !== receiveCurrency.toUpperCase()
   const customerRate = useMemo(() => {
+    if (quoteDisplay?.customerRate && quoteDisplay.customerRate > 0) {
+      return quoteDisplay.customerRate
+    }
     const stashed = peekSendPayoutQuote()
     const rate = stashed?.noah?.rate ?? pricingQuoteResult?.providerRate ?? 0
     return Number.isFinite(rate) && rate > 0 ? rate : 0
-  }, [pricingQuoteResult?.providerRate, payoutSession?.formSessionId, calculatedTotalAmount])
-  const youSendAmount = useMemo(() => {
-    if (amountEntryMode === 'send' && amountScreenSendAmount > 0) {
-      return amountScreenSendAmount
-    }
-    if (!hasFx) return calculatedSendingAmount
-    if (customerRate > 0) return quotedReceiveAmount / customerRate
-    return calculatedSendingAmount
-  }, [
-    amountEntryMode,
-    amountScreenSendAmount,
-    hasFx,
-    customerRate,
-    quotedReceiveAmount,
-    calculatedSendingAmount,
-  ])
-  const processingFee = easnerFee || calculatedFeeAmount
-  const exchangeFee = useMemo(
-    () =>
-      computeBalancePayoutExchangeFee(
-        calculatedTotalAmount,
-        youSendAmount,
-        processingFee,
-      ),
-    [calculatedTotalAmount, youSendAmount, processingFee],
-  )
+  }, [quoteDisplay?.customerRate, pricingQuoteResult?.providerRate])
+  const youSendAmount = quoteDisplay?.youSendAmount ?? calculatedSendingAmount
+  const processingFee = quoteDisplay?.marginAmount ?? easnerFee ?? calculatedFeeAmount
+  const exchangeFee = quoteDisplay?.exchangeFee ?? 0
   const transferMethod = recipient
     ? getGlobalPayoutTransferMethod({
         currency: receiveCurrency,
@@ -281,24 +261,19 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       const stashed = peekSendPayoutQuote()
       if (stashed) {
         setQuotedReceiveAmount(stashed.receiveAmount)
-        const easnerFeeAmt =
-          stashed.easner.pricingTotals?.total_easner_fee ?? stashed.easner.totalFeeAmount ?? 0
+        const display = payoutDisplayAmountsFromQuote(stashed)
         setPricing((prev) => ({
           ...prev,
-          calculatedSendingAmount: amountScreenSendAmount,
-          calculatedFeeAmount: easnerFeeAmt,
-          calculatedTotalAmount: stashed.totalDebited,
+          calculatedSendingAmount: display.youSendAmount,
+          calculatedFeeAmount: display.marginAmount,
+          calculatedTotalAmount: display.totalDebited,
           noahFee: stashed.noah.totalFee,
-          easnerFee: easnerFeeAmt,
+          easnerFee: display.marginAmount,
           pricingQuoteId: stashed.pricingQuoteId,
           pricingQuoteExpiry: stashed.expiresAt,
           pricingQuoteResult: stashed.easner,
-          payoutSession: {
-            formSessionId: stashed.noah.formSessionId,
-            cryptoAuthorizedAmount: stashed.noah.cryptoAuthorizedAmount,
-            cryptoCurrency: stashed.noah.cryptoCurrency,
-            ...(stashed.channelId ? { channelId: stashed.channelId } : {}),
-          },
+          payoutSession: payoutPrepareSessionFromQuote(stashed),
+          quoteDisplay: display,
           quoteLoading: false,
           quoteError: null,
         }))
@@ -322,26 +297,19 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
         })
         if (cancelled) return
         setQuotedReceiveAmount(pq.receiveAmount)
-        const easnerFeeAmt =
-          pq.easner.pricingTotals?.total_easner_fee ??
-          pq.easner.totalFeeAmount ??
-          0
+        const display = payoutDisplayAmountsFromQuote(pq)
         setPricing((prev) => ({
           ...prev,
-          calculatedSendingAmount: amountScreenSendAmount,
+          calculatedSendingAmount: display.youSendAmount,
           noahFee: pq.noah.totalFee,
-          easnerFee: easnerFeeAmt,
-          calculatedFeeAmount: easnerFeeAmt,
-          calculatedTotalAmount: pq.totalDebited,
+          easnerFee: display.marginAmount,
+          calculatedFeeAmount: display.marginAmount,
+          calculatedTotalAmount: display.totalDebited,
           pricingQuoteId: pq.pricingQuoteId,
           pricingQuoteExpiry: pq.expiresAt,
           pricingQuoteResult: pq.easner,
-          payoutSession: {
-            formSessionId: pq.noah.formSessionId,
-            cryptoAuthorizedAmount: pq.noah.cryptoAuthorizedAmount,
-            cryptoCurrency: pq.noah.cryptoCurrency,
-            ...(pq.channelId ? { channelId: pq.channelId } : {}),
-          },
+          payoutSession: payoutPrepareSessionFromQuote(pq),
+          quoteDisplay: display,
           quoteLoading: false,
           quoteError: null,
         }))
@@ -379,6 +347,12 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                   receive_currency: receiveCurrency,
                   transfer_method: transferMethod,
                   processing_time: processingTime,
+                  ...(processingFee > 0 ? { margin_amount: processingFee, easner_fee: processingFee } : {}),
+                  ...(exchangeFee > 0 ? { channel_cost: exchangeFee } : {}),
+                  ...(payoutSession?.noahFloor ? { noah_floor: Number(payoutSession.noahFloor) } : {}),
+                  ...(payoutSession?.noahSendAmount
+                    ? { noah_send_amount: Number(payoutSession.noahSendAmount) }
+                    : {}),
                 }
               : undefined
 

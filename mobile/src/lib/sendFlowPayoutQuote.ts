@@ -1,4 +1,5 @@
 import type { PayoutQuote } from './noahService'
+import type { PayoutPrepareSession } from './payoutPrepareSession'
 
 /** Inline — avoid `@easner/shared` barrel (pulls flag assets into Metro on EAS). */
 function normalizeReceiveForCurrency(currency: string, amount: number): number {
@@ -86,4 +87,36 @@ export async function ensureSendPayoutQuoteStashed(
     })
 
   return inflightQuote
+}
+
+export function payoutPrepareSessionFromQuote(quote: PayoutQuote): PayoutPrepareSession {
+  return {
+    formSessionId: quote.noah.formSessionId,
+    cryptoAuthorizedAmount: quote.noah.cryptoAuthorizedAmount,
+    cryptoCurrency: quote.noah.cryptoCurrency,
+    ...(quote.channelId ? { channelId: quote.channelId } : {}),
+    noahFloor: quote.noah.noahFloor,
+    noahSendAmount: quote.noah.noahSendAmount,
+    totalDebited: String(quote.totalDebited),
+    marginAmount: String(quote.marginAmount),
+    ...(quote.noah.marginCaptureMode ? { marginCaptureMode: quote.noah.marginCaptureMode } : {}),
+    ...(quote.noah.rate != null ? { customerRate: quote.noah.rate } : {}),
+    ...(quote.noah.noahMid != null ? { noahMid: quote.noah.noahMid } : {}),
+  }
+}
+
+export function payoutDisplayAmountsFromQuote(quote: PayoutQuote): {
+  youSendAmount: number
+  exchangeFee: number
+  marginAmount: number
+  totalDebited: number
+  customerRate: number
+} {
+  return {
+    youSendAmount: quote.customerPrincipal,
+    exchangeFee: quote.channelCost,
+    marginAmount: quote.marginAmount,
+    totalDebited: quote.totalDebited,
+    customerRate: quote.noah.rate ?? quote.easner.providerRate ?? 0,
+  }
 }

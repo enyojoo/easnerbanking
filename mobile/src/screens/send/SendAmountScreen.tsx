@@ -1317,7 +1317,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 const transactionId = generateTransactionId()
                 if (stashedQuote) {
                   receiveAmountValue = stashedQuote.receiveAmount
-                  calculatedSendingAmount = stashedQuote.sendAmount
+                  calculatedSendingAmount =
+                    stashedQuote.customerPrincipal > 0
+                      ? stashedQuote.customerPrincipal
+                      : stashedQuote.sendAmount
                   calculatedTotalAmount = stashedQuote.totalDebited
                 }
 

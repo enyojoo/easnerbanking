@@ -1,4 +1,4 @@
-import { computeBalancePayoutExchangeFee, payoutReceiveAmountsMatch } from "@easner/shared"
+import { payoutReceiveAmountsMatch } from "@easner/shared"
 import type { PayoutQuoteResult } from "@/lib/noah/payout-quote"
 import type { SendFlowState } from "@/lib/send-flow-session"
 
@@ -6,27 +6,20 @@ export function mapPayoutQuoteToFlowState(
   state: SendFlowState,
   q: PayoutQuoteResult,
 ): SendFlowState {
-  const easnerFee =
-    q.easner.pricingTotals?.total_easner_fee ?? q.easner.totalFeeAmount ?? 0
-  const youSendAtMid =
-    q.noah.rate && q.noah.rate > 0 ? q.receiveAmount / q.noah.rate : state.sendAmount
-  const exchangeFeeInBalance = computeBalancePayoutExchangeFee(
-    q.totalDebited,
-    youSendAtMid,
-    easnerFee,
-  )
+  const easnerFee = q.marginAmount
+  const channelFee = q.channelCost
   return {
     ...state,
     amount: q.receiveAmount,
-    sendAmount: q.sendAmount,
+    sendAmount: q.customerPrincipal,
     totalAmount: q.totalDebited,
     payoutQuote: {
       receiveAmount: q.receiveAmount,
-      sendAmount: q.sendAmount,
+      sendAmount: q.customerPrincipal,
       sendCurrency: q.sendCurrency,
       totalDebited: q.totalDebited,
       midRate: q.noah.rate,
-      noahFee: exchangeFeeInBalance,
+      noahFee: channelFee,
       noahFeeCurrency: q.sendCurrency,
       easnerFee,
       easnerFeeCurrency: q.sendCurrency,
@@ -36,6 +29,13 @@ export function mapPayoutQuoteToFlowState(
       channelId: q.channelId,
       pricingQuoteId: q.pricingQuoteId,
       expiresAt: q.expiresAt,
+      noahFloor: q.noah.noahFloor,
+      noahSendAmount: q.noah.noahSendAmount,
+      marginAmount: q.marginAmount,
+      channelCost: q.channelCost,
+      customerPrincipal: q.customerPrincipal,
+      marginCaptureMode: q.noah.marginCaptureMode,
+      noahMid: q.noah.noahMid,
     },
   }
 }

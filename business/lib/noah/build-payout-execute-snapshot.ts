@@ -52,5 +52,12 @@ export function normalizePayoutReviewSnapshot(
     processing_time: String(
       o.processing_time || getGlobalPayoutProcessingTime(transferMethod),
     ).trim(),
+    ...(Number.isFinite(Number(o.margin_amount)) ? { margin_amount: Number(o.margin_amount) } : {}),
+    ...(Number.isFinite(Number(o.easner_fee)) ? { easner_fee: Number(o.easner_fee) } : {}),
+    ...(Number.isFinite(Number(o.noah_floor)) ? { noah_floor: Number(o.noah_floor) } : {}),
+    ...(Number.isFinite(Number(o.noah_send_amount))
+      ? { noah_send_amount: Number(o.noah_send_amount) }
+      : {}),
+    ...(Number.isFinite(Number(o.channel_cost)) ? { channel_cost: Number(o.channel_cost) } : {}),
   }
 }

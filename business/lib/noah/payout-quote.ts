@@ -1,7 +1,12 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { getNoahEurCryptoTicker, getNoahUsdCryptoTicker } from "@/lib/noah/config"
 import { findNoahRate, isNoahRateFresh, listNoahRates } from "@/lib/fx/noah-rates"
-import { normalizePayoutReceiveAmount, normalizePayoutReceiveAmountForCurrency } from "@easner/shared"
+import {
+  computeGlobalPayoutPricing,
+  normalizeGlobalPayoutQuoteReceiveAmount,
+  normalizePayoutReceiveAmount,
+  normalizePayoutReceiveAmountForCurrency,
+} from "@easner/shared"
 import {
   prepareSellFromRecipientRow,
   resolveRecipientPayoutCountry,
@@ -10,7 +15,7 @@ import {
 } from "@/lib/terminal/recipient-sell-prepare"
 import { NoProviderForCorridorError, selectProviderForCorridor } from "@/lib/payout-providers"
 import { mapNoahPrepareError } from "@/lib/noah/noah-prepare-errors"
-import { seedQuoteReceiveForSendBudget } from "@/lib/noah/payout-quote-send-budget"
+import { getGlobalPayoutMarginCaptureMode } from "@/lib/noah/margin-capture-mode"
 
 /** Easner fee slice on payout quotes (Noah prepare is authoritative; no DB pricing engine). */
 export type EasnerPayoutQuoteSlice = {
@@ -36,29 +41,33 @@ export type EasnerPayoutQuoteSlice = {
 export type PayoutQuoteResult = {
   receiveAmount: number
   receiveCurrency: string
+  /** Customer FX principal at margined rate (you-send box). */
+  customerPrincipal: number
   sendAmount: number
   sendCurrency: string
   totalDebited: number
+  channelCost: number
+  marginAmount: number
   channelId?: string
   noah: {
     totalFee: number
-    /** Fiat destination currency for TotalFee from Noah prepare. */
     feeCurrency: string
     cryptoAuthorizedAmount: string
+    noahFloor: string
+    noahSendAmount: string
     cryptoCurrency: string
     formSessionId: string
-    /** Customer-facing destination per 1 source (`noah_rates.rate`, margin-applied). */
     rate?: number
-    /** Raw Noah mid from sync (`noah_rates.noah_mid`). */
     noahMid?: number
-    /** All-in destination per 1 source at this ticket (`receive / totalDebited`). */
     effectiveRate?: number
+    marginCaptureMode: "surplus_send" | "split_debit"
+    channelCost: number
+    marginAmount: number
+    customerPrincipal: number
   }
   easner: EasnerPayoutQuoteSlice
-  /** Empty when no persisted Easner quote (apply/validate not used). */
   pricingQuoteId: string
   expiresAt: string
-  /** Execute path for balance sends (Standard Model). Quote FormSessionID is not durable. */
   executionModel: "turnkey_workflow"
 }
 
@@ -70,10 +79,21 @@ function buildEasnerSlice(params: {
   destinationCurrency: string
   receiveAmount: number
   providerRate: number
+  marginAmount: number
+  channelCost: number
 }): EasnerPayoutQuoteSlice {
-  const { sourceAmount, sourceCurrency, destinationCurrency, receiveAmount, providerRate } = params
+  const {
+    sourceAmount,
+    sourceCurrency,
+    destinationCurrency,
+    receiveAmount,
+    providerRate,
+    marginAmount,
+    channelCost,
+  } = params
   const effectiveRate = providerRate > 0 ? providerRate : 1
   const expiresAt = new Date(Date.now() + QUOTE_TTL_MS).toISOString()
+  const totalUserFee = marginAmount + channelCost
   return {
     quoteId: "",
     expiresAt,
@@ -82,14 +102,14 @@ function buildEasnerSlice(params: {
     destinationAmount: sourceAmount * effectiveRate,
     fxMarkupBps: 0,
     payinFeeAmount: 0,
-    payoutFeeAmount: 0,
-    totalFeeAmount: 0,
+    payoutFeeAmount: channelCost,
+    totalFeeAmount: totalUserFee,
     sourceAmount,
     sourceCurrency,
     destinationCurrency,
     pricingTotals: {
-      total_easner_fee: 0,
-      total_user_fee: 0,
+      total_easner_fee: marginAmount,
+      total_user_fee: totalUserFee,
       total_recipient_amount: receiveAmount,
     },
   }
@@ -108,16 +128,17 @@ export async function buildPayoutQuote(input: {
   recipient?: RecipientSellPrepareRow
   receiveFiatAmount: number
   sourceBalanceCurrency: string
-  /** When user entered send-side principal (USD/EUR); Noah total debited may exceed this. */
+  amountEntryMode?: "send" | "receive"
+  /** When user entered send-side principal (USD/EUR). */
   sendBudget?: number
-  /** Note → Reference (US/EUR); CA PaymentPurpose; Africa optional reference. */
   prepareOverrides?: SellPrepareOverrides
 }): Promise<PayoutQuoteResult> {
-  const receiveAmount = normalizePayoutReceiveAmount(Number(input.receiveFiatAmount))
-  if (!Number.isFinite(receiveAmount) || receiveAmount <= 0) {
+  const receiveAmountRaw = normalizePayoutReceiveAmount(Number(input.receiveFiatAmount))
+  if (!Number.isFinite(receiveAmountRaw) || receiveAmountRaw <= 0) {
     throw new Error("receiveFiatAmount must be positive.")
   }
 
+  const amountEntryMode = input.amountEntryMode === "send" ? "send" : "receive"
   const sendBudget =
     input.sendBudget != null && Number.isFinite(input.sendBudget) && input.sendBudget > 0
       ? input.sendBudget
@@ -189,18 +210,27 @@ export async function buildPayoutQuote(input: {
     dbRow = findNoahRate(dbRates, sourceBalanceCurrency, receiveCurrency)
   }
 
-  let quoteReceiveAmount = receiveAmount
-  if (sendBudget != null) {
-    quoteReceiveAmount = seedQuoteReceiveForSendBudget({
-      sendBudget,
-      sourceCurrency: sourceBalanceCurrency,
-      receiveCurrency,
-      clientReceiveAmount: receiveAmount,
-      dbRate: dbRow && isNoahRateFresh(dbRow) ? dbRow.rate : null,
-    })
-  } else {
-    quoteReceiveAmount = normalizePayoutReceiveAmountForCurrency(receiveCurrency, quoteReceiveAmount)
+  let providerRate = 1
+  let noahMid: number | undefined
+  if (sourceBalanceCurrency !== receiveCurrency) {
+    if (dbRow && isNoahRateFresh(dbRow)) {
+      providerRate = dbRow.rate
+      noahMid = dbRow.noah_mid
+    } else {
+      throw new Error(
+        `Exchange rate for ${sourceBalanceCurrency} → ${receiveCurrency} is unavailable. Try again shortly.`,
+      )
+    }
   }
+
+  const quoteReceiveAmount = normalizeGlobalPayoutQuoteReceiveAmount({
+    amountEntryMode,
+    receiveFiatAmount: receiveAmountRaw,
+    sendBudget,
+    customerRate: providerRate,
+    receiveCurrency,
+    normalizeReceive: normalizePayoutReceiveAmountForCurrency,
+  })
 
   let prep: Awaited<ReturnType<typeof prepareSellFromRecipientRow>>["prep"]
   let channelId: string | undefined
@@ -238,54 +268,76 @@ export async function buildPayoutQuote(input: {
     throw new Error("Noah prepare did not return a form session or crypto authorization.")
   }
 
-  const sendAmount = Number.parseFloat(cryptoAuthorizedAmount)
-  if (!Number.isFinite(sendAmount) || sendAmount <= 0) {
+  const noahFloor = Number.parseFloat(cryptoAuthorizedAmount)
+  if (!Number.isFinite(noahFloor) || noahFloor <= 0) {
     throw new Error("Invalid crypto authorized amount from Noah prepare.")
   }
 
   const noahFee = Number.parseFloat(String(prep.totalFee || "0")) || 0
+  const marginCaptureMode = getGlobalPayoutMarginCaptureMode()
 
-  let providerRate = 1
-  let noahMid: number | undefined
-  if (sourceBalanceCurrency !== receiveCurrency) {
-    if (dbRow && isNoahRateFresh(dbRow)) {
-      providerRate = dbRow.rate
-      noahMid = dbRow.noah_mid
-    } else if (sendAmount > 0) {
-      providerRate = quoteReceiveAmount / sendAmount
-    } else {
-      throw new Error(
-        `Exchange rate for ${sourceBalanceCurrency} → ${receiveCurrency} is unavailable. Try again shortly.`,
-      )
-    }
-  }
+  const pricing =
+    sourceBalanceCurrency === receiveCurrency
+      ? {
+          customerPrincipal: quoteReceiveAmount,
+          midNotional: quoteReceiveAmount,
+          marginAmount: 0,
+          channelCost: 0,
+          totalDebited: noahFloor,
+          noahSendAmount: noahFloor,
+          triggerAmount: noahFloor,
+          marginCaptureMode,
+          receiveAmount: quoteReceiveAmount,
+          customerRate: 1,
+          noahMid: 1,
+          noahFloor,
+        }
+      : computeGlobalPayoutPricing({
+          receiveAmount: quoteReceiveAmount,
+          customerRate: providerRate,
+          noahMid: noahMid!,
+          noahFloor,
+          marginCaptureMode,
+        })
 
   const easner = buildEasnerSlice({
-    sourceAmount: sendAmount,
+    sourceAmount: pricing.customerPrincipal,
     sourceCurrency: sourceBalanceCurrency,
     destinationCurrency: receiveCurrency,
     receiveAmount: quoteReceiveAmount,
     providerRate,
+    marginAmount: pricing.marginAmount,
+    channelCost: pricing.channelCost,
   })
 
-  const effectiveRate = sendAmount > 0 ? quoteReceiveAmount / sendAmount : providerRate
+  const effectiveRate =
+    pricing.totalDebited > 0 ? quoteReceiveAmount / pricing.totalDebited : providerRate
 
   return {
     receiveAmount: quoteReceiveAmount,
     receiveCurrency,
-    sendAmount,
+    customerPrincipal: pricing.customerPrincipal,
+    sendAmount: pricing.noahSendAmount,
     sendCurrency: sourceBalanceCurrency,
-    totalDebited: sendAmount,
+    totalDebited: pricing.totalDebited,
+    channelCost: pricing.channelCost,
+    marginAmount: pricing.marginAmount,
     channelId,
     noah: {
       totalFee: noahFee,
       feeCurrency: sourceBalanceCurrency,
       cryptoAuthorizedAmount,
+      noahFloor: cryptoAuthorizedAmount,
+      noahSendAmount: String(pricing.noahSendAmount),
       cryptoCurrency,
       formSessionId,
       rate: providerRate,
       ...(noahMid != null && noahMid > 0 ? { noahMid } : {}),
       effectiveRate,
+      marginCaptureMode,
+      channelCost: pricing.channelCost,
+      marginAmount: pricing.marginAmount,
+      customerPrincipal: pricing.customerPrincipal,
     },
     easner,
     pricingQuoteId: "",

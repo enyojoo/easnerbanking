@@ -197,7 +197,10 @@ function derivePayoutReview(
   }
 
   youSendAmount = youSendAmount ?? totalDebited
-  const exchangeFee = computeBalancePayoutExchangeFee(totalDebited, youSendAmount, processingFee)
+  const exchangeFee =
+    fromMeta?.exchange_fee && fromMeta.exchange_fee > 0
+      ? fromMeta.exchange_fee
+      : computeBalancePayoutExchangeFee(totalDebited, youSendAmount, processingFee)
 
   const transferMethod =
     fromMeta?.transfer_method ||
@@ -211,7 +214,9 @@ function derivePayoutReview(
   return {
     you_send_amount: youSendAmount,
     total_debited: totalDebited,
-    exchange_fee: exchangeFee,
+    exchange_fee: fromMeta?.exchange_fee && fromMeta.exchange_fee > 0
+      ? fromMeta.exchange_fee
+      : computeBalancePayoutExchangeFee(totalDebited, youSendAmount, processingFee),
     processing_fee: processingFee,
     exchange_rate: hasFx ? exchangeRate || 1 : 1,
     send_currency: sendCurrency,
@@ -220,6 +225,11 @@ function derivePayoutReview(
     transfer_method: transferMethod,
     processing_time:
       fromMeta?.processing_time || getGlobalPayoutProcessingTime(transferMethod),
+    ...(fromMeta?.margin_amount != null ? { margin_amount: fromMeta.margin_amount } : {}),
+    ...(fromMeta?.easner_fee != null ? { easner_fee: fromMeta.easner_fee } : {}),
+    ...(fromMeta?.noah_floor != null ? { noah_floor: fromMeta.noah_floor } : {}),
+    ...(fromMeta?.noah_send_amount != null ? { noah_send_amount: fromMeta.noah_send_amount } : {}),
+    ...(fromMeta?.channel_cost != null ? { channel_cost: fromMeta.channel_cost } : {}),
   }
 }
 

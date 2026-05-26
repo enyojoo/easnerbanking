@@ -40,6 +40,7 @@ import {
 } from "@/lib/noah/credit-bank-onramp-wallet"
 import { provisionNoahAfterVerificationApproved } from "@/lib/noah/provision-after-approval"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
+import { applyGlobalPayoutMarginReconciliation } from "@/lib/noah/reconcile-payout-margin"
 
 function pickTxHash(tx: Record<string, unknown>): string | null {
   const h = tx.TxHash ?? tx.TransactionHash ?? tx.txHash ?? tx.Hash ?? tx.PublicID
@@ -410,6 +411,14 @@ export async function applyNoahWebhookSideEffects(
               businessId,
             })
           }
+        }
+
+        if (isGlobalPayoutSell && status === "settled" && upsert.transactionId) {
+          await applyGlobalPayoutMarginReconciliation(admin, {
+            txData,
+            priorMetadata: metadata,
+            transactionId: upsert.transactionId,
+          })
         }
         }
       }

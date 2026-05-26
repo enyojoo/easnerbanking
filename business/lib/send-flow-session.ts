@@ -53,8 +53,16 @@ export interface SendFlowState {
     formSessionId: string
     cryptoAuthorizedAmount: string
     cryptoCurrency: string
+    channelId?: string
     pricingQuoteId?: string
     expiresAt: string
+    noahFloor?: string
+    noahSendAmount?: string
+    marginAmount?: number
+    channelCost?: number
+    customerPrincipal?: number
+    marginCaptureMode?: "surplus_send" | "split_debit"
+    noahMid?: number
   }
 }
 

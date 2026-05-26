@@ -67,12 +67,9 @@ export function detailIdFromTransfer(transfer: NoahTransfer): string {
   return String(transfer.transaction_id || transfer.id || '')
 }
 
-export type PayoutPrepareSession = {
-  formSessionId: string
-  cryptoAuthorizedAmount: string
-  cryptoCurrency: string
-  channelId?: string
-}
+import type { PayoutPrepareSession } from '../lib/payoutPrepareSession'
+
+export type { PayoutPrepareSession } from '../lib/payoutPrepareSession'
 
 export type ExecuteBalanceSendInput = {
   recipient: Recipient
@@ -196,6 +193,15 @@ export async function executeBalanceSend(
         ...(payoutSession.channelId ? { channelId: payoutSession.channelId } : {}),
         recipientId: recipient.id,
         ...(input.reviewSnapshot ? { reviewSnapshot: input.reviewSnapshot } : {}),
+        ...(payoutSession.noahFloor ? { noahFloor: payoutSession.noahFloor } : {}),
+        ...(payoutSession.noahSendAmount ? { noahSendAmount: payoutSession.noahSendAmount } : {}),
+        ...(payoutSession.totalDebited ? { totalDebited: payoutSession.totalDebited } : {}),
+        ...(payoutSession.marginAmount ? { marginAmount: payoutSession.marginAmount } : {}),
+        ...(payoutSession.marginCaptureMode
+          ? { marginCaptureMode: payoutSession.marginCaptureMode }
+          : {}),
+        ...(payoutSession.customerRate != null ? { customerRate: payoutSession.customerRate } : {}),
+        ...(payoutSession.noahMid != null ? { noahMid: payoutSession.noahMid } : {}),
         ...(reservedDebitEtid?.trim() ? { reservedDebitEtid: reservedDebitEtid.trim() } : {}),
         ...(note?.trim() ? { note: note.trim() } : {}),
         ...(input.paymentPurpose?.trim() ? { paymentPurpose: input.paymentPurpose.trim() } : {}),

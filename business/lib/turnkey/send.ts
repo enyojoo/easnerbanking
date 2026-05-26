@@ -32,6 +32,9 @@ export type TurnkeySendInput = {
     easnerPayoutId: string
     noahWorkflowId?: string | null
     formSessionId?: string
+    /** Wallet balance delta on settle (may exceed chain send amount in split_debit). */
+    walletDebitAmount?: number
+    marginLeg?: boolean
   }
   /**
    * Max ms to poll Turnkey for on-chain terminal status.
@@ -505,11 +508,17 @@ export async function createTurnkeySend(
           global_payout_settlement_leg: true,
           suppress_in_feed: true,
           easner_payout_id: String(input.globalPayout.easnerPayoutId).trim(),
+          ...(input.globalPayout.marginLeg ? { global_payout_margin_leg: true } : {}),
           ...(input.globalPayout.noahWorkflowId
             ? { noah_workflow_id: String(input.globalPayout.noahWorkflowId).trim() }
             : {}),
           ...(input.globalPayout.formSessionId
             ? { form_session_id: String(input.globalPayout.formSessionId).trim() }
+            : {}),
+          ...(input.globalPayout.walletDebitAmount != null &&
+          Number.isFinite(input.globalPayout.walletDebitAmount) &&
+          input.globalPayout.walletDebitAmount > 0
+            ? { wallet_debit_amount: input.globalPayout.walletDebitAmount }
             : {}),
         }
       : {}
@@ -718,11 +727,35 @@ async function applyGlobalPayoutTurnkeySettleDebit(
   if (!existing?.id) return
 
   const meta = (existing.metadata || {}) as Record<string, unknown>
+  if (meta.global_payout_margin_leg === true) return
   if (meta.global_payout_settlement_leg !== true) return
   if (meta.balance_delta_applied === true) return
 
-  const amt = Number(existing.amount ?? 0)
-  if (!Number.isFinite(amt) || amt <= 0) return
+  let debitAmt = Number(existing.amount ?? 0)
+  const walletDebitOverride = Number(meta.wallet_debit_amount ?? 0)
+  if (Number.isFinite(walletDebitOverride) && walletDebitOverride > 0) {
+    debitAmt = walletDebitOverride
+  }
+
+  if (params.easnerPayoutId) {
+    const pendingId = pendingGlobalPayoutProviderTransactionId(params.easnerPayoutId)
+    const { data: payoutRow } = await admin
+      .from("transactions")
+      .select("metadata")
+      .eq("provider", "noah")
+      .eq("provider_transaction_id", pendingId)
+      .maybeSingle()
+    if (payoutRow) {
+      const payoutMeta = (payoutRow.metadata || {}) as Record<string, unknown>
+      if (payoutMeta.balance_delta_applied === true) return
+      const fromPayout = Number(payoutMeta.total_debited ?? 0)
+      if (Number.isFinite(fromPayout) && fromPayout > 0) {
+        debitAmt = fromPayout
+      }
+    }
+  }
+
+  if (!Number.isFinite(debitAmt) || debitAmt <= 0) return
 
   const currency = String(existing.currency || "USD").toUpperCase() as "USD" | "EUR"
   const businessId = existing.business_id ? String(existing.business_id) : null
@@ -732,7 +765,7 @@ async function applyGlobalPayoutTurnkeySettleDebit(
     businessId,
     userId: businessId ? null : userId,
     currency,
-    delta: -amt,
+    delta: -debitAmt,
   })
 
   await admin

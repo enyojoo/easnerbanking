@@ -6,7 +6,7 @@ function normalizeReceiveForCurrency(currency: string, amount: number): number {
   return normalized
 }
 
-/** Seed Noah prepare receive fiat from the user's send-side entry + corridor rate. */
+/** @deprecated Use normalizeGlobalPayoutQuoteReceiveAmount from @easner/shared — send/receive entry share one rate. */
 export function seedQuoteReceiveForSendBudget(input: {
   sendBudget: number
   sourceCurrency: string

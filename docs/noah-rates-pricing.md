@@ -14,11 +14,13 @@
 - Powers send rate label, mid-notional “you send”, confirm exchange rate row
 - Synced on a schedule; ops can override via office admin
 
-### Execution layer (Noah prepare)
+### Execution layer (Noah prepare + margin capture)
 
-- `POST /transactions/sell/prepare` → `cryptoAuthorizedAmount` is the authoritative max debit
-- Never replaced by table math
-- “Total debited” and balance checks use prepare
+- `POST /transactions/sell/prepare` → `cryptoAuthorizedAmount` is the Noah floor (`noahFloor`)
+- Wallet debit = `noahFloor + marginAmount` where `marginAmount = customerPrincipal − midNotional`
+- `customerPrincipal` = `receive ÷ noah_rates.rate` (you-send box)
+- Plan A (default): single Turnkey send of `totalDebited`; surplus lands as Noah `BusinessFee` at settlement
+- Plan B (`GLOBAL_PAYOUT_MARGIN_CAPTURE_MODE=split_debit`): Turnkey sends `noahFloor` to Noah + `marginAmount` to platform liquidity pool
 
 ---
 
@@ -51,7 +53,7 @@ Default margin: 1.5% (`NOAH_PAYOUT_MARGIN` in `packages/rate-sync/src/noah-margi
 | Vercel cron | **Every 5 min** | `/api/cron/sync-noah-rates` in `business/vercel.json` |
 | Office / CLI | Manual | Platform Control → Sync rates, or `scripts/sync-noah-rates.ts` |
 
-Easner revenue on global payout comes from this spread only — not from Noah settlement Breakdown buckets.
+Easner revenue on global payout is captured at wallet debit via the margin wedge (`marginAmount`), reconciled against Noah `BusinessFee` on settlement (Plan A).
 
 ---
 
@@ -60,11 +62,11 @@ Easner revenue on global payout comes from this spread only — not from Noah se
 | Row | Source |
 |-----|--------|
 | Exchange rate | `noah_rates.rate` |
-| You send | `receive ÷ rate` |
-| Exchange fee | `totalDebited − youSend − processingFee` (aggregate; mostly channel cost) |
-| Processing fee | `noah_rates.fee_*` when configured |
-| Total debited | prepare / `cryptoAuthorizedAmount` |
-| Recipient gets | user input |
+| You send | Quote `customerPrincipal` (= `receive ÷ rate`) |
+| Exchange fee | Quote `channelCost` (= `noahFloor − midNotional`) |
+| Processing fee / margin | Quote `marginAmount` |
+| Total debited | Quote `totalDebited` (= `noahFloor + marginAmount`) |
+| Recipient gets | user input (full prepare receive) |
 
 ---
 
@@ -76,7 +78,7 @@ For engineering/ops understanding only. These fields appear on settled Noah OffN
 |--------|------|
 | **ChannelFee** | Rail/channel cost in USDC |
 | **Remaining** | USDC sold at Noah mid to deliver recipient fiat |
-| **BusinessFee** | Small surplus after channel + payout allocation; credits merchant USDC balance — not Easner-configured margin |
+| **BusinessFee** | Plan A: surplus margin after channel + payout allocation (~`marginAmount`); Plan B: near zero (margin sent to platform pool on-chain) |
 
 Example: total 4.52 USDC → ChannelFee 0.79 + Remaining 3.69 (→ ₦5,000 at mid) + BusinessFee 0.05.
 

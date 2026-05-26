@@ -10,7 +10,6 @@ import { PinChallengeDialog } from "@/components/app-lock/pin-challenge-dialog"
 import { useAuth } from "@/lib/auth-context"
 import { hasPin, isLoginPinModuleAvailable } from "@/lib/login-pin"
 import {
-  computeBalancePayoutExchangeFee,
   formatPayoutArrivalHint,
   getGlobalPayoutProcessingTime,
   getGlobalPayoutTransferMethod,
@@ -299,31 +298,25 @@ export default function SendConfirmPage() {
 
       const transferMethod = corridorTransferMethod(state.recipient, state.receiveCurrency)
       const processingTime = arrivalHint ?? getGlobalPayoutProcessingTime(transferMethod)
-      const reviewYouSend =
-        state.receiveCurrency !== state.sendCurrency && pq!.midRate && pq!.midRate > 0
-          ? state.amount / pq!.midRate
-          : state.sendAmount
-      const reviewExchangeRate =
-        state.receiveCurrency !== state.sendCurrency && pq!.midRate && pq!.midRate > 0
-          ? pq!.midRate
-          : state.receiveCurrency !== state.sendCurrency && state.amount > 0
-            ? state.amount / pq!.totalDebited
-            : 1
+      const reviewYouSend = pq!.customerPrincipal ?? pq!.sendAmount
+      const reviewExchangeRate = pq!.midRate && pq!.midRate > 0 ? pq!.midRate : 1
+      const reviewExchangeFee = pq!.channelCost ?? pq!.noahFee ?? 0
+      const reviewMargin = pq!.marginAmount ?? pq!.easnerFee ?? 0
       const reviewSnapshot = {
         you_send_amount: reviewYouSend,
         total_debited: pq!.totalDebited,
-        exchange_fee: computeBalancePayoutExchangeFee(
-          pq!.totalDebited,
-          reviewYouSend,
-          pq!.easnerFee ?? 0,
-        ),
-        processing_fee: pq!.easnerFee ?? 0,
+        exchange_fee: reviewExchangeFee,
+        processing_fee: reviewMargin,
         exchange_rate: reviewExchangeRate,
         send_currency: state.sendCurrency,
         receive_amount: state.amount,
         receive_currency: state.receiveCurrency,
         transfer_method: transferMethod,
         processing_time: processingTime,
+        ...(reviewMargin > 0 ? { margin_amount: reviewMargin, easner_fee: reviewMargin } : {}),
+        ...(reviewExchangeFee > 0 ? { channel_cost: reviewExchangeFee } : {}),
+        ...(pq!.noahFloor ? { noah_floor: Number(pq!.noahFloor) } : {}),
+        ...(pq!.noahSendAmount ? { noah_send_amount: Number(pq!.noahSendAmount) } : {}),
       }
 
       const transferBody = {
@@ -338,6 +331,13 @@ export default function SendConfirmPage() {
         ...(payoutEtid ? { reservedDebitEtid: payoutEtid } : {}),
         ...(state.note ? { note: state.note } : {}),
         ...(state.paymentPurpose ? { paymentPurpose: state.paymentPurpose } : {}),
+        ...(pq.noahFloor ? { noahFloor: pq.noahFloor } : {}),
+        ...(pq.noahSendAmount ? { noahSendAmount: pq.noahSendAmount } : {}),
+        totalDebited: String(pq.totalDebited),
+        ...(pq.marginAmount != null ? { marginAmount: String(pq.marginAmount) } : {}),
+        ...(pq.marginCaptureMode ? { marginCaptureMode: pq.marginCaptureMode } : {}),
+        ...(pq.midRate != null ? { customerRate: pq.midRate } : {}),
+        ...(pq.noahMid != null ? { noahMid: pq.noahMid } : {}),
         reviewSnapshot,
       }
 
@@ -412,25 +412,14 @@ export default function SendConfirmPage() {
   const hasFx = !easenetSend && state.receiveCurrency !== state.sendCurrency
   const pq = state.payoutQuote
   const quoteReady = easenetSend || Boolean(pq?.formSessionId)
-  const easnerFee = pq?.easnerFee ?? 0
+  const easnerFee = pq?.marginAmount ?? pq?.easnerFee ?? 0
   const easnerFeeCurrency = pq?.easnerFeeCurrency ?? state.sendCurrency
-  const youSendAmount =
-    state.amountEntryMode === "send" && state.sendAmount > 0
-      ? state.sendAmount
-      : hasFx && pq?.midRate && pq.midRate > 0
-        ? state.amount / pq.midRate
-        : state.sendAmount
+  const youSendAmount = pq?.customerPrincipal ?? pq?.sendAmount ?? state.sendAmount
   const exchangeRate =
     hasFx && pq?.midRate && pq.midRate > 0
       ? pq.midRate
-      : hasFx && state.amount > 0 && (pq?.totalDebited ?? state.sendAmount) > 0
-        ? state.amount / (pq?.totalDebited ?? state.sendAmount)
-        : 1
-  const exchangeFee = computeBalancePayoutExchangeFee(
-    pq?.totalDebited ?? 0,
-    youSendAmount,
-    easnerFee,
-  )
+      : 1
+  const exchangeFee = pq?.channelCost ?? pq?.noahFee ?? 0
 
   const authorizeDisabled =
     isAuthorizing ||

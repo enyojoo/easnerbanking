@@ -9,6 +9,11 @@ export type GlobalPayoutReviewSnapshot = {
   receive_currency: string
   transfer_method: string
   processing_time: string
+  margin_amount?: number
+  easner_fee?: number
+  noah_floor?: number
+  noah_send_amount?: number
+  channel_cost?: number
 }
 
 export type GlobalPayoutRecipientSnapshot = {
