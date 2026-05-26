@@ -19,6 +19,7 @@ import {
   setPushNavMainReady,
 } from '../lib/pendingPushNavigation'
 import { emitAppLocked, registerAppLockListener } from '../lib/app-lock-bus'
+import { avatarImageUri, warmAvatarCacheAsync } from '../lib/avatarCache'
 import { useConsumerKycNoahSync } from '../hooks/useConsumerKycNoahSync'
 // Stack timing and Android vs iOS card transitions: see `transitionPresets.ts`.
 import {
@@ -697,11 +698,15 @@ export default function AppNavigator() {
       if (event === 'unlocked') {
         setPinGate('main')
       } else if (event === 'locked') {
+        const avatarUri = avatarImageUri(userProfile?.profile?.avatar_url)
+        if (avatarUri) {
+          void warmAvatarCacheAsync(avatarUri)
+        }
         setPinGate('pin')
       }
       setLockTick((t) => t + 1)
     })
-  }, [])
+  }, [userProfile?.profile?.avatar_url])
 
   useEffect(() => {
     const ready = pinGate === 'main'

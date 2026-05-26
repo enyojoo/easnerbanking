@@ -24,7 +24,7 @@ import { ensureConsumerMobileAccess } from '../lib/validateAppSurface'
 import { hydratePayoutCorridorsFromStorage, refreshPayoutCorridors } from '../lib/payoutCorridors'
 import { readProfileSnapshot, writeProfileSnapshot } from '../lib/profileSnapshot'
 import { clearMfaVerified } from '../lib/mfaStatusCache'
-import { warmAvatarCache } from '../lib/avatarCache'
+import { warmAvatarCache, warmAvatarCacheAsync } from '../lib/avatarCache'
 import Constants from 'expo-constants'
 import { syncIntercomSession } from '../lib/intercom'
 
@@ -167,6 +167,31 @@ export function useAuth() {
     throw new Error('useAuth must be used within an AuthProvider')
   }
   return context
+}
+
+function mapSessionUser(sessionUser: SupabaseUser): User {
+  const { first_name, last_name } = mapNameFromMetadata(sessionUser.user_metadata)
+  return {
+    id: sessionUser.id,
+    email: sessionUser.email || '',
+    full_name: [first_name, last_name].filter(Boolean).join(' ') || null,
+    first_name,
+    last_name,
+    phone: sessionUser.phone ?? undefined,
+    status: 'active',
+    base_currency: 'USD',
+    enabled_extra_account_currencies: [],
+    created_at: sessionUser.created_at,
+    updated_at: sessionUser.updated_at || sessionUser.created_at,
+  }
+}
+
+/** Load profile snapshot + prefetch avatar before PIN / dashboard first paint. */
+async function hydrateSessionUserFromSnapshot(userId: string): Promise<AuthUser | null> {
+  const snap = await readProfileSnapshot(userId)
+  if (!snap || snap.id !== userId) return null
+  await warmAvatarCacheAsync(snap.profile.avatar_url)
+  return snap
 }
 
 interface AuthProviderProps {
@@ -518,28 +543,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         if (mounted && session?.user) {
           hadSessionUser = true
-          const { first_name, last_name } = mapNameFromMetadata(session.user.user_metadata)
-          const mappedUser: User = {
-            id: session.user.id,
-            email: session.user.email || '',
-            full_name: [first_name, last_name].filter(Boolean).join(' ') || null,
-            first_name,
-            last_name,
-            phone: session.user.phone ?? undefined,
-            status: 'active',
-            base_currency: 'USD',
-            enabled_extra_account_currencies: [],
-            created_at: session.user.created_at,
-            updated_at: session.user.updated_at || session.user.created_at,
+          const mappedUser = mapSessionUser(session.user)
+          const existing = userProfileRef.current
+          if (existing?.id === session.user.id) {
+            setUser(existing.profile)
+          } else {
+            const snap = await hydrateSessionUserFromSnapshot(session.user.id)
+            if (!mounted) return
+            if (snap) {
+              setUser(snap.profile)
+              setUserProfile(snap)
+            } else {
+              setUser(mappedUser)
+            }
           }
-          setUser(mappedUser)
-          /** Do not await — blocks AppNavigator (PIN gate) on AsyncStorage; hydrate when ready. */
-          void readProfileSnapshot(session.user.id).then((snap) => {
-            if (!mounted || !snap || snap.id !== session.user.id) return
-            setUser(snap.profile)
-            setUserProfile(snap)
-            warmAvatarCache(snap.profile.avatar_url)
-          })
           fetchUserProfile(session.user.id, mappedUser, { force: true }).catch(error => {
             console.error('Initial profile fetch error:', error)
           })
@@ -593,28 +610,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
           if (__DEV__) {
             console.log('AuthContext: User session found, hydrating user then syncing MFA gate')
           }
-          const { first_name, last_name } = mapNameFromMetadata(session.user.user_metadata)
-          const mappedUser: User = {
-            id: session.user.id,
-            email: session.user.email || '',
-            full_name: [first_name, last_name].filter(Boolean).join(' ') || null,
-            first_name,
-            last_name,
-            phone: session.user.phone ?? undefined,
-            status: 'active',
-            base_currency: 'USD',
-            enabled_extra_account_currencies: [],
-            created_at: session.user.created_at,
-            updated_at: session.user.updated_at || session.user.created_at,
+          const mappedUser = mapSessionUser(session.user)
+          const existing = userProfileRef.current
+          if (existing?.id === session.user.id) {
+            setUser(existing.profile)
+          } else {
+            const snap = await hydrateSessionUserFromSnapshot(session.user.id)
+            if (!mounted) return
+            if (snap) {
+              setUser(snap.profile)
+              setUserProfile(snap)
+            } else {
+              setUser(mappedUser)
+            }
           }
-          setUser(mappedUser)
-          /** Do not await — same as cold start; login → PIN must not wait on snapshot I/O. */
-          void readProfileSnapshot(session.user.id).then((snap) => {
-            if (!mounted || !snap || snap.id !== session.user.id) return
-            setUser(snap.profile)
-            setUserProfile(snap)
-            warmAvatarCache(snap.profile.avatar_url)
-          })
           void syncMfaGateFromSession()
           void syncIntercomSession(session)
           const profileForce =

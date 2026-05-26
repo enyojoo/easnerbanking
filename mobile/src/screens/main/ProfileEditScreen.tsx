@@ -12,7 +12,6 @@ import {
   ActivityIndicator,
   Keyboard,
   Platform,
-  Image,
 } from 'react-native'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { ArrowLeft, Calendar, Camera, CircleCheck, CircleX, Trash2 } from 'lucide-react-native'
@@ -46,7 +45,8 @@ import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import * as ImagePicker from 'expo-image-picker'
 import { uploadProfileAvatar, PROFILE_AVATAR_MAX_BYTES } from '../../lib/profileAvatarUpload'
 import { getApiBaseUrl } from '../../lib/apiClient'
-import { avatarImageSource, bustAvatarUrl, normalizeAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
+import { AvatarImage } from '../../components/AvatarImage'
+import { bustAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { EasnerAlertSheet } from '../../components/premium'
 
@@ -102,8 +102,15 @@ function ProfileEditContent({ navigation }: NavigationProps) {
     date.setFullYear(date.getFullYear() - 25)
     return date
   })
-  const editAvatarSource = avatarImageSource(editProfileData.avatarUrl)
-  const profileAvatarSource = avatarImageSource(profileData.avatarUrl)
+  const viewAvatarUrl = useMemo(() => {
+    const fromForm = profileData.avatarUrl?.trim()
+    if (fromForm) return fromForm
+    const fromAuth =
+      typeof userProfile?.profile?.avatar_url === 'string'
+        ? userProfile.profile.avatar_url.trim()
+        : ''
+    return fromAuth || null
+  }, [profileData.avatarUrl, userProfile?.profile?.avatar_url])
 
   // Animation refs
   const headerAnim = useRef(new Animated.Value(0)).current
@@ -872,11 +879,10 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                           !editProfileData.avatarUrl?.trim() && styles.avatarEditCircleEmpty,
                         ]}
                       >
-                        {editAvatarSource ? (
-                          <Image
-                            source={editAvatarSource}
+                        {editProfileData.avatarUrl?.trim() ? (
+                          <AvatarImage
+                            avatarUrl={editProfileData.avatarUrl}
                             style={styles.avatarEditImage}
-                            resizeMode="cover"
                           />
                         ) : (
                           <Text style={[userAvatarStyles.initials, styles.avatarEditInitials]}>
@@ -900,12 +906,8 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                     </Pressable>
                   ) : (
                     <View style={[styles.profileAvatarCircle, styles.avatarViewCircle]}>
-                      {profileAvatarSource ? (
-                        <Image
-                          source={profileAvatarSource}
-                          style={styles.avatarViewImage}
-                          resizeMode="cover"
-                        />
+                      {viewAvatarUrl ? (
+                        <AvatarImage avatarUrl={viewAvatarUrl} style={styles.avatarViewImage} />
                       ) : (
                         <Text style={userAvatarStyles.initials}>{profilePhotoInitials()}</Text>
                       )}
