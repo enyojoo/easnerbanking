@@ -1,12 +1,15 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { Card, CardContent } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Switch } from "@/components/ui/switch"
 import { Button } from "@/components/ui/button"
 import { CountryFlag } from "@/components/flags"
 import { payoutCorridorsApi, type PayoutCorridorAdminRow } from "@/lib/payout-corridors-api"
+import { officeKeys } from "@/lib/query/keys"
+import { useOfficePayoutCorridors } from "@/hooks/queries"
 import { PlatformControlTabShell } from "@/components/platform-control/platform-tab-shell"
 import { Loader2 } from "lucide-react"
 
@@ -46,29 +49,14 @@ function groupFiatDestinations(rows: PayoutCorridorAdminRow[]): FiatDestinationR
 }
 
 export function PayoutCorridorsAdminPanel() {
-  const [rows, setRows] = useState<PayoutCorridorAdminRow[]>([])
+  const queryClient = useQueryClient()
+  const corridorsQuery = useOfficePayoutCorridors()
+  const rows = corridorsQuery.data ?? []
   const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
   const [savingKey, setSavingKey] = useState<string | null>(null)
   const fiatRows = useMemo(() => groupFiatDestinations(rows), [rows])
-  const showTableSkeleton = loading && fiatRows.length === 0
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const list = await payoutCorridorsApi.list()
-      setRows(list)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load fiat send destinations")
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    void load()
-  }, [load])
+  const showTableSkeleton = corridorsQuery.isPending && fiatRows.length === 0
+  const refreshing = corridorsQuery.isFetching && fiatRows.length > 0
 
   const toggleEnabled = async (row: FiatDestinationRow, enabled: boolean) => {
     setSavingKey(row.key)
@@ -76,9 +64,10 @@ export function PayoutCorridorsAdminPanel() {
       const updates = await Promise.all(
         row.corridorIds.map((id) => payoutCorridorsApi.patch(id, { enabled })),
       )
-      setRows((prev) => {
+      queryClient.setQueryData<PayoutCorridorAdminRow[]>(officeKeys.payoutCorridors(), (prev) => {
+        const list = prev ?? []
         const byId = new Map(updates.map((u) => [u.id, u]))
-        return prev.map((r) => byId.get(r.id) ?? r)
+        return list.map((r) => byId.get(r.id) ?? r)
       })
       setError(null)
     } catch (e) {
@@ -93,13 +82,26 @@ export function PayoutCorridorsAdminPanel() {
       title="Fiat"
       description="Country and currency pairs users can send to (bank and mobile). Disabled rows are hidden from Business and Mobile send flows."
       actions={
-        <Button type="button" variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-          {loading && fiatRows.length > 0 ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => void corridorsQuery.refetch()}
+          disabled={corridorsQuery.isFetching}
+        >
+          {refreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
           Refresh
         </Button>
       }
     >
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {corridorsQuery.error ? (
+        <p className="text-sm text-destructive">
+          {corridorsQuery.error instanceof Error
+            ? corridorsQuery.error.message
+            : "Failed to load fiat send destinations"}
+        </p>
+      ) : null}
 
       <Card>
         <CardContent className="p-0">

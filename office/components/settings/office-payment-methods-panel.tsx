@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback, type RefObject } from "react"
+import { useState, useRef, useCallback, type RefObject } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -27,8 +28,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { supabase } from "@/lib/supabase"
-import { currenciesApi } from "@/lib/currencies-api"
 import { paymentMethodsApi } from "@/lib/payment-methods-api"
+import { officeKeys } from "@/lib/query/keys"
+import { useOfficeCurrencies, useOfficePaymentMethods } from "@/hooks/queries"
 import {
   getAccountTypeConfigFromCurrency,
   getAccountTypeFromCurrency,
@@ -72,9 +74,20 @@ interface CurrencyRow {
 }
 
 export function OfficePaymentMethodsPanel() {
-  const [currencies, setCurrencies] = useState<CurrencyRow[]>([])
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
+  const currenciesQuery = useOfficeCurrencies("payment-methods")
+  const paymentMethodsQuery = useOfficePaymentMethods()
+  const currencies = (currenciesQuery.data ?? []) as CurrencyRow[]
+  const paymentMethods = (paymentMethodsQuery.data ?? []) as PaymentMethod[]
+  const loading = paymentMethodsQuery.isPending && paymentMethods.length === 0
+  const patchPaymentMethodsCache = useCallback(
+    (updater: (prev: PaymentMethod[]) => PaymentMethod[]) => {
+      queryClient.setQueryData<PaymentMethod[]>(officeKeys.paymentMethods(), (prev) =>
+        updater((prev ?? []) as PaymentMethod[]),
+      )
+    },
+    [queryClient],
+  )
   const [saving, setSaving] = useState(false)
   const [isAddPaymentMethodOpen, setIsAddPaymentMethodOpen] = useState(false)
   const [isEditPaymentMethodOpen, setIsEditPaymentMethodOpen] = useState(false)
@@ -132,35 +145,8 @@ export function OfficePaymentMethodsPanel() {
   const editLogoInputRef = useRef<HTMLInputElement>(null)
 
   const loadCurrencies = useCallback(async () => {
-    try {
-      const list = await currenciesApi.list({ scope: "payment-methods" })
-      setCurrencies(list)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      console.error("Error loading currencies:", message)
-    }
-  }, [])
-
-  const loadPaymentMethods = useCallback(async () => {
-    setLoading(true)
-    try {
-      const list = await paymentMethodsApi.list()
-      setPaymentMethods(list)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      console.error("Error loading payment methods:", message)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  const load = useCallback(async () => {
-    await Promise.all([loadCurrencies(), loadPaymentMethods()])
-  }, [loadCurrencies, loadPaymentMethods])
-
-  useEffect(() => {
-    void load()
-  }, [load])
+    await queryClient.invalidateQueries({ queryKey: officeKeys.currencies("payment-methods") })
+  }, [queryClient])
 
   const handleQrCodeFileSelect = (file: File, isEditing = false) => {
     const allowedTypes = ["image/svg+xml", "image/png", "image/jpeg"]
@@ -373,7 +359,7 @@ export function OfficePaymentMethodsPanel() {
         status: "active",
       })
 
-      setPaymentMethods([...paymentMethods, data])
+      patchPaymentMethodsCache((prev) => [...prev, data as PaymentMethod])
       setNewPaymentMethod({
         currency: "",
         type: "bank_account",
@@ -461,7 +447,9 @@ export function OfficePaymentMethodsPanel() {
         is_default: editingPaymentMethod.is_default,
       })
 
-      setPaymentMethods(paymentMethods.map((pm) => (pm.id === editingPaymentMethod.id ? data : pm)))
+      patchPaymentMethodsCache((prev) =>
+        prev.map((pm) => (pm.id === editingPaymentMethod.id ? (data as PaymentMethod) : pm)),
+      )
       setEditingPaymentMethod(null)
       setEditingQrCodeFile(null)
       setEditingLogoFile(null)
@@ -484,7 +472,9 @@ export function OfficePaymentMethodsPanel() {
 
     try {
       await paymentMethodsApi.patch(id, { status: newStatus })
-      setPaymentMethods(paymentMethods.map((pm) => (pm.id === id ? { ...pm, status: newStatus } : pm)))
+      patchPaymentMethodsCache((prev) =>
+        prev.map((pm) => (pm.id === id ? { ...pm, status: newStatus } : pm)),
+      )
       console.log("Payment method status updated successfully")
     } catch (error) {
       console.error("Error updating payment method status:", error)
@@ -498,8 +488,8 @@ export function OfficePaymentMethodsPanel() {
     try {
       await paymentMethodsApi.patch(id, { is_default: true, currency: targetMethod.currency })
 
-      setPaymentMethods(
-        paymentMethods.map((pm) => ({
+      patchPaymentMethodsCache((prev) =>
+        prev.map((pm) => ({
           ...pm,
           is_default: pm.currency === targetMethod.currency ? pm.id === id : pm.is_default,
         })),
@@ -519,7 +509,7 @@ export function OfficePaymentMethodsPanel() {
         })
       }
       await paymentMethodsApi.remove(id)
-      setPaymentMethods(paymentMethods.filter((pm) => pm.id !== id))
+      patchPaymentMethodsCache((prev) => prev.filter((pm) => pm.id !== id))
       console.log("Payment method deleted successfully")
     } catch (error) {
       console.error("Error deleting payment method:", error)

@@ -71,25 +71,25 @@ function PlatformControlHubBody() {
             <TabsTrigger value="crypto">Crypto</TabsTrigger>
             <TabsTrigger value="webhooks">Webhook inbox</TabsTrigger>
           </TabsList>
-          <TabsContent value="platform" className={TAB_CONTENT_CLASS}>
+          <TabsContent value="platform" forceMount className={TAB_CONTENT_CLASS}>
             <PlatformConfigPanel />
           </TabsContent>
-          <TabsContent value="rates" className={TAB_CONTENT_CLASS}>
+          <TabsContent value="rates" forceMount className={TAB_CONTENT_CLASS}>
             <RatesPanel />
           </TabsContent>
-          <TabsContent value="noah-rates" className={TAB_CONTENT_CLASS}>
+          <TabsContent value="noah-rates" forceMount className={TAB_CONTENT_CLASS}>
             <NoahRatesPanel />
           </TabsContent>
-          <TabsContent value="payment-methods" className={TAB_CONTENT_CLASS}>
+          <TabsContent value="payment-methods" forceMount className={TAB_CONTENT_CLASS}>
             <PaymentMethodsPanel />
           </TabsContent>
-          <TabsContent value="fiat" className={TAB_CONTENT_CLASS}>
+          <TabsContent value="fiat" forceMount className={TAB_CONTENT_CLASS}>
             <FiatPanel />
           </TabsContent>
-          <TabsContent value="crypto" className={TAB_CONTENT_CLASS}>
+          <TabsContent value="crypto" forceMount className={TAB_CONTENT_CLASS}>
             <CryptoPanel />
           </TabsContent>
-          <TabsContent value="webhooks" className={TAB_CONTENT_CLASS}>
+          <TabsContent value="webhooks" forceMount className={TAB_CONTENT_CLASS}>
             <WebhookInboxPanel />
           </TabsContent>
         </Tabs>

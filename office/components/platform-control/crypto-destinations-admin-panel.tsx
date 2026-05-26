@@ -1,12 +1,15 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { Card, CardContent } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Switch } from "@/components/ui/switch"
 import { Button } from "@/components/ui/button"
 import { cryptoDestinationsApi, type CryptoDestinationAdminRow } from "@/lib/crypto-destinations-api"
 import { getTokenIconUrl } from "@/lib/crypto-icons"
+import { officeKeys } from "@/lib/query/keys"
+import { useOfficeCryptoDestinations } from "@/hooks/queries"
 import { PlatformControlTabShell } from "@/components/platform-control/platform-tab-shell"
 import { Loader2 } from "lucide-react"
 
@@ -59,29 +62,14 @@ function groupByAsset(rows: CryptoDestinationAdminRow[]): CryptoDestinationAdmin
 }
 
 export function CryptoDestinationsAdminPanel() {
-  const [rows, setRows] = useState<CryptoDestinationAdminRow[]>([])
+  const queryClient = useQueryClient()
+  const destinationsQuery = useOfficeCryptoDestinations()
+  const rows = destinationsQuery.data ?? []
   const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
   const [savingCode, setSavingCode] = useState<string | null>(null)
   const assetRows = useMemo(() => groupByAsset(rows), [rows])
-  const showTableSkeleton = loading && assetRows.length === 0
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const list = await cryptoDestinationsApi.list()
-      setRows(list)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load crypto destinations")
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    void load()
-  }, [load])
+  const showTableSkeleton = destinationsQuery.isPending && assetRows.length === 0
+  const refreshing = destinationsQuery.isFetching && assetRows.length > 0
 
   const toggleEnabled = async (row: CryptoDestinationAdminRow, enabled: boolean) => {
     const code = row.asset_code.toUpperCase()
@@ -89,9 +77,10 @@ export function CryptoDestinationsAdminPanel() {
     try {
       const ids = rows.filter((r) => r.asset_code.toUpperCase() === code).map((r) => r.id)
       const updates = await Promise.all(ids.map((id) => cryptoDestinationsApi.patch(id, { enabled })))
-      setRows((prev) => {
+      queryClient.setQueryData<CryptoDestinationAdminRow[]>(officeKeys.cryptoDestinations(), (prev) => {
+        const list = prev ?? []
         const byId = new Map(updates.map((u) => [u.id, u]))
-        return prev.map((r) => byId.get(r.id) ?? r)
+        return list.map((r) => byId.get(r.id) ?? r)
       })
       setError(null)
     } catch (e) {
@@ -106,13 +95,26 @@ export function CryptoDestinationsAdminPanel() {
       title="Crypto"
       description="Stablecoins and on-chain assets users can send to wallet recipients. Disabled assets are hidden from send and recipient flows."
       actions={
-        <Button type="button" variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-          {loading && assetRows.length > 0 ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => void destinationsQuery.refetch()}
+          disabled={destinationsQuery.isFetching}
+        >
+          {refreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
           Refresh
         </Button>
       }
     >
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {destinationsQuery.error ? (
+        <p className="text-sm text-destructive">
+          {destinationsQuery.error instanceof Error
+            ? destinationsQuery.error.message
+            : "Failed to load crypto destinations"}
+        </p>
+      ) : null}
 
       <Card>
         <CardContent className="p-0">

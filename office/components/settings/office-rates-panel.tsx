@@ -1,6 +1,7 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { Card, CardContent } from "@/components/ui/card"
 import { PlatformControlTabShell } from "@/components/platform-control/platform-tab-shell"
 import { Button } from "@/components/ui/button"
@@ -24,6 +25,8 @@ import {
 } from "@/components/ui/table"
 import { currenciesApi } from "@/lib/currencies-api"
 import { exchangeRatesApi } from "@/lib/exchange-rates-api"
+import { officeKeys } from "@/lib/query/keys"
+import { useOfficeCurrencies, useOfficeExchangeRates } from "@/hooks/queries"
 import { CurrencyFlag } from "@/components/flags"
 import {
   Dialog,
@@ -100,9 +103,15 @@ function buildDraftForCurrency(
 }
 
 export function OfficeRatesPanel() {
-  const [currencies, setCurrencies] = useState<CurrencyRow[]>([])
-  const [rates, setRates] = useState<ExchangeRateRow[]>([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
+  const currenciesQuery = useOfficeCurrencies("rates")
+  const ratesQuery = useOfficeExchangeRates()
+  const currencies = (currenciesQuery.data ?? []) as CurrencyRow[]
+  const rates = (ratesQuery.data ?? []) as ExchangeRateRow[]
+  const loading =
+    (currenciesQuery.isPending && currencies.length === 0) ||
+    (ratesQuery.isPending && rates.length === 0)
+  const queryError = currenciesQuery.error ?? ratesQuery.error
   const [syncing, setSyncing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -122,39 +131,25 @@ export function OfficeRatesPanel() {
     can_receive: true,
   })
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const [currencyList, rateList] = await Promise.all([
-        currenciesApi.list({ scope: "rates" }),
-        exchangeRatesApi.list(),
-      ])
-      setCurrencies(currencyList as CurrencyRow[])
-      setRates(rateList as ExchangeRateRow[])
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    void load()
-  }, [load])
+  const refreshRatesData = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: officeKeys.currencies("rates") }),
+      queryClient.invalidateQueries({ queryKey: officeKeys.exchangeRates() }),
+    ])
+  }, [queryClient])
 
   const handleSyncRates = useCallback(async () => {
     setSyncing(true)
     setError(null)
     try {
       await exchangeRatesApi.syncFromModel()
-      await load()
+      await refreshRatesData()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setSyncing(false)
     }
-  }, [load])
+  }, [refreshRatesData])
 
   const lastRatesUpdate = useMemo(() => {
     let maxMs = 0
@@ -201,7 +196,7 @@ export function OfficeRatesPanel() {
       })
       setNewCurrency({ code: "", name: "", symbol: "", can_send: true, can_receive: true })
       setIsAddingCurrency(false)
-      await load()
+      await refreshRatesData()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -214,7 +209,7 @@ export function OfficeRatesPanel() {
     setSaving(true)
     try {
       await currenciesApi.patch(currency.id, { status: next })
-      await load()
+      await refreshRatesData()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -232,7 +227,7 @@ export function OfficeRatesPanel() {
     try {
       await currenciesApi.remove(currency.id)
       if (editingCurrency?.id === currency.id) closeEditRates()
-      await load()
+      await refreshRatesData()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -263,7 +258,7 @@ export function OfficeRatesPanel() {
         can_receive: currencySettings.can_receive,
       })
       closeEditRates()
-      await load()
+      await refreshRatesData()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -366,6 +361,11 @@ export function OfficeRatesPanel() {
       {error ? (
         <p className="text-sm text-destructive" role="alert">
           {error}
+        </p>
+      ) : null}
+      {!error && queryError ? (
+        <p className="text-sm text-destructive" role="alert">
+          {queryError instanceof Error ? queryError.message : "Failed to load rates"}
         </p>
       ) : null}
 

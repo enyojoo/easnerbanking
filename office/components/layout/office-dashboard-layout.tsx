@@ -9,7 +9,7 @@ import { useTheme } from "next-themes"
 import { BrandLogo } from "@easner/shared"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/lib/auth-context"
-import { useQueryClient } from "@tanstack/react-query"
+import { clearBrowserQueryClient } from "@/lib/query/query-client"
 import {
   officeNavPrimaryLinks,
   officeNavCollapsibleSections,
@@ -97,7 +97,6 @@ export function OfficeDashboardLayout({ children }: OfficeDashboardLayoutProps) 
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { signOut } = useAuth()
-  const queryClient = useQueryClient()
 
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => getInitialOpenGroups(pathname))
 
@@ -116,7 +115,7 @@ export function OfficeDashboardLayout({ children }: OfficeDashboardLayoutProps) 
 
   const handleLogout = async () => {
     try {
-      queryClient.clear()
+      clearBrowserQueryClient()
       await signOut()
       router.push("/auth/login")
     } catch (error) {

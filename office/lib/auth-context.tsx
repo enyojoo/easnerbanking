@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from "react"
 import type { Session, User } from "@supabase/supabase-js"
 import { supabase } from "./supabase"
+import { clearBrowserQueryClient } from "@/lib/query/query-client"
 
 /** Office admin access is DB-backed (public.admin_users), not JWT metadata. */
 async function resolveOfficeAdmin(session: Session | null): Promise<boolean> {
@@ -77,6 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const signOut = async () => {
+    clearBrowserQueryClient()
     await supabase.auth.signOut()
     setUser(null)
     setIsAdmin(false)

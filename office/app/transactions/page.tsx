@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   Search,
@@ -27,7 +28,7 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { officeFetch } from "@/lib/api-client"
 import { officeKeys } from "@/lib/query/keys"
-import { useAuth } from "@/lib/auth-context"
+import { useOfficeAdminEnabled } from "@/hooks/queries"
 
 interface ProviderLedgerTx {
   id: string
@@ -51,9 +52,8 @@ interface ProviderLedgerTx {
 }
 
 export default function AdminTransactionsPage() {
-  const { user, isAdmin, loading: authLoading } = useAuth()
+  const { enabled: transactionsEnabled } = useOfficeAdminEnabled()
   const queryClient = useQueryClient()
-  const transactionsEnabled = !authLoading && Boolean(user && isAdmin)
   const transactionsQuery = useQuery({
     queryKey: officeKeys.transactions(),
     enabled: transactionsEnabled,
@@ -90,6 +90,7 @@ export default function AdminTransactionsPage() {
   })
 
   const transactions = transactionsQuery.data ?? []
+  const transactionsLoading = transactionsQuery.isPending && transactions.length === 0
   const updateStatus = useMutation({
     mutationFn: async ({ transactionId, newStatus }: { transactionId: string; newStatus: string }) => {
       const r = await officeFetch("/api/admin/office/transactions", {
@@ -446,6 +447,14 @@ export default function AdminTransactionsPage() {
         {/* Transactions Table */}
         <Card>
           <CardContent>
+            {transactionsLoading ? (
+              <div className="space-y-3 py-4">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={i} className="h-10 w-full" />
+                ))}
+              </div>
+            ) : (
+            <>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -658,8 +667,10 @@ export default function AdminTransactionsPage() {
               </TableBody>
             </Table>
 
-            {filteredTransactions.length === 0 && (
+            {filteredTransactions.length === 0 ? (
               <div className="text-center py-8 text-gray-500">No transactions found matching your criteria.</div>
+            ) : null}
+            </>
             )}
           </CardContent>
         </Card>

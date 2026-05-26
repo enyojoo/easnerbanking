@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { officeFetch } from "@/lib/api-client"
 import { useQuery } from "@tanstack/react-query"
 import { officeKeys } from "@/lib/query/keys"
+import { useOfficeAdminEnabled } from "@/hooks/queries"
 
 type Row = {
   id: string
@@ -19,8 +20,10 @@ type Row = {
 }
 
 export default function InvoicesPage() {
+  const { enabled } = useOfficeAdminEnabled()
   const { data: rows = [], error, isPending } = useQuery({
     queryKey: officeKeys.businessInvoices(),
+    enabled,
     queryFn: async () => {
       const r = await officeFetch("/api/admin/business/invoices")
       const d = (await r.json()) as { invoices?: Row[]; error?: string }

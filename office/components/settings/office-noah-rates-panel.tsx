@@ -1,6 +1,7 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { Card, CardContent } from "@/components/ui/card"
 import { PlatformControlTabShell } from "@/components/platform-control/platform-tab-shell"
 import { Button } from "@/components/ui/button"
@@ -35,8 +36,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { currenciesApi } from "@/lib/currencies-api"
 import { isNoahRateRowStale, noahRatesApi, type NoahRateAdminRow } from "@/lib/noah-rates-api"
+import { officeKeys } from "@/lib/query/keys"
+import { useOfficeCurrencies, useOfficeNoahRates } from "@/hooks/queries"
 import { CurrencyFlag } from "@/components/flags"
 import { Edit, Loader2, MoreHorizontal } from "lucide-react"
 
@@ -94,9 +96,13 @@ function customerRateFromMid(noahMid: number, marginBps: number): number {
 }
 
 export function OfficeNoahRatesPanel() {
-  const [currencies, setCurrencies] = useState<CurrencyRow[]>([])
-  const [rates, setRates] = useState<NoahRateAdminRow[]>([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
+  const currenciesQuery = useOfficeCurrencies("rates")
+  const ratesQuery = useOfficeNoahRates()
+  const currencies = (currenciesQuery.data ?? []) as CurrencyRow[]
+  const rates = ratesQuery.data ?? []
+  const loading = ratesQuery.isPending && rates.length === 0
+  const queryError = currenciesQuery.error ?? ratesQuery.error
   const [syncing, setSyncing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -104,26 +110,12 @@ export function OfficeNoahRatesPanel() {
   const [editingSource, setEditingSource] = useState<WalletSourceCode | null>(null)
   const [draft, setDraft] = useState<EditableNoahRate[]>([])
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const [currencyList, rateList] = await Promise.all([
-        currenciesApi.list({ scope: "rates" }),
-        noahRatesApi.list(),
-      ])
-      setCurrencies(currencyList as CurrencyRow[])
-      setRates(rateList)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    void load()
-  }, [load])
+  const refreshNoahRatesData = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: officeKeys.currencies("rates") }),
+      queryClient.invalidateQueries({ queryKey: officeKeys.noahRates() }),
+    ])
+  }, [queryClient])
 
   const currencyByCode = useMemo(() => {
     const map = new Map<string, CurrencyRow>()
@@ -197,13 +189,13 @@ export function OfficeNoahRatesPanel() {
             : ""
         }`,
       )
-      await load()
+      await refreshNoahRatesData()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setSyncing(false)
     }
-  }, [load])
+  }, [refreshNoahRatesData])
 
   const openEditRates = (code: WalletSourceCode) => {
     setEditingSource(code)
@@ -249,7 +241,7 @@ export function OfficeNoahRatesPanel() {
         await noahRatesApi.upsert(payload)
       }
       closeEditRates()
-      await load()
+      await refreshNoahRatesData()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -277,6 +269,11 @@ export function OfficeNoahRatesPanel() {
       {error ? (
         <p className="text-sm text-destructive" role="alert">
           {error}
+        </p>
+      ) : null}
+      {!error && queryError ? (
+        <p className="text-sm text-destructive" role="alert">
+          {queryError instanceof Error ? queryError.message : "Failed to load Noah rates"}
         </p>
       ) : null}
       {syncSummary ? <p className="text-sm text-muted-foreground">{syncSummary}</p> : null}

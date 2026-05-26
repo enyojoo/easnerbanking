@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { officeFetch } from "@/lib/api-client"
 import { officeKeys } from "@/lib/query/keys"
-import { useAuth } from "@/lib/auth-context"
+import { useOfficeAdminEnabled } from "@/hooks/queries"
 import type { OfficeEventInboxResponse } from "@/lib/types/office-overview"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -35,10 +35,9 @@ function formatTs(iso: string | null | undefined) {
 }
 
 export function EventInboxPanel() {
-  const { user, isAdmin, loading: authLoading } = useAuth()
+  const { enabled } = useOfficeAdminEnabled()
   const [providerFilter, setProviderFilter] = useState<(typeof PROVIDERS)[number]>("all")
   const [statusFilter, setStatusFilter] = useState<(typeof STATUSES)[number]>("all")
-  const enabled = !authLoading && Boolean(user && isAdmin)
 
   const query = useQuery({
     queryKey: officeKeys.eventInbox(providerFilter, statusFilter),

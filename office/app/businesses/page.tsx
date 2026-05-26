@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge"
 import { Eye, Building2, Search } from "lucide-react"
 import { officeFetch } from "@/lib/api-client"
 import { officeKeys } from "@/lib/query/keys"
+import { useOfficeAdminEnabled } from "@/hooks/queries"
 import { businessTypeDisplayText } from "@/lib/business-type-label"
 
 /** Mirrors `public.businesses` (+ owner fields from admin API). */
@@ -112,6 +113,7 @@ function KybBadge({ rawStatus }: { rawStatus: string }) {
 function BusinessesPageInner() {
   const searchParams = useSearchParams()
   const highlightBusinessId = searchParams.get("highlight")
+  const { enabled } = useOfficeAdminEnabled()
 
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedBusiness, setSelectedBusiness] = useState<BusinessRow | null>(null)
@@ -122,6 +124,7 @@ function BusinessesPageInner() {
     error: queryError,
   } = useQuery({
     queryKey: officeKeys.businesses(),
+    enabled,
     queryFn: async () => {
       const r = await officeFetch("/api/admin/business/businesses")
       const d = (await r.json()) as { businesses?: BusinessRow[]; error?: string }

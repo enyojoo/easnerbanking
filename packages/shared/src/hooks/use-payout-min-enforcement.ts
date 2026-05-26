@@ -45,10 +45,11 @@ export function usePayoutMinEnforcement(input: {
   const lastSeedKey = useRef<string | null>(null)
 
   useEffect(() => {
-    if (!input.enabled || input.minReceive == null || !input.seedKey) return
+    const minReceive = input.minReceive
+    if (!input.enabled || minReceive == null || !input.seedKey) return
     if (lastSeedKey.current === input.seedKey) return
     lastSeedKey.current = input.seedKey
-    applyMin(input.minReceive)
+    applyMin(minReceive)
   }, [
     input.enabled,
     input.minReceive,
@@ -62,7 +63,8 @@ export function usePayoutMinEnforcement(input: {
   ])
 
   useEffect(() => {
-    if (!input.enabled || input.minReceive == null) return
+    const minReceive = input.minReceive
+    if (!input.enabled || minReceive == null) return
     if (input.enteredAmount <= 0) return
 
     const currentReceive = computePayoutReceiveAmount({
@@ -78,7 +80,7 @@ export function usePayoutMinEnforcement(input: {
     if (
       payoutReceiveMeetsMin({
         receiveAmount: currentReceive,
-        minReceive: input.minReceive,
+        minReceive,
         receiveCurrency: input.receiveCurrency,
       })
     ) {
@@ -98,13 +100,13 @@ export function usePayoutMinEnforcement(input: {
       if (
         payoutReceiveMeetsMin({
           receiveAmount: latestReceive,
-          minReceive: input.minReceive,
+          minReceive,
           receiveCurrency: input.receiveCurrency,
         })
       ) {
         return
       }
-      applyMin(input.minReceive)
+      applyMin(minReceive)
     }, debounceMs)
 
     return () => clearTimeout(timer)

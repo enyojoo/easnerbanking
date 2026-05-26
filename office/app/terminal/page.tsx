@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { officeFetch } from "@/lib/api-client"
 import { useQuery } from "@tanstack/react-query"
 import { officeKeys } from "@/lib/query/keys"
+import { useOfficeAdminEnabled } from "@/hooks/queries"
 
 type Row = {
   id: string
@@ -32,8 +33,10 @@ function fmtFiat(amount: number | string | null, currency: string | null) {
 }
 
 export default function TerminalPage() {
+  const { enabled } = useOfficeAdminEnabled()
   const { data: rows = [], error, isPending } = useQuery({
     queryKey: officeKeys.terminalSessions(),
+    enabled,
     queryFn: async () => {
       const r = await officeFetch("/api/admin/business/terminal-sessions")
       const d = (await r.json()) as { sessions?: Row[]; error?: string }

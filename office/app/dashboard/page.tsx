@@ -26,15 +26,14 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { formatMoneyDisplay } from "@easner/shared"
 import { officeFetch } from "@/lib/api-client"
 import type { OfficeOverviewResponse, OfficeVolumeBalance } from "@/lib/types/office-overview"
-import { useAuth } from "@/lib/auth-context"
 import { officeKeys } from "@/lib/query/keys"
+import { useOfficeAdminEnabled } from "@/hooks/queries"
 
 const OFFICE_OVERVIEW_TTL_MS = 5 * 60 * 1000
 const OVERVIEW_PRESET = "7d" as const
 
 export default function AdminDashboardPage() {
-  const { user, isAdmin } = useAuth()
-  const enabled = Boolean(user && isAdmin)
+  const { enabled } = useOfficeAdminEnabled()
 
   const fetchOverview = useCallback(async (): Promise<OfficeOverviewResponse> => {
     const r = await officeFetch(`/api/admin/office/overview?preset=${encodeURIComponent(OVERVIEW_PRESET)}`)

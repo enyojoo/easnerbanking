@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,23 +10,18 @@ import { Switch } from "@/components/ui/switch"
 import { Save, Edit, X } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { supabase } from "@/lib/supabase"
-import { currenciesApi } from "@/lib/currencies-api"
+import { officeKeys } from "@/lib/query/keys"
+import {
+  useOfficeCurrencies,
+  useOfficeSystemSettings,
+  type OfficeSystemSetting,
+} from "@/hooks/queries"
 import { CurrencyFlag } from "@/components/flags"
 import { OfficeRatesPanel } from "@/components/settings/office-rates-panel"
 import { OfficePaymentMethodsPanel } from "@/components/settings/office-payment-methods-panel"
 import { PlatformControlTabShell } from "@/components/platform-control/platform-tab-shell"
 
-interface SystemSetting {
-  id: string
-  key: string
-  value: string
-  data_type: string
-  category: string
-  description?: string
-  is_active: boolean
-  created_at: string
-  updated_at: string
-}
+interface SystemSetting extends OfficeSystemSetting {}
 
 interface Currency {
   id: string
@@ -67,8 +63,11 @@ const SECTION_COPY: Record<
 }
 
 export function SettingsAdminPanel({ section }: { section?: SettingsAdminSection }) {
+  const queryClient = useQueryClient()
+  const settingsQuery = useOfficeSystemSettings()
+  const fiatCurrenciesQuery = useOfficeCurrencies("fiat")
+  const currencies = (fiatCurrenciesQuery.data ?? []) as Currency[]
   const [systemSettings, setSystemSettings] = useState<SystemSetting[]>([])
-  const [currencies, setCurrencies] = useState<Currency[]>([])
   const [saving, setSaving] = useState(false)
   const [isEditingSecuritySettings, setIsEditingSecuritySettings] = useState(false)
 
@@ -100,114 +99,91 @@ export function SettingsAdminPanel({ section }: { section?: SettingsAdminSection
     NGN: { available: false, active: true },
   })
 
-  const loadSystemSettings = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("system_settings")
-        .select("*")
-        .eq("is_active", true)
-        .order("category", { ascending: true })
+  const applySettingsFromRows = (settings: SystemSetting[]) => {
+    setSystemSettings(settings)
 
-      if (error) throw error
+    const newPlatformConfig = {
+      maintenanceMode: false,
+      registrationEnabled: true,
+      emailVerificationRequired: true,
+    }
+    const newSecuritySettings = {
+      sessionTimeout: 30,
+      passwordMinLength: 8,
+      maxLoginAttempts: 5,
+      accountLockoutDuration: 15,
+    }
+    const newCurrencyControls = {
+      USD: { available: true, active: true },
+      EUR: { available: true, active: true },
+      GBP: { available: false, active: true },
+      NGN: { available: false, active: true },
+    }
 
-      setSystemSettings(data || [])
-
-      // Update platform config from settings
-      const settings = data || []
-      const newPlatformConfig = { ...platformConfig }
-      const newSecuritySettings = { ...securitySettings }
-      const newCurrencyControls = {
-        USD: { ...currencyControls.USD },
-        EUR: { ...currencyControls.EUR },
-        GBP: { ...currencyControls.GBP },
-        NGN: { ...currencyControls.NGN },
+    settings.forEach((setting) => {
+      switch (setting.key) {
+        case "maintenance_mode":
+          newPlatformConfig.maintenanceMode = setting.value === "true"
+          break
+        case "registration_enabled":
+          newPlatformConfig.registrationEnabled = setting.value === "true"
+          break
+        case "email_verification_required":
+          newPlatformConfig.emailVerificationRequired = setting.value === "true"
+          break
+        case "session_timeout":
+          newSecuritySettings.sessionTimeout = Number.parseInt(setting.value)
+          break
+        case "password_min_length":
+          newSecuritySettings.passwordMinLength = Number.parseInt(setting.value)
+          break
+        case "max_login_attempts":
+          newSecuritySettings.maxLoginAttempts = Number.parseInt(setting.value)
+          break
+        case "account_lockout_duration":
+          newSecuritySettings.accountLockoutDuration = Number.parseInt(setting.value)
+          break
+        case "currency_available_USD":
+          newCurrencyControls.USD.available = setting.value === "true"
+          break
+        case "currency_active_USD":
+          newCurrencyControls.USD.active = setting.value === "true"
+          break
+        case "currency_available_EUR":
+          newCurrencyControls.EUR.available = setting.value === "true"
+          break
+        case "currency_active_EUR":
+          newCurrencyControls.EUR.active = setting.value === "true"
+          break
+        case "currency_available_GBP":
+          newCurrencyControls.GBP.available = setting.value === "true"
+          break
+        case "currency_active_GBP":
+          newCurrencyControls.GBP.active = setting.value === "true"
+          break
+        case "currency_available_NGN":
+          newCurrencyControls.NGN.available = setting.value === "true"
+          break
+        case "currency_active_NGN":
+          newCurrencyControls.NGN.active = setting.value === "true"
+          break
       }
+    })
 
-      settings.forEach((setting) => {
-        switch (setting.key) {
-          case "maintenance_mode":
-            newPlatformConfig.maintenanceMode = setting.value === "true"
-            break
-          case "registration_enabled":
-            newPlatformConfig.registrationEnabled = setting.value === "true"
-            break
-          case "email_verification_required":
-            newPlatformConfig.emailVerificationRequired = setting.value === "true"
-            break
-          case "session_timeout":
-            newSecuritySettings.sessionTimeout = Number.parseInt(setting.value)
-            break
-          case "password_min_length":
-            newSecuritySettings.passwordMinLength = Number.parseInt(setting.value)
-            break
-          case "max_login_attempts":
-            newSecuritySettings.maxLoginAttempts = Number.parseInt(setting.value)
-            break
-          case "account_lockout_duration":
-            newSecuritySettings.accountLockoutDuration = Number.parseInt(setting.value)
-            break
-          case "currency_available_USD":
-            newCurrencyControls.USD.available = setting.value === "true"
-            break
-          case "currency_active_USD":
-            newCurrencyControls.USD.active = setting.value === "true"
-            break
-          case "currency_available_EUR":
-            newCurrencyControls.EUR.available = setting.value === "true"
-            break
-          case "currency_active_EUR":
-            newCurrencyControls.EUR.active = setting.value === "true"
-            break
-          case "currency_available_GBP":
-            newCurrencyControls.GBP.available = setting.value === "true"
-            break
-          case "currency_active_GBP":
-            newCurrencyControls.GBP.active = setting.value === "true"
-            break
-          case "currency_available_NGN":
-            newCurrencyControls.NGN.available = setting.value === "true"
-            break
-          case "currency_active_NGN":
-            newCurrencyControls.NGN.active = setting.value === "true"
-            break
-        }
-      })
-
-      setPlatformConfig(newPlatformConfig)
-      setSecuritySettings(newSecuritySettings)
-      setOriginalSecuritySettings(newSecuritySettings)
-      setCurrencyControls(newCurrencyControls)
-    } catch (error) {
-      console.error("Error loading system settings:", error)
-    }
-  }
-
-  const loadCurrencies = async () => {
-    try {
-      const list = await currenciesApi.list({ scope: "fiat" })
-      setCurrencies(list)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      console.error("Error loading currencies:", message)
-    }
-  }
-
-  const loadAllData = async () => {
-    try {
-      const tasks: Promise<void>[] = [loadSystemSettings()]
-      if (!section || section === "platform") {
-        tasks.push(loadCurrencies())
-      }
-      await Promise.all(tasks)
-    } catch (error) {
-      console.error("Error loading data:", error)
-    }
+    setPlatformConfig(newPlatformConfig)
+    setSecuritySettings(newSecuritySettings)
+    setOriginalSecuritySettings(newSecuritySettings)
+    setCurrencyControls(newCurrencyControls)
   }
 
   useEffect(() => {
-    void loadAllData()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch when platform tab changes
-  }, [section])
+    if (!settingsQuery.data) return
+    applySettingsFromRows(settingsQuery.data as SystemSetting[])
+  }, [settingsQuery.data])
+
+  const refreshSystemSettings = async () => {
+    await queryClient.invalidateQueries({ queryKey: officeKeys.systemSettings() })
+  }
 
   const updateSystemSetting = async (key: string, value: any, dataType = "string", category = "platform") => {
     try {
@@ -266,7 +242,7 @@ export function SettingsAdminPanel({ section }: { section?: SettingsAdminSection
       await updateSystemSetting(`currency_active_${code}`, next.active, "boolean", "currency")
     } catch (error) {
       console.error("Error updating currency controls:", error)
-      await loadSystemSettings()
+      await refreshSystemSettings()
     }
   }
 

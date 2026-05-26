@@ -1,8 +1,9 @@
 /** TanStack Query keys for Easner Office (admin app). */
 
+export type OfficeCurrencyScope = "fiat" | "rates" | "payment-methods"
+
 export const officeKeys = {
   root: ["office"] as const,
-  adminData: () => [...officeKeys.root, "admin-data"] as const,
   overview: (preset: string) => [...officeKeys.root, "overview", preset] as const,
   users: () => [...officeKeys.root, "users"] as const,
   transactions: () => [...officeKeys.root, "transactions"] as const,
@@ -12,4 +13,12 @@ export const officeKeys = {
   businessInvoices: () => [...officeKeys.root, "business-invoices"] as const,
   businesses: () => [...officeKeys.root, "businesses"] as const,
   terminalSessions: () => [...officeKeys.root, "terminal-sessions"] as const,
+  currencies: (scope: OfficeCurrencyScope | "all" = "all") =>
+    [...officeKeys.root, "currencies", scope] as const,
+  exchangeRates: () => [...officeKeys.root, "exchange-rates"] as const,
+  noahRates: () => [...officeKeys.root, "noah-rates"] as const,
+  paymentMethods: () => [...officeKeys.root, "payment-methods"] as const,
+  payoutCorridors: () => [...officeKeys.root, "payout-corridors"] as const,
+  cryptoDestinations: () => [...officeKeys.root, "crypto-destinations"] as const,
+  systemSettings: () => [...officeKeys.root, "system-settings"] as const,
 } as const
