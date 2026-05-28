@@ -3,6 +3,9 @@ import { fileURLToPath } from "node:url"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
+const nobleHashesRoot = resolve(__dirname, "../node_modules/@noble/hashes")
+const nobleHashesSubpath = (name) => resolve(nobleHashesRoot, `${name}.js`)
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   outputFileTracingRoot: resolve(__dirname, ".."),
@@ -18,31 +21,18 @@ const nextConfig = {
       ),
       "@easner/server": resolve(__dirname, "../packages/server/lib/index.ts"),
       "@radix-ui/react-slot": resolve(__dirname, "../node_modules/@radix-ui/react-slot"),
-      "@noble/hashes": resolve(__dirname, "../node_modules/@turnkey/crypto/node_modules/@noble/hashes"),
-      "@noble/hashes/utils": resolve(
-        __dirname,
-        "../node_modules/@turnkey/crypto/node_modules/@noble/hashes/utils.js"
-      ),
-      "@noble/hashes/utils.js": resolve(
-        __dirname,
-        "../node_modules/@turnkey/crypto/node_modules/@noble/hashes/utils.js"
-      ),
-      "@noble/hashes/hkdf": resolve(
-        __dirname,
-        "../node_modules/@turnkey/crypto/node_modules/@noble/hashes/hkdf.js"
-      ),
-      "@noble/hashes/hkdf.js": resolve(
-        __dirname,
-        "../node_modules/@turnkey/crypto/node_modules/@noble/hashes/hkdf.js"
-      ),
-      "@noble/hashes/sha256": resolve(
-        __dirname,
-        "../node_modules/@turnkey/crypto/node_modules/@noble/hashes/sha256.js"
-      ),
-      "@noble/hashes/sha256.js": resolve(
-        __dirname,
-        "../node_modules/@turnkey/crypto/node_modules/@noble/hashes/sha256.js"
-      ),
+      // npm overrides hoist @noble/hashes to the workspace root; webpack needs explicit subpaths.
+      "@noble/hashes": nobleHashesRoot,
+      "@noble/hashes/utils": nobleHashesSubpath("utils"),
+      "@noble/hashes/utils.js": nobleHashesSubpath("utils"),
+      "@noble/hashes/hkdf": nobleHashesSubpath("hkdf"),
+      "@noble/hashes/hkdf.js": nobleHashesSubpath("hkdf"),
+      "@noble/hashes/sha256": nobleHashesSubpath("sha256"),
+      "@noble/hashes/sha256.js": nobleHashesSubpath("sha256"),
+      "@noble/hashes/sha3": nobleHashesSubpath("sha3"),
+      "@noble/hashes/sha3.js": nobleHashesSubpath("sha3"),
+      "@noble/hashes/hmac": nobleHashesSubpath("hmac"),
+      "@noble/hashes/hmac.js": nobleHashesSubpath("hmac"),
     }
     return config
   },
