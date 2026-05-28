@@ -66,6 +66,7 @@ export {
   type NoahWalletRateRow,
   noahSendRatesQueryPath,
   noahWalletRowsToRateMap,
+  hasNoahSendRateRow,
   isNoahSendRateRowFresh,
   NOAH_SEND_RATES_STALE_MS,
   mapNoahWalletRateRows,

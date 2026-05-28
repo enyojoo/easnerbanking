@@ -52,7 +52,7 @@ import {
   convertNoahSendFlowAmounts,
   exchangeRatesToRateMap,
   getNoahSendConversionRate,
-  isNoahSendRateRowFresh,
+  hasNoahSendRateRow,
   findPayoutFieldsSchema,
   formatSendRateLabel,
   getCurrencySymbol,
@@ -532,16 +532,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         String(r.from_currency || '').toUpperCase() === send &&
         String(r.to_currency || '').toUpperCase() === receive,
     )
-    return isNoahSendRateRowFresh(
-      row
-        ? {
-            from_currency: send,
-            to_currency: receive,
-            rate: row.rate,
-            as_of: row.updated_at || row.created_at,
-          }
-        : null,
-    )
+    return hasNoahSendRateRow(row ? { rate: row.rate } : null)
   }, [
     showCrossCurrencyExchangeUi,
     sendCurrency,
@@ -549,6 +540,14 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     noahRatesFetched,
     exchangeRatesFromContext,
   ])
+
+  const ratesLoadedForReceiveCurrency = useMemo(() => {
+    const receive = String(receiveCurrency || '').trim().toUpperCase()
+    if (!receive) return false
+    return exchangeRatesFromContext.some(
+      (r) => String(r.to_currency || '').toUpperCase() === receive,
+    )
+  }, [exchangeRatesFromContext, receiveCurrency])
 
   const manualQuoteEnabled =
     !isEasetagRecipient &&
@@ -574,7 +573,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     showCrossCurrencyExchangeUi
 
   const noahRatesLoading =
-    needsNoahRateForSend && !hasNoahRateForPair && (!noahRatesFetched || noahRatesFetching)
+    needsNoahRateForSend &&
+    !hasNoahRateForPair &&
+    (!noahRatesFetched || noahRatesFetching || !ratesLoadedForReceiveCurrency)
 
   const manualQuoteLoading = manualQuoteEnabled && !manualQuote && manualQuoteFetching
 

@@ -1,6 +1,6 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { getNoahEurCryptoTicker, getNoahUsdCryptoTicker } from "@/lib/noah/config"
-import { findNoahRate, isNoahRateFresh, listNoahRates } from "@/lib/fx/noah-rates"
+import { findNoahRate, listNoahRates } from "@/lib/fx/noah-rates"
 import {
   computeGlobalPayoutPricing,
   normalizeGlobalPayoutQuoteReceiveAmount,
@@ -213,7 +213,7 @@ export async function buildPayoutQuote(input: {
   let providerRate = 1
   let noahMid: number | undefined
   if (sourceBalanceCurrency !== receiveCurrency) {
-    if (dbRow && isNoahRateFresh(dbRow)) {
+    if (dbRow) {
       providerRate = dbRow.rate
       noahMid = dbRow.noah_mid
     } else {

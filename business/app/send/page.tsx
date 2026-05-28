@@ -12,7 +12,7 @@ import { formatSendRateLabel } from "@easner/shared"
 import { getCurrencySymbol } from "@/lib/utils"
 import {
   convertNoahSendFlowAmounts,
-  isNoahSendRateRowFresh,
+  hasNoahSendRateRow,
   noahSendRatesQueryPath,
   noahWalletRowsToRateMap,
   type NoahWalletRateRow,
@@ -317,7 +317,7 @@ export default function SendPage() {
   }, [noahRateRows, sendCurrency, receiveCurrency])
 
   const hasValidNoahRateForPair =
-    !needsNoahRateForSend || isNoahSendRateRowFresh(activeNoahRateRow)
+    !needsNoahRateForSend || hasNoahSendRateRow(activeNoahRateRow)
 
   const manualQuoteEnabled =
     paymentMethod === "otherCurrency" &&

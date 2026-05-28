@@ -20,13 +20,20 @@ export function noahSendRatesQueryPath(receiveCurrency: string): string {
   return `/api/fx/noah-rates?destinations=${encodeURIComponent(dest)}`
 }
 
-/** True when an active DB rate exists and is within TTL. */
+/** True when a DB row has a usable customer rate (ignores age — sync/ops owns freshness). */
+export function hasNoahSendRateRow(
+  row: Pick<NoahWalletRateRow, "rate"> | null | undefined,
+): boolean {
+  return Boolean(row && Number.isFinite(row.rate) && row.rate > 0)
+}
+
+/** True when an active DB rate exists and is within TTL (ops/background sync only). */
 export function isNoahSendRateRowFresh(
   row: Pick<NoahWalletRateRow, "rate" | "as_of" | "from_currency" | "to_currency"> | null | undefined,
   maxAgeMs = NOAH_SEND_RATES_STALE_MS,
 ): boolean {
-  if (!row || !Number.isFinite(row.rate) || row.rate <= 0) return false
-  const asOf = row.as_of ? new Date(row.as_of).getTime() : NaN
+  if (!hasNoahSendRateRow(row)) return false
+  const asOf = row!.as_of ? new Date(row!.as_of).getTime() : NaN
   if (!Number.isFinite(asOf) || asOf <= 0) return false
   return Date.now() - asOf <= maxAgeMs
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   convertNoahSendFlowAmounts,
   getNoahSendConversionRate,
+  hasNoahSendRateRow,
   isNoahSendRateRowFresh,
   noahSendRatesQueryPath,
   noahWalletRowsToRateMap,
@@ -16,6 +17,18 @@ describe("noahSendRatesQueryPath", () => {
     expect(noahSendRatesQueryPath("ngn")).toBe(
       "/api/fx/noah-rates?destinations=NGN",
     )
+  })
+})
+
+describe("hasNoahSendRateRow", () => {
+  it("accepts positive rates regardless of age", () => {
+    expect(hasNoahSendRateRow(null)).toBe(false)
+    expect(hasNoahSendRateRow({ rate: 0 })).toBe(false)
+    expect(
+      hasNoahSendRateRow({
+        rate: 1288,
+      }),
+    ).toBe(true)
   })
 })
 
