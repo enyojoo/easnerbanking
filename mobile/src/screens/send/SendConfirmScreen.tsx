@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, Pressable, StyleSheet, ScrollView, Animated, ActivityIndicator } from 'react-native'
 import { ArrowLeft } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CommonActions, useFocusEffect } from '@react-navigation/native'
 import { useQueryClient } from '@tanstack/react-query'
@@ -60,6 +59,7 @@ import {
   payoutPrepareSessionFromQuote,
 } from '../../lib/sendFlowPayoutQuote'
 import { useQuoteCountdown } from '../../hooks/useQuoteCountdown'
+import { haptics } from '../../lib/haptics'
 
 function inferCountryFromRecipientCurrency(currency: string): string | undefined {
   const m: Record<string, string> = {
@@ -404,9 +404,11 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           if (scope && user.id) {
             void invalidateTransactionsFeed(qc, scope, user.id).catch(() => {})
           }
+
+          haptics.success()
         } catch (e: unknown) {
           if (!cancelled) {
-            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+            haptics.error()
             const msg = e instanceof Error ? e.message : TRANSFER_FAIL_MESSAGE
             setTransferError(msg)
           }
@@ -447,7 +449,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   const onConfirmPress = async () => {
     if (!recipient || sendingAfterPin) return
     setTransferError(null)
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    haptics.medium()
     if (!user?.id) {
       showError('Not authenticated.')
       return

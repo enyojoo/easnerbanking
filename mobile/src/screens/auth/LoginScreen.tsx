@@ -11,7 +11,6 @@ import {
   Keyboard,
 } from 'react-native'
 import { Check } from 'lucide-react-native'
-import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '../../contexts/AuthContext'
 import { NavigationProps } from '../../types'
@@ -23,6 +22,7 @@ import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
 import { TextField } from '../../components/ui'
 import { useToast } from '../../components/ToastProvider'
+import { haptics } from '../../lib/haptics'
 
 export default function LoginScreen({ navigation }: NavigationProps) {
   const themeColors = useThemeColors()
@@ -144,7 +144,7 @@ export default function LoginScreen({ navigation }: NavigationProps) {
                  android_ripple={ripple.neutral}
                   style={styles.checkboxContainer}
                   onPress={async () => {
-                    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                    haptics.tap()
                     setRememberMe(!rememberMe)
                   }} >
                   <View
@@ -178,7 +178,7 @@ export default function LoginScreen({ navigation }: NavigationProps) {
                android_ripple={ripple.neutral}
                 style={styles.linkButton}
                 onPress={async () => {
-                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  haptics.tap()
                   navigation.navigate('ForgotPassword')
                 }} >
                 <Text style={authScreenStyles.linkText}>Forgot password?</Text>
@@ -191,7 +191,7 @@ export default function LoginScreen({ navigation }: NavigationProps) {
             <Pressable 
              android_ripple={ripple.neutral} 
               onPress={async () => {
-                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                haptics.tap()
                 navigation.navigate('Register')
               }} >
               <Text style={authScreenStyles.footerLink}>Sign up</Text>

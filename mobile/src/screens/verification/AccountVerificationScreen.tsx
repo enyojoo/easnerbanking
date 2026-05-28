@@ -21,7 +21,6 @@ import {
   Info,
   Map,
 } from 'lucide-react-native'
-import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { WebView } from 'react-native-webview'
 import { useFocusEffect } from '@react-navigation/native'
@@ -55,6 +54,7 @@ import { CONSUMER_TIER_LADDER } from '../../lib/compliance-tier-ladder-copy'
 import { isTier1Complete } from '../../lib/compliance'
 import { needsNoahVirtualAccountProvision } from '../../lib/noahAccountSync'
 import { useToast } from '../../components/ToastProvider'
+import { haptics } from '../../lib/haptics'
 
 const TIER_ICONS: Record<1 | 2 | 3, LucideIcon> = {
   1: Globe,
@@ -647,7 +647,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
           >
             <Pressable
               onPress={async () => {
-                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                haptics.tap()
                 navigation.goBack()
               }}
               style={({ pressed }) => [
@@ -771,7 +771,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
               ) : (
                 <Pressable
                   onPress={async () => {
-                    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                    haptics.tap()
                     await handleOpenKYC()
                   }}
                   disabled={loadingKyc}

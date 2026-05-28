@@ -7,7 +7,6 @@ import {
   Platform,
   Pressable,
 } from 'react-native'
-import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { OtpCodeInput, SectionCard, Button } from '../../components/ui'
 import { EasnerAlertSheet } from '../../components/premium'
@@ -16,6 +15,7 @@ import { spacing, textStyles, useThemeColors } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
 import { useToast } from '../../components/ToastProvider'
+import { haptics } from '../../lib/haptics'
 
 export default function MfaVerifyScreen() {
   const palette = useThemeColors()
@@ -45,7 +45,7 @@ export default function MfaVerifyScreen() {
   }
 
   const handleBack = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
     setCancelSheetVisible(true)
   }
 

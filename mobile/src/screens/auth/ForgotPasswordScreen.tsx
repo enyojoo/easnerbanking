@@ -5,12 +5,9 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
-  ScrollView,
 } from 'react-native'
 import { ArrowLeft, HelpCircle } from 'lucide-react-native'
-import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { getApiBaseUrl } from '../../lib/apiClient'
 import { NavigationProps } from '../../types'
@@ -24,6 +21,8 @@ import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
 import { PinKeypad } from '../../components/pin'
 import { useOtpClipboardAutofill } from '../../hooks/useOtpClipboardAutofill'
 import { useToast } from '../../components/ToastProvider'
+import KeyboardAwareScreen from '../../components/KeyboardAwareScreen'
+import { haptics } from '../../lib/haptics'
 
 export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
   const [step, setStep] = useState<'email' | 'otp'>('email')
@@ -42,7 +41,7 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
   }, [])
 
   const handleBack = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
     if (step === 'otp') {
       setStep('email')
       setOtpCode('')
@@ -55,7 +54,7 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
   }
 
   const handleHelp = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
     showInfo('Need assistance? Contact support at support@easner.com')
   }
 
@@ -235,20 +234,17 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
 
   return (
     <View style={styles.container}>
-      <KeyboardAvoidingView
+      <KeyboardAwareScreen
         style={styles.keyboardContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        contentContainerStyle={[
+          styles.scrollContainer,
+          {
+            paddingTop: insets.top + spacing[4],
+            paddingBottom: Math.max(insets.bottom, spacing[5]),
+          },
+        ]}
+        showsVerticalScrollIndicator={false}
       >
-        <ScrollView
-          contentContainerStyle={[
-            styles.scrollContainer,
-            {
-              paddingTop: insets.top + spacing[4],
-              paddingBottom: Math.max(insets.bottom, spacing[5]),
-            },
-          ]}
-          showsVerticalScrollIndicator={false}
-        >
           {/* Header with back and help buttons */}
           <View style={styles.header}>
             <Pressable
@@ -359,8 +355,7 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
               </>
             )}
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAwareScreen>
     </View>
   )
 }

@@ -7,16 +7,15 @@ import {
   Pressable,
   StyleSheet,
   ScrollView,
-  KeyboardAvoidingView,
   Platform,
   Animated,
   Modal,
   Keyboard,
   useWindowDimensions,
 } from 'react-native'
+import { KeyboardAvoidingView, KeyboardStickyView } from 'react-native-keyboard-controller'
 import { MessageSquareText, ChevronDown, User, Coins, RotateCcw, ArrowLeft, ArrowUpDown, Link, Delete, X, ChevronRight } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Path } from 'react-native-svg'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -83,6 +82,7 @@ import { isMobileMoneyRecipient } from '../../lib/recipientPayoutPreview'
 import { useEasenetRecipientHydration } from '../../hooks/useEasenetRecipientHydration'
 import { navigateToSendRecipientHub } from '../../lib/sendFlowNavigation'
 import { SendSelectedRecipientSummary } from '../../components/send/SendSelectedRecipientSummary'
+import { haptics } from '../../lib/haptics'
 
 function isManualStablecoinCurrencyCode(code: string): boolean {
   const c = code.trim().toUpperCase()
@@ -408,7 +408,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const handleKeypadPress = (value: string) => {
     if (!recipient) return // Disabled until recipient is selected
     
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
 
     let raw = sendAmount.replace(/,/g, '')
 
@@ -877,7 +877,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                  android_ripple={ripple.neutral}
                   style={styles.recipientBar}
                   onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                    haptics.tap()
                     navigateToSendRecipientHub(navigation, {
                       preferredBalanceCurrency: selectedBalanceCurrency,
                       selectedPaymentMethod,
@@ -901,7 +901,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                  android_ripple={ripple.neutral}
                   style={styles.selectRecipientBox}
                   onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                    haptics.tap()
                     navigateToSendRecipientHub(navigation, {
                       preferredBalanceCurrency: selectedBalanceCurrency,
                     })
@@ -1042,7 +1042,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       styles.balanceSelectorInsufficient,
                   ]}
                   onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                    haptics.tap()
                     setShowCurrencyPicker(true)
                   }} >
                   <View style={styles.flagContainer}>
@@ -1147,7 +1147,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                         key={num}
                         style={[styles.keypadButton, { width: keypadSizing.buttonWidth }]}
                         onPress={() => handleKeypadPress(num.toString())}
-                        onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} >
+                        onPressIn={() => haptics.tap()} >
                         <Text style={styles.keypadButtonText}>{num}</Text>
                       </Pressable>
                     ))}
@@ -1158,7 +1158,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                         key={num}
                         style={[styles.keypadButton, { width: keypadSizing.buttonWidth }]}
                         onPress={() => handleKeypadPress(num.toString())}
-                        onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} >
+                        onPressIn={() => haptics.tap()} >
                         <Text style={styles.keypadButtonText}>{num}</Text>
                       </Pressable>
                     ))}
@@ -1169,7 +1169,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                         key={num}
                         style={[styles.keypadButton, { width: keypadSizing.buttonWidth }]}
                         onPress={() => handleKeypadPress(num.toString())}
-                        onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} >
+                        onPressIn={() => haptics.tap()} >
                         <Text style={styles.keypadButtonText}>{num}</Text>
                       </Pressable>
                     ))}
@@ -1178,21 +1178,21 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                      android_ripple={ripple.neutral}
                       style={[styles.keypadButton, { width: keypadSizing.buttonWidth }]}
                       onPress={() => handleKeypadPress('.')}
-                      onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} >
+                      onPressIn={() => haptics.tap()} >
                       <Text style={styles.keypadButtonText}>.</Text>
                     </Pressable>
                     <Pressable
                      android_ripple={ripple.neutral}
                       style={[styles.keypadButton, { width: keypadSizing.buttonWidth }]}
                       onPress={() => handleKeypadPress('0')}
-                      onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} >
+                      onPressIn={() => haptics.tap()} >
                       <Text style={styles.keypadButtonText}>0</Text>
                     </Pressable>
                     <Pressable
                      android_ripple={ripple.neutral}
                       style={[styles.keypadButton, { width: keypadSizing.buttonWidth }]}
                       onPress={() => handleKeypadPress('backspace')}
-                      onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} disabled={!sendAmount || sendAmount === '0'}
+                      onPressIn={() => haptics.tap()} disabled={!sendAmount || sendAmount === '0'}
                     >
                       <Delete
                         size={24}
@@ -1209,6 +1209,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         </KeyboardAvoidingView>
         
         {/* Send/Authorize Button */}
+        <KeyboardStickyView offset={{ closed: 0, opened: spacing[2] }}>
         <View
           style={[
             styles.bottomContainer,
@@ -1220,7 +1221,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
              android_ripple={ripple.neutral}
               style={styles.verifyInlineCta}
               onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                haptics.tap()
                 navigation.navigate('AccountVerification' as never)
               }} accessibilityRole="button"
               accessibilityLabel="Verify identity to unlock banking. Begin."
@@ -1270,7 +1271,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 return
               }
 
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+              haptics.medium()
 
               const navAmounts =
                 sendCurrency !== receiveCurrency
@@ -1473,6 +1474,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             </LinearGradient>
           </Pressable>
         </View>
+        </KeyboardStickyView>
 
         {/* Sending Method Modal */}
         <Modal
@@ -1537,7 +1539,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                           isSelected && styles.currencyItemActive
                         ]}
                         onPress={async () => {
-                          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                          haptics.tap()
                           setSelectedBalanceCurrency(item.code)
                           setSelectedPaymentMethod('balance')
                           setShowCurrencyPicker(false)
@@ -1582,7 +1584,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                         key={currency.code}
                         style={styles.currencyItem}
                         onPress={async () => {
-                          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                          haptics.tap()
                           setSelectedOtherCurrency(currency.code)
                           setSelectedPaymentMethod('otherCurrency')
                           setSelectedOtherPaymentMethod(null)
@@ -1612,7 +1614,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                        android_ripple={ripple.neutral}
                         style={styles.currencyItem}
                         onPress={async () => {
-                          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                          haptics.tap()
                           setSelectedOtherCurrency(null)
                           setSelectedOtherPaymentMethod(null)
                         }}
@@ -1637,7 +1639,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                               isSelected && styles.currencyItemActive
                             ]}
                             onPress={async () => {
-                              await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                              haptics.tap()
                               setSelectedOtherPaymentMethod(method.code)
                               setShowCurrencyPicker(false)
                             }}

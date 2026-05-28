@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react'
-import { Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native'
-import * as Haptics from 'expo-haptics'
+import { StyleSheet, Text, View, ViewStyle } from 'react-native'
+import { PressableScale } from 'pressto'
 import {
   borderRadius,
   fontFamily,
@@ -9,7 +9,7 @@ import {
   useThemeColors,
 } from '../../theme'
 import type { Colors } from '../../theme/colors'
-import { ripple } from '../../lib/androidRipple'
+import { haptics } from '../../lib/haptics'
 
 export type FilterChipProps = {
   label: string
@@ -35,20 +35,14 @@ export function FilterChip({
 
   const handlePress = () => {
     if (!onPress) return
-    Haptics.selectionAsync().catch(() => {})
+    haptics.select()
     onPress()
   }
 
   return (
-    <Pressable
-      android_ripple={ripple.neutral}
+    <PressableScale
       onPress={handlePress}
-      style={({ pressed }) => [
-        styles.base,
-        selected ? styles.active : styles.inactive,
-        pressed ? styles.pressed : null,
-        Array.isArray(style) ? style : style ? [style] : null,
-      ]}
+      style={[styles.base, selected ? styles.active : styles.inactive, style]}
       accessibilityRole="button"
       accessibilityState={{ selected }}
       accessibilityLabel={label}
@@ -71,7 +65,7 @@ export function FilterChip({
           </Text>
         </View>
       ) : null}
-    </Pressable>
+    </PressableScale>
   )
 }
 
@@ -92,9 +86,6 @@ function createStyles(c: Colors) {
       backgroundColor: c.semantic.card,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: c.border.default,
-    },
-    pressed: {
-      opacity: 0.85,
     },
     label: {
       ...textStyles.labelMedium,

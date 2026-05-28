@@ -17,9 +17,9 @@ import {
   Animated,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import * as Haptics from 'expo-haptics'
 import { colors, shadows, borderRadius } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
+import { haptics } from '../../lib/haptics'
 
 interface GradientCardProps {
   children: React.ReactNode
@@ -77,7 +77,7 @@ export default function GradientCard({
   const handlePress = useCallback(async () => {
     if (onPress) {
       if (haptic) {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+        haptics.tap()
       }
       onPress()
     }

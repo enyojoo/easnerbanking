@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { HelpCircle } from 'lucide-react-native'
-import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { NavigationProps } from '../../types'
 import { colors, surfaceChromeCircleStyle, textStyles, spacing, useThemeColors } from '../../theme'
@@ -28,6 +27,7 @@ import { appPinStrings } from '../../constants/app-pin-en'
 import { PinKeypad } from '../../components/pin'
 import { EasnerAlertSheet } from '../../components/premium'
 import { useToast } from '../../components/ToastProvider'
+import { haptics } from '../../lib/haptics'
 
 export default function PinSetupScreen({ navigation, route }: NavigationProps) {
   const palette = useThemeColors()
@@ -73,7 +73,7 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
       }
     }
     
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
   }
 
   const handleBackspace = () => {
@@ -93,7 +93,7 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
       setConfirmPin(newPin)
     }
     
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
   }
 
   const handleConfirmPin = async (confirmPinString?: string) => {
@@ -126,7 +126,7 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
 
       emitAppLocked('unlocked')
 
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+      haptics.success()
 
       // Optional flow: opened from main stack (e.g. More) — gate is already "main"
       if (!isMandatory) {

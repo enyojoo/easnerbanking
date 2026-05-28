@@ -1,4 +1,5 @@
 package com.easner.mobile
+import com.intercom.reactnative.IntercomModule
 
 import android.app.Application
 import android.content.res.Configuration

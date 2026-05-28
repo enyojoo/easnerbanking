@@ -7,6 +7,7 @@ import {
   ScrollView,
   Pressable,
 } from 'react-native'
+import { haptics } from '../../lib/haptics'
 import type { LucideIcon } from 'lucide-react-native'
 import {
   Bell,
@@ -23,7 +24,6 @@ import {
   Users,
 } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import * as Haptics from 'expo-haptics'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { useAuth } from '../../contexts/AuthContext'
 import { NavigationProps, KYCSubmission } from '../../types'
@@ -40,6 +40,8 @@ import {
 import { useThemeColors } from '../../contexts/ThemePaletteContext'
 import { ripple } from '../../lib/androidRipple'
 import { EasnerAlertSheet } from '../../components/premium'
+import EaseEnter from '../../components/EaseEnter'
+import { SettingsRow } from '../../components/SettingsRow'
 import { SectionCard } from '../../components/ui'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import { AvatarImage } from '../../components/AvatarImage'
@@ -290,33 +292,15 @@ function MoreContent({ navigation }: NavigationProps) {
     isDestructive: boolean = false,
     isLast: boolean = false,
   ) => (
-    <Pressable
-     android_ripple={ripple.neutral}
-      style={[styles.menuItem, !isLast && styles.menuItemDivider]}
-      onPress={async () => {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-        onPress()
-      }} >
-      <View style={styles.menuItemLeft}>
-        <View style={styles.menuItemIconWrap}>
-          <IconComponent
-            size={18}
-            color={isDestructive ? colors.error.main : colors.primary.main}
-            strokeWidth={2}
-          />
-        </View>
-        <View style={styles.menuItemTextWrap}>
-          <Text style={[styles.menuItemText, isDestructive && styles.destructiveText]}>
-            {title}
-          </Text>
-          <Text style={styles.menuItemSubtitle}>{subtitle}</Text>
-        </View>
-      </View>
-      <View style={styles.menuItemRight}>
-        {rightComponent}
-        <ChevronRight size={18} color={colors.text.tertiary} strokeWidth={2} />
-      </View>
-    </Pressable>
+    <SettingsRow
+      title={title}
+      subtitle={subtitle}
+      onPress={onPress}
+      icon={IconComponent}
+      rightComponent={rightComponent}
+      isDestructive={isDestructive}
+      isLast={isLast}
+    />
   )
 
   // Profile card data
@@ -344,7 +328,7 @@ function MoreContent({ navigation }: NavigationProps) {
       const text = `@${easetagRaw}`
       const ok = await copyToClipboard(text)
       if (!ok) return
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      haptics.success()
       if (easetagCopyResetRef.current) clearTimeout(easetagCopyResetRef.current)
       setEasetagJustCopied(true)
       easetagCopyResetRef.current = setTimeout(() => {
@@ -397,13 +381,13 @@ function MoreContent({ navigation }: NavigationProps) {
           }}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.content}>
+          <EaseEnter style={styles.content}>
             {/* Profile card */}
             <SectionCard style={styles.profileCard}>
               <Pressable
                 android_ripple={ripple.neutral}
                 onPress={async () => {
-                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  haptics.tap()
                   navigateFromMoreTab('Profile')
                 }}
                 style={styles.profileRow}
@@ -469,7 +453,7 @@ function MoreContent({ navigation }: NavigationProps) {
               <Pressable
                 android_ripple={ripple.heroOnDark}
                 onPress={async () => {
-                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  haptics.tap()
                   banner.onPress()
                 }}
                 accessibilityRole="button"
@@ -503,7 +487,7 @@ function MoreContent({ navigation }: NavigationProps) {
                   android_ripple={ripple.neutral}
                   style={[styles.menuItem, styles.menuItemDivider]}
                   onPress={async () => {
-                    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                    haptics.tap()
                     navigateFromMoreTab('AccountVerification')
                   }}
                 >
@@ -621,7 +605,7 @@ function MoreContent({ navigation }: NavigationProps) {
                 android_ripple={ripple.destructiveTint}
                 style={styles.signOutButton}
                 onPress={async () => {
-                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  haptics.tap()
                   setShowLogoutDialog(true)
                 }}
               >
@@ -634,7 +618,7 @@ function MoreContent({ navigation }: NavigationProps) {
             <View style={styles.versionContainer}>
               <Text style={styles.versionText}>Easner · v1.0.0</Text>
             </View>
-          </View>
+          </EaseEnter>
         </ScrollView>
       </View>
 

@@ -25,7 +25,6 @@ import {
   HelpCircle,
 } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import * as Haptics from 'expo-haptics'
 import { useQueryClient } from '@tanstack/react-query'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { TransactionDetailsBodySkeleton } from '../../components/skeletons'
@@ -55,6 +54,7 @@ import {
 import { isEasnerProductReceiveTitle, isEasnerProductSendTitle, isEasetagReceiveTitle, qk, scopeKey, formatMoneyDisplay, formatSendRateLabel, formatPayoutRecipientSubtitle, formatTransactionDetailHeroTitle, type GlobalPayoutReviewSnapshot, type GlobalPayoutRecipientSnapshot } from '@easner/shared'
 import { ApiError } from '../../query/api-client'
 import { useScope } from '../../query/scope'
+import { haptics } from '../../lib/haptics'
 
 interface LedgerTransaction {
   id: string
@@ -274,7 +274,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   const handleCopy = async (text: string, key: string) => {
     const ok = await copyToClipboard(text)
     if (!ok) return
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+    haptics.success()
     setCopiedStates((prev) => ({ ...prev, [key]: true }))
     setTimeout(() => {
       setCopiedStates((prev) => ({ ...prev, [key]: false }))
@@ -517,7 +517,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   }
 
   const handleSendAgain = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    haptics.medium()
                 navigation.navigate('SelectRecentRecipient' as never)
   }
 
@@ -542,7 +542,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
         <Pressable
          android_ripple={ripple.neutral}
           onPress={async () => {
-            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+            haptics.tap()
             navigation.goBack()
           }}
           style={styles.backButton} >
@@ -597,7 +597,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
             <Pressable
              android_ripple={ripple.neutral}
               onPress={async () => {
-                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                haptics.tap()
                 navigation.goBack()
               }}
               style={styles.backButton} >
@@ -666,7 +666,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
           <Pressable
            android_ripple={ripple.neutral}
             onPress={async () => {
-              await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+              haptics.tap()
               navigation.goBack()
             }}
             style={styles.backButton} >
@@ -1132,7 +1132,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                   pressed && styles.outlineButtonPressed,
                 ]}
                 onPress={async () => {
-                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  haptics.tap()
                   navigation.navigate('Support' as never)
                 }}
                 accessibilityRole="button"
@@ -1152,7 +1152,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                 pressed && styles.outlineButtonPressed,
               ]}
               onPress={async () => {
-                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                haptics.tap()
                 navigation.navigate('Support' as never)
               }}
               accessibilityRole="button"

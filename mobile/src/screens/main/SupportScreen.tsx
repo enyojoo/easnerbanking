@@ -11,7 +11,6 @@ import {
   Alert,
 } from 'react-native'
 import { ArrowLeft, ChevronRight } from 'lucide-react-native'
-import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
@@ -20,6 +19,7 @@ import { presentIntercomMessenger } from '../../lib/intercom'
 import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
+import { haptics } from '../../lib/haptics'
 
 export default function SupportScreen({ navigation }: NavigationProps) {
   const insets = useSafeAreaInsets()
@@ -59,7 +59,7 @@ export default function SupportScreen({ navigation }: NavigationProps) {
   }
 
   const toggleFAQ = async (index: number) => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
     setExpandedFAQ(expandedFAQ === index ? null : index)
   }
 
@@ -110,7 +110,7 @@ export default function SupportScreen({ navigation }: NavigationProps) {
      android_ripple={ripple.neutral}
       style={[styles.contactButton, isLast && styles.contactButtonLast]}
       onPress={async () => {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+        haptics.tap()
         onPress()
       }} >
       <Text style={styles.contactIcon}>{icon}</Text>
@@ -148,7 +148,7 @@ export default function SupportScreen({ navigation }: NavigationProps) {
             <Pressable
              android_ripple={ripple.neutral}
               onPress={async () => {
-                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                haptics.tap()
                 navigation.goBack()
               }}
               style={styles.backButton} >

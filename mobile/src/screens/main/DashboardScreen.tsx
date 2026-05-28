@@ -13,7 +13,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import ShimmerLoader from '../../components/premium/ShimmerLoader'
-import * as Haptics from 'expo-haptics'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   MessageCircle,
@@ -52,7 +51,8 @@ import { apiGet, apiPost } from '../../lib/apiClient'
 import { useQueryClient } from '@tanstack/react-query'
 import { useScope } from '../../query/scope'
 import { NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
-import { ListRowSkeleton } from '../../components/skeletons'
+import EmptyState from '../../components/EmptyState'
+import EaseEnter from '../../components/EaseEnter'
 import { SectionCard } from '../../components/ui'
 import { formatSignedCurrency, getTransactionStatusDisplay } from '../../utils/formatters'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
@@ -68,6 +68,7 @@ import { getTransactionListName } from '../../lib/transactionListLabel'
 import { AvatarImage } from '../../components/AvatarImage'
 import { avatarImageUri, warmAvatarCache } from '../../lib/avatarCache'
 import { buildGroupedActivityItems } from '../../lib/transactionListGrouping'
+import { haptics } from '../../lib/haptics'
 
 const DASHBOARD_SELECTED_CURRENCY_KEY_PREFIX = 'easner_dashboard_selected_currency_'
 const DASHBOARD_RECENT_TX_CACHE_KEY_PREFIX = 'easner_dashboard_recent_tx_v2_'
@@ -392,7 +393,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const handleCurrencyChange = (currency: 'USD' | 'EUR' | 'GBP') => {
     setSelectedCurrency(currency)
     setShowCurrencyDropdown(false)
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
   }
 
   useEffect(() => {
@@ -406,7 +407,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
 
   const toggleBalanceVisibility = () => {
     setBalanceVisible(!balanceVisible)
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
   }
 
   const getTransactionIcon = (iconType: string, isReceived: boolean) => {
@@ -589,7 +590,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                       isSelected && styles.currencyItemActive
                     ]}
                     onPress={async () => {
-                      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                      haptics.tap()
                       handleCurrencyChange(item.code as 'USD' | 'EUR' | 'GBP')
                       setShowCurrencyDropdown(false)
                     }}
@@ -634,7 +635,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                android_ripple={ripple.neutral}
                 style={styles.headerAvatarButton}
                 onPress={async () => {
-                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  haptics.tap()
                   navigation.navigate('Profile' as any)
                 }} >
                 {headerAvatarUri ? (
@@ -656,7 +657,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                  android_ripple={ripple.neutral}
                   style={styles.verifyAccountBanner}
                   onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                    haptics.tap()
                     navigation.navigate('AccountVerification' as never)
                   }} accessibilityRole="button"
                   accessibilityLabel="Verify identity to unlock banking. Begin."
@@ -675,7 +676,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
              android_ripple={ripple.neutral}
               style={styles.supportHeaderButton}
               onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                haptics.tap()
                 navigation.navigate('Support' as never)
               }} accessibilityRole="button"
               accessibilityLabel="Support"
@@ -716,6 +717,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
           />
         }
       >
+        <EaseEnter>
         <LinearGradient
           colors={palette.primary.heroGradient as unknown as readonly [string, string]}
           start={{ x: 0, y: 0 }}
@@ -730,7 +732,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
               style={styles.currencySelector}
               onPress={() => {
                 setShowCurrencyDropdown(true)
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                haptics.tap()
                 refreshBalances(false).catch(error => {
                   console.error('Error refreshing balances:', error)
                 })
@@ -801,7 +803,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
               android_ripple={ripple.heroOnLight}
               style={({ pressed }) => [styles.heroReceiveButton, pressed && styles.heroBtnPressed]}
               onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                haptics.tap()
                 navigation.navigate('ReceiveMoney' as never, {
                   currency: selectedCurrency,
                 } as never)
@@ -816,7 +818,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
               android_ripple={ripple.heroOnDark}
               style={({ pressed }) => [styles.heroSendButton, pressed && styles.heroBtnPressed]}
               onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                haptics.tap()
                 navigation.navigate('SelectRecentRecipient' as never, {
                   preferredBalanceCurrency:
                     selectedCurrency === 'USD' || selectedCurrency === 'EUR'
@@ -846,7 +848,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                 style={({ pressed }) => [styles.viewAllButton, pressed && styles.viewAllButtonPressed]}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  haptics.tap()
                   navigation.navigate('Transactions' as never)
                 }}
                 accessibilityRole="button"
@@ -871,15 +873,22 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
               ))}
             </View>
           ) : recentTransactions.length === 0 && hasAttemptedLoad ? (
-            <View style={styles.emptyStateContainer}>
-              <View style={styles.emptyIconContainer}>
-                <Receipt size={36} color={palette.text.tertiary} strokeWidth={1.5} />
-              </View>
-              <Text style={styles.emptyStateTitle}>No transactions yet</Text>
-              <Text style={styles.emptyStateText}>
-                Your recent transactions will appear here once you send, receive or spend money
-              </Text>
-            </View>
+            <EmptyState
+              icon={Receipt}
+              title="No transactions yet"
+              message="Your recent transactions will appear here once you send, receive or spend money"
+              action={{
+                label: 'Send money',
+                onPress: () => {
+                  navigation.navigate('SelectRecentRecipient' as never, {
+                    preferredBalanceCurrency:
+                      selectedCurrency === 'USD' || selectedCurrency === 'EUR'
+                        ? selectedCurrency
+                        : undefined,
+                  } as never)
+                },
+              }}
+            />
           ) : (
             <View>
               {dashboardTxSegments.map((seg) => {
@@ -908,7 +917,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                       pressed && styles.transactionItemPressed,
                     ]}
                     onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                      haptics.tap()
                       navigation.navigate('TransactionDetails' as never, {
                         transactionId:
                           transaction.ledger_row_id?.trim() || transaction.transaction_id,
@@ -970,6 +979,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
           )}
         </SectionCard>
         </View>
+        </EaseEnter>
     </ScrollView>
     </View>
   )

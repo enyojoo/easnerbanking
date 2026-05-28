@@ -1,5 +1,6 @@
 import React from 'react'
-import { Modal, View, StyleSheet, Pressable, type ModalProps } from 'react-native'
+import { Modal, View, StyleSheet, Pressable, useWindowDimensions, type ModalProps } from 'react-native'
+import { EaseView } from 'react-native-ease'
 import { borderRadius, spacing, useThemeColors } from '../../theme'
 
 type PremiumModalSheetProps = ModalProps & {
@@ -15,18 +16,23 @@ export default function PremiumModalSheet({
   ...props
 }: PremiumModalSheetProps) {
   const palette = useThemeColors()
+  const { height: screenHeight } = useWindowDimensions()
+  const sheetOffset = Math.min(screenHeight * 0.45, 420)
 
   return (
     <Modal
       {...props}
       visible={visible}
       transparent
-      animationType="slide"
+      animationType="none"
       onRequestClose={onRequestClose}
     >
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onRequestClose} />
-        <View
+        <EaseView
+          initialAnimate={{ translateY: sheetOffset }}
+          animate={{ translateY: visible ? 0 : sheetOffset }}
+          transition={{ type: 'spring', damping: 22, stiffness: 280 }}
           style={[
             styles.sheet,
             { backgroundColor: palette.semantic.card, borderColor: palette.border.default },
@@ -34,7 +40,7 @@ export default function PremiumModalSheet({
         >
           <View style={[styles.grabber, { backgroundColor: palette.border.default }]} />
           {children}
-        </View>
+        </EaseView>
       </View>
     </Modal>
   )
@@ -64,4 +70,3 @@ const styles = StyleSheet.create({
     marginBottom: spacing[4],
   },
 })
-

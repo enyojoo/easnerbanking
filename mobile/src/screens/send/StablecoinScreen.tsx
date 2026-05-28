@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { View, Text, Pressable, StyleSheet, ScrollView, Animated, ActivityIndicator } from 'react-native'
 import { ArrowLeft, Copy, Check } from 'lucide-react-native'
-import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import QRCode from 'react-native-qrcode-svg'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -9,6 +8,8 @@ import { NavigationProps } from '../../types'
 import type { Recipient } from '../../types'
 import { colors, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
+import { useDeferredLoading } from '../../hooks/useDeferredLoading'
+import SkeletonLoader from '../../components/SkeletonLoader'
 import { ripple } from '../../lib/androidRipple'
 import { analytics } from '../../lib/analytics'
 import { getApiBaseUrl, getNoahScopeHeaders } from '../../lib/apiClient'
@@ -18,6 +19,7 @@ import { useToast } from '../../components/ToastProvider'
 import { completeManualSendOrder, useManualPayInScreen } from '../../hooks/use-manual-pay-in-screen'
 import { ManualSendReceiptUpload } from '../../components/send/ManualSendReceiptUpload'
 import type { ManualQuoteResponse } from '../../lib/manual-send-api'
+import { haptics } from '../../lib/haptics'
 
 function stablecoinLabel(pm: string | undefined): string {
   const u = String(pm || '').toUpperCase()
@@ -61,6 +63,8 @@ export default function StablecoinScreen({ navigation, route }: NavigationProps)
 
   const [address, setAddress] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const addressLoading = !address && !loadError
+  const showAddressSpinner = useDeferredLoading(addressLoading)
   const [copied, setCopied] = useState(false)
   const [receiptPath, setReceiptPath] = useState<string | null>(null)
 
@@ -107,7 +111,7 @@ export default function StablecoinScreen({ navigation, route }: NavigationProps)
     if (ok) {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      haptics.success()
     }
   }
 
@@ -168,8 +172,13 @@ export default function StablecoinScreen({ navigation, route }: NavigationProps)
           <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
             {loadError ? (
               <Text style={styles.error}>{loadError}</Text>
+            ) : showAddressSpinner ? (
+              <View style={{ marginTop: spacing[8], gap: spacing[4], paddingHorizontal: spacing[2] }}>
+                <SkeletonLoader width="100%" height={120} borderRadius={borderRadius.lg} />
+                <SkeletonLoader width={200} height={200} borderRadius={borderRadius.lg} style={{ alignSelf: 'center' }} />
+              </View>
             ) : !address ? (
-              <ActivityIndicator size="large" color={colors.primary.main} style={{ marginTop: spacing[8] }} />
+              <Text style={styles.error}>Could not load wallet</Text>
             ) : (
               <>
                 <View style={styles.card}>

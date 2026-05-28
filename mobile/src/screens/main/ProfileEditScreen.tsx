@@ -15,7 +15,6 @@ import {
 } from 'react-native'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { ArrowLeft, Calendar, Camera, CircleCheck, CircleX, Trash2 } from 'lucide-react-native'
-import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect } from '@react-navigation/native'
 import {
@@ -49,6 +48,7 @@ import { AvatarImage } from '../../components/AvatarImage'
 import { bustAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { EasnerAlertSheet } from '../../components/premium'
+import { haptics } from '../../lib/haptics'
 
 const ACCOUNT_DELETED_FLAG_KEY = '@easner_account_deleted'
 
@@ -162,7 +162,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
   }, [userProfile, isEditing])
 
   const handleEditProfile = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
     easetagCheckSeqRef.current += 1
     setCheckingEasetag(false)
     setEditProfileData(profileData)
@@ -181,7 +181,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
 
     setLoading(true)
     try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+      haptics.medium()
       const profileUpdate: UserProfileData = {
         phone: editProfileData.phone,
         avatarUrl: editProfileData.avatarUrl,
@@ -265,7 +265,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
   }
 
   const handleCancelEdit = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
     easetagCheckSeqRef.current += 1
     setCheckingEasetag(false)
     setEditProfileData(profileData)
@@ -504,7 +504,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
   }
 
   const handleDeleteAccount = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    haptics.medium()
     try {
       if (!user?.id) return
       setDeleteLoading(true)
@@ -833,7 +833,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
             <Pressable
              android_ripple={ripple.neutral}
               onPress={async () => {
-                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                haptics.tap()
                 navigation.goBack()
               }}
               style={styles.backButton} >
@@ -866,7 +866,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                      android_ripple={ripple.neutral}
                       style={styles.avatarEditTouchable}
                       onPress={async () => {
-                        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                        haptics.tap()
                         void handlePickProfilePhoto()
                       }}
                       disabled={uploadingAvatar || loading} accessibilityRole="button"
@@ -987,7 +987,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
               <Pressable
                android_ripple={ripple.destructiveTint}
                 onPress={async () => {
-                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  haptics.tap()
                   setShowDeleteDialog(true)
                 }}
                 style={styles.deleteButton} >

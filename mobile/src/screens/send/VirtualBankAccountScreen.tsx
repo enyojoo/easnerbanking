@@ -14,7 +14,6 @@ import {
   Copy,
 } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import * as Haptics from 'expo-haptics'
 import { ManualSendReceiptUpload } from '../../components/send/ManualSendReceiptUpload'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -26,6 +25,7 @@ import { useToast } from '../../components/ToastProvider'
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
 import { completeManualSendOrder, useManualPayInScreen } from '../../hooks/use-manual-pay-in-screen'
 import type { ManualQuoteResponse } from '../../lib/manual-send-api'
+import { haptics } from '../../lib/haptics'
 
 interface MockRecipient {
   id: string
@@ -175,7 +175,7 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
   const handleCopy = async (text: string, key: string) => {
     const ok = await copyToClipboard(text)
     if (!ok) return
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+    haptics.success()
     setCopiedStates((prev) => ({ ...prev, [key]: true }))
     setTimeout(() => {
       setCopiedStates((prev) => ({ ...prev, [key]: false }))
@@ -183,7 +183,7 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
   }
 
   const handleConfirmPayment = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    haptics.medium()
     setPaymentConfirmed(true)
     setSubmitting(true)
 

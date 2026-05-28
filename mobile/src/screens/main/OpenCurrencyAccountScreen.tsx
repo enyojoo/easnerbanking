@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList } from 'react-native'
 import { ArrowLeft } from 'lucide-react-native'
-import * as Haptics from 'expo-haptics'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { apiGet, apiPost } from '../../lib/apiClient'
 import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, spacing, borderRadius, fontFamily } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
+import { haptics } from '../../lib/haptics'
 
 type Offer = {
   code: string
@@ -48,7 +48,7 @@ export default function OpenCurrencyAccountScreen({ navigation }: NavigationProp
     setBusyCode(code)
     setError(null)
     try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+      haptics.tap()
       const response = await apiPost('/api/accounts/open-currency', { currency: code })
       const json = await response.json().catch(() => ({}))
       if (!response.ok) {
@@ -70,7 +70,7 @@ export default function OpenCurrencyAccountScreen({ navigation }: NavigationProp
           <Pressable
             android_ripple={ripple.neutral}
             onPress={() => {
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+              haptics.tap()
               navigation.goBack()
             }}
             style={styles.backButton}

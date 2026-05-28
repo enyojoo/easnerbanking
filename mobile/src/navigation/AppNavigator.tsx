@@ -21,6 +21,8 @@ import {
 import { emitAppLocked, registerAppLockListener } from '../lib/app-lock-bus'
 import { avatarImageUri, warmAvatarCacheAsync } from '../lib/avatarCache'
 import { useConsumerKycNoahSync } from '../hooks/useConsumerKycNoahSync'
+import { haptics } from '../lib/haptics'
+import { PressableScale } from 'pressto'
 // Stack timing and Android vs iOS card transitions: see `transitionPresets.ts`.
 import {
   mainStackPreset,
@@ -170,6 +172,11 @@ function MainTabs() {
 
   return (
     <Tab.Navigator
+      screenListeners={{
+        tabPress: () => {
+          haptics.select()
+        },
+      }}
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
@@ -205,6 +212,14 @@ function MainTabs() {
         tabBarIconStyle: {
           marginBottom: 0,
         },
+        tabBarButton: (props) => (
+          <PressableScale
+            {...props}
+            onPress={(e) => {
+              props.onPress?.(e)
+            }}
+          />
+        ),
       }}
     >
       <Tab.Screen

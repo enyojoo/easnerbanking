@@ -11,15 +11,15 @@ import {
   Image,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import * as Haptics from 'expo-haptics'
-import { Plus, Snowflake, Settings, Eye } from 'lucide-react-native'
+import { Plus, Snowflake, Settings, Eye, CreditCard } from 'lucide-react-native'
 import Svg, { Circle, Path } from 'react-native-svg'
-import ScreenWrapper from '../../components/ScreenWrapper'
+import EmptyState from '../../components/EmptyState'
 import { NavigationProps } from '../../types'
 import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { EASNER_CARD_ICON_SOURCE } from '../../lib/easnerBrand'
+import { haptics } from '../../lib/haptics'
 
 const CARD_SPACING = spacing[1]
 
@@ -106,7 +106,7 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
   useCalmParallelEnterWhen(true, headerAnim, contentAnim)
 
   const actionsComingSoon = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
   }
 
   const handleCardScroll = Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], {
@@ -139,7 +139,7 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
             <Pressable
              android_ripple={ripple.neutral}
               style={styles.iconBtn}
-              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} accessibilityRole="button"
+              onPress={() => haptics.tap()} accessibilityRole="button"
               accessibilityLabel="Add card"
             >
               <Plus size={22} color={colors.primary.main} strokeWidth={2} />
@@ -299,11 +299,11 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Card activity</Text>
-            <View style={styles.emptyBox}>
-              <Text style={styles.emptyText}>
-                When you can spend on a card, those movements will show up here.
-              </Text>
-            </View>
+            <EmptyState
+              icon={CreditCard}
+              title="No card activity yet"
+              message="When you can spend on a card, those movements will show up here."
+            />
           </View>
           </Animated.View>
         </ScrollView>

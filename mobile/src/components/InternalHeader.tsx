@@ -2,10 +2,10 @@ import React, { useMemo } from 'react'
 import { View, Text, Pressable, Platform, StyleSheet, ViewStyle } from 'react-native'
 import { ArrowLeft } from 'lucide-react-native'
 import { useNavigation } from '@react-navigation/native'
-import * as Haptics from 'expo-haptics'
 import { textStyles, spacing, fontFamily, useThemeColors } from '../theme'
 import type { Colors } from '../theme/colors'
 import { ripple } from '../lib/androidRipple'
+import { haptics } from '../lib/haptics'
 
 interface InternalHeaderProps {
   title: string
@@ -31,7 +31,7 @@ export default function InternalHeader({
   const styles = useMemo(() => createStyles(palette), [palette])
 
   const handleBack = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
     if (onBack) {
       onBack()
     } else {

@@ -4,12 +4,9 @@ import {
   Text,
   Pressable,
   StyleSheet,
-  KeyboardAvoidingView,
   Platform,
-  ScrollView,
 } from 'react-native'
 import { ArrowLeft, Eye, EyeOff, HelpCircle } from 'lucide-react-native'
-import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../../lib/supabase'
 import { getApiBaseUrl } from '../../lib/apiClient'
@@ -21,6 +18,8 @@ import { authScreenStyles } from '../../theme/authScreen'
 import { TextField } from '../../components/ui'
 import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
 import { useToast } from '../../components/ToastProvider'
+import KeyboardAwareScreen from '../../components/KeyboardAwareScreen'
+import { haptics } from '../../lib/haptics'
 
 export default function ResetPasswordScreen({ navigation, route }: NavigationProps) {
   const [password, setPassword] = useState('')
@@ -54,12 +53,12 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
   }, [route.params])
 
   const handleBack = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
     navigation.navigate('Auth')
   }
 
   const handleHelp = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
     showInfo('Need assistance? Contact support at support@easner.com')
   }
 
@@ -168,20 +167,17 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
 
   return (
     <View style={styles.container}>
-      <KeyboardAvoidingView
+      <KeyboardAwareScreen
         style={styles.keyboardContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        contentContainerStyle={[
+          styles.scrollContainer,
+          {
+            paddingTop: insets.top + spacing[4],
+            paddingBottom: Math.max(insets.bottom, spacing[5]),
+          },
+        ]}
+        showsVerticalScrollIndicator={false}
       >
-        <ScrollView
-          contentContainerStyle={[
-            styles.scrollContainer,
-            {
-              paddingTop: insets.top + spacing[4],
-              paddingBottom: Math.max(insets.bottom, spacing[5]),
-            },
-          ]}
-          showsVerticalScrollIndicator={false}
-        >
           {/* Header with back and help buttons */}
           <View style={styles.header}>
             <Pressable
@@ -265,8 +261,7 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
               />
             </View>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAwareScreen>
     </View>
   )
 }

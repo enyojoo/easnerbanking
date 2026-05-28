@@ -10,7 +10,6 @@ import {
   Keyboard,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import * as Haptics from 'expo-haptics'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { colors, shadows, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
@@ -21,6 +20,7 @@ import { useToast } from '../../components/ToastProvider'
 import { completeManualSendOrder, useManualPayInScreen } from '../../hooks/use-manual-pay-in-screen'
 import { ManualSendReceiptUpload } from '../../components/send/ManualSendReceiptUpload'
 import type { ManualQuoteResponse } from '../../lib/manual-send-api'
+import { haptics } from '../../lib/haptics'
 
 interface MockRecipient {
   id: string
@@ -119,7 +119,7 @@ export default function MobileMoneyScreen({ navigation, route }: NavigationProps
   const handleCopy = async (text: string, key: string) => {
     const ok = await copyToClipboard(text)
     if (!ok) return
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+    haptics.success()
     setCopiedStates((prev) => ({ ...prev, [key]: true }))
     setTimeout(() => {
       setCopiedStates((prev) => ({ ...prev, [key]: false }))
@@ -129,7 +129,7 @@ export default function MobileMoneyScreen({ navigation, route }: NavigationProps
   const handleConfirmPayment = () => {
     if (!isManual && !phoneNumber) return
     
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    haptics.medium()
     setPaymentConfirmed(true)
     
     void (async () => {

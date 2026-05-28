@@ -1,7 +1,7 @@
 import React from 'react'
-import { View, Text, Pressable, Platform, StyleSheet, useWindowDimensions } from 'react-native'
+import { View, Text, StyleSheet, useWindowDimensions } from 'react-native'
+import { PressableScale } from 'pressto'
 import { Delete } from 'lucide-react-native'
-import * as Haptics from 'expo-haptics'
 import {
   borderRadius,
   spacing,
@@ -11,7 +11,7 @@ import {
   useThemeColors,
   fontFamily,
 } from '../../theme'
-import { ripple } from '../../lib/androidRipple'
+import { haptics } from '../../lib/haptics'
 
 type Props = {
   onDigit: (d: string) => void
@@ -40,6 +40,29 @@ export function PinKeypad({
     maxSize: maxButtonSize,
   })
 
+  const cellStyle = (pressed?: boolean) => [
+    styles.keypadButton,
+    {
+      width: keypadSizing.buttonWidth,
+      height: keypadSizing.buttonWidth,
+      borderRadius: Math.max(borderRadius.xl, Math.floor(keypadSizing.buttonWidth * 0.28)),
+      backgroundColor: palette.frame.background,
+      borderColor: palette.frame.border,
+    },
+  ]
+
+  const renderKey = (label: string, onPress: () => void, content: React.ReactNode, enabled = true) => (
+    <PressableScale
+      key={label}
+      style={cellStyle()}
+      onPress={onPress}
+      onPressIn={() => haptics.tap()}
+      enabled={enabled && !disabled}
+    >
+      {content}
+    </PressableScale>
+  )
+
   return (
     <View style={styles.keypadContainer}>
       <View
@@ -48,68 +71,26 @@ export function PinKeypad({
           { width: keypadSizing.rowWidth, gap: keypadSizing.gap, rowGap: keypadSizing.gap },
         ]}
       >
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
-          <Pressable
-            key={num}
-            style={({ pressed }) => [
-              styles.keypadButton,
-              {
-                width: keypadSizing.buttonWidth,
-                height: keypadSizing.buttonWidth,
-                borderRadius: Math.max(borderRadius.xl, Math.floor(keypadSizing.buttonWidth * 0.28)),
-                backgroundColor: palette.frame.background,
-                borderColor: palette.frame.border,
-              },
-              pressed && Platform.OS === 'ios' && styles.keypadPressedIOS,
-            ]}
-            onPress={() => {
-              onDigit(String(num))
-            }}
-            onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-            disabled={disabled}
-            android_ripple={ripple.neutral}
-          >
-            <Text style={[styles.keypadButtonText, { color: palette.text.primary }]}>{num}</Text>
-          </Pressable>
-        ))}
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) =>
+          renderKey(
+            String(num),
+            () => onDigit(String(num)),
+            <Text style={[styles.keypadButtonText, { color: palette.text.primary }]}>{num}</Text>,
+          ),
+        )}
       </View>
       <View style={[styles.keypadBottomRow, { width: keypadSizing.rowWidth }]}>
         <View style={[styles.keypadButtonSpacer, { width: keypadSizing.buttonWidth }]} />
-        <Pressable
-          style={({ pressed }) => [
-            styles.keypadButton,
-            {
-              width: keypadSizing.buttonWidth,
-              height: keypadSizing.buttonWidth,
-              borderRadius: Math.max(borderRadius.xl, Math.floor(keypadSizing.buttonWidth * 0.28)),
-              backgroundColor: palette.frame.background,
-              borderColor: palette.frame.border,
-            },
-            pressed && Platform.OS === 'ios' && styles.keypadPressedIOS,
-          ]}
-          onPress={() => onDigit('0')}
-          onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-          disabled={disabled}
-          android_ripple={ripple.neutral}
-        >
-          <Text style={[styles.keypadButtonText, { color: palette.text.primary }]}>0</Text>
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [
-            styles.keypadButton,
-            {
-              width: keypadSizing.buttonWidth,
-              height: keypadSizing.buttonWidth,
-              borderRadius: Math.max(borderRadius.xl, Math.floor(keypadSizing.buttonWidth * 0.28)),
-              backgroundColor: palette.frame.background,
-              borderColor: palette.frame.border,
-            },
-            pressed && Platform.OS === 'ios' && styles.keypadPressedIOS,
-          ]}
+        {renderKey(
+          '0',
+          () => onDigit('0'),
+          <Text style={[styles.keypadButtonText, { color: palette.text.primary }]}>0</Text>,
+        )}
+        <PressableScale
+          style={cellStyle()}
           onPress={onBackspace}
-          onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-          disabled={disabled || filledCount === 0}
-          android_ripple={ripple.neutral}
+          onPressIn={() => haptics.tap()}
+          enabled={!disabled && filledCount > 0}
         >
           <Delete
             size={24}
@@ -118,7 +99,7 @@ export function PinKeypad({
             }
             strokeWidth={2}
           />
-        </Pressable>
+        </PressableScale>
       </View>
     </View>
   )
@@ -144,9 +125,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
-  },
-  keypadPressedIOS: {
-    opacity: 0.6,
   },
   keypadButtonText: {
     fontSize: 26,

@@ -23,7 +23,6 @@ import {
   ShieldCheck,
   Wallet,
 } from 'lucide-react-native'
-import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -43,6 +42,7 @@ import {
 } from '../../hooks/queries/use-receive-deposit-queries'
 import QRCode from 'react-native-qrcode-svg'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
+import { haptics } from '../../lib/haptics'
 type TabType = 'bank' | 'stablecoin'
 
 export default function ReceiveMoneyScreen({ navigation, route }: NavigationProps) {
@@ -293,7 +293,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const handleCopy = async (text: string, key: string) => {
     const ok = await copyToClipboard(text)
     if (!ok) return
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+    haptics.success()
     setCopiedStates((prev) => ({ ...prev, [key]: true }))
     setTimeout(() => {
       setCopiedStates((prev) => ({ ...prev, [key]: false }))
@@ -302,7 +302,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
 
   const handleShare = async () => {
     try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+      haptics.medium()
       
       if (activeTab === 'bank' && bankAccountDetails) {
         // Format bank account details for sharing
@@ -449,7 +449,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     try {
       setCreatingAccounts(true)
       setAccountCreationError(null)
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+      haptics.medium()
       
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) {
@@ -558,7 +558,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
         android_ripple={ripple.neutral}
         style={styles.detailActionButton}
         onPress={async () => {
-          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+          haptics.tap()
           setAboutSheetOpen(true)
         }}
         accessibilityRole="button"
@@ -602,7 +602,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
              android_ripple={ripple.neutral}
               style={[styles.tab, activeTab === 'bank' && styles.tabActive]}
               onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                haptics.tap()
                 setActiveTab('bank')
               }} >
               <Text style={[styles.tabText, activeTab === 'bank' && styles.tabTextActive]}>
@@ -613,7 +613,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
              android_ripple={ripple.neutral}
               style={[styles.tab, activeTab === 'stablecoin' && styles.tabActive]}
               onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                haptics.tap()
                 setActiveTab('stablecoin')
               }} >
               <Text style={[styles.tabText, activeTab === 'stablecoin' && styles.tabTextActive]}>
@@ -715,7 +715,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                      android_ripple={ripple.neutral}
                       style={styles.kycNoticeButton}
                       onPress={async () => {
-                        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+                        haptics.medium()
                         navigation.navigate('AccountVerification' as any)
                       }} >
                       <Text style={styles.kycNoticeButtonText}>Complete Verification</Text>
@@ -821,7 +821,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                      android_ripple={ripple.neutral}
                       style={styles.kycNoticeButton}
                       onPress={async () => {
-                        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+                        haptics.medium()
                         navigation.navigate('AccountVerification' as any)
                       }} >
                       <Text style={styles.kycNoticeButtonText}>Complete Verification</Text>

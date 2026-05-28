@@ -1,10 +1,10 @@
 import React, { useState } from 'react'
 import { View, Text, TouchableOpacity, Image, StyleSheet, ActivityIndicator } from 'react-native'
 import * as DocumentPicker from 'expo-document-picker'
-import * as Haptics from 'expo-haptics'
 import { Ionicons } from '@expo/vector-icons'
 import { uploadManualSendReceipt } from '../../lib/manual-send-receipt-upload'
 import { colors } from '../../theme'
+import { haptics } from '../../lib/haptics'
 
 type PickedFile = {
   uri: string
@@ -58,7 +58,7 @@ export function ManualSendReceiptUpload({ referenceCode, onPathChange, disabled 
         return
       }
 
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      haptics.success()
       onPathChange(uploaded.path)
     } catch {
       setUploading(false)
@@ -72,7 +72,7 @@ export function ManualSendReceiptUpload({ referenceCode, onPathChange, disabled 
     setFile(null)
     setError(null)
     onPathChange(null)
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
   }
 
   return (

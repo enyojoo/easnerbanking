@@ -10,7 +10,6 @@ import {
   Platform,
 } from 'react-native'
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react-native'
-import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
@@ -27,6 +26,7 @@ import {
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { useToast } from '../../components/ToastProvider'
+import { haptics } from '../../lib/haptics'
 
 export default function ChangePasswordScreen({ navigation }: NavigationProps) {
   const insets = useSafeAreaInsets()
@@ -105,7 +105,7 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
             <Pressable
              android_ripple={ripple.neutral}
               onPress={async () => {
-                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                haptics.tap()
                 navigation.goBack()
               }}
               style={styles.backButton} >

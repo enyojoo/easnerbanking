@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { HelpCircle } from 'lucide-react-native'
-import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { NavigationProps } from '../../types'
 import { colors, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, userAvatarStyles, useThemeColors } from '../../theme'
@@ -25,6 +24,8 @@ import { PinKeypad, PinLockedHintText } from '../../components/pin'
 import { EasnerAlertSheet } from '../../components/premium'
 import { AvatarImage } from '../../components/AvatarImage'
 import { avatarImageUri, warmAvatarCache } from '../../lib/avatarCache'
+import { haptics } from '../../lib/haptics'
+import EaseEnter from '../../components/EaseEnter'
 
 export default function PinEntryScreen({ navigation: navigationProp }: NavigationProps) {
   const palette = useThemeColors()
@@ -93,7 +94,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
       }, 80)
     }
     
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
   }
 
   const handleBackspace = () => {
@@ -108,7 +109,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
     newPin[filledCount - 1] = ''
     setPin(newPin)
     
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
   }
 
   const handleVerifyPin = async (pinString?: string) => {
@@ -131,12 +132,12 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
       }
       
       // Haptic feedback (non-blocking, fire and forget)
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+      haptics.success()
       
       // Navigation happens immediately via triggerPinCheck
       // Loading state will clear when screen changes
     } else {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+      haptics.error()
       setError(result.error || appPinStrings.lockIncorrect)
       setLocked(result.locked || false)
       setLockedUntil(result.lockedUntil || null)
@@ -183,6 +184,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={styles.content}>
+          <EaseEnter>
           <View style={styles.helpRow}>
             <Pressable
               android_ripple={ripple.neutral}
@@ -273,6 +275,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
               <Text style={styles.logoutLinkText}>{appPinStrings.lockLogOut}</Text>
             </Text>
           </Pressable>
+          </EaseEnter>
         </View>
       </KeyboardAvoidingView>
 

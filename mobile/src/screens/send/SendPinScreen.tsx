@@ -10,7 +10,6 @@ import {
   Animated,
 } from 'react-native'
 import { ArrowLeft } from 'lucide-react-native'
-import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { NavigationProps } from '../../types'
 import {
@@ -28,6 +27,7 @@ import { getLockoutState, verifyPin } from '../../lib/pinAuth'
 import { PinKeypad } from '../../components/pin'
 import { PinLockedHintText } from '../../components/pin/PinLockedHintText'
 import { markBalanceSendPinVerified } from '../../lib/sendFlowPostPinGate'
+import { haptics } from '../../lib/haptics'
 
 export default function SendPinScreen({ navigation }: NavigationProps) {
   const palette = useThemeColors()
@@ -109,7 +109,7 @@ export default function SendPinScreen({ navigation }: NavigationProps) {
         navigation.goBack()
         return
       }
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+      haptics.error()
       if (res.locked) {
         setError(null)
         setLockedOut(true)
@@ -137,14 +137,14 @@ export default function SendPinScreen({ navigation }: NavigationProps) {
     if (keypadDisabled || pin.length >= 4) return
     setError(null)
     setPin((p) => p + d)
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
   }
 
   const onBackspace = () => {
     if (keypadDisabled || pin.length === 0) return
     setError(null)
     setPin((p) => p.slice(0, -1))
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
   }
 
   if (!user?.id) {

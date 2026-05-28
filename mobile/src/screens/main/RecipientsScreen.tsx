@@ -13,11 +13,8 @@ import {
   ScrollView,
   Platform,
   Dimensions,
-  KeyboardAvoidingView,
-  Keyboard,
-  InteractionManager,
 } from 'react-native'
-import * as Haptics from 'expo-haptics'
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import {
@@ -78,6 +75,7 @@ import { EasenetLookupPreview } from '../../components/EasenetLookupPreview'
 import { EasenetRecipientHydratedPreview } from '../../components/EasenetRecipientHydratedPreview'
 import { RecipientPayoutPreview } from '../../components/RecipientPayoutPreview'
 import { ListRowSkeleton } from '../../components/skeletons'
+import EmptyState from '../../components/EmptyState'
 import RecipientFormDropdownList from '../../components/recipients/RecipientFormDropdownList'
 import { RecipientBankNameField } from '../../components/recipients/RecipientBankNameField'
 import { isEasenetRecipientRecord, resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
@@ -91,6 +89,7 @@ import {
 import { PayoutSchemaExtraFields } from '../../components/recipients/PayoutSchemaExtraFields'
 import { UsBankAddressFields } from '../../components/recipients/UsBankAddressFields'
 import { useKeyboardScrollPadding } from '../../hooks/useKeyboardScrollPadding'
+import { haptics } from '../../lib/haptics'
 
 function RecipientsContent({ navigation }: NavigationProps) {
   const { user, userProfile } = useAuth()
@@ -1065,7 +1064,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
       <Pressable
        android_ripple={ripple.neutral}
         style={[styles.recipientItem, !isLast && styles.recipientItemDivider]} onPress={async () => {
-          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+          haptics.tap()
           handleEditRecipient(item)
         }}
       >
@@ -1078,7 +1077,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                  android_ripple={ripple.neutral}
                   style={styles.actionIcon}
                   onPress={async () => {
-                    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                    haptics.tap()
                     handleEditRecipient(item)
                   }}
                   disabled={isSubmitting} >
@@ -1088,7 +1087,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                  android_ripple={ripple.neutral}
                   style={[styles.actionIcon, styles.actionIconDelete]}
                   onPress={async () => {
-                    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+                    haptics.medium()
                     handleDeleteRecipient(item)
                   }}
                   disabled={deletingId === item.id} >
@@ -1109,7 +1108,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                  android_ripple={ripple.neutral}
                   style={styles.actionIcon}
                   onPress={async () => {
-                    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                    haptics.tap()
                     handleEditRecipient(item)
                   }}
                   disabled={isSubmitting} >
@@ -1119,7 +1118,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                  android_ripple={ripple.neutral}
                   style={[styles.actionIcon, styles.actionIconDelete]}
                   onPress={async () => {
-                    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+                    haptics.medium()
                     handleDeleteRecipient(item)
                   }}
                   disabled={deletingId === item.id} >
@@ -1159,7 +1158,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
           <Pressable
            android_ripple={ripple.neutral}
             onPress={async () => {
-              await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+              haptics.tap()
               navigation.goBack()
             }}
             style={styles.backButton} >
@@ -1248,13 +1247,24 @@ function RecipientsContent({ navigation }: NavigationProps) {
                 drawDistance={400}
               />
             ) : (
-              <View style={styles.emptyState}>
-                <Users size={48} color={colors.text.secondary} strokeWidth={1.5} />
-                <Text style={styles.emptyText}>{searchTerm.trim() ? 'No matches' : 'No recipients found'}</Text>
-                <Text style={styles.emptySubtext}>
-                  {searchTerm.trim() ? 'Try another search' : 'Add a new recipient to get started'}
-                </Text>
-              </View>
+              <EmptyState
+                icon={Users}
+                title={searchTerm.trim() ? 'No matches' : 'No recipients found'}
+                message={
+                  searchTerm.trim() ? 'Try another search' : 'Add a new recipient to get started'
+                }
+                action={
+                  !searchTerm.trim()
+                    ? {
+                        label: 'Add recipient',
+                        onPress: () => {
+                          resetForm()
+                          setShowRecipientTypeModal(true)
+                        },
+                      }
+                    : undefined
+                }
+              />
             )}
           </Animated.View>
         </ScrollView>
@@ -1265,7 +1275,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
            android_ripple={ripple.neutral}
             style={styles.addRecipientButton}
             onPress={async () => {
-              await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+              haptics.tap()
               resetForm()
               setShowRecipientTypeModal(true)
             }} >
@@ -1319,7 +1329,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                android_ripple={ripple.neutral}
                 style={styles.recipientTypeOption}
                 onPress={async () => {
-                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  haptics.tap()
                   const firstAsset = getWalletAssets()[0] || 'USDT'
                   const firstNetwork = getWalletNetworksForAsset(firstAsset)[0] || ''
                   setSelectedRecipientType('wallet')
@@ -1341,7 +1351,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                android_ripple={ripple.neutral}
                 style={styles.recipientTypeOption}
                 onPress={async () => {
-                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  haptics.tap()
                   setSelectedRecipientType('bank')
                   setSelectedCountryCurrency({
                     countryCode: 'US',
@@ -1368,7 +1378,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                android_ripple={ripple.neutral}
                 style={styles.recipientTypeOption}
                 onPress={async () => {
-                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  haptics.tap()
                   const firstMobile = recipientCatalogFor('mobile_money')[0]
                   const firstCurrency = firstMobile?.currencyCode || 'KES'
                   const firstProvider = getRecipientProviders(firstCurrency, 'mobile_money', firstMobile?.countryCode)[0] || ''
@@ -1398,7 +1408,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                android_ripple={ripple.neutral}
                 style={styles.recipientTypeOption}
                 onPress={async () => {
-                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  haptics.tap()
                   setSelectedRecipientType('easenet')
                   setEasenetProfile(null)
                   setEasenetLookupError(null)
@@ -1565,7 +1575,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                             android_ripple={ripple.neutral}
                             style={[styles.currencyDropdownItem, isSelected && styles.currencyDropdownItemSelected]}
                             onPress={async () => {
-                              await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                              haptics.tap()
                               const countryToSet: CountryCurrency = {
                                 countryCode: item.countryCode,
                                 countryName: item.countryName,
@@ -1698,7 +1708,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                                 newRecipient.provider === provider && styles.currencyDropdownItemSelected,
                               ]}
                               onPress={async () => {
-                                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                                haptics.tap()
                                 setNewRecipient((prev) => ({ ...prev, provider }))
                                 setShowProviderDropdown(false)
                                 setProviderSearchTerm('')
@@ -1793,7 +1803,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                                 newRecipient.currency === asset && styles.currencyDropdownItemSelected,
                               ]}
                               onPress={async () => {
-                                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                                haptics.tap()
                                 const networks = getWalletNetworksForAsset(asset)
                                 setNewRecipient((prev) => ({
                                   ...prev,
@@ -1869,7 +1879,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                                 newRecipient.network === network && styles.currencyDropdownItemSelected,
                               ]}
                               onPress={async () => {
-                                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                                haptics.tap()
                                 setNewRecipient((prev) => ({ ...prev, network }))
                                 setShowWalletNetworkDropdown(false)
                                 setWalletNetworkSearchTerm('')
@@ -1933,7 +1943,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                             style={[styles.transferTypeOption, transferType === 'ACH' && styles.transferTypeOptionSelected]}
                             onPress={() => {
                               setTransferType('ACH')
-                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                              haptics.tap()
                             }} >
                             <Text style={[styles.transferTypeOptionText, transferType === 'ACH' && styles.transferTypeOptionTextSelected]}>
                               ACH
@@ -1944,7 +1954,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                             style={[styles.transferTypeOption, transferType === 'Wire' && styles.transferTypeOptionSelected]}
                             onPress={() => {
                               setTransferType('Wire')
-                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                              haptics.tap()
                             }} >
                             <Text style={[styles.transferTypeOptionText, transferType === 'Wire' && styles.transferTypeOptionTextSelected]}>
                               Fedwire
@@ -2025,7 +2035,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                                 style={[styles.transferTypeOption, newRecipient.checkingOrSavings === 'checking' && styles.transferTypeOptionSelected]}
                                 onPress={() => {
                                   setNewRecipient(prev => ({ ...prev, checkingOrSavings: 'checking' }))
-                                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                                  haptics.tap()
                                 }} >
                                 <Text style={[styles.transferTypeOptionText, newRecipient.checkingOrSavings === 'checking' && styles.transferTypeOptionTextSelected]}>
                                   Checking
@@ -2036,7 +2046,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                                 style={[styles.transferTypeOption, newRecipient.checkingOrSavings === 'savings' && styles.transferTypeOptionSelected]}
                                 onPress={() => {
                                   setNewRecipient(prev => ({ ...prev, checkingOrSavings: 'savings' }))
-                                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                                  haptics.tap()
                                 }} >
                                 <Text style={[styles.transferTypeOptionText, newRecipient.checkingOrSavings === 'savings' && styles.transferTypeOptionTextSelected]}>
                                   Savings

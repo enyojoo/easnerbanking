@@ -14,7 +14,6 @@ import {
 import QRCode from 'react-native-qrcode-svg'
 import { SvgXml } from 'react-native-svg'
 import { useFocusEffect, useRoute } from '@react-navigation/native'
-import * as Haptics from 'expo-haptics'
 import * as Clipboard from 'expo-clipboard'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ArrowLeft, CircleCheck, Copy } from 'lucide-react-native'
@@ -47,6 +46,7 @@ import { ripple } from '../../lib/androidRipple'
 import { NavigationProps } from '../../types'
 import { useAuth } from '../../contexts/AuthContext'
 import { EasnerAlertSheet } from '../../components/premium'
+import { haptics } from '../../lib/haptics'
 
 function svgXmlFromQrDataUrl(qrDataUrl: string | null): string | null {
   if (!qrDataUrl || !qrDataUrl.startsWith('data:image/svg')) return null
@@ -322,7 +322,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
   }, [navigation, backFromEnroll, autoStartEnroll])
 
   const handleHeaderBack = () => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
     if (autoStartEnroll) {
       void backFromEnroll()
       return
@@ -446,7 +446,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
   const copySecret = async () => {
     if (!secret) return
     await Clipboard.setStringAsync(secret)
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+    haptics.success()
     setSecretJustCopied(true)
     if (secretCopiedTimerRef.current) clearTimeout(secretCopiedTimerRef.current)
     secretCopiedTimerRef.current = setTimeout(() => {

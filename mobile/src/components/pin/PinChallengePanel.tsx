@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { View, Text, StyleSheet, Pressable, Platform, Animated, ActivityIndicator } from 'react-native'
-import * as Haptics from 'expo-haptics'
 import { getLockoutState, verifyPin } from '../../lib/pinAuth'
 import { appPinStrings } from '../../constants/app-pin-en'
 import { colors, textStyles, borderRadius, spacing, useThemeColors } from '../../theme'
@@ -9,6 +8,7 @@ import { PinDotsRow } from './PinDotsRow'
 import { PinKeypad } from './PinKeypad'
 import { PinLockedHintText } from './PinLockedHintText'
 import { useDeferredLoading } from '../../hooks/useDeferredLoading'
+import { haptics } from '../../lib/haptics'
 
 export type PinChallengePanelProps = {
   /** When false, resets internal PIN state (same semantics as modal `visible`). */
@@ -81,7 +81,7 @@ export function PinChallengePanel({
         onVerifiedRef.current()
         return
       }
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+      haptics.error()
       if (res.locked) {
         setError(null)
         setLockedOut(true)

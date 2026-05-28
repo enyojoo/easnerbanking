@@ -10,7 +10,6 @@ import {
   Animated,
 } from 'react-native'
 import { ArrowLeft } from 'lucide-react-native'
-import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { NavigationProps } from '../../types'
 import { colors, surfaceChromeCircleStyle, textStyles, spacing, useThemeColors } from '../../theme'
@@ -22,6 +21,7 @@ import { PinKeypad, PinLockedHintText } from '../../components/pin'
 import { useDeferredLoading } from '../../hooks/useDeferredLoading'
 import { EasnerAlertSheet } from '../../components/premium'
 import { useToast } from '../../components/ToastProvider'
+import { haptics } from '../../lib/haptics'
 
 type Step = 'verify' | 'pin' | 'confirm'
 
@@ -107,10 +107,10 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
         setVerifyDigits(empty4())
         verifyTryRef.current = ''
         setStep('pin')
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+        haptics.success()
         return
       }
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+      haptics.error()
       if (res.locked) {
         setError(null)
         setLockedOut(true)
@@ -138,7 +138,7 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
     const res = await setupPin(pinStr, userId)
     setLoading(false)
     if (res.success) {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      haptics.success()
       showSuccess(appPinStrings.changePinSuccessBody)
       setTimeout(() => navigation.goBack(), 450)
       return
@@ -157,7 +157,7 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
       next[filled] = num
       setVerifyDigits(next)
       setError(null)
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+      haptics.tap()
       return
     }
 
@@ -186,7 +186,7 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
       }
     }
 
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
   }
 
   const handleBackspace = () => {
@@ -199,7 +199,7 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
       next[filled - 1] = ''
       setVerifyDigits(next)
       setError(null)
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+      haptics.tap()
       return
     }
 
@@ -210,7 +210,7 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
     newPinArr[filledCount - 1] = ''
     if (step === 'pin') setPin(newPinArr)
     else setConfirmPin(newPinArr)
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
   }
 
   const handleHeaderBack = () => {
@@ -280,7 +280,7 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
             android_ripple={ripple.neutral}
             style={styles.backButton}
             onPress={async () => {
-              await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+              haptics.tap()
               handleHeaderBack()
             }}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}

@@ -1,13 +1,13 @@
 import React from 'react'
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native'
 import { ArrowLeft, ChevronRight } from 'lucide-react-native'
-import * as Haptics from 'expo-haptics'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import ExternalLinkModal from '../../components/ExternalLinkModal'
 import { useExternalLink } from '../../hooks/useExternalLink'
 import { NavigationProps } from '../../types'
 import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, spacing, fontFamily } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
+import { haptics } from '../../lib/haptics'
 
 export default function LegalScreen({ navigation }: NavigationProps) {
   const privacyLink = useExternalLink()
@@ -21,7 +21,7 @@ export default function LegalScreen({ navigation }: NavigationProps) {
             android_ripple={ripple.neutral}
             style={styles.backButton}
             onPress={async () => {
-              await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+              haptics.tap()
               navigation.goBack()
             }}
           >
@@ -39,7 +39,7 @@ export default function LegalScreen({ navigation }: NavigationProps) {
                 android_ripple={ripple.neutral}
                 style={styles.row}
                 onPress={async () => {
-                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  haptics.tap()
                   privacyLink.openLink('https://www.easner.com/privacy', 'Privacy Policy')
                 }}
               >
@@ -54,7 +54,7 @@ export default function LegalScreen({ navigation }: NavigationProps) {
                 android_ripple={ripple.neutral}
                 style={[styles.row, styles.rowLast]}
                 onPress={async () => {
-                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  haptics.tap()
                   termsLink.openLink('https://www.easner.com/terms', 'Terms of Service')
                 }}
               >

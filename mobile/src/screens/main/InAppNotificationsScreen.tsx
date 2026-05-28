@@ -17,12 +17,12 @@ import {
   CreditCard,
   Bell,
 } from 'lucide-react-native'
-import * as Haptics from 'expo-haptics'
-import ScreenWrapper from '../../components/ScreenWrapper'
+import EmptyState from '../../components/EmptyState'
 import { NavigationProps } from '../../types'
 import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, fontFamily } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { useNotifications } from '../../contexts/NotificationsContext'
+import { haptics } from '../../lib/haptics'
 
 // Mock notifications data
 const MOCK_NOTIFICATIONS = [
@@ -145,7 +145,7 @@ function NotificationItem({
      android_ripple={ripple.neutral}
       style={[styles.notificationItem, !item.read && styles.notificationItemUnread]}
       onPress={async () => {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+        haptics.tap()
         if (!item.read) {
           onMarkAsRead()
         }
@@ -206,7 +206,7 @@ export default function InAppNotificationsScreen({ navigation }: NavigationProps
   }
 
   const handleMarkAllAsRead = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
     markAllAsRead()
   }
 
@@ -239,7 +239,7 @@ export default function InAppNotificationsScreen({ navigation }: NavigationProps
           <Pressable
            android_ripple={ripple.neutral}
             onPress={async () => {
-              await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+              haptics.tap()
               navigation.goBack()
             }}
             style={styles.backButton} >
@@ -275,15 +275,15 @@ export default function InAppNotificationsScreen({ navigation }: NavigationProps
           }
         >
           {notifications.length === 0 ? (
-            <View style={styles.emptyState}>
-              <View style={styles.emptyIconContainer}>
-                <Bell size={48} color={colors.neutral[400]} strokeWidth={1.5} />
-              </View>
-              <Text style={styles.emptyTitle}>No notifications</Text>
-              <Text style={styles.emptyText}>
-                You're all caught up! New notifications will appear here.
-              </Text>
-            </View>
+            <EmptyState
+              icon={Bell}
+              title="No notifications"
+              message="You're all caught up! New notifications will appear here."
+              action={{
+                label: 'Notification settings',
+                onPress: () => navigation.navigate('Notifications' as never),
+              }}
+            />
           ) : (
             <View style={styles.notificationsContainer}>
               {notifications.map((item) => (

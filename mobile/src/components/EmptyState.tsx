@@ -1,8 +1,11 @@
 import React from 'react'
-import { View, Text, StyleSheet, ViewStyle } from 'react-native'
+import { View, Text, StyleSheet, ViewStyle, Pressable, Platform } from 'react-native'
 import { FileText } from 'lucide-react-native'
 import type { LucideIcon } from 'lucide-react-native'
 import { colors, textStyles, spacing, borderRadius, fontFamily } from '../theme'
+import { ripple } from '../lib/androidRipple'
+import { haptics } from '../lib/haptics'
+import EaseEnter from './EaseEnter'
 
 interface EmptyStateProps {
   icon?: LucideIcon
@@ -23,20 +26,33 @@ export default function EmptyState({
   style,
 }: EmptyStateProps) {
   return (
-    <View style={[styles.container, style]}>
+    <EaseEnter translateY={8} style={style}>
+      <View style={styles.container}>
       <View style={styles.iconContainer}>
         <Icon size={48} color={colors.neutral[400]} strokeWidth={1.5} />
       </View>
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.message}>{message}</Text>
-      {action && (
-        <View style={styles.actionContainer}>
-          <Text style={styles.actionText} onPress={action.onPress}>
-            {action.label}
-          </Text>
-        </View>
-      )}
-    </View>
+      {action ? (
+        <Pressable
+          android_ripple={ripple.primaryTint}
+          style={({ pressed }) => [
+            styles.actionButton,
+            Platform.OS === 'android' && styles.actionButtonClip,
+            pressed && Platform.OS === 'ios' && styles.actionPressedIOS,
+          ]}
+          onPress={() => {
+            haptics.tap()
+            action.onPress()
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={action.label}
+        >
+          <Text style={styles.actionText}>{action.label}</Text>
+        </Pressable>
+      ) : null}
+      </View>
+    </EaseEnter>
   )
 }
 
@@ -69,8 +85,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing[4],
   },
-  actionContainer: {
+  actionButton: {
     marginTop: spacing[2],
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.primary.main + '12',
+  },
+  actionButtonClip: {
+    overflow: 'hidden',
+  },
+  actionPressedIOS: {
+    opacity: 0.85,
   },
   actionText: {
     ...textStyles.labelMedium,

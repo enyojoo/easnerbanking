@@ -13,7 +13,6 @@ import {
 } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { LinearGradient } from 'expo-linear-gradient'
-import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { NavigationProps } from '../../types'
@@ -21,6 +20,8 @@ import { colors, textStyles, borderRadius, spacing, fontSize, fontFamily, lineHe
 import { ripple } from '../../lib/androidRipple'
 import { AUTH_INITIAL_MODE_KEY } from '../../constants/auth'
 import { useToast } from '../../components/ToastProvider'
+import { haptics } from '../../lib/haptics'
+import EaseEnter from '../../components/EaseEnter'
 
 // Onboarding images
 const ONBOARDING_DATA = [
@@ -80,7 +81,7 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
     const clamped = Math.max(0, Math.min(ONBOARDING_DATA.length - 1, index))
     setCurrentIndex((prev) => {
       if (clamped !== prev) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+        haptics.tap()
       }
       return clamped
     })
@@ -94,7 +95,7 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
         animated: true,
       })
       setCurrentIndex(nextIndex)
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+      haptics.medium()
     } else {
       await handleGetStarted()
     }
@@ -105,7 +106,7 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
   }
 
   const handleGetStarted = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    haptics.medium()
     try {
       await AsyncStorage.setItem(ONBOARDING_COMPLETED_KEY, 'true')
       // Mark that user is coming from onboarding to show back arrow on auth screen
@@ -126,7 +127,7 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
       animated: true,
     })
     setCurrentIndex(index)
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
   }
 
   return (
@@ -212,7 +213,7 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
          android_ripple={ripple.neutral}
           style={[styles.loginLink, { paddingBottom: Math.max(insets.bottom, spacing[4]) }]}
           onPress={async () => {
-            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+            haptics.tap()
             try {
               // Mark onboarding as completed
             await AsyncStorage.setItem(ONBOARDING_COMPLETED_KEY, 'true')

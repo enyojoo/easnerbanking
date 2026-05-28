@@ -4,13 +4,10 @@ import {
   Text,
   Pressable,
   StyleSheet,
-  KeyboardAvoidingView,
   Platform,
-  ScrollView,
   BackHandler,
 } from 'react-native'
 import { ArrowLeft, Eye, EyeOff, HelpCircle } from 'lucide-react-native'
-import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import ExternalLinkModal from '../../components/ExternalLinkModal'
@@ -30,6 +27,9 @@ import { PinKeypad } from '../../components/pin'
 import { ActivityIndicator } from 'react-native'
 import { useOtpClipboardAutofill } from '../../hooks/useOtpClipboardAutofill'
 import { useToast } from '../../components/ToastProvider'
+import KeyboardAwareScreen from '../../components/KeyboardAwareScreen'
+import EaseEnter from '../../components/EaseEnter'
+import { haptics } from '../../lib/haptics'
 
 /**
  * Layout mirrors business auth pages:
@@ -91,7 +91,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
 
   const switchMode = async (newMode: AuthMode) => {
     if (newMode === mode) return
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
     setModeStack((prev) => [...prev, newMode])
     setEmail('')
     setPassword('')
@@ -104,7 +104,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
   }
 
   const handleBack = useCallback(async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
     if (modeStack.length > 1) {
       setEmail('')
       setPassword('')
@@ -147,7 +147,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
   }, [modeStack.length, fromOnboarding, handleBack])
 
   const handleHelp = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
     showInfo('Need assistance? Contact support at support@easner.com')
   }
 
@@ -234,7 +234,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
   }
 
   const handleGoogleAuth = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
     setIsLoading(true)
     try {
       const { error } = await signInWithGoogle()
@@ -296,21 +296,18 @@ export default function AuthScreen({ navigation }: NavigationProps) {
 
   return (
     <View style={styles.container}>
-      <KeyboardAvoidingView
+      <KeyboardAwareScreen
         style={styles.keyboardContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        contentContainerStyle={[
+          styles.scrollContainer,
+          {
+            paddingTop: insets.top + spacing[3],
+            paddingBottom: Math.max(insets.bottom, spacing[6]),
+          },
+        ]}
+        showsVerticalScrollIndicator={false}
       >
-        <ScrollView
-          contentContainerStyle={[
-            styles.scrollContainer,
-            {
-              paddingTop: insets.top + spacing[3],
-              paddingBottom: Math.max(insets.bottom, spacing[6]),
-            },
-          ]}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
+        <EaseEnter>
           <View style={styles.topBar}>
             {showBackButton ? (
               <Pressable android_ripple={ripple.neutral} style={styles.backButton} onPress={handleBack} >
@@ -422,7 +419,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
                android_ripple={ripple.neutral}
                 style={styles.forgotPasswordLink}
                 onPress={async () => {
-                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  haptics.tap()
                   navigation.navigate('ForgotPassword')
                 }} >
                 <Text style={authScreenStyles.forgotPasswordText}>Forgot password?</Text>
@@ -468,7 +465,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
                   android_ripple={ripple.neutral}
                   onPress={async () => {
                     if (signupResendCooldown > 0 || isLoading) return
-                    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                    haptics.tap()
                     setSignupOtpError('')
                     setSignupOtpNotice('')
                     const { error } = await resendSignupOtp(email)
@@ -535,8 +532,8 @@ export default function AuthScreen({ navigation }: NavigationProps) {
               </Pressable>
             </View>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </EaseEnter>
+      </KeyboardAwareScreen>
       <ExternalLinkModal
         visible={termsLink.isVisible}
         url={termsLink.url}

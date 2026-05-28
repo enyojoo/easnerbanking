@@ -1,29 +1,10 @@
-/**
- * HapticButton - Premium button with haptic feedback and press animation
- * 
- * Features:
- * - Light haptic feedback on press
- * - Scale animation on press
- * - Customizable styles
- */
-
-import React, { useRef, useCallback } from 'react'
-import {
-  Pressable,
-  Platform,
-  StyleSheet,
-  StyleProp,
-  ViewStyle,
-  TextStyle,
-  Text,
-  View,
-  ActivityIndicator,
-  Animated,
-} from 'react-native'
-import { ripple } from '../../lib/androidRipple'
-import * as Haptics from 'expo-haptics'
+import React from 'react'
+import { View, Pressable, StyleSheet, Text, ActivityIndicator, Platform, type ViewStyle, type StyleProp } from 'react-native'
+import { PressableScale } from 'pressto'
 import { LinearGradient } from 'expo-linear-gradient'
 import { textStyles, borderRadius, useThemeColors } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
+import { haptics } from '../../lib/haptics'
 
 interface HapticButtonProps {
   children?: React.ReactNode
@@ -34,7 +15,7 @@ interface HapticButtonProps {
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost'
   size?: 'sm' | 'md' | 'lg'
   style?: StyleProp<ViewStyle>
-  textStyle?: TextStyle
+  textStyle?: object
   hapticStyle?: 'light' | 'medium' | 'heavy' | 'none'
   icon?: React.ReactNode
   iconPosition?: 'left' | 'right'
@@ -59,65 +40,24 @@ export default function HapticButton({
   gradient,
 }: HapticButtonProps) {
   const colors = useThemeColors()
-  const scaleAnim = useRef(new Animated.Value(1)).current
 
-  const handlePressIn = useCallback(() => {
-    Animated.spring(scaleAnim, {
-      toValue: 0.96,
-      useNativeDriver: true,
-      speed: 50,
-      bounciness: 4,
-    }).start()
-  }, [scaleAnim])
-
-  const handlePressOut = useCallback(() => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      useNativeDriver: true,
-      speed: 50,
-      bounciness: 4,
-    }).start()
-  }, [scaleAnim])
-
-  const handlePress = useCallback(async () => {
+  const handlePress = () => {
     if (disabled || loading) return
-
-    // Trigger haptic feedback
     if (hapticStyle !== 'none') {
-      const impactStyle = {
-        light: Haptics.ImpactFeedbackStyle.Light,
-        medium: Haptics.ImpactFeedbackStyle.Medium,
-        heavy: Haptics.ImpactFeedbackStyle.Heavy,
-      }[hapticStyle]
-      
-      await Haptics.impactAsync(impactStyle)
+      const fn = { light: haptics.tap, medium: haptics.medium, heavy: haptics.heavy }[hapticStyle]
+      fn()
     }
-
     onPress()
-  }, [disabled, loading, hapticStyle, onPress])
+  }
 
   const sizeStyles = {
-    sm: {
-      paddingVertical: 10,
-      paddingHorizontal: 16,
-      minHeight: 36,
-    },
-    md: {
-      paddingVertical: 14,
-      paddingHorizontal: 24,
-      minHeight: 48,
-    },
-    lg: {
-      paddingVertical: 18,
-      paddingHorizontal: 32,
-      minHeight: 56,
-    },
+    sm: { paddingVertical: 10, paddingHorizontal: 16, minHeight: 36 },
+    md: { paddingVertical: 14, paddingHorizontal: 24, minHeight: 48 },
+    lg: { paddingVertical: 18, paddingHorizontal: 32, minHeight: 56 },
   }
 
   const variantStyles: Record<string, ViewStyle> = {
-    primary: {
-      backgroundColor: colors.primary.main,
-    },
+    primary: { backgroundColor: colors.primary.main },
     secondary: {
       backgroundColor: colors.semantic.muted,
       borderWidth: StyleSheet.hairlineWidth,
@@ -128,24 +68,14 @@ export default function HapticButton({
       borderWidth: 1,
       borderColor: colors.border.default,
     },
-    ghost: {
-      backgroundColor: 'transparent',
-    },
+    ghost: { backgroundColor: 'transparent' },
   }
 
-  const textVariantStyles: Record<string, TextStyle> = {
-    primary: {
-      color: '#FFFFFF',
-    },
-    secondary: {
-      color: colors.text.primary,
-    },
-    outline: {
-      color: colors.primary.main,
-    },
-    ghost: {
-      color: colors.primary.main,
-    },
+  const textVariantStyles: Record<string, object> = {
+    primary: { color: '#FFFFFF' },
+    secondary: { color: colors.text.primary },
+    outline: { color: colors.primary.main },
+    ghost: { color: colors.primary.main },
   }
 
   const content = (
@@ -157,10 +87,8 @@ export default function HapticButton({
         />
       ) : (
         <>
-          {icon && iconPosition === 'left' && (
-            <View style={styles.iconLeft}>{icon}</View>
-          )}
-          {(title || children) && (
+          {icon && iconPosition === 'left' ? <View style={styles.iconLeft}>{icon}</View> : null}
+          {(title || children) ? (
             <Text
               style={[
                 styles.text,
@@ -172,10 +100,8 @@ export default function HapticButton({
             >
               {title || children}
             </Text>
-          )}
-          {icon && iconPosition === 'right' && (
-            <View style={styles.iconRight}>{icon}</View>
-          )}
+          ) : null}
+          {icon && iconPosition === 'right' ? <View style={styles.iconRight}>{icon}</View> : null}
         </>
       )}
     </View>
@@ -190,40 +116,27 @@ export default function HapticButton({
     style,
   ]
 
-  /** Opt-in gradient (e.g. on hero contexts) when caller provides explicit colors. */
   const useGradient = !disabled && Boolean(gradient)
 
   return (
-    <Animated.View style={[{ transform: [{ scale: scaleAnim }] }, fullWidth && styles.fullWidth]}>
-      <Pressable
-        onPress={handlePress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        disabled={disabled || loading}
-        android_ripple={ripple.primaryTint}
-        style={({ pressed }) => [
-          Platform.OS === 'android' && {
-            borderRadius: borderRadius.full,
-            overflow: 'hidden' as const,
-          },
-          fullWidth && { alignSelf: 'stretch' as const },
-          pressed && Platform.OS === 'ios' && !disabled && !loading && styles.pressedIOS,
-        ]}
-      >
-        {useGradient && gradient ? (
-          <LinearGradient
-            colors={gradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={[buttonStyle, { backgroundColor: undefined }]}
-          >
-            {content}
-          </LinearGradient>
-        ) : (
-          <View style={buttonStyle}>{content}</View>
-        )}
-      </Pressable>
-    </Animated.View>
+    <PressableScale
+      onPress={handlePress}
+      disabled={disabled || loading}
+      style={[fullWidth && styles.fullWidth, Platform.OS === 'android' && styles.androidClip]}
+    >
+      {useGradient && gradient ? (
+        <LinearGradient
+          colors={gradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={[buttonStyle, { backgroundColor: undefined }]}
+        >
+          {content}
+        </LinearGradient>
+      ) : (
+        <View style={buttonStyle}>{content}</View>
+      )}
+    </PressableScale>
   )
 }
 
@@ -234,34 +147,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexDirection: 'row',
   },
-  fullWidth: {
-    width: '100%',
-  },
-  disabled: {
-    opacity: 0.5,
-  },
+  fullWidth: { width: '100%' },
+  androidClip: { borderRadius: borderRadius.full, overflow: 'hidden' },
+  disabled: { opacity: 0.5 },
   contentContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  text: {
-    ...textStyles.titleMedium,
-    fontWeight: '600',
-  },
-  textSm: {
-    fontSize: 14,
-  },
-  textLg: {
-    fontSize: 18,
-  },
-  iconLeft: {
-    marginRight: 8,
-  },
-  iconRight: {
-    marginLeft: 8,
-  },
-  pressedIOS: {
-    opacity: 0.92,
-  },
+  text: { ...textStyles.titleMedium, fontWeight: '600' },
+  textSm: { fontSize: 14 },
+  textLg: { fontSize: 18 },
+  iconLeft: { marginRight: 8 },
+  iconRight: { marginLeft: 8 },
 })

@@ -1,9 +1,9 @@
 import React from 'react'
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native'
 import FontAwesome from '@expo/vector-icons/FontAwesome'
-import * as Haptics from 'expo-haptics'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
+import { haptics } from '../../lib/haptics'
 
 /** Matches auth fields: pill radius + semantic border. */
 export function OrDivider() {
@@ -33,7 +33,7 @@ export function GoogleOutlineButton({ label, onPress, disabled }: GoogleButtonPr
         pressed && Platform.OS === 'ios' && !disabled && styles.googleBtnPressedIOS,
       ]}
       onPress={async () => {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+        haptics.tap()
         onPress()
       }}
       disabled={disabled}

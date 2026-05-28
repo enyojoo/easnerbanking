@@ -11,7 +11,6 @@ import {
   Keyboard,
 } from 'react-native'
 import { Eye, EyeOff } from 'lucide-react-native'
-import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { GoogleOutlineButton, OrDivider } from '../../components/auth/AuthChrome'
@@ -28,6 +27,7 @@ import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
 import { TERMS_URL } from '../../constants/auth'
 import { TextField } from '../../components/ui'
 import { useToast } from '../../components/ToastProvider'
+import { haptics } from '../../lib/haptics'
 
 export default function RegisterScreen({ navigation }: NavigationProps) {
   const [formData, setFormData] = useState({
@@ -83,7 +83,7 @@ export default function RegisterScreen({ navigation }: NavigationProps) {
   }
 
   const handleGoogleSignUp = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
     showInfo('Google sign-up will be available in a future update.')
   }
 
@@ -216,7 +216,7 @@ export default function RegisterScreen({ navigation }: NavigationProps) {
                    android_ripple={ripple.neutral}
                     style={styles.eyeButton}
                     onPress={async () => {
-                      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                      haptics.tap()
                       setShowPassword(!showPassword)
                     }} >
                     {showPassword ? (
@@ -244,7 +244,7 @@ export default function RegisterScreen({ navigation }: NavigationProps) {
             <Pressable
              android_ripple={ripple.neutral}
               onPress={async () => {
-                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                haptics.tap()
                 navigation.reset({
                   index: 0,
                   routes: [{ name: 'Login' }],

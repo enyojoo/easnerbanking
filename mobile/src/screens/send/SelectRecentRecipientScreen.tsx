@@ -15,7 +15,6 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { FlashList } from '@shopify/flash-list'
-import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import {
@@ -43,6 +42,7 @@ import { EasenetLookupPreview } from '../../components/EasenetLookupPreview'
 import { EasenetRecipientHydratedPreview } from '../../components/EasenetRecipientHydratedPreview'
 import { RecipientPayoutPreview } from '../../components/RecipientPayoutPreview'
 import { ListRowSkeleton } from '../../components/skeletons'
+import EmptyState from '../../components/EmptyState'
 import { isEasenetRecipientRecord, resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
 import {
   mergeLastSentMaps,
@@ -90,6 +90,7 @@ import { RecipientBankNameField } from '../../components/recipients/RecipientBan
 import { useToast } from '../../components/ToastProvider'
 import { useSendDestinations } from '../../hooks/useSendDestinations'
 import { useFocusEffect } from '@react-navigation/native'
+import { haptics } from '../../lib/haptics'
 
 const getInitials = (name: string): string => {
   const parts = name.trim().split(' ')
@@ -398,7 +399,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   }, [])
 
   const handleSelectRecipient = async (recipient: Recipient) => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
     void prefetchNoahSendExchangeRates(qc, recipient.currency)
     // Use navigate (not push) so re-entering amount after "Change recipient" does not stack duplicate
     // SendAmount screens — back should be hub once, then dashboard.
@@ -415,7 +416,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   }
 
   const handleAddNewRecipient = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
     resetForm()
     setShowRecipientTypeModal(true)
   }
@@ -966,30 +967,32 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
               />
             ) : (
               <Animated.View
-                style={[
-                  styles.emptyState,
-                  {
-                    opacity: contentAnim,
-                    transform: [
-                      {
-                        translateY: contentAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [motion.screenEnterTranslateY, 0],
-                        }),
-                      },
-                    ],
-                  },
-                ]}
+                style={{
+                  opacity: contentAnim,
+                  transform: [
+                    {
+                      translateY: contentAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [motion.screenEnterTranslateY, 0],
+                      }),
+                    },
+                  ],
+                }}
               >
-                <Users size={48} color={colors.text.secondary} strokeWidth={1.5} />
-                <Text style={styles.emptyText}>
-                  {searchTerm.trim() ? 'No matches' : 'No recipients found'}
-                </Text>
-                <Text style={styles.emptySubtext}>
-                  {searchTerm.trim()
-                    ? 'Try another search'
-                    : 'Add a new recipient to get started'}
-                </Text>
+                <EmptyState
+                  icon={Users}
+                  title={searchTerm.trim() ? 'No matches' : 'No recipients found'}
+                  message={
+                    searchTerm.trim()
+                      ? 'Try another search'
+                      : 'Add a new recipient to get started'
+                  }
+                  action={
+                    !searchTerm.trim()
+                      ? { label: 'Add recipient', onPress: handleAddNewRecipient }
+                      : undefined
+                  }
+                />
               </Animated.View>
             )}
           </Animated.View>
@@ -1050,7 +1053,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                android_ripple={ripple.neutral}
                 style={styles.recipientTypeOption}
                 onPress={async () => {
-                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  haptics.tap()
                   const firstAsset = getWalletAssets()[0] || 'USDT'
                   const firstNetwork = getWalletNetworksForAsset(firstAsset)[0] || ''
                   setSelectedRecipientType('wallet')
@@ -1071,7 +1074,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                android_ripple={ripple.neutral}
                 style={styles.recipientTypeOption}
                 onPress={async () => {
-                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  haptics.tap()
                   setSelectedRecipientType('bank')
                   setSelectedCountryCurrency({
                     countryCode: 'US',
@@ -1097,7 +1100,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                android_ripple={ripple.neutral}
                 style={styles.recipientTypeOption}
                 onPress={async () => {
-                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  haptics.tap()
                   const firstMobile = recipientCatalogFor('mobile_money')[0]
                   const firstCurrency = firstMobile?.currencyCode || 'KES'
                   const firstProvider = getRecipientProviders(firstCurrency, 'mobile_money', firstMobile?.countryCode)[0] || ''
@@ -1126,7 +1129,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                android_ripple={ripple.neutral}
                 style={styles.recipientTypeOption}
                 onPress={async () => {
-                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  haptics.tap()
                   setSelectedRecipientType('easenet')
                   setEasenetProfile(null)
                   setEasenetLookupError(null)
@@ -1326,7 +1329,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                           android_ripple={ripple.neutral}
                           style={[styles.currencyDropdownItem, isSelected && styles.currencyDropdownItemSelected]}
                           onPress={async () => {
-                            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                            haptics.tap()
                             setSelectedCountryCurrency({
                               countryCode: item.countryCode,
                               countryName: item.countryName,
@@ -1422,7 +1425,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                                   newRecipient.provider === provider && styles.currencyDropdownItemSelected,
                                 ]}
                                 onPress={async () => {
-                                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                                  haptics.tap()
                                   setNewRecipient((prev) => ({ ...prev, provider }))
                                   setShowProviderDropdown(false)
                                   setProviderSearchTerm('')
@@ -1518,7 +1521,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                                   newRecipient.currency === asset && styles.currencyDropdownItemSelected,
                                 ]}
                                 onPress={async () => {
-                                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                                  haptics.tap()
                                   const networks = getWalletNetworksForAsset(asset)
                                   setNewRecipient((prev) => ({
                                     ...prev,
@@ -1594,7 +1597,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                                   newRecipient.network === network && styles.currencyDropdownItemSelected,
                                 ]}
                                 onPress={async () => {
-                                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                                  haptics.tap()
                                   setNewRecipient((prev) => ({ ...prev, network }))
                                   setShowWalletNetworkDropdown(false)
                                   setWalletNetworkSearchTerm('')
@@ -1663,7 +1666,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                             style={[styles.transferTypeOption, transferType === 'ACH' && styles.transferTypeOptionSelected]}
                             onPress={() => {
                               setTransferType('ACH')
-                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                              haptics.tap()
                             }} >
                             <Text style={[styles.transferTypeOptionText, transferType === 'ACH' && styles.transferTypeOptionTextSelected]}>
                               ACH
@@ -1674,7 +1677,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                             style={[styles.transferTypeOption, transferType === 'Wire' && styles.transferTypeOptionSelected]}
                             onPress={() => {
                               setTransferType('Wire')
-                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                              haptics.tap()
                             }} >
                             <Text style={[styles.transferTypeOptionText, transferType === 'Wire' && styles.transferTypeOptionTextSelected]}>
                               Fedwire
@@ -1743,7 +1746,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                                 style={[styles.transferTypeOption, newRecipient.checkingOrSavings === 'checking' && styles.transferTypeOptionSelected]}
                                 onPress={() => {
                                   setNewRecipient(prev => ({ ...prev, checkingOrSavings: 'checking' }))
-                                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                                  haptics.tap()
                                 }} >
                                 <Text style={[styles.transferTypeOptionText, newRecipient.checkingOrSavings === 'checking' && styles.transferTypeOptionTextSelected]}>
                                   Checking
@@ -1754,7 +1757,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                                 style={[styles.transferTypeOption, newRecipient.checkingOrSavings === 'savings' && styles.transferTypeOptionSelected]}
                                 onPress={() => {
                                   setNewRecipient(prev => ({ ...prev, checkingOrSavings: 'savings' }))
-                                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                                  haptics.tap()
                                 }} >
                                 <Text style={[styles.transferTypeOptionText, newRecipient.checkingOrSavings === 'savings' && styles.transferTypeOptionTextSelected]}>
                                   Savings

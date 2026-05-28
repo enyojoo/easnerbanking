@@ -10,13 +10,14 @@ import {
   Platform,
   Pressable,
 } from 'react-native'
-import { ArrowLeft, Search } from 'lucide-react-native'
-import * as Haptics from 'expo-haptics'
+import { ArrowLeft, CreditCard, Search } from 'lucide-react-native'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { PlainTwoColumnRowSkeleton } from '../../components/skeletons'
+import EmptyState from '../../components/EmptyState'
 import { NavigationProps } from '../../types'
 import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, fontFamily } from '../../theme'
 import { noahService } from '../../lib/noahService'
+import { haptics } from '../../lib/haptics'
 
 type Row = {
   id: string
@@ -101,7 +102,7 @@ export default function TransactionCardScreen({ navigation }: NavigationProps) {
         <View style={styles.header}>
           <Pressable
             onPress={async () => {
-              await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+              haptics.tap()
               navigation.goBack()
             }}
             accessibilityRole="button"
@@ -142,13 +143,11 @@ export default function TransactionCardScreen({ navigation }: NavigationProps) {
               ))}
             </View>
           ) : visible.length === 0 ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>No card transactions yet</Text>
-              <Text style={styles.emptyBody}>
-                Corporate cards are coming soon. When card spend exists, it will be listed here (Noah card
-                source only).
-              </Text>
-            </View>
+            <EmptyState
+              icon={CreditCard}
+              title="No card transactions yet"
+              message="Corporate cards are coming soon. When card spend exists, it will be listed here (Noah card source only)."
+            />
           ) : (
             visible.map((item, idx) => (
               <View

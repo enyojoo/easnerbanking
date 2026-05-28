@@ -7,6 +7,8 @@ import * as BackgroundTask from 'expo-background-task'
 import * as TaskManager from 'expo-task-manager'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { KeyboardProvider } from 'react-native-keyboard-controller'
+import { PressablesConfig } from 'pressto'
 import { useFonts } from 'expo-font'
 import * as SplashScreen from 'expo-splash-screen'
 import * as SystemUI from 'expo-system-ui'
@@ -173,7 +175,6 @@ function AppContent() {
         style={
           !splashFinished || activeRouteName === 'Onboarding' ? 'light' : 'dark'
         }
-        backgroundColor={Platform.OS === 'android' ? palette.background.primary : undefined}
       />
       <AppNavigator />
     </NavigationContainer>
@@ -328,6 +329,12 @@ export default function App() {
   
   try {
     return (
+      <KeyboardProvider>
+      <PressablesConfig
+        animationType="spring"
+        animationConfig={{ damping: 28, stiffness: 320 }}
+        config={{ minScale: 0.97, activeOpacity: 0.92 }}
+      >
       <GestureHandlerRootView style={{ flex: 1 }}>
         {/* Global safe areas (react-native-safe-area-context). Expo Router not used — React Navigation + stack/tabs. */}
         <SafeAreaProvider>
@@ -349,6 +356,8 @@ export default function App() {
           </ThemePaletteProvider>
         </SafeAreaProvider>
       </GestureHandlerRootView>
+      </PressablesConfig>
+      </KeyboardProvider>
     )
   } catch (error) {
     console.error('App.tsx: Error in App component:', error)

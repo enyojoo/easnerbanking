@@ -30,10 +30,6 @@
         "applinks:easner.com"
       ]
     },
-    "androidStatusBar": {
-      "backgroundColor": "#007ACC",
-      "barStyle": "dark-content"
-    },
     "android": {
       "softwareKeyboardLayoutMode": "resize",
       "icon": "./assets/icons/adaptive-icon.png",
@@ -73,6 +69,12 @@
       }
     },
     "plugins": [
+      [
+        "expo-status-bar",
+        {
+          "style": "dark"
+        }
+      ],
       [
         "expo-notifications",
         {

@@ -1,10 +1,10 @@
 import React, { useMemo } from 'react'
 import { View, Text, TextInput, Pressable, StyleSheet, Platform } from 'react-native'
 import { Check, ChevronDown, ChevronUp, Search } from 'lucide-react-native'
-import * as Haptics from 'expo-haptics'
 import RecipientFormDropdownList from './RecipientFormDropdownList'
 import { colors, spacing, textStyles, borderRadius, fontFamily, surfaceFrameStyle } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
+import { haptics } from '../../lib/haptics'
 
 type Props = {
   banks: string[]
@@ -121,7 +121,7 @@ export function RecipientBankNameField({
                     android_ripple={ripple.neutral}
                     style={[styles.item, value === bank && styles.itemSelected]}
                     onPress={async () => {
-                      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                      haptics.tap()
                       onChange(bank)
                       onBlurValidate?.(bank)
                       close()

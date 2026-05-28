@@ -1,4 +1,3 @@
-import * as Haptics from 'expo-haptics'
 import type { QueryClient } from '@tanstack/react-query'
 import { qk, scopeKey, type Scope } from '@easner/shared'
 import { noahService, type NoahTransfer } from '../lib/noahService'
@@ -68,6 +67,7 @@ export function detailIdFromTransfer(transfer: NoahTransfer): string {
 }
 
 import type { PayoutPrepareSession } from '../lib/payoutPrepareSession'
+import { haptics } from '../lib/haptics'
 
 export type { PayoutPrepareSession } from '../lib/payoutPrepareSession'
 
@@ -232,7 +232,7 @@ export async function executeBalanceSend(
     )
   }
 
-  await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+  haptics.success()
 
   let recipientForDetails: Recipient = recipient
   if (

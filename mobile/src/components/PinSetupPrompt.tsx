@@ -8,9 +8,9 @@ import {
   Modal,
 } from 'react-native'
 import { Lock } from 'lucide-react-native'
-import * as Haptics from 'expo-haptics'
 import { colors, textStyles, borderRadius, spacing } from '../theme'
 import { ripple } from '../lib/androidRipple'
+import { haptics } from '../lib/haptics'
 
 interface PinSetupPromptProps {
   visible: boolean
@@ -23,12 +23,12 @@ interface PinSetupPromptProps {
  */
 export default function PinSetupPrompt({ visible, onSetup, onDismiss }: PinSetupPromptProps) {
   const handleSetup = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    haptics.medium()
     onSetup()
   }
 
   const handleDismiss = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    haptics.tap()
     onDismiss()
   }
 

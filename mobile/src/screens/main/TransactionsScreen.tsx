@@ -23,10 +23,10 @@ import {
   CircleX,
   Receipt,
 } from 'lucide-react-native'
-import * as Haptics from 'expo-haptics'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { PremiumModalSheet } from '../../components/premium'
 import { GroupedListCardSkeleton } from '../../components/skeletons'
+import EmptyState from '../../components/EmptyState'
 import { FilterChip, SectionCard } from '../../components/ui'
 import { useCurrenciesCatalog, useTransactionsList, prefetchRecentTransactionDetailsInBackground, prefetchTransactionDetail, TRANSACTIONS_LEDGER_PAGE_SIZE } from '../../hooks/queries'
 import { NavigationProps, Transaction } from '../../types'
@@ -61,6 +61,7 @@ import { getTransactionListName } from '../../lib/transactionListLabel'
 import { useFocusEffect } from '@react-navigation/native'
 import { apiPost } from '../../lib/apiClient'
 import { useAuth } from '../../contexts/AuthContext'
+import { haptics } from '../../lib/haptics'
 
 const TRANSACTIONS_CACHE_KEY_PREFIX = 'easner_transactions_screen_list_'
 const TRANSACTIONS_CACHE_TTL_MS = 60 * 60 * 1000
@@ -300,7 +301,7 @@ const TransactionItem = React.memo(function TransactionItem({
           pressed && styles.transactionItemPressed,
         ]}
         onPress={async () => {
-          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+          haptics.tap()
           onPress()
         }}
         onPressIn={handlePressIn}
@@ -535,7 +536,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
   const onRefresh = async () => {
     setRefreshing(true)
     try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+      haptics.tap()
       // Chain sync can take many seconds — don't block the spinner; refresh ledger after if it inserted rows.
       void syncChainLedgerIfDue(true).then((inserted) => {
         if (inserted) void txQuery.refetch()
@@ -549,6 +550,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
       }
     } finally {
       setRefreshing(false)
+      haptics.select()
     }
   }
 
@@ -704,7 +706,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
             <Pressable
               android_ripple={ripple.neutral}
               onPress={async () => {
-                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                haptics.tap()
                 setDraftFrom(dateRange.from)
                 setDraftTo(dateRange.to)
                 setDateSheetOpen(true)
@@ -736,7 +738,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
               <Pressable
                 android_ripple={ripple.neutral}
                 onPress={async () => {
-                  await Haptics.selectionAsync().catch(() => {})
+                  await haptics.select()
                   setDateRange({ from: null, to: null })
                 }}
                 accessibilityRole="button"
@@ -825,19 +827,26 @@ function TransactionsContent({ navigation }: NavigationProps) {
           {loading ? (
             <TransactionsSkeleton />
           ) : filteredTransactions.length === 0 ? (
-            <View style={styles.emptyStateContainer}>
-              <View style={styles.emptyIconContainer}>
-                <Receipt size={36} color={colors.text.tertiary} strokeWidth={1.5} />
-              </View>
-              <Text style={styles.emptyStateTitle}>
-                {searchTerm || activeFilter !== 'all' ? 'No transactions found' : 'No transactions yet'}
-              </Text>
-              <Text style={styles.emptyStateText}>
-                {searchTerm || activeFilter !== 'all'
+            <EmptyState
+              icon={Receipt}
+              title={
+                searchTerm || activeFilter !== 'all' ? 'No transactions found' : 'No transactions yet'
+              }
+              message={
+                searchTerm || activeFilter !== 'all'
                   ? 'Try adjusting your search or filter to see more transactions'
-                  : 'Your recent transactions will appear here once you send, receive or spend money'}
-              </Text>
-            </View>
+                  : 'Your recent transactions will appear here once you send, receive or spend money'
+              }
+              action={
+                !searchTerm && activeFilter === 'all'
+                  ? {
+                      label: 'Send money',
+                      onPress: () => navigation.navigate('SelectRecentRecipient' as never),
+                    }
+                  : undefined
+              }
+              style={styles.emptyStateContainer}
+            />
           ) : (
             <View style={regularWidth ? [styles.regularWidthRow, { gap: splitConfig.gap }] : undefined}>
               <View
@@ -1066,7 +1075,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
               android_ripple={ripple.neutral}
               style={[styles.dateActionBtn, styles.dateActionBtnSecondary]}
               onPress={async () => {
-                await Haptics.selectionAsync().catch(() => {})
+                await haptics.select()
                 setDraftFrom(null)
                 setDraftTo(null)
                 setDateRange({ from: null, to: null })
@@ -1082,7 +1091,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
               android_ripple={ripple.heroOnDark}
               style={[styles.dateActionBtn, styles.dateActionBtnPrimary]}
               onPress={async () => {
-                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                haptics.tap()
                 setDateRange({ from: draftFrom, to: draftTo })
                 setDraftPickerOpen(null)
                 setDateSheetOpen(false)

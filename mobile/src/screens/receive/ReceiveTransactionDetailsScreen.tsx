@@ -14,7 +14,8 @@ import { useAuth } from '../../contexts/AuthContext'
 import { apiGet } from '../../lib/apiClient'
 import { useThemeColors, fontFamily } from '../../theme'
 import type { Colors } from '../../theme'
-import { CircleCheck, Clock } from 'lucide-react-native'
+import { PlainTwoColumnRowSkeleton } from '../../components/skeletons'
+import { useDeferredLoading } from '../../hooks/useDeferredLoading'
 
 interface ReceiveTransaction {
   id: string
@@ -223,6 +224,7 @@ function ReceiveTransactionDetailsContent({ navigation, route }: NavigationProps
   const initialTransaction = (route?.params as any)?.initialTransaction as ReceiveTransaction | null | undefined
   const [transaction, setTransaction] = useState<ReceiveTransaction | null>(initialTransaction ?? null)
   const [loading, setLoading] = useState(initialTransaction ? false : true)
+  const showLoadingSpinner = useDeferredLoading(loading)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -312,11 +314,13 @@ function ReceiveTransactionDetailsContent({ navigation, route }: NavigationProps
     ]
   }
 
-  if (loading) {
+  if (showLoadingSpinner) {
     return (
       <ScreenWrapper>
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={palette.primary.main} />
+        <View style={[styles.centerContainer, { paddingHorizontal: 20, width: '100%' }]}>
+          <PlainTwoColumnRowSkeleton variant="plain" showDivider={false} />
+          <PlainTwoColumnRowSkeleton variant="plain" showDivider={false} />
+          <PlainTwoColumnRowSkeleton variant="plain" showDivider={false} />
         </View>
       </ScreenWrapper>
     )

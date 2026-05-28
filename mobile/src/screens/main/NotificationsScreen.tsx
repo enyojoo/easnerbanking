@@ -10,7 +10,6 @@ import {
 } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { ArrowLeft } from 'lucide-react-native'
-import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { CommunicationPreferences } from '@easner/shared'
 import { DEFAULT_COMMUNICATION_PREFERENCES, qk } from '@easner/shared'
@@ -25,6 +24,7 @@ import { ripple } from '../../lib/androidRipple'
 import { apiPatch, apiPost } from '../../lib/apiClient'
 import { pushNotificationService } from '../../lib/pushNotificationService'
 import { useToast } from '../../components/ToastProvider'
+import { haptics } from '../../lib/haptics'
 
 export default function NotificationsScreen({ navigation }: NavigationProps) {
   const insets = useSafeAreaInsets()
@@ -169,7 +169,7 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
       <Switch
         value={value}
         onValueChange={async (v) => {
-          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+          haptics.tap()
           onValueChange(v)
         }}
         trackColor={{ false: colors.border.dark, true: colors.primary.main }}
@@ -206,7 +206,7 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
             <Pressable
              android_ripple={ripple.neutral}
               onPress={async () => {
-                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                haptics.tap()
                 navigation.goBack()
               }}
               style={styles.backButton} >

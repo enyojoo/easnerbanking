@@ -9,22 +9,26 @@ import {
 } from 'react-native'
 import { ArrowLeft, Link as LinkIcon } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { colors, shadows, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
+import SkeletonLoader from '../../components/SkeletonLoader'
+import { PlainTwoColumnRowSkeleton } from '../../components/skeletons'
+import { useDeferredLoading } from '../../hooks/useDeferredLoading'
 import { ripple } from '../../lib/androidRipple'
 import { useToast } from '../../components/ToastProvider'
 import { completeManualSendOrder } from '../../hooks/use-manual-pay-in-screen'
 import { ManualSendReceiptUpload } from '../../components/send/ManualSendReceiptUpload'
 import type { ManualQuoteResponse } from '../../lib/manual-send-api'
+import { haptics } from '../../lib/haptics'
 
 export default function OpenBankingScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
   const { showError } = useToast()
   const [loading, setLoading] = useState(false)
+  const showLoadingSpinner = useDeferredLoading(loading)
   const [receiptPath, setReceiptPath] = useState<string | null>(null)
   
   const {
@@ -54,7 +58,7 @@ export default function OpenBankingScreen({ navigation, route }: NavigationProps
 
   const handleConnect = async () => {
     setLoading(true)
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    haptics.medium()
     
     // TODO: Integrate Plaid/OpenBanking flow here
     // For now, simulate connection
@@ -154,9 +158,10 @@ export default function OpenBankingScreen({ navigation, route }: NavigationProps
             />
           ) : null}
 
-          {loading ? (
+          {showLoadingSpinner ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={colors.primary.main} />
+              <PlainTwoColumnRowSkeleton variant="plain" showDivider={false} />
+              <SkeletonLoader width="100%" height={48} borderRadius={borderRadius.lg} style={{ marginTop: spacing[4] }} />
               <Text style={styles.loadingText}>
                 {isSBP ? 'Connecting to SBP...' : 'Connecting to your bank...'}
               </Text>
