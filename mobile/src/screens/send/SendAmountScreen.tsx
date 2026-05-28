@@ -663,7 +663,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       (selectedPaymentMethod === 'otherCurrency' && Boolean(selectedOtherCurrency)))
 
   const payoutMinSeedKey = recipient
-    ? `${recipient.id}:${receiveCurrency}:${payoutRail}:${selectedPaymentMethod}:${selectedOtherCurrency ?? ''}:${amountEntryMode}`
+    ? `${recipient.id}:${receiveCurrency}:${payoutRail}:${selectedPaymentMethod}:${selectedOtherCurrency ?? ''}`
     : null
 
   usePayoutMinEnforcement({

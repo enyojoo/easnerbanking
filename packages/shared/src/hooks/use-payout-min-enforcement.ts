@@ -10,7 +10,7 @@ import {
 
 export function usePayoutMinEnforcement(input: {
   enabled: boolean
-  /** When this changes (recipient, rail, pay source, entry mode), min is applied immediately. */
+  /** When this changes (recipient, rail, pay source), min may be applied immediately. */
   seedKey: string | null
   minReceive: number | null
   amountEntryMode: "send" | "receive"
@@ -49,11 +49,38 @@ export function usePayoutMinEnforcement(input: {
     if (!input.enabled || minReceive == null || !input.seedKey) return
     if (lastSeedKey.current === input.seedKey) return
     lastSeedKey.current = input.seedKey
+
+    if (input.enteredAmount <= 0) {
+      applyMin(minReceive)
+      return
+    }
+
+    const currentReceive = computePayoutReceiveAmount({
+      amountEntryMode: input.amountEntryMode,
+      enteredAmount: input.enteredAmount,
+      sendCurrency: input.sendCurrency,
+      receiveCurrency: input.receiveCurrency,
+      rateMap: input.rateMap,
+      manualQuote: input.manualQuote,
+      useManualQuote: input.useManualQuote,
+    })
+
+    if (
+      payoutReceiveMeetsMin({
+        receiveAmount: currentReceive,
+        minReceive,
+        receiveCurrency: input.receiveCurrency,
+      })
+    ) {
+      return
+    }
+
     applyMin(minReceive)
   }, [
     input.enabled,
     input.minReceive,
     input.seedKey,
+    input.enteredAmount,
     input.amountEntryMode,
     input.sendCurrency,
     input.receiveCurrency,
