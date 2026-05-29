@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   getSendAmountNoteFieldUi,
+  validatePayoutAmountAgainstLimits,
   validateSendAmountFields,
 } from "./payout-form-schema"
 import type { PayoutFieldsSchemaHint } from "./payout-corridor"
@@ -48,6 +49,24 @@ describe("USD optional reference on send amount", () => {
         receiveCurrency: "USD",
       }),
     ).toEqual({ ok: true })
+  })
+
+  it("skips Noah payout minimum for Easetag P2P", () => {
+    expect(
+      validatePayoutAmountAgainstLimits({
+        amount: 1,
+        hints: null,
+        currencyCode: "USD",
+        isEasetag: true,
+      }),
+    ).toEqual({ ok: true })
+    expect(
+      validatePayoutAmountAgainstLimits({
+        amount: 1,
+        hints: null,
+        currencyCode: "USD",
+      }),
+    ).toEqual({ ok: false, message: "Minimum send amount is 10 USD." })
   })
 
   it("still requires reference for EUR corridors", () => {

@@ -1271,6 +1271,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               }
 
               if (
+                !isEasetagRecipient &&
                 (selectedPaymentMethod === 'balance' || selectedPaymentMethod === 'otherCurrency') &&
                 receiveAmountValue > 0
               ) {

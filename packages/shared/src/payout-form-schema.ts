@@ -128,7 +128,10 @@ export function validatePayoutAmountAgainstLimits(input: {
   hints: PayoutFieldsSchemaHint | null | undefined
   currencyCode?: string
   rail?: PayoutRail
+  /** Easetag P2P is internal ledger — no Noah fiat payout minimums. */
+  isEasetag?: boolean
 }): SendAmountFieldValidation {
+  if (input.isEasetag) return { ok: true }
   const cur = input.currencyCode?.trim().toUpperCase() || ""
   const effectiveMin =
     cur.length > 0

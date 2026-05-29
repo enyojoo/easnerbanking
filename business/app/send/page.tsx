@@ -621,7 +621,11 @@ export default function SendPage() {
       setAmountFieldError(fieldCheck.message)
       return
     }
-    if ((isBalanceSource || paymentMethod === "otherCurrency") && receiveAmount > 0) {
+    if (
+      !isEasetagRecipient &&
+      (isBalanceSource || paymentMethod === "otherCurrency") &&
+      receiveAmount > 0
+    ) {
       const limitCheck = validatePayoutAmountAgainstLimits({
         amount: receiveAmount,
         hints: payoutHints,
