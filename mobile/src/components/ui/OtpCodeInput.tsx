@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useCallback, useEffect, useRef } from 'react'
 import {
   View,
   Text,
@@ -8,9 +8,12 @@ import {
   StyleProp,
   TextStyle,
   ViewStyle,
+  Pressable,
+  InteractionManager,
 } from 'react-native'
 import { colors, spacing, textStyles } from '../../theme'
 import { otpCodeBoxStyles, OTP_CODE_BOX_H } from '../../theme/otpCodeBoxVisual'
+import { useOtpClipboardAutofill } from '../../hooks/useOtpClipboardAutofill'
 
 export interface OtpCodeInputProps {
   /** Defaults to `otp-code` */
@@ -28,6 +31,11 @@ export interface OtpCodeInputProps {
   centerLabel?: boolean
   /** Optional extra spacing between label and OTP boxes. */
   labelStyle?: StyleProp<TextStyle>
+  /**
+   * Read clipboard on focus return / foreground for a matching code.
+   * @default true
+   */
+  clipboardAutofill?: boolean
 }
 
 /**
@@ -45,12 +53,45 @@ export function OtpCodeInput({
   containerStyle,
   centerLabel = false,
   labelStyle,
+  clipboardAutofill = true,
 }: OtpCodeInputProps) {
+  const inputRef = useRef<TextInput>(null)
+  const didAutoFocusRef = useRef(false)
   const digits = value.replace(/\D/g, '').slice(0, length)
   const activeIndex = Math.min(digits.length, length - 1)
 
   const handleChange = (t: string) => {
     onChange(t.replace(/\D/g, '').slice(0, length))
+  }
+
+  const focusInput = useCallback(() => {
+    if (disabled) return
+    inputRef.current?.focus()
+  }, [disabled])
+
+  useEffect(() => {
+    if (!autoFocus || disabled) return
+    if (didAutoFocusRef.current) return
+
+    const task = InteractionManager.runAfterInteractions(() => {
+      requestAnimationFrame(() => {
+        inputRef.current?.focus()
+        didAutoFocusRef.current = true
+      })
+    })
+
+    return () => task.cancel()
+  }, [autoFocus, disabled])
+
+  useOtpClipboardAutofill({
+    enabled: clipboardAutofill && !disabled,
+    value: digits,
+    onAutofill: onChange,
+    length,
+  })
+
+  const handleFocus = () => {
+    onFocus?.()
   }
 
   return (
@@ -63,8 +104,14 @@ export function OtpCodeInput({
           {label}
         </Text>
       ) : null}
-      <View style={styles.inputStack} accessibilityLabel={label ? undefined : 'One-time code'}>
-        <View style={otpCodeBoxStyles.boxRow}>
+      <Pressable
+        style={styles.inputStack}
+        onPress={focusInput}
+        disabled={disabled}
+        accessibilityLabel={label ? undefined : 'One-time code'}
+        accessibilityRole="none"
+      >
+        <View style={otpCodeBoxStyles.boxRow} pointerEvents="none">
           {Array.from({ length }, (_, i) => (
             <View
               key={i}
@@ -88,24 +135,29 @@ export function OtpCodeInput({
           ))}
         </View>
         <TextInput
+          ref={inputRef}
           nativeID={id}
           value={digits}
           onChangeText={handleChange}
-          keyboardType="number-pad"
+          keyboardType={Platform.OS === 'ios' ? 'default' : 'numeric'}
+          inputMode="numeric"
           maxLength={length}
           editable={!disabled}
-          autoFocus={autoFocus}
-          onFocus={onFocus}
+          onFocus={handleFocus}
           caretHidden
+          showSoftInputOnFocus
+          autoCapitalize="none"
+          autoCorrect={false}
+          contextMenuHidden={false}
           {...(Platform.OS === 'ios'
             ? { textContentType: 'oneTimeCode' as const }
-            : { autoComplete: 'off' as const })}
+            : { autoComplete: 'sms-otp' as const })}
           spellCheck={false}
           importantForAutofill="yes"
           style={styles.hiddenInput}
           selectionColor="transparent"
         />
-      </View>
+      </Pressable>
     </View>
   )
 }
@@ -130,7 +182,9 @@ const styles = StyleSheet.create({
   },
   hiddenInput: {
     ...StyleSheet.absoluteFillObject,
-    opacity: 0.02,
+    fontSize: 16,
+    color: 'transparent',
+    backgroundColor: 'transparent',
     zIndex: 2,
   },
 })

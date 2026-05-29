@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import {
   View,
   Text,
@@ -26,8 +26,6 @@ export default function MfaVerifyScreen() {
   const [code, setCode] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [cancelSheetVisible, setCancelSheetVisible] = useState(false)
-  /** Only auto-focus on first mount — avoids keyboard flash when returning from the authenticator app. */
-  const autoFocusOtpRef = useRef(true)
 
   const handleSubmit = async () => {
     const digits = code.replace(/\D/g, '')
@@ -76,10 +74,7 @@ export default function MfaVerifyScreen() {
                 label="6-digit code"
                 value={code}
                 onChange={setCode}
-                autoFocus={autoFocusOtpRef.current}
-                onFocus={() => {
-                  autoFocusOtpRef.current = false
-                }}
+                autoFocus
                 disabled={submitting}
               />
             </View>

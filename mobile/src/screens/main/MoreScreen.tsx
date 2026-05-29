@@ -86,7 +86,7 @@ function tierBadgeForProfile(
 }
 
 function MoreContent({ navigation }: NavigationProps) {
-  const { user, userProfile, refreshUserProfile, signOut } = useAuth()
+  const { user, userProfile, refreshUserProfile, signOut, loading: authLoading } = useAuth()
   const { showError } = useToast()
   const copyToClipboard = useCopyToClipboard()
   const palette = useThemeColors()
@@ -115,10 +115,19 @@ function MoreContent({ navigation }: NavigationProps) {
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [mfaStatusLine, setMfaStatusLine] = useState('')
+  /** False until MFA status is read from cache or `listFactors` — avoids showing the MFA banner while loading or on errors. */
+  const [mfaStatusResolved, setMfaStatusResolved] = useState(false)
   const lastKycProfileRefreshRef = useRef(0)
   /** Latest profile for focus handler — avoids putting `noah_kyc_status` in `useFocusEffect` deps (would re-run MFA listFactors on every profile poll while More stays focused). */
   const userProfileRef = useRef(userProfile)
   userProfileRef.current = userProfile
+
+  useEffect(() => {
+    if (!user?.id) {
+      setMfaStatusLine('')
+      setMfaStatusResolved(false)
+    }
+  }, [user?.id])
 
   const refreshMfaStatus = useCallback(async () => {
     const genAtStart = getMfaRefreshGeneration()
@@ -128,6 +137,7 @@ function MoreContent({ navigation }: NavigationProps) {
     if (getMfaRefreshGeneration() !== genAtStart) return
     if (!session?.user) {
       setMfaStatusLine('')
+      setMfaStatusResolved(false)
       return
     }
     const uid = session.user.id
@@ -138,14 +148,14 @@ function MoreContent({ navigation }: NavigationProps) {
     }
     if (getMfaRefreshGeneration() !== genAtStart) return
 
-    if (cached !== null) {
-      setMfaStatusLine(cached ? 'On' : 'Off')
-    } else {
-      setMfaStatusLine('Off')
+    if (cached === true && !shouldListFactorsForMfaRow(uid)) {
+      setMfaStatusLine('On')
+      setMfaStatusResolved(true)
+      return
     }
 
-    if (cached !== null && !shouldListFactorsForMfaRow(uid)) {
-      return
+    if (cached !== null) {
+      setMfaStatusLine(cached ? 'On' : 'Off')
     }
 
     const { data, error } = await listFactorsForMfaStatus(supabase)
@@ -153,6 +163,9 @@ function MoreContent({ navigation }: NavigationProps) {
 
     if (error) {
       console.warn('MoreScreen MFA status:', error.message)
+      if (cached !== null) {
+        setMfaStatusResolved(true)
+      }
       return
     }
     const totp = totpFactorsFromListResponse(data)
@@ -164,6 +177,7 @@ function MoreContent({ navigation }: NavigationProps) {
 
     const on = Boolean(id)
     setMfaStatusLine(on ? 'On' : 'Off')
+    setMfaStatusResolved(true)
     await saveMfaVerified(uid, on)
   }, [])
 
@@ -171,8 +185,9 @@ function MoreContent({ navigation }: NavigationProps) {
     useCallback(() => {
       if (!user?.id) return
       const mem = peekMfaVerified(user.id)
-      if (mem !== null) {
-        setMfaStatusLine(mem ? 'On' : 'Off')
+      if (mem === true) {
+        setMfaStatusLine('On')
+        setMfaStatusResolved(true)
       }
       const up = userProfileRef.current
       const noahKycStatus =
@@ -344,8 +359,12 @@ function MoreContent({ navigation }: NavigationProps) {
   }, [headerAvatarUri])
 
   // Conditional gradient banner — verify identity OR set up MFA when applicable.
-  const showVerifyBanner = !isTier1Complete(userProfile) && verificationStatus !== 'in_review'
-  const showMfaBanner = !showVerifyBanner && mfaStatusLine === 'Off'
+  const profileReady = !authLoading && userProfile != null
+  const tier1Complete = isTier1Complete(userProfile)
+  const showVerifyBanner =
+    profileReady && !tier1Complete && verificationStatus !== 'in_review'
+  const showMfaBanner =
+    profileReady && !showVerifyBanner && mfaStatusResolved && mfaStatusLine === 'Off'
   const banner = showVerifyBanner
     ? {
         title: 'Verify your identity',

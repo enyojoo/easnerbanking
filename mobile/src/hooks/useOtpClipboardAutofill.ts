@@ -10,10 +10,16 @@ type UseOtpClipboardAutofillOptions = {
   length?: number
 }
 
-function extractClipboardOtp(raw: string, length: number): string | null {
+export function extractClipboardOtp(raw: string, length: number): string | null {
   const trimmed = String(raw || '').trim()
-  const pattern = new RegExp(`^\\d{${length}}$`)
-  return pattern.test(trimmed) ? trimmed : null
+  const exact = new RegExp(`^\\d{${length}}$`)
+  if (exact.test(trimmed)) return trimmed
+
+  const digitsOnly = trimmed.replace(/\D/g, '')
+  if (digitsOnly.length === length) return digitsOnly
+
+  const embedded = trimmed.match(new RegExp(`\\d{${length}}`))
+  return embedded ? embedded[0] : null
 }
 
 /**
