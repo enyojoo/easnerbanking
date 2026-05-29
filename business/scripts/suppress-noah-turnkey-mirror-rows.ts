@@ -2,13 +2,11 @@
  * One-time cleanup: tag Turnkey inbound rows that duplicate Noah bank on-ramp settlement hashes.
  *
  * Usage:
- *   cd business && npx tsx scripts/suppress-noah-turnkey-mirror-rows.ts
- *   cd business && npx tsx scripts/suppress-noah-turnkey-mirror-rows.ts --dry-run
+ *   cd business && node --env-file=.env.local --import tsx scripts/suppress-noah-turnkey-mirror-rows.ts --dry-run
+ *   cd business && node --env-file=.env.local --import tsx scripts/suppress-noah-turnkey-mirror-rows.ts
  */
-import { config } from "dotenv"
-config({ path: ".env.local" })
-
 import { createSupabaseAdmin } from "../lib/supabase/admin"
+import { applyWalletBalanceDelta } from "../lib/wallet/wallet-balances-db"
 import {
   extractNoahBankPayInEnrichment,
   isNoahBankOnrampLedgerPayload,
@@ -75,7 +73,7 @@ async function main() {
 
   const { data: turnkeyRows, error: tkErr } = await admin
     .from("transactions")
-    .select("id, tx_hash, user_id, business_id, metadata, amount")
+    .select("id, tx_hash, user_id, business_id, metadata, amount, currency")
     .eq("provider", "turnkey")
     .eq("direction", "in")
     .not("tx_hash", "is", null)
@@ -126,8 +124,23 @@ async function main() {
       noah_bank_onramp_chain_mirror: true,
     }
 
-    console.log(`${dryRun ? "[dry-run] " : ""}suppress turnkey mirror id=${row.id} tx=${h.slice(0, 12)}…`)
+    const reverseBalance =
+      prior.balance_delta_applied === true && !prior.noah_bank_onramp_mirror_reversed
+
+    console.log(
+      `${dryRun ? "[dry-run] " : ""}suppress turnkey mirror id=${row.id} tx=${h.slice(0, 12)}…` +
+        (reverseBalance ? " (reverse balance delta)" : ""),
+    )
     if (!dryRun) {
+      if (reverseBalance && Number.isFinite(amount) && amount > 0) {
+        await applyWalletBalanceDelta(admin, {
+          businessId,
+          userId: businessId ? null : userId,
+          currency: String(row.currency ?? "USD"),
+          delta: -amount,
+        })
+        meta.noah_bank_onramp_mirror_reversed = true
+      }
       await admin
         .from("transactions")
         .update({ metadata: meta, updated_at: new Date().toISOString() })

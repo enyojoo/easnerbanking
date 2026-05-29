@@ -2,6 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 import {
   extractNoahBankPayInEnrichment,
+  isNoahBankOnrampOrchestrationOutLeg,
+  pickNoahOrchestrationRuleExecutionId,
   type NoahBankPayInEnrichment,
 } from "@/lib/noah/bank-onramp-tx"
 import { findBankOnrampPayInTransaction } from "@/lib/noah/find-bank-onramp-pay-in-transaction"
@@ -133,6 +135,39 @@ export async function tryCreditNoahBankOnrampPayInWallet(
     .eq("id", input.transactionId)
 
   return { credited: true }
+}
+
+/**
+ * Bank on-ramp orchestration Out (Noah → user wallet): side effects only.
+ * The fiat pay-in Noah Transaction row is the sole user-facing ledger record.
+ */
+export async function applyNoahBankOnrampOrchestrationOutSideEffects(
+  admin: SupabaseClient,
+  opts: {
+    txData: Record<string, unknown>
+    status: string
+    userId: string
+    businessId: string | null
+  },
+): Promise<void> {
+  if (!isNoahBankOnrampOrchestrationOutLeg(opts.txData)) return
+  const ruleExecutionId = pickNoahOrchestrationRuleExecutionId(opts.txData)
+  if (String(opts.status).toLowerCase() !== "settled" || !ruleExecutionId) return
+
+  const solanaTxHash = pickNoahOnChainTxHashFromLedgerRow({ payload: opts.txData })
+  if (!solanaTxHash) return
+
+  await linkBankOnrampPayInToSolanaTxHash(admin, {
+    ruleExecutionId,
+    solanaTxHash,
+    userId: opts.userId,
+    businessId: opts.businessId,
+  })
+  await reconcileNoahBankOnrampCreditForSolanaTx(admin, {
+    solanaTxHash,
+    userId: opts.userId,
+    businessId: opts.businessId,
+  })
 }
 
 /** Attach the Solana settlement signature to the fiat pay-in row for mirror suppression. */

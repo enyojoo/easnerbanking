@@ -28,12 +28,28 @@ const LEDGER_SELECT =
 function collectGlobalPayoutSettlementTxHashes(rows: Record<string, unknown>[]): Set<string> {
   const hashes = new Set<string>()
   for (const row of rows) {
-    if (String(row.provider ?? "").toLowerCase() !== "turnkey") continue
-    if (String(row.direction ?? "").toLowerCase() !== "out") continue
+    const dir = String(row.direction ?? "").toLowerCase()
     const meta = (row.metadata as Record<string, unknown> | undefined) ?? {}
-    if (meta.global_payout_settlement_leg !== true) continue
-    const hash = String(row.tx_hash ?? "").trim()
-    if (hash) hashes.add(hash)
+    const provider = String(row.provider ?? "").toLowerCase()
+
+    if (provider === "turnkey" && dir === "out" && meta.global_payout_settlement_leg === true) {
+      const hash = String(row.tx_hash ?? "").trim()
+      if (hash) hashes.add(hash)
+      continue
+    }
+
+    if (
+      provider === "noah" &&
+      dir === "out" &&
+      (meta.payout_type === "global_fiat" || meta.flow === "global_fiat_offramp")
+    ) {
+      for (const key of ["turnkey_tx_hash", "noah_on_chain_tx_hash"] as const) {
+        const h = typeof meta[key] === "string" ? meta[key].trim() : ""
+        if (h) hashes.add(h)
+      }
+      const col = String(row.tx_hash ?? "").trim()
+      if (col) hashes.add(col)
+    }
   }
   return hashes
 }

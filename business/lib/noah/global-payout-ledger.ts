@@ -5,6 +5,7 @@ import {
   formatNoahAccountHolderName,
   pickNoahOrchestrationRuleExecutionId,
 } from "@/lib/noah/bank-onramp-tx"
+import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 
 export function pendingGlobalPayoutProviderTransactionId(easnerPayoutId: string): string {
   return `global_payout_pending:${easnerPayoutId}`
@@ -234,7 +235,21 @@ export async function collectGlobalPayoutSettlementTxHashesForScope(
     q = applyLedgerScope(q, scope)
     const { data } = await q.maybeSingle()
     const meta = (data?.metadata || {}) as Record<string, unknown>
-    if (meta.global_payout_settlement_leg === true) matched.add(hash)
+    if (meta.global_payout_settlement_leg === true) {
+      matched.add(hash)
+      continue
+    }
+
+    let noahQ = admin
+      .from("transactions")
+      .select("metadata")
+      .eq("provider", "noah")
+      .eq("direction", "out")
+      .or(`tx_hash.eq.${hash},metadata->>turnkey_tx_hash.eq.${hash},metadata->>noah_on_chain_tx_hash.eq.${hash}`)
+    noahQ = applyLedgerScope(noahQ, scope)
+    const { data: noahRow } = await noahQ.maybeSingle()
+    const noahMeta = (noahRow?.metadata || {}) as Record<string, unknown>
+    if (easnerPayoutIdFromGlobalPayoutNoahMeta(noahMeta)) matched.add(hash)
   }
   return matched
 }
@@ -403,6 +418,182 @@ export async function findPendingGlobalPayoutByExternalId(
   return null
 }
 
+function readEasnerPayoutIdFromNoahMeta(meta: Record<string, unknown>): string | null {
+  const id = String(meta.easner_payout_id ?? "").trim()
+  return id || null
+}
+
+function isGlobalPayoutNoahOutRow(meta: Record<string, unknown>): boolean {
+  return meta.payout_type === "global_fiat" || meta.flow === "global_fiat_offramp"
+}
+
+/** User-facing global payout Noah OUT row (pending or settled). */
+export async function findGlobalPayoutNoahRowByEasnerPayoutId(
+  admin: SupabaseClient,
+  easnerPayoutId: string,
+): Promise<{
+  id: string
+  user_id: string
+  business_id: string | null
+  amount: number
+  currency: string
+  metadata: Record<string, unknown>
+} | null> {
+  const pending = await findPendingGlobalPayoutByExternalId(admin, easnerPayoutId)
+  if (!pending?.id) return null
+  const { data } = await admin
+    .from("transactions")
+    .select("id, user_id, business_id, amount, currency, metadata")
+    .eq("id", pending.id)
+    .maybeSingle()
+  if (!data?.id) return null
+  return {
+    id: String(data.id),
+    user_id: String(data.user_id),
+    business_id: data.business_id != null ? String(data.business_id) : null,
+    amount: Number(data.amount ?? 0),
+    currency: String(data.currency ?? "USD"),
+    metadata: (data.metadata || {}) as Record<string, unknown>,
+  }
+}
+
+export async function findGlobalPayoutNoahRowByTurnkeySendId(
+  admin: SupabaseClient,
+  turnkeySendId: string,
+): Promise<{
+  id: string
+  user_id: string
+  business_id: string | null
+  amount: number
+  currency: string
+  metadata: Record<string, unknown>
+  easnerPayoutId: string | null
+} | null> {
+  const tid = String(turnkeySendId || "").trim()
+  if (!tid) return null
+
+  const select = "id, user_id, business_id, amount, currency, metadata"
+
+  const { data: byMain } = await admin
+    .from("transactions")
+    .select(select)
+    .eq("provider", "noah")
+    .eq("direction", "out")
+    .filter("metadata->>turnkey_send_id", "eq", tid)
+    .maybeSingle()
+  if (byMain?.id) {
+    const meta = (byMain.metadata || {}) as Record<string, unknown>
+    return {
+      id: String(byMain.id),
+      user_id: String(byMain.user_id),
+      business_id: byMain.business_id != null ? String(byMain.business_id) : null,
+      amount: Number(byMain.amount ?? 0),
+      currency: String(byMain.currency ?? "USD"),
+      metadata: meta,
+      easnerPayoutId: readEasnerPayoutIdFromNoahMeta(meta),
+    }
+  }
+
+  const { data: byMargin } = await admin
+    .from("transactions")
+    .select(select)
+    .eq("provider", "noah")
+    .eq("direction", "out")
+    .filter("metadata->>margin_turnkey_send_id", "eq", tid)
+    .maybeSingle()
+  if (byMargin?.id) {
+    const meta = (byMargin.metadata || {}) as Record<string, unknown>
+    return {
+      id: String(byMargin.id),
+      user_id: String(byMargin.user_id),
+      business_id: byMargin.business_id != null ? String(byMargin.business_id) : null,
+      amount: Number(byMargin.amount ?? 0),
+      currency: String(byMargin.currency ?? "USD"),
+      metadata: meta,
+      easnerPayoutId: readEasnerPayoutIdFromNoahMeta(meta),
+    }
+  }
+
+  return null
+}
+
+export async function patchGlobalPayoutNoahTurnkeySettlement(
+  admin: SupabaseClient,
+  input: {
+    easnerPayoutId: string
+    turnkeySendId: string
+    txHash?: string | null
+    turnkeySendStatus?: string | null
+    marginLeg?: boolean
+  },
+): Promise<void> {
+  const row = await findGlobalPayoutNoahRowByEasnerPayoutId(admin, input.easnerPayoutId)
+  if (!row?.id) return
+
+  const meta = { ...row.metadata }
+  if (input.marginLeg) {
+    meta.margin_turnkey_send_id = input.turnkeySendId
+  } else {
+    meta.turnkey_send_id = input.turnkeySendId
+    if (input.txHash) meta.turnkey_tx_hash = input.txHash
+    if (input.turnkeySendStatus) meta.turnkey_send_status = input.turnkeySendStatus
+  }
+
+  await admin
+    .from("transactions")
+    .update({
+      metadata: meta,
+      ...(input.txHash && !input.marginLeg ? { tx_hash: input.txHash } : {}),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", row.id)
+}
+
+/**
+ * Debit wallet for a global fiat payout once Turnkey chain send settles.
+ * Noah payout row is the sole ledger record — no Turnkey OUT row required.
+ */
+export async function applyGlobalPayoutWalletDebitForEasnerPayoutId(
+  admin: SupabaseClient,
+  input: { easnerPayoutId: string; marginLeg?: boolean },
+): Promise<void> {
+  if (input.marginLeg) return
+
+  const row = await findGlobalPayoutNoahRowByEasnerPayoutId(admin, input.easnerPayoutId)
+  if (!row?.id) return
+
+  const meta = row.metadata
+  if (meta.balance_delta_applied === true) return
+
+  let debitAmt = Number(meta.total_debited ?? row.amount ?? 0)
+  if (!Number.isFinite(debitAmt) || debitAmt <= 0) return
+
+  const currency = String(row.currency || "USD").toUpperCase() as "USD" | "EUR"
+  await applyWalletBalanceDelta(admin, {
+    businessId: row.business_id,
+    userId: row.business_id ? null : row.user_id,
+    currency,
+    delta: -debitAmt,
+  })
+
+  await admin
+    .from("transactions")
+    .update({
+      metadata: {
+        ...meta,
+        turnkey_settled: true,
+        balance_delta_applied: true,
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", row.id)
+}
+
+function easnerPayoutIdFromGlobalPayoutNoahMeta(meta: Record<string, unknown>): string | null {
+  if (!isGlobalPayoutNoahOutRow(meta)) return null
+  return readEasnerPayoutIdFromNoahMeta(meta)
+}
+
 /** Skip duplicate chain-ingest debit when Turnkey global payout settlement already handled balance. */
 export async function findGlobalPayoutSettlementForChainSuppression(
   admin: SupabaseClient,
@@ -421,6 +612,9 @@ export async function findGlobalPayoutSettlementForChainSuppression(
       const easnerPayoutId = String(meta.easner_payout_id || "").trim()
       if (easnerPayoutId) return { easnerPayoutId }
     }
+
+    const noahRow = await findGlobalPayoutNoahRowByTurnkeySendId(admin, tid)
+    if (noahRow?.easnerPayoutId) return { easnerPayoutId: noahRow.easnerPayoutId }
   }
 
   const hx = String(input.txHash || "").trim()
@@ -436,6 +630,17 @@ export async function findGlobalPayoutSettlementForChainSuppression(
       const easnerPayoutId = String(meta.easner_payout_id || "").trim()
       if (easnerPayoutId) return { easnerPayoutId }
     }
+
+    let noahQ = admin
+      .from("transactions")
+      .select("metadata")
+      .eq("provider", "noah")
+      .eq("direction", "out")
+      .or(`tx_hash.eq.${hx},metadata->>turnkey_tx_hash.eq.${hx},metadata->>noah_on_chain_tx_hash.eq.${hx}`)
+    const { data: noahByHash } = await noahQ.maybeSingle()
+    const noahMeta = (noahByHash?.metadata || {}) as Record<string, unknown>
+    const easnerPayoutId = easnerPayoutIdFromGlobalPayoutNoahMeta(noahMeta)
+    if (easnerPayoutId) return { easnerPayoutId }
   }
 
   return null

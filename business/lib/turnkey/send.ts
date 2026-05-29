@@ -10,7 +10,16 @@ import { resolveWalletOwnerIdForEasnerContext } from "@/lib/wallet/resolve-walle
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
-import { pendingGlobalPayoutProviderTransactionId } from "@/lib/noah/global-payout-ledger"
+import {
+  findEasetagSettlementForChainSuppression,
+  patchEasetagP2pChainSettlement,
+  updateEasetagSettlementSettled,
+} from "@/lib/ledger/easetag-settlement"
+import {
+  applyGlobalPayoutWalletDebitForEasnerPayoutId,
+  findGlobalPayoutNoahRowByTurnkeySendId,
+  patchGlobalPayoutNoahTurnkeySettlement,
+} from "@/lib/noah/global-payout-ledger"
 
 export type TurnkeySendInput = {
   ctx: NoahAccountContext
@@ -523,6 +532,17 @@ export async function createTurnkeySend(
         }
       : {}
 
+  const globalPayoutEasnerPayoutId =
+    input.globalPayout?.easnerPayoutId != null && String(input.globalPayout.easnerPayoutId).trim()
+      ? String(input.globalPayout.easnerPayoutId).trim()
+      : null
+  const easetagTransferGroupId =
+    input.easetagSettlement?.transferGroupId != null && String(input.easetagSettlement.transferGroupId).trim()
+      ? String(input.easetagSettlement.transferGroupId).trim()
+      : null
+  const skipTurnkeyLedgerRow = Boolean(globalPayoutEasnerPayoutId || easetagTransferGroupId)
+
+  if (!skipTurnkeyLedgerRow) {
   await upsertLedgerTransaction(admin, {
     userId: scopeOwner.userId,
     businessId: scopeOwner.businessId,
@@ -551,6 +571,22 @@ export async function createTurnkeySend(
     occurredAt: new Date().toISOString(),
     baseCurrency: mapAssetToCurrency(input.asset),
   })
+  } else if (globalPayoutEasnerPayoutId) {
+    await patchGlobalPayoutNoahTurnkeySettlement(admin, {
+      easnerPayoutId: globalPayoutEasnerPayoutId,
+      turnkeySendId: parsed.providerTransactionId,
+      txHash: parsed.txHash,
+      turnkeySendStatus: "pending",
+      marginLeg: input.globalPayout?.marginLeg === true,
+    })
+  } else if (easetagTransferGroupId) {
+    await patchEasetagP2pChainSettlement(admin, {
+      transferGroupId: easetagTransferGroupId,
+      turnkeySendId: parsed.providerTransactionId,
+      txHash: parsed.txHash,
+      turnkeySendStatus: "pending",
+    })
+  }
 
   let reconciled: { status: "pending" | "settled" | "failed"; txHash: string | null } = {
     status: "pending",
@@ -605,11 +641,27 @@ export async function createTurnkeySend(
       providerTransactionId: parsed.providerTransactionId,
       ...(lastPollPayload != null ? { statusResponse: lastPollPayload } : {}),
     })
-    if (reconciled.status === "settled" && input.globalPayout?.easnerPayoutId) {
-      await applyGlobalPayoutTurnkeySettleDebit(admin, {
-        providerTransactionId: parsed.providerTransactionId,
-        easnerPayoutId: String(input.globalPayout.easnerPayoutId).trim(),
+    if (reconciled.status === "settled" && globalPayoutEasnerPayoutId) {
+      await patchGlobalPayoutNoahTurnkeySettlement(admin, {
+        easnerPayoutId: globalPayoutEasnerPayoutId,
+        turnkeySendId: parsed.providerTransactionId,
+        txHash: reconciled.txHash ?? parsed.txHash,
+        turnkeySendStatus: reconciled.status,
+        marginLeg: input.globalPayout?.marginLeg === true,
+      }).catch(() => {})
+      await applyGlobalPayoutWalletDebitForEasnerPayoutId(admin, {
+        easnerPayoutId: globalPayoutEasnerPayoutId,
+        marginLeg: input.globalPayout?.marginLeg === true,
       }).catch((e) => console.warn("global_payout_turnkey_settle_debit:", e))
+    } else if (reconciled.status === "settled" && easetagTransferGroupId) {
+      const txHash = reconciled.txHash ?? parsed.txHash
+      await patchEasetagP2pChainSettlement(admin, {
+        transferGroupId: easetagTransferGroupId,
+        turnkeySendId: parsed.providerTransactionId,
+        txHash,
+        turnkeySendStatus: reconciled.status,
+      }).catch(() => {})
+      await updateEasetagSettlementSettled(admin, easetagTransferGroupId, txHash).catch(() => {})
     }
   } catch {
     // Best-effort reconciliation.
@@ -718,6 +770,21 @@ async function applyGlobalPayoutTurnkeySettleDebit(
   admin: SupabaseClient,
   params: { providerTransactionId: string; easnerPayoutId?: string },
 ): Promise<void> {
+  if (params.easnerPayoutId) {
+    await applyGlobalPayoutWalletDebitForEasnerPayoutId(admin, {
+      easnerPayoutId: params.easnerPayoutId,
+    })
+    return
+  }
+
+  const noahRow = await findGlobalPayoutNoahRowByTurnkeySendId(admin, params.providerTransactionId)
+  if (noahRow?.easnerPayoutId) {
+    await applyGlobalPayoutWalletDebitForEasnerPayoutId(admin, {
+      easnerPayoutId: noahRow.easnerPayoutId,
+    })
+    return
+  }
+
   const { data: existing } = await admin
     .from("transactions")
     .select("id, user_id, business_id, amount, currency, metadata")
@@ -737,22 +804,10 @@ async function applyGlobalPayoutTurnkeySettleDebit(
     debitAmt = walletDebitOverride
   }
 
-  if (params.easnerPayoutId) {
-    const pendingId = pendingGlobalPayoutProviderTransactionId(params.easnerPayoutId)
-    const { data: payoutRow } = await admin
-      .from("transactions")
-      .select("metadata")
-      .eq("provider", "noah")
-      .eq("provider_transaction_id", pendingId)
-      .maybeSingle()
-    if (payoutRow) {
-      const payoutMeta = (payoutRow.metadata || {}) as Record<string, unknown>
-      if (payoutMeta.balance_delta_applied === true) return
-      const fromPayout = Number(payoutMeta.total_debited ?? 0)
-      if (Number.isFinite(fromPayout) && fromPayout > 0) {
-        debitAmt = fromPayout
-      }
-    }
+  const easnerPayoutId = String(meta.easner_payout_id || "").trim()
+  if (easnerPayoutId) {
+    await applyGlobalPayoutWalletDebitForEasnerPayoutId(admin, { easnerPayoutId })
+    return
   }
 
   if (!Number.isFinite(debitAmt) || debitAmt <= 0) return
@@ -775,31 +830,6 @@ async function applyGlobalPayoutTurnkeySettleDebit(
       updated_at: new Date().toISOString(),
     })
     .eq("id", existing.id)
-
-  if (params.easnerPayoutId) {
-    const pendingId = pendingGlobalPayoutProviderTransactionId(params.easnerPayoutId)
-    const { data: payoutRow } = await admin
-      .from("transactions")
-      .select("metadata")
-      .eq("provider", "noah")
-      .eq("provider_transaction_id", pendingId)
-      .maybeSingle()
-    if (payoutRow) {
-      const payoutMeta = (payoutRow.metadata || {}) as Record<string, unknown>
-      await admin
-        .from("transactions")
-        .update({
-          metadata: {
-            ...payoutMeta,
-            turnkey_settled: true,
-            balance_delta_applied: true,
-          },
-          updated_at: new Date().toISOString(),
-        })
-        .eq("provider", "noah")
-        .eq("provider_transaction_id", pendingId)
-    }
-  }
 }
 
 export async function reconcileTurnkeySendStatus(
@@ -857,6 +887,44 @@ export async function reconcileTurnkeySendStatus(
         providerTransactionId: params.providerTransactionId,
         easnerPayoutId,
       }).catch((e) => console.warn("global_payout_turnkey_settle_debit:", e))
+    }
+  } else {
+    const easetagSettlement = await findEasetagSettlementForChainSuppression(admin, {
+      turnkeySendStatusId: params.providerTransactionId,
+      txHash,
+    })
+    if (easetagSettlement) {
+      await patchEasetagP2pChainSettlement(admin, {
+        transferGroupId: easetagSettlement.transfer_group_id,
+        turnkeySendId: params.providerTransactionId,
+        txHash,
+        turnkeySendStatus: status,
+      }).catch(() => {})
+      if (status === "settled" && txHash) {
+        await updateEasetagSettlementSettled(admin, easetagSettlement.transfer_group_id, txHash).catch(() => {})
+      }
+    } else {
+      const noahRow = await findGlobalPayoutNoahRowByTurnkeySendId(admin, params.providerTransactionId)
+      if (noahRow?.id) {
+        const meta = { ...noahRow.metadata, turnkey_send_status: status }
+        if (txHash) {
+          meta.turnkey_tx_hash = txHash
+        }
+        await admin
+          .from("transactions")
+          .update({
+            metadata: meta,
+            ...(txHash ? { tx_hash: txHash } : {}),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", noahRow.id)
+
+        if (status === "settled" && noahRow.easnerPayoutId) {
+          await applyGlobalPayoutWalletDebitForEasnerPayoutId(admin, {
+            easnerPayoutId: noahRow.easnerPayoutId,
+          }).catch((e) => console.warn("global_payout_turnkey_settle_debit:", e))
+        }
+      }
     }
   }
 

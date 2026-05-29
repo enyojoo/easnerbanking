@@ -138,6 +138,44 @@ export async function insertEasetagSettlementPending(
   return { ok: true }
 }
 
+/** Patch sender debit leg with on-chain settlement refs (no separate Turnkey `transactions` row). */
+export async function patchEasetagP2pChainSettlement(
+  admin: SupabaseClient,
+  input: {
+    transferGroupId: string
+    turnkeySendId: string
+    txHash?: string | null
+    turnkeySendStatus?: string | null
+  },
+): Promise<void> {
+  const transferGroupId = String(input.transferGroupId || "").trim()
+  const turnkeySendId = String(input.turnkeySendId || "").trim()
+  if (!transferGroupId || !turnkeySendId) return
+
+  const debitPtid = `easetag_p2p:${transferGroupId}:debit`
+  const { data: row } = await admin
+    .from("transactions")
+    .select("id, metadata")
+    .eq("provider", "easner_internal")
+    .eq("provider_transaction_id", debitPtid)
+    .maybeSingle()
+  if (!row?.id) return
+
+  const meta = { ...((row.metadata || {}) as Record<string, unknown>) }
+  meta.turnkey_send_id = turnkeySendId
+  if (input.txHash) meta.turnkey_tx_hash = input.txHash
+  if (input.turnkeySendStatus) meta.turnkey_send_status = input.turnkeySendStatus
+
+  await admin
+    .from("transactions")
+    .update({
+      metadata: meta,
+      ...(input.txHash ? { tx_hash: input.txHash } : {}),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", row.id)
+}
+
 export async function updateEasetagSettlementSubmitted(
   admin: SupabaseClient,
   transferGroupId: string,

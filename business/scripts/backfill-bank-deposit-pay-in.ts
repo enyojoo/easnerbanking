@@ -19,6 +19,8 @@ import {
   mergePayInMetadataWithLifecycle,
 } from "../lib/noah/bank-onramp-tx"
 import { fetchFiatDepositWebhooksByDepositIds } from "../lib/noah/fiat-deposit-webhook-timestamps"
+import { tryCreditNoahBankOnrampPayInWallet } from "../lib/noah/credit-bank-onramp-wallet"
+import { markEventInboxProcessed } from "../lib/webhooks/event-inbox"
 import { createSupabaseAdmin } from "../lib/supabase/admin"
 
 const dryRun = process.argv.includes("--dry-run")
@@ -67,9 +69,22 @@ function pickDepositId(
   return ""
 }
 
+/** Fiat VA pay-in wrongly tagged as internal orchestration in-leg (legacy webhook bug). */
+function isMisclassifiedOrchestrationInPayIn(
+  meta: Record<string, unknown>,
+  payload: Record<string, unknown>,
+): boolean {
+  return (
+    meta.noah_orchestration_settlement_in_leg === true &&
+    isNoahBankOnrampFiatPayIn(payload) &&
+    !isNoahFiatDepositWebhookPayload(payload)
+  )
+}
+
 function isFundingPayInRow(meta: Record<string, unknown>, payload: Record<string, unknown>): boolean {
-  if (meta.suppress_in_feed === true) return false
-  if (meta.noah_orchestration_settlement_in_leg === true) return false
+  const misclassified = isMisclassifiedOrchestrationInPayIn(meta, payload)
+  if (meta.suppress_in_feed === true && !misclassified) return false
+  if (meta.noah_orchestration_settlement_in_leg === true && !misclassified) return false
   const flow = String(meta.flow ?? "").toLowerCase()
   if (flow && flow !== "bank_onramp") return false
   if (isVerificationDepositMetadata(meta)) return false
@@ -92,7 +107,7 @@ async function main() {
   const { data: rows, error } = await admin
     .from("transactions")
     .select(
-      "id, provider_transaction_id, status, metadata, payload, occurred_at, settled_at, amount, currency",
+      "id, user_id, business_id, provider_transaction_id, status, metadata, payload, occurred_at, settled_at, amount, currency, tx_hash",
     )
     .eq("provider", "noah")
     .eq("direction", "in")
@@ -151,13 +166,48 @@ async function main() {
     }
   }
 
+  const noahTxIds = fundingRows.map((r) => String(r.provider_transaction_id ?? "")).filter(Boolean)
+  const settledTxnFromInbox = new Map<
+    string,
+    { data: Record<string, unknown>; eventId: string; inboxStatus: string }
+  >()
+
+  const { data: txnInboxRows } = await admin
+    .from("event_inbox")
+    .select("event_id, status, payload, received_at")
+    .eq("provider", "noah")
+    .eq("event_type", "Transaction")
+    .order("received_at", { ascending: false })
+    .limit(5000)
+
+  for (const inbox of txnInboxRows ?? []) {
+    const envelope = inbox.payload as Record<string, unknown> | undefined
+    const d = envelope?.Data as Record<string, unknown> | undefined
+    if (!d) continue
+    const txId = String(d.ID ?? "").trim()
+    if (!txId || !noahTxIds.includes(txId)) continue
+    if (String(d.Status ?? "").toLowerCase() !== "settled") continue
+    if (!settledTxnFromInbox.has(txId)) {
+      settledTxnFromInbox.set(txId, {
+        data: d,
+        eventId: String(inbox.event_id ?? ""),
+        inboxStatus: String(inbox.status ?? ""),
+      })
+    }
+  }
+
   let updated = 0
   let skipped = 0
+  let credited = 0
+  let inboxReplayed = 0
   const scanned = fundingRows.length
 
   for (const row of fundingRows) {
     const meta = (row.metadata as Record<string, unknown>) ?? {}
-    const payload = row.payload as Record<string, unknown>
+    const storedPayload = row.payload as Record<string, unknown>
+    const noahTxId = String(row.provider_transaction_id ?? "")
+    const settledInbox = noahTxId ? settledTxnFromInbox.get(noahTxId) : undefined
+    const payload = settledInbox?.data ?? storedPayload
     const payInEnrichment = extractNoahBankPayInEnrichment(payload)
     if (!payInEnrichment) {
       skipped++
@@ -188,7 +238,8 @@ async function main() {
           ? meta.reference
           : null)
 
-    const status = String(row.status ?? payload.Status ?? "").toLowerCase() || "unknown"
+    const status =
+      String(settledInbox ? "settled" : row.status ?? payload.Status ?? "").toLowerCase() || "unknown"
     const payInMeta = buildNoahBankPayInLedgerMetadata(payload, payInEnrichment, {
       status,
       occurredAt: row.occurred_at != null ? String(row.occurred_at) : null,
@@ -214,9 +265,27 @@ async function main() {
       noah_fiat_deposit_id: depositId || fiatDepositEnrichment?.depositId || null,
     })
 
-    const patch = {
+    delete metadata.noah_orchestration_settlement_in_leg
+    delete metadata.suppress_in_feed
+
+    const patch: Record<string, unknown> = {
       metadata,
       updated_at: new Date().toISOString(),
+    }
+    if (settledInbox) {
+      patch.payload = payload
+    }
+    if (status === "settled" && String(row.status ?? "").toLowerCase() !== "settled") {
+      patch.status = "settled"
+      patch.settled_at =
+        row.settled_at != null
+          ? String(row.settled_at)
+          : String(payload.Updated ?? payload.Created ?? new Date().toISOString())
+    }
+    const onChain =
+      typeof metadata.noah_on_chain_tx_hash === "string" ? metadata.noah_on_chain_tx_hash.trim() : ""
+    if (onChain && !String(row.tx_hash ?? "").trim()) {
+      patch.tx_hash = onChain
     }
 
     const senderLabel =
@@ -225,8 +294,10 @@ async function main() {
       typeof metadata.deposit_narration === "string" ? metadata.deposit_narration : "—"
 
     if (dryRun) {
+      const settleNote =
+        settledInbox && String(row.status ?? "").toLowerCase() !== "settled" ? " → settle" : ""
       console.log(
-        `[dry-run] ${row.id} (${depositId || row.provider_transaction_id}) → sender=${senderLabel}, narration=${narrationLabel}`,
+        `[dry-run] ${row.id} (${depositId || row.provider_transaction_id}) → sender=${senderLabel}, narration=${narrationLabel}${settleNote}`,
       )
     } else {
       const { error: upErr } = await admin.from("transactions").update(patch).eq("id", row.id)
@@ -235,12 +306,41 @@ async function main() {
         skipped++
         continue
       }
+
+      if (
+        status === "settled" &&
+        payInEnrichment.settledStablecoinAmount != null &&
+        payInEnrichment.settledStablecoinAmount > 0 &&
+        payInEnrichment.walletLedgerCurrency
+      ) {
+        const ruleExecutionId =
+          (typeof metadata.noah_rule_execution_id === "string" && metadata.noah_rule_execution_id.trim()) ||
+          payInEnrichment.ruleExecutionId ||
+          null
+        const { credited: didCredit } = await tryCreditNoahBankOnrampPayInWallet(admin, {
+          transactionId: String(row.id),
+          userId: String(row.user_id),
+          businessId: row.business_id != null ? String(row.business_id) : null,
+          noahTransactionId: noahTxId || String(row.id),
+          ruleExecutionId,
+          payInEnrichment,
+          metadata,
+          solanaTxHash:
+            typeof metadata.noah_on_chain_tx_hash === "string" ? metadata.noah_on_chain_tx_hash : null,
+        })
+        if (didCredit) credited++
+      }
+
+      if (settledInbox?.eventId && settledInbox.inboxStatus === "failed") {
+        await markEventInboxProcessed(admin, "noah", settledInbox.eventId, null)
+        inboxReplayed++
+      }
     }
     updated++
   }
 
   console.log(
-    `Scanned ${scanned} funding bank_onramp rows; ${dryRun ? "would update" : "updated"} ${updated}; skipped ${skipped}.`,
+    `Scanned ${scanned} funding bank_onramp rows; ${dryRun ? "would update" : "updated"} ${updated}; skipped ${skipped}; wallet credited ${credited}; inbox replayed ${inboxReplayed}.`,
   )
 }
 

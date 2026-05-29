@@ -23,7 +23,6 @@ import {
 } from "@/lib/noah/global-payout-ledger"
 import {
   buildNoahBankPayInLedgerMetadata,
-  buildNoahOrchestrationOutLegMetadata,
   buildNoahVerificationFiatDepositLedgerMetadata,
   extractFiatDepositEnrichment,
   extractNoahBankPayInEnrichment,
@@ -36,8 +35,7 @@ import {
 } from "@/lib/noah/bank-onramp-tx"
 import { findBankOnrampPayInTransaction } from "@/lib/noah/find-bank-onramp-pay-in-transaction"
 import {
-  linkBankOnrampPayInToSolanaTxHash,
-  reconcileNoahBankOnrampCreditForSolanaTx,
+  applyNoahBankOnrampOrchestrationOutSideEffects,
   tryCreditNoahBankOnrampPayInWallet,
 } from "@/lib/noah/credit-bank-onramp-wallet"
 import { provisionNoahAfterVerificationApproved } from "@/lib/noah/provision-after-approval"
@@ -257,6 +255,18 @@ export async function applyNoahWebhookSideEffects(
             ruleExecutionId,
             solanaTxHash,
           })
+        } else if (isOrchestrationOut) {
+          await applyNoahBankOnrampOrchestrationOutSideEffects(admin, {
+            txData,
+            status,
+            userId,
+            businessId,
+          })
+        } else if (
+          isNoahBankOnrampOrchestrationInLeg(txData) &&
+          !isNoahGlobalPayoutOrchestrationInLegShape(txData)
+        ) {
+          // Internal on-chain orchestration IN — fiat pay-in row is user-facing.
         } else if (
           isNoahBankOnrampFiatPayIn(txData) &&
           payInEnrichment &&
@@ -273,12 +283,7 @@ export async function applyNoahWebhookSideEffects(
           metadata.collection_channel = "autopayout"
           metadata.autopayout_config_id = autopayoutConfigId
         }
-        if (isOrchestrationOut) {
-          metadata = {
-            ...metadata,
-            ...buildNoahOrchestrationOutLegMetadata(txData, ruleExecutionId),
-          }
-        } else if (payInEnrichment && isNoahBankOnrampFiatPayIn(txData)) {
+        if (payInEnrichment && isNoahBankOnrampFiatPayIn(txData)) {
           const occurredAt = String(txData.Created ?? txData.Updated ?? new Date().toISOString())
           const depositId =
             payInEnrichment.ruleExecutionId ??
@@ -309,18 +314,6 @@ export async function applyNoahWebhookSideEffects(
               fiatDepositSenderName,
               paymentReference,
             }),
-          }
-        } else if (
-          isNoahBankOnrampOrchestrationInLeg(txData) &&
-          ruleExecutionId &&
-          !isNoahGlobalPayoutOrchestrationInLegShape(txData)
-        ) {
-          metadata = {
-            ...metadata,
-            flow: "bank_onramp",
-            noah_rule_execution_id: ruleExecutionId,
-            noah_orchestration_settlement_in_leg: true,
-            suppress_in_feed: true,
           }
         }
 
@@ -405,7 +398,6 @@ export async function applyNoahWebhookSideEffects(
         })
 
         const shouldCreditWallet =
-          !isOrchestrationOut &&
           isNoahBankOnrampFiatPayIn(txData) &&
           status === "settled" &&
           payInEnrichment != null &&
@@ -425,23 +417,6 @@ export async function applyNoahWebhookSideEffects(
             metadata,
             solanaTxHash: pickTxHash(txData),
           })
-        }
-
-        if (isOrchestrationOut && status === "settled" && ruleExecutionId) {
-          const solanaTxHash = pickTxHash(txData)
-          if (solanaTxHash) {
-            await linkBankOnrampPayInToSolanaTxHash(admin, {
-              ruleExecutionId,
-              solanaTxHash,
-              userId,
-              businessId,
-            })
-            await reconcileNoahBankOnrampCreditForSolanaTx(admin, {
-              solanaTxHash,
-              userId,
-              businessId,
-            })
-          }
         }
 
         if (isGlobalPayoutSell && status === "settled" && upsert.transactionId) {
