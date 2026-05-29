@@ -393,10 +393,7 @@ function MoreContent({ navigation }: NavigationProps) {
 
         <ScrollView
           style={styles.scrollContainer}
-          contentContainerStyle={{
-            flexGrow: 1,
-            paddingBottom: spacing[8],
-          }}
+          contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.content}>
@@ -663,6 +660,9 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: spacing[5],
   },
   header: {
     paddingHorizontal: spacing[5],
@@ -937,7 +937,6 @@ const styles = StyleSheet.create({
   versionContainer: {
     alignItems: 'center',
     paddingTop: spacing[2],
-    paddingBottom: spacing[10],
   },
   versionText: {
     ...textStyles.bodySmall,
