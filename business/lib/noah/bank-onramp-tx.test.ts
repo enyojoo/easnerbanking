@@ -124,6 +124,7 @@ import {
   extractFiatDepositEnrichment,
   extractNoahBankPayInEnrichment,
   isNoahBankOnrampFiatPayIn,
+  isNoahBankOnrampOrchestrationInLeg,
   isNoahBankOnrampOrchestrationOutLeg,
 } from "./bank-onramp-tx"
 
@@ -219,5 +220,21 @@ describe("bank-onramp-tx", () => {
     expect(meta.deposit_narration).toBe("Sent from PNC Bank")
     expect(meta.narration).toBe("Sent from PNC Bank")
     expect(meta.settled_amount).toBe(0)
+  })
+
+  it("does not classify fiat VA pay-in as orchestration in leg", () => {
+    expect(isNoahBankOnrampOrchestrationInLeg(FIAT_PAY_IN)).toBe(false)
+    expect(isNoahBankOnrampFiatPayIn(FIAT_PAY_IN)).toBe(true)
+  })
+
+  it("classifies on-chain orchestration in leg without FiatPayment", () => {
+    expect(
+      isNoahBankOnrampOrchestrationInLeg({
+        Direction: "In",
+        Network: "Solana",
+        CryptoCurrency: "USDC",
+        Orchestration: { RuleExecutionID: "rule-1" },
+      }),
+    ).toBe(true)
   })
 })

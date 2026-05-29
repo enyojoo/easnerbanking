@@ -278,19 +278,7 @@ export async function applyNoahWebhookSideEffects(
             ...metadata,
             ...buildNoahOrchestrationOutLegMetadata(txData, ruleExecutionId),
           }
-        } else if (
-          isNoahBankOnrampOrchestrationInLeg(txData) &&
-          ruleExecutionId &&
-          !isNoahGlobalPayoutOrchestrationInLegShape(txData)
-        ) {
-          metadata = {
-            ...metadata,
-            flow: "bank_onramp",
-            noah_rule_execution_id: ruleExecutionId,
-            noah_orchestration_settlement_in_leg: true,
-            suppress_in_feed: true,
-          }
-        } else if (payInEnrichment) {
+        } else if (payInEnrichment && isNoahBankOnrampFiatPayIn(txData)) {
           const occurredAt = String(txData.Created ?? txData.Updated ?? new Date().toISOString())
           const depositId =
             payInEnrichment.ruleExecutionId ??
@@ -321,6 +309,18 @@ export async function applyNoahWebhookSideEffects(
               fiatDepositSenderName,
               paymentReference,
             }),
+          }
+        } else if (
+          isNoahBankOnrampOrchestrationInLeg(txData) &&
+          ruleExecutionId &&
+          !isNoahGlobalPayoutOrchestrationInLegShape(txData)
+        ) {
+          metadata = {
+            ...metadata,
+            flow: "bank_onramp",
+            noah_rule_execution_id: ruleExecutionId,
+            noah_orchestration_settlement_in_leg: true,
+            suppress_in_feed: true,
           }
         }
 

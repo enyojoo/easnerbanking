@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   findNoah: vi.fn(),
   findPendingNoah: vi.fn(),
   reconcileNoah: vi.fn(),
+  linkNoahPayInHash: vi.fn(),
   findEasetag: vi.fn(),
   updateEasetag: vi.fn(),
   upsertLedger: vi.fn(),
@@ -17,6 +18,7 @@ vi.mock("@/lib/noah/noah-bank-onramp-chain-suppression", () => ({
 }))
 vi.mock("@/lib/noah/credit-bank-onramp-wallet", () => ({
   reconcileNoahBankOnrampCreditForSolanaTx: mocks.reconcileNoah,
+  linkBankOnrampPayInToSolanaTxHash: mocks.linkNoahPayInHash,
 }))
 vi.mock("@/lib/ledger/easetag-settlement", () => ({
   findEasetagSettlementForChainSuppression: mocks.findEasetag,
@@ -79,6 +81,7 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
       becameSettled: true,
     })
     mocks.reconcileNoah.mockResolvedValue({ credited: true })
+    mocks.linkNoahPayInHash.mockResolvedValue(undefined)
   })
 
   it("suppresses Noah bank on-ramp hash and reconciles credit", async () => {
@@ -112,6 +115,12 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
     const result = await applyTurnkeyInboundLedgerEvent(admin as never, baseInput)
     expect(result.kind).toBe("suppressed_noah")
     expect(mocks.upsertLedger).not.toHaveBeenCalled()
+    expect(mocks.linkNoahPayInHash).toHaveBeenCalledWith(admin, {
+      ruleExecutionId: "rule-1",
+      solanaTxHash: "hash-noah",
+      userId: "user-1",
+      businessId: null,
+    })
     expect(mocks.reconcileNoah).toHaveBeenCalled()
   })
 

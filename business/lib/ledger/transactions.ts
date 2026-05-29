@@ -76,6 +76,7 @@ function mergeMetadata(
 export async function upsertLedgerTransaction(
   admin: SupabaseClient,
   input: UpsertLedgerTransactionInput,
+  opts?: { retryOnConflict?: boolean },
 ): Promise<UpsertLedgerTransactionResult> {
   const provider = String(input.provider || "").trim().toLowerCase()
   const providerTransactionId = String(input.providerTransactionId || "").trim()
@@ -183,7 +184,12 @@ export async function upsertLedgerTransaction(
   }
 
   const insert = await admin.from("transactions").insert(record).select("id").maybeSingle()
-  if (insert.error) throw insert.error
+  if (insert.error) {
+    if (String(insert.error.code) === "23505" && !opts?.retryOnConflict) {
+      return upsertLedgerTransaction(admin, input, { retryOnConflict: true })
+    }
+    throw insert.error
+  }
   const insertedId = String((insert.data as any)?.id || "").trim()
   if (!insertedId) throw new Error("Inserted transaction missing id")
 

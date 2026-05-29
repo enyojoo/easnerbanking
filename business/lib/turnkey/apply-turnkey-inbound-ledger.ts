@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { findEasetagSettlementForChainSuppression, updateEasetagSettlementSettled } from "@/lib/ledger/easetag-settlement"
 import { findGlobalPayoutSettlementForChainSuppression } from "@/lib/noah/global-payout-ledger"
-import { reconcileNoahBankOnrampCreditForSolanaTx } from "@/lib/noah/credit-bank-onramp-wallet"
+import { reconcileNoahBankOnrampCreditForSolanaTx, linkBankOnrampPayInToSolanaTxHash } from "@/lib/noah/credit-bank-onramp-wallet"
 import {
   findNoahBankOnrampChainSettlementForSuppression,
   findPendingNoahBankOnrampForInboundAmount,
@@ -83,6 +83,14 @@ export async function applyTurnkeyInboundLedgerEvent(
     })
     if (pendingPayIn) {
       if (txHash) {
+        if (pendingPayIn.ruleExecutionId) {
+          await linkBankOnrampPayInToSolanaTxHash(admin, {
+            ruleExecutionId: pendingPayIn.ruleExecutionId,
+            solanaTxHash: txHash,
+            userId,
+            businessId,
+          }).catch(() => {})
+        }
         await reconcileNoahBankOnrampCreditForSolanaTx(admin, {
           solanaTxHash: txHash,
           userId,

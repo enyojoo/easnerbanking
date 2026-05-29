@@ -67,10 +67,16 @@ export function isNoahBankOnrampOrchestrationOutLeg(tx: Record<string, unknown>)
   return crypto.includes("USDC") || crypto.includes("EURC")
 }
 
-/** Orchestrated stablecoin credit to the user's wallet (Transaction In + Orchestration). */
+/**
+ * Orchestrated on-chain stablecoin credit to the user's wallet (Transaction In + Orchestration).
+ * Excludes fiat VA pay-ins (OffNetwork + FiatPayment) — those are the user-facing ledger row.
+ */
 export function isNoahBankOnrampOrchestrationInLeg(tx: Record<string, unknown>): boolean {
   if (String(tx.Direction ?? "") !== "In") return false
+  if (isNoahBankOnrampFiatPayIn(tx)) return false
   if (!pickNoahOrchestrationRuleExecutionId(tx)) return false
+  const net = String(tx.Network ?? "")
+  if (!net || net === "OffNetwork") return false
   const crypto = String(tx.CryptoCurrency ?? "").toUpperCase()
   return crypto.includes("USDC") || crypto.includes("EURC")
 }

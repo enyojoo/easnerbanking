@@ -121,7 +121,8 @@ function amountsRoughlyEqual(a: number, b: number): boolean {
 
 /**
  * Noah pay-in settled on fiat but Solana hash not linked yet (race before orchestration Out webhook).
- * Suppresses duplicate stablecoin rows when chain/RPC/Helius sees the transfer first.
+ * Also matches pending pay-ins while Noah orchestration is still in flight.
+ * Suppresses duplicate stablecoin rows when chain/RPC/Turnkey sees the transfer first.
  */
 export async function findPendingNoahBankOnrampForInboundAmount(
   admin: SupabaseClient,
@@ -142,10 +143,10 @@ export async function findPendingNoahBankOnrampForInboundAmount(
 
   let q = admin
     .from("transactions")
-    .select("id, metadata, payload, tx_hash")
+    .select("id, metadata, payload, tx_hash, status")
     .eq("provider", "noah")
     .eq("direction", "in")
-    .eq("status", "settled")
+    .in("status", ["pending", "processing", "settled"])
     .gte("created_at", sinceIso)
     .or("metadata->>flow.eq.bank_onramp,metadata->>noah_rule_execution_id.not.is.null")
   q = applyLedgerScope(q, input)
@@ -159,6 +160,9 @@ export async function findPendingNoahBankOnrampForInboundAmount(
     if (onChain) continue
 
     const payload = (row.payload as Record<string, unknown> | undefined) ?? {}
+    if (!isNoahBankOnrampFiatPayIn(payload) && meta.noah_orchestration_settlement_in_leg !== true) {
+      continue
+    }
     const enrichment = extractNoahBankPayInEnrichment(payload)
     const settled =
       enrichment?.settledStablecoinAmount ??
