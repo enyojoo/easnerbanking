@@ -19,6 +19,7 @@ import {
   setPushNavMainReady,
 } from '../lib/pendingPushNavigation'
 import { emitAppLocked, registerAppLockListener } from '../lib/app-lock-bus'
+import { prefetchIntercomModule, prepareIntercomMessenger } from '../lib/intercom'
 import { avatarImageUri, warmAvatarCacheAsync } from '../lib/avatarCache'
 import { useConsumerKycNoahSync } from '../hooks/useConsumerKycNoahSync'
 import { haptics } from '../lib/haptics'
@@ -703,6 +704,8 @@ export default function AppNavigator() {
     return registerAppLockListener((event) => {
       if (event === 'unlocked') {
         setPinGate('main')
+        prefetchIntercomModule()
+        void prepareIntercomMessenger()
       } else if (event === 'locked') {
         const avatarUri = avatarImageUri(userProfile?.profile?.avatar_url)
         if (avatarUri) {
@@ -719,8 +722,17 @@ export default function AppNavigator() {
     setPushNavMainReady(ready)
     if (ready) {
       flushPendingPushNavigation((global as any).rootNavigationRef?.current)
+      prefetchIntercomModule()
+      void prepareIntercomMessenger()
     }
   }, [pinGate, lockTick])
+
+  // Warm Intercom while user is on PIN entry so Live Chat is ready right after unlock.
+  useEffect(() => {
+    if (!user?.id || pinGate !== 'pin') return
+    prefetchIntercomModule()
+    void prepareIntercomMessenger()
+  }, [user?.id, pinGate])
 
   useEffect(() => {
     if (!user) {

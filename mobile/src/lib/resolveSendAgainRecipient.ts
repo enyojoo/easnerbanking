@@ -1,0 +1,130 @@
+import type { GlobalPayoutRecipientSnapshot } from '@easner/shared'
+import { buildDraftEasenetRecipient } from './draftEasenetRecipient'
+import { resolveRecipientEasetagForUi } from './easenetRecipientUi'
+import type { Recipient } from '../types'
+
+export type SendAgainTransactionInput = {
+  transaction_type?: string
+  source_type?: string
+  recipient_name?: string
+  name?: string
+  metadata?: Record<string, unknown> | null
+  recipient_snapshot?: GlobalPayoutRecipientSnapshot | null
+  recipient_id?: string
+}
+
+function normalizeAccount(value: string | undefined | null): string {
+  return String(value || '').replace(/\s+/g, '').toLowerCase()
+}
+
+function transactionMetadata(
+  transaction: SendAgainTransactionInput,
+): Record<string, unknown> {
+  const raw = transaction.metadata
+  return raw && typeof raw === 'object' ? raw : {}
+}
+
+function recipientIdFromTransaction(transaction: SendAgainTransactionInput): string {
+  const meta = transactionMetadata(transaction)
+  return String(transaction.recipient_id || meta.recipient_id || '').trim()
+}
+
+function isEasetagP2pTransaction(transaction: SendAgainTransactionInput): boolean {
+  const meta = transactionMetadata(transaction)
+  return (
+    transaction.source_type === 'easetag_p2p' ||
+    String(meta.source || '').toLowerCase() === 'easetag_p2p'
+  )
+}
+
+function matchRecipientFromSnapshot(
+  snapshot: GlobalPayoutRecipientSnapshot,
+  recipients: Recipient[],
+): Recipient | null {
+  const snapAcct = normalizeAccount(snapshot.account_number)
+  const snapPhone = normalizeAccount(snapshot.phone)
+  const snapName = String(snapshot.full_name || '').trim().toLowerCase()
+
+  const byAccount = recipients.filter((r) => {
+    const values = [r.account_number, r.iban, r.phone_number].map(normalizeAccount).filter(Boolean)
+    if (snapAcct && values.some((v) => v === snapAcct)) return true
+    if (snapPhone && normalizeAccount(r.phone_number) === snapPhone) return true
+    return false
+  })
+
+  if (byAccount.length === 1) return byAccount[0]!
+  if (byAccount.length > 1 && snapName) {
+    const narrowed = byAccount.filter((r) => r.full_name.trim().toLowerCase() === snapName)
+    if (narrowed.length === 1) return narrowed[0]!
+  }
+  if (byAccount.length > 0) return byAccount[0]!
+
+  if (snapName) {
+    const byName = recipients.filter((r) => r.full_name.trim().toLowerCase() === snapName)
+    if (byName.length === 1) return byName[0]!
+  }
+
+  return null
+}
+
+function resolveEasetagRecipient(
+  transaction: SendAgainTransactionInput,
+  recipients: Recipient[],
+  userId: string,
+): Recipient | null {
+  const meta = transactionMetadata(transaction)
+  const tag = String(meta.payee_easetag || meta.recipient_easetag || '')
+    .trim()
+    .replace(/^@+/, '')
+    .toLowerCase()
+  if (!tag) return null
+
+  const saved = recipients.find((r) => resolveRecipientEasetagForUi(r) === tag)
+  if (saved) return saved
+
+  const displayName =
+    String(transaction.recipient_name || transaction.name || '').trim() || tag
+  const accountKind =
+    meta.payee_account_kind === 'business'
+      ? 'business'
+      : meta.payee_account_kind === 'personal'
+        ? 'personal'
+        : undefined
+
+  return buildDraftEasenetRecipient({
+    easetag: tag,
+    fullName: displayName,
+    avatarUrl: null,
+    userId,
+    accountKind,
+  })
+}
+
+/**
+ * Resolve a saved (or draft Easetag) recipient from a completed send transaction
+ * so "Send again" can open Send Amount with the counterparty pre-selected.
+ */
+export function resolveSendAgainRecipient(
+  transaction: SendAgainTransactionInput,
+  recipients: Recipient[],
+  userId: string,
+): Recipient | null {
+  if (transaction.transaction_type !== 'send') return null
+
+  const recipientId = recipientIdFromTransaction(transaction)
+  if (recipientId) {
+    const byId = recipients.find((r) => r.id === recipientId)
+    if (byId) return byId
+  }
+
+  if (isEasetagP2pTransaction(transaction)) {
+    return resolveEasetagRecipient(transaction, recipients, userId)
+  }
+
+  const snapshot = transaction.recipient_snapshot
+  if (snapshot) {
+    return matchRecipientFromSnapshot(snapshot, recipients)
+  }
+
+  return null
+}

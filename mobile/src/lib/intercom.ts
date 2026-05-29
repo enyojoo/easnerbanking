@@ -10,9 +10,16 @@ type IntercomModule = typeof import('@intercom/intercom-react-native')
 let intercomLazy: IntercomModule | null | undefined
 let intercomInitialized = false
 let intercomIdentityReady = false
-let syncIntercomSessionPromise: Promise<void> | null = null
+let warmIntercomMessengerPromise: Promise<boolean> | null = null
 let presentIntercomMessengerPromise: Promise<void> | null = null
 let lastIntercomUserId: string | null = null
+let cachedMessengerJwt: { token: string; userId: string; fetchedAt: number } | null = null
+
+/**
+ * Reuse JWT across warm + present so Support chat does not block on a new network round-trip.
+ * Must stay below server `expiresIn` in `business/app/api/intercom/jwt/route.ts` (24h).
+ */
+const MESSENGER_JWT_CACHE_MS = 23 * 60 * 60_000
 
 function getIntercom(): IntercomModule | null {
   if (isExpoGo) return null
@@ -41,6 +48,12 @@ function intercomExtra(): IntercomExtra | undefined {
   return Constants.expoConfig?.extra as IntercomExtra | undefined
 }
 
+function clearIntercomIdentityCache(): void {
+  intercomIdentityReady = false
+  lastIntercomUserId = null
+  cachedMessengerJwt = null
+}
+
 export function isIntercomConfiguredInApp(): boolean {
   const extra = intercomExtra()
   return Boolean(extra?.intercomConfigured && !isExpoGo && getIntercom())
@@ -51,6 +64,9 @@ export function prefetchIntercomModule(): void {
   if (!intercomExtra()?.intercomConfigured || isExpoGo) return
   getIntercom()
   void ensureIntercomInitialized()
+  if (!warmIntercomMessengerPromise) {
+    void warmIntercomMessenger()
+  }
 }
 
 export async function ensureIntercomInitialized(): Promise<boolean> {
@@ -97,8 +113,29 @@ async function fetchIntercomMessengerJwt(accessToken: string): Promise<string | 
   }
 }
 
+async function resolveMessengerJwt(
+  accessToken: string,
+  userId: string,
+  forceRefresh = false,
+): Promise<string | null> {
+  if (
+    !forceRefresh &&
+    cachedMessengerJwt &&
+    cachedMessengerJwt.userId === userId &&
+    Date.now() - cachedMessengerJwt.fetchedAt < MESSENGER_JWT_CACHE_MS
+  ) {
+    return cachedMessengerJwt.token
+  }
+
+  const jwt = await fetchIntercomMessengerJwt(accessToken)
+  if (jwt) {
+    cachedMessengerJwt = { token: jwt, userId, fetchedAt: Date.now() }
+  }
+  return jwt
+}
+
 function refreshIntercomJwtInBackground(session: Session): void {
-  void fetchIntercomMessengerJwt(session.access_token).then((jwt) => {
+  void resolveMessengerJwt(session.access_token, session.user.id, true).then((jwt) => {
     if (!jwt) return
     const mod = getIntercom()
     if (!mod) return
@@ -116,25 +153,78 @@ async function applyIntercomIdentity(session: Session | null): Promise<void> {
   const { default: Intercom, Visibility } = mod
 
   if (session?.user) {
-    const jwt = await fetchIntercomMessengerJwt(session.access_token)
+    const userId = session.user.id
+    const jwt = await resolveMessengerJwt(session.access_token, userId)
     if (!jwt) {
-      intercomIdentityReady = false
+      clearIntercomIdentityCache()
       throw new Error('INTERCOM_JWT_UNAVAILABLE')
     }
     await Intercom.setUserJwt(jwt)
     await Intercom.loginUserWithUserAttributes({
-      userId: session.user.id,
+      userId,
       ...(session.user.email ? { email: session.user.email } : {}),
     })
-    lastIntercomUserId = session.user.id
+    lastIntercomUserId = userId
     intercomIdentityReady = true
   } else {
+    clearIntercomIdentityCache()
     await Intercom.logout().catch(() => undefined)
     await Intercom.loginUnidentifiedUser()
     lastIntercomUserId = null
     intercomIdentityReady = true
   }
   await Intercom.setLauncherVisibility(Visibility.GONE)
+}
+
+/**
+ * Initialize SDK + identity once (shared by login sync, PIN unlock, Support mount, and present).
+ * Returns true when messenger can be presented without another JWT/login pass.
+ */
+async function warmIntercomMessenger(session?: Session | null): Promise<boolean> {
+  const extra = intercomExtra()
+  if (!extra?.intercomConfigured || isExpoGo || !getIntercom()) return false
+
+  if (intercomIdentityReady && intercomInitialized) {
+    const userId = session?.user?.id ?? null
+    if (userId === lastIntercomUserId || (!userId && lastIntercomUserId === null)) {
+      return true
+    }
+  }
+
+  if (warmIntercomMessengerPromise) {
+    return warmIntercomMessengerPromise
+  }
+
+  warmIntercomMessengerPromise = (async () => {
+    prefetchIntercomModule()
+    let resolvedSession = session
+    if (resolvedSession === undefined) {
+      const {
+        data: { session: current },
+      } = await supabase.auth.getSession()
+      resolvedSession = current
+    }
+
+    try {
+      await applyIntercomIdentity(resolvedSession)
+      return intercomIdentityReady
+    } catch (e) {
+      if (e instanceof Error && e.message === 'INTERCOM_JWT_UNAVAILABLE') {
+        console.warn(
+          '[Intercom] No messenger JWT — check business INTERCOM_MESSENGER_API_SECRET and /api/intercom/jwt',
+        )
+        return false
+      }
+      console.warn('[Intercom] warmIntercomMessenger failed', e)
+      return false
+    }
+  })()
+
+  try {
+    return await warmIntercomMessengerPromise
+  } finally {
+    warmIntercomMessengerPromise = null
+  }
 }
 
 /**
@@ -145,78 +235,17 @@ async function applyIntercomIdentity(session: Session | null): Promise<void> {
 export async function syncIntercomSession(session: Session | null): Promise<void> {
   const extra = intercomExtra()
   if (!extra?.intercomConfigured) return
-  prefetchIntercomModule()
-  if (!getIntercom()) return
-
-  if (syncIntercomSessionPromise) {
-    await syncIntercomSessionPromise
-    return
-  }
-
-  syncIntercomSessionPromise = (async () => {
-    try {
-      await applyIntercomIdentity(session)
-    } catch (e) {
-      if (e instanceof Error && e.message === 'INTERCOM_JWT_UNAVAILABLE') {
-        console.warn(
-          '[Intercom] No messenger JWT — check business INTERCOM_MESSENGER_API_SECRET and /api/intercom/jwt',
-        )
-        return
-      }
-      console.warn('[Intercom] syncIntercomSession failed', e)
-    }
-  })()
-
-  try {
-    await syncIntercomSessionPromise
-  } finally {
-    syncIntercomSessionPromise = null
-  }
+  await warmIntercomMessenger(session)
 }
 
 /** Warm Intercom while Support is visible so Live Chat can present on the first tap. */
 export async function prepareIntercomMessenger(): Promise<void> {
   if (!isIntercomConfiguredInApp()) return
-  prefetchIntercomModule()
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-  await syncIntercomSession(session)
-}
-
-async function ensureIntercomReadyToPresent(session: Session | null): Promise<typeof import('@intercom/intercom-react-native').default> {
-  const extra = intercomExtra()
-  if (!extra?.intercomConfigured) {
-    throw new Error('INTERCOM_NOT_CONFIGURED')
-  }
-  if (isExpoGo || !getIntercom()) {
-    throw new Error('INTERCOM_NOT_CONFIGURED')
-  }
-
-  const ok = await ensureIntercomInitialized()
-  if (!ok) throw new Error('INTERCOM_NOT_CONFIGURED')
-
-  const mod = getIntercom()
-  if (!mod) throw new Error('INTERCOM_NOT_CONFIGURED')
-
-  if (syncIntercomSessionPromise) {
-    await syncIntercomSessionPromise
-  }
-
-  const userId = session?.user?.id ?? null
-  const identityMatches = intercomIdentityReady && userId === lastIntercomUserId
-
-  if (!identityMatches) {
-    await applyIntercomIdentity(session)
-  } else if (session?.user) {
-    refreshIntercomJwtInBackground(session)
-  }
-
-  return mod.default
+  await warmIntercomMessenger()
 }
 
 /**
- * Present messenger. When identity was warmed on login / Support mount, this calls native present immediately.
+ * Present messenger. When warmed on login / PIN unlock / Support mount, this should only call native present.
  */
 export async function presentIntercomMessenger(): Promise<void> {
   if (presentIntercomMessengerPromise) {
@@ -224,13 +253,30 @@ export async function presentIntercomMessenger(): Promise<void> {
   }
 
   presentIntercomMessengerPromise = (async () => {
+    const extra = intercomExtra()
+    if (!extra?.intercomConfigured || isExpoGo || !getIntercom()) {
+      throw new Error('INTERCOM_NOT_CONFIGURED')
+    }
+
     const {
       data: { session },
     } = await supabase.auth.getSession()
 
+    const ready = await warmIntercomMessenger(session)
+    if (!ready) {
+      const ok = await ensureIntercomInitialized()
+      if (!ok) throw new Error('INTERCOM_NOT_CONFIGURED')
+      throw new Error('INTERCOM_JWT_UNAVAILABLE')
+    }
+
+    const mod = getIntercom()
+    if (!mod) throw new Error('INTERCOM_NOT_CONFIGURED')
+
     try {
-      const Intercom = await ensureIntercomReadyToPresent(session)
-      await Intercom.present()
+      await mod.default.present()
+      if (session?.user) {
+        refreshIntercomJwtInBackground(session)
+      }
     } catch (e) {
       if (e instanceof Error && e.message === 'INTERCOM_JWT_UNAVAILABLE') throw e
       console.warn('[Intercom] present failed', e)

@@ -48,9 +48,13 @@ import { ripple } from '../../lib/androidRipple'
 import { formatSignedCurrency } from '../../utils/formatters'
 import {
   useTransactionDetail,
+  useRecipientsList,
+  prefetchNoahSendExchangeRates,
   seedTransactionDetailFromDisk,
   unwrapTransactionDetailPayload,
 } from '../../hooks/queries'
+import { useAuth } from '../../contexts/AuthContext'
+import { resolveSendAgainRecipient } from '../../lib/resolveSendAgainRecipient'
 import { isEasnerProductReceiveTitle, isEasnerProductSendTitle, isEasetagReceiveTitle, qk, scopeKey, formatMoneyDisplay, formatSendRateLabel, formatPayoutRecipientSubtitle, formatTransactionDetailHeroTitle, type GlobalPayoutReviewSnapshot, type GlobalPayoutRecipientSnapshot } from '@easner/shared'
 import { ApiError } from '../../query/api-client'
 import { useScope } from '../../query/scope'
@@ -74,6 +78,8 @@ interface LedgerTransaction {
   source_payment_rail?: string
   destination_payment_rail?: string
   recipient_name?: string
+  /** Saved recipient id when present on ledger row or in metadata. */
+  recipient_id?: string
   /** Counterparty display name when the API includes it. */
   name?: string
   receipt_trace_number?: string
@@ -151,6 +157,8 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   const insets = useSafeAreaInsets()
   const qc = useQueryClient()
   const { scope } = useScope()
+  const { user } = useAuth()
+  const recipientsQuery = useRecipientsList()
   const detailQuery = useTransactionDetail(transactionId)
   const copyToClipboard = useCopyToClipboard()
   const cachedListSnapshot = useMemo<LedgerTransaction | null>(() => {
@@ -536,7 +544,34 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
   const handleSendAgain = async () => {
     haptics.medium()
-                navigation.navigate('SelectRecentRecipient' as never)
+    const userId = user?.id
+    if (!transaction || !userId) {
+      navigation.navigate('SelectRecentRecipient' as never)
+      return
+    }
+
+    const recipient = resolveSendAgainRecipient(
+      transaction,
+      recipientsQuery.data ?? [],
+      userId,
+    )
+    if (!recipient) {
+      navigation.navigate('SelectRecentRecipient' as never)
+      return
+    }
+
+    void prefetchNoahSendExchangeRates(qc, recipient.currency)
+    const pref = String(
+      transaction.ledger_currency ||
+        transaction.payout_review?.send_currency ||
+        transaction.currency ||
+        '',
+    ).toUpperCase()
+    navigation.navigate('SendAmount' as never, {
+      recipient,
+      fromSelectRecentRecipient: true,
+      preferredBalanceCurrency: pref === 'USD' || pref === 'EUR' ? pref : undefined,
+    } as never)
   }
 
   // Skeleton loading component

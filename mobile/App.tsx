@@ -45,6 +45,7 @@ import { lightColors } from './src/theme/colors'
 import { isIosOnMac, MAC_INSTALLED_MOBILE_DESIGN_POINTS } from './src/lib/effective-window'
 import { supabaseConfigError } from './src/lib/supabase'
 import { warmBundledFlagCache } from './src/lib/warmBundledFlagCache'
+import { prefetchIntercomModule } from './src/lib/intercom'
 
 // Keep the splash screen visible while we load fonts
 SplashScreen.preventAutoHideAsync()
@@ -222,6 +223,7 @@ export default function App() {
 
   useEffect(() => {
     warmBundledFlagCache()
+    prefetchIntercomModule()
   }, [])
 
   // Edge-to-edge: match root window / nav bar scrim to app background; supports `userInterfaceStyle` with expo-system-ui.

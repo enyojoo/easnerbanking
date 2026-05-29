@@ -25,7 +25,8 @@ export async function GET(request: Request) {
   const payload = intercomJwtPayloadFromUser(user)
   const token = jwt.sign(payload, secret, {
     algorithm: "HS256",
-    expiresIn: "1h",
+    /** Align with mobile messenger JWT cache; Intercom session cookie handles longer in-app use. */
+    expiresIn: "24h",
   })
 
   return NextResponse.json({ token })
