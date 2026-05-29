@@ -551,7 +551,6 @@ export async function createTurnkeySend(
     providerEventId: parsed.providerEventId,
     status: "pending",
     amount: input.amount,
-    amountMinor: Math.round(input.amount * 1_000_000),
     currency: mapAssetToCurrency(input.asset),
     direction: "out",
     payload: (sendRes || {}) as Record<string, unknown>,

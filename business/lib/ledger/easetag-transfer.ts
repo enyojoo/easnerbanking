@@ -57,11 +57,8 @@ function buildTransactionInsert(input: {
     counterparty_address: null,
     occurred_at: input.now,
     settled_at: input.now,
-    amount_minor: null,
     base_currency: input.currency,
     base_amount: input.amount,
-    fx_rate: 1,
-    fx_rate_as_of: null,
     updated_at: input.now,
   }
 }

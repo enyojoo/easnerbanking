@@ -53,12 +53,18 @@ for (const pkg of ['@supabase/supabase-js']) {
   }
 }
 
-// @noble/hashes: `package.json` "exports" omit `package.json` itself, so use a known subpath.
+// @noble/hashes: ESM utils import `@noble/hashes/crypto` but Metro may resolve `crypto.js`,
+// which is not listed in package.json "exports" (only `./crypto` is). Map common subpaths explicitly.
 try {
-  const nobleEntry = require.resolve('@noble/hashes/pbkdf2.js', {
-    paths: [projectRoot, monorepoRoot],
-  })
-  extraNodeModules['@noble/hashes'] = path.dirname(nobleEntry)
+  const nobleDir = path.dirname(
+    require.resolve('@noble/hashes/pbkdf2.js', { paths: [projectRoot, monorepoRoot] })
+  )
+  extraNodeModules['@noble/hashes'] = nobleDir
+  for (const sub of ['crypto', 'pbkdf2', 'sha2', 'utils', 'hmac']) {
+    const file = path.join(nobleDir, `${sub}.js`)
+    extraNodeModules[`@noble/hashes/${sub}`] = file
+    extraNodeModules[`@noble/hashes/${sub}.js`] = file
+  }
 } catch {
   // install issue
 }

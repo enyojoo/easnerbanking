@@ -29,7 +29,6 @@ export type UpsertLedgerTransactionInput = {
   counterpartyAddress?: string | null
   occurredAt?: string | null
   settledAt?: string | null
-  amountMinor?: string | number | null
   baseCurrency?: string | null
 }
 
@@ -94,7 +93,6 @@ export async function upsertLedgerTransaction(
   const fx = findExchangeRate(rates, currency, baseCurrency)
   const fxRate = fx?.rate ?? (currency === baseCurrency ? 1 : null)
   const baseAmount = fxRate != null ? Math.abs(amount) * fxRate : null
-  const fxAsOf = fx?.asOf ?? null
 
   const { data: existing, error: existingErr } = await admin
     .from("transactions")
@@ -145,11 +143,8 @@ export async function upsertLedgerTransaction(
     counterparty_address: input.counterpartyAddress ?? null,
     occurred_at: input.occurredAt ?? null,
     settled_at: settledAt,
-    amount_minor: input.amountMinor ?? null,
     base_currency: baseCurrency,
     base_amount: baseAmount,
-    fx_rate: fxRate,
-    fx_rate_as_of: fxAsOf,
     updated_at: new Date().toISOString(),
   }
 

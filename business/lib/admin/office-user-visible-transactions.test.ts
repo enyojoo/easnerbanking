@@ -124,8 +124,6 @@ describe("enrichOfficeLedgerForUserDisplay", () => {
       counterparty_address: null,
       base_currency: "USD",
       base_amount: 25,
-      fx_rate: null,
-      fx_rate_as_of: null,
       user: null,
     })
 
@@ -162,8 +160,6 @@ describe("enrichOfficeLedgerForUserDisplay", () => {
       counterparty_address: null,
       base_currency: "USD",
       base_amount: 50,
-      fx_rate: null,
-      fx_rate_as_of: null,
       user: {
         email: "owner@example.com",
         full_name: "Jane Owner",

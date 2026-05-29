@@ -3,7 +3,7 @@ import type { createSupabaseAdmin } from "@/lib/supabase/admin"
 type AdminClient = ReturnType<typeof createSupabaseAdmin>
 
 export const OFFICE_LEDGER_TX_SELECT =
-  "id, user_id, business_id, provider, provider_transaction_id, provider_event_id, easner_transaction_id, status, amount, currency, direction, metadata, payload, created_at, updated_at, occurred_at, settled_at, tx_hash, wallet_address, asset, chain, counterparty_address, base_currency, base_amount, fx_rate, fx_rate_as_of"
+  "id, user_id, business_id, provider, provider_transaction_id, provider_event_id, easner_transaction_id, status, amount, currency, direction, metadata, payload, created_at, updated_at, occurred_at, settled_at, tx_hash, wallet_address, asset, chain, counterparty_address, base_currency, base_amount"
 
 export type OfficeLedgerTransaction = {
   id: string
@@ -30,8 +30,6 @@ export type OfficeLedgerTransaction = {
   counterparty_address: string | null
   base_currency: string | null
   base_amount: number | null
-  fx_rate: number | null
-  fx_rate_as_of: string | null
   user?: {
     email: string | null
     full_name: string | null

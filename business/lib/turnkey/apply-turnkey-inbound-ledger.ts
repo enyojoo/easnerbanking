@@ -141,7 +141,6 @@ export async function applyTurnkeyInboundLedgerEvent(
     settledAt: input.settledAt,
     asset: input.asset,
     chain: input.chain,
-    amountMinor: input.amountMinor,
     baseCurrency: input.currency,
   })
 

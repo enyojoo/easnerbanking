@@ -14,10 +14,15 @@ const withHermesCompilerPath = (config) =>
     hermesCommand = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsolutePath() + "/sdks/hermesc/%OS-BIN%/hermesc"
 }`
 
+    const hermesBlockPattern =
+      /[ \t]*try\s*\{[\s\S]*?require\.resolve\('hermes-compiler\/package\.json'\)[\s\S]*?\} catch \(Exception e\) \{[\s\S]*?\}/
+
     const oldPattern =
       /hermesCommand\s*=\s*new File\(\["node",.*?"require\.resolve\('react-native\/package\.json'\)"\]\.execute\(null, rootDir\)\.text\.trim\(\)\)\.getParentFile\(\)\.getAbsolutePath\(\)\s*\+\s*"\/sdks\/hermesc\/%OS-BIN%\/hermesc"/
 
-    if (oldPattern.test(buildGradle)) {
+    if (hermesBlockPattern.test(buildGradle)) {
+      buildGradle = buildGradle.replace(hermesBlockPattern, newHermesCommand)
+    } else if (oldPattern.test(buildGradle)) {
       buildGradle = buildGradle.replace(oldPattern, newHermesCommand)
     } else if (!buildGradle.includes("require.resolve('hermes-compiler/package.json')")) {
       buildGradle = buildGradle.replace(
