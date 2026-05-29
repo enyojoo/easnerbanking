@@ -55,6 +55,7 @@ import { isEasnerProductReceiveTitle, isEasnerProductSendTitle, isEasetagReceive
 import { ApiError } from '../../query/api-client'
 import { useScope } from '../../query/scope'
 import { haptics } from '../../lib/haptics'
+import { buildDynamicAmountTextStyle } from '../../lib/dynamicAmountFontSize'
 
 interface LedgerTransaction {
   id: string
@@ -283,6 +284,23 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
   const formatAmount = (amount: number, currency: string, isReceived: boolean) =>
     formatSignedCurrency(amount, currency, isReceived)
+
+  const heroAmountLabel = useMemo(() => {
+    if (!transaction) return ''
+    const amount = Number(transaction.display_amount ?? transaction.amount)
+    const currency = String(transaction.display_currency ?? transaction.currency ?? 'USD')
+    const received = transaction.transaction_type === 'receive'
+    return formatSignedCurrency(amount, currency, received)
+  }, [transaction])
+
+  const heroAmountTextStyle = useMemo(() => {
+    const received = transaction?.transaction_type === 'receive'
+    return buildDynamicAmountTextStyle(
+      [styles.heroAmount, received ? styles.heroAmountIn : styles.heroAmountOut],
+      heroAmountLabel || '0',
+      { maxSize: 48, minSize: 24 },
+    )
+  }, [heroAmountLabel, transaction?.transaction_type])
 
   const formatTimestamp = (dateString: string) => {
     if (!dateString) return ''
@@ -636,9 +654,6 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   const isGlobalPayoutSend =
     transaction.transaction_type === 'send' &&
     Boolean(transaction.payout_review || transaction.metadata?.payout_type === 'global_fiat')
-  const heroAmount = Number(transaction.display_amount ?? transaction.amount)
-  const heroCurrency = String(transaction.display_currency ?? transaction.currency ?? 'USD')
-
   const easetagWhenTs =
     transaction.completed_at ||
     transaction.updated_at ||
@@ -711,15 +726,16 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
               <Text style={styles.heroTitle} numberOfLines={2}>
                 {getTransactionTypeDisplay()}
               </Text>
-              <Text
-                style={[
-                  styles.heroAmount,
-                  isReceived ? styles.heroAmountIn : styles.heroAmountOut,
-                ]}
-                numberOfLines={1}
-              >
-                {formatAmount(heroAmount, heroCurrency, isReceived)}
-              </Text>
+              <View style={styles.heroAmountSlot}>
+                <Text
+                  style={heroAmountTextStyle}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.5}
+                >
+                  {heroAmountLabel}
+                </Text>
+              </View>
               <StatusPill
                 label={statusInfo.label}
                 tone={statusInfoToneFromInfo(statusInfo)}
@@ -1270,13 +1286,20 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing[1],
   },
+  heroAmountSlot: {
+    width: '100%',
+    minHeight: 54,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing[3],
+    paddingHorizontal: spacing[2],
+  },
   heroAmount: {
     ...textStyles.displayLarge,
     fontFamily: fontFamily.semibold,
     fontWeight: '700',
     letterSpacing: -0.6,
     textAlign: 'center',
-    marginBottom: spacing[3],
   },
   heroAmountIn: {
     color: colors.success.main,

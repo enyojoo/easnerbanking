@@ -90,7 +90,7 @@ function PayoutRecipientAvatar({ recipient }: { recipient: Recipient }) {
         {isWalletRecipient && tokenIcon ? (
           <CachedImage uri={tokenIcon} style={styles.markImg} contentFit="cover" />
         ) : (
-          <CountryFlag code={countryCode} size={16} style={styles.markImg} contentFit="contain" />
+          <CountryFlag code={countryCode} size={16} style={styles.markImg} contentFit="cover" />
         )}
       </View>
     </View>

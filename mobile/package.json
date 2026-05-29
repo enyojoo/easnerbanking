@@ -75,7 +75,6 @@
     "react-native-ease": "^0.7.2",
     "react-native-gesture-handler": "~2.31.1",
     "react-native-keyboard-controller": "1.21.6",
-    "react-native-pulsar": "^1.5.0",
     "react-native-qrcode-svg": "^6.3.20",
     "react-native-quick-base64": "^3.0.0",
     "react-native-quick-crypto": "0.7.17",

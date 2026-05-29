@@ -57,7 +57,7 @@ export function RecipientPayoutPreview({ recipient, getInitials, variant = 'card
           {isWalletRecipient && tokenIcon ? (
             <CachedImage uri={tokenIcon} style={styles.badgeFill} contentFit="cover" />
           ) : (
-            <CountryFlag code={countryCode} size={20} style={styles.badgeFill} contentFit="contain" />
+            <CountryFlag code={countryCode} size={20} style={styles.badgeFill} contentFit="cover" />
           )}
         </View>
       </View>

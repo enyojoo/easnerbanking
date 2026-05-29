@@ -1,10 +1,9 @@
 import * as ExpoHaptics from 'expo-haptics'
-import { Presets } from 'react-native-pulsar'
 
-type FallbackKind = 'tap' | 'medium' | 'heavy' | 'select' | 'success' | 'error'
+type HapticKind = 'tap' | 'medium' | 'heavy' | 'select' | 'success' | 'error'
 
-function expoFallback(kind: FallbackKind) {
-  const map: Record<FallbackKind, () => Promise<void>> = {
+function trigger(kind: HapticKind) {
+  const map: Record<HapticKind, () => Promise<void>> = {
     tap: () => ExpoHaptics.impactAsync(ExpoHaptics.ImpactFeedbackStyle.Light),
     medium: () => ExpoHaptics.impactAsync(ExpoHaptics.ImpactFeedbackStyle.Medium),
     heavy: () => ExpoHaptics.impactAsync(ExpoHaptics.ImpactFeedbackStyle.Heavy),
@@ -15,22 +14,14 @@ function expoFallback(kind: FallbackKind) {
   void map[kind]().catch(() => {})
 }
 
-function runPulsar(fn: () => void, fallback: FallbackKind) {
-  try {
-    fn()
-  } catch {
-    expoFallback(fallback)
-  }
-}
-
-/** Semantic haptic feedback — Pulsar with expo-haptics fallback. */
+/** Cross-platform haptic feedback via expo-haptics (iOS + Android). */
 export const haptics = {
-  tap: () => runPulsar(() => Presets.System.impactLight(), 'tap'),
-  medium: () => runPulsar(() => Presets.System.impactMedium(), 'medium'),
-  heavy: () => runPulsar(() => Presets.System.impactHeavy(), 'heavy'),
-  select: () => runPulsar(() => Presets.System.selection(), 'select'),
-  success: () => runPulsar(() => Presets.System.notificationSuccess(), 'success'),
-  error: () => runPulsar(() => Presets.System.notificationError(), 'error'),
+  tap: () => trigger('tap'),
+  medium: () => trigger('medium'),
+  heavy: () => trigger('heavy'),
+  select: () => trigger('select'),
+  success: () => trigger('success'),
+  error: () => trigger('error'),
   /** Money movement / strong confirm */
-  confirm: () => runPulsar(() => Presets.coinDrop(), 'medium'),
+  confirm: () => trigger('medium'),
 }

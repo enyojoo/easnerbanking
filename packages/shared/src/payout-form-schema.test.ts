@@ -20,7 +20,7 @@ describe("USD optional reference on send amount", () => {
     expect(getSendAmountNoteFieldUi({ hints: stale })).toEqual({
       mode: "note_optional_only",
       label: "Note",
-      placeholder: "Note (optional)",
+      placeholder: "Note",
     })
   })
 

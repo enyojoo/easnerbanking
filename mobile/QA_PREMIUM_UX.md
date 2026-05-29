@@ -26,7 +26,7 @@ Run on **iOS and Android** before merging each phase PR.
 - [ ] Filter chips toggle cleanly
 - [ ] More settings rows navigate correctly
 - [ ] Send flow: SelectRecentRecipient → SendAmount → Confirm
-- [ ] Dev client rebuilt after Reanimated/Pressto/Pulsar
+- [ ] Dev client rebuilt after native dep changes (Reanimated / Pressto / expo-haptics)
 
 ## Gate 3 (Phase 3)
 

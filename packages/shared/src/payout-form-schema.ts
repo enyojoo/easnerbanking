@@ -68,11 +68,11 @@ export function getSendAmountNoteFieldUi(input: {
     return { mode: "note_optional_only", label: "Note", placeholder: "Note" }
   }
   if (isUsOptionalReferenceCorridor(input)) {
-    return { mode: "note_optional_only", label: "Note", placeholder: "Note (optional)" }
+    return { mode: "note_optional_only", label: "Note", placeholder: "Note" }
   }
   const mode = input.hints?.amount_field_mode ?? "note_optional_only"
   if (input.hints?.reference_optional) {
-    return { mode: "note_optional_only", label: "Note", placeholder: "Note (optional)" }
+    return { mode: "note_optional_only", label: "Note", placeholder: "Note" }
   }
   if (mode === "payment_purpose") {
     return { mode, label: "Payment purpose", placeholder: "Select purpose" }

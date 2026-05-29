@@ -13,7 +13,7 @@ import {
   Keyboard,
   useWindowDimensions,
 } from 'react-native'
-import { KeyboardAvoidingView, KeyboardStickyView } from 'react-native-keyboard-controller'
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { MessageSquareText, ChevronDown, User, Coins, RotateCcw, ArrowLeft, ArrowUpDown, Link, Delete, X, ChevronRight } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -84,6 +84,7 @@ import { useEasenetRecipientHydration } from '../../hooks/useEasenetRecipientHyd
 import { navigateToSendRecipientHub } from '../../lib/sendFlowNavigation'
 import { SendSelectedRecipientSummary } from '../../components/send/SendSelectedRecipientSummary'
 import { haptics } from '../../lib/haptics'
+import { buildDynamicAmountTextStyle, getDynamicAmountFontSize } from '../../lib/dynamicAmountFontSize'
 
 function isManualStablecoinCurrencyCode(code: string): boolean {
   const c = code.trim().toUpperCase()
@@ -159,6 +160,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     selectedOtherPaymentMethodFromRoute ?? null
   )
   const [amountEntryMode, setAmountEntryMode] = useState<'receive' | 'send'>('receive')
+  const [sendFooterHeight, setSendFooterHeight] = useState(120)
 
   /** Same-currency Easetag P2P never uses Noah `/prices` (two FX quotes); skip the query to speed the send flow. */
   const skipNoahExchangeRatesForEasetagP2p =
@@ -377,34 +379,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     return `${formattedInteger}.${rawDecimal.slice(0, 2)}`
   }
 
-  // Calculate dynamic font size based on amount length (like Cash App/Revolut)
-  const getDynamicFontSize = (amount: string): number => {
-    // Remove commas and get the length of the numeric part
-    const numericLength = amount.replace(/,/g, '').replace(/\./g, '').length
-    
-    // Minimum font size to ensure readability
-    const minSize = 28
-    
-    // Specific font sizes based on digit count
-    let fontSize: number
-    if (numericLength <= 5) {
-      fontSize = 65
-    } else if (numericLength === 6) {
-      fontSize = 55
-    } else if (numericLength === 7 || numericLength === 8) {
-      fontSize = 50
-    } else {
-      // For 9 digits and above, scale down by 5px per digit over 8
-      // 9 digits = 45px, 10 digits = 40px, etc.
-      fontSize = 50 - ((numericLength - 8) * 5)
-    }
-    
-    // Ensure we don't go below minimum
-    fontSize = Math.max(fontSize, minSize)
-    
-    return fontSize
-  }
-
   // Keypad handlers - natural typing with optional decimal mode.
   const handleKeypadPress = (value: string) => {
     if (!recipient) return // Disabled until recipient is selected
@@ -471,16 +445,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency
       ? selectedOtherCurrency
       : selectedBalanceCurrency
-  const dynamicAmountFontSize = getDynamicFontSize(sendAmount)
+  const dynamicAmountFontSize = getDynamicAmountFontSize(sendAmount)
   const dynamicAmountLineHeight = Math.round(dynamicAmountFontSize * 1.12)
-  const amountTextBase = {
-    ...textStyles.balanceDisplay,
-    fontSize: dynamicAmountFontSize,
-    lineHeight: dynamicAmountLineHeight,
-    includeFontPadding: false as const,
-    paddingVertical: 0,
-    marginVertical: 0,
-  }
+  const amountTextBase = buildDynamicAmountTextStyle(textStyles.balanceDisplay, sendAmount)
   const amountDisplayCurrency = amountEntryMode === 'receive' ? receiveCurrency : sendCurrency
   const amountDisplaySymbolRaw = getCurrencySymbol(amountDisplayCurrency)
   const amountDisplaySymbol =
@@ -729,7 +696,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const tier1Ok = isTier1Complete(userProfile)
   const tier2Ok = TIER2_COMPLETE_PLACEHOLDER
   const showVerificationNotice = !tier1Ok
-  const keypadToCtaGap = showVerificationNotice ? spacing[2] : spacing[1]
   const ctaTopPadding = showVerificationNotice ? spacing[2] : spacing[2]
   const verificationBlocksSend =
     receiveAmount > 0 &&
@@ -815,9 +781,12 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   return (
     <ScreenWrapper>
       <View style={styles.container}>
-        <KeyboardAvoidingView
+        <KeyboardAwareScrollView
           style={styles.keyboardContainer}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          bottomOffset={sendFooterHeight + spacing[2]}
+          showsVerticalScrollIndicator={false}
         >
           <View style={styles.scrollView}>
             {/* Header */}
@@ -1031,7 +1000,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               </View>
 
               {/* Method + note + keypad: stacked under exchange row (tight gap); space below group stays inside KAV above bottomContainer. */}
-              <View style={[styles.sendMethodNoteKeypadGroup, { marginBottom: keypadToCtaGap }]}>
+              <View style={styles.sendMethodNoteKeypadGroup}>
               {/* Sending Method - Currency Balance Selector (Centered) */}
               <View style={styles.balanceSection}>
                 <Pressable
@@ -1207,11 +1176,14 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               </View>
             </Animated.View>
           </View>
-        </KeyboardAvoidingView>
-        
-        {/* Send/Authorize Button */}
-        <KeyboardStickyView offset={{ closed: 0, opened: spacing[2] }}>
+        </KeyboardAwareScrollView>
+
+        {/* Fixed footer: stays at screen bottom; keyboard overlays it so the note field can scroll above the keyboard. */}
         <View
+          onLayout={(e) => {
+            const h = e.nativeEvent.layout.height
+            if (h > 0 && Math.abs(h - sendFooterHeight) > 1) setSendFooterHeight(h)
+          }}
           style={[
             styles.bottomContainer,
             { paddingTop: ctaTopPadding, paddingBottom: insets.bottom + spacing[4] },
@@ -1475,7 +1447,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             </LinearGradient>
           </Pressable>
         </View>
-        </KeyboardStickyView>
 
         {/* Sending Method Modal */}
         <Modal
@@ -1746,8 +1717,11 @@ const styles = StyleSheet.create({
   keyboardContainer: {
     flex: 1,
   },
+  scrollContent: {
+    flexGrow: 1,
+  },
   scrollView: {
-    flex: 1,
+    flexGrow: 1,
     paddingBottom: 0,
     flexDirection: 'column',
   },
@@ -1773,7 +1747,7 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacing[5],
     paddingTop: spacing[2],
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'flex-start',
   },
   sendFormTop: {
