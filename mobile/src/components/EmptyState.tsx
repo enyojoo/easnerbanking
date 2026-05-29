@@ -5,7 +5,6 @@ import type { LucideIcon } from 'lucide-react-native'
 import { colors, textStyles, spacing, borderRadius, fontFamily } from '../theme'
 import { ripple } from '../lib/androidRipple'
 import { haptics } from '../lib/haptics'
-import EaseEnter from './EaseEnter'
 
 interface EmptyStateProps {
   icon?: LucideIcon
@@ -26,7 +25,7 @@ export default function EmptyState({
   style,
 }: EmptyStateProps) {
   return (
-    <EaseEnter translateY={8} style={style}>
+    <View style={style}>
       <View style={styles.container}>
       <View style={styles.iconContainer}>
         <Icon size={48} color={colors.neutral[400]} strokeWidth={1.5} />
@@ -52,7 +51,7 @@ export default function EmptyState({
         </Pressable>
       ) : null}
       </View>
-    </EaseEnter>
+    </View>
   )
 }
 

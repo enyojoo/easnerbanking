@@ -17,6 +17,7 @@ import {
   CreditCard,
   Bell,
 } from 'lucide-react-native'
+import ScreenWrapper from '../../components/ScreenWrapper'
 import EmptyState from '../../components/EmptyState'
 import { NavigationProps } from '../../types'
 import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, fontFamily } from '../../theme'

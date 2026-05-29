@@ -331,12 +331,12 @@ export default function App() {
   try {
     return (
       <KeyboardProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
       <PressablesConfig
         animationType="spring"
         animationConfig={{ damping: 28, stiffness: 320 }}
         config={{ minScale: 0.97, activeOpacity: 0.92 }}
       >
-      <GestureHandlerRootView style={{ flex: 1 }}>
         {/* Global safe areas (react-native-safe-area-context). Expo Router not used — React Navigation + stack/tabs. */}
         <SafeAreaProvider>
           <ThemePaletteProvider>
@@ -356,8 +356,8 @@ export default function App() {
             </PostHogProvider>
           </ThemePaletteProvider>
         </SafeAreaProvider>
-      </GestureHandlerRootView>
       </PressablesConfig>
+      </GestureHandlerRootView>
       </KeyboardProvider>
     )
   } catch (error) {

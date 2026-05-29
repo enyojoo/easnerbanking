@@ -139,6 +139,8 @@ interface AuthContextType {
   loading: boolean
   /** Set after password sign-in when AAL1→AAL2 is required; cleared after successful TOTP verify or sign-out. */
   mfaPending: { factorId: string } | null
+  /** False while post-sign-in MFA requirement is being resolved — blocks PIN until known. */
+  mfaGateResolved: boolean
   signIn: (email: string, password: string, rememberMe?: boolean) => Promise<{ error: any }>
   signInWithGoogle: () => Promise<{ error: Error | null }>
   resendSignupOtp: (email: string) => Promise<{ error: Error | null }>
@@ -203,6 +205,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [userProfile, setUserProfile] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [mfaPending, setMfaPending] = useState<{ factorId: string } | null>(null)
+  const [mfaGateResolved, setMfaGateResolved] = useState(true)
   const profileFetchInFlightRef = useRef<Set<string>>(new Set())
   const userProfileRef = useRef<AuthUser | null>(null)
   /** When `refreshUserProfile` runs while a fetch is in flight, run one more fetch after the current one finishes. */
@@ -210,6 +213,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
   /** Throttle automatic profile refetches (auth listener) for the same user; explicit `force` bypasses. */
   const lastAutoProfileFetchAtRef = useRef<Record<string, number>>({})
   const mfaGateSyncRef = useRef<Promise<'none' | 'pending' | 'missing_factor'> | null>(null)
+  /** Avoid re-opening the MFA loading gate when SIGNED_IN fires after signIn already hydrated the same user. */
+  const mfaHydratedUserIdRef = useRef<string | null>(null)
+  const mfaPendingRef = useRef<{ factorId: string } | null>(null)
   /** Avoid repeated payout-corridor hydration (and dev Metro re-bundling) on every profile refetch. */
   const payoutCorridorsBootstrappedForUserRef = useRef<string | null>(null)
   const oauthConsumeInFlightRef = useRef(false)
@@ -218,38 +224,51 @@ export function AuthProvider({ children }: AuthProviderProps) {
     userProfileRef.current = userProfile
   }, [userProfile])
 
+  useEffect(() => {
+    mfaPendingRef.current = mfaPending
+  }, [mfaPending])
+
   const syncMfaGateFromSession = useCallback(async (): Promise<'none' | 'pending' | 'missing_factor'> => {
+    /** User is mid OTP entry — do not re-sync (avoids loading-shell flicker on app resume). */
+    if (mfaPendingRef.current) {
+      return 'pending'
+    }
     if (mfaGateSyncRef.current) {
       return mfaGateSyncRef.current
     }
+    setMfaGateResolved(false)
     const run = (async (): Promise<'none' | 'pending' | 'missing_factor'> => {
-      const { needsOtp, error: aalErr } = await resolvePostSignInMfaRequirement(supabase)
-      if (aalErr) {
-        console.warn('AuthContext: MFA AAL error', aalErr.message)
-        setMfaPending(null)
-        return 'none'
+      try {
+        const { needsOtp, error: aalErr } = await resolvePostSignInMfaRequirement(supabase)
+        if (aalErr) {
+          console.warn('AuthContext: MFA AAL error', aalErr.message)
+          setMfaPending(null)
+          return 'none'
+        }
+        if (!needsOtp) {
+          setMfaPending(null)
+          return 'none'
+        }
+        const { data: factors, error: facErr } = await supabase.auth.mfa.listFactors()
+        if (facErr || !factors) {
+          setMfaPending(null)
+          return 'none'
+        }
+        const fid = getVerifiedTotpFactorId(totpFactorsFromListResponse(factors))
+        if (!fid) {
+          await supabase.auth.signOut()
+          setUser(null)
+          setUserProfile(null)
+          payoutCorridorsBootstrappedForUserRef.current = null
+          setMfaPending(null)
+          setLoading(false)
+          return 'missing_factor'
+        }
+        setMfaPending({ factorId: fid })
+        return 'pending'
+      } finally {
+        setMfaGateResolved(true)
       }
-      if (!needsOtp) {
-        setMfaPending(null)
-        return 'none'
-      }
-      const { data: factors, error: facErr } = await supabase.auth.mfa.listFactors()
-      if (facErr || !factors) {
-        setMfaPending(null)
-        return 'none'
-      }
-      const fid = getVerifiedTotpFactorId(totpFactorsFromListResponse(factors))
-      if (!fid) {
-        await supabase.auth.signOut()
-        setUser(null)
-        setUserProfile(null)
-        payoutCorridorsBootstrappedForUserRef.current = null
-        setMfaPending(null)
-        setLoading(false)
-        return 'missing_factor'
-      }
-      setMfaPending({ factorId: fid })
-      return 'pending'
     })()
 
     mfaGateSyncRef.current = run
@@ -259,6 +278,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     })
     return run
+  }, [])
+
+  const markSessionUserHydrated = useCallback((userId: string) => {
+    if (mfaHydratedUserIdRef.current !== userId && !mfaPendingRef.current) {
+      setMfaGateResolved(false)
+    }
+    mfaHydratedUserIdRef.current = userId
+  }, [])
+
+  const clearSessionUserHydrated = useCallback(() => {
+    mfaHydratedUserIdRef.current = null
   }, [])
 
   const verifyMfa = useCallback(
@@ -543,6 +573,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         if (mounted && session?.user) {
           hadSessionUser = true
+          markSessionUserHydrated(session.user.id)
           const mappedUser = mapSessionUser(session.user)
           const existing = userProfileRef.current
           if (existing?.id === session.user.id) {
@@ -560,7 +591,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
           fetchUserProfile(session.user.id, mappedUser, { force: true }).catch(error => {
             console.error('Initial profile fetch error:', error)
           })
-          /** Keep MFA sync out of the critical path so OAuth/session restore can leave Auth immediately. */
           void syncMfaGateFromSession()
           void syncIntercomSession(session)
         }
@@ -610,6 +640,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           if (__DEV__) {
             console.log('AuthContext: User session found, hydrating user then syncing MFA gate')
           }
+          markSessionUserHydrated(session.user.id)
           const mappedUser = mapSessionUser(session.user)
           const existing = userProfileRef.current
           if (existing?.id === session.user.id) {
@@ -638,10 +669,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
           // No user session - clear state immediately
           // This happens when user logs out via signOut() or session expires
           lastAutoProfileFetchAtRef.current = {}
+          clearSessionUserHydrated()
           setUser(null)
           setUserProfile(null)
           payoutCorridorsBootstrappedForUserRef.current = null
           setMfaPending(null)
+          setMfaGateResolved(true)
           setLoading(false) // Ensure loading is false so AppNavigator doesn't wait
           void syncIntercomSession(null)
         }
@@ -661,7 +694,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       linkSub.remove()
       subscription.unsubscribe()
     }
-  }, [consumeOAuthCallbackIfPresent, syncMfaGateFromSession])
+  }, [consumeOAuthCallbackIfPresent, syncMfaGateFromSession, markSessionUserHydrated, clearSessionUserHydrated])
 
   useEffect(() => {
     if (user?.id) {
@@ -707,10 +740,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
           created_at: data.user.created_at,
           updated_at: data.user.updated_at || data.user.created_at,
         }
-        /**
-         * Immediate route handoff: show PIN/MFA stack without waiting for extra network checks.
-         * Any later gate failure (surface denied / missing factor) still signs out and resets state.
-         */
+        /** Hold PIN until MFA requirement is resolved (`mfaGateResolved`). */
+        markSessionUserHydrated(mappedUser.id)
         setUser(mappedUser)
         setLoading(false)
       }
@@ -924,8 +955,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
             created_at: data.user.created_at,
             updated_at: data.user.updated_at || data.user.created_at,
           }
+          markSessionUserHydrated(mappedUser.id)
           setUser(mappedUser)
           setLoading(false)
+          void syncMfaGateFromSession()
         }
         analytics.identify(data.user.id, {
           email: data.user.email || email.trim(),
@@ -950,6 +983,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       console.log('AuthContext: Signing out user')
       setMfaPending(null)
+      setMfaGateResolved(true)
+      clearSessionUserHydrated()
 
       // Track sign out
       analytics.trackSignOut()
@@ -998,6 +1033,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     userProfile,
     loading,
     mfaPending,
+    mfaGateResolved,
     signIn,
     signInWithGoogle,
     resendSignupOtp,

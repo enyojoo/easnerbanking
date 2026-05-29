@@ -14,6 +14,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { apiGet } from '../../lib/apiClient'
 import { useThemeColors, fontFamily } from '../../theme'
 import type { Colors } from '../../theme'
+import { CircleCheck, Clock } from 'lucide-react-native'
 import { PlainTwoColumnRowSkeleton } from '../../components/skeletons'
 import { useDeferredLoading } from '../../hooks/useDeferredLoading'
 

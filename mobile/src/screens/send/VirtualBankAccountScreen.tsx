@@ -306,7 +306,7 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Payment Method:</Text>
                 <Text style={styles.summaryValue}>
-                  {paymentMethod === 'bankTransfer' ? 'Bank Transfer' : 'Virtual Bank Account'}
+                  {isManual ? 'Bank Transfer' : 'Virtual Bank Account'}
                 </Text>
               </View>
               <View style={styles.summaryRow}>

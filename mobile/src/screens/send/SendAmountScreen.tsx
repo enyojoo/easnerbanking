@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Path } from 'react-native-svg'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import SkeletonLoader from '../../components/SkeletonLoader'
+import { CachedImage } from '../../components/CachedImage'
 import { NavigationProps } from '../../types'
 import {
   colors,

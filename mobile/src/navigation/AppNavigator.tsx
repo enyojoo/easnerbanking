@@ -635,7 +635,7 @@ function AuthFlowLoadingShell({
 }
 
 export default function AppNavigator() {
-  const { user, userProfile, loading, mfaPending, signOut } = useAuth()
+  const { user, userProfile, loading, mfaPending, mfaGateResolved, signOut } = useAuth()
   const palette = useThemeColors()
   const [pinGate, setPinGate] = useState<'loading' | 'setup' | 'pin' | 'main'>('loading')
   const [lockTick, setLockTick] = useState(0)
@@ -729,15 +729,8 @@ export default function AppNavigator() {
   }, [user])
 
   useEffect(() => {
-    // Avoid any post-login blank/loader gap: default to PIN entry immediately.
-    if (user?.id && !mfaPending && pinGate === 'loading') {
-      setPinGate('pin')
-    }
-  }, [user?.id, mfaPending, pinGate])
-
-  useEffect(() => {
-    // Post-auth route is immediate: either create PIN or enter PIN.
-    if (!user?.id || mfaPending) return
+    // Resolve PIN setup vs entry only after MFA gate is known and not required.
+    if (!user?.id || !mfaGateResolved || mfaPending) return
     let cancelled = false
     void (async () => {
       const setup = await isPinSetup(user.id)
@@ -751,7 +744,7 @@ export default function AppNavigator() {
     return () => {
       cancelled = true
     }
-  }, [user?.id, mfaPending])
+  }, [user?.id, mfaGateResolved, mfaPending])
 
   useEffect(() => {
     if (!user?.id || pinGate !== 'main') return
@@ -945,12 +938,16 @@ export default function AppNavigator() {
   }
 
   /**
-   * Signed-in flow order (enforced in AuthContext: MFA gate resolves before `user` is set):
+   * Signed-in flow order:
    * 1. Login (email/password)
-   * 2. MFA when required (`mfaPending`)
+   * 2. MFA when required (`mfaPending`) — wait until `mfaGateResolved`
    * 3. App PIN create or unlock (`pinGate`)
    * 4. Main app
    */
+  if (user && !mfaGateResolved && !mfaPending) {
+    return <AuthFlowLoadingShell palette={palette} testId="Checking sign-in security" />
+  }
+
   if (user && mfaPending) {
     return <MfaStack key="mfa-stack" />
   }
@@ -960,12 +957,8 @@ export default function AppNavigator() {
     return <AuthFlowLoadingShell palette={palette} testId="Restoring session" />
   }
 
-  /**
-   * Signed-in handoff must feel instant: default to PIN entry while we resolve whether
-   * this is first-time PIN setup. Effect below upgrades to setup when needed.
-   */
   if (user && pinGate === 'loading') {
-    return <PinGateEntryStack />
+    return <AuthFlowLoadingShell palette={palette} testId="Preparing app" />
   }
 
   if (user && pinGate === 'setup') {

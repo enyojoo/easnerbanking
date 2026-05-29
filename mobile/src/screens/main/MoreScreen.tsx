@@ -40,7 +40,6 @@ import {
 import { useThemeColors } from '../../contexts/ThemePaletteContext'
 import { ripple } from '../../lib/androidRipple'
 import { EasnerAlertSheet } from '../../components/premium'
-import EaseEnter from '../../components/EaseEnter'
 import { SettingsRow } from '../../components/SettingsRow'
 import { SectionCard } from '../../components/ui'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
@@ -381,7 +380,7 @@ function MoreContent({ navigation }: NavigationProps) {
           }}
           showsVerticalScrollIndicator={false}
         >
-          <EaseEnter style={styles.content}>
+          <View style={styles.content}>
             {/* Profile card */}
             <SectionCard style={styles.profileCard}>
               <Pressable
@@ -618,7 +617,7 @@ function MoreContent({ navigation }: NavigationProps) {
             <View style={styles.versionContainer}>
               <Text style={styles.versionText}>Easner · v1.0.0</Text>
             </View>
-          </EaseEnter>
+          </View>
         </ScrollView>
       </View>
 

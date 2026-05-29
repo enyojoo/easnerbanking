@@ -13,6 +13,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient'
 import { Plus, Snowflake, Settings, Eye, CreditCard } from 'lucide-react-native'
 import Svg, { Circle, Path } from 'react-native-svg'
+import ScreenWrapper from '../../components/ScreenWrapper'
 import EmptyState from '../../components/EmptyState'
 import { NavigationProps } from '../../types'
 import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
