@@ -68,13 +68,11 @@
         "projectId": "b1e3438a-faea-4359-a86f-6b279ebe2743"
       }
     },
+    "androidStatusBar": {
+      "backgroundColor": "#007ACC",
+      "barStyle": "dark-content"
+    },
     "plugins": [
-      [
-        "expo-status-bar",
-        {
-          "style": "dark"
-        }
-      ],
       [
         "expo-notifications",
         {

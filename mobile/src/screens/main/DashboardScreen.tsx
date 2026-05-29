@@ -52,7 +52,6 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useScope } from '../../query/scope'
 import { NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
 import EmptyState from '../../components/EmptyState'
-import EaseEnter from '../../components/EaseEnter'
 import { SectionCard } from '../../components/ui'
 import { formatSignedCurrency, getTransactionStatusDisplay } from '../../utils/formatters'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
@@ -717,7 +716,6 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
           />
         }
       >
-        <EaseEnter>
         <LinearGradient
           colors={palette.primary.heroGradient as unknown as readonly [string, string]}
           start={{ x: 0, y: 0 }}
@@ -979,7 +977,6 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
           )}
         </SectionCard>
         </View>
-        </EaseEnter>
     </ScrollView>
     </View>
   )

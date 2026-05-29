@@ -175,6 +175,7 @@ function AppContent() {
         style={
           !splashFinished || activeRouteName === 'Onboarding' ? 'light' : 'dark'
         }
+        backgroundColor={Platform.OS === 'android' ? palette.background.primary : undefined}
       />
       <AppNavigator />
     </NavigationContainer>
