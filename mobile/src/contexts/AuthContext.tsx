@@ -16,6 +16,7 @@ import {
   getVerifiedTotpFactorId,
   resolvePostSignInMfaRequirement,
   totpFactorsFromListResponse,
+  clearIncompleteMfaSessionOnColdStart,
 } from '../lib/auth-mfa'
 import { buildVerifiedIdentityFromKycFields } from '@easner/shared'
 import { mapUsersRowToUser, splitFullNameForForm } from '../lib/userProfileHelpers'
@@ -376,6 +377,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (opts?.sourceEvent === 'TOKEN_REFRESHED') {
       return null
     }
+    if (mfaPendingRef.current) {
+      return null
+    }
     if (profileFetchInFlightRef.current.has(userId)) {
       profileFetchPendingRef.current = true
       return null
@@ -505,6 +509,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [user?.id])
 
+  const prevMfaPendingRef = useRef(false)
+  useEffect(() => {
+    const wasPending = prevMfaPendingRef.current
+    prevMfaPendingRef.current = Boolean(mfaPending)
+    if (wasPending && !mfaPending && user?.id) {
+      void fetchUserProfile(user.id, undefined, { force: true, sourceEvent: 'SIGNED_IN' })
+    }
+  }, [mfaPending, user?.id])
+
   const applyPersonalSettingsFromServer = useCallback(
     (personal: PersonalSettingsPayload, options?: { easetag?: string }) => {
       const prev = userProfileRef.current
@@ -567,9 +580,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
           await consumeOAuthCallbackIfPresent(initialUrl)
         }
         await clearInvalidPersistedAuthSession()
+        const clearedIncompleteMfa = await clearIncompleteMfaSessionOnColdStart(supabase)
         const {
           data: { session },
         } = await supabase.auth.getSession()
+
+        if (mounted && clearedIncompleteMfa) {
+          clearSessionUserHydrated()
+          setUser(null)
+          setUserProfile(null)
+          payoutCorridorsBootstrappedForUserRef.current = null
+          setMfaPending(null)
+          setMfaGateResolved(true)
+          setLoading(false)
+          void syncIntercomSession(null)
+          return
+        }
 
         if (mounted && session?.user) {
           hadSessionUser = true
@@ -588,10 +614,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
               setUser(mappedUser)
             }
           }
-          fetchUserProfile(session.user.id, mappedUser, { force: true }).catch(error => {
-            console.error('Initial profile fetch error:', error)
+          void syncMfaGateFromSession().then((gate) => {
+            if (gate === 'pending' || gate === 'missing_factor') return
+            fetchUserProfile(session.user.id, mappedUser, { force: true }).catch((error) => {
+              console.error('Initial profile fetch error:', error)
+            })
           })
-          void syncMfaGateFromSession()
           void syncIntercomSession(session)
         }
       } catch (error) {
@@ -637,6 +665,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       try {
         if (session?.user) {
+          if (event === 'INITIAL_SESSION') {
+            const clearedIncompleteMfa = await clearIncompleteMfaSessionOnColdStart(supabase)
+            if (clearedIncompleteMfa) {
+              if (!mounted) return
+              clearSessionUserHydrated()
+              setUser(null)
+              setUserProfile(null)
+              payoutCorridorsBootstrappedForUserRef.current = null
+              setMfaPending(null)
+              setMfaGateResolved(true)
+              setLoading(false)
+              void syncIntercomSession(null)
+              return
+            }
+          }
+
           if (__DEV__) {
             console.log('AuthContext: User session found, hydrating user then syncing MFA gate')
           }
@@ -655,16 +699,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
               setUser(mappedUser)
             }
           }
-          void syncMfaGateFromSession()
-          void syncIntercomSession(session)
           const profileForce =
             event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'PASSWORD_RECOVERY'
-          fetchUserProfile(session.user.id, mappedUser, {
-            force: profileForce,
-            sourceEvent: event,
-          }).catch((error) => {
-            console.error('Background profile fetch error:', error)
+          void syncMfaGateFromSession().then((gate) => {
+            if (gate === 'pending' || gate === 'missing_factor') return
+            fetchUserProfile(session.user.id, mappedUser, {
+              force: profileForce,
+              sourceEvent: event,
+            }).catch((error) => {
+              console.error('Background profile fetch error:', error)
+            })
           })
+          void syncIntercomSession(session)
         } else {
           // No user session - clear state immediately
           // This happens when user logs out via signOut() or session expires

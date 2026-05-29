@@ -198,3 +198,36 @@ export async function resolvePostSignInMfaRequirement(
   }
   return { needsOtp: false, error: null }
 }
+
+/**
+ * Incomplete sign-in MFA must not survive app kill — user should sign in again from scratch.
+ * Idempotent within the JS process (safe for getInitialSession + INITIAL_SESSION).
+ */
+let coldStartIncompleteMfaCheckPromise: Promise<boolean> | null = null
+
+export async function clearIncompleteMfaSessionOnColdStart(
+  client: SupabaseClient,
+): Promise<boolean> {
+  if (coldStartIncompleteMfaCheckPromise) {
+    return coldStartIncompleteMfaCheckPromise
+  }
+
+  coldStartIncompleteMfaCheckPromise = (async () => {
+    const {
+      data: { session },
+    } = await client.auth.getSession()
+    if (!session?.user) return false
+
+    const { needsOtp, error } = await resolvePostSignInMfaRequirement(client)
+    if (error || !needsOtp) return false
+
+    await client.auth.signOut({ scope: 'local' })
+    return true
+  })()
+
+  try {
+    return await coldStartIncompleteMfaCheckPromise
+  } finally {
+    coldStartIncompleteMfaCheckPromise = null
+  }
+}
