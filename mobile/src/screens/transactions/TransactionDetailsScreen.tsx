@@ -54,7 +54,10 @@ import {
   unwrapTransactionDetailPayload,
 } from '../../hooks/queries'
 import { useAuth } from '../../contexts/AuthContext'
-import { resolveSendAgainRecipient } from '../../lib/resolveSendAgainRecipient'
+import {
+  resolveSendAgainAmountPrefill,
+  resolveSendAgainRecipient,
+} from '../../lib/resolveSendAgainRecipient'
 import { isEasnerProductReceiveTitle, isEasnerProductSendTitle, isEasetagReceiveTitle, qk, scopeKey, formatMoneyDisplay, formatSendRateLabel, formatPayoutRecipientSubtitle, formatTransactionDetailHeroTitle, type GlobalPayoutReviewSnapshot, type GlobalPayoutRecipientSnapshot } from '@easner/shared'
 import { ApiError } from '../../query/api-client'
 import { useScope } from '../../query/scope'
@@ -567,10 +570,18 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
         transaction.currency ||
         '',
     ).toUpperCase()
+    const amountPrefill = resolveSendAgainAmountPrefill(transaction)
     navigation.navigate('SendAmount' as never, {
       recipient,
       fromSelectRecentRecipient: true,
+      fromSendAgain: true,
       preferredBalanceCurrency: pref === 'USD' || pref === 'EUR' ? pref : undefined,
+      ...(amountPrefill
+        ? {
+            initialSendAmount: amountPrefill.keypadAmount,
+            initialAmountEntryMode: amountPrefill.amountEntryMode,
+          }
+        : {}),
     } as never)
   }
 

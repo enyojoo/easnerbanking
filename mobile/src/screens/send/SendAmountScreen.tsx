@@ -85,6 +85,21 @@ import { navigateToSendRecipientHub } from '../../lib/sendFlowNavigation'
 import { SendSelectedRecipientSummary } from '../../components/send/SendSelectedRecipientSummary'
 import { haptics } from '../../lib/haptics'
 import { buildDynamicAmountTextStyle, getDynamicAmountFontSize } from '../../lib/dynamicAmountFontSize'
+import { formatSendAgainKeypadAmount } from '../../lib/resolveSendAgainRecipient'
+
+function initialSendAmountFromRouteParams(params: Record<string, unknown> | undefined): string {
+  const formatted = String(params?.initialSendAmount ?? '').trim()
+  if (formatted && formatted !== '0') return formatted
+  const n = Number(params?.initialAmount)
+  if (Number.isFinite(n) && n > 0) return formatSendAgainKeypadAmount(n)
+  return '0'
+}
+
+function initialAmountEntryModeFromRouteParams(
+  params: Record<string, unknown> | undefined,
+): 'receive' | 'send' {
+  return params?.initialAmountEntryMode === 'send' ? 'send' : 'receive'
+}
 
 function isManualStablecoinCurrencyCode(code: string): boolean {
   const c = code.trim().toUpperCase()
@@ -132,8 +147,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     | undefined
   const selectedOtherCurrencyFromRoute = (route.params as any)?.selectedOtherCurrency as string | undefined
   const selectedOtherPaymentMethodFromRoute = (route.params as any)?.selectedOtherPaymentMethod as string | undefined
+  const routeParamsRecord = route.params as Record<string, unknown> | undefined
   const isPreferredBalanceCurrency = preferredBalanceCurrencyFromRoute === 'USD' || preferredBalanceCurrencyFromRoute === 'EUR'
   const didInitializeBalanceCurrency = useRef(false)
+  const sendAgainPrefillAppliedRef = useRef(false)
   
   // UI State only - no backend integration
   const [recipient, setRecipient] = useState<Recipient | null>(recipientFromRoute || null)
@@ -143,7 +160,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const isEasetagRecipient = easetagUi.length > 0
   const [payoutCorridorActive, setPayoutCorridorActive] = useState(true)
   const [sendDestinations, setSendDestinations] = useState<SendDestinationsResponse | null>(null)
-  const [sendAmount, setSendAmount] = useState('0')
+  const [sendAmount, setSendAmount] = useState(() => initialSendAmountFromRouteParams(routeParamsRecord))
+  const [amountEntryMode, setAmountEntryMode] = useState<'receive' | 'send'>(() =>
+    initialAmountEntryModeFromRouteParams(routeParamsRecord),
+  )
   const [note, setNote] = useState('')
   const [paymentPurpose, setPaymentPurpose] = useState('')
   const [amountFieldError, setAmountFieldError] = useState<string | null>(null)
@@ -159,7 +179,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const [selectedOtherPaymentMethod, setSelectedOtherPaymentMethod] = useState<string | null>(
     selectedOtherPaymentMethodFromRoute ?? null
   )
-  const [amountEntryMode, setAmountEntryMode] = useState<'receive' | 'send'>('receive')
   const [sendFooterHeight, setSendFooterHeight] = useState(120)
 
   /** Same-currency Easetag P2P never uses Noah `/prices` (two FX quotes); skip the query to speed the send flow. */
@@ -325,13 +344,21 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       if (noahKycStatus !== 'approved') {
         void refreshUserProfile()
       }
-      const params = route.params as any
+      const params = route.params as Record<string, unknown> | undefined
       if (params?.recipient) {
         // Update recipient immediately for smooth transition
-        setRecipient(params.recipient)
+        setRecipient(params.recipient as Recipient)
+      }
+      if (params?.fromSendAgain && !sendAgainPrefillAppliedRef.current) {
+        const prefilled = initialSendAmountFromRouteParams(params)
+        if (prefilled !== '0') {
+          setSendAmount(prefilled)
+          setAmountEntryMode(initialAmountEntryModeFromRouteParams(params))
+        }
+        sendAgainPrefillAppliedRef.current = true
       }
       if (params?.selectedPaymentMethod) {
-        setSelectedPaymentMethod(params.selectedPaymentMethod)
+        setSelectedPaymentMethod(params.selectedPaymentMethod as typeof selectedPaymentMethod)
       }
       if (typeof params?.selectedOtherCurrency === 'string' || params?.selectedOtherCurrency === null) {
         setSelectedOtherCurrency(params.selectedOtherCurrency ?? null)

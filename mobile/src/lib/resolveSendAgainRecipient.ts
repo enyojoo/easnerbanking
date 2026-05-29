@@ -1,4 +1,7 @@
-import type { GlobalPayoutRecipientSnapshot } from '@easner/shared'
+import type {
+  GlobalPayoutRecipientSnapshot,
+  GlobalPayoutReviewSnapshot,
+} from '@easner/shared'
 import { buildDraftEasenetRecipient } from './draftEasenetRecipient'
 import { resolveRecipientEasetagForUi } from './easenetRecipientUi'
 import type { Recipient } from '../types'
@@ -8,9 +11,64 @@ export type SendAgainTransactionInput = {
   source_type?: string
   recipient_name?: string
   name?: string
+  amount?: number
+  display_amount?: number
+  ledger_amount?: number
   metadata?: Record<string, unknown> | null
   recipient_snapshot?: GlobalPayoutRecipientSnapshot | null
   recipient_id?: string
+  payout_review?: GlobalPayoutReviewSnapshot | null
+}
+
+export type SendAgainAmountPrefill = {
+  /** Formatted for the send amount keypad (commas, up to 2 decimals). */
+  keypadAmount: string
+  amountEntryMode: 'receive' | 'send'
+}
+
+/** Format a numeric amount for the send amount keypad input. */
+export function formatSendAgainKeypadAmount(amount: number): string {
+  const rounded = Math.round((Number.isFinite(amount) ? amount : 0) * 100) / 100
+  if (rounded <= 0) return '0'
+
+  const fractional = Math.abs(rounded - Math.trunc(rounded))
+  const raw =
+    fractional >= 0.01 ? rounded.toFixed(2).replace(/\.?0+$/, '') : String(Math.trunc(rounded))
+
+  const hasDot = raw.includes('.')
+  const [rawInteger = '0', rawDecimal = ''] = raw.split('.')
+  const normalizedInteger = rawInteger.replace(/^0+(?=\d)/, '') || '0'
+  const formattedInteger = normalizedInteger.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  if (!hasDot) return formattedInteger
+  return `${formattedInteger}.${rawDecimal.slice(0, 2)}`
+}
+
+/**
+ * Amount to prefill on Send Amount when repeating a send (keypad uses receive mode by default).
+ */
+export function resolveSendAgainAmountPrefill(
+  transaction: SendAgainTransactionInput,
+): SendAgainAmountPrefill | null {
+  if (transaction.transaction_type !== 'send') return null
+
+  const review = transaction.payout_review
+  const receiveAmount = Number(review?.receive_amount)
+  if (Number.isFinite(receiveAmount) && receiveAmount > 0) {
+    return {
+      keypadAmount: formatSendAgainKeypadAmount(receiveAmount),
+      amountEntryMode: 'receive',
+    }
+  }
+
+  const fallback = Number(
+    transaction.display_amount ?? transaction.amount ?? transaction.ledger_amount,
+  )
+  if (!Number.isFinite(fallback) || fallback <= 0) return null
+
+  return {
+    keypadAmount: formatSendAgainKeypadAmount(fallback),
+    amountEntryMode: 'receive',
+  }
 }
 
 function normalizeAccount(value: string | undefined | null): string {
