@@ -36,11 +36,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  cryptoRatesApi,
-  isCryptoRateRowStale,
-  type CryptoRateAdminRow,
-} from "@/lib/crypto-rates-api"
+import { cryptoRatesApi, type CryptoRateAdminRow } from "@/lib/crypto-rates-api"
 import { officeKeys } from "@/lib/query/keys"
 import { useOfficeCurrencies, useOfficeCryptoRates } from "@/hooks/queries"
 import { CurrencyFlag } from "@/components/flags"
@@ -100,7 +96,6 @@ type WalletSourceRow = {
   flag_svg?: string | null
   pairCount: number
   activePairCount: number
-  stalePairCount: number
   lastUpdate: string
 }
 
@@ -111,7 +106,7 @@ function formatAsOf(raw: string | undefined): string {
   return t.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
 }
 
-function defaultWalletMeta(code: WalletSourceCode): Omit<WalletSourceRow, "pairCount" | "activePairCount" | "stalePairCount" | "lastUpdate"> {
+function defaultWalletMeta(code: WalletSourceCode): Omit<WalletSourceRow, "pairCount" | "activePairCount" | "lastUpdate"> {
   if (code === "EUR") {
     return { code, name: "Euro", symbol: "€" }
   }
@@ -186,7 +181,6 @@ export function OfficeCryptoRatesPanel() {
         flag_svg: meta.flag_svg,
         pairCount: pairs.length,
         activePairCount: activePairs.length,
-        stalePairCount: activePairs.filter((r) => isCryptoRateRowStale(r)).length,
         lastUpdate:
           lastMs > 0
             ? new Date(lastMs).toLocaleString(undefined, {
@@ -197,11 +191,6 @@ export function OfficeCryptoRatesPanel() {
       }
     })
   }, [rates, currencyByCode])
-
-  const totalStalePairs = useMemo(
-    () => rates.filter((r) => r.status === "active" && isCryptoRateRowStale(r)).length,
-    [rates],
-  )
 
   const handleSyncRates = useCallback(async () => {
     setSyncing(true)
@@ -300,12 +289,6 @@ export function OfficeCryptoRatesPanel() {
         </p>
       ) : null}
       {syncSummary ? <p className="text-sm text-muted-foreground">{syncSummary}</p> : null}
-      {totalStalePairs > 0 ? (
-        <p className="text-sm text-amber-700">
-          {totalStalePairs} active corridor{totalStalePairs === 1 ? "" : "s"} exceed the 5‑minute TTL — wallet send
-          amount preview may be blocked until sync.
-        </p>
-      ) : null}
 
       <Card>
         <CardContent className="p-0">
@@ -321,7 +304,6 @@ export function OfficeCryptoRatesPanel() {
                   <TableHead>Balance currency</TableHead>
                   <TableHead>Code</TableHead>
                   <TableHead>Corridors</TableHead>
-                  <TableHead>Stale</TableHead>
                   <TableHead>Last sync</TableHead>
                   <TableHead className="w-[80px]" />
                 </TableRow>
@@ -346,15 +328,6 @@ export function OfficeCryptoRatesPanel() {
                             ? ` / ${wallet.pairCount} total`
                             : ""}
                         </span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {wallet.stalePairCount > 0 ? (
-                        <Badge variant="destructive">{wallet.stalePairCount} stale</Badge>
-                      ) : wallet.activePairCount > 0 ? (
-                        <Badge variant="secondary">Fresh</Badge>
-                      ) : (
-                        "—"
                       )}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{wallet.lastUpdate}</TableCell>
@@ -392,10 +365,6 @@ export function OfficeCryptoRatesPanel() {
             <DialogTitle>
               Edit crypto rates — {editingMeta?.name} ({editingSource})
             </DialogTitle>
-            <p className="text-sm text-muted-foreground pt-1">
-              Office saves set <code className="text-xs">source=office</code>. LI.FI mid + margin drive customer rate
-              on wallet send amount preview.
-            </p>
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto py-2 space-y-4">
@@ -406,7 +375,6 @@ export function OfficeCryptoRatesPanel() {
             ) : (
               draft.map((row) => {
                 const from = editingSource ?? row.from_currency
-                const stale = row.status === "active" && isCryptoRateRowStale(row)
                 return (
                   <div key={row._key} className="rounded-lg border p-4 space-y-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -429,7 +397,6 @@ export function OfficeCryptoRatesPanel() {
                         <Badge variant={row.source === "office" ? "default" : "secondary"}>
                           {row.source || "sync"}
                         </Badge>
-                        {stale ? <Badge variant="destructive">Stale</Badge> : null}
                         <span className="text-xs text-muted-foreground">{formatAsOf(row.as_of)}</span>
                       </div>
                     </div>

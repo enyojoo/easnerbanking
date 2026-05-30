@@ -1,5 +1,4 @@
 import { officeFetch } from "@/lib/api-client"
-import { NOAH_SEND_RATES_STALE_MS } from "@easner/shared"
 
 export type CryptoRateAdminRow = {
   id?: string
@@ -21,13 +20,6 @@ async function asJson<T>(response: Response): Promise<T> {
     throw new Error((data as { error?: string }).error || "Request failed")
   }
   return data
-}
-
-export function isCryptoRateRowStale(row: Pick<CryptoRateAdminRow, "as_of" | "status">): boolean {
-  if (row.status !== "active") return true
-  const asOfMs = new Date(row.as_of).getTime()
-  if (!Number.isFinite(asOfMs) || asOfMs <= 0) return true
-  return Date.now() - asOfMs > NOAH_SEND_RATES_STALE_MS
 }
 
 export const cryptoRatesApi = {

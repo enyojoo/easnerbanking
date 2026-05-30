@@ -44,6 +44,7 @@ WALLET_SEND_MARGIN=0.015
 LIFI_API_KEY=
 LIFI_INTEGRATOR=easner
 CRYPTO_RATES_PROBE_SOL_ADDRESS=
+# Background sync only — send preview uses active crypto_rates rows regardless of age
 CRYPTO_RATES_REFRESH_TTL_MS=300000
 # Optional: restrict live corridors (omit = all v1 pairs enabled)
 # WALLET_SEND_ENABLED_CORRIDORS=USDC:Solana,EURC:Solana

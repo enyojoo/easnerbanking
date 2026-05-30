@@ -331,9 +331,6 @@ export function OfficeNoahRatesPanel() {
             <DialogTitle>
               Edit Noah rates — {editingMeta?.name} ({editingSource})
             </DialogTitle>
-            <p className="text-sm text-muted-foreground pt-1">
-              Office saves set <code className="text-xs">source=office</code>. Noah mid + margin drive customer rate on send preview.
-            </p>
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto py-2 space-y-4">
