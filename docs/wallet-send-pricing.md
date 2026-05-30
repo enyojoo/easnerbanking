@@ -45,5 +45,6 @@ LIFI_API_KEY=
 LIFI_INTEGRATOR=easner
 CRYPTO_RATES_PROBE_SOL_ADDRESS=
 CRYPTO_RATES_REFRESH_TTL_MS=300000
-WALLET_SEND_ENABLED_CORRIDORS=USDC:Solana,EURC:Solana  # optional override
+# Optional: restrict live corridors (omit = all v1 pairs enabled)
+# WALLET_SEND_ENABLED_CORRIDORS=USDC:Solana,EURC:Solana
 ```

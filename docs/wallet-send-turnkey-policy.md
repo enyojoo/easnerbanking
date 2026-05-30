@@ -26,7 +26,7 @@ Because recipient addresses are user-supplied, v1 relies on:
 
 ```bash
 WALLET_SEND_ENABLED=true
-WALLET_SEND_ENABLED_CORRIDORS=USDC:Solana,EURC:Solana,USDT:Tron,USDC:Base,USDC:Ethereum
+# WALLET_SEND_ENABLED_CORRIDORS=  # omit = all v1 pairs enabled; set only to restrict
 LIFI_API_KEY=
 LIFI_INTEGRATOR=easner
 ```

@@ -1,4 +1,5 @@
 export type PayoutPrepareSession = {
+  recipientId: string
   formSessionId: string
   cryptoAuthorizedAmount: string
   cryptoCurrency: string

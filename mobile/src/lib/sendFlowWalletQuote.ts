@@ -67,6 +67,7 @@ export async function ensureSendWalletQuoteStashed(
 }
 
 export type WalletPrepareSession = {
+  recipientId: string
   formSessionId: string
   cryptoAuthorizedAmount: string
   cryptoCurrency: string
@@ -77,8 +78,12 @@ export type WalletPrepareSession = {
   executionModel?: 'direct_turnkey' | 'lifi_bridge'
 }
 
-export function walletPrepareSessionFromQuote(quote: WalletSendQuote): WalletPrepareSession {
+export function walletPrepareSessionFromQuote(
+  quote: WalletSendQuote,
+  recipientId: string,
+): WalletPrepareSession {
   return {
+    recipientId,
     formSessionId: quote.formSessionId,
     cryptoAuthorizedAmount: quote.wallet.cryptoAuthorizedAmount,
     cryptoCurrency: quote.sendCurrency,

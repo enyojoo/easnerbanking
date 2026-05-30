@@ -43,7 +43,7 @@ import { hasPin } from '../../lib/pinAuth'
 import { analytics } from '../../lib/analytics'
 import type { PricingQuote } from '../../lib/noahService'
 import { noahService } from '../../lib/noahService'
-import type { PayoutPrepareSession } from '../lib/payoutPrepareSession'
+import type { PayoutPrepareSession } from '../../lib/payoutPrepareSession'
 import { resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
 import { isMobileMoneyRecipient } from '../../lib/recipientPayoutPreview'
 import { useEasenetRecipientHydration } from '../../hooks/useEasenetRecipientHydration'
@@ -68,6 +68,28 @@ import {
 } from '../../lib/sendFlowWalletQuote'
 import { useQuoteCountdown } from '../../hooks/useQuoteCountdown'
 import { haptics } from '../../lib/haptics'
+
+function payoutSessionMatchesRecipient(
+  session: PayoutPrepareSession | undefined,
+  recipientId: string | undefined,
+): boolean {
+  return Boolean(
+    session?.formSessionId &&
+      recipientId &&
+      session.recipientId.trim() === recipientId.trim(),
+  )
+}
+
+function walletSessionMatchesRecipient(
+  session: WalletPrepareSession | undefined,
+  recipientId: string | undefined,
+): boolean {
+  return Boolean(
+    session?.formSessionId &&
+      recipientId &&
+      session.recipientId.trim() === recipientId.trim(),
+  )
+}
 
 function inferCountryFromRecipientCurrency(currency: string): string | undefined {
   const m: Record<string, string> = {
@@ -170,7 +192,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
         pricingQuoteExpiry: walletStashed.expiresAt,
         pricingQuoteResult: null as PricingQuote | null,
         payoutSession: undefined as PayoutPrepareSession | undefined,
-        walletSession: walletPrepareSessionFromQuote(walletStashed),
+        walletSession: walletPrepareSessionFromQuote(walletStashed, params.recipient?.id ?? ''),
         quoteDisplay: display,
         quoteLoading: false,
         quoteError: null as string | null,
@@ -199,7 +221,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
         pricingQuoteId: stashed.pricingQuoteId,
         pricingQuoteExpiry: stashed.expiresAt,
         pricingQuoteResult: stashed.easner,
-        payoutSession: payoutPrepareSessionFromQuote(stashed),
+        payoutSession: payoutPrepareSessionFromQuote(stashed, params.recipient?.id ?? ''),
         walletSession: undefined as WalletPrepareSession | undefined,
         quoteDisplay: display,
         quoteLoading: false,
@@ -263,7 +285,12 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
 
   const displayTransactionId = paramTransactionId ? paramTransactionId.toUpperCase() : null
   const quoteCountdown = useQuoteCountdown(pricingQuoteExpiry)
-  const quoteReady = Boolean(easetagUi || payoutSession?.formSessionId || walletSession?.formSessionId)
+  const quoteReady = Boolean(
+    easetagUi ||
+      (isWalletRecipient
+        ? walletSessionMatchesRecipient(walletSession, recipient?.id)
+        : payoutSessionMatchesRecipient(payoutSession, recipient?.id)),
+  )
   const hasFx =
     !easetagUi &&
     selectedBalanceCurrency.toUpperCase() !== receiveCurrency.toUpperCase()
@@ -302,7 +329,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     if (!recipient || easetagUi) return
     if (!recipient.id || !(receiveAmountValue > 0)) return
     if (isWalletRecipient) {
-      if (walletSession?.formSessionId) return
+      if (walletSessionMatchesRecipient(walletSession, recipient.id)) return
       if (isStashedWalletQuoteFresh(quoteStashMeta)) {
         const stashed = peekSendWalletQuote()
         if (stashed) {
@@ -316,7 +343,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
             easnerFee: display.marginAmount,
             pricingQuoteId: stashed.pricingQuoteId,
             pricingQuoteExpiry: stashed.expiresAt,
-            walletSession: walletPrepareSessionFromQuote(stashed),
+            walletSession: walletPrepareSessionFromQuote(stashed, recipient.id),
             quoteDisplay: display,
             quoteLoading: false,
             quoteError: null,
@@ -348,7 +375,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
             easnerFee: display.marginAmount,
             pricingQuoteId: wq.pricingQuoteId,
             pricingQuoteExpiry: wq.expiresAt,
-            walletSession: walletPrepareSessionFromQuote(wq),
+            walletSession: walletPrepareSessionFromQuote(wq, recipient.id),
             quoteDisplay: display,
             quoteLoading: false,
             quoteError: null,
@@ -363,7 +390,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
         cancelled = true
       }
     }
-    if (payoutSession?.formSessionId) return
+    if (payoutSessionMatchesRecipient(payoutSession, recipient.id)) return
     if (isStashedPayoutQuoteFresh(quoteStashMeta)) {
       const stashed = peekSendPayoutQuote()
       if (stashed) {
@@ -379,7 +406,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           pricingQuoteId: stashed.pricingQuoteId,
           pricingQuoteExpiry: stashed.expiresAt,
           pricingQuoteResult: stashed.easner,
-          payoutSession: payoutPrepareSessionFromQuote(stashed),
+          payoutSession: payoutPrepareSessionFromQuote(stashed, recipient.id),
           quoteDisplay: display,
           quoteLoading: false,
           quoteError: null,
@@ -415,7 +442,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           pricingQuoteId: pq.pricingQuoteId,
           pricingQuoteExpiry: pq.expiresAt,
           pricingQuoteResult: pq.easner,
-          payoutSession: payoutPrepareSessionFromQuote(pq),
+          payoutSession: payoutPrepareSessionFromQuote(pq, recipient.id),
           quoteDisplay: display,
           quoteLoading: false,
           quoteError: null,
@@ -573,7 +600,12 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       setTransferError(quoteError)
       return
     }
-    if (!easetagUi && !payoutSession?.formSessionId) {
+    if (
+      !easetagUi &&
+      !(isWalletRecipient
+        ? walletSessionMatchesRecipient(walletSession, recipient.id)
+        : payoutSessionMatchesRecipient(payoutSession, recipient.id))
+    ) {
       setTransferError('Payout quote is still loading. Wait a moment or go back and try again.')
       return
     }

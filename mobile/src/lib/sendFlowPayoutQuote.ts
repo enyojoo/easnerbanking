@@ -92,8 +92,12 @@ export async function ensureSendPayoutQuoteStashed(
   return inflightQuote
 }
 
-export function payoutPrepareSessionFromQuote(quote: PayoutQuote): PayoutPrepareSession {
+export function payoutPrepareSessionFromQuote(
+  quote: PayoutQuote,
+  recipientId: string,
+): PayoutPrepareSession {
   return {
+    recipientId,
     formSessionId: quote.noah.formSessionId,
     cryptoAuthorizedAmount: quote.noah.cryptoAuthorizedAmount,
     cryptoCurrency: quote.noah.cryptoCurrency,

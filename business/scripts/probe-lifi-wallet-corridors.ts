@@ -24,7 +24,7 @@ async function main() {
 
   for (const c of corridors) {
     if (isDirectTurnkeyCorridor(c.asset, c.network)) {
-      console.log(`${c.asset}:${c.network} — direct_turnkey (${c.wave}) — skip LI.FI probe`)
+      console.log(`${c.asset}:${c.network} — direct_turnkey — skip LI.FI probe`)
       continue
     }
 
@@ -51,7 +51,7 @@ async function main() {
         fee: 0,
       })
       const toAmt = Number(quote.estimate?.toAmount ?? 0) / 10 ** dest.decimals
-      console.log(`${c.asset}:${c.network} — OK tool=${quote.tool ?? "?"} to≈${toAmt.toFixed(4)} (${c.wave})`)
+      console.log(`${c.asset}:${c.network} — OK tool=${quote.tool ?? "?"} to≈${toAmt.toFixed(4)} (${c.executionModel})`)
     } catch (e) {
       console.log(
         `${c.asset}:${c.network} — FAIL ${e instanceof Error ? e.message.slice(0, 80) : String(e).slice(0, 80)}`,
