@@ -1738,14 +1738,16 @@ function RecipientsContent({ navigation }: NavigationProps) {
               )}
               {selectedRecipientType === 'wallet' && (
                 <>
-                  <TextInput
-                    style={styles.modalInput}
-                    value={newRecipient.fullName}
-                    onChangeText={(text) => setNewRecipient(prev => ({ ...prev, fullName: text }))}
-                    placeholder="Address nickname"
-                    placeholderTextColor={colors.text.secondary}
-                    editable={!isSubmitting}
-                  />
+                  <View style={styles.walletAddressInputWrap}>
+                    <TextInput
+                      style={[styles.modalInput, styles.walletAddressInput, styles.walletNicknameInput]}
+                      value={newRecipient.fullName}
+                      onChangeText={(text) => setNewRecipient(prev => ({ ...prev, fullName: text }))}
+                      placeholder="Address nickname"
+                      placeholderTextColor={colors.text.secondary}
+                      editable={!isSubmitting}
+                    />
+                  </View>
                   <View style={styles.walletAddressInputWrap}>
                     <TextInput
                       style={[styles.modalInput, styles.walletAddressInput]}
@@ -2877,6 +2879,9 @@ const styles = StyleSheet.create({
   walletAddressInput: {
     marginBottom: 0,
     paddingRight: 44,
+  },
+  walletNicknameInput: {
+    paddingRight: spacing[4],
   },
   walletScanIconButton: {
     position: 'absolute',

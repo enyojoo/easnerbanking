@@ -955,7 +955,7 @@ export function RecipientForm({
 
         {formData.recipientType === "wallet" && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
+            <div className="space-y-2 md:col-span-2">
               <label className="text-xs text-muted-foreground">Address nickname</label>
               <Input
                 id="name-wallet"
@@ -1193,7 +1193,7 @@ export function RecipientForm({
               />
               {errors.routingNumber && <p className="text-xs text-red-500">{errors.routingNumber}</p>}
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 col-span-2">
               <label className="text-xs text-muted-foreground">Account Number</label>
               <Input
                 value={formData.accountNumber}
@@ -1247,7 +1247,7 @@ export function RecipientForm({
               />
               {errors.sortCode && <p className="text-xs text-red-500">{errors.sortCode}</p>}
             </div>
-            <div className="space-y-2 col-span-2">
+            <div className="space-y-2 col-span-3">
               <label className="text-xs text-muted-foreground">Account Number</label>
               <Input
                 value={formData.accountNumber}
@@ -1286,7 +1286,7 @@ export function RecipientForm({
               />
               {errors.routingNumber && <p className="text-xs text-red-500">{errors.routingNumber}</p>}
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 col-span-2">
               <label className="text-xs text-muted-foreground">Account Number</label>
               <Input
                 value={formData.accountNumber}
