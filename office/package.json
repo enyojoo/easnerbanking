@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=22.0.0 <25"
+    "node": "24.x"
   },
   "scripts": {
     "build": "next build --webpack",
@@ -43,7 +43,7 @@
   "devDependencies": {
     "@easner/shared": "*",
     "@tailwindcss/postcss": "^4.1.9",
-    "@types/node": "^22",
+    "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "autoprefixer": "^10.4.20",
