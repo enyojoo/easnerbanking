@@ -55,10 +55,6 @@
     "WALLET_SEND_MARGIN",
     "WALLET_SEND_ENABLED_CORRIDORS"
   ],
-  "globalPassThroughEnv": [
-    "OPEN_EXCHANGE_RATES_APP_ID",
-    "OPEN_EXCHANGE_RATES_TTL_MS"
-  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
