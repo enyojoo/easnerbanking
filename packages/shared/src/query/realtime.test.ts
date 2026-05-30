@@ -32,7 +32,7 @@ function buildMockSupabase(): {
     on(_type, filter, callback) {
       const key = filter.event
       if (!handlers[key]) handlers[key] = []
-      handlers[key].push({ table: filter.table, handler: callback as EventHandler })
+      handlers[key].push({ table: filter.table, handler: callback as unknown as EventHandler })
       return this
     },
     subscribe(cb) {
@@ -122,7 +122,7 @@ describe("attachRealtime INSERT prepend path", () => {
     hidden_from_feed: false,
   })
 
-  const mapper = vi.fn((row: Record<string, unknown>) => ({
+  const mapper = vi.fn((row: Record<string, unknown>): Record<string, unknown> | null => ({
     id: String(row.easner_transaction_id ?? row.id),
     ledger_row_id: String(row.id),
     status: "completed",

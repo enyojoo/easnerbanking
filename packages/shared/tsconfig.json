@@ -19,6 +19,8 @@
   "exclude": [
     "node_modules",
     "dist",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
     "src/**/*.native.ts",
     "src/**/*.native.tsx",
     "src/flags/flag-assets.manifest.ts",
