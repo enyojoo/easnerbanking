@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { View, Platform, AppState, AppStateStatus, StyleSheet, ActivityIndicator } from 'react-native'
 import { createStackNavigator } from '@react-navigation/stack'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
@@ -10,9 +10,11 @@ import { useAuth } from '../contexts/AuthContext'
 import { useThemeColors, spacing, layout, fontFamily } from '../theme'
 import {
   isPinSetup,
+  isAppLocked,
   dismissPinPrompt,
   markSessionInteraction,
   evaluateIdleLock,
+  applyColdStartPinLockIfNeeded,
 } from '../lib/pinAuth'
 import {
   flushPendingPushNavigation,
@@ -637,6 +639,8 @@ function AuthFlowLoadingShell({
 
 export default function AppNavigator() {
   const { user, userProfile, loading, mfaPending, mfaGateResolved, signOut } = useAuth()
+  const signOutRef = useRef(signOut)
+  signOutRef.current = signOut
   const palette = useThemeColors()
   const [pinGate, setPinGate] = useState<'loading' | 'setup' | 'pin' | 'main'>('loading')
   const [lockTick, setLockTick] = useState(0)
@@ -745,13 +749,21 @@ export default function AppNavigator() {
     if (!user?.id || !mfaGateResolved || mfaPending) return
     let cancelled = false
     void (async () => {
+      await applyColdStartPinLockIfNeeded(user.id)
       const setup = await isPinSetup(user.id)
       if (cancelled) return
       if (!setup) {
         setPinGate('setup')
         return
       }
-      setPinGate('pin')
+      const idle = await evaluateIdleLock(user.id)
+      if (cancelled) return
+      if (idle === 'signed_out') {
+        await signOutRef.current()
+        return
+      }
+      const locked = idle === 'locked' || (await isAppLocked(user.id))
+      setPinGate(locked ? 'pin' : 'main')
     })()
     return () => {
       cancelled = true

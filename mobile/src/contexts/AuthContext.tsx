@@ -656,10 +656,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
       /**
        * Token refresh does not change identity or `public.users` row. Running full profile sync
        * on every refresh spams the API and re-renders the tree (bad for dashboard auto-sync).
+       *
+       * On cold start / resume after idle, GoTrue may emit TOKEN_REFRESHED before INITIAL_SESSION.
+       * Ending bootstrap (`loading=false`) before `user` is hydrated makes AppNavigator flash the
+       * logged-out Auth stack, then jump to PIN when the session event arrives.
        */
       if (event === 'TOKEN_REFRESHED' && session?.user) {
-        if (mounted) setLoading(false)
         void syncIntercomSession(session)
+        if (mounted && mfaHydratedUserIdRef.current === session.user.id) {
+          setLoading(false)
+        }
         return
       }
 
