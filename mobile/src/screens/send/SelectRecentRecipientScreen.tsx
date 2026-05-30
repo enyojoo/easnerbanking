@@ -16,7 +16,7 @@ import {
 } from 'react-native'
 import { FlashList } from '@shopify/flash-list'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { CameraView, useCameraPermissions } from 'expo-camera'
+import { useCameraPermissions } from 'expo-camera'
 import {
   ArrowLeft,
   AtSign,
@@ -86,6 +86,7 @@ import { loadRecipientsListCache, saveRecipientsListCache } from '../../lib/reci
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { CountryFlag } from '../../components/flags/CountryFlag'
 import RecipientFormDropdownList from '../../components/recipients/RecipientFormDropdownList'
+import WalletAddressQrScanner from '../../components/recipients/WalletAddressQrScanner'
 import { RecipientBankNameField } from '../../components/recipients/RecipientBankNameField'
 import { useToast } from '../../components/ToastProvider'
 import { useSendDestinations } from '../../hooks/useSendDestinations'
@@ -474,17 +475,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     return fieldMap[fieldName] || fieldName
   }
 
-  const extractWalletAddress = (value: string): string => {
-    const raw = String(value || '').trim()
-    if (!raw) return ''
-    const noQuery = raw.split('?')[0]
-    if (noQuery.includes(':')) {
-      const parts = noQuery.split(':')
-      return parts[parts.length - 1] || raw
-    }
-    return noQuery
-  }
-
   const handleScanPress = async () => {
     const perm = cameraPermission?.granted ? cameraPermission : await requestCameraPermission()
     if (!perm?.granted) {
@@ -493,6 +483,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       )
       return
     }
+    closeAllDropdowns()
     setShowScanModal(true)
   }
 
@@ -1996,36 +1987,15 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
               </View>
               </View>
             </ScrollView>
-            {showScanModal && (
-              <View style={styles.scanOverlay}>
-                <CameraView
-                  style={StyleSheet.absoluteFillObject}
-                  facing="back"
-                  barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-                  onBarcodeScanned={({ data }) => {
-                    const address = extractWalletAddress(data)
-                    if (!address) return
-                    setNewRecipient(prev => ({ ...prev, walletAddress: address }))
-                    setShowScanModal(false)
-                  }}
-                />
-                <View style={styles.scanUiLayer}>
-                  <View style={styles.scanHeaderRow}>
-                    <Text style={styles.scanTitle}>Scan wallet address</Text>
-                    <Pressable android_ripple={ripple.neutral} style={styles.scanCloseButton} onPress={() => setShowScanModal(false)}>
-                      <X size={22} color={colors.text.inverse} strokeWidth={2} />
-                    </Pressable>
-                  </View>
-                  <View style={styles.scanCenterGroup}>
-                    <View style={styles.scanFrame} />
-                    <Text style={styles.scanHint}>Align QR code inside the frame</Text>
-                  </View>
-                </View>
-              </View>
-            )}
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <WalletAddressQrScanner
+        visible={showScanModal}
+        onClose={() => setShowScanModal(false)}
+        onScan={(address) => setNewRecipient((prev) => ({ ...prev, walletAddress: address }))}
+      />
 
     </>
   )
@@ -2472,61 +2442,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  scanOverlay: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'center',
-    zIndex: 9000,
-  },
-  scanUiLayer: {
-    flex: 1,
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    paddingTop: spacing[12],
-    paddingHorizontal: spacing[6],
-    backgroundColor: 'rgba(0,0,0,0.25)',
-  },
-  scanCenterGroup: {
-    marginTop: spacing[16],
-    alignItems: 'center',
-  },
-  scanHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    width: '100%',
-  },
-  scanTitle: {
-    ...textStyles.bodyLarge,
-    color: colors.text.inverse,
-    fontFamily: fontFamily.semibold,
-  },
-  scanCloseButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.35)',
-  },
-  scanFrame: {
-    width: 260,
-    height: 260,
-    borderRadius: 18,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.9)',
-    backgroundColor: 'transparent',
-  },
-  scanHint: {
-    ...textStyles.bodySmall,
-    color: colors.text.inverse,
-    textAlign: 'center',
-    marginTop: spacing[3],
   },
   currencySelectorWrapper: {
     marginBottom: spacing[4],
