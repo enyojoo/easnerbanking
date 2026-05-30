@@ -6,6 +6,7 @@ import { OfficePaymentMethodsPanel } from "@/components/settings/office-payment-
 import { PayoutCorridorsAdminPanel } from "@/components/platform-control/payout-corridors-admin-panel"
 import { CryptoDestinationsAdminPanel } from "@/components/platform-control/crypto-destinations-admin-panel"
 import { OfficeNoahRatesPanel } from "@/components/settings/office-noah-rates-panel"
+import { OfficeCryptoRatesPanel } from "@/components/settings/office-crypto-rates-panel"
 import { EventInboxPanel } from "@/components/platform-control/event-inbox-panel"
 
 export function PlatformConfigPanel() {
@@ -30,6 +31,10 @@ export function CryptoPanel() {
 
 export function NoahRatesPanel() {
   return <OfficeNoahRatesPanel />
+}
+
+export function CryptoRatesPanel() {
+  return <OfficeCryptoRatesPanel />
 }
 
 export function WebhookInboxPanel() {

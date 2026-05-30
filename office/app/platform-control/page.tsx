@@ -11,10 +11,11 @@ import {
   FiatPanel,
   CryptoPanel,
   NoahRatesPanel,
+  CryptoRatesPanel,
   WebhookInboxPanel,
 } from "@/components/platform-control/platform-control-panels"
 
-const TABS = ["platform", "rates", "noah-rates", "payment-methods", "fiat", "crypto", "webhooks"] as const
+const TABS = ["platform", "rates", "noah-rates", "crypto-rates", "payment-methods", "fiat", "crypto", "webhooks"] as const
 type PlatformControlTab = (typeof TABS)[number]
 
 function normalizeTab(raw: string | null): string | null {
@@ -63,6 +64,7 @@ function PlatformControlHubBody() {
             <TabsTrigger value="platform">Platform</TabsTrigger>
             <TabsTrigger value="rates">P2P rates</TabsTrigger>
             <TabsTrigger value="noah-rates">Noah rates</TabsTrigger>
+            <TabsTrigger value="crypto-rates">Crypto rates</TabsTrigger>
             <TabsTrigger value="payment-methods">Payment methods</TabsTrigger>
             <TabsTrigger value="fiat">Fiat</TabsTrigger>
             <TabsTrigger value="crypto">Crypto</TabsTrigger>
@@ -76,6 +78,9 @@ function PlatformControlHubBody() {
           </TabsContent>
           <TabsContent value="noah-rates" forceMount className={TAB_CONTENT_CLASS}>
             <NoahRatesPanel />
+          </TabsContent>
+          <TabsContent value="crypto-rates" forceMount className={TAB_CONTENT_CLASS}>
+            <CryptoRatesPanel />
           </TabsContent>
           <TabsContent value="payment-methods" forceMount className={TAB_CONTENT_CLASS}>
             <PaymentMethodsPanel />

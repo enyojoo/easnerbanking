@@ -48,3 +48,9 @@ CRYPTO_RATES_REFRESH_TTL_MS=300000
 # Optional: restrict live corridors (omit = all v1 pairs enabled)
 # WALLET_SEND_ENABLED_CORRIDORS=USDC:Solana,EURC:Solana
 ```
+
+## Office admin
+
+Platform control → **Crypto rates** (`/platform-control?tab=crypto-rates`): view corridors, **Sync rates** (LI.FI probe → `crypto_rates`), manual overrides (`source=office`).
+
+Apply migration: `business/supabase/migrations/20250530130000_crypto_rates_v1.sql`

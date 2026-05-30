@@ -17,6 +17,7 @@ export const officeKeys = {
     [...officeKeys.root, "currencies", scope] as const,
   exchangeRates: () => [...officeKeys.root, "exchange-rates"] as const,
   noahRates: () => [...officeKeys.root, "noah-rates"] as const,
+  cryptoRates: () => [...officeKeys.root, "crypto-rates"] as const,
   paymentMethods: () => [...officeKeys.root, "payment-methods"] as const,
   payoutCorridors: () => [...officeKeys.root, "payout-corridors"] as const,
   cryptoDestinations: () => [...officeKeys.root, "crypto-destinations"] as const,
