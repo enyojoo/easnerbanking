@@ -25,6 +25,10 @@
     {
       "path": "/api/cron/sync-noah-rates",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-crypto-rates",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

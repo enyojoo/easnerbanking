@@ -50,6 +50,15 @@ CRYPTO_RATES_REFRESH_TTL_MS=300000
 # WALLET_SEND_ENABLED_CORRIDORS=USDC:Solana,EURC:Solana
 ```
 
+### Refresh cadence
+
+| Mechanism | Default | Config |
+|-----------|---------|--------|
+| Background refresh TTL | **5 min** | `CRYPTO_RATES_REFRESH_TTL_MS` (business env) — triggers background sync only; send preview uses active DB rows regardless of age |
+| Background sync on read | When older than TTL | `GET /api/fx/crypto-rates` triggers `syncCryptoRatesSafe` |
+| Vercel cron | **Every 5 min** | `/api/cron/sync-crypto-rates` in `business/vercel.json` |
+| Office / CLI | Manual | Platform Control → Sync rates, or `scripts/sync-crypto-rates.ts` |
+
 ## Office admin
 
 Platform control → **Crypto rates** (`/platform-control?tab=crypto-rates`): view corridors, **Sync rates** (LI.FI probe → `crypto_rates`), manual overrides (`source=office`).
