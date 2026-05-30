@@ -6,44 +6,44 @@
   "types": "./src/index.ts",
   "exports": {
     ".": {
+      "types": "./src/index.ts",
       "import": "./src/index.ts",
-      "require": "./src/index.ts",
-      "types": "./src/index.ts"
+      "require": "./src/index.ts"
     },
     "./hooks/use-payout-min-enforcement": {
+      "types": "./src/hooks/use-payout-min-enforcement.ts",
       "import": "./src/hooks/use-payout-min-enforcement.ts",
-      "require": "./src/hooks/use-payout-min-enforcement.ts",
-      "types": "./src/hooks/use-payout-min-enforcement.ts"
+      "require": "./src/hooks/use-payout-min-enforcement.ts"
     },
     "./verified-identity": {
+      "types": "./src/verified-identity.ts",
       "import": "./src/verified-identity.ts",
-      "require": "./src/verified-identity.ts",
-      "types": "./src/verified-identity.ts"
+      "require": "./src/verified-identity.ts"
     },
     "./format-display-name": {
+      "types": "./src/format-display-name.ts",
       "import": "./src/format-display-name.ts",
-      "require": "./src/format-display-name.ts",
-      "types": "./src/format-display-name.ts"
+      "require": "./src/format-display-name.ts"
     },
     "./transactions/verification-deposit": {
+      "types": "./src/transactions/verification-deposit.ts",
       "import": "./src/transactions/verification-deposit.ts",
-      "require": "./src/transactions/verification-deposit.ts",
-      "types": "./src/transactions/verification-deposit.ts"
+      "require": "./src/transactions/verification-deposit.ts"
     },
     "./transactions/bank-deposit-inbound-label": {
+      "types": "./src/transactions/bank-deposit-inbound-label.ts",
       "import": "./src/transactions/bank-deposit-inbound-label.ts",
-      "require": "./src/transactions/bank-deposit-inbound-label.ts",
-      "types": "./src/transactions/bank-deposit-inbound-label.ts"
+      "require": "./src/transactions/bank-deposit-inbound-label.ts"
     },
     "./transactions/bank-deposit-scheme": {
+      "types": "./src/transactions/bank-deposit-scheme.ts",
       "import": "./src/transactions/bank-deposit-scheme.ts",
-      "require": "./src/transactions/bank-deposit-scheme.ts",
-      "types": "./src/transactions/bank-deposit-scheme.ts"
+      "require": "./src/transactions/bank-deposit-scheme.ts"
     },
     "./warm-flags": {
+      "types": "./src/flags/warm-flags.native.ts",
       "import": "./src/flags/warm-flags.native.ts",
-      "require": "./src/flags/warm-flags.native.ts",
-      "types": "./src/flags/warm-flags.native.ts"
+      "require": "./src/flags/warm-flags.native.ts"
     }
   },
   "scripts": {
