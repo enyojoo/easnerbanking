@@ -3,9 +3,6 @@
   "description": "Easner Banking for businesses (Next.js)",
   "version": "0.1.0",
   "private": true,
-  "engines": {
-    "node": "24.x"
-  },
   "scripts": {
     "build": "next build --webpack",
     "dev": "NODE_OPTIONS='--max-http-header-size=1048576' next dev --port 3000 --turbo",
