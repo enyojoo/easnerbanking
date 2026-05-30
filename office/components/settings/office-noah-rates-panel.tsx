@@ -36,7 +36,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { isNoahRateRowStale, noahRatesApi, type NoahRateAdminRow } from "@/lib/noah-rates-api"
+import { noahRatesApi, type NoahRateAdminRow } from "@/lib/noah-rates-api"
 import { officeKeys } from "@/lib/query/keys"
 import { useOfficeCurrencies, useOfficeNoahRates } from "@/hooks/queries"
 import { CurrencyFlag } from "@/components/flags"
@@ -63,7 +63,6 @@ type WalletSourceRow = {
   flag_svg?: string | null
   pairCount: number
   activePairCount: number
-  stalePairCount: number
   lastUpdate: string
 }
 
@@ -74,7 +73,7 @@ function formatAsOf(raw: string | undefined): string {
   return t.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
 }
 
-function defaultWalletMeta(code: WalletSourceCode): Omit<WalletSourceRow, "pairCount" | "activePairCount" | "stalePairCount" | "lastUpdate"> {
+function defaultWalletMeta(code: WalletSourceCode): Omit<WalletSourceRow, "pairCount" | "activePairCount" | "lastUpdate"> {
   if (code === "EUR") {
     return { code, name: "Euro", symbol: "€" }
   }
@@ -145,7 +144,6 @@ export function OfficeNoahRatesPanel() {
         flag_svg: meta.flag_svg,
         pairCount: pairs.length,
         activePairCount: activePairs.length,
-        stalePairCount: activePairs.filter((r) => isNoahRateRowStale(r)).length,
         lastUpdate:
           lastMs > 0
             ? new Date(lastMs).toLocaleString(undefined, {
@@ -156,11 +154,6 @@ export function OfficeNoahRatesPanel() {
       }
     })
   }, [rates, currencyByCode])
-
-  const totalStalePairs = useMemo(
-    () => rates.filter((r) => r.status === "active" && isNoahRateRowStale(r)).length,
-    [rates],
-  )
 
   const handleSyncRates = useCallback(async () => {
     setSyncing(true)
@@ -262,11 +255,6 @@ export function OfficeNoahRatesPanel() {
         </p>
       ) : null}
       {syncSummary ? <p className="text-sm text-muted-foreground">{syncSummary}</p> : null}
-      {totalStalePairs > 0 ? (
-        <p className="text-sm text-amber-700">
-          {totalStalePairs} active pair{totalStalePairs === 1 ? "" : "s"} exceed the 5‑minute TTL — cross-currency balance send is blocked until sync.
-        </p>
-      ) : null}
 
       <Card>
         <CardContent className="p-0">
@@ -282,7 +270,6 @@ export function OfficeNoahRatesPanel() {
                   <TableHead>Balance currency</TableHead>
                   <TableHead>Code</TableHead>
                   <TableHead>Pairs</TableHead>
-                  <TableHead>Stale</TableHead>
                   <TableHead>Last sync</TableHead>
                   <TableHead className="w-[80px]" />
                 </TableRow>
@@ -307,15 +294,6 @@ export function OfficeNoahRatesPanel() {
                             ? ` / ${wallet.pairCount} total`
                             : ""}
                         </span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {wallet.stalePairCount > 0 ? (
-                        <Badge variant="destructive">{wallet.stalePairCount} stale</Badge>
-                      ) : wallet.activePairCount > 0 ? (
-                        <Badge variant="secondary">Fresh</Badge>
-                      ) : (
-                        "—"
                       )}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{wallet.lastUpdate}</TableCell>
@@ -367,7 +345,6 @@ export function OfficeNoahRatesPanel() {
               draft.map((row) => {
                 const feeType = row.fee_type
                 const from = editingSource ?? row.from_currency
-                const stale = row.status === "active" && isNoahRateRowStale(row)
                 const destMeta = currencyByCode.get(row.to_currency)
                 return (
                   <div key={row._key} className="rounded-lg border p-4 space-y-4">
@@ -396,7 +373,6 @@ export function OfficeNoahRatesPanel() {
                         <Badge variant={row.source === "office" ? "default" : "secondary"}>
                           {row.source || "sync"}
                         </Badge>
-                        {stale ? <Badge variant="destructive">Stale</Badge> : null}
                         <span className="text-xs text-muted-foreground">{formatAsOf(row.as_of)}</span>
                       </div>
                     </div>

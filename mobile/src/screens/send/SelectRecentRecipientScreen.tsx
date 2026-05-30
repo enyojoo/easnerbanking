@@ -1485,8 +1485,15 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                       placeholderTextColor={colors.text.secondary}
                       editable={!isSubmitting}
                     />
-                    <Pressable android_ripple={ripple.neutral} style={styles.walletScanIconButton} onPress={handleScanPress} >
-                  <ScanLine size={18} color={colors.primary.main} strokeWidth={2} />
+                    <Pressable
+                      android_ripple={ripple.neutral}
+                      style={styles.walletScanIconButton}
+                      onPress={() => void handleScanPress()}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel="Scan wallet address QR code"
+                    >
+                      <ScanLine size={18} color={colors.primary.main} strokeWidth={2} />
                     </Pressable>
                   </View>
                   <View style={[styles.currencySelectorWrapper, showWalletAssetDropdown && styles.currencySelectorWrapperActive]}>
@@ -1992,14 +1999,15 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
               </View>
             </ScrollView>
           </View>
+
+          <WalletAddressQrScanner
+            embedded
+            visible={showScanModal}
+            onClose={() => setShowScanModal(false)}
+            onScan={(address) => setNewRecipient((prev) => ({ ...prev, walletAddress: address }))}
+          />
         </KeyboardAvoidingView>
       </Modal>
-
-      <WalletAddressQrScanner
-        visible={showScanModal}
-        onClose={() => setShowScanModal(false)}
-        onScan={(address) => setNewRecipient((prev) => ({ ...prev, walletAddress: address }))}
-      />
 
     </>
   )
@@ -2446,6 +2454,10 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 2,
+    ...Platform.select({
+      android: { elevation: 2 },
+    }),
   },
   currencySelectorWrapper: {
     marginBottom: spacing[4],

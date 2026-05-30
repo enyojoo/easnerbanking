@@ -40,7 +40,7 @@ export {
   type ComputeCryptoSendPricingInput,
   type CryptoSendPricing,
 } from "./crypto-send-pricing"
-export { getTokenIconUrl } from "./crypto-icons"
+export { getTokenIconUrl, getNetworkIconUrl } from "./crypto-icons"
 export { formatExchangeRate, formatSendRateLabel } from "./format-exchange-rate"
 export { BrandLogo } from "./components/BrandLogo"
 export type { BrandLogoProps } from "./components/BrandLogo"

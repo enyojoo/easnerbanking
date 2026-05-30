@@ -19,7 +19,7 @@ const NOAH_TO_LIFI: Record<NoahNetworkId, LifiChainMeta> = {
   Base: { chainId: 8453, chainKey: "bas" },
   PolygonPos: { chainId: 137, chainKey: "pol" },
   BSC: { chainId: 56, chainKey: "bsc" },
-  Tron: { chainId: "TRON", chainKey: "tro" },
+  Tron: { chainId: 728126428, chainKey: "tro" },
 }
 
 export function lifiChainForNoahNetwork(network: string): LifiChainMeta | null {

@@ -10,7 +10,7 @@ export type NoahWalletRateRow = {
   country_code?: string | null
 }
 
-/** Default TTL aligned with business NOAH_RATES_REFRESH_TTL_MS (5 min). */
+/** Default TTL for background Noah rate sync (not send gating). */
 export const NOAH_SEND_RATES_STALE_MS = 300_000
 
 /** Query path for Noah wallet send preview (business + mobile). */
@@ -27,7 +27,7 @@ export function hasNoahSendRateRow(
   return Boolean(row && Number.isFinite(row.rate) && row.rate > 0)
 }
 
-/** True when an active DB rate exists and is within TTL (ops/background sync only). */
+/** True when an active DB rate exists and is within TTL (background sync only). */
 export function isNoahSendRateRowFresh(
   row: Pick<NoahWalletRateRow, "rate" | "as_of" | "from_currency" | "to_currency"> | null | undefined,
   maxAgeMs = NOAH_SEND_RATES_STALE_MS,

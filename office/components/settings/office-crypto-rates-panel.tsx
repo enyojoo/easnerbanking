@@ -44,10 +44,43 @@ import {
 import { officeKeys } from "@/lib/query/keys"
 import { useOfficeCurrencies, useOfficeCryptoRates } from "@/hooks/queries"
 import { CurrencyFlag } from "@/components/flags"
+import { getNetworkIconUrl, getTokenIconUrl } from "@/lib/crypto-icons"
 import { Edit, Loader2, MoreHorizontal } from "lucide-react"
 
 const WALLET_SOURCES = ["USD", "EUR"] as const
 type WalletSourceCode = (typeof WALLET_SOURCES)[number]
+
+function CryptoIcon({ src, label, size = 18 }: { src?: string; label: string; size?: number }) {
+  if (src) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={src}
+        alt=""
+        width={size}
+        height={size}
+        className="rounded-full object-cover shrink-0"
+        loading="lazy"
+      />
+    )
+  }
+  return (
+    <span
+      className="inline-flex shrink-0 items-center justify-center rounded-full bg-muted text-[9px] font-medium text-muted-foreground"
+      style={{ width: size, height: size }}
+    >
+      {label.slice(0, 2).toUpperCase()}
+    </span>
+  )
+}
+
+function CryptoTokenIcon({ code, size = 18 }: { code: string; size?: number }) {
+  return <CryptoIcon src={getTokenIconUrl(code)} label={code} size={size} />
+}
+
+function CryptoNetworkIcon({ network, size = 16 }: { network: string; size?: number }) {
+  return <CryptoIcon src={getNetworkIconUrl(network)} label={network} size={size} />
+}
 
 type CurrencyRow = {
   id: string
@@ -256,10 +289,6 @@ export function OfficeCryptoRatesPanel() {
         </Button>
       }
     >
-      <p className="text-sm text-muted-foreground">
-        Planning-layer wallet send FX (USD/EUR balance → receive asset + network). Live send quotes use LI.FI at
-        confirm; these rows power amount-screen preview.
-      </p>
       {error ? (
         <p className="text-sm text-destructive" role="alert">
           {error}
@@ -389,8 +418,12 @@ export function OfficeCryptoRatesPanel() {
                         />
                         {from}
                         <span className="text-muted-foreground">→</span>
+                        <CryptoTokenIcon code={row.to_currency} size={18} />
                         {row.to_currency}
-                        <Badge variant="outline">{row.receive_network}</Badge>
+                        <span className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-0.5 text-sm font-normal">
+                          <CryptoNetworkIcon network={row.receive_network} size={16} />
+                          {row.receive_network}
+                        </span>
                       </p>
                       <div className="flex items-center gap-2">
                         <Badge variant={row.source === "office" ? "default" : "secondary"}>

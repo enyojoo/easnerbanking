@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef } from 'react'
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { CameraView } from 'expo-camera'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { X } from 'lucide-react-native'
@@ -11,13 +11,18 @@ type WalletAddressQrScannerProps = {
   visible: boolean
   onClose: () => void
   onScan: (address: string) => void
+  /**
+   * Render as a full-screen overlay inside an existing Modal (e.g. add-wallet sheet).
+   * A second RN Modal does not present reliably while another Modal is visible.
+   */
+  embedded?: boolean
 }
 
-export default function WalletAddressQrScanner({
+function ScannerContent({
   visible,
   onClose,
   onScan,
-}: WalletAddressQrScannerProps) {
+}: Pick<WalletAddressQrScannerProps, 'visible' | 'onClose' | 'onScan'>) {
   const insets = useSafeAreaInsets()
   const scanHandledRef = useRef(false)
 
@@ -39,6 +44,55 @@ export default function WalletAddressQrScanner({
     [onClose, onScan],
   )
 
+  if (!visible) return null
+
+  return (
+    <View style={styles.root}>
+      <CameraView
+        style={StyleSheet.absoluteFillObject}
+        facing="back"
+        barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+        onBarcodeScanned={handleBarcodeScanned}
+      />
+
+      <View style={styles.uiLayer} pointerEvents="box-none">
+        <View style={[styles.header, { paddingTop: insets.top + spacing[4] }]}>
+          <Text style={styles.title}>Scan wallet address</Text>
+          <Pressable
+            android_ripple={ripple.neutral}
+            style={styles.closeButton}
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close scanner"
+          >
+            <X size={22} color={colors.text.inverse} strokeWidth={2} />
+          </Pressable>
+        </View>
+
+        <View style={styles.centerGroup} pointerEvents="none">
+          <View style={styles.frame} />
+          <Text style={styles.hint}>Align QR code inside the frame</Text>
+        </View>
+      </View>
+    </View>
+  )
+}
+
+export default function WalletAddressQrScanner({
+  visible,
+  onClose,
+  onScan,
+  embedded = false,
+}: WalletAddressQrScannerProps) {
+  if (embedded) {
+    if (!visible) return null
+    return (
+      <View style={styles.embeddedHost} pointerEvents="box-none">
+        <ScannerContent visible={visible} onClose={onClose} onScan={onScan} />
+      </View>
+    )
+  }
+
   return (
     <Modal
       visible={visible}
@@ -47,41 +101,19 @@ export default function WalletAddressQrScanner({
       statusBarTranslucent
       onRequestClose={onClose}
     >
-      <View style={styles.root}>
-        {visible ? (
-          <CameraView
-            style={StyleSheet.absoluteFillObject}
-            facing="back"
-            barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-            onBarcodeScanned={handleBarcodeScanned}
-          />
-        ) : null}
-
-        <View style={styles.uiLayer} pointerEvents="box-none">
-          <View style={[styles.header, { paddingTop: insets.top + spacing[4] }]}>
-            <Text style={styles.title}>Scan wallet address</Text>
-            <Pressable
-              android_ripple={ripple.neutral}
-              style={styles.closeButton}
-              onPress={onClose}
-              accessibilityRole="button"
-              accessibilityLabel="Close scanner"
-            >
-              <X size={22} color={colors.text.inverse} strokeWidth={2} />
-            </Pressable>
-          </View>
-
-          <View style={styles.centerGroup} pointerEvents="none">
-            <View style={styles.frame} />
-            <Text style={styles.hint}>Align QR code inside the frame</Text>
-          </View>
-        </View>
-      </View>
+      <ScannerContent visible={visible} onClose={onClose} onScan={onScan} />
     </Modal>
   )
 }
 
 const styles = StyleSheet.create({
+  embeddedHost: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 2000,
+    ...Platform.select({
+      android: { elevation: 2000 },
+    }),
+  },
   root: {
     flex: 1,
     backgroundColor: '#000',
