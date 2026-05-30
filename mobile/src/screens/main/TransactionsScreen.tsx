@@ -394,7 +394,8 @@ function TransactionsContent({ navigation }: NavigationProps) {
   const qc = useQueryClient()
   const currencies = useCurrencies()
   const txQuery = useTransactionsList({}, TRANSACTIONS_LEDGER_PAGE_SIZE)
-  
+  const { fetchNextPage, hasNextPage, isFetchingNextPage } = txQuery
+  const loadMoreInFlightRef = useRef(false)
   const [refreshing, setRefreshing] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [activeFilter, setActiveFilter] = useState<ActivityFilter>('all')
@@ -552,6 +553,19 @@ function TransactionsContent({ navigation }: NavigationProps) {
       setRefreshing(false)
       haptics.select()
     }
+  }
+
+  const handleScrollLoadMore = (event: {
+    nativeEvent: { layoutMeasurement: { height: number }; contentOffset: { y: number }; contentSize: { height: number } }
+  }) => {
+    if (!hasNextPage || isFetchingNextPage || loadMoreInFlightRef.current) return
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent
+    const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y
+    if (distanceFromBottom > 320) return
+    loadMoreInFlightRef.current = true
+    void fetchNextPage().finally(() => {
+      loadMoreInFlightRef.current = false
+    })
   }
 
   const formatAmount = (amount: number, currency: string, isReceived: boolean = false) =>
@@ -759,6 +773,8 @@ function TransactionsContent({ navigation }: NavigationProps) {
           { paddingBottom: spacing[8] },
         ]}
         showsVerticalScrollIndicator={false}
+        onScroll={handleScrollLoadMore}
+        scrollEventThrottle={200}
         refreshControl={
           <RefreshControl 
             refreshing={refreshing} 
@@ -909,6 +925,11 @@ function TransactionsContent({ navigation }: NavigationProps) {
                     </View>
                   )
                 })}
+                {hasNextPage && isFetchingNextPage ? (
+                  <View style={styles.loadMoreRow}>
+                    <Text style={styles.loadMoreText}>Loading more…</Text>
+                  </View>
+                ) : null}
               </View>
               {regularWidth ? (
                 <View
@@ -1515,6 +1536,14 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     textAlign: 'center',
     fontFamily: fontFamily.regular,
+  },
+  loadMoreRow: {
+    paddingVertical: spacing[4],
+    alignItems: 'center',
+  },
+  loadMoreText: {
+    ...textStyles.bodySmall,
+    color: colors.text.secondary,
   },
 })
 

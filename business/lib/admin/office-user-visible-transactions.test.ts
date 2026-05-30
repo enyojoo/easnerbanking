@@ -48,7 +48,7 @@ vi.mock("@/lib/admin/office-overview-compute", () => ({
 import { filterSupersededPendingGlobalPayoutRows, filterUserVisibleOfficeLedgerRows, enrichOfficeLedgerForUserDisplay } from "./office-user-visible-transactions"
 
 describe("filterUserVisibleOfficeLedgerRows", () => {
-  it("drops suppress_in_feed orchestration legs", async () => {
+  it("returns rows unchanged (hidden_from_feed is filtered at query time)", async () => {
     const admin = {} as never
     const rows = [
       {
@@ -74,7 +74,7 @@ describe("filterUserVisibleOfficeLedgerRows", () => {
     ]
 
     const visible = await filterUserVisibleOfficeLedgerRows(admin, rows)
-    expect(visible.map((r) => r.id)).toEqual(["visible"])
+    expect(visible.map((r) => r.id)).toEqual(["visible", "hidden"])
   })
 })
 

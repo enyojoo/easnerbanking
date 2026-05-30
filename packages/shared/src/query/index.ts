@@ -25,6 +25,10 @@ export {
   createBatcher,
   pickNewer,
 } from "./realtime"
+export {
+  prependIntoFirstPage,
+  patchRowInPages,
+} from "./infinite-cache"
 export type {
   SupabaseLikeClient,
   SupabaseLikeChannel,

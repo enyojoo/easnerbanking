@@ -7,6 +7,7 @@ import {
   isEasetagChainSettlementTransaction,
   isNoahInternalSettlementTransaction,
 } from "@/lib/transactions/transaction-feed-filters"
+import { resolveHiddenFromFeed } from "@/lib/transactions/ledger-list-cursor"
 
 export type LedgerDirection = "in" | "out"
 
@@ -120,6 +121,8 @@ export async function upsertLedgerTransaction(
     ? (existing?.settled_at != null ? String(existing.settled_at) : input.settledAt ?? null)
     : (input.settledAt ?? null)
 
+  const hiddenFromFeed = resolveHiddenFromFeed(mergedMetadata, payload)
+
   const record = {
     user_id: input.userId,
     business_id: input.businessId ?? null,
@@ -145,6 +148,7 @@ export async function upsertLedgerTransaction(
     settled_at: settledAt,
     base_currency: baseCurrency,
     base_amount: baseAmount,
+    hidden_from_feed: hiddenFromFeed,
     updated_at: new Date().toISOString(),
   }
 

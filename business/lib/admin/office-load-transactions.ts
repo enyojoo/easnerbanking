@@ -1,9 +1,10 @@
 import type { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { OFFICE_LEDGER_LIST_SELECT } from "@/lib/ledger/ledger-select"
 
 type AdminClient = ReturnType<typeof createSupabaseAdmin>
 
-export const OFFICE_LEDGER_TX_SELECT =
-  "id, user_id, business_id, provider, provider_transaction_id, provider_event_id, easner_transaction_id, status, amount, currency, direction, metadata, payload, created_at, updated_at, occurred_at, settled_at, tx_hash, wallet_address, asset, chain, counterparty_address, base_currency, base_amount"
+/** @deprecated Use OFFICE_LEDGER_LIST_SELECT — no payload on list reads. */
+export const OFFICE_LEDGER_TX_SELECT = OFFICE_LEDGER_LIST_SELECT
 
 export type OfficeLedgerTransaction = {
   id: string
@@ -18,7 +19,7 @@ export type OfficeLedgerTransaction = {
   currency: string | null
   direction: string | null
   metadata: Record<string, unknown> | null
-  payload: Record<string, unknown> | null
+  payload?: Record<string, unknown> | null
   created_at: string
   updated_at: string | null
   occurred_at: string | null
@@ -106,7 +107,11 @@ export async function loadOfficeLedgerTransactions(
   opts: { userId?: string; limit?: number } = {},
 ): Promise<{ data: OfficeLedgerTransaction[]; error: { message: string } | null }> {
   const limit = Math.min(Math.max(opts.limit ?? 200, 1), 500)
-  let q = admin.from("transactions").select(OFFICE_LEDGER_TX_SELECT).order("occurred_at", { ascending: false, nullsFirst: false })
+  let q = admin
+    .from("transactions")
+    .select(OFFICE_LEDGER_LIST_SELECT)
+    .eq("hidden_from_feed", false)
+    .order("occurred_at", { ascending: false, nullsFirst: false })
 
   if (opts.userId) {
     q = q.eq("user_id", opts.userId)

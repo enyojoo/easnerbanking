@@ -7,9 +7,7 @@ import { useScope } from '../../query/scope'
  * Personal notifications feed.
  *
  * The realtime bridge invalidates `qk.notifications.root(userId)` on
- * `notifications` INSERTs, so we keep a long stale window — the list
- * only refetches when the user pulls to refresh, sign-ins, or when
- * realtime announces a new row.
+ * `notifications` INSERTs (see `attachRealtime`), so we keep a long stale window.
  */
 
 export interface NotificationRow {

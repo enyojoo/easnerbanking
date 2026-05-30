@@ -1,12 +1,12 @@
 import React from 'react'
 import { AppState, AppStateStatus, Platform } from 'react-native'
 import { QueryClientProvider, focusManager } from '@tanstack/react-query'
-import { qk } from '@easner/shared'
+import { qk, isChannelHealthy } from '@easner/shared'
 import { getMobileQueryClient } from './client'
 import { startQueryPersistence, clearPersistedQueryCache } from './persister'
 import { PersonalScopeProvider, useScope } from './scope'
 import { useSupabaseRealtimeScope } from './use-supabase-realtime-scope'
-import { RealtimeHealthProvider } from './realtime-health-context'
+import { RealtimeHealthProvider, useRealtimeHealth } from './realtime-health-context'
 import { useAuth } from '../contexts/AuthContext'
 import { registerAppLockListener } from '../lib/app-lock-bus'
 import { prefetchReceiveDepositQueries } from '../hooks/queries/use-receive-deposit-queries'
@@ -115,21 +115,21 @@ function ScopeRealtimeBridge({ children }: { children: React.ReactNode }) {
 function ForegroundResumeRefresher({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
   const { scope, isReady } = useScope()
+  const realtimeHealth = useRealtimeHealth()
   const lastRefreshAtRef = React.useRef(0)
 
   const refreshNow = React.useCallback(() => {
       if (!user?.id || !scope || !isReady) return
+      if (isChannelHealthy(realtimeHealth)) return
       const now = Date.now()
       const MIN_INTERVAL_MS = 10_000
       if (now - lastRefreshAtRef.current < MIN_INTERVAL_MS) return
       lastRefreshAtRef.current = now
 
-      // Soft refresh: keep showing cached balances/transactions while refetching.
       void qc.refetchQueries({ queryKey: qk.wallets.root(scope), type: 'active' })
       void qc.refetchQueries({ queryKey: qk.transactions.root(scope), type: 'active' })
-      // Refresh active Noah rate queries so a stale FX never flashes after a long background.
       void qc.refetchQueries({ queryKey: ['exchange-rates', 'noah-send'], type: 'active' })
-    }, [isReady, scope, user?.id])
+    }, [isReady, scope, user?.id, realtimeHealth])
 
   React.useEffect(() => {
     const sub = AppState.addEventListener('change', (status) => {
@@ -154,7 +154,11 @@ function ForegroundResumeRefresher({ children }: { children: React.ReactNode }) 
 
 function RealtimeActive({ children }: { children: React.ReactNode }) {
   const health = useSupabaseRealtimeScope()
-  return <RealtimeHealthProvider value={health}>{children}</RealtimeHealthProvider>
+  return (
+    <RealtimeHealthProvider value={health}>
+      <ForegroundResumeRefresher>{children}</ForegroundResumeRefresher>
+    </RealtimeHealthProvider>
+  )
 }
 
 export function QueryProvider({ children }: { children: React.ReactNode }) {
@@ -163,9 +167,7 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       <AuthGatedCacheReset>
         <PersonalScopeProvider>
           <WarmOperationalCachesOnScope>
-            <ForegroundResumeRefresher>
-              <ScopeRealtimeBridge>{children}</ScopeRealtimeBridge>
-            </ForegroundResumeRefresher>
+            <ScopeRealtimeBridge>{children}</ScopeRealtimeBridge>
           </WarmOperationalCachesOnScope>
         </PersonalScopeProvider>
       </AuthGatedCacheReset>

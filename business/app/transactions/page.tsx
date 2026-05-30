@@ -64,7 +64,13 @@ function exportToCsv(
 }
 
 export default function TransactionsPage() {
-  const { data: rows, loading: listLoading } = useTransactionsCached()
+  const {
+    data: rows,
+    loading: listLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useTransactionsCached()
   useTurnkeyLedgerRepair()
   const { baseCurrency: profileBaseCurrency } = useBusinessProfile()
   const baseCurrencyCode = (profileBaseCurrency || "USD").toUpperCase()
@@ -121,7 +127,8 @@ export default function TransactionsPage() {
   }, [rows, start, end, statusFilter, searchTerm])
 
   const displayedTransactions = filteredTransactions.slice(0, displayCount)
-  const hasMore = displayCount < filteredTransactions.length
+  const hasMoreLocal = displayCount < filteredTransactions.length
+  const hasMore = hasMoreLocal || Boolean(hasNextPage)
 
   const getFxRate = (from: string, to: string): number | null => {
     const f = from.toUpperCase()
@@ -333,8 +340,19 @@ export default function TransactionsPage() {
               </div>
               {hasMore && (
                 <div className="p-6 border-t flex justify-center">
-                  <Button variant="ghost" className="gap-2" onClick={() => setDisplayCount((prev) => prev + 10)}>
-                    Load More
+                  <Button
+                    variant="ghost"
+                    className="gap-2"
+                    disabled={isFetchingNextPage}
+                    onClick={() => {
+                      if (hasMoreLocal) {
+                        setDisplayCount((prev) => prev + 10)
+                      } else if (hasNextPage) {
+                        void fetchNextPage()
+                      }
+                    }}
+                  >
+                    {isFetchingNextPage ? "Loading…" : "Load More"}
                     <ChevronDown className="h-4 w-4" />
                   </Button>
                 </div>

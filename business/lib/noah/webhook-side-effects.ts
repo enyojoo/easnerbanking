@@ -23,6 +23,7 @@ import {
 } from "@/lib/noah/global-payout-ledger"
 import {
   buildNoahBankPayInLedgerMetadata,
+  buildNoahFundingFiatDepositLedgerMetadata,
   buildNoahVerificationFiatDepositLedgerMetadata,
   extractFiatDepositEnrichment,
   extractNoahBankPayInEnrichment,
@@ -170,6 +171,33 @@ export async function applyNoahWebhookSideEffects(
                 .from("transactions")
                 .update({ metadata: merged, updated_at: new Date().toISOString() })
                 .eq("id", existing.id)
+            } else {
+              const occurred = String(p.Occurred ?? data.Created ?? new Date().toISOString())
+              const metadata = buildNoahFundingFiatDepositLedgerMetadata(data, fiatEnrichment, {
+                occurredAt: fiatEnrichment.processingAt,
+                completedAt: fiatEnrichment.status === "settled" ? occurred : null,
+              })
+              const st =
+                fiatEnrichment.status === "settled"
+                  ? "settled"
+                  : fiatEnrichment.status === "pending"
+                    ? "pending"
+                    : "processing"
+              await upsertLedgerTransaction(admin, {
+                userId: fiatUserId,
+                businessId: fiatBusinessId,
+                provider: "noah",
+                providerTransactionId: fiatEnrichment.depositId,
+                status: st,
+                amount: fiatEnrichment.fiatAmount,
+                currency: fiatEnrichment.fiatCurrency,
+                direction: "in",
+                payload: data,
+                metadata,
+                occurredAt: fiatEnrichment.processingAt ?? occurred,
+                settledAt: st === "settled" ? occurred : null,
+                baseCurrency: fiatEnrichment.fiatCurrency,
+              })
             }
           }
         }

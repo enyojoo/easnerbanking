@@ -39,5 +39,8 @@ export function useTransactionsCached() {
     error: query.error instanceof Error ? query.error.message : null,
     refetch: () => query.refetch(),
     isRefetching: query.isFetching,
+    fetchNextPage: query.fetchNextPage,
+    hasNextPage: query.hasNextPage ?? false,
+    isFetchingNextPage: query.isFetchingNextPage,
   }
 }

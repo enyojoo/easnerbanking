@@ -4,6 +4,7 @@ import {
   deriveBankDepositInboundDisplayLabel,
   formatDisplayPersonName,
   formatTransactionDetailHeroTitle,
+  isBankOnrampDepositFlow,
   isVerificationDepositMetadata,
   toEasnerTransactionPrimaryLabel,
 } from "@easner/shared"
@@ -64,8 +65,8 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
   const isVerification = isVerificationDepositMetadata(meta)
   const globalPayout = resolveGlobalPayoutOffRampDetail(row)
   const bankLabel =
-    !isVerification && !globalPayout && payload && isNoahBankOnrampFiatPayIn(payload)
-      ? deriveBankDepositInboundDisplayLabel({ metadata: meta })
+    !isVerification && !globalPayout && (isBankOnrampDepositFlow(meta) || (payload && isNoahBankOnrampFiatPayIn(payload)))
+      ? deriveBankDepositInboundDisplayLabel({ metadata: meta, payload: payload ?? undefined })
       : undefined
   const description =
     globalPayout?.displayDescription ??

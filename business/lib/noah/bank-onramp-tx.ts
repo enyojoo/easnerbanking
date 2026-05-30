@@ -350,6 +350,60 @@ export function buildNoahVerificationFiatDepositLedgerMetadata(
   })
 }
 
+/** Ledger metadata when FiatDeposit webhook arrives before the Transaction webhook (funding VA). */
+export function buildNoahFundingFiatDepositLedgerMetadata(
+  data: Record<string, unknown>,
+  enrichment: FiatDepositEnrichment,
+  opts?: { occurredAt?: string | null; completedAt?: string | null },
+): Record<string, unknown> {
+  const paymentReference = enrichment.paymentReference
+  const depositNarration = deriveBankDepositNarrationLabel({ paymentReference })
+  const schemeCtx = {
+    metadata: {
+      fiat_deposit_currency: enrichment.fiatCurrency,
+      noah_payment_method_type: enrichment.paymentMethodType,
+    },
+    payload: data,
+  }
+  const sourcePaymentRail = deriveBankDepositPaymentRail(schemeCtx)
+  const depositSchemeLabel = deriveBankDepositSchemeLabel({
+    metadata: { ...schemeCtx.metadata, source_payment_rail: sourcePaymentRail },
+    payload: data,
+  })
+  const processingAt = enrichment.processingAt
+  const completedAt =
+    enrichment.status === "settled"
+      ? pickIsoTimestamp(opts?.completedAt, opts?.occurredAt, data.Created)
+      : null
+  const sender = enrichment.senderDisplayName
+  const base: Record<string, unknown> = {
+    source: "webhook_fiat_deposit",
+    source_type: "virtual_account",
+    flow: "bank_onramp",
+    deposit_kind: "funding",
+    fiat_deposit_amount: enrichment.fiatAmount,
+    fiat_deposit_currency: enrichment.fiatCurrency,
+    sender_name: sender,
+    remitter_name: sender,
+    noah_fiat_deposit_sender_name: sender,
+    payment_reference: paymentReference,
+    reference: paymentReference,
+    ...(depositNarration ? { deposit_narration: depositNarration, narration: depositNarration } : {}),
+    noah_fiat_deposit_id: enrichment.depositId,
+    noah_payment_method_type: enrichment.paymentMethodType,
+    source_payment_rail: sourcePaymentRail,
+    deposit_scheme_label: depositSchemeLabel,
+    destination_payment_rail: "crypto",
+    processing_at: processingAt,
+    completed_at: completedAt,
+  }
+  return mergePayInMetadataWithLifecycle({}, base, {
+    processing_at: processingAt,
+    completed_at: completedAt,
+    noah_fiat_deposit_id: enrichment.depositId,
+  })
+}
+
 export function buildNoahBankPayInLedgerMetadata(
   tx: Record<string, unknown>,
   enrichment: NoahBankPayInEnrichment,

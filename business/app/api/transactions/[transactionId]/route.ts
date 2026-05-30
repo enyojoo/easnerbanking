@@ -34,9 +34,7 @@ import {
 } from "@easner/shared"
 import { enrichBankDepositLedgerRows } from "@/lib/transactions/enrich-bank-deposit-ledger-rows"
 import { resolveGlobalPayoutOffRampDetail } from "@/lib/transactions/resolve-global-payout-off-ramp"
-
-const LEDGER_SELECT =
-  "id, easner_transaction_id, provider, provider_transaction_id, status, amount, currency, direction, metadata, payload, created_at, updated_at, occurred_at, settled_at, tx_hash, wallet_address, counterparty_address, asset, chain, base_currency, base_amount"
+import { LEDGER_DETAIL_SELECT } from "@/lib/ledger/ledger-select"
 
 function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, unknown> {
   const dirRaw = String(row.direction ?? "").toLowerCase()
@@ -224,7 +222,7 @@ export async function GET(request: Request, routeCtx: Props) {
   function fetchOne(filter: { column: string; value: string }) {
     let q = admin
       .from("transactions")
-      .select(LEDGER_SELECT)
+      .select(LEDGER_DETAIL_SELECT)
       .eq(filter.column, filter.value)
     if (scope === "business") {
       q = q.eq("business_id", businessId as string)
@@ -245,7 +243,7 @@ export async function GET(request: Request, routeCtx: Props) {
     }
   }
   if (!row) {
-    let q = admin.from("transactions").select(LEDGER_SELECT).contains("metadata", {
+    let q = admin.from("transactions").select(LEDGER_DETAIL_SELECT).contains("metadata", {
       easner_transaction_id: transactionId,
     })
     if (scope === "business") {
@@ -270,7 +268,7 @@ export async function GET(request: Request, routeCtx: Props) {
   }
 
   const rec = row as Record<string, unknown>
-  if (isTurnkeyTransactionHiddenFromFeed(rec.metadata, rec.payload)) {
+  if (rec.hidden_from_feed === true || isTurnkeyTransactionHiddenFromFeed(rec.metadata, rec.payload)) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
 

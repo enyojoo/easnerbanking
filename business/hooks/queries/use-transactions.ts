@@ -2,16 +2,20 @@
 
 import type { InfiniteData, QueryClient } from "@tanstack/react-query"
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query"
-import { qk, scopeKey, type TxFilters, type Scope } from "@easner/shared"
+import { qk, scopeKey, type TxFilters, type Scope, pollingIntervalFor } from "@easner/shared"
 import { apiFetch, ApiError } from "@/lib/query/api-client"
 import type { TransactionWithSource } from "@/lib/transactions"
 import { normalizeEasnerTransactionIdForLookup } from "@/lib/easner-transaction-id"
 import { useScope } from "@/lib/query/scope"
+import { useRealtimeHealth } from "@/lib/query/realtime-health-context"
+import { useDocumentVisibility } from "@/lib/query/use-document-visibility"
 
 const LEDGER_BUSINESS_HEADERS = { "X-Easner-Noah-Scope": "business" } as const
 
-/** Must match `limit` in `qk.transactions.list` for this hook (cache identity). */
-export const BUSINESS_TRANSACTIONS_LIST_LIMIT = 200 as const
+/** First page size for the unified ledger list. */
+export const BUSINESS_TRANSACTIONS_LIST_PAGE_SIZE = 50 as const
+/** @deprecated Use BUSINESS_TRANSACTIONS_LIST_PAGE_SIZE */
+export const BUSINESS_TRANSACTIONS_LIST_LIMIT = BUSINESS_TRANSACTIONS_LIST_PAGE_SIZE as const
 
 export interface TransactionsPage {
   transactions: TransactionWithSource[]
@@ -77,30 +81,37 @@ export function getTransactionDetailPrefetchOptions(scope: Scope, txId: string) 
  */
 export function useTransactionsList(filters: TxFilters = {}) {
   const { scope } = useScope()
-  const listFilters: TxFilters = { ...filters, limit: BUSINESS_TRANSACTIONS_LIST_LIMIT }
+  const realtimeHealth = useRealtimeHealth()
+  const tabVisible = useDocumentVisibility()
+  const listFilters: TxFilters = { ...filters, limit: BUSINESS_TRANSACTIONS_LIST_PAGE_SIZE }
   return useInfiniteQuery({
     queryKey: scope ? qk.transactions.list(scope, listFilters) : ["transactions", "disabled"],
     enabled: Boolean(scope),
     initialPageParam: null as string | null,
     queryFn: async ({ pageParam }) => {
-      const body = await apiFetch<{ transactions: TransactionWithSource[] }>("/api/transactions", {
-        query: {
-          ...filters,
-          cursor: pageParam ?? undefined,
-          limit: BUSINESS_TRANSACTIONS_LIST_LIMIT,
+      const body = await apiFetch<{ transactions: TransactionWithSource[]; nextCursor?: string | null }>(
+        "/api/transactions",
+        {
+          query: {
+            ...filters,
+            cursor: pageParam ?? undefined,
+            limit: BUSINESS_TRANSACTIONS_LIST_PAGE_SIZE,
+          },
+          headers: { ...LEDGER_BUSINESS_HEADERS },
         },
-        headers: { ...LEDGER_BUSINESS_HEADERS },
-      })
+      )
       return {
         transactions: body.transactions ?? [],
-        nextCursor: null,
+        nextCursor: body.nextCursor ?? null,
       } satisfies TransactionsPage
     },
     getNextPageParam: (last) => last.nextCursor,
-    staleTime: 60_000,
+    staleTime: 90_000,
     gcTime: 30 * 60_000,
-    /** Global default is `false`; lists must refetch on remount when stale after navigation (e.g. return from send). */
     refetchOnMount: true,
+    refetchOnWindowFocus: false,
+    refetchInterval: tabVisible ? pollingIntervalFor("operational", realtimeHealth) : false,
+    refetchIntervalInBackground: false,
     meta: { safePersist: true, webPersist: "reduced", freshness: "operational" },
   })
 }

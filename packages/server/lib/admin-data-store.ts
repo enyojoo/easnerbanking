@@ -1,5 +1,12 @@
 import { supabase } from "./supabase"
 
+/** Trimmed selects for legacy AdminDataStore reads (no transaction `payload`). */
+const ADMIN_USER_LIST_SELECT =
+  "id, email, first_name, last_name, full_name, created_at, updated_at, status, noah_kyc_status, phone, country, easetag"
+
+const ADMIN_TX_LIST_SELECT =
+  "id, user_id, business_id, provider, provider_transaction_id, status, amount, currency, direction, metadata, created_at, updated_at, occurred_at, settled_at, tx_hash, wallet_address, asset, chain, counterparty_address, base_currency, base_amount, easner_transaction_id, hidden_from_feed"
+
 interface AdminData {
   users: any[]
   transactions: any[]
@@ -312,7 +319,7 @@ class AdminDataStore {
       console.log("AdminDataStore: Loading users...")
       const { data: users, error } = await supabase
         .from("users")
-        .select("*")
+        .select(ADMIN_USER_LIST_SELECT)
         .order("created_at", { ascending: false })
 
       if (error) {
@@ -386,7 +393,7 @@ class AdminDataStore {
       const { data: sendTransactions, error: sendError } = await supabase
         .from("transactions")
         .select(`
-          *,
+          ${ADMIN_TX_LIST_SELECT},
           user:users(first_name, last_name, email),
           recipient:recipients(full_name, bank_name, account_number, routing_number, sort_code, iban, swift_bic, currency, address_line1, address_line2, city, state, postal_code, transfer_type, checking_or_savings)
         `)

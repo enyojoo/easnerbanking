@@ -3,56 +3,26 @@ import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin
 import type { TransactionWithSource } from "@/lib/transactions"
 import { resolveLedgerListScope } from "@/lib/transactions-ledger-scope"
 import { displayEasnerTransactionId } from "@/lib/easner-transaction-id"
+import { LEDGER_LIST_SELECT } from "@/lib/ledger/ledger-select"
 import {
   deriveBankDepositInboundDisplayLabel,
+  isBankOnrampDepositFlow,
   isEasnerProductReceiveTitle,
   isVerificationDepositMetadata,
   toEasnerTransactionPrimaryLabel,
   VERIFICATION_DEPOSIT_LIST_LABEL,
 } from "@easner/shared"
-import { isNoahBankOnrampFiatPayIn } from "@/lib/noah/bank-onramp-tx"
-import { enrichBankDepositLedgerRows } from "@/lib/transactions/enrich-bank-deposit-ledger-rows"
 import { mapRowToBusinessTransaction } from "@/lib/transactions/map-row-to-business"
 import { resolveGlobalPayoutOffRampDetail } from "@/lib/transactions/resolve-global-payout-off-ramp"
+import { inferLedgerListSourceType } from "@/lib/transactions/ledger-list-source-type"
 import {
-  isNoahGlobalPayoutOrchestrationInHiddenFromFeed,
-  isTurnkeyNoahBankOnrampChainMirror,
-  isTurnkeyTransactionHiddenFromFeed,
-} from "@/lib/transactions/transaction-feed-filters"
-import { collectNoahBankOnrampOnChainTxHashesForScope } from "@/lib/noah/noah-bank-onramp-chain-suppression"
-import { collectGlobalPayoutSettlementTxHashesForScope } from "@/lib/noah/global-payout-ledger"
+  applyLedgerListCursorFilter,
+  buildNextLedgerListCursor,
+  decodeLedgerListCursor,
+} from "@/lib/transactions/ledger-list-cursor"
 
-const LEDGER_SELECT =
-  "id, easner_transaction_id, provider, provider_transaction_id, status, amount, currency, direction, metadata, payload, created_at, updated_at, occurred_at, settled_at, tx_hash, wallet_address, counterparty_address, asset, chain, base_currency, base_amount"
-
-function collectGlobalPayoutSettlementTxHashes(rows: Record<string, unknown>[]): Set<string> {
-  const hashes = new Set<string>()
-  for (const row of rows) {
-    const dir = String(row.direction ?? "").toLowerCase()
-    const meta = (row.metadata as Record<string, unknown> | undefined) ?? {}
-    const provider = String(row.provider ?? "").toLowerCase()
-
-    if (provider === "turnkey" && dir === "out" && meta.global_payout_settlement_leg === true) {
-      const hash = String(row.tx_hash ?? "").trim()
-      if (hash) hashes.add(hash)
-      continue
-    }
-
-    if (
-      provider === "noah" &&
-      dir === "out" &&
-      (meta.payout_type === "global_fiat" || meta.flow === "global_fiat_offramp")
-    ) {
-      for (const key of ["turnkey_tx_hash", "noah_on_chain_tx_hash"] as const) {
-        const h = typeof meta[key] === "string" ? meta[key].trim() : ""
-        if (h) hashes.add(h)
-      }
-      const col = String(row.tx_hash ?? "").trim()
-      if (col) hashes.add(col)
-    }
-  }
-  return hashes
-}
+const DEFAULT_LIST_LIMIT = 50
+const MAX_LIST_LIMIT = 100
 
 function mapNoahTxStatusFromLedger(st: string): string {
   const lower = st.toLowerCase()
@@ -63,7 +33,7 @@ function mapNoahTxStatusFromLedger(st: string): string {
   return lower || "unknown"
 }
 
-/** Mobile list shape when `payload` is missing a full Noah object. */
+/** Mobile list shape — metadata-only (no `payload` on list reads). */
 function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, unknown> {
   const dirRaw = String(row.direction ?? "").toLowerCase()
   const transaction_type = dirRaw === "in" ? "receive" : "send"
@@ -72,7 +42,6 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
     row.occurred_at != null ? String(row.occurred_at) : row.created_at != null ? String(row.created_at) : new Date().toISOString()
   const providerTxId = row.provider_transaction_id != null ? String(row.provider_transaction_id) : ""
   const meta = row.metadata as Record<string, unknown> | null | undefined
-  const payload = row.payload as Record<string, unknown> | null | undefined
   const easnerId = displayEasnerTransactionId({
     easnerTransactionId: row.easner_transaction_id != null ? String(row.easner_transaction_id) : null,
     metadata: meta,
@@ -83,11 +52,10 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
   const idForUi = easnerId || providerTxId || ledgerId
   const amount = typeof row.amount === "number" ? row.amount : Number(row.amount) || 0
   const currency = String(row.currency ?? "USD")
-  /** Supabase row id — use for `/api/transactions/[id]` when `id` / `transaction_id` are display-only (e.g. ETID…). */
   const ledger_row_id = ledgerId || undefined
   const isVerification = isVerificationDepositMetadata(meta)
   const bankLabel =
-    !isVerification && payload && isNoahBankOnrampFiatPayIn(payload)
+    !isVerification && isBankOnrampDepositFlow(meta)
       ? deriveBankDepositInboundDisplayLabel({ metadata: meta })
       : undefined
   const name = isVerification
@@ -97,7 +65,7 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
         provider: String(row.provider ?? "noah"),
         direction: dirRaw === "in" ? "in" : "out",
         metadata: meta ?? null,
-        payload,
+        payload: null,
       })
   const globalPayout = resolveGlobalPayoutOffRampDetail(row)
   const displayAmount = globalPayout?.displayAmount ?? amount
@@ -105,20 +73,7 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
   const displayName = globalPayout?.displayDescription ?? name
   const listSenderName =
     !isVerification && bankLabel && !isEasnerProductReceiveTitle(bankLabel) ? bankLabel : undefined
-  const isEasetagP2p = String(meta?.source ?? "").toLowerCase() === "easetag_p2p"
-  const sourceType =
-    isEasetagP2p
-      ? "easetag_p2p"
-      : String(meta?.source_type ?? "").trim() ||
-        (payload && payload.FiatAmount != null && !payload.FiatPayment
-          ? "virtual_account"
-          : payload && String(payload.Direction ?? "") === "In" && String(payload.Network ?? "") === "OffNetwork"
-            ? "virtual_account"
-            : payload &&
-                String(payload.Direction ?? "") === "In" &&
-                String(payload.Network ?? "") !== "OffNetwork"
-              ? "liquidation_address"
-              : undefined)
+  const sourceType = inferLedgerListSourceType(meta)
 
   return {
     id: idForUi,
@@ -146,7 +101,6 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
     direction: dirRaw === "in" ? "credit" : "debit",
     source_type: sourceType,
     metadata: row.metadata,
-    payload,
   }
 }
 
@@ -154,7 +108,21 @@ function mapRowToMobileTransaction(row: Record<string, unknown>): Record<string,
   return mapLedgerRowToMobileItem(row)
 }
 
+export type LedgerListMetrics = {
+  row_count: number
+  response_bytes: number
+  supabase_query_count: number
+  duration_ms: number
+}
+
+export function logLedgerListMetrics(metrics: LedgerListMetrics): void {
+  console.info("[ledger-list]", JSON.stringify(metrics))
+}
+
 export async function GET(request: Request) {
+  const started = Date.now()
+  let supabaseQueryCount = 0
+
   const user = await getUserFromApiRequest(request)
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -162,18 +130,20 @@ export async function GET(request: Request) {
   if (!scopeRes.ok) return scopeRes.response
   const { scope, businessId } = scopeRes
 
-  const limit = Math.min(
-    200,
-    Math.max(1, Number.parseInt(new URL(request.url).searchParams.get("limit") || "100", 10) || 100),
-  )
+  const url = new URL(request.url)
+  const limitRaw = Number.parseInt(url.searchParams.get("limit") || String(DEFAULT_LIST_LIMIT), 10)
+  const limit = Math.min(MAX_LIST_LIMIT, Math.max(1, Number.isFinite(limitRaw) ? limitRaw : DEFAULT_LIST_LIMIT))
+  const cursor = decodeLedgerListCursor(url.searchParams.get("cursor"))
 
   const admin = createSupabaseAdmin()
   let query = admin
     .from("transactions")
-    .select(LEDGER_SELECT)
+    .select(LEDGER_LIST_SELECT)
+    .eq("hidden_from_feed", false)
     .order("occurred_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
-    .limit(limit)
+    .order("id", { ascending: false })
+    .limit(limit + 1)
 
   if (scope === "business") {
     query = query.eq("business_id", businessId as string)
@@ -181,60 +151,35 @@ export async function GET(request: Request) {
     query = query.eq("user_id", user.id).is("business_id", null)
   }
 
+  if (cursor) {
+    query = applyLedgerListCursorFilter(query, cursor)
+  }
+
   const { data: rows, error } = await query
+  supabaseQueryCount += 1
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 })
   }
 
   const rawRows = (rows ?? []) as Record<string, unknown>[]
-  const globalPayoutSettlementHashes = collectGlobalPayoutSettlementTxHashes(rawRows)
-  const noahGlobalPayoutInHashes = rawRows
-    .filter(
-      (r) =>
-        String(r.provider ?? "").toLowerCase() === "noah" &&
-        String(r.direction ?? "").toLowerCase() === "in" &&
-        String(r.tx_hash ?? "").trim(),
-    )
-    .map((r) => String(r.tx_hash ?? "").trim())
-  if (noahGlobalPayoutInHashes.length > 0) {
-    const fromDb = await collectGlobalPayoutSettlementTxHashesForScope(admin, noahGlobalPayoutInHashes, {
-      userId: user.id,
-      businessId: scope === "business" ? (businessId as string) : null,
-    })
-    for (const hash of fromDb) globalPayoutSettlementHashes.add(hash)
-  }
-  const rowsAfterMetadataFilter = rawRows.filter(
-    (r) => !isTurnkeyTransactionHiddenFromFeed(r.metadata, r.payload),
-  )
+  const { visible, nextCursor } = buildNextLedgerListCursor(rawRows, limit)
 
-  const rowsAfterGlobalPayoutInFilter = rowsAfterMetadataFilter.filter(
-    (r) => !isNoahGlobalPayoutOrchestrationInHiddenFromFeed(r, globalPayoutSettlementHashes),
-  )
-
-  const turnkeyInboundHashes = rowsAfterGlobalPayoutInFilter
-    .filter((r) => String(r.provider ?? "").toLowerCase() === "turnkey" && String(r.direction ?? "").toLowerCase() === "in")
-    .map((r) => String(r.tx_hash ?? "").trim())
-    .filter(Boolean)
-  const noahOnChainHashes =
-    turnkeyInboundHashes.length > 0
-      ? await collectNoahBankOnrampOnChainTxHashesForScope(admin, turnkeyInboundHashes, {
-          userId: user.id,
-          businessId: scope === "business" ? (businessId as string) : null,
-        })
-      : new Set<string>()
-
-  const rowsFiltered = rowsAfterGlobalPayoutInFilter.filter(
-    (r) => !isTurnkeyNoahBankOnrampChainMirror(r, noahOnChainHashes),
-  )
-
-  const rowsEnriched = await enrichBankDepositLedgerRows(admin, rowsFiltered)
-
+  let transactions: TransactionWithSource[] | Record<string, unknown>[]
   if (scope === "business") {
-    const transactions = rowsEnriched.map((r) => mapRowToBusinessTransaction(r))
-    return NextResponse.json({ transactions })
+    transactions = visible.map((r) => mapRowToBusinessTransaction(r))
+  } else {
+    transactions = visible.map((r) => mapRowToMobileTransaction(r))
   }
 
-  const transactions = rowsEnriched.map((r) => mapRowToMobileTransaction(r))
-  return NextResponse.json({ transactions })
+  const body = { transactions, nextCursor }
+  const responseBytes = Buffer.byteLength(JSON.stringify(body), "utf8")
+  logLedgerListMetrics({
+    row_count: visible.length,
+    response_bytes: responseBytes,
+    supabase_query_count: supabaseQueryCount,
+    duration_ms: Date.now() - started,
+  })
+
+  return NextResponse.json(body)
 }

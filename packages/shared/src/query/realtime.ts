@@ -20,6 +20,7 @@
 
 import type { QueryClient, QueryKey } from "@tanstack/react-query"
 import { qk } from "./keys"
+import { patchRowInPages } from "./infinite-cache"
 import { markRecentMoneyActivity } from "./polling-fallback"
 import { scopeId, type Scope } from "./scope"
 
@@ -154,8 +155,52 @@ function scheduleTransactionsFeedRefresh(
   batcher.schedule(key, () => {
     markRecentMoneyActivity()
     qc.invalidateQueries({ queryKey: key, refetchType: "active" })
-    qc.invalidateQueries({ queryKey: key, refetchType: "inactive" })
   })
+}
+
+function scheduleTransactionRowPatch(
+  qc: QueryClient,
+  scope: Scope,
+  batcher: Batcher,
+  row: Record<string, unknown>,
+): void {
+  const key = qk.transactions.root(scope)
+  const rowId = row.id != null ? String(row.id) : ""
+  if (!rowId) {
+    scheduleTransactionsFeedRefresh(qc, scope, batcher)
+    return
+  }
+  batcher.schedule(key, () => {
+    markRecentMoneyActivity()
+    const patched = patchRowInPages(
+      qc,
+      key,
+      rowId,
+      (prev) => ({
+        ...(prev as Record<string, unknown>),
+        status: mapLedgerStatusForList(String(row.status ?? (prev as { status?: string }).status ?? "")),
+        metadata: row.metadata ?? (prev as { metadata?: unknown }).metadata,
+      }),
+      (r) =>
+        String(
+          (r as { ledger_row_id?: string; id?: string }).ledger_row_id ??
+            (r as { id?: string }).id ??
+            "",
+        ),
+    )
+    if (!patched) {
+      qc.invalidateQueries({ queryKey: key, refetchType: "active" })
+    }
+  })
+}
+
+function mapLedgerStatusForList(st: string): string {
+  const lower = st.toLowerCase()
+  if (lower === "settled") return "completed"
+  if (lower === "pending" || lower === "processing") return lower
+  if (lower === "failed" || lower === "cancelled") return "failed"
+  if (lower === "unknown") return "pending"
+  return lower || "unknown"
 }
 
 /**
@@ -256,7 +301,7 @@ export function attachRealtime({
       table: "transactions",
       filter: txFilter,
     },
-    () => {
+    (p) => {
       health.lastEventAt = Date.now()
       emit()
       scheduleTransactionsFeedRefresh(qc, scope, batcher)
@@ -271,10 +316,11 @@ export function attachRealtime({
       table: "transactions",
       filter: txFilter,
     },
-    () => {
+    (p) => {
       health.lastEventAt = Date.now()
       emit()
-      scheduleTransactionsFeedRefresh(qc, scope, batcher)
+      const row = (p.new ?? {}) as Record<string, unknown>
+      scheduleTransactionRowPatch(qc, scope, batcher, row)
     },
   )
 
@@ -300,8 +346,26 @@ export function attachRealtime({
   )
 
   // --- user preferences (personal only) --------------------------------------
-  // Communication preferences are per-user and live in `public.user_preferences`.
   if (scope.kind === "personal") {
+    channel.on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "notifications",
+        filter: `user_id=eq.${scope.userId}`,
+      },
+      () => {
+        health.lastEventAt = Date.now()
+        emit()
+        const key = qk.notifications.root(scope.userId)
+        batcher.schedule(key, () => {
+          qc.invalidateQueries({ queryKey: key, refetchType: "active" })
+          qc.invalidateQueries({ queryKey: qk.notifications.unread(scope.userId), refetchType: "active" })
+        })
+      },
+    )
+
     channel.on(
       "postgres_changes",
       {

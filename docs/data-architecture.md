@@ -135,12 +135,15 @@ optimistic/pessimistic matrix from §9 of the plan:
 
 ## 8. Realtime contract
 
-- One multiplexed channel per `Scope`; no ad-hoc channels in screens.
+- One multiplexed channel per `Scope` on Business and Personal; Office uses a
+  separate platform-wide admin channel (see §8a).
 - Events are debounced at 50 ms per `queryKey` to coalesce bursts.
 - Every write is version-guarded via `pickNewer` (`version`,
   `updated_at` fallback) before touching cache.
-- List prepends use `prependIntoFirstPage` / `patchRowInPages` so
-  existing pagination state is preserved.
+- Transaction list UPDATE events patch cached infinite-query pages via
+  `patchRowInPages`; INSERT events invalidate the active transactions
+  queries (list rows are API-mapped shapes, so prepend is deferred until
+  a shared mapper exists).
 - Sibling pages are marked `inactive` so they revalidate lazily.
 
 Channel health is exposed via `RealtimeHealth`. Surfaces that want a
@@ -149,6 +152,53 @@ fallback poll call:
 ```ts
 refetchInterval: pollingIntervalFor("critical", useRealtimeHealth()),
 ```
+
+### 8a. Office admin realtime
+
+Office subscribes to platform-wide ledger changes via
+`office/lib/query/attach-office-realtime.ts`, wired in
+`OfficeQueryProvider` through `OfficeRealtimeBridge` (gated on
+`useOfficeAdminEnabled`).
+
+| Table | Events | Cache effect |
+| --- | --- | --- |
+| `transactions` | INSERT, UPDATE | Invalidate `officeKeys.transactions()` + overview presets |
+| `users` | INSERT, UPDATE | Invalidate `officeKeys.users()` + overview |
+| `wallet_balances` | * | Invalidate overview KPIs |
+
+Supabase Realtime respects RLS — active office admins receive row events
+via `is_active_office_admin()` policies (see migration
+`20250530120000_transactions_hidden_from_feed.sql`).
+
+Health is exposed through `useOfficeRealtimeHealth()` for optional
+reconnect banners; transaction lists do not poll while the channel is
+healthy.
+
+## 8b. PostgREST egress — transaction lists
+
+Transaction **list** reads intentionally omit the `payload` column and
+filter with `hidden_from_feed = false` at query time so a single indexed
+Supabase round-trip powers each page.
+
+| Constant | Used by |
+| --- | --- |
+| `LEDGER_LIST_SELECT` | `GET /api/transactions`, personal mobile list |
+| `LEDGER_DETAIL_SELECT` | `GET /api/transactions/[id]` (full payload + enrichment) |
+| `OFFICE_LEDGER_LIST_SELECT` | Office admin transaction loaders |
+
+Defaults:
+
+- Page size **50** (max **100** on user API); cursor is keyset on
+  `(occurred_at DESC, created_at DESC, id DESC)`.
+- `hidden_from_feed` is set at upsert via `resolveHiddenFromFeed()` —
+  runtime suppression scans are not run on the list path.
+- The transactions list route logs `[ledger-list]` metrics:
+  `row_count`, `response_bytes`, `supabase_query_count`, `duration_ms`.
+
+Backfill scripts (one-time, not per-request):
+
+- `business/scripts/backfill-bank-deposit-pay-in.ts` — sender/rail metadata
+- `business/scripts/backfill-hidden-from-feed.ts` — `hidden_from_feed` column
 
 ## 9. UX primitives
 
@@ -242,6 +292,8 @@ The shell never unmounts; `keepPreviousData` smooths the transition.
 | Web server API wrapper | `business/lib/server/api.ts` |
 | Web scope context | `business/lib/query/scope.tsx` |
 | Web realtime bridge | `business/lib/query/use-supabase-realtime-scope.ts` |
+| Office realtime bridge | `office/lib/query/attach-office-realtime.ts` |
+| Ledger list selects | `business/lib/ledger/ledger-select.ts` |
 | Web SSR layout | `business/app/(dashboard)/layout.tsx` |
 | Mobile QueryProvider | `mobile/src/query/QueryProvider.tsx` |
 | Mobile persister | `mobile/src/query/persister.ts` |

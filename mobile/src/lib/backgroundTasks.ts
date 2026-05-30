@@ -35,7 +35,7 @@ async function refreshBackgroundSnapshots(): Promise<boolean> {
       headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
     }),
     apiFetch<TransactionsEnvelope>('/api/transactions', {
-      query: { limit: 200 },
+      query: { limit: 50 },
       headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
     }),
   ])
@@ -77,7 +77,7 @@ async function refreshBackgroundSnapshots(): Promise<boolean> {
       `${TRANSACTIONS_CACHE_KEY_PREFIX}${userId}`,
       JSON.stringify({
         at: now,
-        rows: rows.slice(0, 200),
+        rows: rows.slice(0, 50),
       }),
     ])
   }

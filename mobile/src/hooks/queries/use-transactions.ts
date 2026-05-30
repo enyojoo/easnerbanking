@@ -4,9 +4,10 @@ import {
   type QueryClient,
   type UseQueryOptions,
 } from '@tanstack/react-query'
-import { qk, type Scope, type TxFilters } from '@easner/shared'
+import { qk, type Scope, type TxFilters, pollingIntervalFor } from '@easner/shared'
 import { apiFetch } from '../../query/api-client'
 import { useScope } from '../../query/scope'
+import { useRealtimeHealth } from '../../query/realtime-health-context'
 import { NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
 import {
   readCachedTransactionDetail,
@@ -69,6 +70,7 @@ export function mapLedgerRowToTransaction(userId: string, row: Record<string, un
 
 interface TransactionsResponse {
   transactions?: MobileTransactionRow[]
+  nextCursor?: string | null
 }
 
 /**
@@ -76,7 +78,7 @@ interface TransactionsResponse {
  * Home dashboard only displays the first four rows — it uses this same query so cache is shared with the
  * Transactions tab (no second cold fetch / endless skeleton).
  */
-export const TRANSACTIONS_LEDGER_PAGE_SIZE = 200
+export const TRANSACTIONS_LEDGER_PAGE_SIZE = 50
 
 /** Detail rows are immutable ledger snapshots — keep warm for 7d (disk + memory). */
 export const TRANSACTION_DETAIL_STALE_MS = CacheTTL.TRANSACTION_DETAIL
@@ -185,7 +187,7 @@ export function prefetchRecentTransactionDetailsInBackground(
 
 export function useTransactionsList(filters: TxFilters = {}, pageSize = TRANSACTIONS_LEDGER_PAGE_SIZE) {
   const { scope } = useScope()
-  /** `limit` is part of the cache key — keep one page size for main ledger consumers (dashboard + list tab). */
+  const realtimeHealth = useRealtimeHealth()
   const listFilters: TxFilters = { ...filters, limit: pageSize }
   return useInfiniteQuery({
     queryKey: scope ? qk.transactions.list(scope, listFilters) : ['transactions', 'disabled'],
@@ -202,12 +204,15 @@ export function useTransactionsList(filters: TxFilters = {}, pageSize = TRANSACT
       })
       return {
         transactions: body.transactions ?? [],
-        nextCursor: null as string | null,
+        nextCursor: body.nextCursor ?? null,
       }
     },
     getNextPageParam: (last) => last.nextCursor,
-    staleTime: 45_000,
+    staleTime: 90_000,
     gcTime: 30 * 60_000,
+    refetchOnWindowFocus: false,
+    refetchInterval: pollingIntervalFor('operational', realtimeHealth),
+    refetchIntervalInBackground: false,
     meta: { safePersist: true, freshness: 'operational' },
   })
 }
