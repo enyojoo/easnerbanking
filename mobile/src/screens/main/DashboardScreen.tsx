@@ -64,6 +64,8 @@ import {
   markRecentMoneyActivity,
   qk,
 } from '@easner/shared'
+import { useRealtimeHealth } from '../../query/realtime-health-context'
+import { useTransactionListFocusRefresh } from '../../hooks/use-transaction-list-focus-refresh'
 import { getTransactionListName } from '../../lib/transactionListLabel'
 import { AvatarImage } from '../../components/AvatarImage'
 import { avatarImageUri, warmAvatarCache } from '../../lib/avatarCache'
@@ -118,6 +120,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const { scope } = useScope()
   const qc = useQueryClient()
   const txQuery = useTransactionsList({}, TRANSACTIONS_LEDGER_PAGE_SIZE)
+  const realtimeHealth = useRealtimeHealth()
   const { balances, hasResolvedBalance, hasDefinitiveEmptyBalance, refreshBalances } = useBalance()
   const [selectedCurrency, setSelectedCurrency] = useState<'USD' | 'EUR' | 'GBP'>('USD')
   const [balanceVisible, setBalanceVisible] = useState(true)
@@ -325,13 +328,6 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
       refreshBalances(false).catch(() => {
         // Silently fail
       })
-      void (async () => {
-        const insertedRows = await syncChainLedgerIfDue(false)
-        if (insertedRows) {
-          await txQuery.refetch()
-        }
-      })()
-      void txQuery.refetch()
       loadAvailableCurrencies().catch(() => {
         // Silently fail
       })
@@ -342,12 +338,17 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
       refreshUserProfile,
       refreshBalances,
       loadAvailableCurrencies,
-      syncChainLedgerIfDue,
-      txQuery,
       qc,
       scope,
     ])
   )
+
+  // Gate ledger refetch on focus: skip when realtime is healthy (rows arrive via prepend).
+  useTransactionListFocusRefresh({
+    txQuery,
+    realtimeHealth,
+    onChainSync: syncChainLedgerIfDue,
+  })
 
   const balanceRaw = (balances as Record<string, string | undefined>)[selectedCurrency]
   const hasBalanceForSelectedCurrency = typeof balanceRaw === 'string' && balanceRaw.trim().length > 0

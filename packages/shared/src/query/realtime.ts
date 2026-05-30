@@ -20,9 +20,10 @@
 
 import type { QueryClient, QueryKey } from "@tanstack/react-query"
 import { qk } from "./keys"
-import { patchRowInPages } from "./infinite-cache"
+import { patchRowInPages, prependIntoFirstPage } from "./infinite-cache"
 import { markRecentMoneyActivity } from "./polling-fallback"
 import { scopeId, type Scope } from "./scope"
+import { displayEasnerTransactionIdForList, shouldIncludeRowInUserFeed } from "../transactions/map-ledger-list-row"
 
 // Minimal Supabase client shape we rely on. Using a structural type avoids
 // pulling `@supabase/supabase-js` into the shared package's types graph.
@@ -132,6 +133,20 @@ export interface AttachRealtimeOptions {
   onHealth?: (h: RealtimeHealth) => void
   /** Override DB filter; defaults to best-effort entity/user filter. */
   filter?: string
+  /**
+   * Map a raw DB row from a Realtime INSERT event into the list-item shape
+   * expected by the `transactions` infinite query cache. Return `null` to fall
+   * back to the existing invalidate behaviour (e.g. unmapped row types).
+   * When provided, new transactions are prepended directly into the cache
+   * without a network round-trip.
+   */
+  mapTransactionInsert?: (row: Record<string, unknown>) => unknown | null
+  /**
+   * Extract the stable id used for duplicate detection and patch matching.
+   * Defaults to `ledger_row_id ?? id`. Must match the id used by the router
+   * for transaction detail navigation.
+   */
+  transactionListRowId?: (row: unknown) => string
 }
 
 function defaultFilter(scope: Scope): string | undefined {
@@ -145,7 +160,18 @@ function transactionsTableFilter(scope: Scope): string {
   return `user_id=eq.${scope.userId}`
 }
 
-/** Balance and ledger are written separately; keep transaction lists in sync when balances move. */
+/** Default id extractor: matches `transactionDetailLookupId` in mobile and business routing. */
+function defaultListRowId(row: unknown): string {
+  const r = row as { ledger_row_id?: string; id?: string; transaction_id?: string }
+  return String(r.ledger_row_id ?? r.id ?? r.transaction_id ?? "")
+}
+
+/** Lazy-revalidate sibling list queries (e.g. filtered views) without refetching active ones. */
+function scheduleInactiveTransactionListRevalidation(qc: QueryClient, scope: Scope): void {
+  qc.invalidateQueries({ queryKey: qk.transactions.root(scope), refetchType: "inactive" })
+}
+
+/** Invalidate all active transaction list queries under `scope`. Fallback path. */
 function scheduleTransactionsFeedRefresh(
   qc: QueryClient,
   scope: Scope,
@@ -158,39 +184,131 @@ function scheduleTransactionsFeedRefresh(
   })
 }
 
+/**
+ * Partial status/metadata patch when full remap did not hit a cached row.
+ * Tries list id (ETID / mobile id) first, then DB uuid via ledger_row_id.
+ */
+function tryPartialTransactionPatch(
+  qc: QueryClient,
+  key: QueryKey,
+  row: Record<string, unknown>,
+  mapped: unknown | null,
+  idFn: (row: unknown) => string,
+): boolean {
+  const dbRowId = row.id != null ? String(row.id) : ""
+  const patchFn = (prev: unknown) => ({
+    ...(prev as Record<string, unknown>),
+    status: mapLedgerStatusForList(String(row.status ?? (prev as { status?: string }).status ?? "")),
+    metadata: row.metadata ?? (prev as { metadata?: unknown }).metadata,
+  })
+
+  if (mapped != null) {
+    const listId = idFn(mapped)
+    if (listId && patchRowInPages(qc, key, listId, patchFn, idFn)) return true
+  }
+
+  const meta = row.metadata as Record<string, unknown> | null | undefined
+  const derivedListId = displayEasnerTransactionIdForList({
+    easnerTransactionId: row.easner_transaction_id != null ? String(row.easner_transaction_id) : null,
+    metadata: meta,
+    providerTransactionId: row.provider_transaction_id != null ? String(row.provider_transaction_id) : null,
+    fallbackId: row.id != null ? String(row.id) : null,
+  })
+  if (derivedListId && patchRowInPages(qc, key, derivedListId, patchFn, idFn)) return true
+
+  if (dbRowId) {
+    const ledgerIdFn = (r: unknown) =>
+      String((r as { ledger_row_id?: string }).ledger_row_id ?? "")
+    if (patchRowInPages(qc, key, dbRowId, patchFn, ledgerIdFn)) return true
+  }
+
+  return false
+}
+
+/**
+ * Handle a Realtime INSERT event:
+ * - When `mapTransactionInsert` is provided, map the DB row into a list item
+ *   and prepend it into the first page of every cached infinite query.
+ *   Sibling queries that are not active get marked `inactive` for lazy revalidation.
+ *   If mapping returns null or prepend finds no existing cache, fall back to invalidate.
+ * - Without mapper: existing invalidate behaviour (backward compatible).
+ */
+function scheduleTransactionInsert(
+  qc: QueryClient,
+  scope: Scope,
+  batcher: Batcher,
+  row: Record<string, unknown>,
+  mapTransactionInsert: ((row: Record<string, unknown>) => unknown | null) | undefined,
+  idFn: (row: unknown) => string,
+): void {
+  const key = qk.transactions.root(scope)
+  batcher.schedule(key, () => {
+    markRecentMoneyActivity()
+
+    if (!shouldIncludeRowInUserFeed(row)) return
+
+    if (!mapTransactionInsert) {
+      qc.invalidateQueries({ queryKey: key, refetchType: "active" })
+      return
+    }
+
+    const listRow = mapTransactionInsert(row)
+    if (listRow == null) {
+      qc.invalidateQueries({ queryKey: key, refetchType: "active" })
+      return
+    }
+
+    const prepended = prependIntoFirstPage(qc, key, listRow, idFn)
+    if (!prepended) {
+      // No warm cache yet — normal refetch on first mount will pick it up.
+      qc.invalidateQueries({ queryKey: key, refetchType: "active" })
+      return
+    }
+    scheduleInactiveTransactionListRevalidation(qc, scope)
+  })
+}
+
+/**
+ * Handle a Realtime UPDATE event:
+ * - When `mapTransactionInsert` is provided, produce a full list-shape row and replace
+ *   the cached entry. Falls back to partial status/metadata patch.
+ * - Without mapper: existing partial patch behaviour.
+ */
 function scheduleTransactionRowPatch(
   qc: QueryClient,
   scope: Scope,
   batcher: Batcher,
   row: Record<string, unknown>,
+  mapTransactionInsert: ((row: Record<string, unknown>) => unknown | null) | undefined,
+  idFn: (row: unknown) => string,
 ): void {
   const key = qk.transactions.root(scope)
-  const rowId = row.id != null ? String(row.id) : ""
-  if (!rowId) {
+  const dbRowId = row.id != null ? String(row.id) : ""
+  if (!dbRowId) {
     scheduleTransactionsFeedRefresh(qc, scope, batcher)
     return
   }
   batcher.schedule(key, () => {
     markRecentMoneyActivity()
-    const patched = patchRowInPages(
-      qc,
-      key,
-      rowId,
-      (prev) => ({
-        ...(prev as Record<string, unknown>),
-        status: mapLedgerStatusForList(String(row.status ?? (prev as { status?: string }).status ?? "")),
-        metadata: row.metadata ?? (prev as { metadata?: unknown }).metadata,
-      }),
-      (r) =>
-        String(
-          (r as { ledger_row_id?: string; id?: string }).ledger_row_id ??
-            (r as { id?: string }).id ??
-            "",
-        ),
-    )
-    if (!patched) {
-      qc.invalidateQueries({ queryKey: key, refetchType: "active" })
+
+    let mapped: unknown | null = null
+    if (mapTransactionInsert) {
+      try {
+        mapped = mapTransactionInsert(row)
+      } catch {
+        mapped = null
+      }
     }
+
+    // Full remap: replace the existing cache row with the freshly mapped version.
+    if (mapped != null) {
+      const mappedId = idFn(mapped)
+      if (mappedId && patchRowInPages(qc, key, mappedId, () => mapped, idFn)) return
+    }
+
+    if (tryPartialTransactionPatch(qc, key, row, mapped, idFn)) return
+
+    qc.invalidateQueries({ queryKey: key, refetchType: "active" })
   })
 }
 
@@ -215,9 +333,12 @@ export function attachRealtime({
   batchMs = 50,
   onHealth,
   filter,
+  mapTransactionInsert,
+  transactionListRowId,
 }: AttachRealtimeOptions): () => void {
   const batcher = createBatcher(batchMs)
   const scopeFilter = filter ?? defaultFilter(scope)
+  const idFn = transactionListRowId ?? defaultListRowId
   const channelName = `scope:${scope.kind}:${scopeId(scope)}`
   const health: RealtimeHealth = { subscribed: false, lastEventAt: null, lastError: null }
   const emit = () => onHealth?.({ ...health })
@@ -286,7 +407,6 @@ export function attachRealtime({
             detail: "wallet_balances_realtime",
           }
         })
-        scheduleTransactionsFeedRefresh(qc, scope, batcher)
       })
     },
   )
@@ -304,7 +424,8 @@ export function attachRealtime({
     (p) => {
       health.lastEventAt = Date.now()
       emit()
-      scheduleTransactionsFeedRefresh(qc, scope, batcher)
+      const row = (p.new ?? {}) as Record<string, unknown>
+      scheduleTransactionInsert(qc, scope, batcher, row, mapTransactionInsert, idFn)
     },
   )
 
@@ -320,7 +441,7 @@ export function attachRealtime({
       health.lastEventAt = Date.now()
       emit()
       const row = (p.new ?? {}) as Record<string, unknown>
-      scheduleTransactionRowPatch(qc, scope, batcher, row)
+      scheduleTransactionRowPatch(qc, scope, batcher, row, mapTransactionInsert, idFn)
     },
   )
 

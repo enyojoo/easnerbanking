@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { attachRealtime, scopesEqual, type RealtimeHealth, type Scope, type SupabaseLikeClient } from "@easner/shared"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
+import { mapRowToBusinessTransaction } from "@/lib/transactions/map-row-to-business"
 
 /**
  * Attach the shared Supabase → TanStack Query bridge for the current scope.
@@ -38,6 +39,14 @@ export function useSupabaseRealtimeScope(scope: Scope | null) {
       scope,
       supabase,
       onHealth: setHealth,
+      mapTransactionInsert: (row) => {
+        try {
+          return mapRowToBusinessTransaction(row)
+        } catch {
+          return null
+        }
+      },
+      transactionListRowId: (r) => String((r as { id?: string }).id ?? ""),
     })
     return () => {
       scopeRef.current = null

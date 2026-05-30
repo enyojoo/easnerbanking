@@ -1,0 +1,225 @@
+import { describe, expect, it } from "vitest"
+import {
+  displayEasnerTransactionIdForList,
+  inferLedgerListSourceType,
+  mapLedgerRowToMobileListItem,
+  resolveGlobalPayoutListDisplay,
+  shouldIncludeRowInUserFeed,
+} from "./map-ledger-list-row"
+
+function baseRow(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: "db-uuid-1",
+    easner_transaction_id: null,
+    provider: "noah",
+    provider_transaction_id: "noah-tx-1",
+    status: "settled",
+    amount: 25,
+    currency: "USD",
+    direction: "in",
+    metadata: null,
+    created_at: "2025-01-15T12:00:00.000Z",
+    occurred_at: "2025-01-15T12:00:00.000Z",
+    hidden_from_feed: false,
+    ...overrides,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// displayEasnerTransactionIdForList
+// ---------------------------------------------------------------------------
+
+describe("displayEasnerTransactionIdForList", () => {
+  it("prefers easner_transaction_id column", () => {
+    expect(
+      displayEasnerTransactionIdForList({
+        easnerTransactionId: "ETID00001234",
+        providerTransactionId: "noah-tx-1",
+        fallbackId: "db-uuid",
+      }),
+    ).toBe("ETID00001234")
+  })
+
+  it("falls through to metadata etid", () => {
+    expect(
+      displayEasnerTransactionIdForList({
+        easnerTransactionId: null,
+        metadata: { easner_transaction_id: "ETID00009999" },
+        providerTransactionId: "noah-tx-1",
+      }),
+    ).toBe("ETID00009999")
+  })
+
+  it("falls through to provider tx id if ETID prefixed", () => {
+    expect(
+      displayEasnerTransactionIdForList({
+        easnerTransactionId: null,
+        metadata: {},
+        providerTransactionId: "ETIDabcde",
+      }),
+    ).toBe("ETIDabcde")
+  })
+
+  it("returns fallbackId (DB uuid) last resort", () => {
+    expect(
+      displayEasnerTransactionIdForList({
+        easnerTransactionId: null,
+        metadata: {},
+        providerTransactionId: "noah-tx-1",
+        fallbackId: "db-uuid",
+      }),
+    ).toBe("db-uuid")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// inferLedgerListSourceType
+// ---------------------------------------------------------------------------
+
+describe("inferLedgerListSourceType", () => {
+  it("returns easetag_p2p for easetag", () => {
+    expect(inferLedgerListSourceType({ source: "easetag_p2p" })).toBe("easetag_p2p")
+  })
+
+  it("returns virtual_account for bank onramp", () => {
+    expect(inferLedgerListSourceType({ flow: "bank_onramp" })).toBe("virtual_account")
+  })
+
+  it("returns liquidation_address for turnkey webhook", () => {
+    expect(inferLedgerListSourceType({ source: "turnkey_webhook" })).toBe("liquidation_address")
+  })
+
+  it("returns undefined for unknown", () => {
+    expect(inferLedgerListSourceType({})).toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// shouldIncludeRowInUserFeed
+// ---------------------------------------------------------------------------
+
+describe("shouldIncludeRowInUserFeed", () => {
+  it("returns true when hidden_from_feed is false", () => {
+    expect(shouldIncludeRowInUserFeed({ hidden_from_feed: false })).toBe(true)
+  })
+
+  it("returns false when hidden_from_feed is true", () => {
+    expect(shouldIncludeRowInUserFeed({ hidden_from_feed: true })).toBe(false)
+  })
+
+  it("returns true when field is absent", () => {
+    expect(shouldIncludeRowInUserFeed({})).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// resolveGlobalPayoutListDisplay
+// ---------------------------------------------------------------------------
+
+describe("resolveGlobalPayoutListDisplay", () => {
+  it("returns null for non-global-payout rows", () => {
+    expect(resolveGlobalPayoutListDisplay(baseRow())).toBeNull()
+  })
+
+  it("returns display data from metadata for a payout row", () => {
+    const row = baseRow({
+      direction: "out",
+      metadata: {
+        payout_type: "global_fiat",
+        receive_amount: 5000,
+        receive_currency: "NGN",
+        beneficiary_name: "Jane Doe",
+      },
+    })
+    const display = resolveGlobalPayoutListDisplay(row)
+    expect(display).not.toBeNull()
+    expect(display?.displayAmount).toBe(5000)
+    expect(display?.displayCurrency).toBe("NGN")
+    expect(display?.displayDescription).toBe("Jane Doe")
+  })
+
+  it("falls back to ledger amount when receive_amount absent", () => {
+    const row = baseRow({
+      direction: "out",
+      amount: 25,
+      currency: "USD",
+      metadata: { payout_type: "global_fiat" },
+    })
+    const display = resolveGlobalPayoutListDisplay(row)
+    expect(display?.displayAmount).toBe(25)
+    expect(display?.displayCurrency).toBe("USD")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// mapLedgerRowToMobileListItem
+// ---------------------------------------------------------------------------
+
+describe("mapLedgerRowToMobileListItem", () => {
+  it("maps a basic settled inbound row", () => {
+    const item = mapLedgerRowToMobileListItem(baseRow())
+    expect(item.status).toBe("completed")
+    expect(item.transaction_type).toBe("receive")
+    expect(item.direction).toBe("credit")
+    expect(item.amount).toBe(25)
+    expect(item.ledger_row_id).toBe("db-uuid-1")
+  })
+
+  it("produces sender_display_name from bank deposit metadata", () => {
+    const item = mapLedgerRowToMobileListItem(
+      baseRow({
+        direction: "in",
+        metadata: {
+          flow: "bank_onramp",
+          deposit_kind: "funding",
+          sender_name: "Acme Corp",
+          noah_fiat_deposit_sender_name: "Acme Corp",
+        },
+      }),
+    )
+    expect(item.sender_display_name).toBe("Acme Corp")
+  })
+
+  it("uses VERIFICATION_DEPOSIT_LIST_LABEL for verification rows", () => {
+    const item = mapLedgerRowToMobileListItem(
+      baseRow({
+        direction: "in",
+        amount: 0.1,
+        metadata: { deposit_kind: "verification" },
+      }),
+    )
+    expect(item.name).toBe("Bank verification deposit")
+  })
+
+  it("maps easetag receive with sender tag", () => {
+    const item = mapLedgerRowToMobileListItem(
+      baseRow({
+        provider: "easner_internal",
+        metadata: { source: "easetag_p2p", sender_easetag: "alice" },
+      }),
+    )
+    expect(item.name).toContain("@alice")
+    expect(item.source_type).toBe("easetag_p2p")
+  })
+
+  it("maps global payout display fields from metadata", () => {
+    const item = mapLedgerRowToMobileListItem(
+      baseRow({
+        direction: "out",
+        amount: 25,
+        currency: "USD",
+        metadata: {
+          payout_type: "global_fiat",
+          receive_amount: 5000,
+          receive_currency: "NGN",
+          beneficiary_name: "Jane Doe",
+        },
+      }),
+    )
+    expect(item.amount).toBe(5000)
+    expect(item.currency).toBe("NGN")
+    expect(item.ledger_amount).toBe(25)
+    expect(item.ledger_currency).toBe("USD")
+    expect(item.display_description).toBe("Jane Doe")
+  })
+})

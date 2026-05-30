@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { attachRealtime, type RealtimeHealth } from '@easner/shared'
+import { attachRealtime, mapLedgerRowToMobileListItem, type RealtimeHealth } from '@easner/shared'
 import { supabase } from '../lib/supabase'
 import { useMaybeScope } from './scope'
 
@@ -33,6 +33,13 @@ export function useSupabaseRealtimeScope(): RealtimeHealth {
       scope,
       supabase,
       onHealth: setHealth,
+      mapTransactionInsert: (row) => {
+        try {
+          return mapLedgerRowToMobileListItem(row)
+        } catch {
+          return null
+        }
+      },
     })
     return () => {
       detach()

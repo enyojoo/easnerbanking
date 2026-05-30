@@ -27,11 +27,13 @@ import {
   formatMoneyDisplay,
   ledgerStatusMatchesUserFilter,
   ledgerTransactionStatusDisplay,
+  pollingIntervalFor,
   type LedgerTransactionStatusTone,
 } from "@easner/shared"
 import { officeFetch } from "@/lib/api-client"
 import { officeKeys } from "@/lib/query/keys"
 import { useOfficeAdminEnabled } from "@/hooks/queries"
+import { useOfficeRealtimeHealth } from "@/lib/query/attach-office-realtime-bridge"
 
 interface ProviderLedgerTx {
   id: string
@@ -204,12 +206,15 @@ function formatVolumeBalanceSide(side: VolumeBalanceSide | undefined, currency: 
 
 export default function AdminTransactionsPage() {
   const { enabled: transactionsEnabled } = useOfficeAdminEnabled()
+  const realtimeHealth = useOfficeRealtimeHealth()
   const transactionsQuery = useQuery({
     queryKey: officeKeys.transactions(),
     enabled: transactionsEnabled,
     staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    refetchInterval: pollingIntervalFor("operational", realtimeHealth),
     queryFn: async (): Promise<{ transactions: ProviderLedgerTx[]; summary: TransactionsSummary }> => {
-      const r = await officeFetch("/api/admin/office/transactions?limit=200")
+      const r = await officeFetch("/api/admin/office/transactions?limit=50")
       const body = (await r.json()) as {
         transactions?: ProviderLedgerTx[]
         summary?: TransactionsSummary

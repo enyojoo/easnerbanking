@@ -12,6 +12,50 @@ import { officeKeys } from "./keys"
 
 const OVERVIEW_PRESETS = ["7d", "30d", "90d", "1y", "all"] as const
 
+type OfficeTransactionsCache = {
+  transactions: Array<{
+    id: string
+    status: string
+    updated_at?: string
+    occurred_at?: string | null
+  }>
+  summary?: unknown
+}
+
+function patchOfficeTransactionInCache(
+  qc: QueryClient,
+  row: Record<string, unknown>,
+): boolean {
+  const id = row.id != null ? String(row.id) : ""
+  if (!id) return false
+
+  let patched = false
+  qc.setQueryData<OfficeTransactionsCache>(officeKeys.transactions(), (prev) => {
+    if (!prev?.transactions?.length) return prev
+    let changed = false
+    const transactions = prev.transactions.map((tx) => {
+      if (tx.id !== id) return tx
+      changed = true
+      return {
+        ...tx,
+        status: String(row.status ?? tx.status),
+        updated_at: row.updated_at != null ? String(row.updated_at) : tx.updated_at,
+        occurred_at: row.occurred_at != null ? String(row.occurred_at) : tx.occurred_at,
+      }
+    })
+    if (!changed) return prev
+    patched = true
+    return { ...prev, transactions }
+  })
+  return patched
+}
+
+function invalidateOverview(qc: QueryClient, refetchType: "active" | "inactive" = "inactive"): void {
+  for (const preset of OVERVIEW_PRESETS) {
+    qc.invalidateQueries({ queryKey: officeKeys.overview(preset), refetchType })
+  }
+}
+
 export interface AttachOfficeRealtimeOptions {
   qc: QueryClient
   supabase: SupabaseLikeClient
@@ -29,25 +73,25 @@ export function attachOfficeRealtime({
   const health: RealtimeHealth = { subscribed: false, lastEventAt: null, lastError: null }
   const emit = () => onHealth?.({ ...health })
 
-  const invalidateOverview = () => {
-    for (const preset of OVERVIEW_PRESETS) {
-      qc.invalidateQueries({ queryKey: officeKeys.overview(preset), refetchType: "active" })
-    }
-  }
+  const invalidateOverviewLazy = () => invalidateOverview(qc, "inactive")
 
   const channel = supabase.channel("office:admin", { config: { broadcast: { self: false } } })
 
-  const scheduleTransactions = () => {
+  const scheduleTransactions = (row?: Record<string, unknown>) => {
     batcher.schedule(officeKeys.transactions(), () => {
+      if (row && patchOfficeTransactionInCache(qc, row)) {
+        invalidateOverviewLazy()
+        return
+      }
       qc.invalidateQueries({ queryKey: officeKeys.transactions(), refetchType: "active" })
-      invalidateOverview()
+      invalidateOverviewLazy()
     })
   }
 
   const scheduleUsers = () => {
     batcher.schedule(officeKeys.users(), () => {
       qc.invalidateQueries({ queryKey: officeKeys.users(), refetchType: "active" })
-      invalidateOverview()
+      invalidateOverviewLazy()
     })
   }
 
@@ -64,10 +108,10 @@ export function attachOfficeRealtime({
   channel.on(
     "postgres_changes",
     { event: "UPDATE", schema: "public", table: "transactions" },
-    () => {
+    (p) => {
       health.lastEventAt = Date.now()
       emit()
-      scheduleTransactions()
+      scheduleTransactions((p.new ?? {}) as Record<string, unknown>)
     },
   )
 
@@ -98,7 +142,7 @@ export function attachOfficeRealtime({
       health.lastEventAt = Date.now()
       emit()
       batcher.schedule(officeKeys.root, () => {
-        invalidateOverview()
+        invalidateOverviewLazy()
       })
     },
   )

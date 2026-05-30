@@ -15,9 +15,9 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url)
   const userId = url.searchParams.get("userId")?.trim() || undefined
-  const limitRaw = Number(url.searchParams.get("limit") || "200")
-  const limit = Number.isFinite(limitRaw) ? limitRaw : 200
-  const fetchLimit = Math.min(Math.max(limit * 3, limit), 500)
+  const limitRaw = Number(url.searchParams.get("limit") || "50")
+  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 100) : 50
+  const fetchLimit = Math.min(Math.max(limit * 2, limit), 150)
 
   const admin = createSupabaseAdmin()
 

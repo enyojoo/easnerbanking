@@ -58,10 +58,11 @@ import {
   qk,
 } from '@easner/shared'
 import { getTransactionListName } from '../../lib/transactionListLabel'
-import { useFocusEffect } from '@react-navigation/native'
 import { apiPost } from '../../lib/apiClient'
 import { useAuth } from '../../contexts/AuthContext'
 import { haptics } from '../../lib/haptics'
+import { useRealtimeHealth } from '../../query/realtime-health-context'
+import { useTransactionListFocusRefresh } from '../../hooks/use-transaction-list-focus-refresh'
 
 const TRANSACTIONS_CACHE_KEY_PREFIX = 'easner_transactions_screen_list_'
 const TRANSACTIONS_CACHE_TTL_MS = 60 * 60 * 1000
@@ -394,6 +395,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
   const qc = useQueryClient()
   const currencies = useCurrencies()
   const txQuery = useTransactionsList({}, TRANSACTIONS_LEDGER_PAGE_SIZE)
+  const realtimeHealth = useRealtimeHealth()
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = txQuery
   const loadMoreInFlightRef = useRef(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -521,18 +523,11 @@ function TransactionsContent({ navigation }: NavigationProps) {
     [],
   )
 
-  useFocusEffect(
-    React.useCallback(() => {
-      void (async () => {
-        const insertedRows = await syncChainLedgerIfDue(false)
-        if (insertedRows) {
-          await txQuery.refetch()
-        }
-      })()
-      // Match dashboard: refetch ledger on every focus so balance-only updates still show new rows.
-      void txQuery.refetch()
-    }, [syncChainLedgerIfDue, txQuery]),
-  )
+  useTransactionListFocusRefresh({
+    txQuery,
+    realtimeHealth,
+    onChainSync: syncChainLedgerIfDue,
+  })
 
   const onRefresh = async () => {
     setRefreshing(true)

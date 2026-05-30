@@ -106,7 +106,7 @@ export async function loadOfficeLedgerTransactions(
   admin: AdminClient,
   opts: { userId?: string; limit?: number } = {},
 ): Promise<{ data: OfficeLedgerTransaction[]; error: { message: string } | null }> {
-  const limit = Math.min(Math.max(opts.limit ?? 200, 1), 500)
+  const limit = Math.min(Math.max(opts.limit ?? 50, 1), 150)
   let q = admin
     .from("transactions")
     .select(OFFICE_LEDGER_LIST_SELECT)

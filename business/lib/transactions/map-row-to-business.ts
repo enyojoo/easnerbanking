@@ -1,11 +1,13 @@
 import type { TransactionWithSource } from "@/lib/transactions"
-import { displayEasnerTransactionId } from "@/lib/easner-transaction-id"
 import {
   deriveBankDepositInboundDisplayLabel,
+  displayEasnerTransactionIdForList,
   formatDisplayPersonName,
   formatTransactionDetailHeroTitle,
   isBankOnrampDepositFlow,
   isVerificationDepositMetadata,
+  mapLedgerStatusForUserFeed,
+  resolveGlobalPayoutListDisplay,
   toEasnerTransactionPrimaryLabel,
 } from "@easner/shared"
 import { isNoahBankOnrampFiatPayIn } from "@/lib/noah/bank-onramp-tx"
@@ -50,20 +52,12 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
   const provider = String(row.provider ?? "noah").toLowerCase()
   const dirRaw = String(row.direction ?? "").toLowerCase()
   const direction = dirRaw === "in" ? "credit" : "debit"
-  const st = String(row.status ?? "").toLowerCase()
-  const status =
-    st === "settled"
-      ? "completed"
-      : st === "pending" || st === "processing"
-        ? st
-        : st === "failed" || st === "cancelled"
-          ? "failed"
-          : st === "unknown"
-            ? "pending"
-            : (st as "completed" | "pending" | "processing" | "failed")
+  const status = mapLedgerStatusForUserFeed(String(row.status ?? "")) as TransactionWithSource["status"]
 
   const isVerification = isVerificationDepositMetadata(meta)
-  const globalPayout = resolveGlobalPayoutOffRampDetail(row)
+  const globalPayoutDetail = resolveGlobalPayoutOffRampDetail(row)
+  const globalPayoutList = globalPayoutDetail ? null : resolveGlobalPayoutListDisplay(row)
+  const globalPayout = globalPayoutDetail ?? globalPayoutList
   const bankLabel =
     !isVerification && !globalPayout && (isBankOnrampDepositFlow(meta) || (payload && isNoahBankOnrampFiatPayIn(payload)))
       ? deriveBankDepositInboundDisplayLabel({ metadata: meta, payload: payload ?? undefined })
@@ -96,7 +90,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
       ? String(row.base_currency)
       : undefined
   const providerTxId = row.provider_transaction_id != null ? String(row.provider_transaction_id) : undefined
-  const easnerId = displayEasnerTransactionId({
+  const easnerId = displayEasnerTransactionIdForList({
     easnerTransactionId: row.easner_transaction_id != null ? String(row.easner_transaction_id) : null,
     metadata: meta,
     providerTransactionId: providerTxId,
@@ -153,18 +147,24 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     transferId: providerTxId,
     baseCurrency: listBaseCurrency,
     baseAmount: listBaseAmount,
-    ...(globalPayout
+    ...(globalPayoutDetail
       ? {
-          displayHeroTitle: globalPayout.displayHeroTitle,
-          ledgerAmount: globalPayout.ledgerAmount,
-          ledgerCurrency: globalPayout.ledgerCurrency,
-          payoutReview: globalPayout.payoutReview ?? undefined,
-          recipientSnapshot: globalPayout.recipientSnapshot ?? undefined,
-          lifecycle: globalPayout.lifecycle,
+          displayHeroTitle: globalPayoutDetail.displayHeroTitle,
+          ledgerAmount: globalPayoutDetail.ledgerAmount,
+          ledgerCurrency: globalPayoutDetail.ledgerCurrency,
+          payoutReview: globalPayoutDetail.payoutReview ?? undefined,
+          recipientSnapshot: globalPayoutDetail.recipientSnapshot ?? undefined,
+          lifecycle: globalPayoutDetail.lifecycle,
         }
-      : displayHeroTitle
-        ? { displayHeroTitle }
-        : {}),
+      : globalPayoutList
+        ? {
+            displayHeroTitle: globalPayoutList.displayHeroTitle,
+            ledgerAmount: globalPayoutList.ledgerAmount,
+            ledgerCurrency: globalPayoutList.ledgerCurrency,
+          }
+        : displayHeroTitle
+          ? { displayHeroTitle }
+          : {}),
     collectionChannel:
       meta?.collection_channel != null ? String(meta.collection_channel) : undefined,
     autopayoutConfigId:
