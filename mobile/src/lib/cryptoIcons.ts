@@ -17,6 +17,7 @@ const networkIcons: Record<string, string> = {
   PolygonPos: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png",
   Solana: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/solana/info/logo.png",
   Tron: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/tron/info/logo.png",
+  BSC: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/smartchain/info/logo.png",
 }
 
 export function getTokenIconUrl(symbol: string): string | undefined {

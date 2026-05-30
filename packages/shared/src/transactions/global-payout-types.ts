@@ -14,6 +14,7 @@ export type GlobalPayoutReviewSnapshot = {
   noah_floor?: number
   noah_send_amount?: number
   channel_cost?: number
+  network_fee?: number
 }
 
 export type GlobalPayoutRecipientSnapshot = {

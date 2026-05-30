@@ -40,6 +40,8 @@ export interface SendFlowState {
   amountEntryMode?: "send" | "receive"
   /** Executable Noah payout quote from confirm (Noah sell/prepare). */
   payoutQuote?: {
+    /** Saved recipient this quote was priced for (must match `recipient.id` at authorize). */
+    recipientId?: string
     receiveAmount: number
     sendAmount: number
     sendCurrency: string
@@ -63,6 +65,29 @@ export interface SendFlowState {
     customerPrincipal?: number
     marginCaptureMode?: "surplus_send" | "split_debit"
     noahMid?: number
+  }
+  /** Executable wallet send quote from confirm (Turnkey direct or LI.FI). */
+  walletQuote?: {
+    /** Saved recipient this quote was priced for (must match `recipient.id` at authorize). */
+    recipientId?: string
+    receiveAmount: number
+    receiveCurrency: string
+    receiveNetwork: string
+    sendAmount: number
+    sendCurrency: string
+    totalDebited: number
+    marginAmount: number
+    channelCost: number
+    networkFee: number
+    customerRate: number
+    lifiMid: number
+    formSessionId: string
+    cryptoAuthorizedAmount: string
+    cryptoCurrency: string
+    pricingQuoteId: string
+    expiresAt: string
+    executionModel: "direct_turnkey" | "lifi_bridge"
+    lifiFloor?: string
   }
 }
 

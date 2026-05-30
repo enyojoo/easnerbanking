@@ -21,6 +21,7 @@ function sendEntryAmountsMatch(a: number, b: number): boolean {
 }
 
 export type SendPayoutQuoteStashMeta = {
+  recipientId: string
   amountEntryMode: 'send' | 'receive'
   /** Send-side principal when mode=send; receive fiat when mode=receive. */
   entryAmount: number
@@ -47,6 +48,7 @@ export function clearSendPayoutQuote(): void {
 export function isStashedPayoutQuoteFresh(input: SendPayoutQuoteStashMeta): boolean {
   if (!stashed?.expiresAt || !stashed.noah?.formSessionId || !stashedMeta) return false
   if (new Date(stashed.expiresAt).getTime() <= Date.now()) return false
+  if (stashedMeta.recipientId.trim() !== input.recipientId.trim()) return false
   if (stashedMeta.amountEntryMode !== input.amountEntryMode) return false
   if (stashedMeta.receiveCurrency.trim().toUpperCase() !== input.receiveCurrency.trim().toUpperCase()) {
     return false
@@ -68,6 +70,7 @@ export async function ensureSendPayoutQuoteStashed(
   if (isStashedPayoutQuoteFresh(meta)) return peekSendPayoutQuote()
 
   const key = [
+    meta.recipientId,
     meta.amountEntryMode,
     meta.entryAmount,
     meta.receiveCurrency,

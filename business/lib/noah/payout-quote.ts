@@ -15,6 +15,7 @@ import {
 } from "@/lib/terminal/recipient-sell-prepare"
 import { NoProviderForCorridorError, selectProviderForCorridor } from "@/lib/payout-providers"
 import { mapNoahPrepareError } from "@/lib/noah/noah-prepare-errors"
+import { logNoahPayoutFailure } from "@/lib/noah/log-noah-payout-failure"
 import { getGlobalPayoutMarginCaptureMode } from "@/lib/noah/margin-capture-mode"
 
 /** Easner fee slice on payout quotes (Noah prepare is authoritative; no DB pricing engine). */
@@ -240,6 +241,13 @@ export async function buildPayoutQuote(input: {
       const prepared = await runPrepare(fiatAmount)
       return prepared
     } catch (e) {
+      logNoahPayoutFailure("payout_quote_prepare", e, {
+        recipientId: input.recipientId ?? null,
+        receiveCurrency,
+        countryCode: countryCode ?? null,
+        accountSuffix: String(row.account_number ?? "").slice(-4) || null,
+        bankName: row.bank_name ?? null,
+      })
       const msg = e instanceof Error ? e.message.toLowerCase() : String(e).toLowerCase()
       const expired =
         msg.includes("formsession") || (msg.includes("session") && msg.includes("expired"))

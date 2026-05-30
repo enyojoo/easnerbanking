@@ -19,6 +19,12 @@ export {
   NOAH_PAYOUT_MARGIN,
 } from "./noah-margin"
 export {
+  applyCryptoCustomerRate,
+  parseWalletSendMarginFromEnv,
+  walletSendMarginBps,
+  WALLET_SEND_MARGIN,
+} from "./crypto-margin"
+export {
   loadNoahRatePairsFromSupabase,
   type NoahRatePair,
 } from "./noah-pair-catalog"

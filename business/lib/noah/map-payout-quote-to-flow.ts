@@ -14,6 +14,7 @@ export function mapPayoutQuoteToFlowState(
     sendAmount: q.customerPrincipal,
     totalAmount: q.totalDebited,
     payoutQuote: {
+      recipientId: state.recipient.id,
       receiveAmount: q.receiveAmount,
       sendAmount: q.customerPrincipal,
       sendCurrency: q.sendCurrency,
@@ -43,8 +44,10 @@ export function mapPayoutQuoteToFlowState(
 export function isPayoutQuoteFresh(
   pq: SendFlowState["payoutQuote"] | undefined,
   receiveAmount: number,
+  recipientId: string,
 ): boolean {
   if (!pq?.formSessionId || !pq.expiresAt) return false
+  if (!pq.recipientId?.trim() || pq.recipientId.trim() !== recipientId.trim()) return false
   if (!payoutReceiveAmountsMatch(pq.receiveAmount, receiveAmount)) return false
   return new Date(pq.expiresAt).getTime() > Date.now()
 }

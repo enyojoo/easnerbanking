@@ -118,6 +118,31 @@ export interface PayoutQuote {
   expiresAt: string
 }
 
+export interface WalletSendQuote {
+  receiveAmount: number
+  receiveCurrency: string
+  receiveNetwork: string
+  sendAmount: number
+  sendCurrency: string
+  totalDebited: number
+  marginAmount: number
+  channelCost: number
+  networkFee: number
+  rate: number
+  customerRate: number
+  lifiMid: number
+  expiresAt: string
+  formSessionId: string
+  pricingQuoteId: string
+  executionModel: 'direct_turnkey' | 'lifi_bridge'
+  wallet: {
+    cryptoAuthorizedAmount: string
+    lifiFloor: string
+    tokenIconUrl?: string
+    networkIconUrl?: string
+  }
+}
+
 export interface PricingQuote {
   quoteId: string
   expiresAt: string
@@ -187,6 +212,132 @@ export const noahService = {
       throw new Error((data as { error?: string }).error || 'Failed to create payout quote')
     }
     return (data as { quote: PayoutQuote }).quote
+  },
+
+  async createWalletSendQuote(input: {
+    recipientId: string
+    sourceBalanceCurrency: string
+    amountEntryMode?: 'send' | 'receive'
+    receiveAmount?: number
+    sendAmount?: number
+  }): Promise<WalletSendQuote> {
+    const session = await requireAuthSession()
+    const scopeHeaders = await getNoahScopeHeaders()
+    const response = await fetch(`${apiUrl()}/api/wallets/send/quote`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+        ...scopeHeaders,
+      },
+      body: JSON.stringify({
+        recipientId: input.recipientId,
+        sourceBalanceCurrency: input.sourceBalanceCurrency,
+        amountEntryMode: input.amountEntryMode ?? 'receive',
+        ...(input.receiveAmount != null ? { receiveAmount: input.receiveAmount } : {}),
+        ...(input.amountEntryMode === 'send' && input.sendAmount != null && input.sendAmount > 0
+          ? { sendAmount: input.sendAmount }
+          : {}),
+      }),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok || !(data as { ok?: boolean }).ok) {
+      throw new Error((data as { error?: string }).error || 'Failed to create wallet send quote')
+    }
+    return (data as { quote: WalletSendQuote }).quote
+  },
+
+  async executeWalletSend(input: {
+    recipientId: string
+    formSessionId: string
+    reservedDebitEtid?: string
+    reviewSnapshot?: Record<string, unknown>
+  }): Promise<NoahTransfer> {
+    const session = await requireAuthSession()
+    const scopeHeaders = await getNoahScopeHeaders()
+    const response = await fetch(`${apiUrl()}/api/wallets/send/execute`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+        ...scopeHeaders,
+      },
+      body: JSON.stringify(input),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok || !(data as { ok?: boolean }).ok) {
+      throw new Error((data as { error?: string }).error || 'Wallet send failed')
+    }
+    return {
+      id: String((data as { provider_transaction_id?: string }).provider_transaction_id || ''),
+      amount: '',
+      currency: '',
+      status: String((data as { status?: string }).status || 'pending'),
+      transaction_id: String((data as { transaction_id?: string }).transaction_id || ''),
+      easner_transaction_id: String((data as { easner_transaction_id?: string }).easner_transaction_id || ''),
+    }
+  },
+
+  async getCryptoExchangeRates(input?: {
+    destinations?: string
+    networks?: string
+  }): Promise<{ source: string; rates: Array<{
+    from_currency: string
+    to_currency: string
+    receive_network: string
+    rate: number
+    lifi_mid: number
+    as_of: string
+  }> }> {
+    const session = await requireAuthSession()
+    const scopeHeaders = await getNoahScopeHeaders()
+    const qs = new URLSearchParams()
+    if (input?.destinations) qs.set('destinations', input.destinations)
+    if (input?.networks) qs.set('networks', input.networks)
+    const suffix = qs.toString() ? `?${qs.toString()}` : ''
+    const response = await fetch(`${apiUrl()}/api/fx/crypto-rates${suffix}`, {
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        ...scopeHeaders,
+      },
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error((data as { error?: string }).error || 'Failed to load crypto rates')
+    }
+    return data as { source: string; rates: Array<{
+      from_currency: string
+      to_currency: string
+      receive_network: string
+      rate: number
+      lifi_mid: number
+      as_of: string
+    }> }
+  },
+
+  async inferWalletAddress(address: string): Promise<{
+    candidates: Array<{ asset: string; network: string; confidence: string; reason: string }>
+    best: { asset: string; network: string } | null
+  }> {
+    const session = await requireAuthSession()
+    const scopeHeaders = await getNoahScopeHeaders()
+    const response = await fetch(`${apiUrl()}/api/wallets/send/infer-address`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+        ...scopeHeaders,
+      },
+      body: JSON.stringify({ address }),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error((data as { error?: string }).error || 'Inference failed')
+    }
+    return data as {
+      candidates: Array<{ asset: string; network: string; confidence: string; reason: string }>
+      best: { asset: string; network: string } | null
+    }
   },
 
   /**

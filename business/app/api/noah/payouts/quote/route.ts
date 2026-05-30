@@ -165,6 +165,10 @@ export async function POST(request: Request) {
       amountEntryMode,
       sendBudget,
       userId: user.id,
+      recipientCountry: gateRow?.country_code ?? null,
+      recipientCurrency: gateRow?.currency ?? null,
+      recipientBank: gateRow?.bank_name ?? null,
+      recipientAccountSuffix: String(gateRow?.account_number ?? "").slice(-4) || null,
     })
     return NextResponse.json(
       { ok: false, error: mapNoahPayoutUserError(e, "quote") },

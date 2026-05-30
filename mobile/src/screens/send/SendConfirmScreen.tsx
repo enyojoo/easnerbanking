@@ -58,6 +58,14 @@ import {
   payoutDisplayAmountsFromQuote,
   payoutPrepareSessionFromQuote,
 } from '../../lib/sendFlowPayoutQuote'
+import {
+  isStashedWalletQuoteFresh,
+  peekSendWalletQuote,
+  clearSendWalletQuote,
+  walletDisplayAmountsFromQuote,
+  walletPrepareSessionFromQuote,
+  type WalletPrepareSession,
+} from '../../lib/sendFlowWalletQuote'
 import { useQuoteCountdown } from '../../hooks/useQuoteCountdown'
 import { haptics } from '../../lib/haptics'
 
@@ -100,9 +108,11 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     paymentPurpose?: string
     amountEntryMode?: 'send' | 'receive'
     amountScreenSendAmount?: number
+    isWalletSend?: boolean
   }
 
   const recipient = params.recipient
+  const isWalletRecipient = Boolean(recipient?.wallet_network?.trim()) || Boolean(params.isWalletSend)
   const receiveAmountValue = params.receiveAmountValue ?? 0
   const selectedBalanceCurrency = params.selectedBalanceCurrency ?? 'USD'
   const receiveCurrency = params.receiveCurrency ?? recipient?.currency ?? ''
@@ -114,16 +124,18 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   const amountEntryMode = params.amountEntryMode ?? 'receive'
   const quoteStashMeta = useMemo(
     () => ({
+      recipientId: recipient?.id ?? '',
       amountEntryMode,
       entryAmount: amountEntryMode === 'send' ? amountScreenSendAmount : receiveAmountValue,
       receiveCurrency,
     }),
-    [amountEntryMode, amountScreenSendAmount, receiveAmountValue, receiveCurrency],
+    [recipient?.id, amountEntryMode, amountScreenSendAmount, receiveAmountValue, receiveCurrency],
   )
 
   const [quotedReceiveAmount, setQuotedReceiveAmount] = useState(() => {
     const stashed = peekSendPayoutQuote()
     const meta = {
+      recipientId: params.recipient?.id ?? '',
       amountEntryMode: params.amountEntryMode ?? 'receive',
       entryAmount:
         (params.amountEntryMode ?? 'receive') === 'send'
@@ -136,8 +148,37 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   })
 
   const [pricing, setPricing] = useState(() => {
+    const walletStashed = peekSendWalletQuote()
+    const walletMeta = {
+      recipientId: params.recipient?.id ?? '',
+      amountEntryMode: params.amountEntryMode ?? 'receive',
+      entryAmount:
+        (params.amountEntryMode ?? 'receive') === 'send'
+          ? (params.amountScreenSendAmount ?? params.calculatedSendingAmount ?? 0)
+          : (params.receiveAmountValue ?? 0),
+      receiveCurrency: params.receiveCurrency ?? params.recipient?.currency ?? '',
+    }
+    if (isWalletRecipient && walletStashed && isStashedWalletQuoteFresh(walletMeta)) {
+      const display = walletDisplayAmountsFromQuote(walletStashed)
+      return {
+        calculatedSendingAmount: display.youSendAmount,
+        calculatedFeeAmount: display.marginAmount,
+        calculatedTotalAmount: display.totalDebited,
+        noahFee: 0,
+        easnerFee: display.marginAmount,
+        pricingQuoteId: walletStashed.pricingQuoteId,
+        pricingQuoteExpiry: walletStashed.expiresAt,
+        pricingQuoteResult: null as PricingQuote | null,
+        payoutSession: undefined as PayoutPrepareSession | undefined,
+        walletSession: walletPrepareSessionFromQuote(walletStashed),
+        quoteDisplay: display,
+        quoteLoading: false,
+        quoteError: null as string | null,
+      }
+    }
     const stashed = peekSendPayoutQuote()
     const meta = {
+      recipientId: params.recipient?.id ?? '',
       amountEntryMode: params.amountEntryMode ?? 'receive',
       entryAmount:
         (params.amountEntryMode ?? 'receive') === 'send'
@@ -159,6 +200,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
         pricingQuoteExpiry: stashed.expiresAt,
         pricingQuoteResult: stashed.easner,
         payoutSession: payoutPrepareSessionFromQuote(stashed),
+        walletSession: undefined as WalletPrepareSession | undefined,
         quoteDisplay: display,
         quoteLoading: false,
         quoteError: null as string | null,
@@ -174,6 +216,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       pricingQuoteExpiry: params.pricingQuoteExpiry as string | undefined,
       pricingQuoteResult: (params.pricingQuoteResult ?? null) as PricingQuote | null,
       payoutSession: undefined as PayoutPrepareSession | undefined,
+      walletSession: undefined as WalletPrepareSession | undefined,
       quoteDisplay: null as ReturnType<typeof payoutDisplayAmountsFromQuote> | null,
       quoteLoading: false,
       quoteError: null as string | null,
@@ -189,6 +232,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     pricingQuoteExpiry,
     pricingQuoteResult,
     payoutSession,
+    walletSession,
     quoteDisplay,
     quoteLoading,
     quoteError,
@@ -219,7 +263,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
 
   const displayTransactionId = paramTransactionId ? paramTransactionId.toUpperCase() : null
   const quoteCountdown = useQuoteCountdown(pricingQuoteExpiry)
-  const quoteReady = Boolean(easetagUi || payoutSession?.formSessionId)
+  const quoteReady = Boolean(easetagUi || payoutSession?.formSessionId || walletSession?.formSessionId)
   const hasFx =
     !easetagUi &&
     selectedBalanceCurrency.toUpperCase() !== receiveCurrency.toUpperCase()
@@ -234,6 +278,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   const youSendAmount = quoteDisplay?.youSendAmount ?? calculatedSendingAmount
   const processingFee = quoteDisplay?.marginAmount ?? easnerFee ?? calculatedFeeAmount
   const exchangeFee = quoteDisplay?.exchangeFee ?? 0
+  const networkFee = isWalletRecipient ? (quoteDisplay as { networkFee?: number } | null)?.networkFee ?? 0 : 0
   const transferMethod = recipient
     ? getGlobalPayoutTransferMethod({
         currency: receiveCurrency,
@@ -256,6 +301,68 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   useEffect(() => {
     if (!recipient || easetagUi) return
     if (!recipient.id || !(receiveAmountValue > 0)) return
+    if (isWalletRecipient) {
+      if (walletSession?.formSessionId) return
+      if (isStashedWalletQuoteFresh(quoteStashMeta)) {
+        const stashed = peekSendWalletQuote()
+        if (stashed) {
+          setQuotedReceiveAmount(stashed.receiveAmount)
+          const display = walletDisplayAmountsFromQuote(stashed)
+          setPricing((prev) => ({
+            ...prev,
+            calculatedSendingAmount: display.youSendAmount,
+            calculatedFeeAmount: display.marginAmount,
+            calculatedTotalAmount: display.totalDebited,
+            easnerFee: display.marginAmount,
+            pricingQuoteId: stashed.pricingQuoteId,
+            pricingQuoteExpiry: stashed.expiresAt,
+            walletSession: walletPrepareSessionFromQuote(stashed),
+            quoteDisplay: display,
+            quoteLoading: false,
+            quoteError: null,
+          }))
+        }
+        return
+      }
+      let cancelled = false
+      setPricing((prev) => ({ ...prev, quoteLoading: true, quoteError: null }))
+      void (async () => {
+        try {
+          const wq = await noahService.createWalletSendQuote({
+            recipientId: recipient.id,
+            sourceBalanceCurrency: selectedBalanceCurrency,
+            amountEntryMode,
+            ...(amountEntryMode === 'receive' ? { receiveAmount: receiveAmountValue } : {}),
+            ...(amountEntryMode === 'send' && amountScreenSendAmount > 0
+              ? { sendAmount: amountScreenSendAmount }
+              : {}),
+          })
+          if (cancelled) return
+          setQuotedReceiveAmount(wq.receiveAmount)
+          const display = walletDisplayAmountsFromQuote(wq)
+          setPricing((prev) => ({
+            ...prev,
+            calculatedSendingAmount: display.youSendAmount,
+            calculatedFeeAmount: display.marginAmount,
+            calculatedTotalAmount: display.totalDebited,
+            easnerFee: display.marginAmount,
+            pricingQuoteId: wq.pricingQuoteId,
+            pricingQuoteExpiry: wq.expiresAt,
+            walletSession: walletPrepareSessionFromQuote(wq),
+            quoteDisplay: display,
+            quoteLoading: false,
+            quoteError: null,
+          }))
+        } catch (e) {
+          if (cancelled) return
+          const msg = e instanceof Error ? e.message : 'Could not load wallet send quote'
+          setPricing((prev) => ({ ...prev, quoteLoading: false, quoteError: msg }))
+        }
+      })()
+      return () => {
+        cancelled = true
+      }
+    }
     if (payoutSession?.formSessionId) return
     if (isStashedPayoutQuoteFresh(quoteStashMeta)) {
       const stashed = peekSendPayoutQuote()
@@ -322,7 +429,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     return () => {
       cancelled = true
     }
-  }, [easetagUi, recipient?.id, recipient?.currency, selectedBalanceCurrency, receiveAmountValue, quoteStashMeta, amountScreenSendAmount, sendNote, sendPaymentPurpose])
+  }, [easetagUi, isWalletRecipient, recipient?.id, recipient?.currency, selectedBalanceCurrency, receiveAmountValue, quoteStashMeta, amountScreenSendAmount, sendNote, sendPaymentPurpose, walletSession?.formSessionId, payoutSession?.formSessionId, amountEntryMode])
 
   useFocusEffect(
     useCallback(() => {
@@ -341,6 +448,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                   total_debited: calculatedTotalAmount,
                   exchange_fee: exchangeFee,
                   processing_fee: processingFee,
+                  ...(isWalletRecipient && networkFee > 0 ? { network_fee: networkFee } : {}),
                   exchange_rate: hasFx && customerRate > 0 ? customerRate : 1,
                   send_currency: selectedBalanceCurrency,
                   receive_amount: quotedReceiveAmount,
@@ -363,6 +471,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
               receiveAmountValue: quotedReceiveAmount,
               selectedBalanceCurrency,
               ...(payoutSession ? { payoutSession } : {}),
+              ...(walletSession ? { walletSession } : {}),
               ...(reviewSnapshot ? { reviewSnapshot } : {}),
               ...(sendReservedDebitEtid ? { reservedDebitEtid: sendReservedDebitEtid } : {}),
               ...(sendNote ? { note: sendNote } : {}),
@@ -405,6 +514,8 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
             void invalidateTransactionsFeed(qc, scope, user.id).catch(() => {})
           }
 
+          clearSendPayoutQuote()
+          clearSendWalletQuote()
           haptics.success()
         } catch (e: unknown) {
           if (!cancelled) {
@@ -563,6 +674,12 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                     label="Processing fee"
                     value={formatMoneyDisplay(processingFee, selectedBalanceCurrency)}
                   />
+                  {isWalletRecipient ? (
+                    <Row
+                      label="Network fee"
+                      value={formatMoneyDisplay(networkFee, selectedBalanceCurrency)}
+                    />
+                  ) : null}
                 </>
               ) : null}
               {!easetagUi && calculatedTotalAmount > 0 ? (

@@ -10,27 +10,28 @@
  */
 import { createSupabaseAdmin } from "../lib/supabase/admin"
 
-const CRYPTO_CODES = new Set(["USDC", "USDT", "BTC", "EURC", "SOL", "PYUSD"])
+const CRYPTO_CODES = new Set(["USDC", "USDT", "EURC"])
 
 const CRYPTO_NAMES: Record<string, string> = {
   USDC: "USD Coin",
   USDT: "Tether USD",
-  BTC: "Bitcoin",
   EURC: "Euro Coin",
-  SOL: "Solana",
-  PYUSD: "PayPal USD",
 }
 
 const WALLET_NETWORKS: Record<string, string[]> = {
-  USDC: ["Base", "Celo", "Ethereum", "Gnosis", "PolygonPos", "Solana", "Tron"],
-  USDT: ["Celo", "Ethereum", "PolygonPos", "Tron"],
-  BTC: ["Bitcoin"],
+  USDC: ["Solana", "Ethereum", "Base", "PolygonPos", "BSC"],
+  USDT: ["Tron", "Ethereum", "BSC", "PolygonPos", "Solana"],
   EURC: ["Solana"],
-  SOL: ["Solana"],
-  PYUSD: ["FlowEvm", "Solana"],
 }
 
-const DEFAULT_ROUTING = [{ provider: "noah", priority: 1, settlement_asset: "USDC" }]
+const ROUTING_BY_ASSET: Record<string, Array<{ provider: string; priority: number; settlement_asset: string }>> = {
+  USDC: [
+    { provider: "turnkey", priority: 1, settlement_asset: "USDC" },
+    { provider: "lifi", priority: 2, settlement_asset: "USDC" },
+  ],
+  USDT: [{ provider: "lifi", priority: 1, settlement_asset: "USDC" }],
+  EURC: [{ provider: "turnkey", priority: 1, settlement_asset: "EURC" }],
+}
 
 function normalizeBool(v: unknown): boolean | null {
   if (v == null) return null
@@ -81,7 +82,7 @@ async function upsertCryptoAsset(
     networks,
     country_code: null,
     enabled,
-    provider_routing: DEFAULT_ROUTING,
+    provider_routing: ROUTING_BY_ASSET[code] ?? [],
     sort_order: null,
     updated_at: new Date().toISOString(),
   }

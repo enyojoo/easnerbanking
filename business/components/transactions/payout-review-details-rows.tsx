@@ -107,6 +107,15 @@ export function PayoutReviewDetailsRows({
               </span>
             </div>
 
+            {payoutReview.network_fee != null && payoutReview.network_fee > 0 ? (
+              <div className="flex items-center justify-between border-b pb-4">
+                <span className="text-sm text-muted-foreground">Network fee</span>
+                <span className="font-semibold">
+                  {formatMoneyDisplay(payoutReview.network_fee, payoutReview.send_currency)}
+                </span>
+              </div>
+            ) : null}
+
             {hasFx ? (
               <div className="flex items-center justify-between border-b pb-4">
                 <span className="text-sm text-muted-foreground">Exchange rate</span>

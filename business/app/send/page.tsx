@@ -58,6 +58,10 @@ import {
 } from "@easner/shared"
 import { mapPayoutQuoteToFlowState } from "@/lib/noah/map-payout-quote-to-flow"
 import type { PayoutQuoteResult } from "@/lib/noah/payout-quote"
+import {
+  mapWalletQuoteToFlowState,
+} from "@/lib/wallet-send/map-wallet-quote-to-flow"
+import type { WalletSendQuoteResult } from "@/lib/wallet-send/wallet-send-quote"
 import { usePayoutMinEnforcement } from "@/hooks/use-payout-min-enforcement"
 import {
   Select,
@@ -106,10 +110,25 @@ export default function SendPage() {
   const [sourceSheetOpen, setSourceSheetOpen] = useState(false)
   const payoutQuoteCacheRef = useRef<{ key: string; quote: PayoutQuoteResult } | null>(null)
   const payoutQuoteInflightRef = useRef<Promise<PayoutQuoteResult | null> | null>(null)
+  const payoutQuoteInflightKeyRef = useRef("")
   const [payoutQuotePreview, setPayoutQuotePreview] = useState<PayoutQuoteResult | null>(null)
+  const walletQuoteCacheRef = useRef<{ key: string; quote: WalletSendQuoteResult } | null>(null)
+  const walletQuoteInflightRef = useRef<Promise<WalletSendQuoteResult | null> | null>(null)
+  const walletQuoteInflightKeyRef = useRef("")
+  const [walletQuotePreview, setWalletQuotePreview] = useState<WalletSendQuoteResult | null>(null)
   const [noahFxRates, setNoahFxRates] = useState<Record<string, number>>({})
   const [noahRateRows, setNoahRateRows] = useState<NoahWalletRateRow[]>([])
   const [noahRatesLoading, setNoahRatesLoading] = useState(false)
+  type CryptoSendRateRow = {
+    from_currency: string
+    to_currency: string
+    receive_network: string
+    rate: number
+    lifi_mid: number
+    as_of: string
+  }
+  const [cryptoRateRows, setCryptoRateRows] = useState<CryptoSendRateRow[]>([])
+  const [cryptoRatesLoading, setCryptoRatesLoading] = useState(false)
 
   useEffect(() => {
     const raw = sessionStorage.getItem(SEND_FLOW_STATE_KEY)
@@ -220,8 +239,8 @@ export default function SendPage() {
 
   useEffect(() => {
     const dest = (recipient?.currency || "").trim().toUpperCase()
-    if (!dest || dest.length !== 3) {
-      setNoahRatesLoading(false)
+    if (!dest || dest.length !== 3 || isWalletRecipient) {
+      if (!isWalletRecipient) setNoahRatesLoading(false)
       return
     }
     let cancelled = false
@@ -248,7 +267,50 @@ export default function SendPage() {
     return () => {
       cancelled = true
     }
-  }, [recipient?.currency])
+  }, [recipient?.currency, isWalletRecipient])
+
+  useEffect(() => {
+    const asset = (recipient?.currency || "").trim().toUpperCase()
+    const network = (recipient?.walletNetwork || "").trim()
+    if (!isWalletRecipient || !asset || !network) {
+      setCryptoRatesLoading(false)
+      if (!isWalletRecipient) {
+        setCryptoRateRows([])
+      }
+      return
+    }
+    let cancelled = false
+    setCryptoRatesLoading(true)
+    void (async () => {
+      try {
+        const params = new URLSearchParams({ destinations: asset, networks: network })
+        const res = await fetchWithSession(`/api/fx/crypto-rates?${params.toString()}`)
+        const data = (await res.json().catch(() => ({}))) as { rates?: CryptoSendRateRow[] }
+        if (!res.ok || cancelled) return
+        setCryptoRateRows(data.rates || [])
+      } catch {
+        if (!cancelled) setCryptoRateRows([])
+      } finally {
+        if (!cancelled) setCryptoRatesLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [isWalletRecipient, recipient?.currency, recipient?.walletNetwork])
+
+  const cryptoFxRates = useMemo(
+    () =>
+      noahWalletRowsToRateMap(
+        cryptoRateRows.map((r) => ({
+          from_currency: r.from_currency,
+          to_currency: r.to_currency,
+          rate: r.rate,
+          as_of: r.as_of,
+        })),
+      ),
+    [cryptoRateRows],
+  )
 
   const sendCurrency = useMemo(() => {
     if (paymentMethod === "balance" && sourceAccount) return sourceAccount.currency
@@ -273,6 +335,15 @@ export default function SendPage() {
       // Don't preview Noah/reference rates while the manual quote is in flight.
       return { sendAmount: 0, receiveAmount: 0, forwardRate: 1 }
     }
+    if (isWalletRecipient && crossCurrency) {
+      return convertNoahSendFlowAmounts({
+        direction: amountEntryMode,
+        amount: enteredAmount,
+        sendCurrency,
+        receiveCurrency,
+        rateMap: cryptoFxRates,
+      })
+    }
     return convertNoahSendFlowAmounts({
       direction: amountEntryMode,
       amount: enteredAmount,
@@ -287,13 +358,17 @@ export default function SendPage() {
     sendCurrency,
     receiveCurrency,
     noahFxRates,
+    cryptoFxRates,
+    isWalletRecipient,
     otherCurrency,
     manualSend.quote,
   ])
 
   const sendAmount = flowAmounts.sendAmount
   const receiveAmount = flowAmounts.receiveAmount
-  const quotedTotalDebited = payoutQuotePreview?.totalDebited
+  const quotedTotalDebited = isWalletRecipient
+    ? walletQuotePreview?.totalDebited
+    : payoutQuotePreview?.totalDebited
   const balanceDebitAmount =
     quotedTotalDebited != null && quotedTotalDebited > 0 ? quotedTotalDebited : sendAmount
 
@@ -307,6 +382,28 @@ export default function SendPage() {
     !isEasetagRecipient &&
     !isWalletRecipient &&
     sendCurrency !== receiveCurrency
+
+  const needsCryptoRateForSend =
+    isBalanceSource &&
+    isWalletRecipient &&
+    sendCurrency !== receiveCurrency
+
+  const activeCryptoRateRow = useMemo(() => {
+    const send = sendCurrency.trim().toUpperCase()
+    const receive = receiveCurrency.trim().toUpperCase()
+    const network = (recipient?.walletNetwork || "").trim()
+    return (
+      cryptoRateRows.find(
+        (r) =>
+          r.from_currency === send &&
+          r.to_currency === receive &&
+          r.receive_network === network,
+      ) ?? null
+    )
+  }, [cryptoRateRows, sendCurrency, receiveCurrency, recipient?.walletNetwork])
+
+  const hasValidCryptoRateForPair =
+    !needsCryptoRateForSend || (activeCryptoRateRow != null && activeCryptoRateRow.rate > 0)
 
   const activeNoahRateRow = useMemo(() => {
     const send = sendCurrency.trim().toUpperCase()
@@ -331,7 +428,9 @@ export default function SendPage() {
     sendCurrency === receiveCurrency ||
     (manualQuoteEnabled
       ? Boolean(manualSend.quote)
-      : !needsNoahRateForSend || hasValidNoahRateForPair)
+      : isWalletRecipient
+        ? !needsCryptoRateForSend || hasValidCryptoRateForPair
+        : !needsNoahRateForSend || hasValidNoahRateForPair)
 
   const displayBalanceForSource =
     sourceAccount && paymentMethod === "balance"
@@ -354,6 +453,17 @@ export default function SendPage() {
       setSourceAccountId(suggestedAccount.id)
     }
   }, [recipient, sourceAccountId, paymentMethod, suggestedAccount])
+
+  useEffect(() => {
+    payoutQuoteCacheRef.current = null
+    payoutQuoteInflightRef.current = null
+    payoutQuoteInflightKeyRef.current = ""
+    setPayoutQuotePreview(null)
+    walletQuoteCacheRef.current = null
+    walletQuoteInflightRef.current = null
+    walletQuoteInflightKeyRef.current = ""
+    setWalletQuotePreview(null)
+  }, [recipient?.id])
 
   /** Easenet balance send: need org context loaded before Continue (Noah scope on transfer). */
   const needsProfileBeforeEasenetSend =
@@ -405,6 +515,7 @@ export default function SendPage() {
   const payoutMinEnforcementEnabled =
     Boolean(recipient) &&
     !isEasetagRecipient &&
+    !isWalletRecipient &&
     (isBalanceSource ||
       (paymentMethod === "otherCurrency" && Boolean(otherCurrency)))
 
@@ -453,7 +564,7 @@ export default function SendPage() {
     sourceAccount.availableBalance >= balanceDebitAmount &&
     isBalanceSource &&
     tier1Complete &&
-    hasValidNoahRateForPair &&
+    (isWalletRecipient ? hasValidCryptoRateForPair : hasValidNoahRateForPair) &&
     !payoutReceiveBelowMin &&
     (!needsProfileBeforeEasenetSend || (hasData && !profileLoading))
 
@@ -525,6 +636,21 @@ export default function SendPage() {
     !isWalletRecipient &&
     receiveAmount > 0
 
+  const needsWalletQuoteBeforeConfirm =
+    isBalanceSource &&
+    isWalletRecipient &&
+    receiveAmount > 0
+
+  const walletQuoteCacheKey = useMemo(() => {
+    if (!recipient?.id || !(receiveAmount > 0)) return ""
+    return [
+      recipient.id,
+      amountEntryMode,
+      amountEntryMode === "send" ? sendAmount : receiveAmount,
+      sendCurrency,
+    ].join("|")
+  }, [recipient?.id, amountEntryMode, sendAmount, receiveAmount, sendCurrency])
+
   const payoutQuoteCacheKey = useMemo(() => {
     if (!recipient?.id || !(receiveAmount > 0)) return ""
     return [
@@ -541,7 +667,12 @@ export default function SendPage() {
     if (!needsPayoutQuoteBeforeConfirm || !payoutQuoteCacheKey || !recipient?.id) return null
     const cached = payoutQuoteCacheRef.current
     if (cached?.key === payoutQuoteCacheKey) return cached.quote
-    if (payoutQuoteInflightRef.current) return payoutQuoteInflightRef.current
+    if (
+      payoutQuoteInflightRef.current &&
+      payoutQuoteInflightKeyRef.current === payoutQuoteCacheKey
+    ) {
+      return payoutQuoteInflightRef.current
+    }
 
     const promise = (async () => {
       try {
@@ -574,11 +705,13 @@ export default function SendPage() {
       }
     })()
 
+    payoutQuoteInflightKeyRef.current = payoutQuoteCacheKey
     payoutQuoteInflightRef.current = promise
     try {
       return await promise
     } finally {
       payoutQuoteInflightRef.current = null
+      payoutQuoteInflightKeyRef.current = ""
     }
   }, [
     needsPayoutQuoteBeforeConfirm,
@@ -593,6 +726,74 @@ export default function SendPage() {
     businessId,
   ])
 
+  const fetchWalletQuote = useCallback(async (): Promise<WalletSendQuoteResult | null> => {
+    if (!needsWalletQuoteBeforeConfirm || !walletQuoteCacheKey || !recipient?.id) return null
+    const cached = walletQuoteCacheRef.current
+    if (cached?.key === walletQuoteCacheKey) return cached.quote
+    if (
+      walletQuoteInflightRef.current &&
+      walletQuoteInflightKeyRef.current === walletQuoteCacheKey
+    ) {
+      return walletQuoteInflightRef.current
+    }
+
+    const promise = (async () => {
+      try {
+        const headers: Record<string, string> = { "Content-Type": "application/json" }
+        if (businessId) headers["X-Easner-Noah-Scope"] = "business"
+        const res = await fetchWithSession("/api/wallets/send/quote", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            recipientId: recipient.id,
+            sourceBalanceCurrency: sendCurrency,
+            amountEntryMode,
+            ...(amountEntryMode === "receive"
+              ? { receiveAmount }
+              : sendAmount > 0
+                ? { sendAmount }
+                : {}),
+          }),
+        })
+        const data = (await res.json().catch(() => ({}))) as {
+          ok?: boolean
+          quote?: WalletSendQuoteResult
+          error?: string
+        }
+        if (!res.ok || !data.ok || !data.quote) return null
+        walletQuoteCacheRef.current = { key: walletQuoteCacheKey, quote: data.quote }
+        setWalletQuotePreview(data.quote)
+        return data.quote
+      } catch {
+        setWalletQuotePreview(null)
+        return null
+      }
+    })()
+
+    walletQuoteInflightKeyRef.current = walletQuoteCacheKey
+    walletQuoteInflightRef.current = promise
+    try {
+      return await promise
+    } finally {
+      walletQuoteInflightRef.current = null
+      walletQuoteInflightKeyRef.current = ""
+    }
+  }, [
+    needsWalletQuoteBeforeConfirm,
+    walletQuoteCacheKey,
+    recipient?.id,
+    receiveAmount,
+    sendAmount,
+    amountEntryMode,
+    sendCurrency,
+    businessId,
+  ])
+
+  useEffect(() => {
+    if (!needsWalletQuoteBeforeConfirm || !walletQuoteCacheKey || !recipient?.id) return
+    void fetchWalletQuote()
+  }, [needsWalletQuoteBeforeConfirm, walletQuoteCacheKey, recipient?.id, fetchWalletQuote])
+
   useEffect(() => {
     if (!needsPayoutQuoteBeforeConfirm || !payoutQuoteCacheKey || !recipient?.id) return
     void fetchPayoutQuote()
@@ -602,12 +803,6 @@ export default function SendPage() {
     if (!canContinue || !recipient) return
     if (isEasetagRecipient && paymentMethod === "otherCurrency") {
       setAmountFieldError("Easetag sends are only supported from your balance.")
-      return
-    }
-    if (isBalanceSource && isWalletRecipient) {
-      setAmountFieldError(
-        "Wallet address recipients cannot be paid from your balance. Choose a bank, mobile money, or Easetag recipient.",
-      )
       return
     }
     const fieldCheck = validateSendAmountFields({
@@ -623,6 +818,7 @@ export default function SendPage() {
     }
     if (
       !isEasetagRecipient &&
+      !isWalletRecipient &&
       (isBalanceSource || paymentMethod === "otherCurrency") &&
       receiveAmount > 0
     ) {
@@ -658,7 +854,7 @@ export default function SendPage() {
       manualQuote: manualSend.quote ?? undefined,
       feeAmount,
       totalAmount,
-      note: note.trim(),
+      note: isWalletRecipient ? "" : note.trim(),
       ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
       transactionId,
     }
@@ -670,6 +866,13 @@ export default function SendPage() {
         return
       }
       flowState = mapPayoutQuoteToFlowState(state, quote)
+    } else if (needsWalletQuoteBeforeConfirm) {
+      const quote = await fetchWalletQuote()
+      if (!quote?.formSessionId) {
+        setAmountFieldError("Could not load wallet send quote. Try again.")
+        return
+      }
+      flowState = mapWalletQuoteToFlowState(state, quote)
     }
 
     persistSendFlowState(flowState)
@@ -721,7 +924,13 @@ export default function SendPage() {
                   </span>
                 ) : needsNoahRateForSend && noahRatesLoading ? (
                   <Skeleton className="h-4 w-52 max-w-full" />
+                ) : needsCryptoRateForSend && cryptoRatesLoading ? (
+                  <Skeleton className="h-4 w-52 max-w-full" />
                 ) : needsNoahRateForSend && !hasValidNoahRateForPair ? (
+                  <span className="text-destructive text-xs">
+                    Exchange rate unavailable. Try again shortly.
+                  </span>
+                ) : needsCryptoRateForSend && !hasValidCryptoRateForPair ? (
                   <span className="text-destructive text-xs">
                     Exchange rate unavailable. Try again shortly.
                   </span>
@@ -828,7 +1037,7 @@ export default function SendPage() {
         </div>
       )}
 
-      {recipient && amountFieldMode === "payment_purpose" ? (
+      {recipient && !isWalletRecipient && amountFieldMode === "payment_purpose" ? (
         <div className="space-y-2">
           <Label htmlFor="payment-purpose">Payment purpose</Label>
           <Select value={paymentPurpose} onValueChange={setPaymentPurpose}>
@@ -845,7 +1054,7 @@ export default function SendPage() {
           </Select>
           {amountFieldError ? <p className="text-sm text-destructive">{amountFieldError}</p> : null}
         </div>
-      ) : recipient ? (
+      ) : recipient && !isWalletRecipient ? (
         <div className="space-y-2">
           <Label htmlFor="note">{noteFieldUi.label}</Label>
           <Input

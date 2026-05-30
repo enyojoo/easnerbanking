@@ -67,6 +67,7 @@ export function detailIdFromTransfer(transfer: NoahTransfer): string {
 }
 
 import type { PayoutPrepareSession } from '../lib/payoutPrepareSession'
+import type { WalletPrepareSession } from '../lib/sendFlowWalletQuote'
 import { haptics } from '../lib/haptics'
 
 export type { PayoutPrepareSession } from '../lib/payoutPrepareSession'
@@ -78,6 +79,8 @@ export type ExecuteBalanceSendInput = {
   selectedBalanceCurrency: string
   /** Required for fiat Global Payout — from confirm screen quote (`/api/noah/payouts/quote`). */
   payoutSession?: PayoutPrepareSession
+  /** Required for wallet send — from confirm screen quote (`/api/wallets/send/quote`). */
+  walletSession?: WalletPrepareSession
   /** Persisted on transfer metadata for transaction detail / notifications. */
   reviewSnapshot?: Record<string, unknown>
   /** Ledger Easetag P2P: same ETID as confirm review (`reserved_debit_etid`). */
@@ -122,18 +125,9 @@ export async function executeBalanceSend(
   } = input
 
   const easetag = resolveRecipientEasetagForUi(recipient).trim()
-
-  if (recipient.wallet_network?.trim()) {
-    throw new Error(
-      'Wallet address recipients cannot be paid from your USD/EUR balance. Choose a bank or mobile money recipient.',
-    )
-  }
-
+  const isWalletSend = Boolean(recipient.wallet_network?.trim())
   const canUseFiatBalance = selectedBalanceCurrency === 'USD' || selectedBalanceCurrency === 'EUR'
 
-  // Optimistic feed row — appears in the dashboard list instantly so the user
-  // does not see a delay between confirm and "Transfer pending". Reverted on error;
-  // replaced on success by `qk.transactions.root` invalidation in onSettled.
   const optimisticId = `optimistic_${Date.now()}`
   const rollbackOptimistic = insertOptimisticTransaction(ctx.qc, ctx.scope, {
     id: optimisticId,
@@ -152,7 +146,19 @@ export async function executeBalanceSend(
   let transfer: NoahTransfer
 
   try {
-  if (easetag) {
+  if (isWalletSend) {
+    if (!input.walletSession?.formSessionId?.trim()) {
+      throw new Error(
+        'Wallet send quote is required. Return to review and wait for the quote to load before confirming.',
+      )
+    }
+    transfer = await noahService.executeWalletSend({
+      recipientId: recipient.id,
+      formSessionId: input.walletSession.formSessionId,
+      ...(input.reservedDebitEtid?.trim() ? { reservedDebitEtid: input.reservedDebitEtid.trim() } : {}),
+      ...(input.reviewSnapshot ? { reviewSnapshot: input.reviewSnapshot } : {}),
+    })
+  } else if (easetag) {
     transfer = await noahService.createWalletToWalletTransfer({
       destinationEasetag: easetag,
       amount: calculatedTotalAmount.toFixed(8),
@@ -222,7 +228,7 @@ export async function executeBalanceSend(
   const isGlobalFiatPayout = Boolean(payoutSession?.formSessionId?.trim())
   if (
     !isGlobalFiatPayout &&
-    (selectedBalanceCurrency === 'USD' || selectedBalanceCurrency === 'EUR')
+    (isWalletSend || (selectedBalanceCurrency === 'USD' || selectedBalanceCurrency === 'EUR'))
   ) {
     ctx.updateBalanceOptimistically(
       selectedBalanceCurrency as 'USD' | 'EUR',

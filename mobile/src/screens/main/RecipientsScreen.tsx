@@ -79,6 +79,7 @@ import { ListRowSkeleton } from '../../components/skeletons'
 import EmptyState from '../../components/EmptyState'
 import RecipientFormDropdownList from '../../components/recipients/RecipientFormDropdownList'
 import WalletAddressQrScanner from '../../components/recipients/WalletAddressQrScanner'
+import { inferWalletAddressFromApi } from '../../lib/walletAddressInference'
 import { RecipientBankNameField } from '../../components/recipients/RecipientBankNameField'
 import { isEasenetRecipientRecord, resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
@@ -533,7 +534,6 @@ function RecipientsContent({ navigation }: NavigationProps) {
             : undefined,
         mobileProvider: selectedRecipientType === 'mobile' ? newRecipient.provider : undefined,
         walletNetwork: selectedRecipientType === 'wallet' ? newRecipient.network : undefined,
-        walletMemoTag: selectedRecipientType === 'wallet' ? newRecipient.memoTag : undefined,
         routingNumber: newRecipient.routingNumber || undefined,
         sortCode: newRecipient.sortCode || undefined,
         iban: newRecipient.iban || undefined,
@@ -747,7 +747,6 @@ function RecipientsContent({ navigation }: NavigationProps) {
             : undefined,
         mobileProvider: selectedRecipientType === 'mobile' ? newRecipient.provider : undefined,
         walletNetwork: selectedRecipientType === 'wallet' ? newRecipient.network : undefined,
-        walletMemoTag: selectedRecipientType === 'wallet' ? newRecipient.memoTag : undefined,
         routingNumber: newRecipient.routingNumber || undefined,
         sortCode: newRecipient.sortCode || undefined,
         iban: newRecipient.iban || undefined,
@@ -1747,6 +1746,31 @@ function RecipientsContent({ navigation }: NavigationProps) {
                     placeholderTextColor={colors.text.secondary}
                     editable={!isSubmitting}
                   />
+                  <View style={styles.walletAddressInputWrap}>
+                    <TextInput
+                      style={[styles.modalInput, styles.walletAddressInput]}
+                      value={newRecipient.walletAddress}
+                      onChangeText={(text) => {
+                        setNewRecipient(prev => ({ ...prev, walletAddress: text }))
+                        void inferWalletAddressFromApi(text)
+                          .then(({ best }) => {
+                            if (!best) return
+                            setNewRecipient(prev => ({
+                              ...prev,
+                              currency: best.asset,
+                              network: best.network,
+                            }))
+                          })
+                          .catch(() => {})
+                      }}
+                      placeholder="Wallet Address"
+                      placeholderTextColor={colors.text.secondary}
+                      editable={!isSubmitting}
+                    />
+                    <Pressable android_ripple={ripple.neutral} style={styles.walletScanIconButton} onPress={handleScanPress} >
+                      <ScanLine size={18} color={colors.primary.main} strokeWidth={2} />
+                    </Pressable>
+                  </View>
                   <View style={[styles.currencySelectorWrapper, showWalletAssetDropdown && styles.currencySelectorWrapperActive]}>
                     <Pressable
                      android_ripple={ripple.neutral}
@@ -1892,27 +1916,6 @@ function RecipientsContent({ navigation }: NavigationProps) {
                         </>,
                       )}
                   </View>
-                  <View style={styles.walletAddressInputWrap}>
-                    <TextInput
-                      style={[styles.modalInput, styles.walletAddressInput]}
-                      value={newRecipient.walletAddress}
-                      onChangeText={(text) => setNewRecipient(prev => ({ ...prev, walletAddress: text }))}
-                      placeholder="Wallet Address"
-                      placeholderTextColor={colors.text.secondary}
-                      editable={!isSubmitting}
-                    />
-                    <Pressable android_ripple={ripple.neutral} style={styles.walletScanIconButton} onPress={handleScanPress} >
-                      <ScanLine size={18} color={colors.primary.main} strokeWidth={2} />
-                    </Pressable>
-                  </View>
-                  <TextInput
-                    style={styles.modalInput}
-                    value={newRecipient.memoTag}
-                    onChangeText={(text) => setNewRecipient(prev => ({ ...prev, memoTag: text }))}
-                    placeholder="Memo / Tag (optional)"
-                    placeholderTextColor={colors.text.secondary}
-                    editable={!isSubmitting}
-                  />
                 </>
               )}
               {selectedRecipientType === 'bank' && (() => {

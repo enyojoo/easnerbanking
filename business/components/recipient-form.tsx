@@ -550,7 +550,7 @@ export function RecipientForm({
       mobileProvider: formData.recipientType === "mobile" ? formData.mobileProvider.trim() || undefined : undefined,
       walletAsset: formData.recipientType === "wallet" ? formData.walletAsset.trim() || undefined : undefined,
       walletNetwork: formData.recipientType === "wallet" ? formData.walletNetwork.trim() || undefined : undefined,
-      walletMemoTag: formData.recipientType === "wallet" ? formData.walletMemoTag.trim() || undefined : undefined,
+      walletMemoTag: undefined,
       routingNumber: formData.routingNumber?.trim() || undefined,
       sortCode: formData.sortCode?.trim() || undefined,
       iban: formData.iban?.trim() || undefined,
@@ -966,6 +966,31 @@ export function RecipientForm({
               />
               {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
             </div>
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-xs text-muted-foreground">Wallet Address</label>
+              <Input
+                value={formData.walletAddress}
+                onChange={(e) => {
+                  const v = e.target.value
+                  handleInputChange("walletAddress", v)
+                  void fetch("/api/wallets/send/infer-address", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ address: v }),
+                  })
+                    .then((r) => r.json())
+                    .then((data: { best?: { asset: string; network: string } | null }) => {
+                      if (!data.best) return
+                      handleInputChange("walletAsset", data.best.asset)
+                      handleInputChange("walletNetwork", data.best.network)
+                    })
+                    .catch(() => {})
+                }}
+                placeholder="Recipient wallet address"
+                className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.walletAddress ? "border-red-500" : ""}`}
+              />
+              {errors.walletAddress && <p className="text-xs text-red-500">{errors.walletAddress}</p>}
+            </div>
             <div className="space-y-2">
               <label className="text-xs text-muted-foreground">Asset</label>
               <Popover open={walletAssetOpen} onOpenChange={setWalletAssetOpen}>
@@ -1063,25 +1088,6 @@ export function RecipientForm({
                 </PopoverContent>
               </Popover>
               {errors.walletNetwork && <p className="text-xs text-red-500">{errors.walletNetwork}</p>}
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs text-muted-foreground">Memo / Tag (optional)</label>
-              <Input
-                value={formData.walletMemoTag}
-                onChange={(e) => handleInputChange("walletMemoTag", e.target.value)}
-                placeholder="Destination tag or memo if required"
-                className="h-12 placeholder:text-xs placeholder:text-muted-foreground/60"
-              />
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <label className="text-xs text-muted-foreground">Wallet Address</label>
-              <Input
-                value={formData.walletAddress}
-                onChange={(e) => handleInputChange("walletAddress", e.target.value)}
-                placeholder="Recipient wallet address"
-                className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.walletAddress ? "border-red-500" : ""}`}
-              />
-              {errors.walletAddress && <p className="text-xs text-red-500">{errors.walletAddress}</p>}
             </div>
           </div>
         )}

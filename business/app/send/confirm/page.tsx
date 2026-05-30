@@ -32,6 +32,11 @@ import {
   isPayoutQuoteFresh,
   mapPayoutQuoteToFlowState,
 } from "@/lib/noah/map-payout-quote-to-flow"
+import {
+  isWalletQuoteFresh,
+  mapWalletQuoteToFlowState,
+} from "@/lib/wallet-send/map-wallet-quote-to-flow"
+import type { WalletSendQuoteResult } from "@/lib/wallet-send/wallet-send-quote"
 import { useQuoteCountdown } from "@/hooks/use-quote-countdown"
 import { ArrowLeft, Loader2 } from "lucide-react"
 
@@ -69,6 +74,7 @@ export default function SendConfirmPage() {
   const [isAuthorizing, setIsAuthorizing] = useState(false)
   const [authorizeError, setAuthorizeError] = useState<string | null>(null)
   const [payoutQuoteError, setPayoutQuoteError] = useState<string | null>(null)
+  const [walletQuoteError, setWalletQuoteError] = useState<string | null>(null)
   const displayIdFallbackRef = useRef<string | null>(null)
 
   const displayTransactionId = useMemo(() => {
@@ -137,8 +143,7 @@ export default function SendConfirmPage() {
   useEffect(() => {
     if (!state || isEasenetRecipient(state.recipient) || isWalletRecipient(state.recipient) || !(state.amount > 0))
       return
-    if (isPayoutQuoteFresh(state.payoutQuote, state.amount)) return
-    if (state.payoutQuote?.formSessionId) return
+    if (isPayoutQuoteFresh(state.payoutQuote, state.amount, state.recipient.id)) return
     let cancelled = false
     setPayoutQuoteError(null)
     void (async () => {
@@ -195,7 +200,61 @@ export default function SendConfirmPage() {
     }
   }, [state?.recipient.id, state?.amount, state?.sendAmount, state?.amountEntryMode, state?.sendCurrency, state?.note, state?.paymentPurpose, businessId])
 
-  const quoteCountdown = useQuoteCountdown(state?.payoutQuote?.expiresAt)
+  useEffect(() => {
+    if (!state || isEasenetRecipient(state.recipient) || !isWalletRecipient(state.recipient) || !(state.amount > 0))
+      return
+    if (isWalletQuoteFresh(state.walletQuote, state.amount, state.recipient.id)) return
+    let cancelled = false
+    setWalletQuoteError(null)
+    void (async () => {
+      try {
+        const headers: Record<string, string> = { "Content-Type": "application/json" }
+        if (businessId) headers["X-Easner-Noah-Scope"] = "business"
+        const res = await fetchWithSession("/api/wallets/send/quote", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            recipientId: state.recipient.id,
+            sourceBalanceCurrency: state.sendCurrency,
+            amountEntryMode: state.amountEntryMode ?? "receive",
+            ...(state.amountEntryMode === "send" && state.sendAmount > 0
+              ? { sendAmount: state.sendAmount }
+              : { receiveAmount: state.amount }),
+          }),
+        })
+        const data = (await res.json().catch(() => ({}))) as {
+          ok?: boolean
+          error?: string
+          quote?: WalletSendQuoteResult
+        }
+        if (!res.ok || !data.ok || !data.quote) {
+          throw new Error(data.error || "Could not load wallet send quote")
+        }
+        if (cancelled) return
+        const next = mapWalletQuoteToFlowState(state, data.quote)
+        setState(next)
+        sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(next))
+      } catch (e) {
+        if (!cancelled) {
+          setWalletQuoteError(e instanceof Error ? e.message : "Wallet send quote failed")
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [
+    state?.recipient.id,
+    state?.amount,
+    state?.sendAmount,
+    state?.amountEntryMode,
+    state?.sendCurrency,
+    businessId,
+  ])
+
+  const quoteCountdown = useQuoteCountdown(
+    state?.walletQuote?.expiresAt ?? state?.payoutQuote?.expiresAt,
+  )
 
   const finishSend = (transactionId: string) => {
     if (!state) return
@@ -273,15 +332,89 @@ export default function SendConfirmPage() {
     }
 
     if (isWalletRecipient(state.recipient)) {
-      setAuthorizeError(
-        "Wallet address recipients cannot be paid from your USD/EUR balance. Use crypto send or another method.",
-      )
+      const wq = state.walletQuote
+      if (!wq?.formSessionId) {
+        setAuthorizeError(walletQuoteError || "Wallet send quote is not ready. Go back and try again.")
+        return
+      }
+      if (wq.recipientId && wq.recipientId !== state.recipient.id) {
+        setAuthorizeError("Wallet quote doesn't match this recipient. Go back and tap Continue again.")
+        return
+      }
+
+      setIsAuthorizing(true)
+      try {
+        const scopeHeaders: Record<string, string> = {}
+        if (businessId) scopeHeaders["X-Easner-Noah-Scope"] = "business"
+
+        const walletEtid =
+          typeof state.transactionId === "string" &&
+          isEasnerClientTransactionIdFormat(state.transactionId)
+            ? state.transactionId.trim().toUpperCase()
+            : ""
+
+        const receiveNetwork = state.recipient.walletNetwork?.trim() || wq.receiveNetwork
+        const reviewSnapshot = {
+          you_send_amount: wq.sendAmount,
+          total_debited: wq.totalDebited,
+          exchange_fee: wq.channelCost,
+          processing_fee: wq.marginAmount,
+          network_fee: wq.networkFee,
+          exchange_rate: wq.customerRate,
+          send_currency: state.sendCurrency,
+          receive_amount: state.amount,
+          receive_currency: state.receiveCurrency,
+          transfer_method: `${state.receiveCurrency} on ${receiveNetwork}`,
+          processing_time: "Instant",
+        }
+
+        const res = await fetchWithSession("/api/wallets/send/execute", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(walletEtid ? { "Idempotency-Key": walletEtid } : {}),
+            ...scopeHeaders,
+          },
+          body: JSON.stringify({
+            recipientId: state.recipient.id,
+            formSessionId: wq.formSessionId,
+            ...(walletEtid ? { reservedDebitEtid: walletEtid } : {}),
+            reviewSnapshot,
+          }),
+        })
+        const data = (await res.json().catch(() => ({}))) as {
+          ok?: boolean
+          error?: string
+          easner_transaction_id?: string
+          transaction_id?: string
+        }
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Wallet send failed")
+        }
+
+        const transactionId = String(
+          data.easner_transaction_id ?? data.transaction_id ?? state.transactionId ?? generateTransactionId(),
+        ).trim()
+        if (user?.id) {
+          dataCache.invalidate(CACHE_KEYS.TRANSACTIONS_LIST(user.id))
+        }
+        requestBusinessAccountsRefresh()
+        await finishSend(transactionId)
+      } catch (e) {
+        setAuthorizeError(e instanceof Error ? e.message : "Wallet send failed")
+      } finally {
+        setIsAuthorizing(false)
+      }
       return
     }
 
     const pq = state.payoutQuote
     if (!pq?.formSessionId) {
       setAuthorizeError(payoutQuoteError || "Payout quote is not ready. Go back and try again.")
+      return
+    }
+    if (pq.recipientId && pq.recipientId !== state.recipient.id) {
+      setAuthorizeError("Payout quote doesn't match this recipient. Go back and tap Continue again.")
       return
     }
 
@@ -409,21 +542,46 @@ export default function SendConfirmPage() {
   const transferMethod = corridorTransferMethod(state.recipient, state.receiveCurrency)
   const processingTime = arrivalHint ?? getGlobalPayoutProcessingTime(transferMethod)
   const easenetSend = isEasenetRecipient(state.recipient)
-  const hasFx = !easenetSend && state.receiveCurrency !== state.sendCurrency
+  const walletSend = isWalletRecipient(state.recipient)
+  const hasFx =
+    !easenetSend &&
+    state.receiveCurrency.toUpperCase() !== state.sendCurrency.toUpperCase()
   const pq = state.payoutQuote
-  const quoteReady = easenetSend || Boolean(pq?.formSessionId)
-  const easnerFee = pq?.marginAmount ?? pq?.easnerFee ?? 0
-  const easnerFeeCurrency = pq?.easnerFeeCurrency ?? state.sendCurrency
-  const youSendAmount = pq?.customerPrincipal ?? pq?.sendAmount ?? state.sendAmount
+  const wq = state.walletQuote
+  const quoteReady =
+    easenetSend ||
+    (walletSend
+      ? isWalletQuoteFresh(wq, state.amount, state.recipient.id)
+      : isPayoutQuoteFresh(pq, state.amount, state.recipient.id))
+  const easnerFee = walletSend
+    ? (wq?.marginAmount ?? 0)
+    : (pq?.marginAmount ?? pq?.easnerFee ?? 0)
+  const easnerFeeCurrency = walletSend
+    ? state.sendCurrency
+    : (pq?.easnerFeeCurrency ?? state.sendCurrency)
+  const youSendAmount = walletSend
+    ? (wq?.sendAmount ?? state.sendAmount)
+    : (pq?.customerPrincipal ?? pq?.sendAmount ?? state.sendAmount)
   const exchangeRate =
-    hasFx && pq?.midRate && pq.midRate > 0
-      ? pq.midRate
+    hasFx && (walletSend ? wq?.customerRate : pq?.midRate) &&
+    (walletSend ? wq!.customerRate : pq!.midRate!) > 0
+      ? walletSend
+        ? wq!.customerRate
+        : pq!.midRate!
       : 1
-  const exchangeFee = pq?.channelCost ?? pq?.noahFee ?? 0
+  const exchangeFee = walletSend ? (wq?.channelCost ?? 0) : (pq?.channelCost ?? pq?.noahFee ?? 0)
+  const networkFee = walletSend ? (wq?.networkFee ?? 0) : 0
+  const totalDebited = walletSend
+    ? (wq?.totalDebited ?? state.sendAmount)
+    : (pq?.totalDebited ?? state.sendAmount)
+  const walletTransferMethod = walletSend
+    ? `${state.receiveCurrency} on ${state.recipient.walletNetwork?.trim() || wq?.receiveNetwork || "wallet"}`
+    : transferMethod
+  const walletProcessingTime = walletSend ? "Instant" : processingTime
 
   const authorizeDisabled =
     isAuthorizing ||
-    Boolean(payoutQuoteError && !easenetSend) ||
+    Boolean((walletSend ? walletQuoteError : payoutQuoteError) && !easenetSend) ||
     (!easenetSend && (!quoteReady || quoteCountdown.expired))
 
   return (
@@ -436,15 +594,16 @@ export default function SendConfirmPage() {
         transactionId={displayTransactionId}
         payoutReview={{
           you_send_amount: youSendAmount,
-          total_debited: pq?.totalDebited ?? state.sendAmount,
+          total_debited: totalDebited,
           exchange_fee: exchangeFee,
           processing_fee: easnerFee,
+          network_fee: networkFee,
           exchange_rate: exchangeRate,
           send_currency: state.sendCurrency,
           receive_amount: state.amount,
           receive_currency: state.receiveCurrency,
-          transfer_method: transferMethod,
-          processing_time: processingTime,
+          transfer_method: walletTransferMethod,
+          processing_time: walletProcessingTime,
         }}
         recipientNode={
           <SendSelectedRecipientSummary
@@ -461,10 +620,10 @@ export default function SendConfirmPage() {
         showFeeBreakdown={!easenetSend && quoteReady}
       />
 
-      {payoutQuoteError && !easenetSend ? (
-        <p className="text-sm text-destructive">{payoutQuoteError}</p>
+      {(walletSend ? walletQuoteError : payoutQuoteError) && !easenetSend ? (
+        <p className="text-sm text-destructive">{walletSend ? walletQuoteError : payoutQuoteError}</p>
       ) : null}
-      {!easenetSend && pq?.expiresAt ? (
+      {!easenetSend && (wq?.expiresAt || pq?.expiresAt) ? (
         <div className="text-xs text-muted-foreground">
           {quoteCountdown.expired
             ? "Quote expired — go back and continue again for a fresh quote."
@@ -478,7 +637,7 @@ export default function SendConfirmPage() {
         </p>
       ) : null}
 
-      {state.note && (
+      {state.note && !walletSend && (
         <Card>
           <CardContent className="p-4">
             <p className="mb-1 text-sm text-muted-foreground">Note</p>

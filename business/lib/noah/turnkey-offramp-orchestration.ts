@@ -177,31 +177,40 @@ export async function executeTurnkeyOfframpPayout(
 
   const quoted = input.quotedSession
   const quotedFormSessionId = String(quoted?.formSessionId || "").trim()
-  const quotedCryptoAuthorized = String(quoted?.cryptoAuthorizedAmount || "").trim()
   const quotedChannelId = String(quoted?.channelId || channelId || "").trim()
 
-  let formSessionId = quotedFormSessionId
-  let cryptoAuthorizedAmount = quotedCryptoAuthorized
+  let formSessionId = ""
+  let cryptoAuthorizedAmount = ""
   let resolvedChannelId = quotedChannelId || channelId
 
-  if (!formSessionId || !cryptoAuthorizedAmount) {
-    let prep: Awaited<ReturnType<typeof prepareSellFromRecipientRow>>
-    try {
-      prep = await prepareSellFromRecipientRow({
-        row: recipientRow,
-        fiatAmount,
-        cryptoCurrency,
-        noahCustomerId: ctx.noahCustomerId,
-        overrides,
-      })
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      return { ok: false, error: msg || "prepare_failed" }
-    }
+  // Always prepare at execute so the Noah form session matches this recipient row.
+  // Client-quoted sessions are used for pricing/debit only — reusing a stale session
+  // can route payouts to the wrong bank account when quotes were cached incorrectly.
+  let prep: Awaited<ReturnType<typeof prepareSellFromRecipientRow>>
+  try {
+    prep = await prepareSellFromRecipientRow({
+      row: recipientRow,
+      fiatAmount,
+      cryptoCurrency,
+      noahCustomerId: ctx.noahCustomerId,
+      overrides,
+    })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return { ok: false, error: msg || "prepare_failed" }
+  }
 
-    formSessionId = String(prep.prep.formSessionId || "").trim()
-    cryptoAuthorizedAmount = String(prep.prep.cryptoAuthorizedAmount || "").trim()
-    resolvedChannelId = channelId || prep.channelId
+  formSessionId = String(prep.prep.formSessionId || "").trim()
+  cryptoAuthorizedAmount = String(prep.prep.cryptoAuthorizedAmount || "").trim()
+  resolvedChannelId = prep.channelId || resolvedChannelId
+
+  if (quotedFormSessionId && quotedFormSessionId !== formSessionId) {
+    console.warn("[noah_global_payout]", {
+      stage: "execute_form_session_mismatch",
+      recipientId: recipientId ?? null,
+      quotedFormSessionIdPrefix: quotedFormSessionId.slice(0, 12),
+      executeFormSessionIdPrefix: formSessionId.slice(0, 12),
+    })
   }
 
   if (!formSessionId || !cryptoAuthorizedAmount) {

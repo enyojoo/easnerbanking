@@ -21,6 +21,10 @@ export { useCommunicationPreferences } from './use-communication-preferences'
 export { useCurrenciesCatalog } from './use-currencies'
 export { useExchangeRatesList } from './use-exchange-rates'
 export { useNoahSendExchangeRates, prefetchNoahSendExchangeRates } from './use-noah-send-exchange-rates'
+export {
+  useCryptoSendExchangeRates,
+  prefetchCryptoSendExchangeRates,
+} from './use-crypto-send-exchange-rates'
 export { useManualSendCatalog } from './use-manual-send-catalog'
 export { useManualQuote } from './use-manual-quote'
 export { useFxPairs, useFxQuote } from './use-fx'
