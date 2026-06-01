@@ -123,7 +123,6 @@ export async function buildWalletSendQuote(input: {
       toToken: dest.address,
       fromAddress: probeFrom,
       toAddress: destinationAddress,
-      fromAmount: "0",
       toAmount: toAmountRaw,
       fee: 0,
     })

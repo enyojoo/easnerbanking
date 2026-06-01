@@ -2,6 +2,7 @@
 
 import type { Beneficiary } from "@/lib/recipient-types"
 import { fetchWithSession } from "@/lib/fetch-with-session"
+import { readEasenetPublicProfileCache } from "@/lib/easenet-public-profile-cache"
 import { countryCodeForRecipientSave, getCountryCodeForCurrency } from "@easner/shared"
 
 type RecipientRow = {
@@ -203,11 +204,13 @@ export function toBeneficiary(row: RecipientRow): Beneficiary {
     ? walletDescriptor.split("/")
     : [undefined, walletDescriptor || undefined]
   const normalizedCountryCode = (row.country_code || legacyCountryCodeFromMobile || "").trim().toUpperCase() || undefined
+  const easetag = easetagFromBankName || undefined
+  const cachedEasenet = easetag ? readEasenetPublicProfileCache(easetag) : null
   return {
     id: row.id,
     countryCode: normalizedCountryCode,
-    payeeEasetag: easetagFromBankName || undefined,
-    avatarUrl: undefined,
+    payeeEasetag: easetag,
+    avatarUrl: cachedEasenet?.avatarUrl ?? undefined,
     name: row.full_name,
     bankName: mobileInnerMatch ? `Mobile Money (${mobileProvider})` : bankNameTrimmed,
     accountNumber: row.account_number,

@@ -53,9 +53,12 @@ export async function lifiQuote(params: LifiQuoteRequest): Promise<LifiQuoteResp
     integrator: params.integrator ?? getLifiIntegrator(),
     slippage: String(params.slippage ?? 0.03),
   })
-  if (params.fromAmount) qs.set("fromAmount", params.fromAmount)
+  if (params.fromAmount && params.fromAmount !== "0") qs.set("fromAmount", params.fromAmount)
   if (params.toAmount) qs.set("toAmount", params.toAmount)
-  if (!params.fromAmount && !params.toAmount) {
+  if (
+    (!params.fromAmount || params.fromAmount === "0") &&
+    !params.toAmount
+  ) {
     throw new Error("lifi_quote_requires_from_or_to_amount")
   }
   if (params.fee != null && params.fee > 0) {

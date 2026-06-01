@@ -52,6 +52,7 @@ import { SendSelectedRecipientSummary } from '../../components/send/SendSelected
 import { getCachedSendDestinations } from '../../lib/sendDestinations'
 import { isEasnerClientTransactionIdFormat } from '../../lib/transactionId'
 import {
+  isCompletePayoutQuote,
   isStashedPayoutQuoteFresh,
   peekSendPayoutQuote,
   clearSendPayoutQuote,
@@ -208,20 +209,21 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           : (params.receiveAmountValue ?? 0),
       receiveCurrency: params.receiveCurrency ?? params.recipient?.currency ?? '',
     }
-    const useStashed = stashed && isStashedPayoutQuoteFresh(meta)
+    const useStashed = stashed && isStashedPayoutQuoteFresh(meta) && isCompletePayoutQuote(stashed)
     if (useStashed) {
       const display = payoutDisplayAmountsFromQuote(stashed)
       const easnerFeeAmt = display.marginAmount
+      const payoutSessionFromQuote = payoutPrepareSessionFromQuote(stashed, params.recipient?.id ?? '')
       return {
         calculatedSendingAmount: display.youSendAmount,
         calculatedFeeAmount: easnerFeeAmt,
         calculatedTotalAmount: display.totalDebited,
-        noahFee: stashed.noah.totalFee,
+        noahFee: stashed.noah.totalFee ?? 0,
         easnerFee: easnerFeeAmt,
         pricingQuoteId: stashed.pricingQuoteId,
         pricingQuoteExpiry: stashed.expiresAt,
         pricingQuoteResult: stashed.easner,
-        payoutSession: payoutPrepareSessionFromQuote(stashed, params.recipient?.id ?? ''),
+        payoutSession: payoutSessionFromQuote,
         walletSession: undefined as WalletPrepareSession | undefined,
         quoteDisplay: display,
         quoteLoading: false,
@@ -393,20 +395,21 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     if (payoutSessionMatchesRecipient(payoutSession, recipient.id)) return
     if (isStashedPayoutQuoteFresh(quoteStashMeta)) {
       const stashed = peekSendPayoutQuote()
-      if (stashed) {
+      if (stashed && isCompletePayoutQuote(stashed)) {
         setQuotedReceiveAmount(stashed.receiveAmount)
         const display = payoutDisplayAmountsFromQuote(stashed)
+        const payoutSessionFromQuote = payoutPrepareSessionFromQuote(stashed, recipient.id)
         setPricing((prev) => ({
           ...prev,
           calculatedSendingAmount: display.youSendAmount,
           calculatedFeeAmount: display.marginAmount,
           calculatedTotalAmount: display.totalDebited,
-          noahFee: stashed.noah.totalFee,
+          noahFee: stashed.noah.totalFee ?? 0,
           easnerFee: display.marginAmount,
           pricingQuoteId: stashed.pricingQuoteId,
           pricingQuoteExpiry: stashed.expiresAt,
           pricingQuoteResult: stashed.easner,
-          payoutSession: payoutPrepareSessionFromQuote(stashed, recipient.id),
+          payoutSession: payoutSessionFromQuote,
           quoteDisplay: display,
           quoteLoading: false,
           quoteError: null,
@@ -430,19 +433,28 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           ...(sendPaymentPurpose ? { paymentPurpose: sendPaymentPurpose } : {}),
         })
         if (cancelled) return
+        if (!isCompletePayoutQuote(pq)) {
+          setPricing((prev) => ({
+            ...prev,
+            quoteLoading: false,
+            quoteError: 'Incomplete payout quote response.',
+          }))
+          return
+        }
         setQuotedReceiveAmount(pq.receiveAmount)
         const display = payoutDisplayAmountsFromQuote(pq)
+        const payoutSessionFromQuote = payoutPrepareSessionFromQuote(pq, recipient.id)
         setPricing((prev) => ({
           ...prev,
           calculatedSendingAmount: display.youSendAmount,
-          noahFee: pq.noah.totalFee,
+          noahFee: pq.noah.totalFee ?? 0,
           easnerFee: display.marginAmount,
           calculatedFeeAmount: display.marginAmount,
           calculatedTotalAmount: display.totalDebited,
           pricingQuoteId: pq.pricingQuoteId,
           pricingQuoteExpiry: pq.expiresAt,
           pricingQuoteResult: pq.easner,
-          payoutSession: payoutPrepareSessionFromQuote(pq, recipient.id),
+          payoutSession: payoutSessionFromQuote,
           quoteDisplay: display,
           quoteLoading: false,
           quoteError: null,

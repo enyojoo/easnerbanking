@@ -30,23 +30,41 @@ export type SendPayoutQuoteStashMeta = {
 
 let stashed: PayoutQuote | null = null
 let stashedMeta: SendPayoutQuoteStashMeta | null = null
+let lastPayoutQuoteError: string | null = null
+
+export function isCompletePayoutQuote(quote: PayoutQuote | null | undefined): quote is PayoutQuote {
+  return Boolean(
+    quote?.expiresAt &&
+      quote.noah?.formSessionId &&
+      quote.noah.cryptoAuthorizedAmount &&
+      quote.noah.cryptoCurrency &&
+      quote.easner,
+  )
+}
 
 export function stashSendPayoutQuote(quote: PayoutQuote, meta: SendPayoutQuoteStashMeta): void {
+  if (!isCompletePayoutQuote(quote)) return
   stashed = quote
   stashedMeta = meta
+  lastPayoutQuoteError = null
 }
 
 export function peekSendPayoutQuote(): PayoutQuote | null {
   return stashed
 }
 
+export function peekLastPayoutQuoteError(): string | null {
+  return lastPayoutQuoteError
+}
+
 export function clearSendPayoutQuote(): void {
   stashed = null
   stashedMeta = null
+  lastPayoutQuoteError = null
 }
 
 export function isStashedPayoutQuoteFresh(input: SendPayoutQuoteStashMeta): boolean {
-  if (!stashed?.expiresAt || !stashed.noah?.formSessionId || !stashedMeta) return false
+  if (!isCompletePayoutQuote(stashed) || !stashedMeta) return false
   if (new Date(stashed.expiresAt).getTime() <= Date.now()) return false
   if (stashedMeta.recipientId.trim() !== input.recipientId.trim()) return false
   if (stashedMeta.amountEntryMode !== input.amountEntryMode) return false
@@ -78,12 +96,20 @@ export async function ensureSendPayoutQuoteStashed(
   if (inflightQuote && inflightQuoteKey === key) return inflightQuote
 
   inflightQuoteKey = key
+  lastPayoutQuoteError = null
   inflightQuote = fetchQuote()
     .then((quote) => {
+      if (!isCompletePayoutQuote(quote)) {
+        lastPayoutQuoteError = 'Incomplete payout quote response.'
+        return null
+      }
       stashSendPayoutQuote(quote, meta)
       return quote
     })
-    .catch(() => null)
+    .catch((err) => {
+      lastPayoutQuoteError = err instanceof Error ? err.message : 'quote_failed'
+      return null
+    })
     .finally(() => {
       inflightQuote = null
       inflightQuoteKey = ''
@@ -95,7 +121,8 @@ export async function ensureSendPayoutQuoteStashed(
 export function payoutPrepareSessionFromQuote(
   quote: PayoutQuote,
   recipientId: string,
-): PayoutPrepareSession {
+): PayoutPrepareSession | undefined {
+  if (!isCompletePayoutQuote(quote)) return undefined
   return {
     recipientId,
     formSessionId: quote.noah.formSessionId,
@@ -124,6 +151,6 @@ export function payoutDisplayAmountsFromQuote(quote: PayoutQuote): {
     exchangeFee: quote.channelCost,
     marginAmount: quote.marginAmount,
     totalDebited: quote.totalDebited,
-    customerRate: quote.noah.rate ?? quote.easner.providerRate ?? 0,
+    customerRate: quote.noah?.rate ?? quote.easner?.providerRate ?? 0,
   }
 }

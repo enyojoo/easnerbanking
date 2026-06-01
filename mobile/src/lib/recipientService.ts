@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { countryCodeForRecipientSave } from '@easner/shared'
 import { supabase } from './supabase'
-import { resolveRecipientEasetagForUi } from './easenetRecipientUi'
+import { enrichEasenetRecipientFromCache, primeAndAttachEasenetSnapshot } from './enrichEasenetRecipient'
+import { isEasenetRecipientRecord, resolveRecipientEasetagForUi } from './easenetRecipientUi'
 import { buildRecipientInsertPayload } from './recipientPersistPayload'
 import type { Recipient } from '../types'
 
@@ -27,6 +28,9 @@ export interface RecipientData {
   city?: string
   state?: string
   postalCode?: string
+  /** Client-only Easenet snapshot — not written to Supabase. */
+  payeeAvatarUrl?: string | null
+  payeeAccountKind?: 'personal' | 'business'
 }
 
 function isMissingTableError(e: unknown): boolean {
@@ -103,7 +107,7 @@ function normalizeRecipient(row: Recipient): Recipient {
     : [undefined, walletDescriptor || undefined]
   const isWallet = Boolean(walletMatch)
   const payee_easetag = resolveRecipientEasetagForUi(row) || undefined
-  return {
+  return enrichEasenetRecipientFromCache({
     ...row,
     bank_name: mobileParsed.normalizedBankName || bankName,
     country_code: row.country_code || mobileParsed.countryCode || undefined,
@@ -111,7 +115,29 @@ function normalizeRecipient(row: Recipient): Recipient {
     wallet_network: row.wallet_network || network || undefined,
     currency: (isWallet ? asset || row.currency : row.currency) || row.currency,
     payee_easetag,
+  })
+}
+
+async function enrichEasenetAfterMutate(
+  recipient: Recipient,
+  snapshot: {
+    fullName: string
+    payeeAvatarUrl?: string | null
+    payeeAccountKind?: 'personal' | 'business'
+  },
+): Promise<Recipient> {
+  const normalized = normalizeRecipient(recipient)
+  const tag = resolveRecipientEasetagForUi(normalized)
+  if (!tag || !isEasenetRecipientRecord(normalized)) return normalized
+  if (snapshot.payeeAccountKind !== 'business' && snapshot.payeeAccountKind !== 'personal') {
+    return normalized
   }
+  return primeAndAttachEasenetSnapshot(normalized, {
+    easetag: tag,
+    fullName: snapshot.fullName,
+    avatarUrl: snapshot.payeeAvatarUrl,
+    accountKind: snapshot.payeeAccountKind,
+  })
 }
 
 export const recipientService = {
@@ -163,15 +189,26 @@ export const recipientService = {
         .select()
         .single()
       if (error) throw error
-      if (data) return normalizeRecipient(data as Recipient)
+      if (data) {
+        return enrichEasenetAfterMutate(data as Recipient, {
+          fullName: recipientData.fullName,
+          payeeAvatarUrl: recipientData.payeeAvatarUrl,
+          payeeAccountKind: recipientData.payeeAccountKind,
+        })
+      }
     } catch (e) {
       if (!isMissingTableError(e)) throw e
     }
 
     const list = await loadLocalRecipients(userId)
-    list.unshift(row)
+    const enriched = await enrichEasenetAfterMutate(row, {
+      fullName: recipientData.fullName,
+      payeeAvatarUrl: recipientData.payeeAvatarUrl,
+      payeeAccountKind: recipientData.payeeAccountKind,
+    })
+    list.unshift(enriched)
     await saveLocalRecipients(userId, list)
-    return normalizeRecipient(row)
+    return enriched
   },
 
   async getByUserId(userId: string): Promise<Recipient[]> {
@@ -215,6 +252,9 @@ export const recipientService = {
       city?: string
       state?: string
       postalCode?: string
+      /** Client-only Easenet snapshot — not written to Supabase. */
+      payeeAvatarUrl?: string | null
+      payeeAccountKind?: 'personal' | 'business'
     },
   ): Promise<Recipient> {
     const derivedBankName =
@@ -257,7 +297,13 @@ export const recipientService = {
         .single()
 
       if (error) throw error
-      if (data) return normalizeRecipient(data as Recipient)
+      if (data) {
+        return enrichEasenetAfterMutate(data as Recipient, {
+          fullName: String(updates.fullName ?? (data as Recipient).full_name ?? ''),
+          payeeAvatarUrl: updates.payeeAvatarUrl,
+          payeeAccountKind: updates.payeeAccountKind,
+        })
+      }
     } catch (e) {
       if (isMissingColumnError(e)) {
         const fallback = { ...updateData }
@@ -267,7 +313,13 @@ export const recipientService = {
           .eq('id', recipientId)
           .select()
           .single()
-        if (!error && data) return normalizeRecipient(data as Recipient)
+        if (!error && data) {
+          return enrichEasenetAfterMutate(data as Recipient, {
+            fullName: String(updates.fullName ?? (data as Recipient).full_name ?? ''),
+            payeeAvatarUrl: updates.payeeAvatarUrl,
+            payeeAccountKind: updates.payeeAccountKind,
+          })
+        }
         if (error) throw error
       }
       if (!isMissingTableError(e)) throw e
@@ -278,7 +330,11 @@ export const recipientService = {
     if (idx === -1) throw new Error('Recipient not found')
     list[idx] = { ...list[idx], ...updateData, updated_at: now() } as Recipient
     await saveLocalRecipients(userId, list)
-    return normalizeRecipient(list[idx]!)
+    return enrichEasenetAfterMutate(list[idx]!, {
+      fullName: String(updates.fullName ?? list[idx]!.full_name ?? ''),
+      payeeAvatarUrl: updates.payeeAvatarUrl,
+      payeeAccountKind: updates.payeeAccountKind,
+    })
   },
 
   async delete(recipientId: string, userId: string): Promise<void> {

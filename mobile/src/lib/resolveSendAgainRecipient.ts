@@ -145,7 +145,14 @@ function resolveEasetagRecipient(
   return buildDraftEasenetRecipient({
     easetag: tag,
     fullName: displayName,
+    avatarUrl: null,
     userId,
+    accountKind:
+      meta.payee_account_kind === 'business'
+        ? 'business'
+        : meta.payee_account_kind === 'personal'
+          ? 'personal'
+          : undefined,
   })
 }
 

@@ -44,7 +44,6 @@ export async function executeLifiWalletSend(input: {
       toToken: dest.address,
       fromAddress,
       toAddress: input.session.destination_address,
-      fromAmount: "0",
       toAmount: toAmountRaw,
       fee: 0,
     })

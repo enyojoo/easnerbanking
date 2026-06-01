@@ -31,7 +31,7 @@ function EasenetRecipientAvatar({
   easenetPreview?: HydratedEasenetProfile | null
 }) {
   const displayName = (easenetPreview?.fullName || recipient.full_name).trim()
-  const uri = String(easenetPreview?.avatarUrl || '').trim()
+  const uri = String(easenetPreview?.avatarUrl || recipient.payee_avatar_url || '').trim()
   const [imgFailed, setImgFailed] = useState(false)
   useEffect(() => {
     setImgFailed(false)
@@ -127,7 +127,7 @@ export function SendSelectedRecipientSummary({
         {isEasenet ? (
           <EasenetSubtitleRow
             easetag={resolveRecipientEasetagForUi(recipient)}
-            accountKind={easenetPreview?.accountKind}
+            accountKind={easenetPreview?.accountKind ?? recipient.payee_account_kind}
             textStyle={styles.details}
             gap={4}
           />

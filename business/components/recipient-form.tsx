@@ -30,6 +30,7 @@ import {
   type RecipientUpsertInput,
 } from "@/lib/recipients-store"
 import { fetchEasenetProfileByTag } from "@/lib/easenet-profile"
+import { writeEasenetPublicProfileCache } from "@/lib/easenet-public-profile-cache"
 import { EasenetRecipientProfileRow } from "@/components/easenet-recipient-profile-row"
 import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
@@ -500,6 +501,11 @@ export function RecipientForm({
     if (!validateForm()) return
 
     if (formData.recipientType === "easenet" && easenetResolved) {
+      writeEasenetPublicProfileCache(easenetResolved.easetag, {
+        fullName: easenetResolved.fullName,
+        avatarUrl: easenetResolved.avatarUrl,
+        accountKind: easenetResolved.accountKind,
+      })
       const payload: RecipientUpsertInput = {
         recipientType: "easenet",
         countryCode: "US",

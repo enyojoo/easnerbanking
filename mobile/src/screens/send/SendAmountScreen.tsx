@@ -68,7 +68,9 @@ import { usePayoutMinEnforcement } from '../../hooks/usePayoutMinEnforcement'
 import { noahService, type WalletSendQuote } from '../../lib/noahService'
 import {
   ensureSendPayoutQuoteStashed,
+  isCompletePayoutQuote,
   isStashedPayoutQuoteFresh,
+  peekLastPayoutQuoteError,
   peekSendPayoutQuote,
   clearSendPayoutQuote,
 } from '../../lib/sendFlowPayoutQuote'
@@ -1353,6 +1355,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
            android_ripple={ripple.neutral}
             style={[styles.sendButton, { marginTop: spacing[2] }, sendButtonDisabled && styles.sendButtonDisabled]}
             onPress={async () => {
+              try {
               const enteredAmountValue = Number.parseFloat(sendAmount.replace(/,/g, ''))
               if (!sendAmount || sendAmount === '0' || enteredAmountValue <= 0 || !recipient || !selectedPaymentMethod) return
 
@@ -1505,9 +1508,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 !isEasetagRecipient &&
                 !isWalletRecipient &&
                 receiveAmountValue > 0 &&
-                !stashedQuote?.noah?.formSessionId
+                !isCompletePayoutQuote(stashedQuote)
               ) {
-                showError('Could not load payout quote. Try again.')
+                showError(peekLastPayoutQuoteError() || 'Could not load payout quote. Try again.')
                 return
               }
               let calculatedSendingAmount =
@@ -1625,6 +1628,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   totalAmount: calculatedTotalAmount,
                   manualQuote: manualQuote ?? null,
                 } as never)
+              }
+              } catch (e) {
+                console.error('[SendAmount] continue failed:', e)
+                showError(e instanceof Error ? e.message : 'Something went wrong. Try again.')
               }
             }}
             disabled={sendButtonDisabled}

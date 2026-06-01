@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach } from 'vitest'
 import type { PayoutQuote } from './noahService'
 import {
   clearSendPayoutQuote,
+  isCompletePayoutQuote,
   isStashedPayoutQuoteFresh,
   stashSendPayoutQuote,
 } from './sendFlowPayoutQuote'
@@ -74,6 +75,17 @@ describe('sendFlowPayoutQuote stash', () => {
         entryAmount: 1000,
         receiveCurrency: 'NGN',
       }),
+    ).toBe(false)
+  })
+
+  it('rejects incomplete quotes', () => {
+    expect(isCompletePayoutQuote(null)).toBe(false)
+    expect(
+      isCompletePayoutQuote(
+        sampleQuote({
+          easner: undefined as unknown as PayoutQuote['easner'],
+        }),
+      ),
     ).toBe(false)
   })
 })

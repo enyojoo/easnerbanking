@@ -8,12 +8,20 @@ import React, {
   useRef,
   useState,
 } from 'react'
-import { Keyboard, Platform } from 'react-native'
+import { Keyboard, Platform, View } from 'react-native'
 import RecipientFormSelectSheet from './RecipientFormSelectSheet'
+
+type DropdownAnchor = {
+  x: number
+  y: number
+  width: number
+  height: number
+}
 
 type DropdownSheetState = {
   content: React.ReactNode
   onClose: () => void
+  anchor: DropdownAnchor | null
 } | null
 
 type CloseSheetOptions = {
@@ -21,8 +29,9 @@ type CloseSheetOptions = {
 }
 
 type RecipientFormDropdownHostContextValue = {
-  openSheet: (content: React.ReactNode, onClose: () => void) => void
+  openSheet: (content: React.ReactNode, onClose: () => void, anchor: DropdownAnchor | null) => void
   syncSheetContent: (content: React.ReactNode) => void
+  syncSheetAnchor: (anchor: DropdownAnchor | null) => void
   closeSheet: (options?: CloseSheetOptions) => void
 }
 
@@ -57,8 +66,15 @@ export function RecipientFormDropdownHost({ children }: { children: React.ReactN
     })
   }, [])
 
-  const openSheet = useCallback((content: React.ReactNode, onClose: () => void) => {
-    setSheet({ content, onClose })
+  const openSheet = useCallback(
+    (content: React.ReactNode, onClose: () => void, anchor: DropdownAnchor | null) => {
+      setSheet({ content, onClose, anchor })
+    },
+    [],
+  )
+
+  const syncSheetAnchor = useCallback((anchor: DropdownAnchor | null) => {
+    setSheet((prev) => (prev ? { ...prev, anchor } : null))
   }, [])
 
   const syncSheetContent = useCallback((content: React.ReactNode) => {
@@ -66,8 +82,8 @@ export function RecipientFormDropdownHost({ children }: { children: React.ReactN
   }, [])
 
   const value = useMemo(
-    () => ({ openSheet, syncSheetContent, closeSheet }),
-    [openSheet, syncSheetContent, closeSheet],
+    () => ({ openSheet, syncSheetContent, syncSheetAnchor, closeSheet }),
+    [openSheet, syncSheetContent, syncSheetAnchor, closeSheet],
   )
 
   return (
@@ -76,6 +92,7 @@ export function RecipientFormDropdownHost({ children }: { children: React.ReactN
       <RecipientFormSelectSheet
         visible={sheet != null}
         onClose={() => closeSheet({ notify: true })}
+        anchor={sheet?.anchor ?? null}
         keyboardBottom={keyboardBottom}
       >
         {sheet?.content}
@@ -84,7 +101,7 @@ export function RecipientFormDropdownHost({ children }: { children: React.ReactN
   )
 }
 
-/** Mount picker content in the bottom sheet while `visible` is true. */
+/** Mount picker content in the shared anchored overlay while `visible` is true. */
 export function useRecipientFormDropdownSheet(
   visible: boolean,
   onClose: () => void,
@@ -106,7 +123,7 @@ export function useRecipientFormDropdownSheet(
 
   useLayoutEffect(() => {
     if (!visible) return
-    ctx.openSheet(contentRef.current, stableOnClose)
+    ctx.openSheet(contentRef.current, stableOnClose, null)
     return () => {
       ctx.closeSheet({ notify: false })
     }
@@ -118,7 +135,7 @@ export function useRecipientFormDropdownSheet(
   }, [content, visible, ctx])
 }
 
-/** Renders nothing inline; shows `children` in the shared bottom sheet while `visible`. */
+/** Renders an invisible anchor inline; shows `children` in the shared anchored overlay while `visible`. */
 export function RegisterRecipientDropdownSheet({
   visible,
   onClose,
@@ -128,6 +145,47 @@ export function RegisterRecipientDropdownSheet({
   onClose: () => void
   children: React.ReactNode
 }) {
-  useRecipientFormDropdownSheet(visible, onClose, children)
-  return null
+  const anchorRef = useRef<View>(null)
+  const ctx = useContext(RecipientFormDropdownHostContext)
+  if (!ctx) {
+    throw new Error('RegisterRecipientDropdownSheet must be used within RecipientFormDropdownHost')
+  }
+
+  const measureAnchor = useCallback(
+    (callback: (anchor: DropdownAnchor | null) => void) => {
+      requestAnimationFrame(() => {
+        anchorRef.current?.measureInWindow((x, y, width, height) => {
+          callback(width > 0 ? { x, y, width, height } : null)
+        })
+      })
+    },
+    [],
+  )
+
+  const onCloseRef = useRef(onClose)
+  const contentRef = useRef(children)
+  onCloseRef.current = onClose
+  contentRef.current = children
+
+  const stableOnClose = useCallback(() => {
+    onCloseRef.current()
+  }, [])
+
+  useLayoutEffect(() => {
+    if (!visible) return
+    measureAnchor((anchor) => {
+      ctx.openSheet(contentRef.current, stableOnClose, anchor)
+    })
+    return () => {
+      ctx.closeSheet({ notify: false })
+    }
+  }, [visible, ctx, stableOnClose, measureAnchor])
+
+  useLayoutEffect(() => {
+    if (!visible) return
+    ctx.syncSheetContent(contentRef.current)
+    measureAnchor(ctx.syncSheetAnchor)
+  }, [children, visible, ctx, measureAnchor])
+
+  return <View ref={anchorRef} collapsable={false} pointerEvents="none" style={{ height: 0, width: '100%' }} />
 }

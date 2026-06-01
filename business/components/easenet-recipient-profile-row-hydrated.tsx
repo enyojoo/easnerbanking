@@ -78,13 +78,8 @@ export function EasenetRecipientProfileRowHydrated({
     }
   }, [easetag, avatarUrl, fullName, accountKind])
 
+  // Stale-while-revalidate: show cache/props instantly, always refresh from API in background.
   useEffect(() => {
-    const propAvatar = String(avatarUrl || "").trim()
-    if (propAvatar) return
-
-    const cached = readEasenetPublicProfileCache(easetag)
-    if (cached && String(cached.avatarUrl || "").trim()) return
-
     let cancelled = false
     void (async () => {
       const res = await fetchEasenetProfileByTag(easetag)
@@ -108,7 +103,7 @@ export function EasenetRecipientProfileRowHydrated({
     return () => {
       cancelled = true
     }
-  }, [easetag, avatarUrl])
+  }, [easetag, avatarUrl, fullName, accountKind])
 
   const mergedAvatar = String(avatarUrl || "").trim() ? avatarUrl : remote?.avatarUrl ?? null
   const mergedName = fullName

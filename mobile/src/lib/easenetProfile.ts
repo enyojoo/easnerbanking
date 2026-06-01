@@ -66,13 +66,50 @@ const DISK_TTL_MS = 30 * 24 * 60 * 60 * 1000
 const PERSIST_KEY_PREFIX = 'easner_easenet_public_profile_v1_'
 
 const cachedProfiles = new Map<string, { at: number; value: EasenetPublicProfile }>()
-const inflightProfiles = new Map<string, Promise<EasenetPublicProfile>>()
+const inflightRevalidations = new Map<string, Promise<EasenetPublicProfile>>()
+const profileListeners = new Map<string, Set<(profile: EasenetPublicProfile) => void>>()
 
 function cacheKeyForEasetag(rawTag: string): string {
   return String(rawTag || '')
     .trim()
     .replace(/^@+/, '')
     .toLowerCase()
+}
+
+function notifyProfileListeners(key: string, profile: EasenetPublicProfile): void {
+  const listeners = profileListeners.get(key)
+  if (!listeners) return
+  for (const listener of listeners) {
+    listener(profile)
+  }
+}
+
+async function storeEasenetProfile(key: string, value: EasenetPublicProfile): Promise<void> {
+  cachedProfiles.set(key, { at: Date.now(), value })
+  if (value.found) {
+    await writePersistedEasenetProfile(key, value)
+    await prefetchImageUri(normalizeAvatarUrl(value.avatarUrl))
+  }
+  notifyProfileListeners(key, value)
+}
+
+/** Subscribe to background revalidation updates for a tag (SWR). */
+export function subscribeEasenetPublicProfile(
+  rawTag: string,
+  listener: (profile: EasenetPublicProfile) => void,
+): () => void {
+  const key = cacheKeyForEasetag(rawTag)
+  if (key.length < 4) return () => {}
+  let set = profileListeners.get(key)
+  if (!set) {
+    set = new Set()
+    profileListeners.set(key, set)
+  }
+  set.add(listener)
+  return () => {
+    set!.delete(listener)
+    if (set!.size === 0) profileListeners.delete(key)
+  }
 }
 
 /** Synchronous read of the in-memory Easenet profile cache (same TTL as {@link fetchEasenetPublicProfileCached}). */
@@ -142,13 +179,38 @@ export async function primeEasenetPublicProfileCache(
     avatarUrl: snapshot.avatarUrl?.trim() || null,
     accountKind: snapshot.accountKind,
   }
-  cachedProfiles.set(key, { at: Date.now(), value })
-  await writePersistedEasenetProfile(key, value)
-  await prefetchImageUri(normalizeAvatarUrl(value.avatarUrl))
+  await storeEasenetProfile(key, value)
 }
 
 /**
- * Non-blocking warmup for Easetag public profiles; deduped by in-flight + cache checks.
+ * Force network refresh, update caches, and notify subscribers.
+ */
+export async function revalidateEasenetPublicProfile(rawTag: string): Promise<EasenetPublicProfile> {
+  const key = cacheKeyForEasetag(rawTag)
+  if (key.length < 4) {
+    return { found: false }
+  }
+
+  const pending = inflightRevalidations.get(key)
+  if (pending) return pending
+
+  const promise = fetchEasenetPublicProfile(key)
+    .then(async (value) => {
+      await storeEasenetProfile(key, value)
+      inflightRevalidations.delete(key)
+      return value
+    })
+    .catch((error) => {
+      inflightRevalidations.delete(key)
+      throw error
+    })
+
+  inflightRevalidations.set(key, promise)
+  return promise
+}
+
+/**
+ * Non-blocking warmup: show cached profiles instantly, revalidate every tag in the background.
  */
 export async function warmEasenetPublicProfiles(rawTags: string[]): Promise<void> {
   const unique = Array.from(
@@ -170,16 +232,17 @@ export async function clearEasenetPublicProfileCaches(): Promise<void> {
       await AsyncStorage.multiRemove(toRemove)
     }
     cachedProfiles.clear()
+    profileListeners.clear()
   } catch {
     // ignore
   }
 }
 
 /**
- * Same as {@link fetchEasenetPublicProfile} but:
- * - dedupes in-flight requests
- * - reuses in-memory results (24h)
- * - reuses AsyncStorage (7d) so app restarts don’t always refetch
+ * Stale-while-revalidate:
+ * - returns memory/disk cache immediately when available
+ * - always kicks off a background network refresh (deduped)
+ * - cold miss blocks until the first fetch completes
  */
 export async function fetchEasenetPublicProfileCached(rawTag: string): Promise<EasenetPublicProfile> {
   const key = cacheKeyForEasetag(rawTag)
@@ -189,35 +252,16 @@ export async function fetchEasenetPublicProfileCached(rawTag: string): Promise<E
 
   const mem = cachedProfiles.get(key)
   if (mem && Date.now() - mem.at < MEMORY_TTL_MS) {
+    void revalidateEasenetPublicProfile(key).catch(() => {})
     return mem.value
   }
 
   const disk = await readPersistedEasenetProfile(key)
   if (disk?.found) {
     cachedProfiles.set(key, { at: Date.now(), value: disk })
+    void revalidateEasenetPublicProfile(key).catch(() => {})
     return disk
   }
 
-  const pending = inflightProfiles.get(key)
-  if (pending) {
-    return pending
-  }
-
-  const promise = fetchEasenetPublicProfile(key)
-    .then(async (v) => {
-      cachedProfiles.set(key, { at: Date.now(), value: v })
-      inflightProfiles.delete(key)
-      if (v.found) {
-        await writePersistedEasenetProfile(key, v)
-        await prefetchImageUri(normalizeAvatarUrl(v.avatarUrl))
-      }
-      return v
-    })
-    .catch((e) => {
-      inflightProfiles.delete(key)
-      throw e
-    })
-
-  inflightProfiles.set(key, promise)
-  return promise
+  return revalidateEasenetPublicProfile(key)
 }

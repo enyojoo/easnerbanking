@@ -1,13 +1,21 @@
 import React from 'react'
-import { Modal, Platform, Pressable, StyleSheet, View } from 'react-native'
+import { Modal, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { colors, spacing, borderRadius } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
+
+type DropdownAnchor = {
+  x: number
+  y: number
+  width: number
+  height: number
+}
 
 type RecipientFormSelectSheetProps = {
   visible: boolean
   onClose: () => void
   children: React.ReactNode
+  anchor?: DropdownAnchor | null
   /** Extra bottom inset when the software keyboard is open (px). */
   keyboardBottom?: number
 }
@@ -15,14 +23,28 @@ type RecipientFormSelectSheetProps = {
 function SheetBody({
   onClose,
   keyboardBottom = 0,
+  anchor,
   children,
 }: {
   onClose: () => void
   keyboardBottom?: number
+  anchor?: DropdownAnchor | null
   children: React.ReactNode
 }) {
   const insets = useSafeAreaInsets()
-  const bottomPad = Math.max(insets.bottom, spacing[3]) + keyboardBottom
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions()
+  const horizontalInset = spacing[5]
+  const dropdownTop = anchor ? anchor.y + anchor.height + spacing[1] : undefined
+  const dropdownLeft = anchor
+    ? Math.max(horizontalInset, Math.min(anchor.x, windowWidth - anchor.width - horizontalInset))
+    : horizontalInset
+  const dropdownWidth = anchor
+    ? Math.min(anchor.width, windowWidth - horizontalInset * 2)
+    : windowWidth - horizontalInset * 2
+  const bottomLimit = windowHeight - Math.max(insets.bottom, spacing[3]) - keyboardBottom - spacing[3]
+  const dropdownMaxHeight = anchor
+    ? Math.max(140, Math.min(320, bottomLimit - (dropdownTop ?? 0)))
+    : 320
 
   return (
     <View style={styles.host}>
@@ -32,10 +54,27 @@ function SheetBody({
         accessibilityRole="button"
         accessibilityLabel="Close menu"
       />
-      <View style={[styles.sheetWrap, { paddingBottom: bottomPad }]}>
+      <View
+        style={[
+          styles.dropdownWrap,
+          anchor
+            ? {
+                top: dropdownTop,
+                left: dropdownLeft,
+                width: dropdownWidth,
+                maxHeight: dropdownMaxHeight,
+              }
+            : {
+                left: horizontalInset,
+                right: horizontalInset,
+                bottom: Math.max(insets.bottom, spacing[3]) + keyboardBottom,
+                maxHeight: dropdownMaxHeight,
+              },
+        ]}
+      >
         <Pressable
           android_ripple={ripple.neutral}
-          style={styles.sheet}
+          style={[styles.dropdown, { maxHeight: dropdownMaxHeight }]}
           onPress={(e) => e.stopPropagation()}
         >
           {children}
@@ -46,13 +85,14 @@ function SheetBody({
 }
 
 /**
- * Bottom-anchored picker presented in a root RN Modal so it layers above
+ * Field-anchored picker presented in a root RN Modal so it layers above
  * the add-recipient sheet (embedded overlays inside another Modal often do not paint).
  */
 export default function RecipientFormSelectSheet({
   visible,
   onClose,
   children,
+  anchor = null,
   keyboardBottom = 0,
 }: RecipientFormSelectSheetProps) {
   if (!visible) return null
@@ -66,7 +106,7 @@ export default function RecipientFormSelectSheet({
       statusBarTranslucent
       presentationStyle="overFullScreen"
     >
-      <SheetBody onClose={onClose} keyboardBottom={keyboardBottom}>
+      <SheetBody onClose={onClose} keyboardBottom={keyboardBottom} anchor={anchor}>
         {children}
       </SheetBody>
     </Modal>
@@ -76,29 +116,30 @@ export default function RecipientFormSelectSheet({
 const styles = StyleSheet.create({
   host: {
     flex: 1,
-    justifyContent: 'flex-end',
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: 'transparent',
   },
-  sheetWrap: {
-    paddingHorizontal: spacing[5],
-    maxHeight: '58%',
+  dropdownWrap: {
+    position: 'absolute',
   },
-  sheet: {
+  dropdown: {
     borderWidth: 1,
     borderColor: colors.frame.border,
     borderRadius: borderRadius.lg,
     backgroundColor: colors.background.primary,
     overflow: 'hidden',
-    maxHeight: 320,
     ...Platform.select({
       ios: {
         shadowColor: colors.neutral.black,
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.12,
-        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.16,
+        shadowRadius: 18,
       },
       android: { elevation: 24 },
     }),

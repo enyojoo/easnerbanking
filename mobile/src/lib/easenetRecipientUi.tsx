@@ -18,18 +18,6 @@ export function isEasenetRecipientRecord(r: {
 }
 
 /** Tag for display / transfers; empty if not an Easenet row. */
-/**
- * Saved / draft Easetag rows already carry `payee_account_kind` and display name from lookup or DB —
- * skip repeated public API fetches (see {@link useEasenetRecipientHydration}).
- */
-export function shouldSkipEasenetPublicFetch(r: {
-  bank_name?: string | null
-  full_name?: string | null
-}): boolean {
-  if (!isEasenetRecipientRecord(r)) return false
-  return Boolean(String(r.full_name || '').trim())
-}
-
 export function resolveRecipientEasetagForUi(r: {
   payee_easetag?: string | null
   bank_name?: string | null
@@ -39,6 +27,24 @@ export function resolveRecipientEasetagForUi(r: {
   const m = String(r.bank_name || '').match(/^Easetag\s*\(@([^)]+)\)/i)
   if (m?.[1]) return normalizeEasetag(m[1])
   return ''
+}
+
+/**
+ * Saved / draft Easetag rows with a client snapshot (avatar or account kind) can render
+ * instantly without refetching public profile on every screen.
+ */
+export function shouldSkipEasenetPublicFetch(r: {
+  payee_easetag?: string | null
+  bank_name?: string | null
+  full_name?: string | null
+  payee_account_kind?: 'business' | 'personal' | null
+  payee_avatar_url?: string | null
+}): boolean {
+  if (!isEasenetRecipientRecord(r)) return false
+  if (!String(r.full_name || '').trim()) return false
+  const kind = r.payee_account_kind
+  if (kind === 'business' || kind === 'personal') return true
+  return Boolean(String(r.payee_avatar_url || '').trim())
 }
 
 export function formatEasenetRecipientSubtitle(

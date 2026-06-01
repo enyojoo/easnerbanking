@@ -292,6 +292,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       easenetRows.map((row) =>
         primeEasenetPublicProfileCache(resolveRecipientEasetagForUi(row), {
           fullName: row.full_name,
+          avatarUrl: row.payee_avatar_url,
+          accountKind: row.payee_account_kind,
         }),
       ),
     )
@@ -348,7 +350,9 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     return buildDraftEasenetRecipient({
       easetag: hubSearchEasenet.easetag,
       fullName: hubSearchEasenet.fullName,
+      avatarUrl: hubSearchEasenet.avatarUrl,
       userId: userProfile.id,
+      accountKind: hubSearchEasenet.accountKind,
     })
   }, [hubSearchEasenet, userProfile?.id])
 
@@ -581,6 +585,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
           bankName: `Easetag (@${tag})`,
           currency: 'USD',
           countryCode: 'US',
+          payeeAvatarUrl: easenetProfile.avatarUrl,
+          payeeAccountKind: easenetProfile.accountKind,
         })
         if (scope && user?.id) await invalidateRecipientsFeed(qc, scope, user.id)
         setError('')

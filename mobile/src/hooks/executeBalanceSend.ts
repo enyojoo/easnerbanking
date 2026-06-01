@@ -256,6 +256,8 @@ export async function executeBalanceSend(
         bankName: `Easetag (@${tag})`,
         currency: 'USD',
         countryCode: 'US',
+        payeeAvatarUrl: recipient.payee_avatar_url,
+        payeeAccountKind: recipient.payee_account_kind,
       })
       if (ctx.scope && ctx.userId) await invalidateRecipientsFeed(ctx.qc, ctx.scope, ctx.userId)
       recipientForDetails = created

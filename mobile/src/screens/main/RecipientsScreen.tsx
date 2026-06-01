@@ -260,6 +260,8 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
       easenetRows.map((row) =>
         primeEasenetPublicProfileCache(resolveRecipientEasetagForUi(row), {
           fullName: row.full_name,
+          avatarUrl: row.payee_avatar_url,
+          accountKind: row.payee_account_kind,
         }),
       ),
     )
@@ -461,6 +463,8 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
           bankName: `Easetag (@${tag})`,
           currency: 'USD',
           countryCode: 'US',
+          payeeAvatarUrl: easenetProfile.avatarUrl,
+          payeeAccountKind: easenetProfile.accountKind,
         })
         setUiRecipients((prev) => [createdRecipient, ...prev.filter((r) => r.id !== createdRecipient.id)])
         if (scope && user?.id) await invalidateRecipientsFeed(qc, scope, user.id)
@@ -679,6 +683,8 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
           accountNumber: tag,
           bankName: `Easetag (@${tag})`,
           countryCode: 'US',
+          payeeAvatarUrl: easenetProfile.avatarUrl,
+          payeeAccountKind: easenetProfile.accountKind,
         })
         setUiRecipients((prev) => prev.map((r) => (r.id === updatedRecipient.id ? updatedRecipient : r)))
         if (scope && user?.id) await invalidateRecipientsFeed(qc, scope, user.id)

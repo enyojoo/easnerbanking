@@ -48,6 +48,9 @@ export interface Recipient {
   postal_code?: string
   /** Derived from `Easetag (@tag)` bank_name + account_number — not a DB column. */
   payee_easetag?: string
+  /** Client-only snapshot from Easenet lookup / profile cache — not a DB column. */
+  payee_avatar_url?: string | null
+  payee_account_kind?: 'business' | 'personal'
   transfer_type?: "ACH" | "Wire"
   checking_or_savings?: "checking" | "savings"
   mobile_provider?: string

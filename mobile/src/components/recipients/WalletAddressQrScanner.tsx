@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef } from 'react'
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { CameraView } from 'expo-camera'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { X } from 'lucide-react-native'
@@ -19,7 +19,9 @@ export function WalletAddressQrScannerContent({
   onScan,
 }: Pick<WalletAddressQrScannerProps, 'visible' | 'onClose' | 'onScan'>) {
   const insets = useSafeAreaInsets()
+  const { width, height } = useWindowDimensions()
   const scanHandledRef = useRef(false)
+  const frameSize = Math.min(320, Math.max(240, Math.min(width * 0.72, height * 0.42)))
 
   useEffect(() => {
     if (visible) {
@@ -66,7 +68,7 @@ export function WalletAddressQrScannerContent({
         </View>
 
         <View style={styles.centerGroup} pointerEvents="none">
-          <View style={styles.frame} />
+          <View style={[styles.frame, { width: frameSize, height: frameSize }]} />
           <Text style={styles.hint}>Align QR code inside the frame</Text>
         </View>
       </View>
@@ -98,21 +100,29 @@ export const walletAddressQrScannerStyles = StyleSheet.create({
     backgroundColor: '#000',
   },
   camera: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
   },
   uiLayer: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'flex-start',
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     alignItems: 'center',
     paddingHorizontal: spacing[6],
   },
   header: {
+    position: 'absolute',
+    left: spacing[6],
+    right: spacing[6],
+    top: 0,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    width: '100%',
     paddingBottom: spacing[4],
   },
   title: {
@@ -129,12 +139,12 @@ export const walletAddressQrScannerStyles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.35)',
   },
   centerGroup: {
-    marginTop: spacing[16],
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
+    paddingTop: spacing[12],
   },
   frame: {
-    width: 260,
-    height: 260,
     borderRadius: 18,
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.9)',
