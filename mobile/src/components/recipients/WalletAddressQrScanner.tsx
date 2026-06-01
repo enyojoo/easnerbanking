@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef } from 'react'
-import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 import { CameraView } from 'expo-camera'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { X } from 'lucide-react-native'
@@ -11,14 +11,9 @@ type WalletAddressQrScannerProps = {
   visible: boolean
   onClose: () => void
   onScan: (address: string) => void
-  /**
-   * Render as a full-screen overlay inside an existing Modal (e.g. add-wallet sheet).
-   * A second RN Modal does not present reliably while another Modal is visible.
-   */
-  embedded?: boolean
 }
 
-function ScannerContent({
+export function WalletAddressQrScannerContent({
   visible,
   onClose,
   onScan,
@@ -47,13 +42,13 @@ function ScannerContent({
   if (!visible) return null
 
   return (
-    <View style={styles.root}>
+    <View style={styles.root} collapsable={false}>
       <CameraView
-        style={StyleSheet.absoluteFillObject}
+        style={styles.camera}
         facing="back"
         active={visible}
         barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-        onBarcodeScanned={handleBarcodeScanned}
+        onBarcodeScanned={visible ? handleBarcodeScanned : undefined}
       />
 
       <View style={styles.uiLayer} pointerEvents="box-none">
@@ -83,17 +78,7 @@ export default function WalletAddressQrScanner({
   visible,
   onClose,
   onScan,
-  embedded = false,
 }: WalletAddressQrScannerProps) {
-  if (embedded) {
-    if (!visible) return null
-    return (
-      <View style={styles.embeddedHost} pointerEvents="auto">
-        <ScannerContent visible={visible} onClose={onClose} onScan={onScan} />
-      </View>
-    )
-  }
-
   return (
     <Modal
       visible={visible}
@@ -102,22 +87,20 @@ export default function WalletAddressQrScanner({
       statusBarTranslucent
       onRequestClose={onClose}
     >
-      <ScannerContent visible={visible} onClose={onClose} onScan={onScan} />
+      <WalletAddressQrScannerContent visible={visible} onClose={onClose} onScan={onScan} />
     </Modal>
   )
 }
 
-const styles = StyleSheet.create({
-  embeddedHost: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 2000,
-    ...Platform.select({
-      android: { elevation: 2000 },
-    }),
-  },
+export const walletAddressQrScannerStyles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: '#000',
+  },
+  camera: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
   },
   uiLayer: {
     ...StyleSheet.absoluteFillObject,
@@ -164,3 +147,5 @@ const styles = StyleSheet.create({
     marginTop: spacing[3],
   },
 })
+
+const styles = walletAddressQrScannerStyles

@@ -50,6 +50,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: gate.error }, { status: 400 })
   }
 
+  const amountEntryMode = body?.amountEntryMode === "send" ? "send" : "receive"
+  const sendAmountInput = Number(body?.sendAmount)
+  const sendBudget =
+    amountEntryMode === "send" &&
+    Number.isFinite(sendAmountInput) &&
+    sendAmountInput > 0
+      ? sendAmountInput
+      : undefined
+  const receiveAmountInput = Number(body?.receiveAmount)
+  if (
+    amountEntryMode === "receive" &&
+    (!Number.isFinite(receiveAmountInput) || receiveAmountInput <= 0) &&
+    !sendBudget
+  ) {
+    return NextResponse.json({ error: "receiveAmount must be positive." }, { status: 400 })
+  }
+  if (amountEntryMode === "send" && !sendBudget) {
+    return NextResponse.json({ error: "sendAmount must be positive." }, { status: 400 })
+  }
+
   const sourceBalanceCurrency = String(body?.sourceBalanceCurrency || "USD").trim().toUpperCase()
   const settlement = settlementAssetForBalance(sourceBalanceCurrency)
   const probeFrom = await resolveTurnkeyAddressForNoahPair(
@@ -64,9 +84,9 @@ export async function POST(request: Request) {
       admin,
       recipient: recipient as WalletRecipientRow,
       sourceBalanceCurrency,
-      amountEntryMode: body?.amountEntryMode === "send" ? "send" : "receive",
-      receiveAmount: Number(body?.receiveAmount),
-      sendAmount: Number(body?.sendAmount),
+      amountEntryMode,
+      receiveAmount: receiveAmountInput,
+      sendAmount: sendAmountInput,
       probeFromAddress: probeFrom ?? undefined,
     })
     return NextResponse.json({ ok: true, quote })

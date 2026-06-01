@@ -75,6 +75,7 @@ import {
 import {
   ensureSendWalletQuoteStashed,
   isStashedWalletQuoteFresh,
+  peekLastWalletQuoteError,
   peekSendWalletQuote,
   clearSendWalletQuote,
 } from '../../lib/sendFlowWalletQuote'
@@ -1493,7 +1494,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 receiveAmountValue > 0 &&
                 !stashedWalletQuote?.formSessionId
               ) {
-                showError('Could not load wallet send quote. Try again.')
+                showError(
+                  peekLastWalletQuoteError() || 'Could not load wallet send quote. Try again.',
+                )
                 return
               }
 

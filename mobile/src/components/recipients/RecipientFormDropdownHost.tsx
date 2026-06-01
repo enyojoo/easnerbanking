@@ -1,6 +1,14 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { Keyboard, Platform } from 'react-native'
-import { useEffect } from 'react'
 import RecipientFormSelectSheet from './RecipientFormSelectSheet'
 
 type DropdownSheetState = {
@@ -8,9 +16,14 @@ type DropdownSheetState = {
   onClose: () => void
 } | null
 
+type CloseSheetOptions = {
+  notify?: boolean
+}
+
 type RecipientFormDropdownHostContextValue = {
   openSheet: (content: React.ReactNode, onClose: () => void) => void
-  closeSheet: () => void
+  syncSheetContent: (content: React.ReactNode) => void
+  closeSheet: (options?: CloseSheetOptions) => void
 }
 
 const RecipientFormDropdownHostContext = createContext<RecipientFormDropdownHostContextValue | null>(
@@ -34,34 +47,35 @@ export function RecipientFormDropdownHost({ children }: { children: React.ReactN
     }
   }, [])
 
-  const closeSheet = useCallback(() => {
+  const closeSheet = useCallback((options?: CloseSheetOptions) => {
+    const notify = options?.notify !== false
     setSheet((prev) => {
-      prev?.onClose()
+      if (prev && notify) {
+        prev.onClose()
+      }
       return null
     })
   }, [])
 
   const openSheet = useCallback((content: React.ReactNode, onClose: () => void) => {
-    setSheet((prev) => {
-      if (prev?.onClose !== onClose) {
-        prev?.onClose()
-      }
-      return { content, onClose }
-    })
+    setSheet({ content, onClose })
+  }, [])
+
+  const syncSheetContent = useCallback((content: React.ReactNode) => {
+    setSheet((prev) => (prev ? { ...prev, content } : null))
   }, [])
 
   const value = useMemo(
-    () => ({ openSheet, closeSheet }),
-    [openSheet, closeSheet],
+    () => ({ openSheet, syncSheetContent, closeSheet }),
+    [openSheet, syncSheetContent, closeSheet],
   )
 
   return (
     <RecipientFormDropdownHostContext.Provider value={value}>
       {children}
       <RecipientFormSelectSheet
-        embedded
         visible={sheet != null}
-        onClose={closeSheet}
+        onClose={() => closeSheet({ notify: true })}
         keyboardBottom={keyboardBottom}
       >
         {sheet?.content}
@@ -81,13 +95,27 @@ export function useRecipientFormDropdownSheet(
     throw new Error('useRecipientFormDropdownSheet must be used within RecipientFormDropdownHost')
   }
 
-  useEffect(() => {
+  const onCloseRef = useRef(onClose)
+  const contentRef = useRef(content)
+  onCloseRef.current = onClose
+  contentRef.current = content
+
+  const stableOnClose = useCallback(() => {
+    onCloseRef.current()
+  }, [])
+
+  useLayoutEffect(() => {
     if (!visible) return
-    ctx.openSheet(content, onClose)
+    ctx.openSheet(contentRef.current, stableOnClose)
     return () => {
-      ctx.closeSheet()
+      ctx.closeSheet({ notify: false })
     }
-  }, [visible, onClose, content, ctx])
+  }, [visible, ctx, stableOnClose])
+
+  useLayoutEffect(() => {
+    if (!visible) return
+    ctx.syncSheetContent(contentRef.current)
+  }, [content, visible, ctx])
 }
 
 /** Renders nothing inline; shows `children` in the shared bottom sheet while `visible`. */

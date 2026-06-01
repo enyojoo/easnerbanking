@@ -10,11 +10,6 @@ type RecipientFormSelectSheetProps = {
   children: React.ReactNode
   /** Extra bottom inset when the software keyboard is open (px). */
   keyboardBottom?: number
-  /**
-   * When true, render inside the add-recipient modal (no nested RN Modal).
-   * Nested modals do not receive touches reliably on iOS/Android.
-   */
-  embedded?: boolean
 }
 
 function SheetBody({
@@ -30,14 +25,14 @@ function SheetBody({
   const bottomPad = Math.max(insets.bottom, spacing[3]) + keyboardBottom
 
   return (
-    <View style={styles.host} pointerEvents="box-none">
+    <View style={styles.host}>
       <Pressable
         style={styles.overlay}
         onPress={onClose}
         accessibilityRole="button"
         accessibilityLabel="Close menu"
       />
-      <View style={[styles.sheetWrap, { paddingBottom: bottomPad }]} pointerEvents="box-none">
+      <View style={[styles.sheetWrap, { paddingBottom: bottomPad }]}>
         <Pressable
           android_ripple={ripple.neutral}
           style={styles.sheet}
@@ -51,27 +46,16 @@ function SheetBody({
 }
 
 /**
- * Bottom-anchored picker for add-recipient dropdowns: tap outside to dismiss,
- * keyboard-aware padding, no selection required to close.
+ * Bottom-anchored picker presented in a root RN Modal so it layers above
+ * the add-recipient sheet (embedded overlays inside another Modal often do not paint).
  */
 export default function RecipientFormSelectSheet({
   visible,
   onClose,
   children,
   keyboardBottom = 0,
-  embedded = false,
 }: RecipientFormSelectSheetProps) {
   if (!visible) return null
-
-  if (embedded) {
-    return (
-      <View style={styles.embeddedHost} pointerEvents="box-none">
-        <SheetBody onClose={onClose} keyboardBottom={keyboardBottom}>
-          {children}
-        </SheetBody>
-      </View>
-    )
-  }
 
   return (
     <Modal
@@ -80,6 +64,7 @@ export default function RecipientFormSelectSheet({
       animationType="fade"
       onRequestClose={onClose}
       statusBarTranslucent
+      presentationStyle="overFullScreen"
     >
       <SheetBody onClose={onClose} keyboardBottom={keyboardBottom}>
         {children}
@@ -89,13 +74,6 @@ export default function RecipientFormSelectSheet({
 }
 
 const styles = StyleSheet.create({
-  embeddedHost: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 9000,
-    ...Platform.select({
-      android: { elevation: 9000 },
-    }),
-  },
   host: {
     flex: 1,
     justifyContent: 'flex-end',

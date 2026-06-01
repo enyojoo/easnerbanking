@@ -179,6 +179,9 @@ export const recipientService = {
           payee_easetag: recipientData.payeeEasetag || null,
           payee_avatar_url: recipientData.payeeAvatarUrl ?? null,
           payee_account_kind: recipientData.payeeAccountKind || null,
+          mobile_provider: recipientData.mobileProvider || null,
+          wallet_network: recipientData.walletNetwork || null,
+          wallet_memo_tag: recipientData.walletMemoTag || null,
         }
       const { data, error } = await supabase
         .from('recipients')

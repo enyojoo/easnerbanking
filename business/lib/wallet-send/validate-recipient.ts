@@ -1,3 +1,4 @@
+import { coerceWalletRecipientRow } from "./coerce-recipient"
 import { isCorridorEnabled, listWalletSendCorridors } from "./corridors"
 
 export type WalletRecipientRow = {
@@ -28,12 +29,13 @@ export function walletDestinationAddress(row: WalletRecipientRow): string {
 }
 
 export function validateWalletRecipientForSend(row: WalletRecipientRow): { ok: true } | { ok: false; error: string } {
-  if (!isWalletRecipientRow(row)) {
+  const coerced = coerceWalletRecipientRow(row)
+  if (!isWalletRecipientRow(coerced)) {
     return { ok: false, error: "Recipient is not a wallet address recipient." }
   }
-  const asset = walletReceiveAsset(row)
-  const network = walletReceiveNetwork(row)
-  const address = walletDestinationAddress(row)
+  const asset = walletReceiveAsset(coerced)
+  const network = walletReceiveNetwork(coerced)
+  const address = walletDestinationAddress(coerced)
   if (!address) return { ok: false, error: "Wallet address is required." }
   if (!network) return { ok: false, error: "Wallet network is required." }
   if (!isCorridorEnabled(asset, network)) {

@@ -69,6 +69,7 @@ import TransactionDetailsScreen from '../screens/transactions/TransactionDetails
 // Send Money Flow Screens
 import SendAmountScreen from '../screens/send/SendAmountScreen'
 import SelectRecentRecipientScreen from '../screens/send/SelectRecentRecipientScreen'
+import ScanWalletAddressScreen from '../screens/recipients/ScanWalletAddressScreen'
 import SelectRecipientScreen from '../screens/send/SelectRecipientScreen'
 import SendConfirmScreen from '../screens/send/SendConfirmScreen'
 import SendPinScreen from '../screens/send/SendPinScreen'
@@ -363,6 +364,15 @@ function MainStack() {
             // No animation when going back from SendAmountScreen
             ...(isFromSendAmount ? sendFlowInstantTransitionSpec : sendFlowStandardPreset()),
           }
+        }}
+      />
+      <Stack.Screen
+        name="ScanWalletAddress"
+        component={ScanWalletAddressScreen}
+        options={{
+          headerShown: false,
+          animation: 'slide_from_bottom',
+          contentStyle: { backgroundColor: '#000' },
         }}
       />
       <Stack.Screen 

@@ -1,12 +1,16 @@
 import { randomUUID } from "crypto"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { applyCryptoCustomerRate, parseWalletSendMarginFromEnv } from "@easner/rate-sync"
-import { normalizeCryptoSendQuoteReceiveAmount } from "@easner/shared"
+import {
+  normalizeCryptoSendQuoteReceiveAmount,
+  normalizePayoutReceiveAmountForCurrency,
+} from "@easner/shared"
 import { lifiQuote } from "@/lib/lifi/client"
 import { resolveWalletSendToken, sourceSolVaultToken } from "@/lib/lifi/token-map"
 import { findCryptoRate, listCryptoRates } from "@/lib/fx/crypto-rates"
 import { resolveWalletSendExecutionModel } from "./routing"
 import { pricingFromDirectTurnkey, pricingFromLifiQuote } from "./pricing"
+import { coerceWalletRecipientRow } from "./coerce-recipient"
 import {
   validateWalletRecipientForSend,
   walletDestinationAddress,
@@ -54,7 +58,8 @@ export async function buildWalletSendQuote(input: {
   sendAmount?: number
   probeFromAddress?: string
 }): Promise<WalletSendQuoteResult> {
-  const gate = validateWalletRecipientForSend(input.recipient)
+  const recipient = coerceWalletRecipientRow(input.recipient)
+  const gate = validateWalletRecipientForSend(recipient)
   if (!gate.ok) throw new Error(gate.error)
 
   const sourceBalanceCurrency = input.sourceBalanceCurrency.trim().toUpperCase()
@@ -62,9 +67,9 @@ export async function buildWalletSendQuote(input: {
     throw new Error("sourceBalanceCurrency must be USD or EUR.")
   }
 
-  const receiveAsset = walletReceiveAsset(input.recipient)
-  const receiveNetwork = walletReceiveNetwork(input.recipient)
-  const destinationAddress = walletDestinationAddress(input.recipient)
+  const receiveAsset = walletReceiveAsset(recipient)
+  const receiveNetwork = walletReceiveNetwork(recipient)
+  const destinationAddress = walletDestinationAddress(recipient)
   const amountEntryMode = input.amountEntryMode === "send" ? "send" : "receive"
 
   const rates = await listCryptoRates(input.admin, { destinations: [receiveAsset] })
@@ -140,8 +145,8 @@ export async function buildWalletSendQuote(input: {
 
   await createWalletSendSession(input.admin, {
     formSessionId,
-    userId: input.recipient.user_id,
-    recipientId: input.recipient.id,
+    userId: recipient.user_id,
+    recipientId: recipient.id,
     sourceBalanceCurrency,
     receiveAsset,
     receiveNetwork,

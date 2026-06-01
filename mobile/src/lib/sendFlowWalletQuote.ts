@@ -41,6 +41,11 @@ export function isStashedWalletQuoteFresh(input: SendWalletQuoteStashMeta): bool
 
 let inflightQuote: Promise<WalletSendQuote | null> | null = null
 let inflightQuoteKey = ''
+let lastWalletQuoteError: string | null = null
+
+export function peekLastWalletQuoteError(): string | null {
+  return lastWalletQuoteError
+}
 
 export async function ensureSendWalletQuoteStashed(
   fetchQuote: () => Promise<WalletSendQuote>,
@@ -52,12 +57,17 @@ export async function ensureSendWalletQuoteStashed(
   if (inflightQuote && inflightQuoteKey === key) return inflightQuote
 
   inflightQuoteKey = key
+  lastWalletQuoteError = null
   inflightQuote = fetchQuote()
     .then((quote) => {
       stashSendWalletQuote(quote, meta)
+      lastWalletQuoteError = null
       return quote
     })
-    .catch(() => null)
+    .catch((err) => {
+      lastWalletQuoteError = err instanceof Error ? err.message : 'quote_failed'
+      return null
+    })
     .finally(() => {
       inflightQuote = null
       inflightQuoteKey = ''

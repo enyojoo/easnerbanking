@@ -10,11 +10,11 @@ import {
   Platform,
   Keyboard,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native'
-import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
+import { KeyboardAvoidingView, KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { FlashList } from '@shopify/flash-list'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useCameraPermissions } from 'expo-camera'
 import {
   ArrowLeft,
   AtSign,
@@ -24,7 +24,6 @@ import {
   ChevronRight,
   ChevronUp,
   CircleX,
-  ScanLine,
   Search,
   Smartphone,
   Users,
@@ -84,7 +83,7 @@ import { loadRecipientsListCache, saveRecipientsListCache } from '../../lib/reci
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { CountryFlag } from '../../components/flags/CountryFlag'
 import RecipientFormDropdownList from '../../components/recipients/RecipientFormDropdownList'
-import WalletAddressQrScanner from '../../components/recipients/WalletAddressQrScanner'
+import { WalletAddressField } from '../../components/recipients/WalletAddressField'
 import { inferWalletAddressFromApi } from '../../lib/walletAddressInference'
 import { RecipientBankNameField } from '../../components/recipients/RecipientBankNameField'
 import { useToast } from '../../components/ToastProvider'
@@ -103,7 +102,7 @@ const getInitials = (name: string): string => {
 export default function SelectRecentRecipientScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
   const { user, userProfile } = useAuth()
-  const { showError, showWarning } = useToast()
+  const { showError } = useToast()
   const preferredBalanceCurrency = String((route.params as any)?.preferredBalanceCurrency || '').toUpperCase()
   const routePaymentMethod = (route.params as any)?.selectedPaymentMethod as
     | 'balance'
@@ -144,8 +143,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   const [providerSearchTerm, setProviderSearchTerm] = useState('')
   const [walletAssetSearchTerm, setWalletAssetSearchTerm] = useState('')
   const [walletNetworkSearchTerm, setWalletNetworkSearchTerm] = useState('')
-  const [showScanModal, setShowScanModal] = useState(false)
-  const [cameraPermission, requestCameraPermission] = useCameraPermissions()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [selectedCountryCurrency, setSelectedCountryCurrency] = useState<CountryCurrency | null>(null)
@@ -181,6 +178,29 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       void refreshCatalog()
     }, [refreshCatalog]),
   )
+
+  const applyWalletAddressInference = useCallback((text: string) => {
+    void inferWalletAddressFromApi(text)
+      .then(({ best }) => {
+        if (!best) return
+        setNewRecipient((prev) => ({
+          ...prev,
+          currency: best.asset,
+          network: best.network,
+        }))
+      })
+      .catch(() => {})
+  }, [])
+
+  const scannedWalletAddress = (route.params as { scannedWalletAddress?: string } | undefined)
+    ?.scannedWalletAddress
+
+  useEffect(() => {
+    if (!scannedWalletAddress) return
+    setNewRecipient((prev) => ({ ...prev, walletAddress: scannedWalletAddress }))
+    applyWalletAddressInference(scannedWalletAddress)
+    navigation.setParams({ scannedWalletAddress: undefined } as never)
+  }, [scannedWalletAddress, navigation, applyWalletAddressInference])
 
   const recipientCatalogFor = useCallback(
     (type: RecipientType) =>
@@ -218,7 +238,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   // Animation refs
   const headerAnim = useRef(new Animated.Value(0)).current
   const contentAnim = useRef(new Animated.Value(0)).current
-  const formScrollRef = useRef<ScrollView>(null)
+  const formScrollRef = useRef<React.ComponentRef<typeof KeyboardAwareScrollView>>(null)
 
   useCalmParallelEnterWhen(true, headerAnim, contentAnim)
 
@@ -439,7 +459,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     setShowProviderDropdown(false)
     setShowWalletAssetDropdown(false)
     setShowWalletNetworkDropdown(false)
-    setShowScanModal(false)
     setProviderSearchTerm('')
     setWalletAssetSearchTerm('')
     setWalletNetworkSearchTerm('')
@@ -458,17 +477,10 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     return fieldMap[fieldName] || fieldName
   }
 
-  const handleScanPress = async () => {
+  const handleWalletScanPress = () => {
     Keyboard.dismiss()
-    const perm = cameraPermission?.granted ? cameraPermission : await requestCameraPermission()
-    if (!perm?.granted) {
-      showWarning(
-        'Camera permission needed. Enable camera access in Settings to scan wallet QR codes.',
-      )
-      return
-    }
     closeAllDropdowns()
-    setShowScanModal(true)
+    navigation.navigate('ScanWalletAddress' as never)
   }
 
   const isFormValid = () => {
@@ -1121,10 +1133,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
         animationType="slide"
         transparent={true}
         onRequestClose={() => {
-          if (showScanModal) {
-            setShowScanModal(false)
-            return
-          }
           setShowBankAccountForm(false)
           resetForm()
         }}
@@ -1133,10 +1141,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
           <Pressable 
            android_ripple={ripple.neutral} 
             style={StyleSheet.absoluteFill} onPress={() => {
-              if (showScanModal) {
-                setShowScanModal(false)
-                return
-              }
               closeAllDropdowns()
               setShowBankAccountForm(false)
               resetForm()
@@ -1144,7 +1148,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
           />
           <RecipientFormDropdownHost>
           <View 
-            style={[styles.modalContainer, styles.modalContainerWithScanner, { 
+            style={[styles.modalContainer, { 
               height: '92%',
               paddingBottom: Math.max(insets.bottom, 20),
             }]}>
@@ -1425,38 +1429,15 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                       editable={!isSubmitting}
                     />
                   </View>
-                  <View style={[styles.walletAddressInputWrap, styles.walletAddressInputRow]}>
-                    <TextInput
-                      style={[styles.modalInput, styles.walletAddressInput, styles.walletAddressInputField]}
-                      value={newRecipient.walletAddress}
-                      onChangeText={(text) => {
-                        setNewRecipient(prev => ({ ...prev, walletAddress: text }))
-                        void inferWalletAddressFromApi(text)
-                          .then(({ best }) => {
-                            if (!best) return
-                            setNewRecipient(prev => ({
-                              ...prev,
-                              currency: best.asset,
-                              network: best.network,
-                            }))
-                          })
-                          .catch(() => {})
-                      }}
-                      placeholder="Wallet Address"
-                      placeholderTextColor={colors.text.secondary}
-                      editable={!isSubmitting}
-                    />
-                    <Pressable
-                      android_ripple={ripple.neutral}
-                      style={styles.walletScanIconButton}
-                      onPress={() => void handleScanPress()}
-                      hitSlop={8}
-                      accessibilityRole="button"
-                      accessibilityLabel="Scan wallet address QR code"
-                    >
-                      <ScanLine size={20} color={colors.primary.main} strokeWidth={2} />
-                    </Pressable>
-                  </View>
+                  <WalletAddressField
+                    value={newRecipient.walletAddress}
+                    onChangeText={(text) => {
+                      setNewRecipient((prev) => ({ ...prev, walletAddress: text }))
+                      applyWalletAddressInference(text)
+                    }}
+                    onScanPress={handleWalletScanPress}
+                    editable={!isSubmitting}
+                  />
                   <View style={[styles.currencySelectorWrapper, showWalletAssetDropdown && styles.currencySelectorWrapperActive]}>
                     <Pressable
                      android_ripple={ripple.neutral}
@@ -1956,24 +1937,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
               </View>
               </View>
             </KeyboardAwareScrollView>
-            <WalletAddressQrScanner
-              embedded
-              visible={showScanModal}
-              onClose={() => setShowScanModal(false)}
-              onScan={(address) => {
-                setNewRecipient((prev) => ({ ...prev, walletAddress: address }))
-                void inferWalletAddressFromApi(address)
-                  .then(({ best }) => {
-                    if (!best) return
-                    setNewRecipient((prev) => ({
-                      ...prev,
-                      currency: best.asset,
-                      network: best.network,
-                    }))
-                  })
-                  .catch(() => {})
-              }}
-            />
           </View>
           </RecipientFormDropdownHost>
         </View>
@@ -2312,9 +2275,6 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  modalContainerWithScanner: {
-    overflow: 'hidden',
-  },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -2412,34 +2372,11 @@ const styles = StyleSheet.create({
   walletAddressInputWrap: {
     marginBottom: spacing[4],
   },
-  walletAddressInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-  },
   walletAddressInput: {
     marginBottom: 0,
   },
-  walletAddressInputField: {
-    flex: 1,
-    minWidth: 0,
-  },
   walletNicknameInput: {
     paddingRight: spacing[4],
-  },
-  walletScanIconButton: {
-    width: 48,
-    height: 48,
-    borderRadius: borderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.frame.border,
-    backgroundColor: colors.frame.background,
-    flexShrink: 0,
-    ...Platform.select({
-      android: { elevation: 0 },
-    }),
   },
   currencySelectorWrapper: {
     marginBottom: spacing[4],
