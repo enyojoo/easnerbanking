@@ -16,6 +16,11 @@ describe('getSendAmountFieldSymbol', () => {
     expect(getSendAmountFieldSymbol('stable')).toBe('$')
   })
 
+  it('uses € for euro-pegged EURC', () => {
+    expect(getSendAmountFieldSymbol('EURC')).toBe('€')
+    expect(getSendAmountFieldSymbol('eurc')).toBe('€')
+  })
+
   it('uses fiat symbols for major currencies', () => {
     expect(getSendAmountFieldSymbol('USD')).toBe('$')
     expect(getSendAmountFieldSymbol('ZAR')).toBe('R')
