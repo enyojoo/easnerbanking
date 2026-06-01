@@ -8,7 +8,7 @@ function normalizeEasetag(easetag: string | undefined | null): string {
     .toLowerCase()
 }
 
-/** Saved Easetag recipients may omit `payee_easetag` (legacy / fallback insert) but keep `bank_name` like `Easetag (@tag)`. */
+/** Easetag rows use `bank_name` like `Easetag (@tag)` and tag in `account_number`. */
 export function isEasenetRecipientRecord(r: {
   payee_easetag?: string | null
   bank_name?: string | null
@@ -23,18 +23,11 @@ export function isEasenetRecipientRecord(r: {
  * skip repeated public API fetches (see {@link useEasenetRecipientHydration}).
  */
 export function shouldSkipEasenetPublicFetch(r: {
-  payee_easetag?: string | null
   bank_name?: string | null
-  payee_account_kind?: 'business' | 'personal' | null
   full_name?: string | null
-  payee_avatar_url?: string | null
 }): boolean {
   if (!isEasenetRecipientRecord(r)) return false
-  if (!String(r.full_name || '').trim()) return false
-  const kind = r.payee_account_kind
-  if (kind === 'business' || kind === 'personal') return true
-  /** Legacy rows may omit `payee_account_kind` but still have name + avatar from lookup — avoid repeat API calls. */
-  return Boolean(String(r.payee_avatar_url || '').trim())
+  return Boolean(String(r.full_name || '').trim())
 }
 
 export function resolveRecipientEasetagForUi(r: {

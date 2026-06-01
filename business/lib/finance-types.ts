@@ -133,7 +133,6 @@ export interface Beneficiary {
   mobileProvider?: string
   walletAsset?: string
   walletNetwork?: string
-  walletMemoTag?: string
   createdAt: string
   lastUsed: string
 }

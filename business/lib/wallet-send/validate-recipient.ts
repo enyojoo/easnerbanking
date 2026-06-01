@@ -7,13 +7,14 @@ export type WalletRecipientRow = {
   account_number: string
   currency: string
   wallet_network?: string | null
-  wallet_memo_tag?: string | null
-  payee_easetag?: string | null
+  bank_name?: string | null
   full_name?: string | null
 }
 
-export function isWalletRecipientRow(row: Pick<WalletRecipientRow, "wallet_network" | "payee_easetag">): boolean {
-  return Boolean(String(row.wallet_network || "").trim()) && !String(row.payee_easetag || "").trim()
+export function isWalletRecipientRow(row: Pick<WalletRecipientRow, "wallet_network" | "bank_name">): boolean {
+  const bank = String(row.bank_name || "").toLowerCase()
+  if (bank.includes("easetag") || bank.includes("easenet")) return false
+  return Boolean(String(row.wallet_network || "").trim())
 }
 
 export function walletReceiveAsset(row: WalletRecipientRow): string {

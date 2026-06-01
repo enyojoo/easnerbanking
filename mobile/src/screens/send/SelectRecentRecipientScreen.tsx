@@ -66,6 +66,7 @@ import { CountryCurrency } from '../../lib/countryCurrencyMapping'
 import {
   recipientFormNeedsAddress,
   recipientFormNeedsEmail,
+  recipientFormNeedsPhone,
 } from '@easner/shared'
 import { PayoutSchemaExtraFields } from '../../components/recipients/PayoutSchemaExtraFields'
 import { UsBankAddressFields } from '../../components/recipients/UsBankAddressFields'
@@ -225,7 +226,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     provider: '',
     walletAddress: '',
     network: '',
-    memoTag: '',
     checkingOrSavings: '',
     addressLine1: '',
     city: '',
@@ -292,8 +292,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       easenetRows.map((row) =>
         primeEasenetPublicProfileCache(resolveRecipientEasetagForUi(row), {
           fullName: row.full_name,
-          avatarUrl: row.payee_avatar_url,
-          accountKind: row.payee_account_kind,
         }),
       ),
     )
@@ -350,8 +348,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     return buildDraftEasenetRecipient({
       easetag: hubSearchEasenet.easetag,
       fullName: hubSearchEasenet.fullName,
-      avatarUrl: hubSearchEasenet.avatarUrl,
-      accountKind: hubSearchEasenet.accountKind,
       userId: userProfile.id,
     })
   }, [hubSearchEasenet, userProfile?.id])
@@ -439,7 +435,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       provider: '',
       walletAddress: '',
       network: '',
-      memoTag: '',
       checkingOrSavings: '',
       addressLine1: '',
       city: '',
@@ -545,6 +540,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
           })
         : null
     if (recipientFormNeedsEmail(schemaHints) && !newRecipient.email.trim()) return false
+    if (recipientFormNeedsPhone(schemaHints) && !newRecipient.phoneNumber.trim()) return false
     if (
       recipientFormNeedsAddress({ hints: schemaHints, currencyCode: newRecipient.currency }) &&
       selectedCountryCurrency?.countryCode !== 'US'
@@ -585,9 +581,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
           bankName: `Easetag (@${tag})`,
           currency: 'USD',
           countryCode: 'US',
-          payeeEasetag: tag,
-          payeeAvatarUrl: easenetProfile.avatarUrl,
-          payeeAccountKind: easenetProfile.accountKind,
         })
         if (scope && user?.id) await invalidateRecipientsFeed(qc, scope, user.id)
         setError('')
@@ -637,7 +630,11 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
         bankName: bankNameForType,
         currency: newRecipient.currency,
         countryCode: selectedCountryCurrency?.countryCode,
-        phoneNumber: selectedRecipientType === 'mobile' ? newRecipient.phoneNumber : undefined,
+        phoneNumber:
+          selectedRecipientType === 'mobile' ||
+          (selectedRecipientType === 'bank' && recipientFormNeedsPhone(bankSchemaHints))
+            ? newRecipient.phoneNumber.trim() || undefined
+            : undefined,
         email:
           selectedRecipientType === 'bank' && recipientFormNeedsEmail(bankSchemaHints)
             ? newRecipient.email.trim() || undefined
@@ -1898,6 +1895,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                         countryCode={selectedCountryCurrency.countryCode}
                         values={{
                           email: newRecipient.email,
+                          phoneNumber: newRecipient.phoneNumber,
                           addressLine1: newRecipient.addressLine1,
                           city: newRecipient.city,
                           state: newRecipient.state,

@@ -22,7 +22,6 @@ export type RecipientFieldKey =
   | 'provider'
   | 'walletAddress'
   | 'network'
-  | 'memoTag'
 
 export interface RecipientFieldSpec {
   key: RecipientFieldKey
@@ -72,7 +71,6 @@ const walletFields: RecipientFieldSpec[] = [
   { key: 'fullName', label: 'Wallet owner name', placeholder: 'Wallet owner name', required: true },
   { key: 'network', label: 'Network', placeholder: 'Select network', required: true },
   { key: 'walletAddress', label: 'Wallet address', placeholder: 'Wallet address', required: true },
-  { key: 'memoTag', label: 'Memo/Tag (optional)', placeholder: 'Memo, tag, or destination tag', required: false },
 ]
 
 const noahBankCountryCurrencies: Array<{ countryCode: string; countryName: string; currencyCode: string; currencyName: string }> = [
@@ -117,6 +115,7 @@ const noahBankCountryCurrencies: Array<{ countryCode: string; countryName: strin
   { countryCode: 'NL', countryName: 'Netherlands', currencyCode: 'EUR', currencyName: 'Euro' },
   { countryCode: 'NZ', countryName: 'New Zealand', currencyCode: 'NZD', currencyName: 'New Zealand Dollar' },
   { countryCode: 'NG', countryName: 'Nigeria', currencyCode: 'NGN', currencyName: 'Nigerian Naira' },
+  { countryCode: 'ZA', countryName: 'South Africa', currencyCode: 'ZAR', currencyName: 'South African Rand' },
   { countryCode: 'PH', countryName: 'Philippines', currencyCode: 'PHP', currencyName: 'Philippine Peso' },
   { countryCode: 'PL', countryName: 'Poland', currencyCode: 'PLN', currencyName: 'Polish Zloty' },
   { countryCode: 'PT', countryName: 'Portugal', currencyCode: 'EUR', currencyName: 'Euro' },

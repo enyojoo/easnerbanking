@@ -31,7 +31,7 @@ function EasenetRecipientAvatar({
   easenetPreview?: HydratedEasenetProfile | null
 }) {
   const displayName = (easenetPreview?.fullName || recipient.full_name).trim()
-  const uri = String(easenetPreview?.avatarUrl || recipient.payee_avatar_url || '').trim()
+  const uri = String(easenetPreview?.avatarUrl || '').trim()
   const [imgFailed, setImgFailed] = useState(false)
   useEffect(() => {
     setImgFailed(false)
@@ -57,7 +57,7 @@ function PayoutRecipientAvatar({ recipient }: { recipient: Recipient }) {
   const countryCode =
     recipient.country_code ||
     (recipient.currency === 'EUR' ? 'EU' : getCountryCodeForCurrency(recipient.currency) || 'US')
-  const uri = String(recipient.payee_avatar_url || '').trim()
+  const uri = ''
   const [imgFailed, setImgFailed] = useState(false)
   useEffect(() => {
     setImgFailed(false)

@@ -3,22 +3,9 @@ import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin
 import { payoutCorridorGate } from "@/lib/payout-corridor-validation"
 import {
   looksLikeMissingStructuredColumn,
+  toRecipientLegacyPayload,
   type RecipientWritePayload,
 } from "@/lib/recipients-write-payload"
-
-function toLegacyPayload(payload: RecipientWritePayload) {
-  return {
-    full_name: payload.full_name,
-    account_number: payload.account_number,
-    bank_name: payload.bank_name,
-    phone_number: payload.phone_number || null,
-    currency: payload.currency,
-    routing_number: payload.routing_number || null,
-    sort_code: payload.sort_code || null,
-    iban: payload.iban || null,
-    swift_bic: payload.swift_bic || null,
-  }
-}
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -37,7 +24,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   const admin = createSupabaseAdmin()
   const { data: existing } = await admin
     .from("recipients")
-    .select("country_code,currency,mobile_provider,wallet_network,wallet_memo_tag,payee_easetag,bank_name")
+    .select("country_code,currency,mobile_provider,wallet_network,bank_name")
     .eq("id", id)
     .eq("user_id", user.id)
     .maybeSingle()
@@ -51,8 +38,6 @@ export async function PATCH(request: Request, context: RouteContext) {
     currency: payload.currency ?? existing.currency ?? "",
     mobile_provider: payload.mobile_provider ?? existing.mobile_provider ?? null,
     wallet_network: payload.wallet_network ?? existing.wallet_network ?? null,
-    wallet_memo_tag: payload.wallet_memo_tag ?? existing.wallet_memo_tag ?? null,
-    payee_easetag: payload.payee_easetag ?? existing.payee_easetag ?? null,
     bank_name: payload.bank_name ?? existing.bank_name ?? null,
   }
   const gate = await payoutCorridorGate(admin, merged)
@@ -81,7 +66,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   const fallback = await admin
     .from("recipients")
-    .update(toLegacyPayload(payload))
+    .update(toRecipientLegacyPayload(payload))
     .eq("id", id)
     .eq("user_id", user.id)
     .select("*")

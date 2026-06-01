@@ -122,16 +122,18 @@ export async function POST(request: Request) {
   }
 
   const recipientRow = rec as RecipientSellPrepareRow
+  const bankLabel = String(rec.bank_name || "").toLowerCase()
+  const isEasetagRecipient =
+    bankLabel.includes("easetag") || bankLabel.includes("easenet")
   const gateRow = {
     country_code: String(rec.country_code || countryCode).toUpperCase(),
     currency: String(rec.currency || fiatCurrency).toUpperCase(),
     bank_name: rec.bank_name,
     mobile_provider: rec.mobile_provider,
     wallet_network: rec.wallet_network,
-    payee_easetag: rec.payee_easetag,
   }
 
-  if (gateRow.wallet_network || gateRow.payee_easetag) {
+  if (gateRow.wallet_network || isEasetagRecipient) {
     return NextResponse.json(
       {
         error:

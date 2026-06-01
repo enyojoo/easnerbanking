@@ -2,8 +2,7 @@
 
 import type { Beneficiary } from "@/lib/recipient-types"
 import { fetchWithSession } from "@/lib/fetch-with-session"
-import { getCountryCodeForCurrency } from "@easner/shared"
-import type { PayeeAccountKind } from "@/lib/easner-brand"
+import { countryCodeForRecipientSave, getCountryCodeForCurrency } from "@easner/shared"
 
 type RecipientRow = {
   id: string
@@ -25,16 +24,8 @@ type RecipientRow = {
   city?: string | null
   state?: string | null
   postal_code?: string | null
-  noah_external_account_id?: string | null
-  noah_form_session_id?: string | null
-  noah_sell_crypto_authorized?: string | null
-  noah_sell_crypto_currency?: string | null
   mobile_provider?: string | null
   wallet_network?: string | null
-  wallet_memo_tag?: string | null
-  payee_easetag?: string | null
-  payee_avatar_url?: string | null
-  payee_account_kind?: string | null
   created_at: string
   updated_at: string
 }
@@ -51,7 +42,6 @@ export type RecipientUpsertInput = {
   mobileProvider?: string
   walletAsset?: string
   walletNetwork?: string
-  walletMemoTag?: string
   routingNumber?: string
   sortCode?: string
   iban?: string
@@ -64,8 +54,6 @@ export type RecipientUpsertInput = {
   postalCode?: string
   /** Normalized easetag (no @); required for easenet */
   payeeEasetag?: string
-  payeeAvatarUrl?: string | null
-  payeeAccountKind?: "personal" | "business"
 }
 
 const countryByCurrency: Record<string, string> = {
@@ -116,7 +104,11 @@ function deriveBankName(input: RecipientUpsertInput): string {
 
 function toWritePayload(input: RecipientUpsertInput) {
   return {
-    country_code: input.countryCode || null,
+    country_code:
+      countryCodeForRecipientSave({
+        countryCode: input.countryCode,
+        currencyCode: input.currency,
+      }) || null,
     full_name: input.fullName,
     account_number: input.accountNumber,
     bank_name: deriveBankName(input),
@@ -126,7 +118,7 @@ function toWritePayload(input: RecipientUpsertInput) {
     routing_number: input.routingNumber || null,
     sort_code: input.sortCode || null,
     iban: input.iban || null,
-    swift_bic: input.swiftBic || input.walletMemoTag || null,
+    swift_bic: input.swiftBic || null,
     transfer_type: input.transferType || null,
     checking_or_savings: input.checkingOrSavings || null,
     address_line1: input.addressLine1 || null,
@@ -135,13 +127,6 @@ function toWritePayload(input: RecipientUpsertInput) {
     postal_code: input.postalCode || null,
     mobile_provider: input.mobileProvider || null,
     wallet_network: input.walletNetwork || null,
-    wallet_memo_tag: input.walletMemoTag || null,
-    payee_easetag: input.recipientType === "easenet" ? input.payeeEasetag || null : null,
-    payee_avatar_url: input.recipientType === "easenet" ? input.payeeAvatarUrl ?? null : null,
-    payee_account_kind:
-      input.recipientType === "easenet"
-        ? input.payeeAccountKind || null
-        : null,
   }
 }
 
@@ -218,15 +203,11 @@ export function toBeneficiary(row: RecipientRow): Beneficiary {
     ? walletDescriptor.split("/")
     : [undefined, walletDescriptor || undefined]
   const normalizedCountryCode = (row.country_code || legacyCountryCodeFromMobile || "").trim().toUpperCase() || undefined
-  const rawKind = String(row.payee_account_kind || "").toLowerCase()
-  const payeeAccountKind: PayeeAccountKind | undefined =
-    rawKind === "business" || rawKind === "personal" ? (rawKind as PayeeAccountKind) : undefined
   return {
     id: row.id,
     countryCode: normalizedCountryCode,
-    payeeEasetag: row.payee_easetag || easetagFromBankName || undefined,
-    payeeAccountKind,
-    avatarUrl: row.payee_avatar_url || undefined,
+    payeeEasetag: easetagFromBankName || undefined,
+    avatarUrl: undefined,
     name: row.full_name,
     bankName: mobileInnerMatch ? `Mobile Money (${mobileProvider})` : bankNameTrimmed,
     accountNumber: row.account_number,
@@ -250,7 +231,6 @@ export function toBeneficiary(row: RecipientRow): Beneficiary {
     mobileProvider: row.mobile_provider || mobileProvider || undefined,
     walletAsset: walletAssetFromLabel || undefined,
     walletNetwork: row.wallet_network || walletNetworkFromLabel || undefined,
-    walletMemoTag: row.wallet_memo_tag || (walletMatch ? row.swift_bic || undefined : undefined),
   }
 }
 

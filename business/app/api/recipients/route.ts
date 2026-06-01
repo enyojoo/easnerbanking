@@ -1,25 +1,12 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { payoutCorridorGate } from "@/lib/payout-corridor-validation"
-import { recipientFormNeedsEmail } from "@easner/shared"
+import { recipientFormNeedsEmail, recipientFormNeedsPhone } from "@easner/shared"
 import {
   looksLikeMissingStructuredColumn,
+  toRecipientLegacyPayload,
   type RecipientWritePayload,
 } from "@/lib/recipients-write-payload"
-
-function toLegacyPayload(payload: RecipientWritePayload) {
-  return {
-    full_name: payload.full_name,
-    account_number: payload.account_number,
-    bank_name: payload.bank_name,
-    phone_number: payload.phone_number || null,
-    currency: payload.currency,
-    routing_number: payload.routing_number || null,
-    sort_code: payload.sort_code || null,
-    iban: payload.iban || null,
-    swift_bic: payload.swift_bic || null,
-  }
-}
 
 export async function GET(request: Request) {
   const user = await getUserFromApiRequest(request)
@@ -63,7 +50,9 @@ export async function POST(request: Request) {
   const cc = String(payload.country_code || "").toUpperCase()
   const cur = String(payload.currency || "").toUpperCase()
   const isMobile = Boolean(payload.mobile_provider)
-  if (cc && cur && !payload.wallet_network && !payload.payee_easetag) {
+  const bankLabel = String(payload.bank_name || "").toLowerCase()
+  const isEasetagRow = bankLabel.includes("easetag") || bankLabel.includes("easenet")
+  if (cc && cur && !payload.wallet_network && !isEasetagRow) {
     const rail = isMobile ? "mobile_money" : "bank_transfer"
     const { data: corridor } = await admin
       .from("payout_corridors")
@@ -88,7 +77,7 @@ export async function POST(request: Request) {
       )
     }
     const fieldsSchema = corridor?.fields_schema as
-      | { needs_email?: boolean }
+      | { needs_email?: boolean; needs_phone?: boolean }
       | null
       | undefined
     if (!isMobile && recipientFormNeedsEmail(fieldsSchema ?? null)) {
@@ -101,6 +90,15 @@ export async function POST(request: Request) {
       }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
         return NextResponse.json({ error: "Invalid email address." }, { status: 400 })
+      }
+    }
+    if (!isMobile && recipientFormNeedsPhone(fieldsSchema ?? null)) {
+      const phone = String(payload.phone_number || "").replace(/\s/g, "")
+      if (!phone) {
+        return NextResponse.json(
+          { error: "Phone number is required for this payout corridor." },
+          { status: 400 },
+        )
       }
     }
   }
@@ -126,7 +124,7 @@ export async function POST(request: Request) {
 
   const fallback = await admin
     .from("recipients")
-    .insert({ ...toLegacyPayload(payload), user_id: user.id })
+    .insert({ ...toRecipientLegacyPayload(payload), user_id: user.id })
     .select("*")
     .single()
   if (!fallback.error) return NextResponse.json({ recipient: fallback.data }, { status: 201 })

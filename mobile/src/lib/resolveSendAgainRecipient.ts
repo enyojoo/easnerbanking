@@ -142,19 +142,10 @@ function resolveEasetagRecipient(
 
   const displayName =
     String(transaction.recipient_name || transaction.name || '').trim() || tag
-  const accountKind =
-    meta.payee_account_kind === 'business'
-      ? 'business'
-      : meta.payee_account_kind === 'personal'
-        ? 'personal'
-        : undefined
-
   return buildDraftEasenetRecipient({
     easetag: tag,
     fullName: displayName,
-    avatarUrl: null,
     userId,
-    accountKind,
   })
 }
 

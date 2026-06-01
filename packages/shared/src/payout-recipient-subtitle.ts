@@ -7,7 +7,6 @@ export type PayoutRecipientSubtitleInput = {
   accountNumber?: string | null
   fullAccountNumber?: string | null
   walletNetwork?: string | null
-  walletMemoTag?: string | null
   swiftBic?: string | null
   /** When set, subtitle parts are empty (Easetag uses its own row). */
   payeeEasetag?: string | null
@@ -139,7 +138,7 @@ export function getPayoutRecipientSubtitleParts(
   if (isWalletPayoutRow(input)) {
     const left = walletNetworkLabel(input)
     const addr = String(
-      input.fullAccountNumber || input.accountNumber || input.walletMemoTag || input.swiftBic || "",
+      input.fullAccountNumber || input.accountNumber || input.swiftBic || "",
     ).trim()
     const right = addr ? truncateMiddle(addr, 6, 6) : ""
     return { left, right }
@@ -164,7 +163,6 @@ export function beneficiaryToPayoutSubtitleInput(b: {
   accountNumber: string
   fullAccountNumber: string
   walletNetwork?: string
-  walletMemoTag?: string
   bic?: string
   payeeEasetag?: string
 }): PayoutRecipientSubtitleInput {
@@ -176,7 +174,6 @@ export function beneficiaryToPayoutSubtitleInput(b: {
     accountNumber: b.accountNumber,
     fullAccountNumber: b.fullAccountNumber,
     walletNetwork: b.walletNetwork,
-    walletMemoTag: b.walletMemoTag,
     swiftBic: b.bic,
     payeeEasetag: b.payeeEasetag,
   }

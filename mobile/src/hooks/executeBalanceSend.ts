@@ -249,16 +249,13 @@ export async function executeBalanceSend(
     ctx.userProfile?.id
   ) {
     try {
-      const tag = recipient.payee_easetag!.trim()
+      const tag = easetag
       const created = await recipientService.create(ctx.userProfile.id, {
         fullName: recipient.full_name,
         accountNumber: tag,
         bankName: `Easetag (@${tag})`,
         currency: 'USD',
         countryCode: 'US',
-        payeeEasetag: tag,
-        payeeAvatarUrl: recipient.payee_avatar_url ?? null,
-        payeeAccountKind: recipient.payee_account_kind,
       })
       if (ctx.scope && ctx.userId) await invalidateRecipientsFeed(ctx.qc, ctx.scope, ctx.userId)
       recipientForDetails = created

@@ -32,8 +32,6 @@ export interface Recipient {
   id: string
   user_id: string
   country_code?: string
-  /** @deprecated Legacy column; payouts use confirm-time quote + form session only. */
-  noah_external_account_id?: string
   full_name: string
   account_number: string
   bank_name: string
@@ -45,21 +43,15 @@ export interface Recipient {
   iban?: string
   swift_bic?: string
   address_line1?: string
-  address_line2?: string
   city?: string
   state?: string
   postal_code?: string
-  /** Easetag (@handle): P2P via Easner internal ledger (`POST /api/wallets/easetag-transfer`). */
+  /** Derived from `Easetag (@tag)` bank_name + account_number — not a DB column. */
   payee_easetag?: string
-  /** Snapshot of payee `users.avatar_url` at save time (Easetag / P2P recipients). */
-  payee_avatar_url?: string
-  /** Easetag profile: personal user vs business (from public lookup). */
-  payee_account_kind?: 'business' | 'personal'
   transfer_type?: "ACH" | "Wire"
   checking_or_savings?: "checking" | "savings"
   mobile_provider?: string
   wallet_network?: string
-  wallet_memo_tag?: string
   created_at: string
   updated_at: string
 }

@@ -19,14 +19,31 @@ export type RecipientWritePayload = {
   postal_code?: string | null
   mobile_provider?: string | null
   wallet_network?: string | null
-  wallet_memo_tag?: string | null
-  payee_easetag?: string | null
-  payee_avatar_url?: string | null
-  payee_account_kind?: string | null
-  noah_external_account_id?: string | null
-  noah_form_session_id?: string | null
-  noah_sell_crypto_authorized?: string | null
-  noah_sell_crypto_currency?: string | null
+}
+
+/** Subset for DBs missing newer recipient columns — still keeps corridor-critical fields. */
+export function toRecipientLegacyPayload(payload: RecipientWritePayload) {
+  return {
+    country_code: payload.country_code || null,
+    full_name: payload.full_name,
+    account_number: payload.account_number,
+    bank_name: payload.bank_name,
+    phone_number: payload.phone_number || null,
+    email: payload.email || null,
+    currency: payload.currency,
+    routing_number: payload.routing_number || null,
+    sort_code: payload.sort_code || null,
+    iban: payload.iban || null,
+    swift_bic: payload.swift_bic || null,
+    transfer_type: payload.transfer_type || null,
+    checking_or_savings: payload.checking_or_savings || null,
+    address_line1: payload.address_line1 || null,
+    city: payload.city || null,
+    state: payload.state || null,
+    postal_code: payload.postal_code || null,
+    mobile_provider: payload.mobile_provider || null,
+    wallet_network: payload.wallet_network || null,
+  }
 }
 
 export function looksLikeMissingStructuredColumn(error: unknown): boolean {

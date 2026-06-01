@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { countryCodeForRecipientSave } from '@easner/shared'
 import { supabase } from './supabase'
 import { resolveRecipientEasetagForUi } from './easenetRecipientUi'
+import { buildRecipientInsertPayload } from './recipientPersistPayload'
 import type { Recipient } from '../types'
 
 export type { Recipient }
@@ -15,7 +17,6 @@ export interface RecipientData {
   email?: string
   mobileProvider?: string
   walletNetwork?: string
-  walletMemoTag?: string
   routingNumber?: string
   sortCode?: string
   iban?: string
@@ -26,9 +27,6 @@ export interface RecipientData {
   city?: string
   state?: string
   postalCode?: string
-  payeeEasetag?: string
-  payeeAvatarUrl?: string | null
-  payeeAccountKind?: 'personal' | 'business'
 }
 
 function isMissingTableError(e: unknown): boolean {
@@ -93,6 +91,7 @@ function parseMobileBankName(bankName: string): { provider?: string; countryCode
   }
 }
 
+/** Enrich list rows: Easetag tag from bank_name; wallet network from label when missing. */
 function normalizeRecipient(row: Recipient): Recipient {
   const bankName = row.bank_name || ''
   const mobileParsed = parseMobileBankName(bankName)
@@ -103,29 +102,27 @@ function normalizeRecipient(row: Recipient): Recipient {
     ? walletDescriptor.split('/')
     : [undefined, walletDescriptor || undefined]
   const isWallet = Boolean(walletMatch)
-  const inferredEasetag = resolveRecipientEasetagForUi(row)
-  const payee_easetag =
-    String(row.payee_easetag || '').trim() || inferredEasetag || undefined
+  const payee_easetag = resolveRecipientEasetagForUi(row) || undefined
   return {
     ...row,
     bank_name: mobileParsed.normalizedBankName || bankName,
     country_code: row.country_code || mobileParsed.countryCode || undefined,
     mobile_provider: row.mobile_provider || mobileMatch?.[1] || undefined,
     wallet_network: row.wallet_network || network || undefined,
-    wallet_memo_tag: row.wallet_memo_tag || (walletMatch ? row.swift_bic || undefined : undefined),
-    // For legacy wallet rows, bank_name may be the only source of truth for asset/network.
     currency: (isWallet ? asset || row.currency : row.currency) || row.currency,
-    /** Backfill from `Easetag (@tag)` bank label when DB column was missing on insert. */
     payee_easetag,
   }
 }
 
 export const recipientService = {
   async create(userId: string, recipientData: RecipientData): Promise<Recipient> {
-    const derivedSwiftBic = recipientData.swiftBic || recipientData.walletMemoTag
     const bankNameForPersist = recipientData.mobileProvider
       ? buildMobileBankName(recipientData.mobileProvider, recipientData.countryCode)
       : recipientData.bankName
+    const countryCode = countryCodeForRecipientSave({
+      countryCode: recipientData.countryCode,
+      currencyCode: recipientData.currency,
+    })
     const row: Recipient = {
       id: newId(),
       user_id: userId,
@@ -135,85 +132,39 @@ export const recipientService = {
       phone_number: recipientData.phoneNumber || undefined,
       email: recipientData.email || undefined,
       currency: recipientData.currency,
-      country_code: recipientData.countryCode || undefined,
+      country_code: countryCode || undefined,
       routing_number: recipientData.routingNumber || undefined,
       sort_code: recipientData.sortCode || undefined,
       iban: recipientData.iban || undefined,
-      swift_bic: derivedSwiftBic || undefined,
+      swift_bic: recipientData.swiftBic || undefined,
       transfer_type: recipientData.transferType || undefined,
       checking_or_savings: recipientData.checkingOrSavings || undefined,
       address_line1: recipientData.addressLine1 || undefined,
       city: recipientData.city || undefined,
       state: recipientData.state || undefined,
       postal_code: recipientData.postalCode || undefined,
-      payee_easetag: recipientData.payeeEasetag || undefined,
-      payee_avatar_url: recipientData.payeeAvatarUrl || undefined,
-      payee_account_kind: recipientData.payeeAccountKind || undefined,
       mobile_provider: recipientData.mobileProvider || undefined,
       wallet_network: recipientData.walletNetwork || undefined,
-      wallet_memo_tag: recipientData.walletMemoTag || undefined,
       created_at: now(),
       updated_at: now(),
     }
 
     try {
-      const payload = {
-          user_id: userId,
-          full_name: recipientData.fullName,
-          account_number: recipientData.accountNumber,
-          bank_name: bankNameForPersist,
-          phone_number: recipientData.phoneNumber || null,
-          email: recipientData.email || null,
-          currency: recipientData.currency,
-          country_code: recipientData.countryCode || null,
-          routing_number: recipientData.routingNumber || null,
-          sort_code: recipientData.sortCode || null,
-          iban: recipientData.iban || null,
-          swift_bic: derivedSwiftBic || null,
-          transfer_type: recipientData.transferType || null,
-          checking_or_savings: recipientData.checkingOrSavings || null,
-          address_line1: recipientData.addressLine1 || null,
-          city: recipientData.city || null,
-          state: recipientData.state || null,
-          postal_code: recipientData.postalCode || null,
-          payee_easetag: recipientData.payeeEasetag || null,
-          payee_avatar_url: recipientData.payeeAvatarUrl ?? null,
-          payee_account_kind: recipientData.payeeAccountKind || null,
-          mobile_provider: recipientData.mobileProvider || null,
-          wallet_network: recipientData.walletNetwork || null,
-          wallet_memo_tag: recipientData.walletMemoTag || null,
-        }
+      const payload = buildRecipientInsertPayload(
+        userId,
+        recipientData,
+        bankNameForPersist,
+        recipientData.swiftBic,
+        countryCode,
+      )
       const { data, error } = await supabase
         .from('recipients')
         .insert(payload)
         .select()
         .single()
-
       if (error) throw error
-      if (data) {
-        return normalizeRecipient(data as Recipient)
-      }
+      if (data) return normalizeRecipient(data as Recipient)
     } catch (e) {
-      if (isMissingColumnError(e)) {
-        const payload = {
-          user_id: userId,
-          full_name: recipientData.fullName,
-          account_number: recipientData.accountNumber,
-          bank_name: bankNameForPersist,
-          phone_number: recipientData.phoneNumber || null,
-          currency: recipientData.currency,
-          routing_number: recipientData.routingNumber || null,
-          sort_code: recipientData.sortCode || null,
-          iban: recipientData.iban || null,
-          swift_bic: derivedSwiftBic || null,
-          transfer_type: recipientData.transferType || null,
-          checking_or_savings: recipientData.checkingOrSavings || null,
-          address_line1: recipientData.addressLine1 || null,
-        }
-        const { data, error } = await supabase.from('recipients').insert(payload).select().single()
-        if (!error && data) return normalizeRecipient(data as Recipient)
-        if (error) throw error
-      }
       if (!isMissingTableError(e)) throw e
     }
 
@@ -254,7 +205,6 @@ export const recipientService = {
       mobileProvider?: string
       countryCode?: string
       walletNetwork?: string
-      walletMemoTag?: string
       routingNumber?: string
       sortCode?: string
       iban?: string
@@ -265,12 +215,8 @@ export const recipientService = {
       city?: string
       state?: string
       postalCode?: string
-      payeeEasetag?: string
-      payeeAvatarUrl?: string | null
-      payeeAccountKind?: 'personal' | 'business'
     },
   ): Promise<Recipient> {
-    const derivedSwiftBic = updates.swiftBic ?? updates.walletMemoTag
     const derivedBankName =
       updates.bankName !== undefined
         ? updates.bankName
@@ -288,20 +234,18 @@ export const recipientService = {
     if (updates.routingNumber !== undefined) updateData.routing_number = updates.routingNumber || null
     if (updates.sortCode !== undefined) updateData.sort_code = updates.sortCode || null
     if (updates.iban !== undefined) updateData.iban = updates.iban || null
-    if (derivedSwiftBic !== undefined) updateData.swift_bic = derivedSwiftBic || null
+    if (updates.swiftBic !== undefined) updateData.swift_bic = updates.swiftBic || null
     if (updates.mobileProvider !== undefined) updateData.mobile_provider = updates.mobileProvider || null
     if (updates.walletNetwork !== undefined) updateData.wallet_network = updates.walletNetwork || null
-    if (updates.walletMemoTag !== undefined) updateData.wallet_memo_tag = updates.walletMemoTag || null
-    if (updates.countryCode !== undefined) updateData.country_code = updates.countryCode || null
+    if (updates.countryCode !== undefined) {
+      updateData.country_code = String(updates.countryCode || '').trim().toUpperCase() || null
+    }
     if (updates.transferType !== undefined) updateData.transfer_type = updates.transferType || null
     if (updates.checkingOrSavings !== undefined) updateData.checking_or_savings = updates.checkingOrSavings || null
     if (updates.addressLine1 !== undefined) updateData.address_line1 = updates.addressLine1 || null
     if (updates.city !== undefined) updateData.city = updates.city || null
     if (updates.state !== undefined) updateData.state = updates.state || null
     if (updates.postalCode !== undefined) updateData.postal_code = updates.postalCode || null
-    if (updates.payeeEasetag !== undefined) updateData.payee_easetag = updates.payeeEasetag || null
-    if (updates.payeeAvatarUrl !== undefined) updateData.payee_avatar_url = updates.payeeAvatarUrl ?? null
-    if (updates.payeeAccountKind !== undefined) updateData.payee_account_kind = updates.payeeAccountKind || null
     updateData.updated_at = now()
 
     try {
@@ -317,8 +261,6 @@ export const recipientService = {
     } catch (e) {
       if (isMissingColumnError(e)) {
         const fallback = { ...updateData }
-        delete fallback.country_code
-        delete fallback.payee_account_kind
         const { data, error } = await supabase
           .from('recipients')
           .update(fallback)

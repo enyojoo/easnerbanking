@@ -1,11 +1,16 @@
 import React from 'react'
-import { View, Text, TextInput, StyleSheet } from 'react-native'
+import { View, TextInput, StyleSheet } from 'react-native'
 import type { PayoutFieldsSchemaHint } from '@easner/shared'
-import { recipientFormNeedsAddress, recipientFormNeedsEmail } from '@easner/shared'
+import {
+  recipientFormNeedsAddress,
+  recipientFormNeedsEmail,
+  recipientFormNeedsPhone,
+} from '@easner/shared'
 import { colors, spacing, textStyles } from '../../theme'
 
 export type PayoutRecipientExtraValues = {
   email: string
+  phoneNumber: string
   addressLine1: string
   city: string
   state: string
@@ -21,7 +26,7 @@ type Props = {
   isSubmitting?: boolean
 }
 
-/** Email + holder address when Noah fields_schema requires them (ZA, CA, …). */
+/** Email, phone, and holder address when Noah fields_schema requires them (ZA, CA, …). */
 export function PayoutSchemaExtraFields({
   hints,
   currencyCode,
@@ -31,13 +36,25 @@ export function PayoutSchemaExtraFields({
   isSubmitting,
 }: Props) {
   const needsEmail = recipientFormNeedsEmail(hints)
+  const needsPhone = recipientFormNeedsPhone(hints)
   const needsAddress =
     recipientFormNeedsAddress({ hints, currencyCode }) && countryCode !== 'US'
 
-  if (!needsEmail && !needsAddress) return null
+  if (!needsEmail && !needsPhone && !needsAddress) return null
 
   return (
     <View style={styles.wrap}>
+      {needsPhone ? (
+        <TextInput
+          style={styles.input}
+          value={values.phoneNumber}
+          onChangeText={(text) => onChange({ phoneNumber: text })}
+          placeholder="Phone number *"
+          placeholderTextColor={colors.text.secondary}
+          keyboardType="phone-pad"
+          editable={!isSubmitting}
+        />
+      ) : null}
       {needsEmail ? (
         <TextInput
           style={styles.input}
@@ -90,9 +107,6 @@ export function PayoutSchemaExtraFields({
           </View>
         </>
       ) : null}
-      {needsEmail || needsAddress ? (
-        <Text style={styles.hint}>Required for payouts to this country.</Text>
-      ) : null}
     </View>
   )
 }
@@ -111,5 +125,4 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row', gap: spacing[3] },
   half: { flex: 1 },
-  hint: { ...textStyles.caption, color: colors.text.secondary },
 })

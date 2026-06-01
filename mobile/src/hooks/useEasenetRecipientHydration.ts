@@ -75,9 +75,6 @@ export function useEasenetRecipientHydration(recipient: Recipient | null | undef
       }
     }
 
-    const localAvatar = recipient.payee_avatar_url?.trim() || null
-    const storedKind = recipient.payee_account_kind
-
     const remoteOk = remote?.found && normEasetag(remote.easetag) === tag
 
     if (remoteOk) {
@@ -86,16 +83,15 @@ export function useEasenetRecipientHydration(recipient: Recipient | null | undef
         fullName: remote.fullName.trim() || recipient.full_name,
         easetag: tag,
         accountKind: remote.accountKind,
-        avatarUrl: remoteAvatar ?? localAvatar,
+        avatarUrl: remoteAvatar,
       }
     }
 
     return {
       fullName: recipient.full_name,
       easetag: tag,
-      accountKind:
-        storedKind === 'business' ? 'business' : storedKind === 'personal' ? 'personal' : undefined,
-      avatarUrl: localAvatar,
+      accountKind: undefined,
+      avatarUrl: null,
     }
   }, [recipient, remote, isEasenet, tag])
 }

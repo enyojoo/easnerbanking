@@ -7,13 +7,11 @@ type RecipientLike = {
   currency: string
   mobile_provider?: string | null
   wallet_network?: string | null
-  wallet_memo_tag?: string | null
-  payee_easetag?: string | null
   bank_name?: string | null
 }
 
 function isWalletRow(row: RecipientLike): boolean {
-  return Boolean(row.wallet_network) || Boolean(row.payee_easetag)
+  return Boolean(row.wallet_network) && !isEasenetRow(row)
 }
 
 function isEasenetRow(row: RecipientLike): boolean {

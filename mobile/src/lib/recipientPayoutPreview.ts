@@ -34,7 +34,6 @@ function recipientToSubtitleInput(r: Recipient): PayoutRecipientSubtitleInput {
     accountNumber: r.account_number,
     fullAccountNumber: r.account_number,
     walletNetwork: r.wallet_network,
-    walletMemoTag: r.wallet_memo_tag,
     swiftBic: r.swift_bic,
     payeeEasetag: isEasenetRecipientRecord(r) ? '@easetag' : undefined,
   }

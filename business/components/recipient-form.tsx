@@ -119,7 +119,6 @@ export function RecipientForm({
     walletAsset: DEFAULT_WALLET_ASSET,
     walletNetwork: "",
     walletAddress: "",
-    walletMemoTag: "",
     mobileProvider: "",
     transferType: "ACH",
     checkingOrSavings: "",
@@ -235,7 +234,6 @@ export function RecipientForm({
         walletAsset: bene.walletAsset || parsedWalletAsset || bene.currency || "USDT",
         walletNetwork: bene.walletNetwork || parsedWalletNetwork || "",
         walletAddress: bene.fullAccountNumber || bene.accountNumber || "",
-        walletMemoTag: bene.walletMemoTag || bene.bic || "",
         mobileProvider: bene.mobileProvider || normalizedMobileProvider || "",
         transferType: bene.transferType || "ACH",
         checkingOrSavings: bene.checkingOrSavings || "",
@@ -509,8 +507,6 @@ export function RecipientForm({
         bankName: "",
         currency: "USD",
         payeeEasetag: easenetResolved.easetag,
-        payeeAvatarUrl: easenetResolved.avatarUrl,
-        payeeAccountKind: easenetResolved.accountKind,
       }
       try {
         setIsSubmitting(true)
@@ -550,7 +546,6 @@ export function RecipientForm({
       mobileProvider: formData.recipientType === "mobile" ? formData.mobileProvider.trim() || undefined : undefined,
       walletAsset: formData.recipientType === "wallet" ? formData.walletAsset.trim() || undefined : undefined,
       walletNetwork: formData.recipientType === "wallet" ? formData.walletNetwork.trim() || undefined : undefined,
-      walletMemoTag: undefined,
       routingNumber: formData.routingNumber?.trim() || undefined,
       sortCode: formData.sortCode?.trim() || undefined,
       iban: formData.iban?.trim() || undefined,

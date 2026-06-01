@@ -122,6 +122,22 @@ export function recipientFormNeedsAddress(input: {
   return input.currencyCode.trim().toUpperCase() === "CAD"
 }
 
+/** Recipient form: ZA BankLocal and similar require phone on the saved row. */
+export function recipientFormNeedsPhone(hints: PayoutFieldsSchemaHint | null | undefined): boolean {
+  return Boolean(hints?.needs_phone)
+}
+
+/** Persist ISO2 country on recipient rows (picker value or currency default). */
+export function countryCodeForRecipientSave(input: {
+  countryCode?: string | null
+  currencyCode: string
+}): string {
+  return resolvePayoutCountryCode({
+    countryCode: input.countryCode,
+    currencyCode: input.currencyCode,
+  })
+}
+
 /** Amount screen: validate receive amount against Noah max and effective min (Noah ∪ business policy). */
 export function validatePayoutAmountAgainstLimits(input: {
   amount: number

@@ -1,11 +1,9 @@
 import type { ReactNode } from 'react'
-import { useEffect, useState } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import type { Recipient } from '../types'
 import { getPayoutRecipientSubtitleParts } from '../lib/recipientPayoutPreview'
 import { getTokenIconUrl } from '../lib/cryptoIcons'
 import { PayoutSubtitleRow } from '../lib/easenetRecipientUi'
-import { avatarImageUri } from '../lib/avatarCache'
 import { CachedImage } from './CachedImage'
 import { CountryFlag } from './flags/CountryFlag'
 import { getCountryCodeForCurrency } from '@easner/shared'
@@ -30,29 +28,14 @@ export function RecipientPayoutPreview({ recipient, getInitials, variant = 'card
     recipient.country_code ||
     (recipient.currency === 'EUR' ? 'EU' : getCountryCodeForCurrency(recipient.currency) || 'US')
 
-  const uri = avatarImageUri(recipient.payee_avatar_url)
-  const [imageFailed, setImageFailed] = useState(false)
-  useEffect(() => {
-    setImageFailed(false)
-  }, [uri])
-
   const { left, right } = getPayoutRecipientSubtitleParts(recipient)
 
   return (
     <View style={[styles.wrap, row && styles.wrapRow]}>
       <View style={styles.avatarWrap}>
-        {uri && !imageFailed ? (
-          <CachedImage
-            uri={uri}
-            style={styles.avatarImg}
-            contentFit="cover"
-            onError={() => setImageFailed(true)}
-          />
-        ) : (
-          <View style={styles.avatarFallback}>
-            <Text style={styles.avatarInitials}>{getInitials(recipient.full_name)}</Text>
-          </View>
-        )}
+        <View style={styles.avatarFallback}>
+          <Text style={styles.avatarInitials}>{getInitials(recipient.full_name)}</Text>
+        </View>
         <View style={styles.cornerBadge}>
           {isWalletRecipient && tokenIcon ? (
             <CachedImage uri={tokenIcon} style={styles.badgeFill} contentFit="cover" />

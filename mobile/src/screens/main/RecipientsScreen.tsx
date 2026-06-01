@@ -85,6 +85,7 @@ import {
   getCountryCodeForCurrency,
   recipientFormNeedsAddress,
   recipientFormNeedsEmail,
+  recipientFormNeedsPhone,
 } from '@easner/shared'
 import { PayoutSchemaExtraFields } from '../../components/recipients/PayoutSchemaExtraFields'
 import { UsBankAddressFields } from '../../components/recipients/UsBankAddressFields'
@@ -224,7 +225,6 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
     provider: '',
     walletAddress: '',
     network: '',
-    memoTag: '',
     checkingOrSavings: '',
     addressLine1: '',
     city: '',
@@ -260,8 +260,6 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
       easenetRows.map((row) =>
         primeEasenetPublicProfileCache(resolveRecipientEasetagForUi(row), {
           fullName: row.full_name,
-          avatarUrl: row.payee_avatar_url,
-          accountKind: row.payee_account_kind,
         }),
       ),
     )
@@ -463,9 +461,6 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
           bankName: `Easetag (@${tag})`,
           currency: 'USD',
           countryCode: 'US',
-          payeeEasetag: tag,
-          payeeAvatarUrl: easenetProfile.avatarUrl,
-          payeeAccountKind: easenetProfile.accountKind,
         })
         setUiRecipients((prev) => [createdRecipient, ...prev.filter((r) => r.id !== createdRecipient.id)])
         if (scope && user?.id) await invalidateRecipientsFeed(qc, scope, user.id)
@@ -506,7 +501,11 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
         bankName: bankNameForType,
         currency: newRecipient.currency,
         countryCode: selectedCountryCurrency?.countryCode,
-        phoneNumber: selectedRecipientType === 'mobile' ? newRecipient.phoneNumber || undefined : undefined,
+        phoneNumber:
+          selectedRecipientType === 'mobile' ||
+          (selectedRecipientType === 'bank' && recipientFormNeedsPhone(bankSchemaHints))
+            ? newRecipient.phoneNumber.trim() || undefined
+            : undefined,
         email:
           selectedRecipientType === 'bank' && recipientFormNeedsEmail(bankSchemaHints)
             ? newRecipient.email.trim() || undefined
@@ -635,7 +634,6 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
       provider: recipient.mobile_provider || (inferredType === 'mobile' ? providerFromBank : '') || '',
       walletAddress: recipient.account_number || '',
       network: recipient.wallet_network || (inferredType === 'wallet' ? walletNetworkFromBank || '' : ''),
-      memoTag: recipient.wallet_memo_tag || recipient.swift_bic || '',
       checkingOrSavings: recipient.checking_or_savings || '',
       addressLine1: recipient.address_line1 || '',
       city: recipient.city || '',
@@ -679,9 +677,6 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
           accountNumber: tag,
           bankName: `Easetag (@${tag})`,
           countryCode: 'US',
-          payeeEasetag: tag,
-          payeeAvatarUrl: easenetProfile.avatarUrl,
-          payeeAccountKind: easenetProfile.accountKind,
         })
         setUiRecipients((prev) => prev.map((r) => (r.id === updatedRecipient.id ? updatedRecipient : r)))
         if (scope && user?.id) await invalidateRecipientsFeed(qc, scope, user.id)
@@ -719,7 +714,11 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
         fullName: newRecipient.fullName,
         accountNumber: accountNumberForType,
         bankName: bankNameForType,
-        phoneNumber: selectedRecipientType === 'mobile' ? newRecipient.phoneNumber : '',
+        phoneNumber:
+          selectedRecipientType === 'mobile' ||
+          (selectedRecipientType === 'bank' && recipientFormNeedsPhone(bankSchemaHints))
+            ? newRecipient.phoneNumber.trim() || undefined
+            : undefined,
         email:
           selectedRecipientType === 'bank' && recipientFormNeedsEmail(bankSchemaHints)
             ? newRecipient.email.trim() || undefined
@@ -882,6 +881,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
           })
         : null
     if (recipientFormNeedsEmail(schemaHints) && !newRecipient.email.trim()) return false
+    if (recipientFormNeedsPhone(schemaHints) && !newRecipient.phoneNumber.trim()) return false
     if (
       recipientFormNeedsAddress({ hints: schemaHints, currencyCode: newRecipient.currency }) &&
       selectedCountryCurrency?.countryCode !== 'US'
@@ -909,7 +909,6 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
       provider: '',
       walletAddress: '',
       network: '',
-      memoTag: '',
       checkingOrSavings: '',
       addressLine1: '',
       city: '',
@@ -2218,6 +2217,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                         countryCode={selectedCountryCurrency.countryCode}
                         values={{
                           email: newRecipient.email,
+                          phoneNumber: newRecipient.phoneNumber,
                           addressLine1: newRecipient.addressLine1,
                           city: newRecipient.city,
                           state: newRecipient.state,
