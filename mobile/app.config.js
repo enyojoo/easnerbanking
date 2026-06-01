@@ -215,13 +215,22 @@ module.exports = ({ config }) => {
       infoPlist: {
         ...((config.ios && config.ios.infoPlist) || {}),
         NSCameraUsageDescription:
-          'Easner uses the camera when you take or attach photos.',
+          'Easner uses the camera to scan wallet QR codes and when you take or attach photos.',
         NSMicrophoneUsageDescription:
           'Easner uses the microphone when you record or send audio.',
       },
     },
     plugins: [
       ...(config.plugins || []),
+      [
+        'expo-camera',
+        {
+          cameraPermission:
+            'Allow Easner to access your camera to scan wallet address QR codes.',
+          recordAudioAndroid: false,
+          barcodeScannerEnabled: true,
+        },
+      ],
       './plugins/withHermesCompilerPath.js',
       './plugins/withInternalExpoImport.js',
       './plugins/withAndroidStoragePermissionsMaxSdk.js',

@@ -23,9 +23,9 @@ const PAYOUT_BUSINESS_MIN_BANK: Record<string, number> = {
   GBP: 10,
   CAD: 10,
   NGN: 1000,
-  KES: 500,
-  GHS: 50,
-  ZAR: 100,
+  KES: 150,
+  GHS: 10,
+  ZAR: 10,
 }
 
 /** Optional lower floor for mobile money where it differs from bank (same currency). */

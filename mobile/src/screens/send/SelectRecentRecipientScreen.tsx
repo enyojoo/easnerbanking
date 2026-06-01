@@ -5,15 +5,13 @@ import {
   Pressable,
   StyleSheet,
   Animated,
-  ScrollView,
   TextInput,
   Modal,
   Platform,
-  Dimensions,
-  KeyboardAvoidingView,
   Keyboard,
   ActivityIndicator,
 } from 'react-native'
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { FlashList } from '@shopify/flash-list'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useCameraPermissions } from 'expo-camera'
@@ -72,7 +70,7 @@ import {
 } from '@easner/shared'
 import { PayoutSchemaExtraFields } from '../../components/recipients/PayoutSchemaExtraFields'
 import { UsBankAddressFields } from '../../components/recipients/UsBankAddressFields'
-import { useKeyboardScrollPadding } from '../../hooks/useKeyboardScrollPadding'
+import { RecipientFormDropdownHost, RegisterRecipientDropdownSheet } from '../../components/recipients/RecipientFormDropdownHost'
 import {
   buildRecipientCatalogForType,
   getPayoutFieldsSchemaForCorridor,
@@ -160,7 +158,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   } | null>(null)
   const [easenetLookupLoading, setEasenetLookupLoading] = useState(false)
   const [easenetLookupError, setEasenetLookupError] = useState<string | null>(null)
-  const [androidDropdownKeyboardHeight, setAndroidDropdownKeyboardHeight] = useState(0)
 
   /** Hub search (@mode) live lookup — separate from add-recipient modal. */
   const [hubSearchEasenet, setHubSearchEasenet] = useState<{
@@ -222,7 +219,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   const headerAnim = useRef(new Animated.Value(0)).current
   const contentAnim = useRef(new Animated.Value(0)).current
   const formScrollRef = useRef<ScrollView>(null)
-  const keyboardScrollPadding = useKeyboardScrollPadding()
 
   useCalmParallelEnterWhen(true, headerAnim, contentAnim)
 
@@ -386,20 +382,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     }
   }, [newRecipient.payeeEasetag, selectedRecipientType, showBankAccountForm])
 
-  useEffect(() => {
-    if (Platform.OS !== 'android') return
-    const onShow = Keyboard.addListener('keyboardDidShow', (event) => {
-      setAndroidDropdownKeyboardHeight(event.endCoordinates?.height || 0)
-    })
-    const onHide = Keyboard.addListener('keyboardDidHide', () => {
-      setAndroidDropdownKeyboardHeight(0)
-    })
-    return () => {
-      onShow.remove()
-      onHide.remove()
-    }
-  }, [])
-
   const handleSelectRecipient = async (recipient: Recipient) => {
     haptics.tap()
     void prefetchNoahSendExchangeRates(qc, recipient.currency)
@@ -477,6 +459,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   }
 
   const handleScanPress = async () => {
+    Keyboard.dismiss()
     const perm = cameraPermission?.granted ? cameraPermission : await requestCameraPermission()
     if (!perm?.granted) {
       showWarning(
@@ -776,29 +759,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     setShowBankDropdown(false)
     setBankSearchTerm('')
   }
-  const renderDropdownContainer = (onClose: () => void, content: React.ReactNode) => {
-    if (Platform.OS === 'android') {
-      const screenHeight = Dimensions.get('screen').height
-      const keyboardOpen = androidDropdownKeyboardHeight > 0
-      const maxHeight = Math.max(260, Math.floor(screenHeight * (keyboardOpen ? 0.5 : 0.62)))
-      return (
-        <Modal
-          visible
-          transparent
-          animationType="fade"
-          onRequestClose={onClose}
-          statusBarTranslucent
-        >
-          <Pressable style={styles.androidDropdownOverlay} onPress={onClose} />
-          <View style={styles.androidDropdownContainer} pointerEvents="box-none">
-            <View style={[styles.androidDropdownCard, { maxHeight }]}>{content}</View>
-          </View>
-        </Modal>
-      )
-    }
-    return <View style={styles.currencyDropdown}>{content}</View>
-  }
-
   const renderRecipient = ({ item, index }: { item: Recipient; index: number }) => {
     const isDraftEasenet = isDraftEasenetRecipient(item.id)
     const isEasenet = isEasenetRecipientRecord(item)
@@ -1161,24 +1121,30 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
         animationType="slide"
         transparent={true}
         onRequestClose={() => {
+          if (showScanModal) {
+            setShowScanModal(false)
+            return
+          }
           setShowBankAccountForm(false)
           resetForm()
         }}
       >
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-        >
+        <View style={styles.modalOverlay}>
           <Pressable 
            android_ripple={ripple.neutral} 
             style={StyleSheet.absoluteFill} onPress={() => {
+              if (showScanModal) {
+                setShowScanModal(false)
+                return
+              }
+              closeAllDropdowns()
               setShowBankAccountForm(false)
               resetForm()
             }}
           />
+          <RecipientFormDropdownHost>
           <View 
-            style={[styles.modalContainer, { 
+            style={[styles.modalContainer, styles.modalContainerWithScanner, { 
               height: '92%',
               paddingBottom: Math.max(insets.bottom, 20),
             }]}>
@@ -1204,25 +1170,20 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
               </Pressable>
             </View>
 
-            <ScrollView 
+            <KeyboardAwareScrollView
               ref={formScrollRef}
               style={styles.modalScrollView}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={[
                 styles.modalScrollContent,
-                { paddingBottom: Math.max(insets.bottom, 20) + keyboardScrollPadding },
+                { paddingBottom: Math.max(insets.bottom, 20) },
               ]}
               nestedScrollEnabled={true}
-              /** When a dropdown is open, pause the form scroll so the dropdown list receives vertical drags (Android + iOS). */
               scrollEnabled={!isAnyDropdownOpen}
               keyboardShouldPersistTaps="handled"
-              automaticallyAdjustKeyboardInsets
+              bottomOffset={insets.bottom + spacing[3]}
             >
               <View style={styles.modalContent}>
-              {isAnyDropdownOpen && Platform.OS !== 'android' && (
-                <Pressable android_ripple={ripple.neutral} style={styles.dropdownBackdrop} onPress={closeAllDropdowns} />
-              )}
-              
               {error ? (
                 <View style={styles.errorContainer}>
                   <Text style={styles.errorText}>{error}</Text>
@@ -1292,13 +1253,13 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                 </View>
               </Pressable>
               
-              {showCurrencyDropdown &&
-                renderDropdownContainer(
-                  () => {
-                    setShowCurrencyDropdown(false)
-                    setCurrencySearchTerm('')
-                  },
-                  <>
+              <RegisterRecipientDropdownSheet
+                visible={showCurrencyDropdown}
+                onClose={() => {
+                  setShowCurrencyDropdown(false)
+                  setCurrencySearchTerm('')
+                }}
+              >
                   <View style={styles.currencyDropdownSearch}>
                     <Search size={18} color={colors.neutral[400]} strokeWidth={2} />
                     <TextInput
@@ -1352,8 +1313,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                       )
                     })}
                   </RecipientFormDropdownList>
-                  </>,
-                )}
+              </RegisterRecipientDropdownSheet>
             </View>
             )}
 
@@ -1381,13 +1341,13 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                         )}
                       </View>
                     </Pressable>
-                    {showProviderDropdown &&
-                      renderDropdownContainer(
-                        () => {
-                          setShowProviderDropdown(false)
-                          setProviderSearchTerm('')
-                        },
-                        <>
+                    <RegisterRecipientDropdownSheet
+                      visible={showProviderDropdown}
+                      onClose={() => {
+                        setShowProviderDropdown(false)
+                        setProviderSearchTerm('')
+                      }}
+                    >
                         <View style={styles.currencyDropdownSearch}>
                           <Search size={18} color={colors.neutral[400]} strokeWidth={2} />
                           <TextInput
@@ -1431,8 +1391,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                               </Pressable>
                             ))}
                         </RecipientFormDropdownList>
-                        </>,
-                      )}
+                    </RegisterRecipientDropdownSheet>
             </View>
                   <TextInput
                     style={styles.modalInput}
@@ -1466,9 +1425,9 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                       editable={!isSubmitting}
                     />
                   </View>
-                  <View style={styles.walletAddressInputWrap}>
+                  <View style={[styles.walletAddressInputWrap, styles.walletAddressInputRow]}>
                     <TextInput
-                      style={[styles.modalInput, styles.walletAddressInput]}
+                      style={[styles.modalInput, styles.walletAddressInput, styles.walletAddressInputField]}
                       value={newRecipient.walletAddress}
                       onChangeText={(text) => {
                         setNewRecipient(prev => ({ ...prev, walletAddress: text }))
@@ -1495,7 +1454,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                       accessibilityRole="button"
                       accessibilityLabel="Scan wallet address QR code"
                     >
-                      <ScanLine size={18} color={colors.primary.main} strokeWidth={2} />
+                      <ScanLine size={20} color={colors.primary.main} strokeWidth={2} />
                     </Pressable>
                   </View>
                   <View style={[styles.currencySelectorWrapper, showWalletAssetDropdown && styles.currencySelectorWrapperActive]}>
@@ -1519,13 +1478,13 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                         )}
                       </View>
                     </Pressable>
-                    {showWalletAssetDropdown &&
-                      renderDropdownContainer(
-                        () => {
-                          setShowWalletAssetDropdown(false)
-                          setWalletAssetSearchTerm('')
-                        },
-                        <>
+                    <RegisterRecipientDropdownSheet
+                      visible={showWalletAssetDropdown}
+                      onClose={() => {
+                        setShowWalletAssetDropdown(false)
+                        setWalletAssetSearchTerm('')
+                      }}
+                    >
                         <View style={styles.currencyDropdownSearch}>
                           <Search size={18} color={colors.neutral[400]} strokeWidth={2} />
                           <TextInput
@@ -1569,8 +1528,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                               </Pressable>
                             ))}
                         </RecipientFormDropdownList>
-                        </>,
-                      )}
+                    </RegisterRecipientDropdownSheet>
                   </View>
                   <View style={[styles.currencySelectorWrapper, showWalletNetworkDropdown && styles.currencySelectorWrapperActive]}>
                     <Pressable
@@ -1595,13 +1553,13 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                         )}
                       </View>
                     </Pressable>
-                    {showWalletNetworkDropdown &&
-                      renderDropdownContainer(
-                        () => {
-                          setShowWalletNetworkDropdown(false)
-                          setWalletNetworkSearchTerm('')
-                        },
-                        <>
+                    <RegisterRecipientDropdownSheet
+                      visible={showWalletNetworkDropdown}
+                      onClose={() => {
+                        setShowWalletNetworkDropdown(false)
+                        setWalletNetworkSearchTerm('')
+                      }}
+                    >
                         <View style={styles.currencyDropdownSearch}>
                           <Search size={18} color={colors.neutral[400]} strokeWidth={2} />
                           <TextInput
@@ -1640,8 +1598,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                               </Pressable>
                             ))}
                         </RecipientFormDropdownList>
-                        </>,
-                      )}
+                    </RegisterRecipientDropdownSheet>
                   </View>
                 </>
               )}
@@ -1736,7 +1693,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                         setShowBankDropdown(false)
                         setBankSearchTerm('')
                       }}
-                      renderDropdownContainer={renderDropdownContainer}
                     />
 
                     {/* US Account Fields */}
@@ -1999,16 +1955,28 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                 </Pressable>
               </View>
               </View>
-            </ScrollView>
+            </KeyboardAwareScrollView>
+            <WalletAddressQrScanner
+              embedded
+              visible={showScanModal}
+              onClose={() => setShowScanModal(false)}
+              onScan={(address) => {
+                setNewRecipient((prev) => ({ ...prev, walletAddress: address }))
+                void inferWalletAddressFromApi(address)
+                  .then(({ best }) => {
+                    if (!best) return
+                    setNewRecipient((prev) => ({
+                      ...prev,
+                      currency: best.asset,
+                      network: best.network,
+                    }))
+                  })
+                  .catch(() => {})
+              }}
+            />
           </View>
-
-          <WalletAddressQrScanner
-            embedded
-            visible={showScanModal}
-            onClose={() => setShowScanModal(false)}
-            onScan={(address) => setNewRecipient((prev) => ({ ...prev, walletAddress: address }))}
-          />
-        </KeyboardAvoidingView>
+          </RecipientFormDropdownHost>
+        </View>
       </Modal>
 
     </>
@@ -2344,6 +2312,9 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  modalContainerWithScanner: {
+    overflow: 'hidden',
+  },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -2440,28 +2411,34 @@ const styles = StyleSheet.create({
   },
   walletAddressInputWrap: {
     marginBottom: spacing[4],
-    position: 'relative',
+  },
+  walletAddressInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
   },
   walletAddressInput: {
     marginBottom: 0,
-    paddingRight: 44,
+  },
+  walletAddressInputField: {
+    flex: 1,
+    minWidth: 0,
   },
   walletNicknameInput: {
     paddingRight: spacing[4],
   },
   walletScanIconButton: {
-    position: 'absolute',
-    right: spacing[3],
-    top: '50%',
-    transform: [{ translateY: -16 }],
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 2,
+    borderWidth: 1,
+    borderColor: colors.frame.border,
+    backgroundColor: colors.frame.background,
+    flexShrink: 0,
     ...Platform.select({
-      android: { elevation: 2 },
+      android: { elevation: 0 },
     }),
   },
   currencySelectorWrapper: {

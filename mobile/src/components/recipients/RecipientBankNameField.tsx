@@ -2,6 +2,7 @@ import React, { useMemo } from 'react'
 import { View, Text, TextInput, Pressable, StyleSheet, Platform } from 'react-native'
 import { Check, ChevronDown, ChevronUp, Search } from 'lucide-react-native'
 import RecipientFormDropdownList from './RecipientFormDropdownList'
+import { RegisterRecipientDropdownSheet } from './RecipientFormDropdownHost'
 import { colors, spacing, textStyles, borderRadius, fontFamily, surfaceFrameStyle } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { haptics } from '../../lib/haptics'
@@ -19,7 +20,6 @@ type Props = {
   searchTerm: string
   onSearchTermChange: (term: string) => void
   onCloseDropdown: () => void
-  renderDropdownContainer: (onClose: () => void, content: React.ReactNode) => React.ReactNode
   onBlurValidate?: (value: string) => void
 }
 
@@ -37,7 +37,6 @@ export function RecipientBankNameField({
   searchTerm,
   onSearchTermChange,
   onCloseDropdown,
-  renderDropdownContainer,
   onBlurValidate,
 }: Props) {
   const sorted = useMemo(() => [...banks].sort((a, b) => a.localeCompare(b)), [banks])
@@ -94,51 +93,47 @@ export function RecipientBankNameField({
         </View>
       </Pressable>
       {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
-      {showDropdown &&
-        renderDropdownContainer(
-          close,
-          <>
-            <View style={styles.searchRow}>
-              <Search size={18} color={colors.neutral[400]} strokeWidth={2} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search banks…"
-                placeholderTextColor={colors.neutral[400]}
-                value={searchTerm}
-                onChangeText={onSearchTermChange}
-                autoCorrect={false}
-              />
+      <RegisterRecipientDropdownSheet visible={showDropdown} onClose={close}>
+        <View style={styles.searchRow}>
+          <Search size={18} color={colors.neutral[400]} strokeWidth={2} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search banks…"
+            placeholderTextColor={colors.neutral[400]}
+            value={searchTerm}
+            onChangeText={onSearchTermChange}
+            autoCorrect={false}
+          />
+        </View>
+        <RecipientFormDropdownList>
+          {filtered.length === 0 ? (
+            <View style={styles.emptyRow}>
+              <Text style={styles.emptyText}>No banks found</Text>
             </View>
-            <RecipientFormDropdownList>
-              {filtered.length === 0 ? (
-                <View style={styles.emptyRow}>
-                  <Text style={styles.emptyText}>No banks found</Text>
-                </View>
-              ) : (
-                filtered.map((bank) => (
-                  <Pressable
-                    key={bank}
-                    android_ripple={ripple.neutral}
-                    style={[styles.item, value === bank && styles.itemSelected]}
-                    onPress={async () => {
-                      haptics.tap()
-                      onChange(bank)
-                      onBlurValidate?.(bank)
-                      close()
-                    }}
-                  >
-                    <Text style={styles.itemLabel} numberOfLines={2}>
-                      {bank}
-                    </Text>
-                    {value === bank ? (
-                      <Check size={18} color={colors.primary.main} strokeWidth={2.5} />
-                    ) : null}
-                  </Pressable>
-                ))
-              )}
-            </RecipientFormDropdownList>
-          </>,
-        )}
+          ) : (
+            filtered.map((bank) => (
+              <Pressable
+                key={bank}
+                android_ripple={ripple.neutral}
+                style={[styles.item, value === bank && styles.itemSelected]}
+                onPress={async () => {
+                  haptics.tap()
+                  onChange(bank)
+                  onBlurValidate?.(bank)
+                  close()
+                }}
+              >
+                <Text style={styles.itemLabel} numberOfLines={2}>
+                  {bank}
+                </Text>
+                {value === bank ? (
+                  <Check size={18} color={colors.primary.main} strokeWidth={2.5} />
+                ) : null}
+              </Pressable>
+            ))
+          )}
+        </RecipientFormDropdownList>
+      </RegisterRecipientDropdownSheet>
     </View>
   )
 }

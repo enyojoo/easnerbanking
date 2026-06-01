@@ -13,9 +13,9 @@ describe("getBusinessPayoutMin", () => {
     expect(getBusinessPayoutMin("NGN")).toBe(1000)
   })
 
-  it("uses KES 500 for bank and mobile", () => {
-    expect(getBusinessPayoutMin("KES", "bank_transfer")).toBe(500)
-    expect(getBusinessPayoutMin("KES", "mobile_money")).toBe(500)
+  it("uses KES 150 for bank and mobile", () => {
+    expect(getBusinessPayoutMin("KES", "bank_transfer")).toBe(150)
+    expect(getBusinessPayoutMin("KES", "mobile_money")).toBe(150)
   })
 })
 
@@ -42,6 +42,42 @@ describe("resolveEffectivePayoutMin", () => {
         currencyCode: "EUR",
       }),
     ).toBe(10)
+  })
+
+  /** Noah manifest mins (docs/noah-payout-manifest.json) — Easner must stay >= Noah. */
+  it("stays at or above Noah channel mins for African corridors", () => {
+    expect(
+      resolveEffectivePayoutMin({
+        hints: { limits: { min: "10" } } as PayoutFieldsSchemaHint,
+        currencyCode: "GHS",
+      }),
+    ).toBe(10)
+    expect(
+      resolveEffectivePayoutMin({
+        hints: { limits: { min: "10" } } as PayoutFieldsSchemaHint,
+        currencyCode: "ZAR",
+      }),
+    ).toBe(10)
+    expect(
+      resolveEffectivePayoutMin({
+        hints: { limits: { min: "104" } } as PayoutFieldsSchemaHint,
+        currencyCode: "KES",
+        rail: "bank_transfer",
+      }),
+    ).toBe(150)
+    expect(
+      resolveEffectivePayoutMin({
+        hints: { limits: { min: "100" } } as PayoutFieldsSchemaHint,
+        currencyCode: "KES",
+        rail: "mobile_money",
+      }),
+    ).toBe(150)
+    expect(
+      resolveEffectivePayoutMin({
+        hints: { limits: { min: "50" } } as PayoutFieldsSchemaHint,
+        currencyCode: "NGN",
+      }),
+    ).toBe(1000)
   })
 })
 

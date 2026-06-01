@@ -55,16 +55,17 @@ import {
   hasNoahSendRateRow,
   findPayoutFieldsSchema,
   formatSendRateLabel,
-  getCurrencySymbol,
   normalizePayoutReceiveAmountForCurrency,
   resolveEffectivePayoutMin,
   resolvePayoutCountryCode,
   getSendAmountNoteFieldUi,
   validatePayoutAmountAgainstLimits,
   validateSendAmountFields,
+  validateWalletSendReceiveAmount,
+  WALLET_SEND_MIN_RECEIVE_AMOUNT,
 } from '@easner/shared'
 import { usePayoutMinEnforcement } from '../../hooks/usePayoutMinEnforcement'
-import { noahService } from '../../lib/noahService'
+import { noahService, type WalletSendQuote } from '../../lib/noahService'
 import {
   ensureSendPayoutQuoteStashed,
   isStashedPayoutQuoteFresh,
@@ -93,6 +94,7 @@ import { SendSelectedRecipientSummary } from '../../components/send/SendSelected
 import { haptics } from '../../lib/haptics'
 import { buildDynamicAmountTextStyle, getDynamicAmountFontSize } from '../../lib/dynamicAmountFontSize'
 import { formatSendAgainKeypadAmount } from '../../lib/resolveSendAgainRecipient'
+import { getSendAmountFieldSymbol } from '../../lib/sendAmountFieldSymbol'
 
 function initialSendAmountFromRouteParams(params: Record<string, unknown> | undefined): string {
   const formatted = String(params?.initialSendAmount ?? '').trim()
@@ -158,6 +160,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const isPreferredBalanceCurrency = preferredBalanceCurrencyFromRoute === 'USD' || preferredBalanceCurrencyFromRoute === 'EUR'
   const didInitializeBalanceCurrency = useRef(false)
   const sendAgainPrefillAppliedRef = useRef(false)
+  const walletMinSeedAppliedRef = useRef<string | null>(null)
+  const [walletQuotePreview, setWalletQuotePreview] = useState<WalletSendQuote | null>(null)
   
   // UI State only - no backend integration
   const [recipient, setRecipient] = useState<Recipient | null>(recipientFromRoute || null)
@@ -208,14 +212,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   } = useCryptoSendExchangeRates(recipient?.currency, recipient?.wallet_network, {
     enabled: isWalletRecipientEarly,
   })
-  const exchangeRates = isWalletRecipientEarly
-    ? cryptoRatesFromContext.map((r) => ({
-        from_currency: r.from_currency,
-        to_currency: r.to_currency,
-        rate: r.rate,
-        status: 'active' as const,
-      }))
-    : exchangeRatesFromContext || []
 
   useEffect(() => {
     if (!recipient?.currency || skipNoahExchangeRatesForEasetagP2p || isWalletRecipientEarly) return
@@ -503,47 +499,64 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const dynamicAmountLineHeight = Math.round(dynamicAmountFontSize * 1.12)
   const amountTextBase = buildDynamicAmountTextStyle(textStyles.balanceDisplay, sendAmount)
   const amountDisplayCurrency = amountEntryMode === 'receive' ? receiveCurrency : sendCurrency
-  const amountDisplaySymbolRaw = getCurrencySymbol(amountDisplayCurrency)
-  const amountDisplaySymbol =
-    (typeof amountDisplaySymbolRaw === 'string' && amountDisplaySymbolRaw.trim().length > 0
-      ? amountDisplaySymbolRaw
-      : String(amountDisplayCurrency || '').trim()) || getCurrencySymbol(selectedBalanceCurrency)
-  const amountAssetIconUrl = getTokenIconUrl(String(amountDisplayCurrency || '').toUpperCase()) || null
-  const showAmountAssetIcon = Boolean(amountAssetIconUrl && amountDisplaySymbol.length > 2)
-  const prefixLineHeight =
-    amountDisplaySymbol.length > 2
-      ? Math.max(Math.round(dynamicAmountLineHeight * 0.55), 22)
-      : dynamicAmountLineHeight
-  /** One Text line like Dashboard — avoids Text vs TextInput baseline mismatch for $ / € / £. */
-  const unifiedShortAmountText =
-    !showAmountAssetIcon && amountDisplaySymbol.length <= 2
+  const amountDisplaySymbol = getSendAmountFieldSymbol(
+    amountDisplayCurrency || selectedBalanceCurrency,
+  )
   const amountTextStyle = {
     ...amountTextBase,
   }
-  const amountPrefixStyle = {
-    ...amountTextBase,
-    fontSize:
-      amountDisplaySymbol.length > 2
-        ? Math.max(Math.round(dynamicAmountFontSize * 0.52), 20)
-        : dynamicAmountFontSize,
-    lineHeight: prefixLineHeight,
-  }
   // Keep the amount band fixed so dynamic number-size changes never push/pull the
-  // balance/note/keypad/KYC/CTA group vertically.
-  const amountRowHeight = Platform.select({
-    ios: 108,
-    default: 116,
-  })
+  // balance/note/keypad/KYC/CTA group vertically. Tall enough for dynamic headline lineHeight on iOS.
+  const amountRowHeight = Math.max(
+    Platform.select({ ios: 108, default: 116 }) ?? 116,
+    dynamicAmountLineHeight + spacing[2],
+  )
 
   const showCrossCurrencyExchangeUi =
     String(sendCurrency || '').toUpperCase() !== String(receiveCurrency || '').toUpperCase()
 
   const noahRateMap = useMemo(
-    () => exchangeRatesToRateMap(exchangeRates),
-    [exchangeRates],
+    () => exchangeRatesToRateMap(exchangeRatesFromContext),
+    [exchangeRatesFromContext],
   )
 
+  const cryptoFxRates = useMemo(
+    () =>
+      exchangeRatesToRateMap(
+        cryptoRatesFromContext.map((r) => ({
+          from_currency: r.from_currency,
+          to_currency: r.to_currency,
+          rate: r.rate,
+        })),
+      ),
+    [cryptoRatesFromContext],
+  )
+
+  const isWalletRecipient = Boolean(recipient?.wallet_network?.trim())
+
+  const activeCryptoRateRow = useMemo(() => {
+    if (!isWalletRecipient) return null
+    const send = String(sendCurrency || '').trim().toUpperCase()
+    const receive = String(receiveCurrency || '').trim().toUpperCase()
+    const network = String(recipient?.wallet_network || '').trim()
+    return (
+      cryptoRatesFromContext.find(
+        (r) =>
+          String(r.from_currency || '').toUpperCase() === send &&
+          String(r.to_currency || '').toUpperCase() === receive &&
+          String(r.receive_network || '').trim() === network,
+      ) ?? null
+    )
+  }, [
+    isWalletRecipient,
+    cryptoRatesFromContext,
+    sendCurrency,
+    receiveCurrency,
+    recipient?.wallet_network,
+  ])
+
   const hasNoahRateForPair = useMemo(() => {
+    if (isWalletRecipient) return true
     if (!showCrossCurrencyExchangeUi) return true
     const send = String(sendCurrency || '').trim().toUpperCase()
     const receive = String(receiveCurrency || '').trim().toUpperCase()
@@ -556,6 +569,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     )
     return hasNoahSendRateRow(row ? { rate: row.rate } : null)
   }, [
+    isWalletRecipient,
     showCrossCurrencyExchangeUi,
     sendCurrency,
     receiveCurrency,
@@ -586,8 +600,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     toCurrency: receiveCurrency,
   })
 
-  const isWalletRecipient = Boolean(recipient?.wallet_network?.trim())
-
   const needsNoahRateForSend =
     selectedPaymentMethod === 'balance' &&
     !isEasetagRecipient &&
@@ -599,6 +611,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     isWalletRecipient &&
     showCrossCurrencyExchangeUi
 
+  const hasValidCryptoRateForPair =
+    !needsCryptoRateForSend ||
+    (activeCryptoRateRow != null && Number(activeCryptoRateRow.rate) > 0)
+
   const noahRatesLoading =
     needsNoahRateForSend &&
     !hasNoahRateForPair &&
@@ -606,7 +622,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
   const cryptoRatesLoading =
     needsCryptoRateForSend &&
-    !hasNoahRateForPair &&
+    !hasValidCryptoRateForPair &&
     (!cryptoRatesFetched || cryptoRatesFetching)
 
   const manualQuoteLoading = manualQuoteEnabled && !manualQuote && manualQuoteFetching
@@ -615,9 +631,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     !showCrossCurrencyExchangeUi ||
     (selectedPaymentMethod === 'otherCurrency'
       ? !manualQuoteEnabled || Boolean(manualQuote)
-      : !needsNoahRateForSend && !needsCryptoRateForSend
-        ? true
-        : hasNoahRateForPair)
+      : isWalletRecipient
+        ? !needsCryptoRateForSend || hasValidCryptoRateForPair
+        : !needsNoahRateForSend || hasNoahRateForPair)
 
   const flowAmounts = useMemo(() => {
     if (!showCrossCurrencyExchangeUi || enteredAmount <= 0) {
@@ -630,13 +646,15 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         forwardRate: manualQuote.exchangeRate,
       }
     }
-    if (!hasNoahRateForPair) {
+    const previewRateMap = isWalletRecipient ? cryptoFxRates : noahRateMap
+    const hasPreviewRate = isWalletRecipient ? hasValidCryptoRateForPair : hasNoahRateForPair
+    if (!hasPreviewRate) {
       const fallback = convertNoahSendFlowAmounts({
         direction: amountEntryMode,
         amount: enteredAmount,
         sendCurrency,
         receiveCurrency,
-        rateMap: noahRateMap,
+        rateMap: previewRateMap,
       })
       return {
         sendAmount: fallback.sendAmount,
@@ -649,7 +667,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       amount: enteredAmount,
       sendCurrency,
       receiveCurrency,
-      rateMap: noahRateMap,
+      rateMap: previewRateMap,
     })
   }, [
     showCrossCurrencyExchangeUi,
@@ -658,9 +676,12 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     sendCurrency,
     receiveCurrency,
     noahRateMap,
+    cryptoFxRates,
+    isWalletRecipient,
     selectedPaymentMethod,
     manualQuote,
     hasNoahRateForPair,
+    hasValidCryptoRateForPair,
   ])
 
   const receiveAmount = normalizePayoutReceiveAmountForCurrency(
@@ -730,11 +751,16 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   /** Debit from wallet when paying from balance (includes fees when FX order amounts are available). */
   const balanceDebitEstimate =
     selectedPaymentMethod === 'balance' && recipient && receiveAmount > 0
-      ? totalAmount > 0
-        ? totalAmount
-        : sendingAmount > 0
-          ? sendingAmount
-          : 0
+      ? isWalletRecipient &&
+        walletQuotePreview &&
+        walletQuoteFresh &&
+        walletQuotePreview.totalDebited > 0
+        ? walletQuotePreview.totalDebited
+        : totalAmount > 0
+          ? totalAmount
+          : sendingAmount > 0
+            ? sendingAmount
+            : 0
       : 0
 
   const balanceDebitCents = Math.round((Number.isFinite(balanceDebitEstimate) ? balanceDebitEstimate : 0) * 100)
@@ -847,14 +873,21 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     selectedBalanceCurrency,
   ])
 
-  useEffect(() => {
-    if (!walletQuotePrefetchKey || !recipient?.id) return
-    const meta = {
-      recipientId: recipient.id,
+  const walletQuoteStashMeta = useMemo(
+    () => ({
+      recipientId: recipient?.id ?? '',
       amountEntryMode,
       entryAmount: amountEntryMode === 'send' ? sendingAmount : receiveAmount,
       receiveCurrency,
-    }
+    }),
+    [recipient?.id, amountEntryMode, sendingAmount, receiveAmount, receiveCurrency],
+  )
+
+  const walletQuoteFresh = isStashedWalletQuoteFresh(walletQuoteStashMeta)
+
+  useEffect(() => {
+    if (!walletQuotePrefetchKey || !recipient?.id) return
+    let cancelled = false
     void ensureSendWalletQuoteStashed(
       () =>
         noahService.createWalletSendQuote({
@@ -864,14 +897,43 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
           ...(amountEntryMode === 'receive' ? { receiveAmount } : {}),
           ...(amountEntryMode === 'send' && sendingAmount > 0 ? { sendAmount: sendingAmount } : {}),
         }),
-      meta,
-    )
-  }, [walletQuotePrefetchKey, recipient, receiveAmount, receiveCurrency, selectedBalanceCurrency, amountEntryMode, sendingAmount])
+      walletQuoteStashMeta,
+    ).then((quote) => {
+      if (!cancelled) setWalletQuotePreview(quote)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [
+    walletQuotePrefetchKey,
+    recipient,
+    receiveAmount,
+    receiveCurrency,
+    selectedBalanceCurrency,
+    amountEntryMode,
+    sendingAmount,
+    walletQuoteStashMeta,
+  ])
 
   useEffect(() => {
     clearSendPayoutQuote()
     clearSendWalletQuote()
+    setWalletQuotePreview(null)
+    walletMinSeedAppliedRef.current = null
   }, [recipient?.id])
+
+  useEffect(() => {
+    if (!recipient?.wallet_network?.trim()) return
+    if (selectedPaymentMethod !== 'balance') return
+    if (sendAgainPrefillAppliedRef.current) return
+    const seedKey = recipient.id
+    if (walletMinSeedAppliedRef.current === seedKey) return
+    const parsed = sendAmount ? Number.parseFloat(sendAmount.replace(/,/g, '')) || 0 : 0
+    if (parsed <= 0) {
+      setSendAmount(formatAmount(String(WALLET_SEND_MIN_RECEIVE_AMOUNT)))
+    }
+    walletMinSeedAppliedRef.current = seedKey
+  }, [recipient?.id, recipient?.wallet_network, selectedPaymentMethod, sendAmount])
 
   const exchangeInfoAmountPositive =
     !!(recipient && sendAmount && Number.parseFloat(sendAmount.replace(/,/g, '')) > 0)
@@ -886,6 +948,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     (selectedPaymentMethod === 'otherCurrency' && (!selectedOtherCurrency || !selectedOtherPaymentMethod)) ||
     verificationBlocksSend ||
     hasInsufficientBalance ||
+    (isWalletRecipient &&
+      selectedPaymentMethod === 'balance' &&
+      receiveAmount > 0 &&
+      receiveAmount < WALLET_SEND_MIN_RECEIVE_AMOUNT) ||
     (exchangeInfoAmountPositive && showCrossCurrencyExchangeUi && !exchangePreviewReady)
 
   const showExchangePreviewSkeleton =
@@ -1020,63 +1086,22 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               <View style={styles.amountSection}>
                 <View style={[styles.amountInputWrapper, { height: amountRowHeight }]}>
                   <View style={styles.amountInputContainer}>
-                    {unifiedShortAmountText ? (
-                      <Text
-                        style={[
-                          styles.amountInput,
-                          amountTextStyle,
-                          styles.amountUnified,
-                          !recipient && styles.amountInputDisabled,
-                        ]}
-                        numberOfLines={1}
-                        adjustsFontSizeToFit
-                        minimumFontScale={0.5}
-                        accessibilityRole="text"
-                        accessibilityLabel={`Amount ${amountDisplaySymbol}${recipient ? sendAmount : '0'}`}
-                      >
-                        {amountDisplaySymbol}
-                        {recipient ? sendAmount : '0'}
-                      </Text>
-                    ) : (
-                      <>
-                        {recipient &&
-                          (showAmountAssetIcon ? (
-                            <View style={styles.amountAssetIconWrap}>
-                              <CachedImage
-                                uri={amountAssetIconUrl!}
-                                style={styles.amountAssetIcon}
-                                contentFit="cover"
-                              />
-                            </View>
-                          ) : (
-                            <Text style={[styles.currencyPrefix, amountPrefixStyle]} numberOfLines={1}>
-                              {amountDisplaySymbol}
-                            </Text>
-                          ))}
-                        <TextInput
-                          style={[
-                            styles.amountInput,
-                            !recipient && styles.amountInputDisabled,
-                            amountTextStyle,
-                          ]}
-                          value={recipient ? sendAmount : '0'}
-                          onChangeText={(text) => {
-                            if (!recipient) return
-
-                            let cleaned = text.replace(/,/g, '').replace(/[^0-9.]/g, '')
-                            const formatted = formatAmount(cleaned)
-                            setSendAmount(formatted)
-                          }}
-                          placeholder="0"
-                          placeholderTextColor={colors.text.secondary}
-                          keyboardType="numeric"
-                          editable={!!recipient}
-                          autoFocus={false}
-                          showSoftInputOnFocus={false}
-                          underlineColorAndroid="transparent"
-                        />
-                      </>
-                    )}
+                    <Text
+                      style={[
+                        styles.amountInput,
+                        amountTextStyle,
+                        styles.amountUnified,
+                        !recipient && styles.amountInputDisabled,
+                      ]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.5}
+                      accessibilityRole="text"
+                      accessibilityLabel={`Amount ${amountDisplaySymbol}${recipient ? sendAmount : '0'}`}
+                    >
+                      {amountDisplaySymbol}
+                      {recipient ? sendAmount : '0'}
+                    </Text>
                   </View>
           </View>
 
@@ -1106,6 +1131,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                         </Text>
                       </View>
                     </View>
+                  ) : needsCryptoRateForSend && !cryptoRatesLoading && !hasValidCryptoRateForPair ? (
+                    <Text style={[styles.exchangeInfoText, styles.exchangeInfoUnavailable]}>
+                      Exchange rate unavailable. Try again shortly.
+                    </Text>
                   ) : needsNoahRateForSend && !noahRatesLoading && !hasNoahRateForPair ? (
                     <Text style={[styles.exchangeInfoText, styles.exchangeInfoUnavailable]}>
                       Exchange rate unavailable. Try again shortly.
@@ -1352,6 +1381,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
               haptics.medium()
 
+              const navRateMap = isWalletRecipient ? cryptoFxRates : noahRateMap
               const navAmounts =
                 sendCurrency !== receiveCurrency
                   ? convertNoahSendFlowAmounts({
@@ -1359,7 +1389,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       amount: enteredAmountValue,
                       sendCurrency,
                       receiveCurrency,
-                      rateMap: noahRateMap,
+                      rateMap: navRateMap,
                     })
                   : {
                       sendAmount: enteredAmountValue,
@@ -1378,7 +1408,24 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               }
 
               if (
+                isWalletRecipient &&
+                selectedPaymentMethod === 'balance' &&
+                receiveAmountValue > 0
+              ) {
+                const walletMinCheck = validateWalletSendReceiveAmount(
+                  receiveAmountValue,
+                  receiveCurrency,
+                )
+                if (!walletMinCheck.ok) {
+                  setAmountFieldError(walletMinCheck.message)
+                  showError(walletMinCheck.message)
+                  return
+                }
+              }
+
+              if (
                 !isEasetagRecipient &&
+                !isWalletRecipient &&
                 (selectedPaymentMethod === 'balance' || selectedPaymentMethod === 'otherCurrency') &&
                 receiveAmountValue > 0
               ) {
@@ -1971,38 +2018,17 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     maxWidth: '100%',
   },
-  /** Single-line amount (short $ € £): same rendering path as dashboard balance Text. */
+  /** Single-line amount: same rendering path as dashboard balance Text (avoids iOS TextInput clip). */
   amountUnified: {
     flexShrink: 1,
     textAlign: 'center',
     maxWidth: '100%',
-  },
-  currencyPrefix: {
-    fontSize: 50,
-    fontWeight: '900',
-    color: colors.text.primary,
-    fontFamily: fontFamily.black,
-    marginRight: 2,
-    includeFontPadding: false,
-    paddingVertical: 0,
+    width: '100%',
     ...Platform.select({
-      android: { textAlignVertical: 'center' as const },
+      android: { includeFontPadding: false },
+      ios: { includeFontPadding: false },
       default: {},
     }),
-  },
-  amountAssetIconWrap: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginRight: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  amountAssetIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
   },
   amountInput: {
     // Base fontSize - will be overridden by inline style for dynamic sizing
@@ -2010,7 +2036,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: colors.text.primary,
     fontFamily: fontFamily.black,
-    textAlign: 'left',
+    textAlign: 'center',
     paddingLeft: 0,
     paddingRight: 0,
     paddingTop: 0,
@@ -2018,7 +2044,6 @@ const styles = StyleSheet.create({
     marginVertical: 0,
     flexShrink: 1,
     flexGrow: 0,
-    minWidth: 48,
     includeFontPadding: false,
     ...Platform.select({
       android: { textAlignVertical: 'center' as const },

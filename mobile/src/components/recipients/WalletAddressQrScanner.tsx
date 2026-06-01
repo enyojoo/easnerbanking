@@ -51,6 +51,7 @@ function ScannerContent({
       <CameraView
         style={StyleSheet.absoluteFillObject}
         facing="back"
+        active={visible}
         barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
         onBarcodeScanned={handleBarcodeScanned}
       />
@@ -87,7 +88,7 @@ export default function WalletAddressQrScanner({
   if (embedded) {
     if (!visible) return null
     return (
-      <View style={styles.embeddedHost} pointerEvents="box-none">
+      <View style={styles.embeddedHost} pointerEvents="auto">
         <ScannerContent visible={visible} onClose={onClose} onScan={onScan} />
       </View>
     )

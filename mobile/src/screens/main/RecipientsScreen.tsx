@@ -12,10 +12,9 @@ import {
   ActivityIndicator,
   ScrollView,
   Platform,
-  Dimensions,
   Keyboard,
 } from 'react-native'
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
+import { KeyboardAvoidingView, KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useCameraPermissions } from 'expo-camera'
 import {
@@ -91,7 +90,7 @@ import {
 } from '@easner/shared'
 import { PayoutSchemaExtraFields } from '../../components/recipients/PayoutSchemaExtraFields'
 import { UsBankAddressFields } from '../../components/recipients/UsBankAddressFields'
-import { useKeyboardScrollPadding } from '../../hooks/useKeyboardScrollPadding'
+import { RecipientFormDropdownHost, RegisterRecipientDropdownSheet } from '../../components/recipients/RecipientFormDropdownHost'
 import { haptics } from '../../lib/haptics'
 
 function RecipientsContent({ navigation }: NavigationProps) {
@@ -143,7 +142,6 @@ function RecipientsContent({ navigation }: NavigationProps) {
   } | null>(null)
   const [easenetLookupLoading, setEasenetLookupLoading] = useState(false)
   const [easenetLookupError, setEasenetLookupError] = useState<string | null>(null)
-  const [androidDropdownKeyboardHeight, setAndroidDropdownKeyboardHeight] = useState(0)
   useEffect(() => {
     const uid = userProfile?.id || user?.id
     if (!uid) return
@@ -190,7 +188,6 @@ function RecipientsContent({ navigation }: NavigationProps) {
   // Animation refs
   const headerAnim = useRef(new Animated.Value(0)).current
   const formScrollRef = useRef<ScrollView>(null)
-  const keyboardScrollPadding = useKeyboardScrollPadding()
   const contentAnim = useRef(new Animated.Value(0)).current
 
   // Run entrance animations
@@ -293,20 +290,6 @@ function RecipientsContent({ navigation }: NavigationProps) {
     }
   }, [newRecipient.payeeEasetag, selectedRecipientType, showBankAccountForm])
 
-  useEffect(() => {
-    if (Platform.OS !== 'android') return
-    const onShow = Keyboard.addListener('keyboardDidShow', (event) => {
-      setAndroidDropdownKeyboardHeight(event.endCoordinates?.height || 0)
-    })
-    const onHide = Keyboard.addListener('keyboardDidHide', () => {
-      setAndroidDropdownKeyboardHeight(0)
-    })
-    return () => {
-      onShow.remove()
-      onHide.remove()
-    }
-  }, [])
-  
   // Reset form after create/edit form modal closes (for smooth animation)
   useEffect(() => {
     if (!showBankAccountForm && editingRecipient) {
@@ -434,29 +417,6 @@ function RecipientsContent({ navigation }: NavigationProps) {
     setShowBankDropdown(false)
     setBankSearchTerm('')
   }
-  const renderDropdownContainer = (onClose: () => void, content: React.ReactNode) => {
-    if (Platform.OS === 'android') {
-      const screenHeight = Dimensions.get('screen').height
-      const keyboardOpen = androidDropdownKeyboardHeight > 0
-      const maxHeight = Math.max(260, Math.floor(screenHeight * (keyboardOpen ? 0.5 : 0.62)))
-      return (
-        <Modal
-          visible
-          transparent
-          animationType="fade"
-          onRequestClose={onClose}
-          statusBarTranslucent
-        >
-          <Pressable style={styles.androidDropdownOverlay} onPress={onClose} />
-          <View style={styles.androidDropdownContainer} pointerEvents="box-none">
-            <View style={[styles.androidDropdownCard, { maxHeight }]}>{content}</View>
-          </View>
-        </Modal>
-      )
-    }
-    return <View style={styles.currencyDropdown}>{content}</View>
-  }
-
   const handleAddRecipient = async () => {
     if (!userProfile?.id) {
       showError('User not authenticated')
@@ -831,6 +791,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
   }
 
   const handleScanPress = async () => {
+    Keyboard.dismiss()
     const perm = cameraPermission?.granted ? cameraPermission : await requestCameraPermission()
     if (!perm?.granted) {
       showWarning(
@@ -1440,27 +1401,32 @@ function RecipientsContent({ navigation }: NavigationProps) {
         animationType="slide"
         transparent={true}
         onRequestClose={() => {
+          if (showScanModal) {
+            setShowScanModal(false)
+            return
+          }
           setShowBankAccountForm(false)
           setEditingRecipient(null)
           resetForm()
         }}
       >
-        {/* Bank Account Form */}
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-        >
+        <View style={styles.modalOverlay}>
           <Pressable 
            android_ripple={ripple.neutral} 
             style={StyleSheet.absoluteFill} onPress={() => {
+              if (showScanModal) {
+                setShowScanModal(false)
+                return
+              }
+              closeAllDropdowns()
               setShowBankAccountForm(false)
               setEditingRecipient(null)
               resetForm()
             }}
           />
+          <RecipientFormDropdownHost>
           <View 
-            style={[styles.modalContainer, { 
+            style={[styles.modalContainer, styles.modalContainerWithScanner, { 
               height: '92%',
               paddingBottom: Math.max(insets.bottom, 20),
             }]}
@@ -1488,24 +1454,20 @@ function RecipientsContent({ navigation }: NavigationProps) {
               </Pressable>
             </View>
 
-            <ScrollView 
+            <KeyboardAwareScrollView
               ref={formScrollRef}
               style={styles.modalScrollView}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={[
                 styles.modalScrollContent,
-                { paddingBottom: Math.max(insets.bottom, 20) + keyboardScrollPadding },
+                { paddingBottom: Math.max(insets.bottom, 20) },
               ]}
               nestedScrollEnabled={true}
-              // Pause parent form scroll while a dropdown is open so list drags stay inside the dropdown.
               scrollEnabled={!isAnyDropdownOpen}
               keyboardShouldPersistTaps="handled"
-              automaticallyAdjustKeyboardInsets
+              bottomOffset={insets.bottom + spacing[3]}
             >
               <View style={styles.modalContent}>
-              {isAnyDropdownOpen && Platform.OS !== 'android' && (
-                <Pressable android_ripple={ripple.neutral} style={styles.dropdownBackdrop} onPress={closeAllDropdowns} />
-              )}
               {error ? (
                 <View style={styles.errorContainer}>
                   <Text style={styles.errorText}>{error}</Text>
@@ -1538,13 +1500,13 @@ function RecipientsContent({ navigation }: NavigationProps) {
                   </View>
                 </Pressable>
                 
-                {showCountryDropdown &&
-                  renderDropdownContainer(
-                    () => {
-                      setShowCountryDropdown(false)
-                      setCountrySearchTerm('')
-                    },
-                    <>
+                <RegisterRecipientDropdownSheet
+                  visible={showCountryDropdown}
+                  onClose={() => {
+                    setShowCountryDropdown(false)
+                    setCountrySearchTerm('')
+                  }}
+                >
                     <View style={styles.currencyDropdownSearch}>
                       <Search size={18} color={colors.neutral[400]} strokeWidth={2} />
                       <TextInput
@@ -1606,8 +1568,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                         )
                       })}
                     </RecipientFormDropdownList>
-                    </>,
-                  )}
+                </RegisterRecipientDropdownSheet>
               </View>}
 
               {/* Show form fields */}
@@ -1672,13 +1633,13 @@ function RecipientsContent({ navigation }: NavigationProps) {
                         )}
                       </View>
                     </Pressable>
-                    {showProviderDropdown &&
-                      renderDropdownContainer(
-                        () => {
-                          setShowProviderDropdown(false)
-                          setProviderSearchTerm('')
-                        },
-                        <>
+                    <RegisterRecipientDropdownSheet
+                      visible={showProviderDropdown}
+                      onClose={() => {
+                        setShowProviderDropdown(false)
+                        setProviderSearchTerm('')
+                      }}
+                    >
                         <View style={styles.currencyDropdownSearch}>
                           <Search size={18} color={colors.neutral[400]} strokeWidth={2} />
                           <TextInput
@@ -1714,8 +1675,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                             </Pressable>
                           ))}
                         </RecipientFormDropdownList>
-                        </>,
-                      )}
+                    </RegisterRecipientDropdownSheet>
                   </View>
                   <TextInput
                     style={styles.modalInput}
@@ -1748,9 +1708,9 @@ function RecipientsContent({ navigation }: NavigationProps) {
                       editable={!isSubmitting}
                     />
                   </View>
-                  <View style={styles.walletAddressInputWrap}>
+                  <View style={[styles.walletAddressInputWrap, styles.walletAddressInputRow]}>
                     <TextInput
-                      style={[styles.modalInput, styles.walletAddressInput]}
+                      style={[styles.modalInput, styles.walletAddressInput, styles.walletAddressInputField]}
                       value={newRecipient.walletAddress}
                       onChangeText={(text) => {
                         setNewRecipient(prev => ({ ...prev, walletAddress: text }))
@@ -1777,7 +1737,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                       accessibilityRole="button"
                       accessibilityLabel="Scan wallet address QR code"
                     >
-                      <ScanLine size={18} color={colors.primary.main} strokeWidth={2} />
+                      <ScanLine size={20} color={colors.primary.main} strokeWidth={2} />
                     </Pressable>
                   </View>
                   <View style={[styles.currencySelectorWrapper, showWalletAssetDropdown && styles.currencySelectorWrapperActive]}>
@@ -1801,13 +1761,13 @@ function RecipientsContent({ navigation }: NavigationProps) {
                         )}
                       </View>
                     </Pressable>
-                    {showWalletAssetDropdown &&
-                      renderDropdownContainer(
-                        () => {
-                          setShowWalletAssetDropdown(false)
-                          setWalletAssetSearchTerm('')
-                        },
-                        <>
+                    <RegisterRecipientDropdownSheet
+                      visible={showWalletAssetDropdown}
+                      onClose={() => {
+                        setShowWalletAssetDropdown(false)
+                        setWalletAssetSearchTerm('')
+                      }}
+                    >
                         <View style={styles.currencyDropdownSearch}>
                           <Search size={18} color={colors.neutral[400]} strokeWidth={2} />
                           <TextInput
@@ -1851,8 +1811,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                             </Pressable>
                           ))}
                         </RecipientFormDropdownList>
-                        </>,
-                      )}
+                    </RegisterRecipientDropdownSheet>
                   </View>
                   <View style={[styles.currencySelectorWrapper, showWalletNetworkDropdown && styles.currencySelectorWrapperActive]}>
                     <Pressable
@@ -1877,13 +1836,13 @@ function RecipientsContent({ navigation }: NavigationProps) {
                         )}
                       </View>
                     </Pressable>
-                    {showWalletNetworkDropdown &&
-                      renderDropdownContainer(
-                        () => {
-                          setShowWalletNetworkDropdown(false)
-                          setWalletNetworkSearchTerm('')
-                        },
-                        <>
+                    <RegisterRecipientDropdownSheet
+                      visible={showWalletNetworkDropdown}
+                      onClose={() => {
+                        setShowWalletNetworkDropdown(false)
+                        setWalletNetworkSearchTerm('')
+                      }}
+                    >
                         <View style={styles.currencyDropdownSearch}>
                           <Search size={18} color={colors.neutral[400]} strokeWidth={2} />
                           <TextInput
@@ -1922,8 +1881,7 @@ function RecipientsContent({ navigation }: NavigationProps) {
                             </Pressable>
                           ))}
                         </RecipientFormDropdownList>
-                        </>,
-                      )}
+                    </RegisterRecipientDropdownSheet>
                   </View>
                 </>
               )}
@@ -2024,7 +1982,6 @@ function RecipientsContent({ navigation }: NavigationProps) {
                         setShowBankDropdown(false)
                         setBankSearchTerm('')
                       }}
-                      renderDropdownContainer={renderDropdownContainer}
                       onBlurValidate={(v) => validateField('bankName', v)}
                     />
 
@@ -2323,16 +2280,28 @@ function RecipientsContent({ navigation }: NavigationProps) {
                 </Pressable>
               </View>
               </View>
-            </ScrollView>
+            </KeyboardAwareScrollView>
+            <WalletAddressQrScanner
+              embedded
+              visible={showScanModal}
+              onClose={() => setShowScanModal(false)}
+              onScan={(address) => {
+                setNewRecipient((prev) => ({ ...prev, walletAddress: address }))
+                void inferWalletAddressFromApi(address)
+                  .then(({ best }) => {
+                    if (!best) return
+                    setNewRecipient((prev) => ({
+                      ...prev,
+                      currency: best.asset,
+                      network: best.network,
+                    }))
+                  })
+                  .catch(() => {})
+              }}
+            />
           </View>
-
-          <WalletAddressQrScanner
-            embedded
-            visible={showScanModal}
-            onClose={() => setShowScanModal(false)}
-            onScan={(address) => setNewRecipient((prev) => ({ ...prev, walletAddress: address }))}
-          />
-        </KeyboardAvoidingView>
+          </RecipientFormDropdownHost>
+        </View>
       </Modal>
 
       <EasnerAlertSheet
@@ -2591,6 +2560,9 @@ const styles = StyleSheet.create({
         elevation: 16,
       },
     }),
+  },
+  modalContainerWithScanner: {
+    overflow: 'hidden',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -2874,28 +2846,34 @@ const styles = StyleSheet.create({
   },
   walletAddressInputWrap: {
     marginBottom: spacing[4],
-    position: 'relative',
+  },
+  walletAddressInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
   },
   walletAddressInput: {
     marginBottom: 0,
-    paddingRight: 44,
+  },
+  walletAddressInputField: {
+    flex: 1,
+    minWidth: 0,
   },
   walletNicknameInput: {
     paddingRight: spacing[4],
   },
   walletScanIconButton: {
-    position: 'absolute',
-    right: spacing[3],
-    top: '50%',
-    transform: [{ translateY: -16 }],
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 2,
+    borderWidth: 1,
+    borderColor: colors.frame.border,
+    backgroundColor: colors.frame.background,
+    flexShrink: 0,
     ...Platform.select({
-      android: { elevation: 2 },
+      android: { elevation: 0 },
     }),
   },
   infoBox: {
