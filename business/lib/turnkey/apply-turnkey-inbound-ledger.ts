@@ -1,7 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { findEasetagSettlementForChainSuppression, updateEasetagSettlementSettled } from "@/lib/ledger/easetag-settlement"
-import { findGlobalPayoutSettlementForChainSuppression } from "@/lib/noah/global-payout-ledger"
+import {
+  findGlobalPayoutRefundForInboundSuppression,
+  findGlobalPayoutSettlementForChainSuppression,
+} from "@/lib/noah/global-payout-ledger"
 import { reconcileNoahBankOnrampCreditForSolanaTx, linkBankOnrampPayInToSolanaTxHash } from "@/lib/noah/credit-bank-onramp-wallet"
 import {
   findNoahBankOnrampChainSettlementForSuppression,
@@ -97,6 +100,17 @@ export async function applyTurnkeyInboundLedgerEvent(
           businessId,
         }).catch(() => {})
       }
+      return { kind: "suppressed_noah" }
+    }
+
+    const refundSuppressed = await findGlobalPayoutRefundForInboundSuppression(admin, {
+      txHash,
+      userId,
+      businessId,
+      amount: input.amount,
+      currency: input.currency,
+    })
+    if (refundSuppressed) {
       return { kind: "suppressed_noah" }
     }
   }

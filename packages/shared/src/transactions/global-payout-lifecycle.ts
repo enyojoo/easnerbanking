@@ -74,7 +74,7 @@ export function buildGlobalPayoutLifecycle(
       },
       {
         id: "failed",
-        title: "Unable to complete",
+        title: "Failed",
         description:
           "This transfer could not be completed. Please contact support with your transaction reference.",
         state: "current",

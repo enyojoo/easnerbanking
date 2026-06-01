@@ -60,6 +60,6 @@ describe("buildBankDepositLifecycle", () => {
       metadata: { processing_at: "2026-05-19T22:00:46Z" },
     })
     expect(steps[1].id).toBe("failed")
-    expect(steps[1].title).toBe("Unable to complete")
+    expect(steps[1].title).toBe("Failed")
   })
 })

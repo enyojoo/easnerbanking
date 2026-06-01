@@ -75,6 +75,7 @@ export function resolveHiddenFromFeed(metadata: unknown, payload?: unknown): boo
   if (m.noah_orchestration_settlement_leg === true) return true
   if (m.noah_orchestration_settlement_in_leg === true) return true
   if (m.noah_bank_onramp_chain_mirror === true) return true
+  if (m.global_payout_refund_mirror === true) return true
   if (payload && typeof payload === "object" && isNoahBankOnrampOrchestrationOutLeg(payload as Record<string, unknown>)) {
     return true
   }

@@ -36,6 +36,328 @@ export function isNoahGlobalPayoutOrchestrationInLeg(tx: Record<string, unknown>
 }
 
 /**
+ * Noah Solana crypto OUT that returns USDC/EURC after a failed global fiat payout — not a user-facing row.
+ */
+export function isNoahGlobalPayoutRefundOutLeg(tx: Record<string, unknown>): boolean {
+  if (String(tx.Direction ?? "").toUpperCase() !== "OUT") return false
+  if (tx.FiatPayment) return false
+  const net = String(tx.Network ?? "")
+  if (!net || net === "OffNetwork") return false
+  const crypto = String(tx.CryptoCurrency ?? "").toUpperCase()
+  if (!crypto.includes("USDC") && !crypto.includes("EURC")) return false
+  const externalId = String(tx.ExternalID ?? tx.externalID ?? "").trim()
+  if (!externalId) return false
+  const orch = tx.Orchestration
+  return orch != null && typeof orch === "object"
+}
+
+function amountsRoughlyEqual(a: number, b: number): boolean {
+  if (!Number.isFinite(a) || !Number.isFinite(b) || a <= 0 || b <= 0) return false
+  return Math.abs(a - b) <= Math.max(0.01, a * 0.001)
+}
+
+function pickDebitAmountFromGlobalPayoutMeta(
+  meta: Record<string, unknown>,
+  rowAmount: number,
+): number | null {
+  const total = Number(meta.total_debited ?? 0)
+  if (Number.isFinite(total) && total > 0) return total
+  const crypto = Number(meta.crypto_authorized_amount ?? 0)
+  if (Number.isFinite(crypto) && crypto > 0) return crypto
+  if (Number.isFinite(rowAmount) && rowAmount > 0) return rowAmount
+  return null
+}
+
+export type FailedGlobalPayoutOutRow = {
+  id: string
+  easnerPayoutId: string
+  metadata: Record<string, unknown>
+  amount: number
+  currency: string
+  user_id: string
+  business_id: string | null
+}
+
+/** User-facing global payout OUT row in a terminal failure state. */
+export async function findFailedGlobalPayoutOutByEasnerPayoutId(
+  admin: SupabaseClient,
+  input: {
+    easnerPayoutId: string
+    userId: string
+    businessId: string | null
+  },
+): Promise<FailedGlobalPayoutOutRow | null> {
+  const easnerPayoutId = String(input.easnerPayoutId || "").trim()
+  if (!easnerPayoutId) return null
+
+  const pending = await findPendingGlobalPayoutByExternalId(admin, easnerPayoutId)
+  if (!pending?.id) return null
+
+  let q = admin
+    .from("transactions")
+    .select("id, metadata, amount, currency, user_id, business_id, status")
+    .eq("id", pending.id)
+  q = applyLedgerScope(q, { userId: input.userId, businessId: input.businessId })
+  const { data } = await q.maybeSingle()
+  if (!data?.id) return null
+
+  const st = String(data.status ?? "").toLowerCase()
+  if (st !== "failed" && st !== "cancelled") return null
+
+  const meta = (data.metadata || {}) as Record<string, unknown>
+  return {
+    id: String(data.id),
+    easnerPayoutId,
+    metadata: meta,
+    amount: Number(data.amount ?? 0),
+    currency: String(data.currency ?? "USD"),
+    user_id: String(data.user_id),
+    business_id: data.business_id != null ? String(data.business_id) : null,
+  }
+}
+
+export type GlobalPayoutRefundSuppression = {
+  easnerPayoutId: string
+  outRowId: string
+}
+
+/**
+ * Turnkey inbound that mirrors Noah's post-failure USDC refund — suppress ledger row and balance delta.
+ */
+export async function findGlobalPayoutRefundForInboundSuppression(
+  admin: SupabaseClient,
+  input: {
+    txHash: string | null
+    userId: string
+    businessId: string | null
+    amount?: number
+    currency?: string
+  },
+): Promise<GlobalPayoutRefundSuppression | null> {
+  const txHash = String(input.txHash || "").trim()
+  const scope = { userId: input.userId, businessId: input.businessId }
+  const select = "id, metadata, amount, currency, status"
+
+  if (txHash) {
+    let byRefundHash = admin
+      .from("transactions")
+      .select(select)
+      .eq("provider", "noah")
+      .eq("direction", "out")
+      .in("status", ["failed", "cancelled"])
+      .filter("metadata->>noah_refund_tx_hash", "eq", txHash)
+    byRefundHash = applyLedgerScope(byRefundHash, scope)
+    const { data: hashRow } = await byRefundHash.maybeSingle()
+    if (hashRow?.id) {
+      const meta = (hashRow.metadata || {}) as Record<string, unknown>
+      const easnerPayoutId = readEasnerPayoutIdFromNoahMeta(meta)
+      if (easnerPayoutId && isGlobalPayoutNoahOutRow(meta)) {
+        return { easnerPayoutId, outRowId: String(hashRow.id) }
+      }
+    }
+  }
+
+  const inboundAmount = input.amount
+  const inboundCurrency = String(input.currency || "").trim().toUpperCase()
+  const sinceIso = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()
+
+  let recentQ = admin
+    .from("transactions")
+    .select(select)
+    .eq("provider", "noah")
+    .eq("direction", "out")
+    .in("status", ["failed", "cancelled"])
+    .gte("created_at", sinceIso)
+    .or("metadata->>payout_type.eq.global_fiat,metadata->>flow.eq.global_fiat_offramp")
+  recentQ = applyLedgerScope(recentQ, scope)
+  const { data: failedRows } = await recentQ.limit(20)
+
+  for (const row of failedRows ?? []) {
+    const meta = (row.metadata || {}) as Record<string, unknown>
+    if (!isGlobalPayoutNoahOutRow(meta)) continue
+    const easnerPayoutId = readEasnerPayoutIdFromNoahMeta(meta)
+    if (!easnerPayoutId) continue
+
+    if (txHash) {
+      const expected = String(meta.noah_refund_tx_hash ?? "").trim()
+      if (expected && expected === txHash) {
+        return { easnerPayoutId, outRowId: String(row.id) }
+      }
+    }
+
+    if (inboundAmount == null || !Number.isFinite(inboundAmount) || inboundAmount <= 0) continue
+
+    const rowCurrency = String(row.currency ?? "USD").toUpperCase()
+    if (inboundCurrency && rowCurrency !== inboundCurrency) continue
+
+    const debitAmt = pickDebitAmountFromGlobalPayoutMeta(meta, Number(row.amount ?? 0))
+    if (debitAmt == null) continue
+    if (!amountsRoughlyEqual(inboundAmount, debitAmt)) continue
+
+    const outboundHash = String(meta.turnkey_tx_hash ?? meta.noah_on_chain_tx_hash ?? "").trim()
+    if (txHash && outboundHash && txHash === outboundHash) continue
+
+    return { easnerPayoutId, outRowId: String(row.id) }
+  }
+
+  return null
+}
+
+/**
+ * Restore ledger balance when a global fiat payout fails after Turnkey send debited the wallet.
+ */
+export async function reverseGlobalPayoutWalletDebitForEasnerPayoutId(
+  admin: SupabaseClient,
+  input: { easnerPayoutId: string },
+): Promise<boolean> {
+  const row = await findGlobalPayoutNoahRowByEasnerPayoutId(admin, input.easnerPayoutId)
+  if (!row?.id) return false
+
+  const meta = row.metadata
+  if (meta.balance_delta_applied !== true) return false
+  if (meta.balance_delta_reversed === true) return false
+
+  const creditAmt = pickDebitAmountFromGlobalPayoutMeta(meta, row.amount)
+  if (creditAmt == null) return false
+
+  const currency = String(row.currency || "USD").toUpperCase() as "USD" | "EUR"
+  await applyWalletBalanceDelta(admin, {
+    businessId: row.business_id,
+    userId: row.business_id ? null : row.user_id,
+    currency,
+    delta: creditAmt,
+  })
+
+  await admin
+    .from("transactions")
+    .update({
+      metadata: {
+        ...meta,
+        balance_delta_reversed: true,
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", row.id)
+
+  return true
+}
+
+export function extractNoahRefundHintsFromOrchestrationIn(
+  txData: Record<string, unknown>,
+): Record<string, unknown> | null {
+  const refunds = txData.Refunds
+  if (!Array.isArray(refunds) || refunds.length === 0) return null
+  const first = refunds[0]
+  if (!first || typeof first !== "object") return null
+  const r = first as Record<string, unknown>
+  const patch: Record<string, unknown> = { noah_refund_expected: true }
+  if (r.RefundID != null) patch.noah_refund_id = String(r.RefundID)
+  if (r.RefundedAmount != null) patch.noah_refund_amount = String(r.RefundedAmount)
+  if (r.Status != null) patch.noah_refund_status = String(r.Status)
+  if (r.RequestTime != null) patch.noah_refund_requested_at = String(r.RequestTime)
+  return patch
+}
+
+/** Patch failed payout OUT metadata when Noah sends the on-chain refund leg (no new ledger row). */
+export async function handleNoahGlobalPayoutRefundOutWebhook(
+  admin: SupabaseClient,
+  input: {
+    noahTransactionId: string
+    txData: Record<string, unknown>
+    status: string
+    userId: string
+    businessId: string | null
+    externalId: string | null
+    solanaTxHash: string | null
+  },
+): Promise<{ patchedOutRowId: string | null }> {
+  const easnerPayoutId = String(input.externalId || "").trim()
+  if (!easnerPayoutId) return { patchedOutRowId: null }
+
+  const outRow = await findFailedGlobalPayoutOutByEasnerPayoutId(admin, {
+    easnerPayoutId,
+    userId: input.userId,
+    businessId: input.businessId,
+  })
+  if (!outRow) {
+    const pending = await findPendingGlobalPayoutByExternalId(admin, easnerPayoutId)
+    if (!pending?.id) return { patchedOutRowId: null }
+    let q = admin.from("transactions").select("id, metadata, status").eq("id", pending.id)
+    q = applyLedgerScope(q, { userId: input.userId, businessId: input.businessId })
+    const { data } = await q.maybeSingle()
+    if (!data?.id) return { patchedOutRowId: null }
+    const st = String(data.status ?? "").toLowerCase()
+    if (st !== "failed" && st !== "cancelled") return { patchedOutRowId: null }
+    const meta = (data.metadata || {}) as Record<string, unknown>
+    const patch = buildGlobalPayoutRefundOutMetadataPatch(meta, input)
+    await admin
+      .from("transactions")
+      .update({ metadata: patch, updated_at: new Date().toISOString() })
+      .eq("id", data.id)
+    return { patchedOutRowId: String(data.id) }
+  }
+
+  const patch = buildGlobalPayoutRefundOutMetadataPatch(outRow.metadata, input)
+  await admin
+    .from("transactions")
+    .update({ metadata: patch, updated_at: new Date().toISOString() })
+    .eq("id", outRow.id)
+  return { patchedOutRowId: outRow.id }
+}
+
+function buildGlobalPayoutRefundOutMetadataPatch(
+  prior: Record<string, unknown>,
+  input: {
+    noahTransactionId: string
+    txData: Record<string, unknown>
+    status: string
+    solanaTxHash: string | null
+  },
+): Record<string, unknown> {
+  const hash = input.solanaTxHash || pickNoahWebhookTxHash(input.txData)
+  return {
+    ...prior,
+    flow: "global_fiat_offramp",
+    noah_refund_expected: true,
+    noah_refund_noah_transaction_id: input.noahTransactionId,
+    noah_refund_status: input.status,
+    ...(hash ? { noah_refund_tx_hash: hash } : {}),
+  }
+}
+
+/** On-chain signatures for failed global payout refunds (Turnkey mirror suppression). */
+export async function collectGlobalPayoutRefundTxHashesForScope(
+  admin: SupabaseClient,
+  txHashes: string[],
+  scope: { userId: string; businessId: string | null },
+): Promise<Set<string>> {
+  const wanted = [...new Set(txHashes.map((h) => String(h || "").trim()).filter(Boolean))]
+  if (wanted.length === 0) return new Set()
+
+  const matched = new Set<string>()
+  const sinceIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+
+  let q = admin
+    .from("transactions")
+    .select("metadata")
+    .eq("provider", "noah")
+    .eq("direction", "out")
+    .in("status", ["failed", "cancelled"])
+    .gte("created_at", sinceIso)
+    .or("metadata->>payout_type.eq.global_fiat,metadata->>flow.eq.global_fiat_offramp")
+  q = applyLedgerScope(q, scope)
+  const { data: rows } = await q.limit(80)
+
+  for (const row of rows ?? []) {
+    const meta = (row.metadata || {}) as Record<string, unknown>
+    const h = String(meta.noah_refund_tx_hash ?? "").trim()
+    if (h && wanted.includes(h)) matched.add(h)
+  }
+
+  return matched
+}
+
+/**
  * Pending Noah IN webhooks often omit Orchestration; ID is the rule execution id.
  */
 export function pickNoahGlobalPayoutOrchestrationRuleExecutionId(
@@ -762,9 +1084,13 @@ export async function handleNoahGlobalPayoutOrchestrationInWebhook(
   })
 
   if (globalPayoutOutRow) {
+    const refundHints = extractNoahRefundHintsFromOrchestrationIn(input.txData)
+    const priorWithRefunds = refundHints
+      ? { ...globalPayoutOutRow.metadata, ...refundHints }
+      : globalPayoutOutRow.metadata
     await linkGlobalPayoutOutRowFromOrchestrationIn(admin, {
       outRowId: globalPayoutOutRow.id,
-      priorMetadata: globalPayoutOutRow.metadata,
+      priorMetadata: priorWithRefunds,
       ruleExecutionId: input.ruleExecutionId,
       solanaTxHash: input.solanaTxHash,
       noahOrchestrationInTransactionId: input.noahTransactionId,

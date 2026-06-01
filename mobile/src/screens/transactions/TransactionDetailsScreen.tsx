@@ -688,9 +688,6 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
   const isReceived = transaction.transaction_type === 'receive'
   const statusInfo = getStatusInfo(transaction.status)
-  const isFailed = transaction.status.toLowerCase().includes('failed') || 
-                   transaction.status.toLowerCase().includes('returned') ||
-                   transaction.status.toLowerCase().includes('refunded')
   const isEasetagP2p = transaction.source_type === 'easetag_p2p'
   const isBankOnrampReceive =
     transaction.transaction_type === 'receive' &&
@@ -803,40 +800,6 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
               }]
             }}
           >
-            {/* Failed/Refunded Status */}
-            {isFailed && (
-              <View style={styles.failedCard}>
-                <View style={styles.failedIconContainer}>
-                  <CircleX size={32} color={colors.error.main} strokeWidth={2} />
-                </View>
-                <Text style={styles.failedTitle}>
-                  {transaction.status.toLowerCase().includes('refunded') 
-                    ? 'Transaction Refunded' 
-                    : transaction.status.toLowerCase().includes('returned')
-                    ? 'Transaction Returned'
-                    : 'Transaction Failed'}
-                </Text>
-                <Text style={styles.failedDescription}>
-                  {transaction.status.toLowerCase().includes('refunded')
-                    ? 'This transaction has been refunded to the sender.'
-                    : transaction.status.toLowerCase().includes('returned')
-                    ? 'This transaction was returned and could not be completed.'
-                    : 'There was an issue with your transaction. Please contact support.'}
-                </Text>
-                
-                <View style={styles.failedDetails}>
-                  <View style={styles.failedDetailRow}>
-                    <Text style={styles.failedDetailLabel}>Transaction ID</Text>
-                    <Text style={styles.failedDetailValue}>{transaction.transaction_id}</Text>
-                  </View>
-                  <View style={styles.failedDetailRow}>
-                    <Text style={styles.failedDetailLabel}>When</Text>
-                    <Text style={styles.failedDetailValue}>{formatTimestamp(transaction.updated_at)}</Text>
-                  </View>
-                </View>
-              </View>
-            )}
-
             {/* Transaction Summary — rows render from existing transaction metadata only. */}
             <SectionCard style={styles.card}>
               <View style={styles.summaryRows}>
@@ -1388,54 +1351,6 @@ const styles = StyleSheet.create({
   },
   copyIconSuccess: {
     backgroundColor: colors.success.background,
-  },
-  failedCard: {
-    backgroundColor: colors.error.background,
-    borderRadius: borderRadius.xl,
-    padding: spacing[5],
-    marginBottom: spacing[3],
-    alignItems: 'center',
-  },
-  failedIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: colors.neutral.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing[3],
-  },
-  failedTitle: {
-    ...textStyles.titleLarge,
-    color: colors.error.main,
-    marginBottom: spacing[2],
-  },
-  failedDescription: {
-    ...textStyles.bodyMedium,
-    color: colors.error.dark,
-    textAlign: 'center',
-    marginBottom: spacing[4],
-  },
-  failedDetails: {
-    width: '100%',
-    borderTopWidth: 1,
-    borderTopColor: colors.error.main + '30',
-    paddingTop: spacing[3],
-  },
-  failedDetailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing[2],
-  },
-  failedDetailLabel: {
-    ...textStyles.bodySmall,
-    color: colors.error.dark,
-  },
-  failedDetailValue: {
-    ...textStyles.titleSmall,
-    color: colors.error.main,
-    fontFamily: fontFamily.mono,
   },
   summaryRows: {
     gap: spacing[3],

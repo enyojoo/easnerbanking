@@ -105,7 +105,7 @@ export function buildBankDepositLifecycle(
       },
       {
         id: "failed",
-        title: "Unable to complete",
+        title: "Failed",
         description:
           "This deposit could not be posted to your account. Please contact support with your transaction reference.",
         state: "current",

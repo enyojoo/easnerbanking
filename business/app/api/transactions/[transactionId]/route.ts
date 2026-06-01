@@ -21,10 +21,12 @@ import {
 } from "@/lib/transactions/global-payout-detail"
 import {
   isNoahGlobalPayoutOrchestrationInHiddenFromFeed,
+  isTurnkeyGlobalPayoutRefundMirror,
   isTurnkeyNoahBankOnrampChainMirror,
   isTurnkeyTransactionHiddenFromFeed,
 } from "@/lib/transactions/transaction-feed-filters"
 import { collectNoahBankOnrampOnChainTxHashesForScope } from "@/lib/noah/noah-bank-onramp-chain-suppression"
+import { collectGlobalPayoutRefundTxHashesForScope } from "@/lib/noah/global-payout-ledger"
 import {
   deriveEasnerInboundRemitterDisplayName,
   formatTransactionDetailHeroTitle,
@@ -309,6 +311,14 @@ export async function GET(request: Request, routeCtx: Props) {
       businessId: scope === "business" ? (businessId as string) : null,
     })
     if (isTurnkeyNoahBankOnrampChainMirror(rec, noahHashes)) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 })
+    }
+
+    const refundHashes = await collectGlobalPayoutRefundTxHashesForScope(admin, [txHashForMirror], {
+      userId,
+      businessId: scope === "business" ? (businessId as string) : null,
+    })
+    if (isTurnkeyGlobalPayoutRefundMirror(rec, refundHashes)) {
       return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
   }

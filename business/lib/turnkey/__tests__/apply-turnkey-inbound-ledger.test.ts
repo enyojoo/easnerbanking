@@ -3,6 +3,8 @@ import { describe, expect, it, vi, beforeEach } from "vitest"
 const mocks = vi.hoisted(() => ({
   findNoah: vi.fn(),
   findPendingNoah: vi.fn(),
+  findRefund: vi.fn(),
+  findGlobalPayoutSettlement: vi.fn(),
   reconcileNoah: vi.fn(),
   linkNoahPayInHash: vi.fn(),
   findEasetag: vi.fn(),
@@ -36,6 +38,10 @@ vi.mock("@/lib/liquidity/sweep-jobs", () => ({
 vi.mock("@/lib/liquidity/platform-pool", () => ({
   ledgerCurrencyForStablecoinAsset: () => "USD",
   resolvePooledSolanaSourceAddress: async () => null,
+}))
+vi.mock("@/lib/noah/global-payout-ledger", () => ({
+  findGlobalPayoutRefundForInboundSuppression: mocks.findRefund,
+  findGlobalPayoutSettlementForChainSuppression: mocks.findGlobalPayoutSettlement,
 }))
 
 import { applyTurnkeyInboundLedgerEvent } from "@/lib/turnkey/apply-turnkey-inbound-ledger"
@@ -73,6 +79,8 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
     vi.clearAllMocks()
     mocks.findNoah.mockResolvedValue(null)
     mocks.findPendingNoah.mockResolvedValue(null)
+    mocks.findRefund.mockResolvedValue(null)
+    mocks.findGlobalPayoutSettlement.mockResolvedValue(null)
     mocks.findEasetag.mockResolvedValue(null)
     mocks.updateEasetag.mockResolvedValue(undefined)
     mocks.upsertLedger.mockResolvedValue({
@@ -122,6 +130,19 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
       businessId: null,
     })
     expect(mocks.reconcileNoah).toHaveBeenCalled()
+  })
+
+  it("suppresses global payout refund mirror without upsert", async () => {
+    mocks.findRefund.mockResolvedValue({
+      easnerPayoutId: "payout-1",
+      outRowId: "out-1",
+    })
+    const admin = { from: vi.fn() }
+
+    const result = await applyTurnkeyInboundLedgerEvent(admin as never, baseInput)
+    expect(result.kind).toBe("suppressed_noah")
+    expect(mocks.upsertLedger).not.toHaveBeenCalled()
+    expect(mocks.applyDelta).not.toHaveBeenCalled()
   })
 
   it("suppresses Easetag settlement without upsert", async () => {

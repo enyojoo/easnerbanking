@@ -23,6 +23,7 @@ export function isTurnkeyTransactionHiddenFromFeed(
   if (m.global_payout_orchestration_in_leg === true) return true
   if (m.noah_orchestration_settlement_leg === true) return true
   if (m.noah_orchestration_settlement_in_leg === true) return true
+  if (m.global_payout_refund_mirror === true) return true
   if (payload && typeof payload === "object" && isNoahBankOnrampOrchestrationOutLeg(payload as Record<string, unknown>)) {
     return true
   }
@@ -111,5 +112,28 @@ export function isNoahGlobalPayoutOrchestrationInHiddenFromFeed(
     String(row.tx_hash ?? "").trim() || pickNoahWebhookTxHash(payload) || ""
   if (hash && globalPayoutSettlementTxHashes.has(hash)) return true
 
+  return false
+}
+
+/** Turnkey inbound that mirrors Noah's post-failure global payout USDC refund. */
+export function isTurnkeyGlobalPayoutRefundMirror(
+  row: {
+    provider?: unknown
+    direction?: unknown
+    tx_hash?: unknown
+    metadata?: unknown
+  },
+  globalPayoutRefundTxHashes: ReadonlySet<string>,
+): boolean {
+  if (String(row.provider ?? "").toLowerCase() !== "turnkey") return false
+  if (String(row.direction ?? "").toLowerCase() !== "in") return false
+  if (!row.metadata || typeof row.metadata !== "object") {
+    const h = String(row.tx_hash ?? "").trim()
+    return Boolean(h && globalPayoutRefundTxHashes.has(h))
+  }
+  const m = row.metadata as Record<string, unknown>
+  if (m.global_payout_refund_mirror === true || m.suppress_in_feed === true) return true
+  const h = String(row.tx_hash ?? "").trim()
+  if (h && globalPayoutRefundTxHashes.has(h)) return true
   return false
 }

@@ -18,7 +18,10 @@ import {
   findPendingGlobalPayoutByExternalId,
   linkPendingGlobalPayoutToNoahTransactionId,
   handleNoahGlobalPayoutOrchestrationInWebhook,
+  handleNoahGlobalPayoutRefundOutWebhook,
+  isNoahGlobalPayoutRefundOutLeg,
   pickNoahGlobalPayoutOrchestrationRuleExecutionId,
+  reverseGlobalPayoutWalletDebitForEasnerPayoutId,
   settlementWalletCurrencyForNoahCrypto,
 } from "@/lib/noah/global-payout-ledger"
 import {
@@ -283,6 +286,16 @@ export async function applyNoahWebhookSideEffects(
             ruleExecutionId,
             solanaTxHash,
           })
+        } else if (isNoahGlobalPayoutRefundOutLeg(txData)) {
+          await handleNoahGlobalPayoutRefundOutWebhook(admin, {
+            noahTransactionId: id,
+            txData,
+            status,
+            userId,
+            businessId,
+            externalId,
+            solanaTxHash,
+          })
         } else if (isOrchestrationOut) {
           await applyNoahBankOnrampOrchestrationOutSideEffects(admin, {
             txData,
@@ -453,6 +466,32 @@ export async function applyNoahWebhookSideEffects(
             priorMetadata: metadata,
             transactionId: upsert.transactionId,
           })
+        }
+
+        if (
+          isGlobalPayoutSell &&
+          (status === "failed" || status === "cancelled") &&
+          externalId
+        ) {
+          await reverseGlobalPayoutWalletDebitForEasnerPayoutId(admin, {
+            easnerPayoutId: externalId,
+          }).catch((e) => console.warn("global_payout_failed_reversal:", e))
+          if (upsert.transactionId) {
+            const failedAt = String(
+              txData.Updated ?? txData.Created ?? new Date().toISOString(),
+            )
+            await admin
+              .from("transactions")
+              .update({
+                metadata: {
+                  ...metadata,
+                  noah_payout_failed_at: failedAt,
+                  noah_refund_expected: true,
+                },
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", upsert.transactionId)
+          }
         }
         }
       }

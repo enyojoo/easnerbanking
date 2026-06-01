@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest"
 import {
   buildNoahGlobalPayoutOrchestrationInSuppressMetadata,
   extractNoahGlobalPayoutPayOutEnrichment,
+  extractNoahRefundHintsFromOrchestrationIn,
   isNoahGlobalPayoutOrchestrationInLeg,
   isNoahGlobalPayoutOrchestrationInLegShape,
+  isNoahGlobalPayoutRefundOutLeg,
   isNoahGlobalPayoutSellTx,
   pendingGlobalPayoutProviderTransactionId,
   pickNoahGlobalPayoutLedgerFields,
@@ -159,6 +161,63 @@ describe("isNoahGlobalPayoutSellTx", () => {
         FiatPayment: { Amount: "100", FiatCurrency: "USD" },
       }),
     ).toBe(false)
+  })
+})
+
+describe("isNoahGlobalPayoutRefundOutLeg", () => {
+  it("matches Noah Solana refund OUT after failed global payout", () => {
+    expect(
+      isNoahGlobalPayoutRefundOutLeg({
+        Direction: "Out",
+        Network: "Solana",
+        CryptoCurrency: "USDC",
+        ExternalID: "3f3045bf-fc29-4934-8dcc-4cbe5821dd17",
+        Orchestration: { RuleExecutionID: "8a3494f1-7fc5-568b-b562-34f6e8dcf26c" },
+        PublicID: "2N9HgwZRhDiRJSGtpUmAKCukR5fBrB6FKjyyvRh3CjWWeNK8VxWD9BfkL74dpU7skQyzYBHL6zn8BFCqWeRqTqZr",
+      }),
+    ).toBe(true)
+  })
+
+  it("rejects OffNetwork fiat payout shape", () => {
+    expect(
+      isNoahGlobalPayoutRefundOutLeg({
+        Direction: "Out",
+        Network: "OffNetwork",
+        CryptoCurrency: "USDC",
+        ExternalID: "3f3045bf-fc29-4934-8dcc-4cbe5821dd17",
+        FiatPayment: { Amount: "1000", FiatCurrency: "NGN" },
+        Orchestration: { RuleExecutionID: "b7726190-5c49-11f1-b623-b2d19e5e0dca" },
+      }),
+    ).toBe(false)
+  })
+
+  it("rejects refund shape without ExternalID", () => {
+    expect(
+      isNoahGlobalPayoutRefundOutLeg({
+        Direction: "Out",
+        Network: "Solana",
+        CryptoCurrency: "USDC",
+        Orchestration: { RuleExecutionID: "8a3494f1-7fc5-568b-b562-34f6e8dcf26c" },
+      }),
+    ).toBe(false)
+  })
+})
+
+describe("extractNoahRefundHintsFromOrchestrationIn", () => {
+  it("maps Refunds array from orchestration IN webhook", () => {
+    const hints = extractNoahRefundHintsFromOrchestrationIn({
+      Refunds: [
+        {
+          Status: "Pending",
+          Currency: "USDC",
+          RefundID: "1c7e06ad-98f0-51a1-b155-80727dbfbd89",
+          RefundedAmount: "1.318321",
+        },
+      ],
+    })
+    expect(hints?.noah_refund_expected).toBe(true)
+    expect(hints?.noah_refund_id).toBe("1c7e06ad-98f0-51a1-b155-80727dbfbd89")
+    expect(hints?.noah_refund_amount).toBe("1.318321")
   })
 })
 
