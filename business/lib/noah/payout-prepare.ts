@@ -30,6 +30,7 @@ export {
   buildUsBankSellForm,
   isNoahUsAchChannel,
   normalizeBankAccountNumber,
+  normalizeNoahE164Phone,
 } from "./sell-form-builders"
 export type {
   AccountHolderNameInput,

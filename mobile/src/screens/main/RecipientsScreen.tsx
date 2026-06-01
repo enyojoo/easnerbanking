@@ -630,7 +630,9 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
       sortCode: recipient.sort_code || '',
       iban: recipient.iban || '',
       swiftBic: recipient.swift_bic || '',
-      phoneNumber: inferredType === 'mobile' ? recipient.phone_number || recipient.account_number || '' : '',
+      phoneNumber:
+        recipient.phone_number ||
+        (inferredType === 'mobile' ? recipient.account_number || '' : ''),
       provider: recipient.mobile_provider || (inferredType === 'mobile' ? providerFromBank : '') || '',
       walletAddress: recipient.account_number || '',
       network: recipient.wallet_network || (inferredType === 'wallet' ? walletNetworkFromBank || '' : ''),

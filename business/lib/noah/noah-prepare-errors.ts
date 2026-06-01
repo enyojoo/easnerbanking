@@ -2,12 +2,35 @@ import { NoahHttpError } from "@/lib/noah/http"
 
 export type NoahPayoutErrorStage = "prepare" | "sell" | "quote"
 
+function noahValidationDescriptions(body: unknown): string[] {
+  if (!body || typeof body !== "object") return []
+  const ext = (body as Record<string, unknown>).RequestExtension
+  if (!ext || typeof ext !== "object") return []
+  const items = (ext as Record<string, unknown>).Body
+  if (!Array.isArray(items)) return []
+  return items
+    .map((item) => {
+      if (!item || typeof item !== "object") return ""
+      return String((item as Record<string, unknown>).Description || "").trim()
+    })
+    .filter(Boolean)
+}
+
 /** Map Noah prepare/sell API errors to user-facing copy. */
 export function mapNoahPayoutUserError(
   e: unknown,
   stage: NoahPayoutErrorStage = "prepare",
 ): string {
   if (e instanceof NoahHttpError) {
+    const validations = noahValidationDescriptions(e.body)
+    const validationBlob = validations.join(" ").toLowerCase()
+    if (
+      validationBlob.includes("phone") &&
+      (validationBlob.includes("+") || validationBlob.includes("international"))
+    ) {
+      return "Phone number must use international format with a + and country code (e.g. +27821234567 for South Africa). Edit the recipient and update the phone number."
+    }
+
     const msg = (e.detail || e.message).toLowerCase()
     if (msg.includes("reference")) {
       return "Payment reference is required or invalid for this corridor."

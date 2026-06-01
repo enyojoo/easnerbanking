@@ -229,7 +229,8 @@ export function RecipientForm({
         sortCode: bene.sortCode || "",
         country: matchedCountry?.name || bene.country || "United States",
         phone:
-          inferredType === "mobile" ? bene.phone || (bene.fullAccountNumber || bene.accountNumber || "") : "",
+          bene.phone ||
+          (inferredType === "mobile" ? bene.fullAccountNumber || bene.accountNumber || "" : ""),
         email: bene.email || "",
         walletAsset: bene.walletAsset || parsedWalletAsset || bene.currency || "USDT",
         walletNetwork: bene.walletNetwork || parsedWalletNetwork || "",

@@ -144,6 +144,7 @@ export async function prepareSellFromRecipientRow(input: {
     const form = buildIdentifierSellForm(picked.formSchema, {
       phone: phoneNumber,
       fullName,
+      countryCode: country,
       paymentPurpose: paymentPurpose || note,
     })
     const prep = await prepareSellTransaction({
@@ -330,6 +331,7 @@ export async function prepareSellFromRecipientRow(input: {
       accountNumber,
       bankName,
       fullName,
+      countryCode: country,
       phone: row.phone_number ?? undefined,
       email: overrides?.email || row.email || undefined,
       address: addressFromRow(row),

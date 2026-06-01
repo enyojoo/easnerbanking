@@ -3,6 +3,7 @@ import {
   buildAccountHolderName,
   buildBankLocalSellForm,
   normalizeBankAccountNumber,
+  normalizeNoahE164Phone,
   buildCaBankLocalSellForm,
   buildEurSepaSellForm,
   buildGbBankLocalSellForm,
@@ -161,13 +162,26 @@ describe("buildBankLocalSellForm ZA", () => {
       bankName: "FNB",
       fullName: "Jane Doe",
       email: "jane@example.com",
-      phone: "+27123456789",
+      phone: "0821234567",
+      countryCode: "ZA",
       address: { address: "1 Main", city: "Cape Town", state: "WC", postalCode: "8001" },
     })
     expect(form.Email).toBe("jane@example.com")
-    expect(form.PhoneNumber).toBe("+27123456789")
+    expect(form.PhoneNumber).toBe("+27821234567")
     expect(form.AccountHolderAddress).toBeDefined()
     expect(form.AccountHolderName).toBeDefined()
+  })
+})
+
+describe("normalizeNoahE164Phone", () => {
+  it("converts ZA local trunk prefix to +27 E.164", () => {
+    expect(normalizeNoahE164Phone("082 123 4567", "ZA")).toBe("+27821234567")
+    expect(normalizeNoahE164Phone("+27821234567", "ZA")).toBe("+27821234567")
+    expect(normalizeNoahE164Phone("27821234567", "ZA")).toBe("+27821234567")
+  })
+
+  it("converts NG local to +234", () => {
+    expect(normalizeNoahE164Phone("08012345678", "NG")).toBe("+2348012345678")
   })
 })
 

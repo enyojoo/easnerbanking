@@ -50,6 +50,67 @@ export function normalizeBankAccountNumber(accountNumber: string): string {
     .replace(/[^\d]/g, "")
 }
 
+/** ISO2 → ITU calling code (Noah payout corridors that require PhoneNumber / mobile). */
+const ISO2_CALLING_CODE: Record<string, string> = {
+  BJ: "229",
+  BF: "226",
+  BW: "267",
+  CM: "237",
+  CI: "225",
+  GH: "233",
+  IN: "91",
+  ID: "62",
+  KE: "254",
+  MW: "265",
+  ML: "223",
+  NG: "234",
+  PH: "63",
+  RW: "250",
+  SN: "221",
+  TG: "228",
+  TZ: "255",
+  UG: "256",
+  ZA: "27",
+  ZM: "260",
+}
+
+/**
+ * Noah sell/prepare expects E.164 with a leading '+' (e.g. ZA local 082… → +2782…).
+ */
+export function normalizeNoahE164Phone(phone: string, countryCode?: string): string {
+  const trimmed = String(phone || "").trim()
+  if (!trimmed) return ""
+
+  if (trimmed.startsWith("+")) {
+    const digits = trimmed.slice(1).replace(/\D/g, "")
+    return digits ? `+${digits}` : ""
+  }
+
+  let digits = trimmed.replace(/[\s().-]/g, "").replace(/\D/g, "")
+  if (!digits) return ""
+
+  if (digits.startsWith("00")) {
+    digits = digits.slice(2)
+    return digits ? `+${digits}` : ""
+  }
+
+  const iso2 = String(countryCode || "").trim().toUpperCase()
+  const calling = iso2 ? ISO2_CALLING_CODE[iso2] : undefined
+  if (calling) {
+    if (digits.startsWith(calling) && digits.length >= calling.length + 7) {
+      return `+${digits}`
+    }
+    if (digits.startsWith("0") && digits.length >= 9) {
+      return `+${calling}${digits.slice(1)}`
+    }
+    if (digits.length >= 7 && digits.length <= 12) {
+      return `+${calling}${digits}`
+    }
+  }
+
+  return `+${digits}`
+}
+
 export function buildEurSepaSellForm(input: {
   iban: string
   fullName: string
@@ -142,6 +203,7 @@ export type BankLocalSellInput = {
   accountNumber: string
   bankName: string
   fullName: string
+  countryCode?: string
   phone?: string
   email?: string
   address?: { address: string; city: string; state: string; postalCode: string }
@@ -166,7 +228,7 @@ export function buildBankLocalSellForm(
     form.AccountHolderName = buildAccountHolderName({ fullName: data.fullName })
   }
   if (data.phone?.trim() && (isRequired(formSchema, "PhoneNumber") || prop(formSchema, "PhoneNumber"))) {
-    form.PhoneNumber = data.phone.trim()
+    form.PhoneNumber = normalizeNoahE164Phone(data.phone, data.countryCode)
   }
   if (data.email?.trim() && (isRequired(formSchema, "Email") || prop(formSchema, "Email"))) {
     form.Email = data.email.trim()
@@ -187,6 +249,7 @@ export function buildBankLocalSellForm(
 export type IdentifierSellInput = {
   phone: string
   fullName: string
+  countryCode?: string
   paymentPurpose?: string
 }
 
@@ -206,7 +269,7 @@ export function buildIdentifierSellForm(
   data: IdentifierSellInput,
 ): Record<string, unknown> {
   const purpose = data.paymentPurpose?.trim() || defaultPaymentPurpose()
-  const phone = data.phone.trim()
+  const phone = normalizeNoahE164Phone(data.phone, data.countryCode)
   const holder = buildAccountHolderName({ fullName: data.fullName })
 
   const mmDetails = prop(formSchema, "MobileMoneyDetails")
