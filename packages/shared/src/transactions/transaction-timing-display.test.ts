@@ -50,8 +50,19 @@ describe("buildTransactionTimingRows", () => {
       status: "settled",
       startedAt: started,
       completedAt: completed,
+      showTerminalDuration: true,
     })
     expect(rows).toEqual([{ label: "Completed in", value: "12 seconds" }])
+  })
+
+  it("returns no terminal duration rows when showTerminalDuration is false", () => {
+    const rows = buildTransactionTimingRows({
+      status: "settled",
+      startedAt: started,
+      completedAt: completed,
+      showTerminalDuration: false,
+    })
+    expect(rows).toEqual([])
   })
 
   it("returns Failed after when failed with end time", () => {

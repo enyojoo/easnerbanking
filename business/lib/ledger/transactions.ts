@@ -3,6 +3,7 @@ import { ensureExchangeRatesFresh, findExchangeRate } from "@/lib/fx/exchange-ra
 import { ensureEasnerTransactionId } from "@/lib/easner-transaction-id"
 import { sendTransactionSettledPush } from "@/lib/notifications/expo-push"
 import { buildTransactionSettledPushContent } from "@/lib/notifications/transaction-settled-content"
+import { shouldDeferBankDepositSettledPush } from "@/lib/notifications/bank-deposit-settled-notify"
 import {
   isEasetagChainSettlementTransaction,
   isNoahInternalSettlementTransaction,
@@ -168,7 +169,8 @@ export async function upsertLedgerTransaction(
     if (
       becameSettled &&
       !isEasetagChainSettlementTransaction(mergedMetadata) &&
-      !isNoahInternalSettlementTransaction(mergedMetadata)
+      !isNoahInternalSettlementTransaction(mergedMetadata) &&
+      !shouldDeferBankDepositSettledPush(mergedMetadata)
     ) {
       const { title, body } = buildTransactionSettledPushContent({
         provider,
@@ -203,7 +205,8 @@ export async function upsertLedgerTransaction(
   if (
     insertedBecameSettled &&
     !isEasetagChainSettlementTransaction(mergedMetadata) &&
-    !isNoahInternalSettlementTransaction(mergedMetadata)
+    !isNoahInternalSettlementTransaction(mergedMetadata) &&
+    !shouldDeferBankDepositSettledPush(mergedMetadata)
   ) {
     const { title, body } = buildTransactionSettledPushContent({
       provider,

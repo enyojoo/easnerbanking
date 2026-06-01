@@ -293,14 +293,13 @@ export function resolveGlobalPayoutOffRampDetail(
     productFallback: "Transfer",
   })
 
-  const processingAt =
-    pickIso(meta.processing_at) ?? webhook?.processingAt ?? pickIso(row.occurred_at, row.created_at)
-  const completedAt = pickIso(meta.completed_at, webhook?.completedAt)
-  const failedAt = pickIso(
-    meta.failed_at,
-    meta.noah_payout_failed_at,
-    webhook?.failedAt,
+  const processingAt = pickIso(
+    webhook?.processingAt,
+    meta.processing_at,
+    pickIso(row.occurred_at, row.created_at),
   )
+  const completedAt = pickIso(webhook?.completedAt, meta.completed_at)
+  const failedAt = pickIso(webhook?.failedAt, meta.failed_at, meta.noah_payout_failed_at)
 
   const effectiveMetadata: Record<string, unknown> = {
     ...meta,
@@ -338,6 +337,7 @@ export function resolveGlobalPayoutOffRampDetail(
   const timingAnchors = resolveTransactionTimingAnchors({
     createdAt: row.created_at != null ? String(row.created_at) : null,
     metadata: effectiveMetadata,
+    webhookProcessingAt: webhook?.processingAt,
     webhookCompletedAt: webhook?.completedAt,
     webhookFailedAt: webhook?.failedAt,
     lifecycle,

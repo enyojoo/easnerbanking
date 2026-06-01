@@ -213,6 +213,10 @@ export function mergeBankDepositLifecycleMetadata(
   existing: Record<string, unknown> | null | undefined,
   patch: {
     processing_at?: string | null
+    /** Fiat VA leg settled (funding deposits). */
+    fiat_settled_at?: string | null
+    /** Orchestration Out settled — funds sent to user wallet; sets user-facing `completed_at`. */
+    on_chain_settled_at?: string | null
     completed_at?: string | null
     noah_fiat_deposit_id?: string | null
   },
@@ -225,9 +229,23 @@ export function mergeBankDepositLifecycleMetadata(
       merged.processing_at = nextProcessing
     }
   }
+  const nextFiatSettled = pickIsoTimestamp(patch.fiat_settled_at)
+  const prevFiatSettled = pickIsoTimestamp(merged.fiat_settled_at)
+  if (nextFiatSettled) {
+    if (!prevFiatSettled || new Date(nextFiatSettled).getTime() < new Date(prevFiatSettled).getTime()) {
+      merged.fiat_settled_at = nextFiatSettled
+    }
+  }
+  const nextOnChain = pickIsoTimestamp(patch.on_chain_settled_at)
+  if (nextOnChain) {
+    merged.on_chain_settled_at = nextOnChain
+    merged.completed_at = nextOnChain
+  }
   const nextCompleted = pickIsoTimestamp(patch.completed_at)
-  if (nextCompleted && !pickIsoTimestamp(merged.completed_at)) {
-    merged.completed_at = nextCompleted
+  if (nextCompleted && !nextOnChain) {
+    if (!pickIsoTimestamp(merged.on_chain_settled_at) && !pickIsoTimestamp(merged.completed_at)) {
+      merged.completed_at = nextCompleted
+    }
   }
   if (patch.noah_fiat_deposit_id) {
     merged.noah_fiat_deposit_id = patch.noah_fiat_deposit_id
@@ -352,7 +370,7 @@ export function buildNoahVerificationFiatDepositLedgerMetadata(
   })
 
   const processingAt = enrichment.processingAt
-  const completedAt =
+  const fiatSettledAt =
     enrichment.status === "settled"
       ? pickIsoTimestamp(opts?.completedAt, opts?.occurredAt, data.Created)
       : null
@@ -381,11 +399,11 @@ export function buildNoahVerificationFiatDepositLedgerMetadata(
     deposit_scheme_label: depositSchemeLabel,
     destination_payment_rail: "crypto",
     processing_at: processingAt,
-    completed_at: completedAt,
+    completed_at: fiatSettledAt,
   }
   return mergePayInMetadataWithLifecycle({}, base, {
     processing_at: processingAt,
-    completed_at: completedAt,
+    completed_at: fiatSettledAt,
     noah_fiat_deposit_id: enrichment.depositId,
   })
 }
@@ -411,7 +429,7 @@ export function buildNoahFundingFiatDepositLedgerMetadata(
     payload: data,
   })
   const processingAt = enrichment.processingAt
-  const completedAt =
+  const fiatSettledAt =
     enrichment.status === "settled"
       ? pickIsoTimestamp(opts?.completedAt, opts?.occurredAt, data.Created)
       : null
@@ -435,11 +453,11 @@ export function buildNoahFundingFiatDepositLedgerMetadata(
     deposit_scheme_label: depositSchemeLabel,
     destination_payment_rail: "crypto",
     processing_at: processingAt,
-    completed_at: completedAt,
+    fiat_settled_at: fiatSettledAt,
   }
   return mergePayInMetadataWithLifecycle({}, base, {
     processing_at: processingAt,
-    completed_at: completedAt,
+    fiat_settled_at: fiatSettledAt,
     noah_fiat_deposit_id: enrichment.depositId,
   })
 }
@@ -459,7 +477,7 @@ export function buildNoahBankPayInLedgerMetadata(
   const settledWalletAmount = roundFiatDisplayAmount(enrichment.settledStablecoinAmount)
   const st = String(opts?.status ?? tx.Status ?? "").toLowerCase()
   const processingAt = pickIsoTimestamp(opts?.occurredAt, tx.Occurred, tx.Created)
-  const completedAt =
+  const fiatSettledAt =
     st === "settled"
       ? pickIsoTimestamp(opts?.occurredAt, tx.Occurred, tx.Created, tx.Updated)
       : null
@@ -487,6 +505,7 @@ export function buildNoahBankPayInLedgerMetadata(
     settledStablecoinAmount: enrichment.settledStablecoinAmount,
     fiatDepositSenderName: opts?.fiatDepositSenderName ?? enrichment.senderDisplayName,
   })
+  const isVerification = verificationFields.deposit_kind === "verification"
 
   const base: Record<string, unknown> = {
     source: "webhook_transaction",
@@ -514,11 +533,13 @@ export function buildNoahBankPayInLedgerMetadata(
     deposit_scheme_label: depositSchemeLabel,
     destination_payment_rail: "crypto",
     processing_at: processingAt,
-    completed_at: completedAt,
+    ...(isVerification ? { completed_at: fiatSettledAt } : { fiat_settled_at: fiatSettledAt }),
   }
   return mergePayInMetadataWithLifecycle({}, base, {
     processing_at: processingAt,
-    completed_at: completedAt,
+    ...(isVerification
+      ? { completed_at: fiatSettledAt }
+      : { fiat_settled_at: fiatSettledAt }),
     noah_fiat_deposit_id: enrichment.ruleExecutionId,
   })
 }
@@ -528,6 +549,8 @@ export function mergePayInMetadataWithLifecycle(
   payInFields: Record<string, unknown>,
   lifecyclePatch: {
     processing_at?: string | null
+    fiat_settled_at?: string | null
+    on_chain_settled_at?: string | null
     completed_at?: string | null
     noah_fiat_deposit_id?: string | null
   },

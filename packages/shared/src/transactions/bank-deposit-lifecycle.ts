@@ -85,8 +85,15 @@ export function buildBankDepositLifecycle(
   const ledgerStatus = normalizeLedgerStatus(input.status)
   const processingAt =
     readIso(meta, "processing_at") ?? input.occurredAt ?? input.createdAt ?? null
+  const onChainSettledAt = readIso(meta, "on_chain_settled_at")
+  const isVerification = isVerificationDepositMetadata(meta)
   const completedAt =
-    readIso(meta, "completed_at") ?? input.settledAt ?? null
+    onChainSettledAt ??
+    (isVerification ? readIso(meta, "completed_at") : null) ??
+    (isVerification ? input.settledAt : null) ??
+    null
+  const fundsAvailable =
+    ledgerStatus === "settled" && (isVerification || onChainSettledAt != null)
   const failedAt =
     readIso(meta, "failed_at") ?? readIso(meta, "noah_payout_failed_at") ?? null
   const { amount: postedAmount, currency: postedCurrency } = readPostedAmount(meta)
@@ -116,13 +123,14 @@ export function buildBankDepositLifecycle(
     ]
   }
 
-  const isSettled = ledgerStatus === "settled"
+  const processingState: BankDepositLifecycleStepState =
+    fundsAvailable || ledgerStatus === "settled" ? "complete" : "current"
 
-  const processingState: BankDepositLifecycleStepState = isSettled
+  const completedState: BankDepositLifecycleStepState = fundsAvailable
     ? "complete"
-    : "current"
-
-  const completedState: BankDepositLifecycleStepState = isSettled ? "complete" : "upcoming"
+    : ledgerStatus === "settled"
+      ? "current"
+      : "upcoming"
 
   return [
     {
@@ -137,7 +145,7 @@ export function buildBankDepositLifecycle(
       title: "Completed",
       description: completedDescription(meta),
       state: completedState,
-      occurredAt: isSettled ? completedAt : null,
+      occurredAt: fundsAvailable ? completedAt : null,
     },
   ]
 }

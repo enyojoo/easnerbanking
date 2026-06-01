@@ -31,23 +31,40 @@ describe("buildBankDepositLifecycle", () => {
     expect(steps[1].description).toBe("Funds are now available in your account balance.")
   })
 
-  it("returns both steps complete when settled", () => {
+  it("shows completed in progress when fiat settled but on-chain pending", () => {
     const steps = buildBankDepositLifecycle({
       status: "settled",
       metadata: {
         processing_at: "2026-05-19T22:00:46Z",
-        completed_at: "2026-05-19T22:00:56Z",
+        fiat_settled_at: "2026-05-19T22:00:53Z",
+        deposit_kind: "funding",
+        settled_amount: 9.95,
+        settled_currency: "USD",
+      },
+    })
+    expect(steps[0].state).toBe("complete")
+    expect(steps[1].state).toBe("current")
+    expect(steps[1].occurredAt).toBeNull()
+  })
+
+  it("returns both steps complete when on-chain settled", () => {
+    const steps = buildBankDepositLifecycle({
+      status: "settled",
+      metadata: {
+        processing_at: "2026-05-19T22:00:46Z",
+        on_chain_settled_at: "2026-05-19T22:01:42Z",
+        completed_at: "2026-05-19T22:01:42Z",
         settled_amount: 9.95,
         settled_currency: "USD",
         fiat_deposit_amount: 12,
         source_payment_rail: "wire",
         deposit_scheme_label: "Wire",
+        deposit_kind: "funding",
       },
-      settledAt: "2026-05-19T22:00:56Z",
     })
     expect(steps[0].state).toBe("complete")
     expect(steps[1].state).toBe("complete")
-    expect(steps[1].occurredAt).toBe("2026-05-19T22:00:56Z")
+    expect(steps[1].occurredAt).toBe("2026-05-19T22:01:42Z")
     expect(steps[0].description).toBe(
       "We've received your Wire deposit and confirming it.",
     )

@@ -316,6 +316,7 @@ export async function applyNoahWebhookSideEffects(
             status,
             userId,
             businessId,
+            occurredAt: webhookOccurred,
           })
         } else if (
           isNoahBankOnrampOrchestrationInLeg(txData) &&

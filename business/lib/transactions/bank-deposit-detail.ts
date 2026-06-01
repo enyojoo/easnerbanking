@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { isBankOnrampDepositFlow } from "@easner/shared"
 import { isBankOnrampFiatDepositPayload } from "@/lib/noah/bank-onramp-tx"
+import { fetchBankOnrampOrchestrationOutFromWebhooks } from "@/lib/noah/bank-onramp-orchestration-out-webhook-timestamps"
 import { fetchFiatDepositLifecycleFromWebhooks } from "@/lib/noah/fiat-deposit-webhook-timestamps"
 import { resolveBankDepositPayInDetail } from "@/lib/transactions/resolve-bank-deposit-pay-in"
 
@@ -86,9 +87,20 @@ export async function attachBankDepositDetailFieldsAsync(
   let resolved = resolveBankDepositPayInDetail(row)
   if (!resolved) return transaction
 
-  if (resolved.fiatDepositId) {
-    const webhook = await fetchFiatDepositLifecycleFromWebhooks(admin, resolved.fiatDepositId)
-    resolved = resolveBankDepositPayInDetail(row, webhook) ?? resolved
+  const ruleId =
+    resolved.fiatDepositId ??
+    (typeof (row.metadata as Record<string, unknown> | undefined)?.noah_rule_execution_id ===
+    "string"
+      ? String((row.metadata as Record<string, unknown>).noah_rule_execution_id).trim()
+      : null)
+
+  if (ruleId) {
+    const [fiatDeposit, orchestrationOut] = await Promise.all([
+      fetchFiatDepositLifecycleFromWebhooks(admin, ruleId),
+      fetchBankOnrampOrchestrationOutFromWebhooks(admin, ruleId),
+    ])
+    resolved =
+      resolveBankDepositPayInDetail(row, { fiatDeposit, orchestrationOut }) ?? resolved
   }
 
   return attachBankDepositDetailFields(row, transaction, resolved)

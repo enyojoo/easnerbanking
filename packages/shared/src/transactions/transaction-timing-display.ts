@@ -21,6 +21,8 @@ export type BuildTransactionTimingRowsInput = {
    * Bank deposits: false — Processing step in lifecycle already shows that time.
    */
   showStartedWhileInFlight?: boolean
+  /** Bank deposits: false — use lifecycle tracker only (no Completed in / Failed after). */
+  showTerminalDuration?: boolean
 }
 
 function pickIso(...candidates: unknown[]): string | null {
@@ -138,8 +140,9 @@ export function buildTransactionTimingRows(
   const userStatus = mapLedgerStatusToUserStatus(input.status)
   const startedMs = parseIsoMs(input.startedAt)
   const startedDisplay = formatStartedDisplay(input.startedAt)
+  const showTerminalDuration = input.showTerminalDuration !== false
 
-  if (userStatus === "completed") {
+  if (userStatus === "completed" && showTerminalDuration) {
     const endMs = parseIsoMs(input.completedAt)
     if (startedMs != null && endMs != null && endMs >= startedMs) {
       return [{ label: "Completed in", value: formatTransactionDurationMs(endMs - startedMs) }]
@@ -147,7 +150,7 @@ export function buildTransactionTimingRows(
     return []
   }
 
-  if (userStatus === "failed") {
+  if (userStatus === "failed" && showTerminalDuration) {
     const endMs = parseIsoMs(input.failedAt)
     if (startedMs != null && endMs != null && endMs >= startedMs) {
       return [{ label: "Failed after", value: formatTransactionDurationMs(endMs - startedMs) }]

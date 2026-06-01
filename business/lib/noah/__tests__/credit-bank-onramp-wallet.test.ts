@@ -1,4 +1,9 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
+
+vi.mock("@/lib/notifications/bank-deposit-settled-notify", () => ({
+  notifyBankDepositPayInSettledPush: vi.fn(),
+}))
+
 import {
   buildNoahBankOnrampCreditKey,
   turnkeyInboundAppliedBalanceDelta,

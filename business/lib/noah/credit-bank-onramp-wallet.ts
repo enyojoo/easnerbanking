@@ -7,6 +7,8 @@ import {
   type NoahBankPayInEnrichment,
 } from "@/lib/noah/bank-onramp-tx"
 import { findBankOnrampPayInTransaction } from "@/lib/noah/find-bank-onramp-pay-in-transaction"
+import { notifyBankDepositPayInSettledPush } from "@/lib/notifications/bank-deposit-settled-notify"
+import { mergeBankDepositLifecycleMetadata } from "@/lib/noah/bank-onramp-tx"
 import { pickNoahOnChainTxHashFromLedgerRow } from "@/lib/noah/noah-on-chain-tx-hash"
 
 function applyLedgerScope<T extends { eq: (col: string, val: string) => T; is: (col: string, val: null) => T }>(
@@ -148,6 +150,7 @@ export async function applyNoahBankOnrampOrchestrationOutSideEffects(
     status: string
     userId: string
     businessId: string | null
+    occurredAt?: string | null
   },
 ): Promise<void> {
   if (!isNoahBankOnrampOrchestrationOutLeg(opts.txData)) return
@@ -157,9 +160,15 @@ export async function applyNoahBankOnrampOrchestrationOutSideEffects(
   const solanaTxHash = pickNoahOnChainTxHashFromLedgerRow({ payload: opts.txData })
   if (!solanaTxHash) return
 
-  await linkBankOnrampPayInToSolanaTxHash(admin, {
+  const onChainSettledAt =
+    typeof opts.occurredAt === "string" && opts.occurredAt.trim()
+      ? opts.occurredAt.trim()
+      : null
+
+  const payIn = await patchBankOnrampPayInOnChainSettled(admin, {
     ruleExecutionId,
     solanaTxHash,
+    onChainSettledAt,
     userId: opts.userId,
     businessId: opts.businessId,
   })
@@ -168,6 +177,47 @@ export async function applyNoahBankOnrampOrchestrationOutSideEffects(
     userId: opts.userId,
     businessId: opts.businessId,
   })
+  if (payIn?.id) {
+    await notifyBankDepositPayInSettledPush(admin, payIn.id)
+  }
+}
+
+/** Persist orchestration Out Settled time on the user-facing pay-in row. */
+export async function patchBankOnrampPayInOnChainSettled(
+  admin: SupabaseClient,
+  opts: {
+    ruleExecutionId: string
+    solanaTxHash: string
+    onChainSettledAt: string | null
+    userId: string
+    businessId: string | null
+  },
+): Promise<{ id: string } | null> {
+  const ruleExecutionId = String(opts.ruleExecutionId || "").trim()
+  const solanaTxHash = String(opts.solanaTxHash || "").trim()
+  if (!ruleExecutionId || !solanaTxHash) return null
+
+  const payIn = await findBankOnrampPayInTransaction(admin, {
+    depositId: ruleExecutionId,
+    userId: opts.userId,
+    businessId: opts.businessId,
+  })
+  if (!payIn?.id) return null
+
+  const merged = mergeBankDepositLifecycleMetadata(payIn.metadata, {
+    on_chain_settled_at: opts.onChainSettledAt,
+  })
+
+  await admin
+    .from("transactions")
+    .update({
+      metadata: { ...merged, noah_on_chain_tx_hash: solanaTxHash },
+      tx_hash: solanaTxHash,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", payIn.id)
+
+  return { id: payIn.id }
 }
 
 /** Attach the Solana settlement signature to the fiat pay-in row for mirror suppression. */
@@ -191,15 +241,13 @@ export async function linkBankOnrampPayInToSolanaTxHash(
   })
   if (!payIn?.id) return
 
-  const meta = { ...payIn.metadata, noah_on_chain_tx_hash: solanaTxHash }
-  await admin
-    .from("transactions")
-    .update({
-      tx_hash: solanaTxHash,
-      metadata: meta,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", payIn.id)
+  await patchBankOnrampPayInOnChainSettled(admin, {
+    ruleExecutionId,
+    solanaTxHash,
+    onChainSettledAt: null,
+    userId: opts.userId,
+    businessId: opts.businessId,
+  })
 }
 
 /**

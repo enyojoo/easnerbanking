@@ -1,7 +1,6 @@
 import {
   buildBankDepositLifecycle,
   buildTransactionTimingRows,
-  resolveTransactionTimingAnchors,
   deriveBankDepositInboundDisplayLabel,
   deriveBankDepositNarrationLabel,
   deriveBankDepositPaymentRail,
@@ -22,7 +21,13 @@ import {
   mergeBankDepositLifecycleMetadata,
   pickNoahOrchestrationRuleExecutionId,
 } from "@/lib/noah/bank-onramp-tx"
+import type { BankOnrampOrchestrationOutTimestamps } from "@/lib/noah/bank-onramp-orchestration-out-webhook-timestamps"
 import type { FiatDepositWebhookTimestamps } from "@/lib/noah/fiat-deposit-webhook-timestamps"
+
+export type BankDepositPayInWebhookContext = {
+  fiatDeposit?: FiatDepositWebhookTimestamps | null
+  orchestrationOut?: BankOnrampOrchestrationOutTimestamps | null
+}
 
 function roundFiat(amount: number | null | undefined): number | null {
   if (amount == null || !Number.isFinite(amount)) return null
@@ -77,8 +82,14 @@ export type ResolvedBankDepositPayIn = {
 
 export function resolveBankDepositPayInDetail(
   row: Record<string, unknown>,
-  webhook?: FiatDepositWebhookTimestamps | null,
+  webhooks?: BankDepositPayInWebhookContext | FiatDepositWebhookTimestamps | null,
 ): ResolvedBankDepositPayIn | null {
+  const fiatDepositWebhook =
+    webhooks && "fiatDeposit" in webhooks
+      ? webhooks.fiatDeposit
+      : (webhooks as FiatDepositWebhookTimestamps | null | undefined)
+  const orchestrationOutWebhook =
+    webhooks && "orchestrationOut" in webhooks ? webhooks.orchestrationOut : null
   const meta = (row.metadata as Record<string, unknown> | null | undefined) ?? {}
   const payload = (row.payload as Record<string, unknown> | null | undefined) ?? {}
   const isFiatDepositPayload = isNoahFiatDepositWebhookPayload(payload)
@@ -123,7 +134,7 @@ export function resolveBankDepositPayInDetail(
       : txEnrichment?.walletLedgerCurrency ?? fiatCurrency
 
   const paymentReference =
-    webhook?.paymentReference ||
+    fiatDepositWebhook?.paymentReference ||
     (typeof meta.payment_reference === "string" && meta.payment_reference.trim()) ||
     (typeof meta.reference === "string" && meta.reference.trim()) ||
     fdEnrichment?.paymentReference ||
@@ -131,7 +142,7 @@ export function resolveBankDepositPayInDetail(
     null
 
   const fiatDepositSenderName =
-    webhook?.senderName ??
+    fiatDepositWebhook?.senderName ??
     (typeof meta.noah_fiat_deposit_sender_name === "string"
       ? meta.noah_fiat_deposit_sender_name
       : null)
@@ -164,13 +175,22 @@ export function resolveBankDepositPayInDetail(
 
   const processingAt =
     pickIso(meta.processing_at) ??
-    webhook?.processingAt ??
+    fiatDepositWebhook?.processingAt ??
     pickIso(payload.Created, row.occurred_at, row.created_at)
 
-  const completedAt =
-    stLower === "settled"
-      ? pickIso(meta.completed_at, webhook?.completedAt)
-      : pickIso(meta.completed_at)
+  const ruleExecutionId =
+    txEnrichment?.ruleExecutionId ??
+    pickNoahOrchestrationRuleExecutionId(payload) ??
+    fiatDepositId
+
+  const isVerification = isVerificationDepositMetadata(meta)
+  const completedAt = isVerification
+    ? pickIso(meta.completed_at, fiatDepositWebhook?.completedAt)
+    : pickIso(
+        meta.on_chain_settled_at,
+        orchestrationOutWebhook?.onChainSettledAt,
+        meta.completed_at,
+      )
   const failedAt = pickIso(meta.failed_at, meta.noah_payout_failed_at)
 
   const schemeCtx = {
@@ -179,7 +199,9 @@ export function resolveBankDepositPayInDetail(
       fiat_deposit_currency: fiatCurrency,
       noah_payment_method_type:
         meta.noah_payment_method_type ??
-        (webhook?.paymentMethodType != null ? webhook.paymentMethodType : null) ??
+        (fiatDepositWebhook?.paymentMethodType != null
+          ? fiatDepositWebhook.paymentMethodType
+          : null) ??
         fdEnrichment?.paymentMethodType,
     },
     payload,
@@ -209,20 +231,28 @@ export function resolveBankDepositPayInDetail(
     payment_reference: paymentReference,
     reference: paymentReference,
     ...(narration ? { deposit_narration: narration, narration } : {}),
-    noah_rule_execution_id: txEnrichment?.ruleExecutionId ?? fiatDepositId,
+    noah_rule_execution_id: ruleExecutionId,
     noah_fiat_deposit_id: fiatDepositId,
-    noah_on_chain_tx_hash: txEnrichment?.onChainTxHash ?? null,
+    noah_on_chain_tx_hash:
+      pickIso(meta.noah_on_chain_tx_hash, orchestrationOutWebhook?.solanaTxHash) ??
+      txEnrichment?.onChainTxHash ??
+      null,
     source_payment_rail: sourcePaymentRail,
     deposit_scheme_label: depositSchemeLabel,
     processing_at: processingAt,
-    completed_at: completedAt,
+    ...(isVerification ? { completed_at: completedAt } : {}),
+    ...(completedAt && !isVerification ? { on_chain_settled_at: completedAt, completed_at: completedAt } : {}),
   }
 
   const effectiveMetadata = mergeBankDepositLifecycleMetadata(
     { ...meta, ...payInFields },
     {
       processing_at: processingAt,
-      completed_at: completedAt,
+      ...(isVerification
+        ? { completed_at: completedAt }
+        : completedAt
+          ? { on_chain_settled_at: completedAt }
+          : {}),
       noah_fiat_deposit_id: fiatDepositId,
     },
   )
@@ -236,24 +266,13 @@ export function resolveBankDepositPayInDetail(
     createdAt: row.created_at != null ? String(row.created_at) : null,
   })
 
-  const timingAnchors = resolveTransactionTimingAnchors({
-    startAnchor: "processing_at",
-    metadata: effectiveMetadata,
-    webhookProcessingAt: webhook?.processingAt,
-    webhookCompletedAt: webhook?.completedAt,
-    lifecycle,
-  })
-
   const transactionTiming = buildTransactionTimingRows({
     status: ledgerStatus,
-    startedAt: timingAnchors.startedAt,
-    completedAt: timingAnchors.completedAt,
-    failedAt: timingAnchors.failedAt,
+    startedAt: null,
     showExpectedWhileInFlight: false,
     showStartedWhileInFlight: false,
+    showTerminalDuration: false,
   })
-
-  const transactionStartedAt = timingAnchors.startedAt
 
   return {
     effectiveMetadata,
@@ -269,7 +288,7 @@ export function resolveBankDepositPayInDetail(
     reference: narration ?? paymentReference,
     processingAt,
     completedAt,
-    transactionStartedAt,
+    transactionStartedAt: processingAt,
     ledgerCreatedAt: row.created_at != null ? String(row.created_at) : null,
     transactionTiming,
     fiatDepositId,
