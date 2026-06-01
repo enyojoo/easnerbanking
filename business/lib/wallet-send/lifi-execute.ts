@@ -7,6 +7,7 @@ import { resolveWalletSendToken, sourceSolVaultToken } from "@/lib/lifi/token-ma
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { resolveTurnkeyAddressForNoahPair } from "@/lib/wallet/resolve-wallet-owner"
 import type { WalletSendSessionRow } from "./wallet-send-session"
+import { estimateLifiFromAmountRaw } from "./lifi-from-amount"
 
 type TurnkeyClientLike = Record<string, (...args: unknown[]) => Promise<unknown>>
 
@@ -33,7 +34,12 @@ export async function executeLifiWalletSend(input: {
   )
   if (!fromAddress) return { ok: false, error: "no_source_vault" }
 
-  const toAmountRaw = Math.round(input.session.receive_amount * 10 ** dest.decimals).toString()
+  const fromAmountRaw = estimateLifiFromAmountRaw({
+    receiveAmount: input.session.receive_amount,
+    customerRate: input.session.customer_rate,
+    lifiMid: input.session.lifi_mid,
+    sourceDecimals: source.decimals,
+  })
 
   let quote
   try {
@@ -44,7 +50,7 @@ export async function executeLifiWalletSend(input: {
       toToken: dest.address,
       fromAddress,
       toAddress: input.session.destination_address,
-      toAmount: toAmountRaw,
+      fromAmount: fromAmountRaw,
       fee: 0,
     })
   } catch (e) {

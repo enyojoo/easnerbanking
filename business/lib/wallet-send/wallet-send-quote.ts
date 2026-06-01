@@ -11,6 +11,7 @@ import { findCryptoRate, listCryptoRates } from "@/lib/fx/crypto-rates"
 import { resolveWalletSendExecutionModel } from "./routing"
 import { pricingFromDirectTurnkey, pricingFromLifiQuote } from "./pricing"
 import { coerceWalletRecipientRow } from "./coerce-recipient"
+import { estimateLifiFromAmountRaw, lifiFromAmountRawForSendBudget } from "./lifi-from-amount"
 import {
   validateWalletRecipientForSend,
   walletDestinationAddress,
@@ -115,7 +116,15 @@ export async function buildWalletSendQuote(input: {
     const dest = resolveWalletSendToken(receiveAsset, receiveNetwork)
     if (!dest) throw new Error("Unsupported receive asset/network.")
 
-    const toAmountRaw = Math.round(receiveAmount * 10 ** dest.decimals).toString()
+    const fromAmountRaw =
+      amountEntryMode === "send" && input.sendAmount != null && input.sendAmount > 0
+        ? lifiFromAmountRawForSendBudget(input.sendAmount, source.decimals)
+        : estimateLifiFromAmountRaw({
+            receiveAmount,
+            customerRate,
+            lifiMid,
+            sourceDecimals: source.decimals,
+          })
     const quote = await lifiQuote({
       fromChain: source.chainId,
       toChain: dest.chainId,
@@ -123,7 +132,7 @@ export async function buildWalletSendQuote(input: {
       toToken: dest.address,
       fromAddress: probeFrom,
       toAddress: destinationAddress,
-      toAmount: toAmountRaw,
+      fromAmount: fromAmountRaw,
       fee: 0,
     })
 

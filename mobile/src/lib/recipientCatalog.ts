@@ -1,4 +1,5 @@
 import {
+  corridorMatchesCountryCurrency,
   findPayoutFieldsSchema,
   sortByEasnerCountryPickerOrder,
   type CryptoDestinationPublic,
@@ -369,10 +370,8 @@ export function getRecipientFormFields(
   countryCode?: string,
 ): RecipientFieldSpec[] {
   if (recipientType === 'bank' && countryCode && payoutCorridorCache?.bank.length) {
-    const row = payoutCorridorCache.bank.find(
-      (c) =>
-        c.country_code.toUpperCase() === countryCode.toUpperCase() &&
-        c.currency_code.toUpperCase() === currencyCode.toUpperCase(),
+    const row = payoutCorridorCache.bank.find((c) =>
+      corridorMatchesCountryCurrency(c, { countryCode, currencyCode }),
     )
     if (row) return getBankFieldsForCurrency(row.currency_code)
   }
@@ -388,10 +387,8 @@ export function getRecipientProviders(
   countryCode?: string,
 ): string[] {
   if (recipientType === 'mobile_money' && countryCode && payoutCorridorCache?.mobile.length) {
-    const row = payoutCorridorCache.mobile.find(
-      (c) =>
-        c.country_code.toUpperCase() === countryCode.toUpperCase() &&
-        c.currency_code.toUpperCase() === currencyCode.toUpperCase(),
+    const row = payoutCorridorCache.mobile.find((c) =>
+      corridorMatchesCountryCurrency(c, { countryCode, currencyCode }),
     )
     if (row) {
       if (Array.isArray(row.providers) && (row.providers as string[]).length > 0) {

@@ -87,7 +87,7 @@ export {
   payoutReceiveAmountsMatchForCurrency,
 } from "./noah-send-rates"
 export type { PayoutCorridorPublic, PayoutFieldsSchemaHint, PayoutRail } from "./payout-corridor"
-export { corridorDisplayLabel, flagCodeFromCorridor } from "./payout-corridor"
+export { corridorDisplayLabel, corridorMatchesCountryCurrency, flagCodeFromCorridor } from "./payout-corridor"
 export {
   findPayoutFieldsSchema,
   getSendAmountNoteFieldUi,

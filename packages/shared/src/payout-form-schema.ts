@@ -1,4 +1,9 @@
-import type { PayoutCorridorPublic, PayoutFieldsSchemaHint, PayoutRail } from "./payout-corridor"
+import {
+  corridorMatchesCountryCurrency,
+  type PayoutCorridorPublic,
+  type PayoutFieldsSchemaHint,
+  type PayoutRail,
+} from "./payout-corridor"
 import { getCountryCodeForCurrency } from "./flags/currency-mapping"
 import { parsePayoutMinAmount, resolveEffectivePayoutMin } from "./payout-business-limits"
 
@@ -27,16 +32,16 @@ export { parsePayoutMinAmount } from "./payout-business-limits"
 
 /** Find corridor row + fields_schema for country/currency/rail. */
 export function findPayoutFieldsSchema(
-  corridors: PayoutCorridorPublic[],
+  corridors: PayoutCorridorPublic[] | null | undefined,
   input: { countryCode: string; currencyCode: string; rail: PayoutRail },
 ): PayoutFieldsSchemaHint | null {
-  const cc = input.countryCode.trim().toUpperCase()
-  const cur = input.currencyCode.trim().toUpperCase()
-  const row = corridors.find(
-    (c) =>
-      c.country_code.toUpperCase() === cc &&
-      c.currency_code.toUpperCase() === cur &&
-      c.rail === input.rail,
+  if (!corridors?.length) return null
+  const row = corridors.find((c) =>
+    corridorMatchesCountryCurrency(c, {
+      countryCode: input.countryCode,
+      currencyCode: input.currencyCode,
+      rail: input.rail,
+    }),
   )
   return row?.fields_schema ?? null
 }

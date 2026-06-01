@@ -1,3 +1,4 @@
+import { corridorMatchesCountryCurrency } from '@easner/shared'
 import type { Recipient } from '../types'
 import { getPayoutCorridorCache } from './sendDestinations'
 import type { PayoutCorridorCacheShape } from './recipientCatalog'
@@ -33,8 +34,8 @@ export function isRecipientPayoutCorridorActive(
   const cur = (r.currency || '').toUpperCase()
   if (!cc || !cur) return true
 
-  const hit = rail.find(
-    (c) => c.country_code.toUpperCase() === cc && c.currency_code.toUpperCase() === cur,
+  const hit = rail.find((c) =>
+    corridorMatchesCountryCurrency(c, { countryCode: cc, currencyCode: cur }),
   )
   if (!hit) return false
   if (typeof hit.noah_sell_available === 'boolean') return hit.noah_sell_available

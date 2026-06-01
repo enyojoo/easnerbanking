@@ -1,10 +1,54 @@
 import { describe, expect, it } from "vitest"
 import {
+  findPayoutFieldsSchema,
   getSendAmountNoteFieldUi,
   validatePayoutAmountAgainstLimits,
   validateSendAmountFields,
 } from "./payout-form-schema"
-import type { PayoutFieldsSchemaHint } from "./payout-corridor"
+import type { PayoutCorridorPublic, PayoutFieldsSchemaHint } from "./payout-corridor"
+
+describe("findPayoutFieldsSchema", () => {
+  it("does not throw when catalog rows omit country_code", () => {
+    const corridors = [
+      {
+        id: "bad",
+        rail: "bank_transfer",
+        country_code: null as unknown as string,
+        country_name: "Bad",
+        currency_code: "NGN",
+        currency_name: "Naira",
+        sort_order: 0,
+        providers: null,
+      },
+      {
+        id: "ng",
+        rail: "bank_transfer",
+        country_code: "NG",
+        country_name: "Nigeria",
+        currency_code: "NGN",
+        currency_name: "Naira",
+        sort_order: 1,
+        providers: null,
+        fields_schema: { amount_field_mode: "note" as const },
+      },
+    ] satisfies PayoutCorridorPublic[]
+
+    expect(() =>
+      findPayoutFieldsSchema(corridors, {
+        countryCode: "NG",
+        currencyCode: "NGN",
+        rail: "bank_transfer",
+      }),
+    ).not.toThrow()
+    expect(
+      findPayoutFieldsSchema(corridors, {
+        countryCode: "NG",
+        currencyCode: "NGN",
+        rail: "bank_transfer",
+      }),
+    ).toEqual({ amount_field_mode: "note" })
+  })
+})
 
 describe("USD optional reference on send amount", () => {
   const usOptionalHints = {

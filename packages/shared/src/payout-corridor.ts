@@ -53,3 +53,19 @@ export function corridorDisplayLabel(c: Pick<PayoutCorridorPublic, "country_name
 export function flagCodeFromCorridor(c: Pick<PayoutCorridorPublic, "country_code">): string {
   return String(c.country_code || "").toUpperCase()
 }
+
+function normCorridorToken(value: string | null | undefined): string {
+  return String(value ?? "").trim().toUpperCase()
+}
+
+/** Safe match for catalog rows — skips malformed entries missing country/currency codes. */
+export function corridorMatchesCountryCurrency(
+  c: Pick<PayoutCorridorPublic, "country_code" | "currency_code" | "rail">,
+  input: { countryCode: string; currencyCode: string; rail?: PayoutRail },
+): boolean {
+  const cc = normCorridorToken(input.countryCode)
+  const cur = normCorridorToken(input.currencyCode)
+  if (!cc || !cur) return false
+  if (input.rail != null && c.rail !== input.rail) return false
+  return normCorridorToken(c.country_code) === cc && normCorridorToken(c.currency_code) === cur
+}
