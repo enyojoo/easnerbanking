@@ -13,7 +13,7 @@ import {
   Keyboard,
   useWindowDimensions,
 } from 'react-native'
-import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 import { MessageSquareText, ChevronDown, User, Coins, RotateCcw, ArrowLeft, ArrowUpDown, Link, Delete, X, ChevronRight } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -964,14 +964,12 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   return (
     <ScreenWrapper>
       <View style={styles.container}>
-        <KeyboardAwareScrollView
+        <KeyboardAvoidingView
           style={styles.keyboardContainer}
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          bottomOffset={sendFooterHeight + spacing[2]}
-          showsVerticalScrollIndicator={false}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? spacing[2] : 0}
         >
-          <View style={styles.scrollView}>
+          <View style={styles.mainColumn}>
             {/* Header */}
             <Animated.View 
               style={[
@@ -1145,7 +1143,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 </View>
               </View>
 
-              {/* Method + note + keypad: stacked under exchange row (tight gap); space below group stays inside KAV above bottomContainer. */}
+              {/* Method + note + keypad: pinned above footer on tall screens (no scroll). */}
+              <View style={styles.sendMethodNoteKeypadFill}>
               <View style={styles.sendMethodNoteKeypadGroup}>
               {/* Sending Method - Currency Balance Selector (Centered) */}
               <View style={styles.balanceSection}>
@@ -1320,11 +1319,12 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               </View>
             </View>
               </View>
+              </View>
             </Animated.View>
           </View>
-        </KeyboardAwareScrollView>
+        </KeyboardAvoidingView>
 
-        {/* Fixed footer: stays at screen bottom; keyboard overlays it so the note field can scroll above the keyboard. */}
+        {/* Fixed footer: stays at screen bottom; KAV shifts the form when the note keyboard is open. */}
         <View
           onLayout={(e) => {
             const h = e.nativeEvent.layout.height
@@ -1917,12 +1917,8 @@ const styles = StyleSheet.create({
   keyboardContainer: {
     flex: 1,
   },
-  scrollContent: {
-    flexGrow: 1,
-  },
-  scrollView: {
-    flexGrow: 1,
-    paddingBottom: 0,
+  mainColumn: {
+    flex: 1,
     flexDirection: 'column',
   },
   header: {
@@ -1947,16 +1943,22 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacing[5],
     paddingTop: spacing[2],
-    flexGrow: 1,
+    flex: 1,
     justifyContent: 'flex-start',
   },
   sendFormTop: {
     flexShrink: 0,
   },
-  /** Method + note + keypad: no `marginTop: 'auto'` (that pushed the block into the bottom bar). Flow sits under the rate row with a small gap. */
+  /** Fills space under amount so method + keypad sit just above the Send CTA on tall devices. */
+  sendMethodNoteKeypadFill: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    width: '100%',
+    minHeight: 0,
+  },
   sendMethodNoteKeypadGroup: {
     marginTop: 0,
-    marginBottom: spacing[5],
+    marginBottom: spacing[2],
     flexShrink: 0,
     width: '100%',
   },

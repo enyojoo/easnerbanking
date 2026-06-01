@@ -2,11 +2,48 @@ import { describe, expect, it } from "vitest"
 import {
   assertSellFormSessionReady,
   buildAckFormForNextStep,
+  buildPrepareBody,
   extractBeneficiaryAckContext,
   parseNoahFormNextStep,
   parsePrepareSellRaw,
   sellFormSessionNeedsFinalize,
 } from "@/lib/noah/finalize-sell-form-session"
+
+describe("buildPrepareBody", () => {
+  it("always includes PascalCase ChannelID and CryptoCurrency for Noah schema", () => {
+    expect(
+      buildPrepareBody({
+        channelId: "ch-1",
+        cryptoCurrency: "USDC",
+        fiatAmount: "1000.00",
+        formSessionId: "sess-1",
+        form: { Confirmed: true },
+        delayedSell: true,
+      }),
+    ).toEqual({
+      ChannelID: "ch-1",
+      CryptoCurrency: "USDC",
+      FiatAmount: "1000.00",
+      FormSessionID: "sess-1",
+      Form: { Confirmed: true },
+      DelayedSell: true,
+    })
+  })
+
+  it("omits empty Form on seal follow-up steps", () => {
+    const body = buildPrepareBody({
+      channelId: "ch-1",
+      cryptoCurrency: "USDC",
+      fiatAmount: "1000.00",
+      formSessionId: "sess-1",
+      form: {},
+      delayedSell: true,
+    })
+    expect(body).not.toHaveProperty("Form")
+    expect(body.ChannelID).toBe("ch-1")
+    expect(body.CryptoCurrency).toBe("USDC")
+  })
+})
 
 describe("parsePrepareSellRaw", () => {
   it("preserves formSessionId when follow-up prepare omits it", () => {

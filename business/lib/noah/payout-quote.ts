@@ -1,5 +1,5 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { getNoahEurCryptoTicker, getNoahUsdCryptoTicker } from "@/lib/noah/config"
+import { getNoahEurCryptoTicker, getNoahSettlementCryptoCurrency } from "@/lib/noah/config"
 import { findNoahRate, listNoahRates } from "@/lib/fx/noah-rates"
 import {
   computeGlobalPayoutPricing,
@@ -119,7 +119,7 @@ function buildEasnerSlice(params: {
 function settlementCryptoForBalance(balanceCurrency: string): string {
   return balanceCurrency.trim().toUpperCase() === "EUR"
     ? getNoahEurCryptoTicker()
-    : getNoahUsdCryptoTicker()
+    : getNoahSettlementCryptoCurrency()
 }
 
 export async function buildPayoutQuote(input: {

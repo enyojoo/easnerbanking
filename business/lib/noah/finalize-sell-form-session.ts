@@ -263,7 +263,8 @@ type PrepareBodyInput = {
   paymentMethodId?: string
 }
 
-function buildPrepareBody(input: PrepareBodyInput): Record<string, unknown> {
+/** PascalCase body for POST /transactions/sell/prepare (Noah schema). */
+export function buildPrepareBody(input: PrepareBodyInput): Record<string, unknown> {
   const body: Record<string, unknown> = {
     ChannelID: input.channelId,
     CryptoCurrency: input.cryptoCurrency,
@@ -281,34 +282,11 @@ function buildPrepareBody(input: PrepareBodyInput): Record<string, unknown> {
 }
 
 async function postSellPrepare(body: Record<string, unknown>): Promise<Record<string, unknown>> {
-  try {
-    return await noahFetch<Record<string, unknown>>({
-      method: "POST",
-      path: "/transactions/sell/prepare",
-      json: body,
-    })
-  } catch {
-    return await noahFetch<Record<string, unknown>>({
-      method: "POST",
-      path: "/transactions/sell/prepare",
-      json: {
-        channelId: body.ChannelID ?? body.channelId,
-        cryptoCurrency: body.CryptoCurrency ?? body.cryptoCurrency,
-        fiatAmount: body.FiatAmount ?? body.fiatAmount,
-        form: body.Form ?? body.form ?? {},
-        delayedSell: body.DelayedSell ?? body.delayedSell ?? true,
-        ...(body.CustomerID || body.customerId
-          ? { customerId: body.CustomerID ?? body.customerId }
-          : {}),
-        ...(body.FormSessionID || body.formSessionId
-          ? { formSessionId: body.FormSessionID ?? body.formSessionId }
-          : {}),
-        ...(body.PaymentMethodID || body.paymentMethodId
-          ? { paymentMethodId: body.PaymentMethodID ?? body.paymentMethodId }
-          : {}),
-      },
-    })
-  }
+  return noahFetch<Record<string, unknown>>({
+    method: "POST",
+    path: "/transactions/sell/prepare",
+    json: body,
+  })
 }
 
 async function runPrepareStep(

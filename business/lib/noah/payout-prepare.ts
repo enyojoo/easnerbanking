@@ -148,27 +148,11 @@ export async function prepareSellTransaction(input: {
   if (input.customerId) {
     body.CustomerID = input.customerId
   }
-  let raw: Record<string, unknown>
-  try {
-    raw = await noahFetch<Record<string, unknown>>({
-      method: "POST",
-      path: "/transactions/sell/prepare",
-      json: body,
-    })
-  } catch {
-    raw = await noahFetch<Record<string, unknown>>({
-      method: "POST",
-      path: "/transactions/sell/prepare",
-      json: {
-        channelId: input.channelId,
-        cryptoCurrency: input.cryptoCurrency,
-        fiatAmount: input.fiatAmount,
-        form: input.form,
-        delayedSell: true,
-        ...(input.customerId ? { customerId: input.customerId } : {}),
-      },
-    })
-  }
+  const raw = await noahFetch<Record<string, unknown>>({
+    method: "POST",
+    path: "/transactions/sell/prepare",
+    json: body,
+  })
   let prep = parsePrepareSellRaw(raw)
   prep = await finalizeSellFormSessionAfterPrepare({
     channelId: input.channelId,

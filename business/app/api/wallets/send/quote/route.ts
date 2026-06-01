@@ -91,9 +91,14 @@ export async function POST(request: Request) {
     })
     return NextResponse.json({ ok: true, quote })
   } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "quote_failed" },
-      { status: 400 },
-    )
+    const message = e instanceof Error ? e.message : "quote_failed"
+    console.error("[wallet_send_quote]", {
+      recipientId,
+      sourceBalanceCurrency,
+      amountEntryMode,
+      error: message,
+      stack: e instanceof Error ? e.stack : undefined,
+    })
+    return NextResponse.json({ error: message }, { status: 400 })
   }
 }
