@@ -276,9 +276,12 @@ export type { TransactionDetailHeroTitleInput } from "./transactions/transaction
 export {
   buildTransactionTimingRows,
   formatTransactionDurationMs,
+  resolveTransactionTimingAnchors,
+  type TransactionTimingStartAnchor,
 } from "./transactions/transaction-timing-display"
 export type {
   BuildTransactionTimingRowsInput,
+  ResolveTransactionTimingAnchorsInput,
   TransactionTimingRow,
 } from "./transactions/transaction-timing-display"
 export { formatDisplayPersonName } from "./format-display-name"

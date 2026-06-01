@@ -1,6 +1,7 @@
 import {
   buildGlobalPayoutLifecycle,
   buildTransactionTimingRows,
+  resolveTransactionTimingAnchors,
   computeBalancePayoutExchangeFee,
   formatDisplayPersonName,
   formatTransactionDetailHeroTitle,
@@ -292,7 +293,6 @@ export function resolveGlobalPayoutOffRampDetail(
     productFallback: "Transfer",
   })
 
-  const transactionStartedAt = pickIso(meta.transaction_started_at, row.created_at)
   const processingAt =
     pickIso(meta.processing_at) ?? webhook?.processingAt ?? pickIso(row.occurred_at, row.created_at)
   const completedAt = pickIso(meta.completed_at, webhook?.completedAt)
@@ -335,14 +335,25 @@ export function resolveGlobalPayoutOffRampDetail(
   const easnerPayoutId =
     meta.easner_payout_id != null ? String(meta.easner_payout_id).trim() : null
 
+  const timingAnchors = resolveTransactionTimingAnchors({
+    createdAt: row.created_at != null ? String(row.created_at) : null,
+    metadata: effectiveMetadata,
+    webhookCompletedAt: webhook?.completedAt,
+    webhookFailedAt: webhook?.failedAt,
+    lifecycle,
+  })
+
   const transactionTiming = buildTransactionTimingRows({
     status: String(row.status ?? ""),
-    startedAt: transactionStartedAt,
-    completedAt,
-    failedAt,
+    startedAt: timingAnchors.startedAt,
+    completedAt: timingAnchors.completedAt,
+    failedAt: timingAnchors.failedAt,
     expectedProcessingTime: payoutReview?.processing_time,
     showExpectedWhileInFlight: true,
+    showStartedWhileInFlight: true,
   })
+
+  const transactionStartedAt = timingAnchors.startedAt
 
   return {
     effectiveMetadata,

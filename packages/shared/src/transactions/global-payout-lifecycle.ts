@@ -58,6 +58,8 @@ export function buildGlobalPayoutLifecycle(
   const processingAt =
     readIso(meta, "processing_at") ?? input.occurredAt ?? input.createdAt ?? null
   const completedAt = readIso(meta, "completed_at") ?? input.settledAt ?? null
+  const failedAt =
+    readIso(meta, "failed_at") ?? readIso(meta, "noah_payout_failed_at") ?? null
   const completedDescription = formatGlobalPayoutCompletedDescription(
     input.payoutReview,
     input.recipientName,
@@ -78,7 +80,7 @@ export function buildGlobalPayoutLifecycle(
         description:
           "This transfer could not be completed. Please contact support with your transaction reference.",
         state: "current",
-        occurredAt: completedAt ?? processingAt,
+        occurredAt: failedAt ?? processingAt,
       },
     ]
   }

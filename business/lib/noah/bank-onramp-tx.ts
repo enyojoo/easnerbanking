@@ -458,10 +458,10 @@ export function buildNoahBankPayInLedgerMetadata(
 ): Record<string, unknown> {
   const settledWalletAmount = roundFiatDisplayAmount(enrichment.settledStablecoinAmount)
   const st = String(opts?.status ?? tx.Status ?? "").toLowerCase()
-  const processingAt = pickIsoTimestamp(tx.Created, opts?.occurredAt)
+  const processingAt = pickIsoTimestamp(opts?.occurredAt, tx.Occurred, tx.Created)
   const completedAt =
     st === "settled"
-      ? pickIsoTimestamp(tx.Updated, tx.Occurred, opts?.occurredAt)
+      ? pickIsoTimestamp(opts?.occurredAt, tx.Occurred, tx.Created, tx.Updated)
       : null
   const schemeCtx = {
     metadata: {

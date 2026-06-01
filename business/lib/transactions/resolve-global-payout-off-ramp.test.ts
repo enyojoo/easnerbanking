@@ -28,6 +28,15 @@ vi.mock("@easner/shared", () => ({
   getGlobalPayoutTransferMethod: () => "Bank transfer",
   getGlobalPayoutProcessingTime: () => "Within minutes",
   buildTransactionTimingRows: () => [{ label: "Expected", value: "Within minutes" }],
+  resolveTransactionTimingAnchors: (input: {
+    createdAt?: string | null
+    webhookCompletedAt?: string | null
+    webhookFailedAt?: string | null
+  }) => ({
+    startedAt: input.createdAt ?? null,
+    completedAt: input.webhookCompletedAt ?? null,
+    failedAt: input.webhookFailedAt ?? null,
+  }),
   isGlobalPayoutOffRampOutRow: (row: { direction?: unknown; metadata?: Record<string, unknown> | null }) =>
     String(row.direction ?? "").toLowerCase() === "out" &&
     String(row.metadata?.payout_type ?? "").toLowerCase() === "global_fiat",

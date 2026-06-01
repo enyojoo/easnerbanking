@@ -87,6 +87,8 @@ export function buildBankDepositLifecycle(
     readIso(meta, "processing_at") ?? input.occurredAt ?? input.createdAt ?? null
   const completedAt =
     readIso(meta, "completed_at") ?? input.settledAt ?? null
+  const failedAt =
+    readIso(meta, "failed_at") ?? readIso(meta, "noah_payout_failed_at") ?? null
   const { amount: postedAmount, currency: postedCurrency } = readPostedAmount(meta)
   const schemeLabel = deriveBankDepositSchemeLabel({
     metadata: meta,
@@ -109,7 +111,7 @@ export function buildBankDepositLifecycle(
         description:
           "This deposit could not be posted to your account. Please contact support with your transaction reference.",
         state: "current",
-        occurredAt: completedAt ?? processingAt,
+        occurredAt: failedAt ?? processingAt,
       },
     ]
   }

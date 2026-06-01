@@ -5,14 +5,87 @@ export type TransactionTimingRow = {
   value: string
 }
 
+/** Payouts: ledger `created_at` (user initiated). Deposits: Noah `processing_at` (bank rail). */
+export type TransactionTimingStartAnchor = "created_at" | "processing_at"
+
 export type BuildTransactionTimingRowsInput = {
   status: string
   startedAt: string | null
   completedAt?: string | null
   failedAt?: string | null
   expectedProcessingTime?: string | null
-  /** When true (global payout in-flight), show Expected + Started. */
+  /** Global payout in-flight: show Expected estimate. */
   showExpectedWhileInFlight?: boolean
+  /**
+   * User-initiated payouts: show Started timestamp while in-flight.
+   * Bank deposits: false — Processing step in lifecycle already shows that time.
+   */
+  showStartedWhileInFlight?: boolean
+}
+
+function pickIso(...candidates: unknown[]): string | null {
+  for (const c of candidates) {
+    if (c == null) continue
+    const s = String(c).trim()
+    if (s) return s
+  }
+  return null
+}
+
+function readMetaIso(meta: Record<string, unknown>, key: string): string | null {
+  return pickIso(meta[key])
+}
+
+function lifecycleStepOccurredAt(
+  lifecycle: Array<{ id: string; occurredAt: string | null }> | null | undefined,
+  stepId: string,
+): string | null {
+  const step = lifecycle?.find((s) => s.id === stepId)
+  if (!step?.occurredAt) return null
+  const s = String(step.occurredAt).trim()
+  return s || null
+}
+
+export type ResolveTransactionTimingAnchorsInput = {
+  createdAt?: string | null
+  startAnchor?: TransactionTimingStartAnchor
+  metadata?: Record<string, unknown> | null
+  webhookProcessingAt?: string | null
+  webhookCompletedAt?: string | null
+  webhookFailedAt?: string | null
+  lifecycle?: Array<{ id: string; occurredAt: string | null }> | null
+}
+
+/** Resolves duration start/end. Payout start = `created_at`; deposit start = `processing_at`. */
+export function resolveTransactionTimingAnchors(
+  input: ResolveTransactionTimingAnchorsInput,
+): {
+  startedAt: string | null
+  completedAt: string | null
+  failedAt: string | null
+} {
+  const meta = input.metadata ?? {}
+  const startAnchor = input.startAnchor ?? "created_at"
+  const startedAt =
+    startAnchor === "processing_at"
+      ? pickIso(
+          input.webhookProcessingAt,
+          readMetaIso(meta, "processing_at"),
+          lifecycleStepOccurredAt(input.lifecycle, "processing"),
+        )
+      : pickIso(input.createdAt)
+  const completedAt = pickIso(
+    input.webhookCompletedAt,
+    readMetaIso(meta, "completed_at"),
+    lifecycleStepOccurredAt(input.lifecycle, "completed"),
+  )
+  const failedAt = pickIso(
+    input.webhookFailedAt,
+    readMetaIso(meta, "failed_at"),
+    readMetaIso(meta, "noah_payout_failed_at"),
+    lifecycleStepOccurredAt(input.lifecycle, "failed"),
+  )
+  return { startedAt, completedAt, failedAt }
 }
 
 function parseIsoMs(iso: string | null | undefined): number | null {
@@ -71,9 +144,6 @@ export function buildTransactionTimingRows(
     if (startedMs != null && endMs != null && endMs >= startedMs) {
       return [{ label: "Completed in", value: formatTransactionDurationMs(endMs - startedMs) }]
     }
-    if (startedMs != null) {
-      return [{ label: "Started", value: startedDisplay }]
-    }
     return []
   }
 
@@ -81,9 +151,6 @@ export function buildTransactionTimingRows(
     const endMs = parseIsoMs(input.failedAt)
     if (startedMs != null && endMs != null && endMs >= startedMs) {
       return [{ label: "Failed after", value: formatTransactionDurationMs(endMs - startedMs) }]
-    }
-    if (startedMs != null) {
-      return [{ label: "Started", value: startedDisplay }]
     }
     return []
   }
@@ -95,7 +162,7 @@ export function buildTransactionTimingRows(
       rows.push({ label: "Expected", value: expected })
     }
   }
-  if (startedMs != null) {
+  if (input.showStartedWhileInFlight && startedMs != null) {
     rows.push({ label: "Started", value: startedDisplay })
   }
   return rows

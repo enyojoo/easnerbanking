@@ -1,6 +1,7 @@
 import {
   buildBankDepositLifecycle,
   buildTransactionTimingRows,
+  resolveTransactionTimingAnchors,
   deriveBankDepositInboundDisplayLabel,
   deriveBankDepositNarrationLabel,
   deriveBankDepositPaymentRail,
@@ -166,11 +167,11 @@ export function resolveBankDepositPayInDetail(
     webhook?.processingAt ??
     pickIso(payload.Created, row.occurred_at, row.created_at)
 
-  const transactionStartedAt = pickIso(meta.transaction_started_at, row.created_at)
   const completedAt =
     stLower === "settled"
       ? pickIso(meta.completed_at, webhook?.completedAt)
       : pickIso(meta.completed_at)
+  const failedAt = pickIso(meta.failed_at, meta.noah_payout_failed_at)
 
   const schemeCtx = {
     metadata: {
@@ -235,12 +236,24 @@ export function resolveBankDepositPayInDetail(
     createdAt: row.created_at != null ? String(row.created_at) : null,
   })
 
+  const timingAnchors = resolveTransactionTimingAnchors({
+    startAnchor: "processing_at",
+    metadata: effectiveMetadata,
+    webhookProcessingAt: webhook?.processingAt,
+    webhookCompletedAt: webhook?.completedAt,
+    lifecycle,
+  })
+
   const transactionTiming = buildTransactionTimingRows({
     status: ledgerStatus,
-    startedAt: transactionStartedAt,
-    completedAt,
+    startedAt: timingAnchors.startedAt,
+    completedAt: timingAnchors.completedAt,
+    failedAt: timingAnchors.failedAt,
     showExpectedWhileInFlight: false,
+    showStartedWhileInFlight: false,
   })
+
+  const transactionStartedAt = timingAnchors.startedAt
 
   return {
     effectiveMetadata,
