@@ -27,6 +27,7 @@ vi.mock("@easner/shared", () => ({
       : "Transfer",
   getGlobalPayoutTransferMethod: () => "Bank transfer",
   getGlobalPayoutProcessingTime: () => "Within minutes",
+  buildTransactionTimingRows: () => [{ label: "Expected", value: "Within minutes" }],
   isGlobalPayoutOffRampOutRow: (row: { direction?: unknown; metadata?: Record<string, unknown> | null }) =>
     String(row.direction ?? "").toLowerCase() === "out" &&
     String(row.metadata?.payout_type ?? "").toLowerCase() === "global_fiat",

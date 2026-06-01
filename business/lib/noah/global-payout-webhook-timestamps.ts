@@ -4,12 +4,13 @@ import { isNoahGlobalPayoutSellTx } from "@/lib/noah/global-payout-ledger"
 export type GlobalPayoutWebhookTimestamps = {
   processingAt: string | null
   completedAt: string | null
+  failedAt: string | null
 }
 
 const GLOBAL_PAYOUT_WEBHOOK_SCAN_LIMIT = 3000
 
 function emptyTimestamps(): GlobalPayoutWebhookTimestamps {
-  return { processingAt: null, completedAt: null }
+  return { processingAt: null, completedAt: null, failedAt: null }
 }
 
 function pickIso(...candidates: unknown[]): string | null {
@@ -38,7 +39,13 @@ function mergeGlobalPayoutDelivery(
     acc.processingAt = created ?? occurred
   }
   if (status === "settled") {
-    acc.completedAt = occurred ?? created ?? pickIso(receivedAt)
+    const terminal = occurred ?? created ?? pickIso(receivedAt)
+    if (terminal && !acc.completedAt) {
+      acc.completedAt = terminal
+    }
+  }
+  if ((status === "failed" || status === "cancelled") && !acc.failedAt) {
+    acc.failedAt = occurred ?? created ?? pickIso(receivedAt)
   }
 
   return acc

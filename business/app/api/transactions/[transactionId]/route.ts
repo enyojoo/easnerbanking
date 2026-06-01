@@ -177,6 +177,7 @@ function mapLedgerRowToMobileDetail(row: Record<string, unknown>): Record<string
         }
       : {}),
     updated_at: row.updated_at != null ? String(row.updated_at) : created,
+    ledger_created_at: row.created_at != null ? String(row.created_at) : created,
     completed_at: row.settled_at != null ? String(row.settled_at) : st === "settled" ? created : undefined,
     tx_hash: row.tx_hash != null ? String(row.tx_hash) : undefined,
     base_amount: typeof row.base_amount === "number" ? row.base_amount : Number(row.base_amount) || undefined,
@@ -410,6 +411,9 @@ export async function GET(request: Request, routeCtx: Props) {
                   (transaction.metadata as Record<string, unknown>).deposit_scheme_label,
                 )
               : "ACH",
+        transactionTiming:
+          (transaction.transaction_timing as typeof businessTransaction.transactionTiming) ??
+          businessTransaction.transactionTiming,
       }
     } else if (isGlobalPayoutOffRampRow(rec)) {
       businessTransaction = {
@@ -461,6 +465,9 @@ export async function GET(request: Request, routeCtx: Props) {
           typeof transaction.display_description === "string"
             ? String(transaction.display_description)
             : businessTransaction.counterpartyName,
+        transactionTiming:
+          (transaction.transaction_timing as typeof businessTransaction.transactionTiming) ??
+          businessTransaction.transactionTiming,
       }
     }
     return NextResponse.json({ transaction, businessTransaction })

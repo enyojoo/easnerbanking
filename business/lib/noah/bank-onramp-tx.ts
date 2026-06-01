@@ -226,12 +226,52 @@ export function mergeBankDepositLifecycleMetadata(
     }
   }
   const nextCompleted = pickIsoTimestamp(patch.completed_at)
-  if (nextCompleted) {
+  if (nextCompleted && !pickIsoTimestamp(merged.completed_at)) {
     merged.completed_at = nextCompleted
   }
   if (patch.noah_fiat_deposit_id) {
     merged.noah_fiat_deposit_id = patch.noah_fiat_deposit_id
   }
+  return merged
+}
+
+/** Global fiat payout lifecycle timestamps (user Started anchor + webhook terminal times). */
+export function mergeGlobalPayoutLifecycleMetadata(
+  existing: Record<string, unknown> | null | undefined,
+  patch: {
+    transaction_started_at?: string | null
+    processing_at?: string | null
+    completed_at?: string | null
+    failed_at?: string | null
+  },
+): Record<string, unknown> {
+  const merged = { ...(existing ?? {}) }
+
+  const nextStarted = pickIsoTimestamp(patch.transaction_started_at)
+  const prevStarted = pickIsoTimestamp(merged.transaction_started_at)
+  if (nextStarted && !prevStarted) {
+    merged.transaction_started_at = nextStarted
+  }
+
+  const nextProcessing = pickIsoTimestamp(patch.processing_at)
+  const prevProcessing = pickIsoTimestamp(merged.processing_at)
+  if (nextProcessing) {
+    if (!prevProcessing || new Date(nextProcessing).getTime() < new Date(prevProcessing).getTime()) {
+      merged.processing_at = nextProcessing
+    }
+  }
+
+  const nextCompleted = pickIsoTimestamp(patch.completed_at)
+  if (nextCompleted && !pickIsoTimestamp(merged.completed_at)) {
+    merged.completed_at = nextCompleted
+  }
+
+  const nextFailed = pickIsoTimestamp(patch.failed_at)
+  if (nextFailed && !pickIsoTimestamp(merged.failed_at)) {
+    merged.failed_at = nextFailed
+    merged.noah_payout_failed_at = nextFailed
+  }
+
   return merged
 }
 

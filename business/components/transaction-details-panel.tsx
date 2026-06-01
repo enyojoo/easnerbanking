@@ -14,6 +14,7 @@ import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { TransactionLifecycleTracker } from "@/components/transactions/transaction-lifecycle-tracker"
 import { TransactionDetailHero } from "@/components/transactions/transaction-detail-hero"
 import { PayoutReviewDetailsRows } from "@/components/transactions/payout-review-details-rows"
+import { TransactionTimingRows } from "@/components/transactions/transaction-timing-rows"
 
 export interface TransactionDetailsPanelProps {
   transaction: Transaction | null
@@ -100,6 +101,7 @@ function TransactionSummaryDetails({
   const partyLabel = transaction.direction === "credit" ? "Sender" : "Recipient"
   const showLifecycleTracker = Boolean(transaction.lifecycle?.length)
   const displayCurrency = transaction.postedCurrency || transaction.displayCurrency || "USD"
+  const timingRows = transaction.transactionTiming
 
   return (
     <Card className="border-border shadow-sm">
@@ -131,18 +133,22 @@ function TransactionSummaryDetails({
           </div>
         ) : null}
 
-        <div className="flex justify-between gap-4 text-sm">
-          <span className="shrink-0 text-muted-foreground">When</span>
-          <span className="text-right font-medium">
-            {new Date(transaction.date).toLocaleDateString("en-US", {
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </span>
-        </div>
+        {timingRows?.length ? (
+          <TransactionTimingRows rows={timingRows} className="flex justify-between gap-4 border-b pb-4 text-sm" />
+        ) : (
+          <div className="flex justify-between gap-4 text-sm">
+            <span className="shrink-0 text-muted-foreground">When</span>
+            <span className="text-right font-medium">
+              {new Date(transaction.date).toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+          </div>
+        )}
 
         {isCard && cardLast4 ? (
           <div className="flex justify-between text-sm">
@@ -257,6 +263,7 @@ export function TransactionDetailsPanel({
           payoutReview={transaction.payoutReview}
           recipientSnapshot={transaction.recipientSnapshot}
           sendNote={transaction.sendNote}
+          timingRows={transaction.transactionTiming}
           copiedKey={copiedKey}
           onCopy={handleCopy}
           showRecipientGets={false}

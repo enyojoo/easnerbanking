@@ -34,6 +34,7 @@ import {
   isNoahBankOnrampOrchestrationInLeg,
   isNoahBankOnrampOrchestrationOutLeg,
   isVerificationFiatDeposit,
+  mergeGlobalPayoutLifecycleMetadata,
   mergePayInMetadataWithLifecycle,
   pickNoahOrchestrationRuleExecutionId,
 } from "@/lib/noah/bank-onramp-tx"
@@ -45,6 +46,18 @@ import {
 import { provisionNoahAfterVerificationApproved } from "@/lib/noah/provision-after-approval"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { applyGlobalPayoutMarginReconciliation } from "@/lib/noah/reconcile-payout-margin"
+
+function pickWebhookOccurredIso(
+  envelope: Record<string, unknown>,
+  data: Record<string, unknown>,
+): string {
+  for (const c of [envelope.Occurred, data.Occurred, data.Created, data.Updated]) {
+    if (c == null) continue
+    const s = String(c).trim()
+    if (s) return s
+  }
+  return new Date().toISOString()
+}
 
 function pickTxHash(tx: Record<string, unknown>): string | null {
   const h = tx.TxHash ?? tx.TransactionHash ?? tx.txHash ?? tx.Hash ?? tx.PublicID
@@ -220,6 +233,7 @@ export async function applyNoahWebhookSideEffects(
       const directionRaw = String(txData.Direction ?? "").toLowerCase()
       const direction = directionRaw === "in" ? "in" : directionRaw === "out" ? "out" : null
       const status = String(txData.Status ?? "").toLowerCase() || "unknown"
+      const webhookOccurred = pickWebhookOccurredIso(p, txData)
 
       let userId: string | null = null
       let businessId: string | null = null
@@ -325,7 +339,7 @@ export async function applyNoahWebhookSideEffects(
           metadata.autopayout_config_id = autopayoutConfigId
         }
         if (payInEnrichment && isNoahBankOnrampFiatPayIn(txData)) {
-          const occurredAt = String(txData.Created ?? txData.Updated ?? new Date().toISOString())
+          const occurredAt = webhookOccurred
           const depositId =
             payInEnrichment.ruleExecutionId ??
             pickNoahOrchestrationRuleExecutionId(txData) ??
@@ -418,6 +432,31 @@ export async function applyNoahWebhookSideEffects(
             ...(priorCrypto ? { crypto_authorized_amount: priorCrypto } : {}),
             ...(payoutEnrichment ? buildNoahGlobalPayoutPayOutMetadata(txData, payoutEnrichment) : {}),
           }
+          const lifecyclePatch: {
+            transaction_started_at?: string | null
+            processing_at?: string | null
+            completed_at?: string | null
+            failed_at?: string | null
+          } = {
+            transaction_started_at:
+              typeof priorMeta.transaction_started_at === "string"
+                ? priorMeta.transaction_started_at
+                : null,
+          }
+          if (status === "pending" || status === "processing") {
+            lifecyclePatch.processing_at = webhookOccurred
+          }
+          if (status === "settled") {
+            lifecyclePatch.completed_at = webhookOccurred
+          }
+          if (status === "failed" || status === "cancelled") {
+            lifecyclePatch.failed_at = webhookOccurred
+            metadata = {
+              ...metadata,
+              noah_refund_expected: true,
+            }
+          }
+          metadata = mergeGlobalPayoutLifecycleMetadata(metadata, lifecyclePatch)
         }
 
         const upsert = await upsertLedgerTransaction(admin, {
@@ -432,8 +471,8 @@ export async function applyNoahWebhookSideEffects(
           payload: txData,
           metadata,
           txHash: pickTxHash(txData) ?? payInEnrichment?.onChainTxHash ?? null,
-          occurredAt: String(txData.Created ?? txData.Updated ?? new Date().toISOString()),
-          settledAt: status === "settled" ? String(txData.Updated ?? txData.Created ?? new Date().toISOString()) : null,
+          occurredAt: webhookOccurred,
+          settledAt: status === "settled" ? webhookOccurred : null,
           baseCurrency: ledgerBaseCurrency,
           asset: ledgerAsset,
         })
@@ -476,22 +515,6 @@ export async function applyNoahWebhookSideEffects(
           await reverseGlobalPayoutWalletDebitForEasnerPayoutId(admin, {
             easnerPayoutId: externalId,
           }).catch((e) => console.warn("global_payout_failed_reversal:", e))
-          if (upsert.transactionId) {
-            const failedAt = String(
-              txData.Updated ?? txData.Created ?? new Date().toISOString(),
-            )
-            await admin
-              .from("transactions")
-              .update({
-                metadata: {
-                  ...metadata,
-                  noah_payout_failed_at: failedAt,
-                  noah_refund_expected: true,
-                },
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", upsert.transactionId)
-          }
         }
         }
       }

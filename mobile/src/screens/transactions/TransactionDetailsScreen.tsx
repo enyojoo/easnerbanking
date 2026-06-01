@@ -113,6 +113,8 @@ interface LedgerTransaction {
   payout_review?: GlobalPayoutReviewSnapshot
   recipient_snapshot?: GlobalPayoutRecipientSnapshot
   send_note?: string
+  transaction_timing?: Array<{ label: string; value: string }>
+  ledger_created_at?: string
 }
 
 type StatusInfo = {
@@ -910,6 +912,12 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                         <Text style={styles.summaryValue}>{transaction.reference}</Text>
                       </View>
                     ) : null}
+                    {transaction.transaction_timing?.map((row) => (
+                      <View key={row.label} style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>{row.label}</Text>
+                        <Text style={styles.summaryValue}>{row.value}</Text>
+                      </View>
+                    ))}
                   </>
                 ) : null}
 
@@ -1066,10 +1074,20 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                       <Text style={styles.summaryLabel}>Transfer method</Text>
                       <Text style={styles.summaryValue}>{transaction.payout_review.transfer_method}</Text>
                     </View>
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Processing time</Text>
-                      <Text style={styles.summaryValue}>{transaction.payout_review.processing_time}</Text>
-                    </View>
+                    {(transaction.transaction_timing?.length
+                      ? transaction.transaction_timing
+                      : [
+                          {
+                            label: 'Processing time',
+                            value: transaction.payout_review.processing_time,
+                          },
+                        ]
+                    ).map((row) => (
+                      <View key={row.label} style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>{row.label}</Text>
+                        <Text style={styles.summaryValue}>{row.value}</Text>
+                      </View>
+                    ))}
                     {transaction.send_note || transaction.metadata?.send_note ? (
                       <View style={styles.summaryRow}>
                         <Text style={styles.summaryLabel}>Note</Text>

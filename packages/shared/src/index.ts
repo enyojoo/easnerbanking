@@ -273,6 +273,14 @@ export {
   formatTransactionDetailHeroTitle,
 } from "./transactions/transaction-detail-hero-title"
 export type { TransactionDetailHeroTitleInput } from "./transactions/transaction-detail-hero-title"
+export {
+  buildTransactionTimingRows,
+  formatTransactionDurationMs,
+} from "./transactions/transaction-timing-display"
+export type {
+  BuildTransactionTimingRowsInput,
+  TransactionTimingRow,
+} from "./transactions/transaction-timing-display"
 export { formatDisplayPersonName } from "./format-display-name"
 export {
   buildVerifiedIdentityFromKycFields,

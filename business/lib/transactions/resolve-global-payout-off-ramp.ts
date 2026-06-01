@@ -1,5 +1,6 @@
 import {
   buildGlobalPayoutLifecycle,
+  buildTransactionTimingRows,
   computeBalancePayoutExchangeFee,
   formatDisplayPersonName,
   formatTransactionDetailHeroTitle,
@@ -9,6 +10,7 @@ import {
   type GlobalPayoutLifecycleStep,
   type GlobalPayoutRecipientSnapshot,
   type GlobalPayoutReviewSnapshot,
+  type TransactionTimingRow,
 } from "@easner/shared"
 import { extractNoahGlobalPayoutPayOutEnrichment } from "@/lib/noah/global-payout-ledger"
 import { normalizePayoutReviewSnapshot } from "@/lib/noah/build-payout-execute-snapshot"
@@ -247,6 +249,10 @@ export type ResolvedGlobalPayoutOffRamp = {
   sendNote: string | null
   processingAt: string | null
   completedAt: string | null
+  failedAt: string | null
+  transactionStartedAt: string | null
+  ledgerCreatedAt: string | null
+  transactionTiming: TransactionTimingRow[]
   easnerPayoutId: string | null
 }
 
@@ -286,10 +292,15 @@ export function resolveGlobalPayoutOffRampDetail(
     productFallback: "Transfer",
   })
 
+  const transactionStartedAt = pickIso(meta.transaction_started_at, row.created_at)
   const processingAt =
     pickIso(meta.processing_at) ?? webhook?.processingAt ?? pickIso(row.occurred_at, row.created_at)
-  const completedAt =
-    pickIso(meta.completed_at) ?? webhook?.completedAt ?? pickIso(row.settled_at)
+  const completedAt = pickIso(meta.completed_at, webhook?.completedAt)
+  const failedAt = pickIso(
+    meta.failed_at,
+    meta.noah_payout_failed_at,
+    webhook?.failedAt,
+  )
 
   const effectiveMetadata: Record<string, unknown> = {
     ...meta,
@@ -324,6 +335,15 @@ export function resolveGlobalPayoutOffRampDetail(
   const easnerPayoutId =
     meta.easner_payout_id != null ? String(meta.easner_payout_id).trim() : null
 
+  const transactionTiming = buildTransactionTimingRows({
+    status: String(row.status ?? ""),
+    startedAt: transactionStartedAt,
+    completedAt,
+    failedAt,
+    expectedProcessingTime: payoutReview?.processing_time,
+    showExpectedWhileInFlight: true,
+  })
+
   return {
     effectiveMetadata,
     lifecycle,
@@ -338,6 +358,10 @@ export function resolveGlobalPayoutOffRampDetail(
     sendNote: sendNote || null,
     processingAt,
     completedAt,
+    failedAt,
+    transactionStartedAt,
+    ledgerCreatedAt: row.created_at != null ? String(row.created_at) : null,
+    transactionTiming,
     easnerPayoutId,
   }
 }

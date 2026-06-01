@@ -32,6 +32,9 @@ export function attachBankDepositDetailFields(
     reference,
     processingAt,
     completedAt,
+    transactionStartedAt,
+    ledgerCreatedAt,
+    transactionTiming,
   } = detail
 
   return {
@@ -67,6 +70,9 @@ export function attachBankDepositDetailFields(
       : {}),
     ...(processingAt ? { processing_at: processingAt } : {}),
     ...(completedAt ? { completed_at: completedAt } : {}),
+    ...(transactionStartedAt ? { transaction_started_at: transactionStartedAt } : {}),
+    ...(ledgerCreatedAt ? { ledger_created_at: ledgerCreatedAt } : {}),
+    transaction_timing: transactionTiming,
   }
 }
 

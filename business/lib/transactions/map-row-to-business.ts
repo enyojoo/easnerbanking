@@ -11,6 +11,7 @@ import {
   toEasnerTransactionPrimaryLabel,
 } from "@easner/shared"
 import { isNoahBankOnrampFiatPayIn } from "@/lib/noah/bank-onramp-tx"
+import { resolveBankDepositPayInDetail } from "@/lib/transactions/resolve-bank-deposit-pay-in"
 import { resolveGlobalPayoutOffRampDetail } from "@/lib/transactions/resolve-global-payout-off-ramp"
 
 function deriveCounterpartyName(input: {
@@ -56,6 +57,12 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
 
   const isVerification = isVerificationDepositMetadata(meta)
   const globalPayoutDetail = resolveGlobalPayoutOffRampDetail(row)
+  const bankDepositDetail =
+    !globalPayoutDetail &&
+    !isVerification &&
+    (isBankOnrampDepositFlow(meta) || (payload && isNoahBankOnrampFiatPayIn(payload)))
+      ? resolveBankDepositPayInDetail(row)
+      : null
   const globalPayoutList = globalPayoutDetail ? null : resolveGlobalPayoutListDisplay(row)
   const globalPayout = globalPayoutDetail ?? globalPayoutList
   const bankLabel =
@@ -155,8 +162,19 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
           payoutReview: globalPayoutDetail.payoutReview ?? undefined,
           recipientSnapshot: globalPayoutDetail.recipientSnapshot ?? undefined,
           lifecycle: globalPayoutDetail.lifecycle,
+          transactionTiming: globalPayoutDetail.transactionTiming,
         }
-      : globalPayoutList
+      : bankDepositDetail
+        ? {
+            lifecycle: bankDepositDetail.lifecycle,
+            transactionTiming: bankDepositDetail.transactionTiming,
+            depositAmount: bankDepositDetail.depositAmount,
+            postedAmount: bankDepositDetail.postedAmount ?? undefined,
+            postedCurrency: bankDepositDetail.postedCurrency,
+            paymentScheme: bankDepositDetail.depositSchemeLabel,
+            narration: bankDepositDetail.narration ?? undefined,
+          }
+        : globalPayoutList
         ? {
             displayHeroTitle: globalPayoutList.displayHeroTitle,
             ledgerAmount: globalPayoutList.ledgerAmount,

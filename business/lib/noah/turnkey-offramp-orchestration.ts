@@ -3,7 +3,9 @@ import { randomUUID } from "node:crypto"
 import { pickNoahWorkflowIdFromResponse } from "@/lib/noah/bank-onramp-workflow"
 import { getNoahEurCryptoTicker, getNoahUsdCryptoTicker } from "@/lib/noah/config"
 import {
+  applyGlobalPayoutWalletDebitForEasnerPayoutId,
   pendingGlobalPayoutProviderTransactionId,
+  reverseGlobalPayoutWalletDebitForEasnerPayoutId,
   settlementWalletCurrencyForNoahCrypto,
 } from "@/lib/noah/global-payout-ledger"
 import {
@@ -105,6 +107,34 @@ async function readAvailableBalance(
   const { data, error } = await q.maybeSingle()
   if (error) return { available: 0, err: error.message }
   return { available: Number(data?.available_balance ?? 0) }
+}
+
+async function markGlobalPayoutExecuteFailed(
+  admin: SupabaseClient,
+  input: {
+    easnerPayoutId: string
+    pendingMetadata: Record<string, unknown>
+    detail: string
+    extraMetadata?: Record<string, unknown>
+  },
+): Promise<void> {
+  await admin
+    .from("transactions")
+    .update({
+      status: "failed",
+      metadata: {
+        ...input.pendingMetadata,
+        failure_reason: input.detail,
+        ...input.extraMetadata,
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("provider", "noah")
+    .eq("provider_transaction_id", pendingGlobalPayoutProviderTransactionId(input.easnerPayoutId))
+
+  await reverseGlobalPayoutWalletDebitForEasnerPayoutId(admin, {
+    easnerPayoutId: input.easnerPayoutId,
+  }).catch((e) => console.warn("global_payout_execute_failed_reversal:", e))
 }
 
 async function findExistingPayoutByIdempotency(
@@ -303,6 +333,7 @@ export async function executeTurnkeyOfframpPayout(
 
   const pendingMetadata: Record<string, unknown> = {
     source: "api_noah_transfers",
+    transaction_started_at: now,
     payout_type: "global_fiat",
     execution_model: "turnkey_workflow",
     easner_payout_id: easnerPayoutId,
@@ -347,6 +378,18 @@ export async function executeTurnkeyOfframpPayout(
     asset: cryptoCurrency,
     baseCurrency: walletCurrency,
   })
+
+  try {
+    await applyGlobalPayoutWalletDebitForEasnerPayoutId(admin, { easnerPayoutId })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    await markGlobalPayoutExecuteFailed(admin, {
+      easnerPayoutId,
+      pendingMetadata,
+      detail: msg || "wallet_reserve_failed",
+    })
+    return { ok: false, error: msg || "wallet_reserve_failed" }
+  }
 
   let turnkeySendId: string | undefined
   let turnkeySendStatus: "pending" | "settled" | "failed" | undefined
@@ -411,32 +454,21 @@ export async function executeTurnkeyOfframpPayout(
       const detail =
         send.chainFailureDetail?.trim() ||
         "Turnkey Solana broadcast failed. Check wallet USDC balance and try again."
-      await admin
-        .from("transactions")
-        .update({
-          status: "failed",
-          metadata: {
-            ...pendingMetadata,
-            turnkey_send_id: send.providerTransactionId,
-            failure_reason: detail,
-          },
-          updated_at: new Date().toISOString(),
-        })
-        .eq("provider", "noah")
-        .eq("provider_transaction_id", pendingProviderTransactionId(easnerPayoutId))
+      await markGlobalPayoutExecuteFailed(admin, {
+        easnerPayoutId,
+        pendingMetadata,
+        detail,
+        extraMetadata: { turnkey_send_id: send.providerTransactionId },
+      })
       return { ok: false, error: detail }
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
-    await admin
-      .from("transactions")
-      .update({
-        status: "failed",
-        metadata: { ...pendingMetadata, failure_reason: msg },
-        updated_at: new Date().toISOString(),
-      })
-      .eq("provider", "noah")
-      .eq("provider_transaction_id", pendingProviderTransactionId(easnerPayoutId))
+    await markGlobalPayoutExecuteFailed(admin, {
+      easnerPayoutId,
+      pendingMetadata,
+      detail: msg || "turnkey_send_failed",
+    })
     return { ok: false, error: msg || "turnkey_send_failed" }
   }
 

@@ -29,6 +29,10 @@ export function attachGlobalPayoutDetailFields(
     sendNote,
     processingAt,
     completedAt,
+    failedAt,
+    transactionStartedAt,
+    ledgerCreatedAt,
+    transactionTiming,
   } = detail
 
   return {
@@ -51,6 +55,10 @@ export function attachGlobalPayoutDetailFields(
     ...(sendNote ? { send_note: sendNote, sendNote } : {}),
     ...(processingAt ? { processing_at: processingAt } : {}),
     ...(completedAt ? { completed_at: completedAt } : {}),
+    ...(failedAt ? { failed_at: failedAt } : {}),
+    ...(transactionStartedAt ? { transaction_started_at: transactionStartedAt } : {}),
+    ...(ledgerCreatedAt ? { ledger_created_at: ledgerCreatedAt } : {}),
+    transaction_timing: transactionTiming,
     metadata: {
       ...((transaction.metadata as Record<string, unknown> | undefined) ?? {}),
       ...effectiveMetadata,

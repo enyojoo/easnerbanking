@@ -872,12 +872,13 @@ export async function patchGlobalPayoutNoahTurnkeySettlement(
 }
 
 /**
- * Debit wallet for a global fiat payout once Turnkey chain send settles.
+ * Debit wallet for a global fiat payout (idempotent).
+ * Called at execute to reserve `available_balance`, or at Turnkey settle to patch `turnkey_settled`.
  * Noah payout row is the sole ledger record — no Turnkey OUT row required.
  */
 export async function applyGlobalPayoutWalletDebitForEasnerPayoutId(
   admin: SupabaseClient,
-  input: { easnerPayoutId: string; marginLeg?: boolean },
+  input: { easnerPayoutId: string; marginLeg?: boolean; markTurnkeySettled?: boolean },
 ): Promise<void> {
   if (input.marginLeg) return
 
@@ -885,7 +886,20 @@ export async function applyGlobalPayoutWalletDebitForEasnerPayoutId(
   if (!row?.id) return
 
   const meta = row.metadata
-  if (meta.balance_delta_applied === true) return
+  const markTurnkeySettled = input.markTurnkeySettled === true
+
+  if (meta.balance_delta_applied === true) {
+    if (markTurnkeySettled && meta.turnkey_settled !== true) {
+      await admin
+        .from("transactions")
+        .update({
+          metadata: { ...meta, turnkey_settled: true },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", row.id)
+    }
+    return
+  }
 
   let debitAmt = Number(meta.total_debited ?? row.amount ?? 0)
   if (!Number.isFinite(debitAmt) || debitAmt <= 0) return
@@ -898,13 +912,19 @@ export async function applyGlobalPayoutWalletDebitForEasnerPayoutId(
     delta: -debitAmt,
   })
 
+  const reservedAt =
+    typeof meta.wallet_debit_reserved_at === "string" && meta.wallet_debit_reserved_at.trim()
+      ? meta.wallet_debit_reserved_at
+      : new Date().toISOString()
+
   await admin
     .from("transactions")
     .update({
       metadata: {
         ...meta,
-        turnkey_settled: true,
         balance_delta_applied: true,
+        wallet_debit_reserved_at: reservedAt,
+        ...(markTurnkeySettled ? { turnkey_settled: true } : {}),
       },
       updated_at: new Date().toISOString(),
     })

@@ -1,5 +1,6 @@
 import {
   buildBankDepositLifecycle,
+  buildTransactionTimingRows,
   deriveBankDepositInboundDisplayLabel,
   deriveBankDepositNarrationLabel,
   deriveBankDepositPaymentRail,
@@ -9,6 +10,7 @@ import {
   isBankOnrampDepositFlow,
   isVerificationDepositMetadata,
   type BankDepositLifecycleStep,
+  type TransactionTimingRow,
 } from "@easner/shared"
 import {
   deriveNoahBankPayInRemitterName,
@@ -66,6 +68,9 @@ export type ResolvedBankDepositPayIn = {
   reference: string | null
   processingAt: string | null
   completedAt: string | null
+  transactionStartedAt: string | null
+  ledgerCreatedAt: string | null
+  transactionTiming: TransactionTimingRow[]
   fiatDepositId: string | null
 }
 
@@ -161,11 +166,10 @@ export function resolveBankDepositPayInDetail(
     webhook?.processingAt ??
     pickIso(payload.Created, row.occurred_at, row.created_at)
 
+  const transactionStartedAt = pickIso(meta.transaction_started_at, row.created_at)
   const completedAt =
     stLower === "settled"
-      ? pickIso(meta.completed_at) ??
-        webhook?.completedAt ??
-        pickIso(row.settled_at, payload.Updated, row.occurred_at)
+      ? pickIso(meta.completed_at, webhook?.completedAt)
       : pickIso(meta.completed_at)
 
   const schemeCtx = {
@@ -231,6 +235,13 @@ export function resolveBankDepositPayInDetail(
     createdAt: row.created_at != null ? String(row.created_at) : null,
   })
 
+  const transactionTiming = buildTransactionTimingRows({
+    status: ledgerStatus,
+    startedAt: transactionStartedAt,
+    completedAt,
+    showExpectedWhileInFlight: false,
+  })
+
   return {
     effectiveMetadata,
     lifecycle,
@@ -245,6 +256,9 @@ export function resolveBankDepositPayInDetail(
     reference: narration ?? paymentReference,
     processingAt,
     completedAt,
+    transactionStartedAt,
+    ledgerCreatedAt: row.created_at != null ? String(row.created_at) : null,
+    transactionTiming,
     fiatDepositId,
   }
 }

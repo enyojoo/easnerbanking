@@ -97,7 +97,7 @@ export async function upsertLedgerTransaction(
 
   const { data: existing, error: existingErr } = await admin
     .from("transactions")
-    .select("id,status,metadata,payload,settled_at")
+    .select("id,status,metadata,payload,settled_at,occurred_at")
     .eq("provider", provider)
     .eq("provider_transaction_id", providerTransactionId)
     .maybeSingle()
@@ -120,6 +120,13 @@ export async function upsertLedgerTransaction(
   const settledAt = isStatusDowngradeFromSettled
     ? (existing?.settled_at != null ? String(existing.settled_at) : input.settledAt ?? null)
     : (input.settledAt ?? null)
+
+  const existingOccurred =
+    existing?.occurred_at != null ? String(existing.occurred_at).trim() : ""
+  const occurredAt =
+    existing?.id && existingOccurred
+      ? existingOccurred
+      : (input.occurredAt ?? null)
 
   const hiddenFromFeed = resolveHiddenFromFeed(mergedMetadata, payload)
 
@@ -144,7 +151,7 @@ export async function upsertLedgerTransaction(
     asset: input.asset ?? null,
     chain: input.chain ?? null,
     counterparty_address: input.counterpartyAddress ?? null,
-    occurred_at: input.occurredAt ?? null,
+    occurred_at: occurredAt,
     settled_at: settledAt,
     base_currency: baseCurrency,
     base_amount: baseAmount,

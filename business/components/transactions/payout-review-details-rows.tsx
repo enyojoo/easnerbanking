@@ -7,7 +7,9 @@ import {
   formatSendRateLabel,
   type GlobalPayoutRecipientSnapshot,
   type GlobalPayoutReviewSnapshot,
+  type TransactionTimingRow,
 } from "@easner/shared"
+import { TransactionTimingRows } from "@/components/transactions/transaction-timing-rows"
 import { Card, CardContent } from "@/components/ui/card"
 import { Copy, Check } from "lucide-react"
 
@@ -23,6 +25,8 @@ type Props = {
   showFeeBreakdown?: boolean
   /** Detail view: hero already shows receive amount. Confirm/review keeps this row. */
   showRecipientGets?: boolean
+  /** Dynamic timing (Expected / Started / Completed in). Omit on send confirm. */
+  timingRows?: TransactionTimingRow[] | null
 }
 
 function recipientSubtitle(snapshot: GlobalPayoutRecipientSnapshot): string {
@@ -46,6 +50,7 @@ export function PayoutReviewDetailsRows({
   onCopy,
   showFeeBreakdown = true,
   showRecipientGets = true,
+  timingRows,
 }: Props) {
   const hasFx =
     payoutReview.receive_currency.toUpperCase() !== payoutReview.send_currency.toUpperCase()
@@ -166,10 +171,14 @@ export function PayoutReviewDetailsRows({
           <span className="font-medium">{payoutReview.transfer_method}</span>
         </div>
 
-        <div className="flex items-center justify-between border-b pb-4">
-          <span className="text-sm text-muted-foreground">Processing time</span>
-          <span className="font-medium">{payoutReview.processing_time}</span>
-        </div>
+        {timingRows?.length ? (
+          <TransactionTimingRows rows={timingRows} />
+        ) : (
+          <div className="flex items-center justify-between border-b pb-4">
+            <span className="text-sm text-muted-foreground">Processing time</span>
+            <span className="font-medium">{payoutReview.processing_time}</span>
+          </div>
+        )}
 
         {sendNote ? (
           <div className="flex items-center justify-between gap-4">

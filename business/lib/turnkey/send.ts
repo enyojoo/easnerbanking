@@ -651,6 +651,7 @@ export async function createTurnkeySend(
       await applyGlobalPayoutWalletDebitForEasnerPayoutId(admin, {
         easnerPayoutId: globalPayoutEasnerPayoutId,
         marginLeg: input.globalPayout?.marginLeg === true,
+        markTurnkeySettled: true,
       }).catch((e) => console.warn("global_payout_turnkey_settle_debit:", e))
     } else if (reconciled.status === "settled" && easetagTransferGroupId) {
       const txHash = reconciled.txHash ?? parsed.txHash
@@ -772,6 +773,7 @@ async function applyGlobalPayoutTurnkeySettleDebit(
   if (params.easnerPayoutId) {
     await applyGlobalPayoutWalletDebitForEasnerPayoutId(admin, {
       easnerPayoutId: params.easnerPayoutId,
+      markTurnkeySettled: true,
     })
     return
   }
@@ -780,6 +782,7 @@ async function applyGlobalPayoutTurnkeySettleDebit(
   if (noahRow?.easnerPayoutId) {
     await applyGlobalPayoutWalletDebitForEasnerPayoutId(admin, {
       easnerPayoutId: noahRow.easnerPayoutId,
+      markTurnkeySettled: true,
     })
     return
   }
@@ -805,7 +808,10 @@ async function applyGlobalPayoutTurnkeySettleDebit(
 
   const easnerPayoutId = String(meta.easner_payout_id || "").trim()
   if (easnerPayoutId) {
-    await applyGlobalPayoutWalletDebitForEasnerPayoutId(admin, { easnerPayoutId })
+    await applyGlobalPayoutWalletDebitForEasnerPayoutId(admin, {
+      easnerPayoutId,
+      markTurnkeySettled: true,
+    })
     return
   }
 
@@ -921,6 +927,7 @@ export async function reconcileTurnkeySendStatus(
         if (status === "settled" && noahRow.easnerPayoutId) {
           await applyGlobalPayoutWalletDebitForEasnerPayoutId(admin, {
             easnerPayoutId: noahRow.easnerPayoutId,
+            markTurnkeySettled: true,
           }).catch((e) => console.warn("global_payout_turnkey_settle_debit:", e))
         }
       }

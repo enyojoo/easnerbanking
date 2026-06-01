@@ -90,6 +90,7 @@ export interface Transaction {
   ledgerCurrency?: string
   payoutReview?: import("@easner/shared").GlobalPayoutReviewSnapshot
   recipientSnapshot?: import("@easner/shared").GlobalPayoutRecipientSnapshot
+  transactionTiming?: import("@easner/shared").TransactionTimingRow[]
 }
 
 export interface StablecoinAccount {
