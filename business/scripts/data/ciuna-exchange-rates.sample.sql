@@ -1,3 +1,0 @@
-INSERT INTO "public"."exchange_rates" ("id", "from_currency", "to_currency", "rate", "fee_type", "fee_amount", "min_amount", "max_amount", "status", "created_at", "updated_at", "bank_receive_min", "bank_receive_max", "cash_receive_min", "cash_receive_max", "logistics_fee_type", "logistics_fee_amount") VALUES
-('0205f8d8-4ccd-4237-b638-281149d09e89', 'GBP', 'TZS', '3079.43527090', 'free', '0.0000', '10.00', '10000.00', 'active', '2025-08-12 10:39:49.331274+00', '2026-05-23 06:08:21.989997+00', null, null, null, null, 'free', '0'),
-('2cbd6303-e239-4a0c-879a-f281796d477d', 'USD', 'NGN', '1338.43252454', 'free', '0.0000', '10.00', '10000.00', 'active', '2025-07-29 20:56:15.116717+00', '2026-05-23 06:08:21.989997+00', null, null, null, null, 'free', '0');
