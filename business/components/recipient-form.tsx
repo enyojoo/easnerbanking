@@ -34,6 +34,7 @@ import { writeEasenetPublicProfileCache } from "@/lib/easenet-public-profile-cac
 import { EasenetRecipientProfileRow } from "@/components/easenet-recipient-profile-row"
 import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
+import { resolveInferredWalletAssetNetwork } from "@easner/shared"
 import { inferWalletAddressFromApi } from "@/lib/wallet-send/infer-wallet-address-client"
 
 const RECIPIENT_TYPE_TABS = [
@@ -145,7 +146,6 @@ export function RecipientForm({
   } | null>(null)
   const [easenetLookupLoading, setEasenetLookupLoading] = useState(false)
   const [easenetLookupError, setEasenetLookupError] = useState<string | null>(null)
-  const [walletInferenceHint, setWalletInferenceHint] = useState<string | null>(null)
   const walletInferSeqRef = useRef(0)
 
   const {
@@ -295,42 +295,32 @@ export function RecipientForm({
   const applyWalletAddressInference = useCallback(
     (address: string, networksByAsset: Record<string, string[]>) => {
       const trimmed = address.trim()
-      if (trimmed.length < 8) {
-        setWalletInferenceHint(null)
-        return
-      }
+      if (trimmed.length < 8) return
       const seq = ++walletInferSeqRef.current
       void inferWalletAddressFromApi(trimmed)
-        .then(({ best }) => {
-          if (seq !== walletInferSeqRef.current) return
-          if (!best) {
-            setWalletInferenceHint(null)
-            return
-          }
-          const networks = networksByAsset[best.asset] || []
-          const network = networks.includes(best.network)
-            ? best.network
-            : networks[0] || best.network
-          setFormData((prev) => ({
-            ...prev,
-            walletAsset: best.asset,
-            walletNetwork: network,
-          }))
-          setWalletInferenceHint(`Detected ${best.asset} · ${network}`)
+        .then(({ best, candidates }) => {
+          if (seq !== walletInferSeqRef.current || !best) return
+          setFormData((prev) => {
+            const { asset, network } = resolveInferredWalletAssetNetwork({
+              candidates,
+              best,
+              previousAsset: prev.walletAsset,
+              networksByAsset,
+            })
+            return {
+              ...prev,
+              walletAsset: asset,
+              walletNetwork: network,
+            }
+          })
         })
-        .catch(() => {
-          if (seq !== walletInferSeqRef.current) return
-          setWalletInferenceHint(null)
-        })
+        .catch(() => {})
     },
     [],
   )
 
   useEffect(() => {
-    if (formData.recipientType !== "wallet") {
-      setWalletInferenceHint(null)
-      return
-    }
+    if (formData.recipientType !== "wallet") return
     const t = window.setTimeout(() => {
       applyWalletAddressInference(formData.walletAddress, walletAssetNetworks)
     }, 450)
@@ -808,6 +798,7 @@ export function RecipientForm({
                   easetag={easenetResolved.easetag}
                   accountKind={easenetResolved.accountKind}
                   avatarUrl={easenetResolved.avatarUrl}
+                  showEasnerMark
                 />
               </div>
             ) : null}
@@ -1029,9 +1020,6 @@ export function RecipientForm({
                 placeholder="Recipient wallet address"
                 className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.walletAddress ? "border-red-500" : ""}`}
               />
-              {walletInferenceHint ? (
-                <p className="text-xs text-muted-foreground">{walletInferenceHint}</p>
-              ) : null}
               {errors.walletAddress && <p className="text-xs text-red-500">{errors.walletAddress}</p>}
             </div>
             <div className="space-y-2">

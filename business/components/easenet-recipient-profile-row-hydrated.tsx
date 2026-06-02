@@ -15,6 +15,7 @@ type Props = {
   easetag: string
   accountKind?: PayeeAccountKind | null
   avatarUrl?: string | null
+  showEasnerMark?: boolean
   className?: string
   textColClassName?: string
   nameClassName?: string
@@ -31,6 +32,7 @@ export function EasenetRecipientProfileRowHydrated({
   easetag,
   accountKind,
   avatarUrl,
+  showEasnerMark = false,
   className,
   textColClassName,
   nameClassName,
@@ -115,6 +117,7 @@ export function EasenetRecipientProfileRowHydrated({
       easetag={easetag}
       accountKind={mergedKind}
       avatarUrl={mergedAvatar}
+      showEasnerMark={showEasnerMark}
       className={className}
       textColClassName={textColClassName}
       nameClassName={nameClassName}

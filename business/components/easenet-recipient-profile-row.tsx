@@ -27,6 +27,7 @@ export function EasenetRecipientProfileRow({
   easetag,
   accountKind,
   avatarUrl,
+  showEasnerMark = false,
   className,
   textColClassName,
   nameClassName,
@@ -37,6 +38,8 @@ export function EasenetRecipientProfileRow({
   easetag: string
   accountKind?: PayeeAccountKind | null
   avatarUrl?: string | null
+  /** List / lookup rows only — selected send chip has no corner mark (mobile parity). */
+  showEasnerMark?: boolean
   className?: string
   textColClassName?: string
   nameClassName?: string
@@ -64,19 +67,21 @@ export function EasenetRecipientProfileRow({
             <User className="h-5 w-5 text-primary" />
           </div>
         )}
-        <div className="absolute -bottom-0.5 -right-0.5 h-5 w-5 overflow-hidden rounded-full border-2 border-background bg-background">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={EASNER_MARK_URL}
-            alt=""
-            width={20}
-            height={20}
-            loading="eager"
-            decoding="async"
-            fetchPriority="high"
-            className="size-full object-contain"
-          />
-        </div>
+        {showEasnerMark ? (
+          <div className="absolute -bottom-0.5 -right-0.5 h-5 w-5 overflow-hidden rounded-full border-2 border-background bg-background">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={EASNER_MARK_URL}
+              alt=""
+              width={20}
+              height={20}
+              loading="eager"
+              decoding="async"
+              fetchPriority="high"
+              className="size-full object-contain"
+            />
+          </div>
+        ) : null}
       </div>
       <div className={cn("min-w-0 flex-1", textColClassName)}>
         <p className={cn("truncate font-medium", nameClassName)}>{fullName}</p>

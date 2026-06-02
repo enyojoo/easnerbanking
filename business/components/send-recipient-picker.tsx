@@ -217,6 +217,7 @@ export function SendRecipientPicker({
                 >
                   <SendSelectedRecipientSummary
                     beneficiary={b}
+                    variant="list"
                     subtitleClassName="text-xs text-muted-foreground"
                   />
                 </button>

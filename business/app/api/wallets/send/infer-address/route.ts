@@ -1,3 +1,4 @@
+import { pickBestWalletInferenceCandidate } from "@easner/shared"
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/app/api/noah/_helpers"
 import { inferWalletAddress } from "@/lib/wallet-send/infer-address"
@@ -15,6 +16,6 @@ export async function POST(request: Request) {
   }
 
   const candidates = inferWalletAddress(address)
-  const best = candidates[0] ?? null
+  const best = pickBestWalletInferenceCandidate(candidates)
   return NextResponse.json({ candidates, best })
 }

@@ -86,7 +86,10 @@ import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { CountryFlag } from '../../components/flags/CountryFlag'
 import RecipientFormDropdownList from '../../components/recipients/RecipientFormDropdownList'
 import { WalletAddressField } from '../../components/recipients/WalletAddressField'
-import { inferWalletAddressFromApi } from '../../lib/walletAddressInference'
+import {
+  inferWalletAddressFromApi,
+  resolveInferredWalletAssetNetwork,
+} from '../../lib/walletAddressInference'
 import { RecipientBankNameField } from '../../components/recipients/RecipientBankNameField'
 import { useToast } from '../../components/ToastProvider'
 import { useSendDestinations } from '../../hooks/useSendDestinations'
@@ -193,13 +196,16 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
 
   const applyWalletAddressInference = useCallback((text: string) => {
     void inferWalletAddressFromApi(text)
-      .then(({ best }) => {
+      .then(({ best, candidates }) => {
         if (!best) return
-        setNewRecipient((prev) => ({
-          ...prev,
-          currency: best.asset,
-          network: best.network,
-        }))
+        setNewRecipient((prev) => {
+          const { asset, network } = resolveInferredWalletAssetNetwork({
+            candidates,
+            best,
+            previousAsset: prev.currency,
+          })
+          return { ...prev, currency: asset, network }
+        })
       })
       .catch(() => {})
   }, [])

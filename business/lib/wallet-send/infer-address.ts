@@ -64,6 +64,7 @@ export function inferWalletAddress(rawInput: string): AddressInferenceCandidate[
   if (lower.startsWith("solana:") || lower.startsWith("sol:")) {
     pushIfEnabled(out, "USDC", "Solana", "high", "solana URI scheme")
     pushIfEnabled(out, "USDT", "Solana", "medium", "solana URI scheme")
+    pushIfEnabled(out, "EURC", "Solana", "medium", "solana URI scheme")
     return out
   }
   if (lower.startsWith("ethereum:") || lower.startsWith("eip155:")) {

@@ -41,6 +41,11 @@ export {
   type CryptoSendPricing,
 } from "./crypto-send-pricing"
 export { getTokenIconUrl, getNetworkIconUrl } from "./crypto-icons"
+export {
+  pickBestWalletInferenceCandidate,
+  resolveInferredWalletAssetNetwork,
+  type WalletAddressInferenceCandidate,
+} from "./wallet-address-inference"
 export { formatExchangeRate, formatSendRateLabel } from "./format-exchange-rate"
 export { BrandLogo } from "./components/BrandLogo"
 export type { BrandLogoProps } from "./components/BrandLogo"

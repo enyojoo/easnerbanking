@@ -1,11 +1,14 @@
 "use client"
 
 import type { ReactNode } from "react"
-import { User } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { RecipientCornerFlagBadge } from "@/components/recipient-corner-flag-badge"
+import { CountryFlag } from "@/components/flags"
 import { getTokenIconUrl } from "@/lib/crypto-icons"
-import { isWalletBeneficiary, walletTokenAsset } from "@/lib/wallet-recipient-display"
+import {
+  isWalletBeneficiary,
+  resolvePayoutCountryCode,
+  walletTokenAsset,
+} from "@/lib/wallet-recipient-display"
 import { cn } from "@/lib/utils"
 
 function recipientInitials(name: string): string {
@@ -19,6 +22,9 @@ function recipientInitials(name: string): string {
       .toUpperCase() || "?"
   )
 }
+
+const avatarFillClass =
+  "size-full min-h-0 min-w-0 rounded-full [&_img]:size-full [&_img]:rounded-full [&_img]:object-cover [&_img]:object-center"
 
 type RecipientPayoutProfileRowProps = {
   fullName: string
@@ -37,7 +43,7 @@ type RecipientPayoutProfileRowProps = {
 }
 
 /**
- * Bank / mobile / wallet recipient row — wallet avatars use asset logo (mobile parity).
+ * Selected payout recipient — full flag or token avatar, no corner badge (mobile SendSelectedRecipientSummary).
  */
 export function RecipientPayoutProfileRow({
   fullName,
@@ -57,6 +63,7 @@ export function RecipientPayoutProfileRow({
   const isWallet = isWalletBeneficiary({ bankName, walletNetwork, walletAsset })
   const tokenAsset = walletTokenAsset({ walletAsset, currency })
   const tokenIconUrl = isWallet ? getTokenIconUrl(tokenAsset) : undefined
+  const payoutCountryCode = resolvePayoutCountryCode(countryCode, currency)
 
   return (
     <div
@@ -74,24 +81,13 @@ export function RecipientPayoutProfileRow({
           </Avatar>
         ) : isWallet && tokenIconUrl ? (
           <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-border bg-background">
-            <img
-              src={tokenIconUrl}
-              alt=""
-              className="h-full w-full object-cover"
-            />
+            <img src={tokenIconUrl} alt="" className="h-full w-full object-cover" />
           </div>
         ) : (
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-            <User className="h-5 w-5 text-primary" />
+          <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-border bg-background">
+            <CountryFlag code={payoutCountryCode} className={avatarFillClass} title={payoutCountryCode} />
           </div>
         )}
-        <RecipientCornerFlagBadge
-          countryCode={countryCode}
-          currency={currency}
-          bankName={bankName}
-          walletNetwork={walletNetwork}
-          walletAsset={walletAsset}
-        />
       </div>
       <div className={cn("min-w-0", alignEnd ? "shrink text-right" : "flex-1")}>
         <p className={cn("truncate font-medium", alignEnd && "text-right", nameClassName)}>{fullName}</p>

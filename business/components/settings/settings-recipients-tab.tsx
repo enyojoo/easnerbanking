@@ -198,6 +198,7 @@ export function SettingsRecipientsTab() {
                     <div className="flex min-w-0 flex-1 items-center gap-3">
                       <SendSelectedRecipientSummary
                         beneficiary={recipient}
+                        variant="list"
                         subtitleClassName="text-xs text-muted-foreground"
                       />
                     </div>

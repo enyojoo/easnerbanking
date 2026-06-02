@@ -1,12 +1,10 @@
+import { resolveInferredWalletAssetNetwork, type WalletAddressInferenceCandidate } from '@easner/shared'
 import { getApiBaseUrl, getNoahScopeHeaders } from './apiClient'
 import { getSessionReliable } from './authSession'
 
-export type AddressInferenceCandidate = {
-  asset: string
-  network: string
-  confidence: 'high' | 'medium' | 'low'
-  reason: string
-}
+export type AddressInferenceCandidate = WalletAddressInferenceCandidate
+
+export { resolveInferredWalletAssetNetwork }
 
 export async function inferWalletAddressFromApi(address: string): Promise<{
   candidates: AddressInferenceCandidate[]

@@ -76,7 +76,10 @@ import { ListRowSkeleton } from '../../components/skeletons'
 import EmptyState from '../../components/EmptyState'
 import RecipientFormDropdownList from '../../components/recipients/RecipientFormDropdownList'
 import { WalletAddressField } from '../../components/recipients/WalletAddressField'
-import { inferWalletAddressFromApi } from '../../lib/walletAddressInference'
+import {
+  inferWalletAddressFromApi,
+  resolveInferredWalletAssetNetwork,
+} from '../../lib/walletAddressInference'
 import { RecipientBankNameField } from '../../components/recipients/RecipientBankNameField'
 import { isEasenetRecipientRecord, resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
@@ -184,13 +187,16 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
 
   const applyWalletAddressInference = useCallback((text: string) => {
     void inferWalletAddressFromApi(text)
-      .then(({ best }) => {
+      .then(({ best, candidates }) => {
         if (!best) return
-        setNewRecipient((prev) => ({
-          ...prev,
-          currency: best.asset,
-          network: best.network,
-        }))
+        setNewRecipient((prev) => {
+          const { asset, network } = resolveInferredWalletAssetNetwork({
+            candidates,
+            best,
+            previousAsset: prev.currency,
+          })
+          return { ...prev, currency: asset, network }
+        })
       })
       .catch(() => {})
   }, [])
