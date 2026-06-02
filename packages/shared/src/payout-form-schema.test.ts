@@ -104,6 +104,23 @@ describe("resolveSendConfirmArrivalHint", () => {
       }),
     ).toBe("Within a minute")
   })
+
+  it("shows Within minutes when only receive currency is set (no country on recipient)", () => {
+    expect(
+      resolveSendConfirmArrivalHint({
+        currencyCode: "ZAR",
+        rail: "bank_transfer",
+        processingSeconds: 50,
+      }),
+    ).toBe(SEND_ARRIVAL_WITHIN_MINUTES)
+    expect(
+      resolveSendConfirmArrivalHint({
+        currencyCode: "NGN",
+        rail: "bank_transfer",
+        processingSeconds: 60,
+      }),
+    ).toBe(SEND_ARRIVAL_WITHIN_MINUTES)
+  })
 })
 
 describe("findPayoutFieldsSchema", () => {

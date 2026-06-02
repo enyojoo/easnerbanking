@@ -294,6 +294,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     isWalletSend: isWalletRecipient,
     processingSeconds: payoutHints?.processing_seconds,
     countryCode: payoutCountryCode,
+    currencyCode: recipient?.currency,
     rail: payoutRail,
   })
   const sendReservedDebitEtid =

@@ -11,6 +11,7 @@ import { useAuth } from "@/lib/auth-context"
 import { hasPin, isLoginPinModuleAvailable } from "@/lib/login-pin"
 import {
   getGlobalPayoutTransferMethod,
+  resolvePayoutCountryCode,
   resolveSendConfirmArrivalHint,
 } from "@easner/shared"
 import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
@@ -92,12 +93,19 @@ export default function SendConfirmPage() {
     currencyCode: state?.receiveCurrency,
     rail: payoutRail,
   })
+  const payoutCountryCode = state
+    ? resolvePayoutCountryCode({
+        countryCode: state.recipient.countryCode,
+        currencyCode: state.receiveCurrency,
+      })
+    : ""
   const arrivalHint = state
     ? resolveSendConfirmArrivalHint({
         isEasetag: isEasenetRecipient(state.recipient),
         isWalletSend: isWalletRecipient(state.recipient),
         processingSeconds: payoutHints?.processing_seconds,
-        countryCode: state.recipient.countryCode,
+        countryCode: payoutCountryCode,
+        currencyCode: state.receiveCurrency,
         rail: payoutRail,
       })
     : null

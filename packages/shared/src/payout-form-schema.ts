@@ -37,13 +37,18 @@ export const NG_BANK_ARRIVAL_PROCESSING_SECONDS = 50
 export const SEND_ARRIVAL_WITHIN_MINUTES = "Within minutes"
 
 const WITHIN_MINUTES_BANK_COUNTRIES = new Set(["NG", "GH", "ZA"])
+const WITHIN_MINUTES_BANK_CURRENCIES = new Set(["NGN", "GHS", "ZAR"])
 
 export function isWithinMinutesBankPayoutCorridor(input: {
   countryCode?: string | null
+  currencyCode?: string | null
   rail?: PayoutRail
 }): boolean {
+  if (input.rail !== "bank_transfer") return false
   const cc = String(input.countryCode || "").trim().toUpperCase()
-  return input.rail === "bank_transfer" && WITHIN_MINUTES_BANK_COUNTRIES.has(cc)
+  if (WITHIN_MINUTES_BANK_COUNTRIES.has(cc)) return true
+  const cur = String(input.currencyCode || "").trim().toUpperCase()
+  return WITHIN_MINUTES_BANK_CURRENCIES.has(cur)
 }
 
 /**
@@ -245,9 +250,22 @@ export function resolveSendConfirmArrivalHint(input: {
   isWalletSend?: boolean
   processingSeconds?: number | null
   countryCode?: string | null
+  currencyCode?: string | null
   rail?: PayoutRail
 }): string | null {
   if (input.isEasetag || input.isWalletSend) return SEND_ARRIVAL_WITHIN_SECONDS
-  if (isWithinMinutesBankPayoutCorridor(input)) return SEND_ARRIVAL_WITHIN_MINUTES
+  const countryCode = resolvePayoutCountryCode({
+    countryCode: input.countryCode,
+    currencyCode: input.currencyCode ?? "",
+  })
+  if (
+    isWithinMinutesBankPayoutCorridor({
+      countryCode,
+      currencyCode: input.currencyCode,
+      rail: input.rail,
+    })
+  ) {
+    return SEND_ARRIVAL_WITHIN_MINUTES
+  }
   return formatPayoutArrivalHint(input.processingSeconds ?? undefined)
 }
