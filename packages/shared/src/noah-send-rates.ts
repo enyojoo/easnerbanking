@@ -202,8 +202,8 @@ export function exchangeRatesToRateMap(
   for (const r of rates) {
     if (r.status && r.status !== "active") continue
     if (!Number.isFinite(r.rate) || r.rate <= 0) continue
-    const from = r.from_currency.toUpperCase()
-    const to = r.to_currency.toUpperCase()
+    const from = String(r.from_currency || "").toUpperCase()
+    const to = String(r.to_currency || "").toUpperCase()
     map[`${from}_${to}`] = r.rate
   }
   return map

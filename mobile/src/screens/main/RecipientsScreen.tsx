@@ -165,11 +165,21 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
     catalogRevision,
     refresh: refreshCatalog,
   } = useSendDestinations()
+  const restoreWalletFormAfterScanRef = useRef(false)
 
   useFocusEffect(
     useCallback(() => {
       void refreshCatalog()
     }, [refreshCatalog]),
+  )
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!restoreWalletFormAfterScanRef.current) return
+      restoreWalletFormAfterScanRef.current = false
+      setSelectedRecipientType('wallet')
+      setShowBankAccountForm(true)
+    }, []),
   )
 
   const applyWalletAddressInference = useCallback((text: string) => {
@@ -311,6 +321,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
 
   // Reset form after create/edit form modal closes (for smooth animation)
   useEffect(() => {
+    if (restoreWalletFormAfterScanRef.current) return
     if (!showBankAccountForm && editingRecipient) {
       // Modal just closed, reset form after animation completes
       const timer = setTimeout(() => {
@@ -819,7 +830,11 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
   const handleWalletScanPress = () => {
     Keyboard.dismiss()
     closeAllDropdowns()
-    navigation.navigate('ScanWalletAddress' as never)
+    restoreWalletFormAfterScanRef.current = true
+    setShowBankAccountForm(false)
+    setTimeout(() => {
+      navigation.navigate('ScanWalletAddress' as never)
+    }, 220)
   }
 
   const isFormValid = () => {

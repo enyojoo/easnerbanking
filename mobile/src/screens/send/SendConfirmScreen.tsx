@@ -12,8 +12,8 @@ import {
   formatSendRateLabel,
   getGlobalPayoutProcessingTime,
   getGlobalPayoutTransferMethod,
-  getSendAmountNoteFieldUi,
   qk,
+  resolvePayoutCountryCode,
 } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
@@ -49,7 +49,8 @@ import { isMobileMoneyRecipient } from '../../lib/recipientPayoutPreview'
 import { useEasenetRecipientHydration } from '../../hooks/useEasenetRecipientHydration'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { SendSelectedRecipientSummary } from '../../components/send/SendSelectedRecipientSummary'
-import { getCachedSendDestinations } from '../../lib/sendDestinations'
+import { getSendDestinationsMemory } from '../../lib/sendDestinations'
+import { isWalletSendRecipient } from '../../lib/recipientWalletMeta'
 import { isEasnerClientTransactionIdFormat } from '../../lib/transactionId'
 import {
   isCompletePayoutQuote,
@@ -135,7 +136,8 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   }
 
   const recipient = params.recipient
-  const isWalletRecipient = Boolean(recipient?.wallet_network?.trim()) || Boolean(params.isWalletSend)
+  const isWalletRecipient =
+    Boolean(params.isWalletSend) || isWalletSendRecipient(recipient ?? null)
   const receiveAmountValue = params.receiveAmountValue ?? 0
   const selectedBalanceCurrency = params.selectedBalanceCurrency ?? 'USD'
   const receiveCurrency = params.receiveCurrency ?? recipient?.currency ?? ''
@@ -264,16 +266,22 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
 
   const easetagUi = recipient ? resolveRecipientEasetagForUi(recipient) : ''
   const easenetDisplay = useEasenetRecipientHydration(recipient ?? null)
-  const sendDestinations = getCachedSendDestinations()
+  const sendDestinations = getSendDestinationsMemory()
   const payoutRail = recipient && isMobileMoneyRecipient(recipient) ? 'mobile_money' : 'bank_transfer'
+  const payoutCountryCode = recipient
+    ? resolvePayoutCountryCode({
+        countryCode: recipient.country_code,
+        currencyCode: recipient.currency,
+      })
+    : ''
   const payoutHints =
-    sendDestinations && recipient?.country_code
+    sendDestinations && recipient && payoutCountryCode
       ? findPayoutFieldsSchema(
           payoutRail === 'mobile_money'
             ? sendDestinations.fiat.mobile_money
             : sendDestinations.fiat.bank_transfer,
           {
-            countryCode: recipient.country_code,
+            countryCode: payoutCountryCode,
             currencyCode: recipient.currency,
             rail: payoutRail,
           },

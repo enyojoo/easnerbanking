@@ -724,6 +724,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const payoutMinEnforcementEnabled =
     Boolean(recipient) &&
     !isEasetagRecipient &&
+    !isWalletRecipient &&
     (selectedPaymentMethod === 'balance' ||
       (selectedPaymentMethod === 'otherCurrency' && Boolean(selectedOtherCurrency)))
 
@@ -834,7 +835,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const needsBackgroundPayoutQuote =
     selectedPaymentMethod === 'balance' &&
     !isEasetagRecipient &&
-    !recipient?.wallet_network?.trim() &&
+    !isWalletRecipient &&
     receiveAmount > 0 &&
     Boolean(recipient?.id)
 
@@ -1486,7 +1487,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               const stashedQuote =
                 selectedPaymentMethod === 'balance' &&
                 !isEasetagRecipient &&
-                !recipient?.wallet_network?.trim() &&
+                !isWalletRecipient &&
                 receiveAmountValue > 0
                   ? await ensureSendPayoutQuoteStashed(
                       () =>

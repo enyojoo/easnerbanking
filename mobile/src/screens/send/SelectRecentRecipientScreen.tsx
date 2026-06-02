@@ -174,11 +174,21 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     catalogRevision,
     refresh: refreshCatalog,
   } = useSendDestinations()
+  const restoreWalletFormAfterScanRef = useRef(false)
 
   useFocusEffect(
     useCallback(() => {
       void refreshCatalog()
     }, [refreshCatalog]),
+  )
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!restoreWalletFormAfterScanRef.current) return
+      restoreWalletFormAfterScanRef.current = false
+      setSelectedRecipientType('wallet')
+      setShowBankAccountForm(true)
+    }, []),
   )
 
   const applyWalletAddressInference = useCallback((text: string) => {
@@ -485,7 +495,11 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   const handleWalletScanPress = () => {
     Keyboard.dismiss()
     closeAllDropdowns()
-    navigation.navigate('ScanWalletAddress' as never)
+    restoreWalletFormAfterScanRef.current = true
+    setShowBankAccountForm(false)
+    setTimeout(() => {
+      navigation.navigate('ScanWalletAddress' as never)
+    }, 220)
   }
 
   const isFormValid = () => {

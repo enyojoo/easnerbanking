@@ -33,7 +33,8 @@ export function buildOtherSendCurrencies(catalog: SendDestinationsResponse): Oth
   const hold = new Set(BALANCE_HOLD_CURRENCY_CODES.map((c) => c.toUpperCase()))
   const byCode = new Map<string, OtherSendCurrency>()
   for (const row of distinctCorridors(catalog)) {
-    const code = row.currency_code.toUpperCase()
+    const code = String(row.currency_code || "").toUpperCase()
+    if (!code) continue
     if (hold.has(code)) continue
     if (!byCode.has(code)) {
       byCode.set(code, {
@@ -73,10 +74,13 @@ export function buildCrossBorderPaymentMethods(
   }
 
   for (const row of catalog.fiat.bank_transfer) {
-    add(row.currency_code, { code: "bankTransfer", name: "Bank Transfer" })
+    const cur = String(row.currency_code || "").toUpperCase()
+    if (!cur) continue
+    add(cur, { code: "bankTransfer", name: "Bank Transfer" })
   }
   for (const row of catalog.fiat.mobile_money) {
-    const cur = row.currency_code.toUpperCase()
+    const cur = String(row.currency_code || "").toUpperCase()
+    if (!cur) continue
     const mCode = mobileMethodCode(cur, row.providers)
     add(cur, { code: mCode, name: mobileMethodName(mCode) })
   }

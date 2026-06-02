@@ -87,5 +87,12 @@ describe('sendFlowPayoutQuote stash', () => {
         }),
       ),
     ).toBe(false)
+    expect(
+      isCompletePayoutQuote(
+        sampleQuote({
+          easner: { ...sampleQuote().easner, providerRate: 0 },
+        }),
+      ),
+    ).toBe(false)
   })
 })

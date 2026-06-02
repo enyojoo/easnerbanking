@@ -33,12 +33,15 @@ let stashedMeta: SendPayoutQuoteStashMeta | null = null
 let lastPayoutQuoteError: string | null = null
 
 export function isCompletePayoutQuote(quote: PayoutQuote | null | undefined): quote is PayoutQuote {
+  const easnerRate = quote?.easner?.providerRate
   return Boolean(
     quote?.expiresAt &&
       quote.noah?.formSessionId &&
       quote.noah.cryptoAuthorizedAmount &&
       quote.noah.cryptoCurrency &&
-      quote.easner,
+      quote.easner &&
+      Number.isFinite(easnerRate) &&
+      easnerRate > 0,
   )
 }
 
