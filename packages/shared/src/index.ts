@@ -102,6 +102,8 @@ export {
   recipientFormNeedsAddress,
   recipientFormNeedsPhone,
   formatPayoutArrivalHint,
+  resolveSendConfirmArrivalHint,
+  SEND_ARRIVAL_WITHIN_SECONDS,
   resolvePayoutCountryCode,
   countryCodeForRecipientSave,
   type SendAmountFieldValidation,

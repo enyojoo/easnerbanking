@@ -8,10 +8,9 @@ import { useQueryClient } from '@tanstack/react-query'
 import {
   findPayoutFieldsSchema,
   formatMoneyDisplay,
-  formatPayoutArrivalHint,
   formatSendRateLabel,
-  getGlobalPayoutProcessingTime,
   getGlobalPayoutTransferMethod,
+  resolveSendConfirmArrivalHint,
   qk,
   resolvePayoutCountryCode,
 } from '@easner/shared'
@@ -287,7 +286,11 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           },
         )
       : null
-  const arrivalHint = formatPayoutArrivalHint(payoutHints?.processing_seconds)
+  const arrivalHint = resolveSendConfirmArrivalHint({
+    isEasetag: Boolean(easetagUi),
+    isWalletSend: isWalletRecipient,
+    processingSeconds: payoutHints?.processing_seconds,
+  })
   const sendReservedDebitEtid =
     paramTransactionId && isEasnerClientTransactionIdFormat(paramTransactionId)
       ? paramTransactionId.toUpperCase()
@@ -325,7 +328,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
         payeeEasetag: recipient.payee_easetag,
       })
     : 'Bank transfer'
-  const processingTime = arrivalHint ?? getGlobalPayoutProcessingTime(transferMethod)
+  const processingTime = arrivalHint ?? undefined
 
   const [sendingAfterPin, setSendingAfterPin] = useState(false)
   const [transferError, setTransferError] = useState<string | null>(null)
@@ -501,7 +504,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                   receive_amount: quotedReceiveAmount,
                   receive_currency: receiveCurrency,
                   transfer_method: transferMethod,
-                  processing_time: processingTime,
+                  ...(processingTime ? { processing_time: processingTime } : {}),
                   ...(processingFee > 0 ? { margin_amount: processingFee, easner_fee: processingFee } : {}),
                   ...(exchangeFee > 0 ? { channel_cost: exchangeFee } : {}),
                   ...(payoutSession?.noahFloor ? { noah_floor: Number(payoutSession.noahFloor) } : {}),
@@ -745,9 +748,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                 label="Recipient gets"
                 value={formatMoneyDisplay(quotedReceiveAmount, receiveCurrency)}
               />
-              {arrivalHint && !easetagUi ? (
-                <Row label="Arrival" value={arrivalHint} />
-              ) : null}
+              {arrivalHint ? <Row label="Arrival" value={arrivalHint} /> : null}
               {recipient ? (
                 <View
                   style={[

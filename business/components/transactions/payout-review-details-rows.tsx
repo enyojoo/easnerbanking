@@ -173,12 +173,12 @@ export function PayoutReviewDetailsRows({
 
         {timingRows?.length ? (
           <TransactionTimingRows rows={timingRows} />
-        ) : (
+        ) : payoutReview.processing_time ? (
           <div className="flex items-center justify-between border-b pb-4">
-            <span className="text-sm text-muted-foreground">Processing time</span>
+            <span className="text-sm text-muted-foreground">Arrival</span>
             <span className="font-medium">{payoutReview.processing_time}</span>
           </div>
-        )}
+        ) : null}
 
         {sendNote ? (
           <div className="flex items-center justify-between gap-4">

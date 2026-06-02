@@ -10,9 +10,8 @@ import { PinChallengeDialog } from "@/components/app-lock/pin-challenge-dialog"
 import { useAuth } from "@/lib/auth-context"
 import { hasPin, isLoginPinModuleAvailable } from "@/lib/login-pin"
 import {
-  formatPayoutArrivalHint,
-  getGlobalPayoutProcessingTime,
   getGlobalPayoutTransferMethod,
+  resolveSendConfirmArrivalHint,
 } from "@easner/shared"
 import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
@@ -93,7 +92,13 @@ export default function SendConfirmPage() {
     currencyCode: state?.receiveCurrency,
     rail: payoutRail,
   })
-  const arrivalHint = formatPayoutArrivalHint(payoutHints?.processing_seconds)
+  const arrivalHint = state
+    ? resolveSendConfirmArrivalHint({
+        isEasetag: isEasenetRecipient(state.recipient),
+        isWalletSend: isWalletRecipient(state.recipient),
+        processingSeconds: payoutHints?.processing_seconds,
+      })
+    : null
 
   const needPinChallenge =
     !!user?.id && isLoginPinModuleAvailable() && hasPin(user.id)
@@ -365,7 +370,7 @@ export default function SendConfirmPage() {
           receive_amount: state.amount,
           receive_currency: state.receiveCurrency,
           transfer_method: `${state.receiveCurrency} on ${receiveNetwork}`,
-          processing_time: "Instant",
+          processing_time: arrivalHint ?? undefined,
         }
 
         const res = await fetchWithSession("/api/wallets/send/execute", {
@@ -430,7 +435,7 @@ export default function SendConfirmPage() {
           : ""
 
       const transferMethod = corridorTransferMethod(state.recipient, state.receiveCurrency)
-      const processingTime = arrivalHint ?? getGlobalPayoutProcessingTime(transferMethod)
+      const processingTime = arrivalHint ?? undefined
       const reviewYouSend = pq!.customerPrincipal ?? pq!.sendAmount
       const reviewExchangeRate = pq!.midRate && pq!.midRate > 0 ? pq!.midRate : 1
       const reviewExchangeFee = pq!.channelCost ?? pq!.noahFee ?? 0
@@ -540,7 +545,6 @@ export default function SendConfirmPage() {
 
   const sourceAccount = sourceAccounts.find((a) => a.id === state.sourceAccountId!)
   const transferMethod = corridorTransferMethod(state.recipient, state.receiveCurrency)
-  const processingTime = arrivalHint ?? getGlobalPayoutProcessingTime(transferMethod)
   const easenetSend = isEasenetRecipient(state.recipient)
   const walletSend = isWalletRecipient(state.recipient)
   const hasFx =
@@ -577,8 +581,6 @@ export default function SendConfirmPage() {
   const walletTransferMethod = walletSend
     ? `${state.receiveCurrency} on ${state.recipient.walletNetwork?.trim() || wq?.receiveNetwork || "wallet"}`
     : transferMethod
-  const walletProcessingTime = walletSend ? "Instant" : processingTime
-
   const authorizeDisabled =
     isAuthorizing ||
     Boolean((walletSend ? walletQuoteError : payoutQuoteError) && !easenetSend) ||
@@ -603,7 +605,7 @@ export default function SendConfirmPage() {
           receive_amount: state.amount,
           receive_currency: state.receiveCurrency,
           transfer_method: walletTransferMethod,
-          processing_time: walletProcessingTime,
+          processing_time: arrivalHint ?? "",
         }}
         recipientNode={
           <SendSelectedRecipientSummary

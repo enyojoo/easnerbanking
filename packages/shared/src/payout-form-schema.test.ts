@@ -1,11 +1,43 @@
 import { describe, expect, it } from "vitest"
 import {
   findPayoutFieldsSchema,
+  formatPayoutArrivalHint,
+  resolveSendConfirmArrivalHint,
+  SEND_ARRIVAL_WITHIN_SECONDS,
   getSendAmountNoteFieldUi,
   validatePayoutAmountAgainstLimits,
   validateSendAmountFields,
 } from "./payout-form-schema"
 import type { PayoutCorridorPublic, PayoutFieldsSchemaHint } from "./payout-corridor"
+
+describe("formatPayoutArrivalHint", () => {
+  it("maps Noah manifest tiers to product copy", () => {
+    expect(formatPayoutArrivalHint(50)).toBe("Within a minute")
+    expect(formatPayoutArrivalHint(60)).toBe("Within a minute")
+    expect(formatPayoutArrivalHint(3600)).toBe("Within a few hours")
+    expect(formatPayoutArrivalHint(86400)).toBe("1 business day")
+  })
+
+  it("returns null for missing or non-positive values", () => {
+    expect(formatPayoutArrivalHint(undefined)).toBeNull()
+    expect(formatPayoutArrivalHint(0)).toBeNull()
+  })
+
+  it("pluralizes multi-day business estimates", () => {
+    expect(formatPayoutArrivalHint(172800)).toBe("2 business days")
+  })
+})
+
+describe("resolveSendConfirmArrivalHint", () => {
+  it("uses Within seconds for Easetag and wallet", () => {
+    expect(resolveSendConfirmArrivalHint({ isEasetag: true })).toBe(SEND_ARRIVAL_WITHIN_SECONDS)
+    expect(resolveSendConfirmArrivalHint({ isWalletSend: true })).toBe(SEND_ARRIVAL_WITHIN_SECONDS)
+  })
+
+  it("uses Noah tiers for fiat payout", () => {
+    expect(resolveSendConfirmArrivalHint({ processingSeconds: 60 })).toBe("Within a minute")
+  })
+})
 
 describe("findPayoutFieldsSchema", () => {
   it("does not throw when catalog rows omit country_code", () => {

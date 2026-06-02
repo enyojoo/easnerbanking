@@ -184,18 +184,27 @@ function formatPayoutLimitLabel(amount: number): string {
   return amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-/** Confirm screen: human-readable arrival hint from ProcessingSeconds. */
+/** Confirm / review: Easetag P2P and on-chain wallet sends. */
+export const SEND_ARRIVAL_WITHIN_SECONDS = "Within seconds"
+
+/**
+ * Confirm screen: human-readable arrival hint from Noah `ProcessingSeconds`.
+ * Buckets are product copy (not literal second-for-second estimates).
+ */
 export function formatPayoutArrivalHint(processingSeconds?: number): string | null {
   if (processingSeconds == null || processingSeconds <= 0) return null
-  if (processingSeconds < 120) return "Arrives in about 1–2 minutes"
-  if (processingSeconds < 3600) {
-    const mins = Math.max(1, Math.round(processingSeconds / 60))
-    return `Arrives in about ${mins} minute${mins === 1 ? "" : "s"}`
-  }
-  if (processingSeconds < 86400) {
-    const hours = Math.max(1, Math.round(processingSeconds / 3600))
-    return `Arrives in about ${hours} hour${hours === 1 ? "" : "s"}`
-  }
+  if (processingSeconds < 120) return "Within a minute"
+  if (processingSeconds < 86400) return "Within a few hours"
   const days = Math.max(1, Math.round(processingSeconds / 86400))
-  return days === 1 ? "Arrives in about 1 business day" : `Arrives in about ${days} business days`
+  return days === 1 ? "1 business day" : `${days} business days`
+}
+
+/** Send confirm Arrival row — fiat uses Noah seconds; Easetag and wallet are instant ledger/on-chain. */
+export function resolveSendConfirmArrivalHint(input: {
+  isEasetag?: boolean
+  isWalletSend?: boolean
+  processingSeconds?: number | null
+}): string | null {
+  if (input.isEasetag || input.isWalletSend) return SEND_ARRIVAL_WITHIN_SECONDS
+  return formatPayoutArrivalHint(input.processingSeconds ?? undefined)
 }
