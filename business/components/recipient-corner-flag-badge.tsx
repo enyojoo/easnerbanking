@@ -1,6 +1,8 @@
 "use client"
 
 import { CountryFlag, CurrencyFlag } from "@/components/flags"
+import { getTokenIconUrl } from "@/lib/crypto-icons"
+import { isWalletBeneficiary, walletTokenAsset } from "@/lib/wallet-recipient-display"
 import { cn } from "@/lib/utils"
 
 const flagCropClass =
@@ -9,19 +11,29 @@ const flagCropClass =
 type RecipientCornerFlagBadgeProps = {
   countryCode?: string | null
   currency: string
+  bankName?: string | null
+  walletNetwork?: string | null
+  walletAsset?: string | null
   className?: string
 }
 
 /**
  * Circular corner badge on recipient avatars (bank / mobile / wallet).
- * Matches EasenetRecipientProfileRow easner-mark badge (20px circle, bottom-right).
+ * Wallet rows use the asset token logo; fiat uses country or currency flag.
  */
 export function RecipientCornerFlagBadge({
   countryCode,
   currency,
+  bankName,
+  walletNetwork,
+  walletAsset,
   className,
 }: RecipientCornerFlagBadgeProps) {
+  const isWallet = isWalletBeneficiary({ bankName, walletNetwork, walletAsset })
+  const asset = walletTokenAsset({ walletAsset, currency })
+  const tokenIcon = isWallet ? getTokenIconUrl(asset) : undefined
   const cc = String(countryCode || "").trim().toUpperCase()
+
   return (
     <div
       className={cn(
@@ -30,7 +42,9 @@ export function RecipientCornerFlagBadge({
       )}
       aria-hidden
     >
-      {cc ? (
+      {isWallet && tokenIcon ? (
+        <img src={tokenIcon} alt="" className={flagCropClass} />
+      ) : cc ? (
         <CountryFlag code={cc} className={flagCropClass} title={cc} />
       ) : (
         <CurrencyFlag currency={currency} className={flagCropClass} title={currency} />

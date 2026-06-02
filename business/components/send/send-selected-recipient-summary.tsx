@@ -45,6 +45,9 @@ export function SendSelectedRecipientSummary({
       fullName={b.name}
       countryCode={b.countryCode}
       currency={b.currency}
+      bankName={b.bankName}
+      walletNetwork={b.walletNetwork}
+      walletAsset={b.walletAsset}
       avatarUrl={b.avatarUrl}
       subtitle={<PayoutRecipientSubtitleRow left={left} right={right} className={subtitleClassName} />}
       alignEnd={alignEnd}
