@@ -195,6 +195,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
             candidates,
             best,
             previousAsset: prev.currency,
+            previousNetwork: prev.network,
           })
           return { ...prev, currency: asset, network }
         })

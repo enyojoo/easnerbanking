@@ -8,16 +8,12 @@ const TOKEN_BY_ASSET_NETWORK: Partial<
     Solana: { address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", decimals: 6 },
     Ethereum: { address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", decimals: 6 },
     Base: { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", decimals: 6 },
-    PolygonPos: { address: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", decimals: 6 },
-    BSC: { address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", decimals: 18 },
     Tron: { address: "TR8uUYpffcPib4NioKAs81LZxUF98CgHYs", decimals: 6 },
   },
   USDT: {
     Solana: { address: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB", decimals: 6 },
     Ethereum: { address: "0xdAC17F958D2ee523a2206206994597C13D831ec7", decimals: 6 },
     Base: { address: "0xfde4C96c8590BB5BA8c193842FF767abDA5Eba29", decimals: 6 },
-    PolygonPos: { address: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F", decimals: 6 },
-    BSC: { address: "0x55d398326f99059fF775485246999027B3197955", decimals: 18 },
     Tron: { address: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t", decimals: 6 },
   },
   EURC: {

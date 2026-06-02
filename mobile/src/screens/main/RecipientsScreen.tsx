@@ -186,6 +186,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
             candidates,
             best,
             previousAsset: prev.currency,
+            previousNetwork: prev.network,
           })
           return { ...prev, currency: asset, network }
         })

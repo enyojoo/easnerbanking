@@ -305,6 +305,7 @@ export function RecipientForm({
               candidates,
               best,
               previousAsset: prev.walletAsset,
+              previousNetwork: prev.walletNetwork,
               networksByAsset,
             })
             return {

@@ -18,7 +18,7 @@ const V1_ASSETS: Array<{
     id: "ea64b85a-1a54-4ad4-bf57-3b50a2d7791d",
     code: "USDC",
     name: "USD Coin",
-    networks: ["Solana", "Ethereum", "Base", "PolygonPos", "BSC"],
+    networks: ["Solana", "Ethereum", "Base"],
     sort_order: 1,
     provider_routing: [
       { provider: "turnkey", priority: 1, settlement_asset: "USDC" },
@@ -29,7 +29,7 @@ const V1_ASSETS: Array<{
     id: "fdf52bea-1b5f-4484-b61d-e594cc96b807",
     code: "USDT",
     name: "Tether USD",
-    networks: ["Tron", "Ethereum", "BSC", "PolygonPos", "Solana"],
+    networks: ["Tron", "Ethereum", "Solana"],
     sort_order: 2,
     provider_routing: [{ provider: "lifi", priority: 1, settlement_asset: "USDC" }],
   },

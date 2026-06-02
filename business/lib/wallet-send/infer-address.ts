@@ -19,6 +19,13 @@ function stripUri(raw: string): string {
   return noQuery
 }
 
+function parseEip155ChainId(raw: string): number | null {
+  const match = raw.toLowerCase().match(/eip155:(\d+)/)
+  if (!match) return null
+  const id = Number(match[1])
+  return Number.isFinite(id) ? id : null
+}
+
 function isEvmAddress(addr: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(addr)
 }
@@ -62,12 +69,22 @@ export function inferWalletAddress(rawInput: string): AddressInferenceCandidate[
     return out
   }
   if (lower.startsWith("solana:") || lower.startsWith("sol:")) {
-    pushIfEnabled(out, "USDC", "Solana", "high", "solana URI scheme")
+    pushIfEnabled(out, "USDC", "Solana", "medium", "solana URI scheme")
     pushIfEnabled(out, "USDT", "Solana", "medium", "solana URI scheme")
     pushIfEnabled(out, "EURC", "Solana", "medium", "solana URI scheme")
     return out
   }
-  if (lower.startsWith("ethereum:") || lower.startsWith("eip155:")) {
+  if (lower.startsWith("eip155:")) {
+    const chainId = parseEip155ChainId(raw)
+    if (chainId === 8453) {
+      pushIfEnabled(out, "USDC", "Base", "high", "eip155 Base (8453)")
+      return out
+    }
+    pushIfEnabled(out, "USDC", "Ethereum", "high", "eip155 Ethereum")
+    pushIfEnabled(out, "USDT", "Ethereum", "medium", "eip155 Ethereum")
+    return out
+  }
+  if (lower.startsWith("ethereum:")) {
     pushIfEnabled(out, "USDC", "Ethereum", "high", "ethereum URI scheme")
     pushIfEnabled(out, "USDT", "Ethereum", "medium", "ethereum URI scheme")
     return out
@@ -83,16 +100,14 @@ export function inferWalletAddress(rawInput: string): AddressInferenceCandidate[
   if (isEvmAddress(addr)) {
     pushIfEnabled(out, "USDC", "Ethereum", "medium", "EVM hex address")
     pushIfEnabled(out, "USDT", "Ethereum", "medium", "EVM hex address")
-    pushIfEnabled(out, "USDC", "Base", "low", "EVM hex address")
-    pushIfEnabled(out, "USDC", "PolygonPos", "low", "EVM hex address")
-    pushIfEnabled(out, "USDC", "BSC", "low", "EVM hex address")
+    pushIfEnabled(out, "USDC", "Base", "medium", "EVM hex address")
     return out
   }
 
   if (isSolanaAddress(addr)) {
     pushIfEnabled(out, "USDC", "Solana", "medium", "Solana base58 address")
-    pushIfEnabled(out, "USDT", "Solana", "low", "Solana base58 address")
-    pushIfEnabled(out, "EURC", "Solana", "low", "Solana base58 address")
+    pushIfEnabled(out, "USDT", "Solana", "medium", "Solana base58 address")
+    pushIfEnabled(out, "EURC", "Solana", "medium", "Solana base58 address")
     return out
   }
 

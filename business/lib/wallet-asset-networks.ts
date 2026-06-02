@@ -10,8 +10,8 @@
  * this map is the offline fallback when send-destinations is unavailable.
  */
 export const WALLET_ASSET_NETWORKS: Record<string, string[]> = {
-  USDC: ["Solana", "Ethereum", "Base", "PolygonPos", "BSC"],
-  USDT: ["Tron", "Ethereum", "BSC", "PolygonPos", "Solana"],
+  USDC: ["Solana", "Ethereum", "Base"],
+  USDT: ["Tron", "Ethereum", "Solana"],
   EURC: ["Solana"],
 }
 

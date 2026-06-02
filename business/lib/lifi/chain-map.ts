@@ -4,8 +4,6 @@ export type NoahNetworkId =
   | "Solana"
   | "Ethereum"
   | "Base"
-  | "PolygonPos"
-  | "BSC"
   | "Tron"
 
 export type LifiChainMeta = {
@@ -17,8 +15,6 @@ const NOAH_TO_LIFI: Record<NoahNetworkId, LifiChainMeta> = {
   Solana: { chainId: "SOL", chainKey: "sol" },
   Ethereum: { chainId: 1, chainKey: "eth" },
   Base: { chainId: 8453, chainKey: "bas" },
-  PolygonPos: { chainId: 137, chainKey: "pol" },
-  BSC: { chainId: 56, chainKey: "bsc" },
   Tron: { chainId: 728126428, chainKey: "tro" },
 }
 

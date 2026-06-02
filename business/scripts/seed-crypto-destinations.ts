@@ -14,7 +14,7 @@ const ASSETS: Array<{
   {
     code: "USDC",
     name: "USD Coin",
-    networks: ["Solana", "Ethereum", "Base", "PolygonPos", "BSC"],
+    networks: ["Solana", "Ethereum", "Base"],
     sort_order: 1,
     provider_routing: [
       { provider: "turnkey", priority: 1, settlement_asset: "USDC" },
@@ -24,7 +24,7 @@ const ASSETS: Array<{
   {
     code: "USDT",
     name: "Tether USD",
-    networks: ["Tron", "Ethereum", "BSC", "PolygonPos", "Solana"],
+    networks: ["Tron", "Ethereum", "Solana"],
     sort_order: 2,
     provider_routing: [{ provider: "lifi", priority: 1, settlement_asset: "USDC" }],
   },

@@ -19,8 +19,8 @@ const CRYPTO_NAMES: Record<string, string> = {
 }
 
 const WALLET_NETWORKS: Record<string, string[]> = {
-  USDC: ["Solana", "Ethereum", "Base", "PolygonPos", "BSC"],
-  USDT: ["Tron", "Ethereum", "BSC", "PolygonPos", "Solana"],
+  USDC: ["Solana", "Ethereum", "Base"],
+  USDT: ["Tron", "Ethereum", "Solana"],
   EURC: ["Solana"],
 }
 
