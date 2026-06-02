@@ -62,7 +62,7 @@ import {
   validatePayoutAmountAgainstLimits,
   validateSendAmountFields,
   validateWalletSendReceiveAmount,
-  WALLET_SEND_MIN_RECEIVE_AMOUNT,
+  resolveEffectiveWalletSendMin,
 } from '@easner/shared'
 import { usePayoutMinEnforcement } from '../../hooks/usePayoutMinEnforcement'
 import { noahService, type WalletSendQuote } from '../../lib/noahService'
@@ -91,6 +91,7 @@ import { getTokenIconUrl } from '../../lib/cryptoIcons'
 import type { Recipient } from '../../types'
 import { resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
 import { isMobileMoneyRecipient } from '../../lib/recipientPayoutPreview'
+import { isWalletSendRecipient, resolveRecipientWalletNetwork } from '../../lib/recipientWalletMeta'
 import { useEasenetRecipientHydration } from '../../hooks/useEasenetRecipientHydration'
 import { navigateToSendRecipientHub } from '../../lib/sendFlowNavigation'
 import { SendSelectedRecipientSummary } from '../../components/send/SendSelectedRecipientSummary'
@@ -163,7 +164,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const isPreferredBalanceCurrency = preferredBalanceCurrencyFromRoute === 'USD' || preferredBalanceCurrencyFromRoute === 'EUR'
   const didInitializeBalanceCurrency = useRef(false)
   const sendAgainPrefillAppliedRef = useRef(false)
-  const walletMinSeedAppliedRef = useRef<string | null>(null)
   const [walletQuotePreview, setWalletQuotePreview] = useState<WalletSendQuote | null>(null)
   
   // UI State only - no backend integration
@@ -196,7 +196,11 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const [sendFooterHeight, setSendFooterHeight] = useState(120)
 
   /** Same-currency Easetag P2P never uses Noah `/prices` (two FX quotes); skip the query to speed the send flow. */
-  const isWalletRecipientEarly = Boolean(recipient?.wallet_network?.trim())
+  const resolvedWalletNetwork = useMemo(
+    () => resolveRecipientWalletNetwork(recipient),
+    [recipient],
+  )
+  const isWalletRecipientEarly = isWalletSendRecipient(recipient)
   const skipNoahExchangeRatesForEasetagP2p =
     isEasetagRecipient &&
     selectedPaymentMethod === 'balance' &&
@@ -204,15 +208,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const {
     data: exchangeRatesFromContext = [],
     isFetched: noahRatesFetched,
-    isFetching: noahRatesFetching,
   } = useNoahSendExchangeRates(recipient?.currency, {
     enabled: !skipNoahExchangeRatesForEasetagP2p && !isWalletRecipientEarly,
   })
   const {
     data: cryptoRatesFromContext = [],
     isFetched: cryptoRatesFetched,
-    isFetching: cryptoRatesFetching,
-  } = useCryptoSendExchangeRates(recipient?.currency, recipient?.wallet_network, {
+  } = useCryptoSendExchangeRates(recipient?.currency, resolvedWalletNetwork, {
     enabled: isWalletRecipientEarly,
   })
 
@@ -222,12 +224,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   }, [recipient?.currency, skipNoahExchangeRatesForEasetagP2p, isWalletRecipientEarly, qc])
 
   useEffect(() => {
-    if (!isWalletRecipientEarly || !recipient?.currency || !recipient.wallet_network) return
-    void prefetchCryptoSendExchangeRates(qc, recipient.currency, recipient.wallet_network)
-  }, [isWalletRecipientEarly, recipient?.currency, recipient?.wallet_network, qc])
+    if (!isWalletRecipientEarly || !recipient?.currency || !resolvedWalletNetwork) return
+    void prefetchCryptoSendExchangeRates(qc, recipient.currency, resolvedWalletNetwork)
+  }, [isWalletRecipientEarly, recipient?.currency, resolvedWalletNetwork, qc])
+
+  const isWalletRecipient = isWalletRecipientEarly
 
   // Initialize sending balance currency once:
-  // 1) honor incoming preference from prior screen flow, 2) otherwise fallback to available balance.
   React.useEffect(() => {
     if (didInitializeBalanceCurrency.current) return
     const usdBalance = parseFloat(balances.USD || '0')
@@ -535,13 +538,11 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     [cryptoRatesFromContext],
   )
 
-  const isWalletRecipient = Boolean(recipient?.wallet_network?.trim())
-
   const activeCryptoRateRow = useMemo(() => {
     if (!isWalletRecipient) return null
     const send = String(sendCurrency || '').trim().toUpperCase()
     const receive = String(receiveCurrency || '').trim().toUpperCase()
-    const network = String(recipient?.wallet_network || '').trim()
+    const network = resolvedWalletNetwork
     return (
       cryptoRatesFromContext.find(
         (r) =>
@@ -555,7 +556,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     cryptoRatesFromContext,
     sendCurrency,
     receiveCurrency,
-    recipient?.wallet_network,
+    resolvedWalletNetwork,
   ])
 
   const hasNoahRateForPair = useMemo(() => {
@@ -564,7 +565,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     const send = String(sendCurrency || '').trim().toUpperCase()
     const receive = String(receiveCurrency || '').trim().toUpperCase()
     if (send === receive) return true
-    if (!noahRatesFetched) return false
     const row = exchangeRatesFromContext.find(
       (r) =>
         String(r.from_currency || '').toUpperCase() === send &&
@@ -576,17 +576,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     showCrossCurrencyExchangeUi,
     sendCurrency,
     receiveCurrency,
-    noahRatesFetched,
     exchangeRatesFromContext,
   ])
-
-  const ratesLoadedForReceiveCurrency = useMemo(() => {
-    const receive = String(receiveCurrency || '').trim().toUpperCase()
-    if (!receive) return false
-    return exchangeRatesFromContext.some(
-      (r) => String(r.to_currency || '').toUpperCase() === receive,
-    )
-  }, [exchangeRatesFromContext, receiveCurrency])
 
   const manualQuoteEnabled =
     !isEasetagRecipient &&
@@ -618,15 +609,31 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     !needsCryptoRateForSend ||
     (activeCryptoRateRow != null && Number(activeCryptoRateRow.rate) > 0)
 
+  const walletMinReceive = useMemo(() => {
+    if (!isWalletRecipient || !resolvedWalletNetwork) {
+      return resolveEffectiveWalletSendMin({
+        receiveCurrency: receiveCurrency,
+        receiveNetwork: 'Solana',
+        customerRate: 1,
+      })
+    }
+    const rate = Number(activeCryptoRateRow?.rate ?? 0)
+    return resolveEffectiveWalletSendMin({
+      receiveCurrency,
+      receiveNetwork: resolvedWalletNetwork,
+      customerRate: rate > 0 ? rate : 1,
+    })
+  }, [isWalletRecipient, resolvedWalletNetwork, receiveCurrency, activeCryptoRateRow?.rate])
+
   const noahRatesLoading =
     needsNoahRateForSend &&
     !hasNoahRateForPair &&
-    (!noahRatesFetched || noahRatesFetching || !ratesLoadedForReceiveCurrency)
+    !noahRatesFetched
 
   const cryptoRatesLoading =
     needsCryptoRateForSend &&
     !hasValidCryptoRateForPair &&
-    (!cryptoRatesFetched || cryptoRatesFetching)
+    !cryptoRatesFetched
 
   const manualQuoteLoading = manualQuoteEnabled && !manualQuote && manualQuoteFetching
 
@@ -739,6 +746,28 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       Boolean(selectedOtherCurrency) &&
       showCrossCurrencyExchangeUi &&
       Boolean(manualQuote),
+    onApplyEnteredAmount: (amount) => {
+      setSendAmount(formatAmount(amount.toFixed(2)))
+    },
+  })
+
+  const walletMinEnforcementEnabled =
+    isWalletRecipient && selectedPaymentMethod === 'balance'
+
+  const walletMinSeedKey =
+    recipient && resolvedWalletNetwork
+      ? `${recipient.id}:${receiveCurrency}:${resolvedWalletNetwork}:${selectedBalanceCurrency}`
+      : null
+
+  usePayoutMinEnforcement({
+    enabled: walletMinEnforcementEnabled,
+    seedKey: walletMinSeedKey,
+    minReceive: walletMinReceive,
+    amountEntryMode,
+    enteredAmount,
+    sendCurrency,
+    receiveCurrency,
+    rateMap: cryptoFxRates,
     onApplyEnteredAmount: (amount) => {
       setSendAmount(formatAmount(amount.toFixed(2)))
     },
@@ -922,21 +951,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     clearSendPayoutQuote()
     clearSendWalletQuote()
     setWalletQuotePreview(null)
-    walletMinSeedAppliedRef.current = null
   }, [recipient?.id])
-
-  useEffect(() => {
-    if (!recipient?.wallet_network?.trim()) return
-    if (selectedPaymentMethod !== 'balance') return
-    if (sendAgainPrefillAppliedRef.current) return
-    const seedKey = recipient.id
-    if (walletMinSeedAppliedRef.current === seedKey) return
-    const parsed = sendAmount ? Number.parseFloat(sendAmount.replace(/,/g, '')) || 0 : 0
-    if (parsed <= 0) {
-      setSendAmount(formatAmount(String(WALLET_SEND_MIN_RECEIVE_AMOUNT)))
-    }
-    walletMinSeedAppliedRef.current = seedKey
-  }, [recipient?.id, recipient?.wallet_network, selectedPaymentMethod, sendAmount])
 
   const exchangeInfoAmountPositive =
     !!(recipient && sendAmount && Number.parseFloat(sendAmount.replace(/,/g, '')) > 0)
@@ -954,7 +969,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     (isWalletRecipient &&
       selectedPaymentMethod === 'balance' &&
       receiveAmount > 0 &&
-      receiveAmount < WALLET_SEND_MIN_RECEIVE_AMOUNT) ||
+      receiveAmount < walletMinReceive) ||
     (exchangeInfoAmountPositive && showCrossCurrencyExchangeUi && !exchangePreviewReady)
 
   const showExchangePreviewSkeleton =
@@ -1419,6 +1434,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 const walletMinCheck = validateWalletSendReceiveAmount(
                   receiveAmountValue,
                   receiveCurrency,
+                  { minReceive: walletMinReceive },
                 )
                 if (!walletMinCheck.ok) {
                   setAmountFieldError(walletMinCheck.message)

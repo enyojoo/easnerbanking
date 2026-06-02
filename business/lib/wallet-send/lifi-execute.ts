@@ -2,12 +2,12 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { getTurnkeyApiClientForSubOrganization } from "@/lib/turnkey/client"
 import { getTurnkeySolanaBroadcastCaip2, isTurnkeySolSponsorshipEnabled } from "@/lib/turnkey/config"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
-import { lifiQuote, lifiGetStatus } from "@/lib/lifi/client"
+import { lifiGetStatus } from "@/lib/lifi/client"
 import { resolveWalletSendToken, sourceSolVaultToken } from "@/lib/lifi/token-map"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { resolveTurnkeyAddressForNoahPair } from "@/lib/wallet/resolve-wallet-owner"
 import type { WalletSendSessionRow } from "./wallet-send-session"
-import { estimateLifiFromAmountRaw } from "./lifi-from-amount"
+import { quoteLifiWalletBridge } from "./lifi-wallet-quote"
 
 type TurnkeyClientLike = Record<string, (...args: unknown[]) => Promise<unknown>>
 
@@ -34,24 +34,17 @@ export async function executeLifiWalletSend(input: {
   )
   if (!fromAddress) return { ok: false, error: "no_source_vault" }
 
-  const fromAmountRaw = estimateLifiFromAmountRaw({
-    receiveAmount: input.session.receive_amount,
-    customerRate: input.session.customer_rate,
-    lifiMid: input.session.lifi_mid,
-    sourceDecimals: source.decimals,
-  })
-
   let quote
   try {
-    quote = await lifiQuote({
-      fromChain: source.chainId,
-      toChain: dest.chainId,
-      fromToken: source.address,
-      toToken: dest.address,
+    quote = await quoteLifiWalletBridge({
+      source,
+      dest,
       fromAddress,
       toAddress: input.session.destination_address,
-      fromAmount: fromAmountRaw,
-      fee: 0,
+      amountEntryMode: "receive",
+      receiveAmount: input.session.receive_amount,
+      customerRate: input.session.customer_rate,
+      lifiMid: input.session.lifi_mid,
     })
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "lifi_quote_failed" }

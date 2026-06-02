@@ -10,8 +10,8 @@ import { RealtimeHealthProvider, useRealtimeHealth } from './realtime-health-con
 import { useAuth } from '../contexts/AuthContext'
 import { registerAppLockListener } from '../lib/app-lock-bus'
 import { prefetchReceiveDepositQueries } from '../hooks/queries/use-receive-deposit-queries'
-import { prefetchRecipientsList } from '../hooks/queries/use-recipients'
-import { prefetchNoahSendExchangeRates } from '../hooks/queries/use-noah-send-exchange-rates'
+import { prefetchRecipientsList, RECIPIENTS_STALE_MS } from '../hooks/queries/use-recipients'
+import { warmSendRateCachesFromRecipients } from '../lib/warmSendRateCaches'
 import { recipientService } from '../lib/recipientService'
 
 /**
@@ -84,21 +84,17 @@ function WarmOperationalCachesOnScope({ children }: { children: React.ReactNode 
     if (!isReady || !scope) return
     void prefetchReceiveDepositQueries(qc, scope)
     void prefetchRecipientsList(qc, scope)
-    // Warm Noah wallet rates for every currency the user actually sends to.
-    // This makes the rate appear instantly on SendAmount even on the first
-    // tap of a recipient (no network round-trip during navigation animation).
+    // Warm Noah + crypto send rates for each recipient corridor (same DB rows as quote).
     void (async () => {
       try {
-        const recipients = await recipientService.getByUserId(scope.userId)
-        const seen = new Set<string>()
-        for (const r of recipients ?? []) {
-          const cur = String(r?.currency ?? '').trim().toUpperCase()
-          if (cur.length !== 3 || seen.has(cur)) continue
-          seen.add(cur)
-          void prefetchNoahSendExchangeRates(qc, cur)
-        }
+        const recipients = await qc.fetchQuery({
+          queryKey: qk.beneficiaries.list(scope),
+          queryFn: () => recipientService.getByUserId(scope.userId),
+          staleTime: RECIPIENTS_STALE_MS,
+        })
+        await warmSendRateCachesFromRecipients(qc, recipients)
       } catch {
-        // Best-effort cache warming; surface errors via the actual hook on the screen.
+        // Best-effort; SendAmount hooks refetch if cache miss.
       }
     })()
   }, [isReady, scope])

@@ -52,6 +52,7 @@ import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
 import {
   exchangeRatesToRateMap,
   resolveEffectivePayoutMin,
+  resolveEffectiveWalletSendMin,
   getSendAmountNoteFieldUi,
   validatePayoutAmountAgainstLimits,
   validateSendAmountFields,
@@ -543,10 +544,58 @@ export default function SendPage() {
     },
   })
 
+  const walletMinReceive = useMemo(() => {
+    if (!isWalletRecipient) {
+      return resolveEffectiveWalletSendMin({
+        receiveCurrency,
+        receiveNetwork: "Solana",
+        customerRate: 1,
+      })
+    }
+    const network = (recipient?.walletNetwork || "").trim()
+    if (!network) {
+      return resolveEffectiveWalletSendMin({
+        receiveCurrency,
+        receiveNetwork: "Solana",
+        customerRate: 1,
+      })
+    }
+    const rate = Number(activeCryptoRateRow?.rate ?? 0)
+    return resolveEffectiveWalletSendMin({
+      receiveCurrency,
+      receiveNetwork: network,
+      customerRate: rate > 0 ? rate : 1,
+    })
+  }, [isWalletRecipient, recipient?.walletNetwork, receiveCurrency, activeCryptoRateRow?.rate])
+
+  const walletMinEnforcementEnabled = isWalletRecipient && isBalanceSource
+
+  const walletMinSeedKey =
+    recipient?.walletNetwork?.trim()
+      ? `${recipient.id}:${receiveCurrency}:${recipient.walletNetwork}:${sendCurrency}`
+      : null
+
+  usePayoutMinEnforcement({
+    enabled: walletMinEnforcementEnabled,
+    seedKey: walletMinSeedKey,
+    minReceive: walletMinReceive,
+    amountEntryMode,
+    enteredAmount,
+    sendCurrency,
+    receiveCurrency,
+    rateMap: cryptoFxRates,
+    onApplyEnteredAmount: (amount) => {
+      setAmountStr(formatAmountForDisplay(amount.toFixed(2)))
+    },
+  })
+
   const payoutReceiveBelowMin =
     payoutMinReceive != null &&
     receiveAmount > 0 &&
     receiveAmount < payoutMinReceive
+
+  const walletReceiveBelowMin =
+    isWalletRecipient && receiveAmount > 0 && receiveAmount < walletMinReceive
 
   const manualAmountOutOfRange =
     Boolean(
@@ -566,6 +615,7 @@ export default function SendPage() {
     tier1Complete &&
     (isWalletRecipient ? hasValidCryptoRateForPair : hasValidNoahRateForPair) &&
     !payoutReceiveBelowMin &&
+    !walletReceiveBelowMin &&
     (!needsProfileBeforeEasenetSend || (hasData && !profileLoading))
 
   const canContinueOtherCurrency =

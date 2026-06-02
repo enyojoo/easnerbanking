@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { estimateLifiFromAmountRaw, lifiFromAmountRawForSendBudget } from "../lifi-from-amount"
+import { estimateLifiFromAmountRaw, lifiFromAmountRawForSendBudget, lifiMinFromAmountRaw } from "../lifi-from-amount"
 
 describe("lifiFromAmountRawForSendBudget", () => {
   it("converts USDC send budget to 6-decimal base units", () => {

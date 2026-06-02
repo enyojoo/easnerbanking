@@ -4,14 +4,15 @@ import { applyCryptoCustomerRate, parseWalletSendMarginFromEnv } from "@easner/r
 import {
   normalizeCryptoSendQuoteReceiveAmount,
   normalizePayoutReceiveAmountForCurrency,
+  resolveEffectiveWalletSendMin,
+  validateWalletSendReceiveAmount,
 } from "@easner/shared"
-import { lifiQuote } from "@/lib/lifi/client"
 import { resolveWalletSendToken, sourceSolVaultToken } from "@/lib/lifi/token-map"
 import { findCryptoRate, listCryptoRates } from "@/lib/fx/crypto-rates"
 import { resolveWalletSendExecutionModel } from "./routing"
 import { pricingFromDirectTurnkey, pricingFromLifiQuote } from "./pricing"
 import { coerceWalletRecipientRow } from "./coerce-recipient"
-import { estimateLifiFromAmountRaw, lifiFromAmountRawForSendBudget } from "./lifi-from-amount"
+import { quoteLifiWalletBridge } from "./lifi-wallet-quote"
 import {
   validateWalletRecipientForSend,
   walletDestinationAddress,
@@ -96,6 +97,14 @@ export async function buildWalletSendQuote(input: {
     throw new Error("Amount must be positive.")
   }
 
+  const minReceive = resolveEffectiveWalletSendMin({
+    receiveCurrency: receiveAsset,
+    receiveNetwork,
+    customerRate,
+  })
+  const minCheck = validateWalletSendReceiveAmount(receiveAmount, receiveAsset, { minReceive })
+  if (!minCheck.ok) throw new Error(minCheck.message)
+
   const executionModel = resolveWalletSendExecutionModel(receiveAsset, receiveNetwork)
   const margin = parseWalletSendMarginFromEnv(process.env.WALLET_SEND_MARGIN)
 
@@ -116,24 +125,19 @@ export async function buildWalletSendQuote(input: {
     const dest = resolveWalletSendToken(receiveAsset, receiveNetwork)
     if (!dest) throw new Error("Unsupported receive asset/network.")
 
-    const fromAmountRaw =
-      amountEntryMode === "send" && input.sendAmount != null && input.sendAmount > 0
-        ? lifiFromAmountRawForSendBudget(input.sendAmount, source.decimals)
-        : estimateLifiFromAmountRaw({
-            receiveAmount,
-            customerRate,
-            lifiMid,
-            sourceDecimals: source.decimals,
-          })
-    const quote = await lifiQuote({
-      fromChain: source.chainId,
-      toChain: dest.chainId,
-      fromToken: source.address,
-      toToken: dest.address,
+    const quote = await quoteLifiWalletBridge({
+      source,
+      dest,
       fromAddress: probeFrom,
       toAddress: destinationAddress,
-      fromAmount: fromAmountRaw,
-      fee: 0,
+      amountEntryMode,
+      receiveAmount,
+      sendBudget:
+        amountEntryMode === "send" && input.sendAmount != null && input.sendAmount > 0
+          ? input.sendAmount
+          : undefined,
+      customerRate,
+      lifiMid,
     })
 
     lifiQuoteId = quote.id

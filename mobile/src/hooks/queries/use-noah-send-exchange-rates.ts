@@ -6,6 +6,9 @@ import type { ExchangeRate } from '../../types'
 const STALE_MS = 2 * 60_000
 const GC_MS = 10 * 60_000
 
+/** Last successful `/api/fx/noah-rates` payload (= `noah_rates` rows). Shown instantly on cold start; refetch refreshes from DB. */
+const NOAH_SEND_RATES_META = { safePersist: true, freshness: 'reference' as const }
+
 function noahSendRatesQueryKey(receiveCurrency: string) {
   return ['exchange-rates', 'noah-send', receiveCurrency] as const
 }
@@ -28,6 +31,7 @@ export function prefetchNoahSendExchangeRates(
     queryFn: () => fetchNoahSendExchangeRates(dest),
     staleTime: STALE_MS,
     gcTime: GC_MS,
+    meta: NOAH_SEND_RATES_META,
   })
 }
 
@@ -53,5 +57,6 @@ export function useNoahSendExchangeRates(
     // SendAmount screen never flashes a "no rate" state when switching recipients.
     // The hook also re-derives the rate by code, so consumers naturally ignore stale pairs.
     placeholderData: keepPreviousData,
+    meta: NOAH_SEND_RATES_META,
   })
 }

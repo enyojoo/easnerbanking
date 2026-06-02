@@ -56,7 +56,8 @@ import { CachedImage } from '../../components/CachedImage'
 import KeyboardSafeContainer from '../../components/KeyboardSafeContainer'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../contexts/AuthContext'
-import { useCurrenciesCatalog, useRecipientsList, useTransactionsList, mapLedgerRowToTransaction, prefetchNoahSendExchangeRates } from '../../hooks/queries'
+import { useCurrenciesCatalog, useRecipientsList, useTransactionsList, mapLedgerRowToTransaction, prefetchNoahSendExchangeRates, prefetchCryptoSendExchangeRates } from '../../hooks/queries'
+import { isWalletSendRecipient, resolveRecipientWalletNetwork } from '../../lib/recipientWalletMeta'
 import { useScope } from '../../query/scope'
 import { invalidateRecipientsFeed } from '../../query/refresh-user-feeds'
 import { recipientService } from '../../lib/recipientService'
@@ -404,7 +405,12 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
 
   const handleSelectRecipient = async (recipient: Recipient) => {
     haptics.tap()
-    void prefetchNoahSendExchangeRates(qc, recipient.currency)
+    if (isWalletSendRecipient(recipient)) {
+      const net = resolveRecipientWalletNetwork(recipient)
+      if (net) void prefetchCryptoSendExchangeRates(qc, recipient.currency, net)
+    } else {
+      void prefetchNoahSendExchangeRates(qc, recipient.currency)
+    }
     // Use navigate (not push) so re-entering amount after "Change recipient" does not stack duplicate
     // SendAmount screens — back should be hub once, then dashboard.
     navigation.navigate('SendAmount' as never, {
@@ -783,9 +789,13 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
        android_ripple={ripple.neutral}
         style={[styles.recipientItem, !isLast && styles.recipientItemDivider]}
         onPressIn={() => {
-          // Start the rate fetch the instant the finger touches the row, ~80–150ms before
-          // the navigation transition completes — so SendAmount renders the rate immediately.
-          void prefetchNoahSendExchangeRates(qc, item.currency)
+          // Start the rate fetch the instant the finger touches the row — same DB rows as quote.
+          if (isWalletSendRecipient(item)) {
+            const net = resolveRecipientWalletNetwork(item)
+            if (net) void prefetchCryptoSendExchangeRates(qc, item.currency, net)
+          } else {
+            void prefetchNoahSendExchangeRates(qc, item.currency)
+          }
         }}
         onPress={() => handleSelectRecipient(item)} >
         <View style={styles.recipientRow}>

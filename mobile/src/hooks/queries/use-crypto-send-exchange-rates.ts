@@ -4,6 +4,9 @@ import { noahService } from '../../lib/noahService'
 const STALE_MS = 2 * 60_000
 const GC_MS = 10 * 60_000
 
+/** Last successful `/api/fx/crypto-rates` payload (= `crypto_rates` rows). Shown instantly on cold start; refetch refreshes from DB. */
+const CRYPTO_SEND_RATES_META = { safePersist: true, freshness: 'reference' as const }
+
 export type CryptoSendRateRow = {
   from_currency: string
   to_currency: string
@@ -45,6 +48,7 @@ export function prefetchCryptoSendExchangeRates(
     queryFn: () => fetchCryptoSendExchangeRates(asset, net),
     staleTime: STALE_MS,
     gcTime: GC_MS,
+    meta: CRYPTO_SEND_RATES_META,
   })
 }
 
@@ -64,5 +68,6 @@ export function useCryptoSendExchangeRates(
     gcTime: GC_MS,
     enabled,
     placeholderData: keepPreviousData,
+    meta: CRYPTO_SEND_RATES_META,
   })
 }
