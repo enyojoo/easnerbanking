@@ -21,7 +21,7 @@ export type BuildTransactionTimingRowsInput = {
    * Bank deposits: false — Processing step in lifecycle already shows that time.
    */
   showStartedWhileInFlight?: boolean
-  /** Bank deposits: false — use lifecycle tracker only (no Completed in / Failed after). */
+  /** Bank deposits: false — use lifecycle tracker only (no Arrived / Failed after). */
   showTerminalDuration?: boolean
 }
 
@@ -132,7 +132,7 @@ function formatStartedDisplay(iso: string | null): string {
 }
 
 /**
- * Detail summary rows for Option A timing (Expected / Started / Completed in / Failed after).
+ * Detail summary rows for timing (Expected / Started / Arrived / Failed after).
  */
 export function buildTransactionTimingRows(
   input: BuildTransactionTimingRowsInput,
@@ -145,7 +145,7 @@ export function buildTransactionTimingRows(
   if (userStatus === "completed" && showTerminalDuration) {
     const endMs = parseIsoMs(input.completedAt)
     if (startedMs != null && endMs != null && endMs >= startedMs) {
-      return [{ label: "Completed in", value: formatTransactionDurationMs(endMs - startedMs) }]
+      return [{ label: "Arrived", value: formatTransactionDurationMs(endMs - startedMs) }]
     }
     return []
   }

@@ -45,14 +45,14 @@ describe("buildTransactionTimingRows", () => {
     expect(rows).toEqual([])
   })
 
-  it("returns Completed in when settled with both timestamps", () => {
+  it("returns Arrived with actual duration when settled with both timestamps", () => {
     const rows = buildTransactionTimingRows({
       status: "settled",
       startedAt: started,
       completedAt: completed,
       showTerminalDuration: true,
     })
-    expect(rows).toEqual([{ label: "Completed in", value: "12 seconds" }])
+    expect(rows).toEqual([{ label: "Arrived", value: "12 seconds" }])
   })
 
   it("returns no terminal duration rows when showTerminalDuration is false", () => {
@@ -98,7 +98,7 @@ describe("resolveTransactionTimingAnchors", () => {
       startedAt: anchors.startedAt,
       completedAt: anchors.completedAt,
     })
-    expect(rows[0]).toEqual({ label: "Completed in", value: "12 seconds" })
+    expect(rows[0]).toEqual({ label: "Arrived", value: "12 seconds" })
   })
 
   it("uses processing_at as deposit duration start", () => {
@@ -116,7 +116,7 @@ describe("resolveTransactionTimingAnchors", () => {
       completedAt: anchors.completedAt,
       showStartedWhileInFlight: false,
     })
-    expect(rows[0]).toEqual({ label: "Completed in", value: "45 seconds" })
+    expect(rows[0]).toEqual({ label: "Arrived", value: "45 seconds" })
   })
 
   it("prefers webhook failed_at for failed duration", () => {

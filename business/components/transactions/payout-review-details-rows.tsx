@@ -5,6 +5,10 @@ import {
   formatMoneyDisplay,
   formatPayoutRecipientSubtitle,
   formatSendRateLabel,
+  hasPayoutCrossCurrencyFx,
+  shouldShowPayoutExchangeFee,
+  shouldShowPayoutNetworkFee,
+  shouldShowPayoutProcessingFee,
   type GlobalPayoutRecipientSnapshot,
   type GlobalPayoutReviewSnapshot,
   type TransactionTimingRow,
@@ -25,7 +29,7 @@ type Props = {
   showFeeBreakdown?: boolean
   /** Detail view: hero already shows receive amount. Confirm/review keeps this row. */
   showRecipientGets?: boolean
-  /** Dynamic timing (Expected / Started / Completed in). Omit on send confirm. */
+  /** Dynamic timing (Expected / Started / Arrived). Omit on send confirm. */
   timingRows?: TransactionTimingRow[] | null
 }
 
@@ -52,8 +56,14 @@ export function PayoutReviewDetailsRows({
   showRecipientGets = true,
   timingRows,
 }: Props) {
-  const hasFx =
-    payoutReview.receive_currency.toUpperCase() !== payoutReview.send_currency.toUpperCase()
+  const hasFx = hasPayoutCrossCurrencyFx(payoutReview.send_currency, payoutReview.receive_currency)
+  const showExchangeFee = shouldShowPayoutExchangeFee({
+    sendCurrency: payoutReview.send_currency,
+    receiveCurrency: payoutReview.receive_currency,
+    exchangeFee: payoutReview.exchange_fee,
+  })
+  const showProcessingFee = shouldShowPayoutProcessingFee(payoutReview.processing_fee)
+  const showNetworkFee = shouldShowPayoutNetworkFee(payoutReview.network_fee)
 
   return (
     <Card className="border-border shadow-sm">
@@ -98,25 +108,29 @@ export function PayoutReviewDetailsRows({
 
         {showFeeBreakdown ? (
           <>
-            <div className="flex items-center justify-between border-b pb-4">
-              <span className="text-sm text-muted-foreground">Exchange fee</span>
-              <span className="font-semibold">
-                {formatMoneyDisplay(payoutReview.exchange_fee, payoutReview.send_currency)}
-              </span>
-            </div>
+            {showExchangeFee ? (
+              <div className="flex items-center justify-between border-b pb-4">
+                <span className="text-sm text-muted-foreground">Exchange fee</span>
+                <span className="font-semibold">
+                  {formatMoneyDisplay(payoutReview.exchange_fee, payoutReview.send_currency)}
+                </span>
+              </div>
+            ) : null}
 
-            <div className="flex items-center justify-between border-b pb-4">
-              <span className="text-sm text-muted-foreground">Processing fee</span>
-              <span className="font-semibold">
-                {formatMoneyDisplay(payoutReview.processing_fee, payoutReview.send_currency)}
-              </span>
-            </div>
+            {showProcessingFee ? (
+              <div className="flex items-center justify-between border-b pb-4">
+                <span className="text-sm text-muted-foreground">Processing fee</span>
+                <span className="font-semibold">
+                  {formatMoneyDisplay(payoutReview.processing_fee, payoutReview.send_currency)}
+                </span>
+              </div>
+            ) : null}
 
-            {payoutReview.network_fee != null && payoutReview.network_fee > 0 ? (
+            {showNetworkFee ? (
               <div className="flex items-center justify-between border-b pb-4">
                 <span className="text-sm text-muted-foreground">Network fee</span>
                 <span className="font-semibold">
-                  {formatMoneyDisplay(payoutReview.network_fee, payoutReview.send_currency)}
+                  {formatMoneyDisplay(payoutReview.network_fee!, payoutReview.send_currency)}
                 </span>
               </div>
             ) : null}

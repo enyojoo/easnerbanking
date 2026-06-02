@@ -11,6 +11,9 @@ import {
   formatSendRateLabel,
   getGlobalPayoutTransferMethod,
   resolveSendConfirmArrivalHint,
+  shouldShowPayoutExchangeFee,
+  shouldShowPayoutNetworkFee,
+  shouldShowPayoutProcessingFee,
   qk,
   resolvePayoutCountryCode,
 } from '@easner/shared'
@@ -319,6 +322,13 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   const processingFee = quoteDisplay?.marginAmount ?? easnerFee ?? calculatedFeeAmount
   const exchangeFee = quoteDisplay?.exchangeFee ?? 0
   const networkFee = isWalletRecipient ? (quoteDisplay as { networkFee?: number } | null)?.networkFee ?? 0 : 0
+  const showExchangeFee = shouldShowPayoutExchangeFee({
+    sendCurrency: selectedBalanceCurrency,
+    receiveCurrency,
+    exchangeFee,
+  })
+  const showProcessingFee = shouldShowPayoutProcessingFee(processingFee)
+  const showNetworkFee = isWalletRecipient && shouldShowPayoutNetworkFee(networkFee)
   const transferMethod = recipient
     ? getGlobalPayoutTransferMethod({
         currency: receiveCurrency,
@@ -721,15 +731,19 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
               ) : null}
               {!easetagUi && quoteReady ? (
                 <>
-                  <Row
-                    label="Exchange fee"
-                    value={formatMoneyDisplay(exchangeFee, selectedBalanceCurrency)}
-                  />
-                  <Row
-                    label="Processing fee"
-                    value={formatMoneyDisplay(processingFee, selectedBalanceCurrency)}
-                  />
-                  {isWalletRecipient ? (
+                  {showExchangeFee ? (
+                    <Row
+                      label="Exchange fee"
+                      value={formatMoneyDisplay(exchangeFee, selectedBalanceCurrency)}
+                    />
+                  ) : null}
+                  {showProcessingFee ? (
+                    <Row
+                      label="Processing fee"
+                      value={formatMoneyDisplay(processingFee, selectedBalanceCurrency)}
+                    />
+                  ) : null}
+                  {showNetworkFee ? (
                     <Row
                       label="Network fee"
                       value={formatMoneyDisplay(networkFee, selectedBalanceCurrency)}

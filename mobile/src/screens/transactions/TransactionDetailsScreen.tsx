@@ -58,7 +58,23 @@ import {
   resolveSendAgainAmountPrefill,
   resolveSendAgainRecipient,
 } from '../../lib/resolveSendAgainRecipient'
-import { isEasnerProductReceiveTitle, isEasnerProductSendTitle, isEasetagReceiveTitle, qk, scopeKey, formatMoneyDisplay, formatSendRateLabel, formatPayoutRecipientSubtitle, formatTransactionDetailHeroTitle, type GlobalPayoutReviewSnapshot, type GlobalPayoutRecipientSnapshot } from '@easner/shared'
+import {
+  isEasnerProductReceiveTitle,
+  isEasnerProductSendTitle,
+  isEasetagReceiveTitle,
+  qk,
+  scopeKey,
+  formatMoneyDisplay,
+  formatSendRateLabel,
+  formatPayoutRecipientSubtitle,
+  formatTransactionDetailHeroTitle,
+  hasPayoutCrossCurrencyFx,
+  shouldShowPayoutExchangeFee,
+  shouldShowPayoutNetworkFee,
+  shouldShowPayoutProcessingFee,
+  type GlobalPayoutReviewSnapshot,
+  type GlobalPayoutRecipientSnapshot,
+} from '@easner/shared'
 import { ApiError } from '../../query/api-client'
 import { useScope } from '../../query/scope'
 import { haptics } from '../../lib/haptics'
@@ -1003,26 +1019,47 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                         )}
                       </Text>
                     </View>
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Exchange fee</Text>
-                      <Text style={styles.summaryValue}>
-                        {formatMoneyDisplay(
-                          transaction.payout_review.exchange_fee,
-                          transaction.payout_review.send_currency,
-                        )}
-                      </Text>
-                    </View>
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Processing fee</Text>
-                      <Text style={styles.summaryValue}>
-                        {formatMoneyDisplay(
-                          transaction.payout_review.processing_fee,
-                          transaction.payout_review.send_currency,
-                        )}
-                      </Text>
-                    </View>
-                    {transaction.payout_review.receive_currency.toUpperCase() !==
-                    transaction.payout_review.send_currency.toUpperCase() ? (
+                    {shouldShowPayoutExchangeFee({
+                      sendCurrency: transaction.payout_review.send_currency,
+                      receiveCurrency: transaction.payout_review.receive_currency,
+                      exchangeFee: transaction.payout_review.exchange_fee,
+                    }) ? (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Exchange fee</Text>
+                        <Text style={styles.summaryValue}>
+                          {formatMoneyDisplay(
+                            transaction.payout_review.exchange_fee,
+                            transaction.payout_review.send_currency,
+                          )}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {shouldShowPayoutProcessingFee(transaction.payout_review.processing_fee) ? (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Processing fee</Text>
+                        <Text style={styles.summaryValue}>
+                          {formatMoneyDisplay(
+                            transaction.payout_review.processing_fee,
+                            transaction.payout_review.send_currency,
+                          )}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {shouldShowPayoutNetworkFee(transaction.payout_review.network_fee) ? (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Network fee</Text>
+                        <Text style={styles.summaryValue}>
+                          {formatMoneyDisplay(
+                            transaction.payout_review.network_fee!,
+                            transaction.payout_review.send_currency,
+                          )}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {hasPayoutCrossCurrencyFx(
+                      transaction.payout_review.send_currency,
+                      transaction.payout_review.receive_currency,
+                    ) ? (
                       <View style={styles.summaryRow}>
                         <Text style={styles.summaryLabel}>Exchange rate</Text>
                         <Text style={styles.summaryValue}>
