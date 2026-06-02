@@ -4,26 +4,17 @@ import type { Beneficiary } from "@/lib/recipient-types"
 import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
 import { getBeneficiaryPayoutSubtitleParts } from "@/lib/beneficiary-payout-subtitle"
 import { EasenetRecipientProfileRowHydrated } from "@/components/easenet-recipient-profile-row-hydrated"
-import { RecipientPayoutPreview } from "@/components/recipient-payout-preview"
 import { RecipientPayoutProfileRow } from "@/components/recipient-payout-profile-row"
 import { PayoutRecipientSubtitleRow } from "@/components/send/payout-recipient-subtitle-row"
 
-type SendRecipientSummaryVariant = "selected" | "list"
-
-/**
- * Recipient chip for send flows.
- * - `selected`: full flag / token / profile avatar, no corner badge (amount, confirm, picker button).
- * - `list`: initials + corner badge (picker dialog, settings list — mobile RecipientPayoutPreview).
- */
+/** Recipient row — full flag / token / profile avatar everywhere (no corner badges). */
 export function SendSelectedRecipientSummary({
   beneficiary,
-  variant = "selected",
   className,
   subtitleClassName = "text-sm text-muted-foreground",
   alignEnd = false,
 }: {
   beneficiary: Beneficiary
-  variant?: SendRecipientSummaryVariant
   className?: string
   subtitleClassName?: string
   /** Review/confirm: chip aligns flush right with amount rows. */
@@ -40,19 +31,8 @@ export function SendSelectedRecipientSummary({
         easetag={b.payeeEasetag}
         accountKind={b.payeeAccountKind}
         avatarUrl={b.avatarUrl}
-        showEasnerMark={variant === "list"}
         className={rowClass}
         nameClassName={endClass}
-        subtitleClassName={subtitleClassName}
-      />
-    )
-  }
-
-  if (variant === "list") {
-    return (
-      <RecipientPayoutPreview
-        beneficiary={b}
-        className={rowClass}
         subtitleClassName={subtitleClassName}
       />
     )

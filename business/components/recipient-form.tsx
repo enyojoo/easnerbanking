@@ -798,7 +798,6 @@ export function RecipientForm({
                   easetag={easenetResolved.easetag}
                   accountKind={easenetResolved.accountKind}
                   avatarUrl={easenetResolved.avatarUrl}
-                  showEasnerMark
                 />
               </div>
             ) : null}

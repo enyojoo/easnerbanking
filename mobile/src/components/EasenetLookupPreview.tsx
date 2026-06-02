@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import { Image } from 'expo-image'
 import { EasenetSubtitleRow } from '../lib/easenetRecipientUi'
-import { EasnerMarkBadge } from './EasnerMarkBadge'
 import { colors, spacing, borderRadius, textStyles, fontFamily, surfaceFrameStyle } from '../theme'
 
 export type EasenetLookupProfile = {
@@ -23,7 +22,7 @@ type Props = {
   titleEndAccessory?: ReactNode
 }
 
-/** Avatar + Easner mark + name + Business/Personal • @tag (matches easetag search preview). */
+/** Easetag row — profile photo or initials + name + subtitle (no corner mark). */
 export function EasenetLookupPreview({
   profile,
   getInitials,
@@ -55,9 +54,6 @@ export function EasenetLookupPreview({
             <Text style={styles.avatarInitials}>{getInitials(profile.fullName)}</Text>
           </View>
         )}
-        <View style={styles.markBadge}>
-          <EasnerMarkBadge size={20} />
-        </View>
       </View>
       <View style={styles.textCol}>
         <View style={styles.nameRow}>
@@ -110,7 +106,6 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   avatarWrap: {
-    position: 'relative',
     marginRight: spacing[3],
   },
   avatarImg: {
@@ -132,13 +127,6 @@ const styles = StyleSheet.create({
     ...textStyles.titleSmall,
     color: colors.primary.main,
     fontFamily: fontFamily.semibold,
-  },
-  markBadge: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    zIndex: 3,
-    elevation: 3,
   },
   textCol: {
     flex: 1,

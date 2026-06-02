@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
-import { getCountryCodeForCurrency } from '@easner/shared'
 import { AvatarImage } from '../AvatarImage'
-import { CachedImage } from '../CachedImage'
-import { CountryFlag } from '../flags/CountryFlag'
+import { PayoutRecipientAvatar } from '../PayoutRecipientAvatar'
 import { colors, textStyles, spacing, fontFamily } from '../../theme'
 import type { Recipient } from '../../types'
 import {
@@ -14,7 +12,6 @@ import {
 } from '../../lib/easenetRecipientUi'
 import { getPayoutRecipientSubtitleParts } from '../../lib/recipientPayoutPreview'
 import type { HydratedEasenetProfile } from '../../hooks/useEasenetRecipientHydration'
-import { getTokenIconUrl } from '../../lib/cryptoIcons'
 
 function recipientInitials(fullName: string): string {
   const parts = fullName.trim().split(' ').filter(Boolean)
@@ -51,52 +48,6 @@ function EasenetRecipientAvatar({
   )
 }
 
-function PayoutRecipientAvatar({ recipient }: { recipient: Recipient }) {
-  const isWalletRecipient = String(recipient.bank_name || '').toLowerCase().includes('wallet')
-  const tokenIcon = getTokenIconUrl(recipient.currency)
-  const countryCode =
-    recipient.country_code ||
-    (recipient.currency === 'EUR' ? 'EU' : getCountryCodeForCurrency(recipient.currency) || 'US')
-  const uri = ''
-  const [imgFailed, setImgFailed] = useState(false)
-  useEffect(() => {
-    setImgFailed(false)
-  }, [uri])
-
-  const hasPhoto = Boolean(uri && !imgFailed)
-
-  if (!hasPhoto) {
-    return (
-      <View style={styles.avatarCircle}>
-        {isWalletRecipient && tokenIcon ? (
-          <CachedImage uri={tokenIcon} style={styles.avatarFill} contentFit="cover" />
-        ) : (
-          <CountryFlag code={countryCode} size={36} style={styles.avatarFill} contentFit="cover" />
-        )}
-      </View>
-    )
-  }
-
-  return (
-    <View style={styles.avatarCircleWrap}>
-      <View style={styles.avatarCircle}>
-        <AvatarImage
-          avatarUrl={uri}
-          style={styles.avatarFill}
-          onError={() => setImgFailed(true)}
-        />
-      </View>
-      <View style={styles.markBadge}>
-        {isWalletRecipient && tokenIcon ? (
-          <CachedImage uri={tokenIcon} style={styles.markImg} contentFit="cover" />
-        ) : (
-          <CountryFlag code={countryCode} size={16} style={styles.markImg} contentFit="cover" />
-        )}
-      </View>
-    </View>
-  )
-}
-
 /** Avatar + display name + Easetag or payout subtitle (amount + confirm screens). */
 export function SendSelectedRecipientSummary({
   recipient,
@@ -118,7 +69,7 @@ export function SendSelectedRecipientSummary({
       {isEasenet ? (
         <EasenetRecipientAvatar recipient={recipient} easenetPreview={easenetPreview} />
       ) : (
-        <PayoutRecipientAvatar recipient={recipient} />
+        <PayoutRecipientAvatar recipient={recipient} size={36} />
       )}
       <View style={[styles.info, alignEnd && styles.infoAlignEnd]}>
         <Text style={[styles.name, alignEnd && styles.textAlignEnd]} numberOfLines={1} ellipsizeMode="tail">
@@ -182,9 +133,6 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.regular,
     lineHeight: 16,
   },
-  avatarCircleWrap: {
-    position: 'relative',
-  },
   avatarCircle: {
     width: 36,
     height: 36,
@@ -195,27 +143,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 0.5,
     borderColor: colors.frame.border,
-  },
-  markBadge: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    zIndex: 3,
-    elevation: 3,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: colors.background.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.background.primary,
-    overflow: 'hidden',
-  },
-  markImg: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
   },
   avatarFill: {
     width: 36,

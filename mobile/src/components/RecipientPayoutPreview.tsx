@@ -2,11 +2,8 @@ import type { ReactNode } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import type { Recipient } from '../types'
 import { getPayoutRecipientSubtitleParts } from '../lib/recipientPayoutPreview'
-import { getTokenIconUrl } from '../lib/cryptoIcons'
+import { PayoutRecipientAvatar } from './PayoutRecipientAvatar'
 import { PayoutSubtitleRow } from '../lib/easenetRecipientUi'
-import { CachedImage } from './CachedImage'
-import { CountryFlag } from './flags/CountryFlag'
-import { getCountryCodeForCurrency } from '@easner/shared'
 import { colors, spacing, borderRadius, textStyles, fontFamily, surfaceFrameStyle } from '../theme'
 
 type Props = {
@@ -16,33 +13,15 @@ type Props = {
   titleEndAccessory?: ReactNode
 }
 
-/**
- * Same structure as Easenet preview: avatar + corner badge (flag / token) + name + `Label • detail`
- * (mobile money, bank account, crypto wallet — not Easenet).
- */
-export function RecipientPayoutPreview({ recipient, getInitials, variant = 'card', titleEndAccessory }: Props) {
+/** Payout recipient row — full flag / token avatar + name + subtitle (no corner badge). */
+export function RecipientPayoutPreview({ recipient, variant = 'card', titleEndAccessory }: Props) {
   const row = variant === 'row'
-  const isWalletRecipient = String(recipient.bank_name || '').toLowerCase().includes('wallet')
-  const tokenIcon = getTokenIconUrl(recipient.currency)
-  const countryCode =
-    recipient.country_code ||
-    (recipient.currency === 'EUR' ? 'EU' : getCountryCodeForCurrency(recipient.currency) || 'US')
-
   const { left, right } = getPayoutRecipientSubtitleParts(recipient)
 
   return (
     <View style={[styles.wrap, row && styles.wrapRow]}>
       <View style={styles.avatarWrap}>
-        <View style={styles.avatarFallback}>
-          <Text style={styles.avatarInitials}>{getInitials(recipient.full_name)}</Text>
-        </View>
-        <View style={styles.cornerBadge}>
-          {isWalletRecipient && tokenIcon ? (
-            <CachedImage uri={tokenIcon} style={styles.badgeFill} contentFit="cover" />
-          ) : (
-            <CountryFlag code={countryCode} size={20} style={styles.badgeFill} contentFit="cover" />
-          )}
-        </View>
+        <PayoutRecipientAvatar recipient={recipient} size={48} />
       </View>
       <View style={styles.textCol}>
         <View style={styles.nameRow}>
@@ -90,49 +69,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   avatarWrap: {
-    position: 'relative',
     marginRight: spacing[3],
-  },
-  avatarImg: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    overflow: 'hidden',
-    backgroundColor: colors.neutral[100],
-  },
-  avatarFallback: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.primary.main + '18',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarInitials: {
-    ...textStyles.titleSmall,
-    color: colors.primary.main,
-    fontFamily: fontFamily.semibold,
-  },
-  cornerBadge: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    zIndex: 3,
-    elevation: 3,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.background.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.background.primary,
-    overflow: 'hidden',
-  },
-  badgeFill: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
   },
   textCol: {
     flex: 1,

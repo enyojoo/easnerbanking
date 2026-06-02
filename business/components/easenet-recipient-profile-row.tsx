@@ -3,7 +3,6 @@
 import { User } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { EasenetRecipientSubtitle } from "@/components/easenet-recipient-subtitle"
-import { EASNER_MARK_URL } from "@/lib/easner-brand"
 import type { PayeeAccountKind } from "@/lib/easner-brand"
 import { cn } from "@/lib/utils"
 
@@ -19,15 +18,12 @@ function easenetInitials(name: string): string {
   )
 }
 
-/**
- * Send-flow easetag row: photo (or user fallback) + Easner mark badge + name + Business/Personal • @tag.
- */
+/** Easetag row — profile photo or initials + name + subtitle (no corner mark). */
 export function EasenetRecipientProfileRow({
   fullName,
   easetag,
   accountKind,
   avatarUrl,
-  showEasnerMark = false,
   className,
   textColClassName,
   nameClassName,
@@ -38,12 +34,9 @@ export function EasenetRecipientProfileRow({
   easetag: string
   accountKind?: PayeeAccountKind | null
   avatarUrl?: string | null
-  /** List / lookup rows only — selected send chip has no corner mark (mobile parity). */
-  showEasnerMark?: boolean
   className?: string
   textColClassName?: string
   nameClassName?: string
-  /** Classes for Business • @tag (default `text-sm text-muted-foreground`) */
   subtitleClassName?: string
   subtitleWrapperClassName?: string
 }) {
@@ -67,21 +60,6 @@ export function EasenetRecipientProfileRow({
             <User className="h-5 w-5 text-primary" />
           </div>
         )}
-        {showEasnerMark ? (
-          <div className="absolute -bottom-0.5 -right-0.5 h-5 w-5 overflow-hidden rounded-full border-2 border-background bg-background">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={EASNER_MARK_URL}
-              alt=""
-              width={20}
-              height={20}
-              loading="eager"
-              decoding="async"
-              fetchPriority="high"
-              className="size-full object-contain"
-            />
-          </div>
-        ) : null}
       </div>
       <div className={cn("min-w-0 flex-1", textColClassName)}>
         <p className={cn("truncate font-medium", nameClassName)}>{fullName}</p>
