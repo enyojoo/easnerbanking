@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SendRecipientPicker } from "@/components/send-recipient-picker"
 import { formatSendRateLabel } from "@easner/shared"
-import { getCurrencySymbol } from "@/lib/utils"
+import { getCurrencySymbol, getSendAmountFieldSymbol } from "@/lib/utils"
 import {
   convertNoahSendFlowAmounts,
   hasNoahSendRateRow,
@@ -994,7 +994,9 @@ export default function SendPage() {
                       <ArrowUpDown className="h-3.5 w-3.5 shrink-0 text-primary" strokeWidth={2} aria-hidden />
                       <span className="min-w-0 truncate">
                         {amountEntryMode === "receive" ? "Sending" : "Receiving"}:{" "}
-                        {getCurrencySymbol(amountEntryMode === "receive" ? sendCurrency : receiveCurrency)}
+                        {getSendAmountFieldSymbol(
+                          amountEntryMode === "receive" ? sendCurrency : receiveCurrency,
+                        )}
                         {(amountEntryMode === "receive" ? sendAmount : receiveAmount).toLocaleString("en-US", {
                           minimumFractionDigits:
                             Math.abs((amountEntryMode === "receive" ? sendAmount : receiveAmount) % 1) >= 0.01
@@ -1019,7 +1021,7 @@ export default function SendPage() {
             style={{ fontVariantNumeric: "tabular-nums" }}
           >
             <span className="font-black text-foreground select-none shrink-0 text-5xl">
-              {getCurrencySymbol(amountInputCurrency)}
+              {getSendAmountFieldSymbol(amountInputCurrency)}
             </span>
             <input
               type="text"

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -34,6 +34,7 @@ import { writeEasenetPublicProfileCache } from "@/lib/easenet-public-profile-cac
 import { EasenetRecipientProfileRow } from "@/components/easenet-recipient-profile-row"
 import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
+import { inferWalletAddressFromApi } from "@/lib/wallet-send/infer-wallet-address-client"
 
 const RECIPIENT_TYPE_TABS = [
   { id: "bank" as const, label: "Bank Account" },
@@ -144,6 +145,8 @@ export function RecipientForm({
   } | null>(null)
   const [easenetLookupLoading, setEasenetLookupLoading] = useState(false)
   const [easenetLookupError, setEasenetLookupError] = useState<string | null>(null)
+  const [walletInferenceHint, setWalletInferenceHint] = useState<string | null>(null)
+  const walletInferSeqRef = useRef(0)
 
   const {
     bankCorridors,
@@ -288,6 +291,56 @@ export function RecipientForm({
       window.clearTimeout(t)
     }
   }, [formData.easenetTag, formData.recipientType])
+
+  const applyWalletAddressInference = useCallback(
+    (address: string, networksByAsset: Record<string, string[]>) => {
+      const trimmed = address.trim()
+      if (trimmed.length < 8) {
+        setWalletInferenceHint(null)
+        return
+      }
+      const seq = ++walletInferSeqRef.current
+      void inferWalletAddressFromApi(trimmed)
+        .then(({ best }) => {
+          if (seq !== walletInferSeqRef.current) return
+          if (!best) {
+            setWalletInferenceHint(null)
+            return
+          }
+          const networks = networksByAsset[best.asset] || []
+          const network = networks.includes(best.network)
+            ? best.network
+            : networks[0] || best.network
+          setFormData((prev) => ({
+            ...prev,
+            walletAsset: best.asset,
+            walletNetwork: network,
+          }))
+          setWalletInferenceHint(`Detected ${best.asset} · ${network}`)
+        })
+        .catch(() => {
+          if (seq !== walletInferSeqRef.current) return
+          setWalletInferenceHint(null)
+        })
+    },
+    [],
+  )
+
+  useEffect(() => {
+    if (formData.recipientType !== "wallet") {
+      setWalletInferenceHint(null)
+      return
+    }
+    const t = window.setTimeout(() => {
+      applyWalletAddressInference(formData.walletAddress, walletAssetNetworks)
+    }, 450)
+    return () => window.clearTimeout(t)
+  }, [
+    formData.walletAddress,
+    formData.recipientType,
+    walletAssetNetworks,
+    applyWalletAddressInference,
+  ])
 
   const bankFromApi = bankCorridors.length > 0
   const mobileFromApi = mobileCorridors.length > 0
@@ -972,25 +1025,13 @@ export function RecipientForm({
               <label className="text-xs text-muted-foreground">Wallet Address</label>
               <Input
                 value={formData.walletAddress}
-                onChange={(e) => {
-                  const v = e.target.value
-                  handleInputChange("walletAddress", v)
-                  void fetch("/api/wallets/send/infer-address", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ address: v }),
-                  })
-                    .then((r) => r.json())
-                    .then((data: { best?: { asset: string; network: string } | null }) => {
-                      if (!data.best) return
-                      handleInputChange("walletAsset", data.best.asset)
-                      handleInputChange("walletNetwork", data.best.network)
-                    })
-                    .catch(() => {})
-                }}
+                onChange={(e) => handleInputChange("walletAddress", e.target.value)}
                 placeholder="Recipient wallet address"
                 className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.walletAddress ? "border-red-500" : ""}`}
               />
+              {walletInferenceHint ? (
+                <p className="text-xs text-muted-foreground">{walletInferenceHint}</p>
+              ) : null}
               {errors.walletAddress && <p className="text-xs text-red-500">{errors.walletAddress}</p>}
             </div>
             <div className="space-y-2">

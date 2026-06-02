@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
-import { getCurrencySymbol } from "@easner/shared"
+import { getCurrencySymbol, getSendAmountFieldSymbol } from "@easner/shared"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -8,7 +8,7 @@ export function cn(...inputs: ClassValue[]) {
 
 export const defaultCurrency = "USD"
 
-export { getCurrencySymbol }
+export { getCurrencySymbol, getSendAmountFieldSymbol }
 
 /** Format amount with currency symbol and thousands separators (e.g. $250,000,000.00) */
 export function formatCurrency(amount: number, currency: string): string {

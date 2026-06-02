@@ -33,3 +33,14 @@ export function getCurrencySymbol(currency: string, fallback = "USD"): string {
   }
   return code
 }
+
+/** Amount-field prefix on send screens. Pegged stables use fiat symbols, not token tickers. */
+export function getSendAmountFieldSymbol(currency: string): string {
+  const code = String(currency || "").trim().toUpperCase()
+  if (code === "USDT" || code === "USDC" || code === "STABLE") return "$"
+  if (code === "EURC") return "€"
+  const sym = getCurrencySymbol(currency)
+  const trimmed = sym?.trim()
+  if (trimmed) return trimmed
+  return code
+}

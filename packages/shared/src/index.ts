@@ -24,7 +24,7 @@ export {
 } from "./constants/login-pin"
 export { APP_URLS } from "./constants/urls"
 export { cn } from "./utils/cn"
-export { getCurrencySymbol } from "./currency-symbol"
+export { getCurrencySymbol, getSendAmountFieldSymbol } from "./currency-symbol"
 export { formatMoneyDisplay } from "./format-money-display"
 export { computeBalancePayoutExchangeFee } from "./payout-review-fees"
 export {
