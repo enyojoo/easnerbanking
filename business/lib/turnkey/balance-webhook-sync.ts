@@ -1,7 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { applyTurnkeyInboundLedgerEvent } from "@/lib/turnkey/apply-turnkey-inbound-ledger"
 import { isTurnkeyBalanceWebhooksIngestEnabled } from "@/lib/turnkey/config"
+import { turnkeyInboundLedgerRowExists } from "@/lib/turnkey/ledger-inbound-exists"
 import type { NormalizedTurnkeyBalanceDeposit } from "@/lib/turnkey/turnkey-balance-webhook-payload"
+import { turnkeyBalanceDepositProviderTransactionId } from "@/lib/turnkey/turnkey-balance-webhook-payload"
 import { resolveTurnkeyWalletScopeFromEvent } from "@/lib/turnkey/resolve-turnkey-wallet-scope"
 
 function mapAssetToCurrency(asset: string): string {
@@ -11,7 +13,9 @@ function mapAssetToCurrency(asset: string): string {
 }
 
 /**
- * Ingest Turnkey `balances:confirmed` deposits as organic Stablecoin Deposit rows.
+ * Ingest Turnkey balance deposit webhooks (`balances:confirmed` / `balances:finalized`)
+ * as organic Stablecoin Deposit rows. Confirmed and finalized for the same tx dedupe
+ * via tx-hash `provider_transaction_id` and `turnkeyInboundLedgerRowExists`.
  */
 export async function applyTurnkeyBalanceWebhookSideEffects(
   admin: SupabaseClient,
@@ -39,7 +43,18 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
   const currency = mapAssetToCurrency(asset)
 
   const addressForId = scope.tokenAccountAddress || scope.walletAddress
-  const providerTransactionId = deposit.eventId || `${deposit.txHash}:${addressForId}:${asset}`
+  if (
+    deposit.txHash &&
+    (await turnkeyInboundLedgerRowExists(admin, {
+      signature: deposit.txHash,
+      userId: scope.userId,
+      businessId: scope.businessId,
+    }))
+  ) {
+    return true
+  }
+
+  const providerTransactionId = turnkeyBalanceDepositProviderTransactionId(deposit, addressForId)
 
   const result = await applyTurnkeyInboundLedgerEvent(admin, {
     userId: scope.userId,
@@ -69,5 +84,10 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
     amountMinor: deposit.amountMinor,
   })
 
-  return result.kind === "applied" || result.kind === "suppressed_noah" || result.kind === "suppressed_easetag"
+  return (
+    result.kind === "applied" ||
+    result.kind === "skipped" ||
+    result.kind === "suppressed_noah" ||
+    result.kind === "suppressed_easetag"
+  )
 }

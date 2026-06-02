@@ -43,8 +43,12 @@ vi.mock("@/lib/noah/global-payout-ledger", () => ({
   findGlobalPayoutRefundForInboundSuppression: mocks.findRefund,
   findGlobalPayoutSettlementForChainSuppression: mocks.findGlobalPayoutSettlement,
 }))
+vi.mock("@/lib/turnkey/ledger-inbound-exists", () => ({
+  turnkeyInboundLedgerRowExists: vi.fn().mockResolvedValue(false),
+}))
 
 import { applyTurnkeyInboundLedgerEvent } from "@/lib/turnkey/apply-turnkey-inbound-ledger"
+import { turnkeyInboundLedgerRowExists } from "@/lib/turnkey/ledger-inbound-exists"
 
 const baseInput = {
   userId: "user-1",
@@ -141,6 +145,16 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
 
     const result = await applyTurnkeyInboundLedgerEvent(admin as never, baseInput)
     expect(result.kind).toBe("suppressed_noah")
+    expect(mocks.upsertLedger).not.toHaveBeenCalled()
+    expect(mocks.applyDelta).not.toHaveBeenCalled()
+  })
+
+  it("skips duplicate settled inbound when tx_hash already in ledger", async () => {
+    vi.mocked(turnkeyInboundLedgerRowExists).mockResolvedValueOnce(true)
+    const admin = { from: vi.fn() }
+
+    const result = await applyTurnkeyInboundLedgerEvent(admin as never, baseInput)
+    expect(result.kind).toBe("skipped")
     expect(mocks.upsertLedger).not.toHaveBeenCalled()
     expect(mocks.applyDelta).not.toHaveBeenCalled()
   })

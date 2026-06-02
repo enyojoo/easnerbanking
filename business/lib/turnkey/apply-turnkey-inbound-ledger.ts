@@ -10,6 +10,7 @@ import {
   findNoahBankOnrampChainSettlementForSuppression,
   findPendingNoahBankOnrampForInboundAmount,
 } from "@/lib/noah/noah-bank-onramp-chain-suppression"
+import { turnkeyInboundLedgerRowExists } from "@/lib/turnkey/ledger-inbound-exists"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 import { enqueueLiquiditySweepJob } from "@/lib/liquidity/sweep-jobs"
 import { resolvePooledSolanaSourceAddress, ledgerCurrencyForStablecoinAsset } from "@/lib/liquidity/platform-pool"
@@ -134,6 +135,17 @@ export async function applyTurnkeyInboundLedgerEvent(
   })
   if (globalPayoutSuppressed && direction === "out") {
     return { kind: "suppressed_easetag" }
+  }
+
+  if (direction === "in" && status === "settled" && txHash) {
+    const alreadyInLedger = await turnkeyInboundLedgerRowExists(admin, {
+      signature: txHash,
+      userId,
+      businessId,
+    })
+    if (alreadyInLedger) {
+      return { kind: "skipped" }
+    }
   }
 
   const upsert = await upsertLedgerTransaction(admin, {

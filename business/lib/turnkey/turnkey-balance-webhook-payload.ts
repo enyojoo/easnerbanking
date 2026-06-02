@@ -1,5 +1,6 @@
 /**
- * Turnkey balance webhooks (BALANCE_CONFIRMED_UPDATES) use `balances:confirmed` envelopes.
+ * Turnkey balance webhooks (`BALANCE_CONFIRMED_UPDATES` / `BALANCE_FINALIZED_UPDATES`)
+ * use `balances:confirmed` and `balances:finalized` envelopes with the same on-chain tx.
  * @see https://docs.turnkey.com/concepts/balances#delivery-payload
  */
 
@@ -166,6 +167,31 @@ function parseLegacyBalanceShape(root: Record<string, unknown>): ParsedTurnkeyBa
       raw: root,
     },
   }
+}
+
+/** Strip Turnkey phase suffix so confirmed/finalized share one ledger id. */
+export function stripTurnkeyBalancePhaseFromEventId(eventId: string): string {
+  return String(eventId || "")
+    .trim()
+    .replace(/:balances:(confirmed|finalized)$/i, "")
+}
+
+/**
+ * Stable `provider_transaction_id` for a deposit — one row per on-chain transfer,
+ * regardless of confirmed vs finalized webhook delivery.
+ */
+export function turnkeyBalanceDepositProviderTransactionId(
+  deposit: Pick<NormalizedTurnkeyBalanceDeposit, "txHash" | "eventId" | "asset">,
+  addressForId: string,
+): string {
+  const txHash = String(deposit.txHash || "").trim()
+  const address = String(addressForId || "").trim()
+  const asset = String(deposit.asset || "").trim().toUpperCase()
+  if (txHash && address && asset) {
+    return `${txHash}:${address}:${asset}`
+  }
+  const stripped = stripTurnkeyBalancePhaseFromEventId(deposit.eventId)
+  return stripped || deposit.eventId
 }
 
 export function parseTurnkeyBalanceWebhookPayload(payload: unknown): ParsedTurnkeyBalanceWebhook {

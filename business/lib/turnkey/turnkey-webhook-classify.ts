@@ -30,17 +30,25 @@ function collectActivityTypes(payload: TurnkeyPayload): string[] {
   return [...types]
 }
 
-/** Turnkey BALANCE_CONFIRMED_UPDATES (`balances:confirmed`) — balance pipeline, not activity no-op. */
+/** Turnkey balance webhooks (`balances:confirmed` / `balances:finalized`) — not activity no-op. */
 export function isTurnkeyBalanceConfirmedPayload(payload: unknown): boolean {
   if (isTurnkeyBalancesConfirmedWebhook(payload)) return true
   if (!payload || typeof payload !== "object") return false
   const p = payload as TurnkeyPayload
   const types = collectActivityTypes(p)
-  if (types.some((t) => t.includes("BALANCE_CONFIRMED") || t === "BALANCE_CONFIRMED_UPDATES")) {
+  if (
+    types.some(
+      (t) =>
+        t.includes("BALANCE_CONFIRMED") ||
+        t === "BALANCE_CONFIRMED_UPDATES" ||
+        t.includes("BALANCE_FINALIZED") ||
+        t === "BALANCE_FINALIZED_UPDATES",
+    )
+  ) {
     return true
   }
   const eventType = String(p.eventType ?? p.type ?? "").toUpperCase()
-  if (eventType.includes("BALANCE_CONFIRMED")) return true
+  if (eventType.includes("BALANCE_CONFIRMED") || eventType.includes("BALANCE_FINALIZED")) return true
 
   let hasBalanceSignal = false
   walkObject(p, (obj) => {

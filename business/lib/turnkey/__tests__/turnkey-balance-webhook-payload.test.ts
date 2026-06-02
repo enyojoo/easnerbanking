@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest"
 import {
   isTurnkeyBalancesConfirmedWebhook,
   parseTurnkeyBalanceWebhookPayload,
+  stripTurnkeyBalancePhaseFromEventId,
+  turnkeyBalanceDepositProviderTransactionId,
   turnkeyWebhookInboxIdentity,
 } from "@/lib/turnkey/turnkey-balance-webhook-payload"
 
@@ -13,6 +15,18 @@ const BALANCES_CONFIRMED_DEPOSIT = {
     txHash: "5abc123def456",
     address: "DepositAta1111111111111111111111111111111111",
     idempotencyKey: "idem-abc-123",
+    asset: { symbol: "USDC", decimals: 6, amount: "9946074" },
+    block: { timestamp: "2026-05-20T12:00:00.000Z" },
+  },
+}
+
+const BALANCES_FINALIZED_DEPOSIT = {
+  type: "balances:finalized",
+  msg: {
+    operation: "deposit",
+    txHash: "5abc123def456",
+    address: "DepositAta1111111111111111111111111111111111",
+    idempotencyKey: "hash-base:balances:finalized",
     asset: { symbol: "USDC", decimals: 6, amount: "9946074" },
     block: { timestamp: "2026-05-20T12:00:00.000Z" },
   },
@@ -82,8 +96,42 @@ describe("parseTurnkeyBalanceWebhookPayload", () => {
     expect(parsed.data.eventId).toBe("idem-top-level-org")
   })
 
+  it("parses balances:finalized deposit the same as confirmed", () => {
+    const parsed = parseTurnkeyBalanceWebhookPayload(BALANCES_FINALIZED_DEPOSIT)
+    expect(parsed.kind).toBe("deposit")
+    if (parsed.kind !== "deposit") return
+    expect(parsed.data.eventType).toBe("balances:finalized")
+    expect(parsed.data.eventId).toBe("hash-base:balances:finalized")
+  })
+
+  it("uses tx-hash provider id shared across confirmed and finalized", () => {
+    const confirmed = parseTurnkeyBalanceWebhookPayload({
+      ...BALANCES_CONFIRMED_DEPOSIT,
+      msg: {
+        ...BALANCES_CONFIRMED_DEPOSIT.msg,
+        idempotencyKey: "hash-base:balances:confirmed",
+      },
+    })
+    const finalized = parseTurnkeyBalanceWebhookPayload(BALANCES_FINALIZED_DEPOSIT)
+    expect(confirmed.kind).toBe("deposit")
+    expect(finalized.kind).toBe("deposit")
+    if (confirmed.kind !== "deposit" || finalized.kind !== "deposit") return
+
+    const address = "DepositAta1111111111111111111111111111111111"
+    const confirmedId = turnkeyBalanceDepositProviderTransactionId(confirmed.data, address)
+    const finalizedId = turnkeyBalanceDepositProviderTransactionId(finalized.data, address)
+    expect(confirmedId).toBe(finalizedId)
+    expect(confirmedId).toBe("5abc123def456:DepositAta1111111111111111111111111111111111:USDC")
+  })
+
+  it("strips balance phase suffix from event id", () => {
+    expect(stripTurnkeyBalancePhaseFromEventId("abc:balances:confirmed")).toBe("abc")
+    expect(stripTurnkeyBalancePhaseFromEventId("abc:balances:finalized")).toBe("abc")
+  })
+
   it("detects balance webhooks without activity id", () => {
     expect(isTurnkeyBalancesConfirmedWebhook(BALANCES_CONFIRMED_DEPOSIT)).toBe(true)
+    expect(isTurnkeyBalancesConfirmedWebhook(BALANCES_FINALIZED_DEPOSIT)).toBe(true)
     expect(isTurnkeyBalancesConfirmedWebhook({ type: "ACTIVITY_TYPE_CREATE_WALLET", id: "x" })).toBe(false)
   })
 })
