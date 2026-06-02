@@ -86,6 +86,7 @@ import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { CountryFlag } from '../../components/flags/CountryFlag'
 import RecipientFormDropdownList from '../../components/recipients/RecipientFormDropdownList'
 import { WalletAddressField } from '../../components/recipients/WalletAddressField'
+import { EmbeddedWalletAddressQrScanner } from '../../components/recipients/WalletAddressQrScanner'
 import {
   inferWalletAddressFromApi,
   resolveInferredWalletAssetNetwork,
@@ -148,6 +149,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   const [providerSearchTerm, setProviderSearchTerm] = useState('')
   const [walletAssetSearchTerm, setWalletAssetSearchTerm] = useState('')
   const [walletNetworkSearchTerm, setWalletNetworkSearchTerm] = useState('')
+  const [showWalletAddressScanner, setShowWalletAddressScanner] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [selectedCountryCurrency, setSelectedCountryCurrency] = useState<CountryCurrency | null>(null)
@@ -177,21 +179,11 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     catalogRevision,
     refresh: refreshCatalog,
   } = useSendDestinations()
-  const restoreWalletFormAfterScanRef = useRef(false)
 
   useFocusEffect(
     useCallback(() => {
       void refreshCatalog()
     }, [refreshCatalog]),
-  )
-
-  useFocusEffect(
-    useCallback(() => {
-      if (!restoreWalletFormAfterScanRef.current) return
-      restoreWalletFormAfterScanRef.current = false
-      setSelectedRecipientType('wallet')
-      setShowBankAccountForm(true)
-    }, []),
   )
 
   const applyWalletAddressInference = useCallback((text: string) => {
@@ -483,6 +475,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     setProviderSearchTerm('')
     setWalletAssetSearchTerm('')
     setWalletNetworkSearchTerm('')
+    setShowWalletAddressScanner(false)
   }
 
   const mapFieldName = (fieldName: string): string => {
@@ -501,11 +494,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   const handleWalletScanPress = () => {
     Keyboard.dismiss()
     closeAllDropdowns()
-    restoreWalletFormAfterScanRef.current = true
-    setShowBankAccountForm(false)
-    setTimeout(() => {
-      navigation.navigate('ScanWalletAddress' as never)
-    }, 220)
+    setShowWalletAddressScanner(true)
   }
 
   const isFormValid = () => {
@@ -1187,7 +1176,9 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
             }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                {selectedRecipientType === 'wallet'
+                {showWalletAddressScanner && selectedRecipientType === 'wallet'
+                  ? 'Scan wallet address'
+                  : selectedRecipientType === 'wallet'
                   ? 'Add Wallet Address'
                   : selectedRecipientType === 'mobile'
                     ? 'Add Mobile Money'
@@ -1198,6 +1189,10 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
               <Pressable
                android_ripple={ripple.neutral}
                 onPress={() => {
+                  if (showWalletAddressScanner) {
+                    setShowWalletAddressScanner(false)
+                    return
+                  }
                   setShowBankAccountForm(false)
                   resetForm()
                 }}
@@ -1207,6 +1202,18 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
               </Pressable>
             </View>
 
+            {showWalletAddressScanner && selectedRecipientType === 'wallet' ? (
+              <EmbeddedWalletAddressQrScanner
+                visible
+                showHeader={false}
+                onClose={() => setShowWalletAddressScanner(false)}
+                onScan={(address) => {
+                  setNewRecipient((prev) => ({ ...prev, walletAddress: address }))
+                  applyWalletAddressInference(address)
+                  setShowWalletAddressScanner(false)
+                }}
+              />
+            ) : (
             <KeyboardAwareScrollView
               ref={formScrollRef}
               style={styles.modalScrollView}
@@ -1971,6 +1978,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
               </View>
               </View>
             </KeyboardAwareScrollView>
+            )}
           </View>
           </RecipientFormDropdownHost>
         </View>

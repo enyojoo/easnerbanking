@@ -76,6 +76,7 @@ import { ListRowSkeleton } from '../../components/skeletons'
 import EmptyState from '../../components/EmptyState'
 import RecipientFormDropdownList from '../../components/recipients/RecipientFormDropdownList'
 import { WalletAddressField } from '../../components/recipients/WalletAddressField'
+import { EmbeddedWalletAddressQrScanner } from '../../components/recipients/WalletAddressQrScanner'
 import {
   inferWalletAddressFromApi,
   resolveInferredWalletAssetNetwork,
@@ -123,6 +124,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
   const [providerSearchTerm, setProviderSearchTerm] = useState('')
   const [walletAssetSearchTerm, setWalletAssetSearchTerm] = useState('')
   const [walletNetworkSearchTerm, setWalletNetworkSearchTerm] = useState('')
+  const [showWalletAddressScanner, setShowWalletAddressScanner] = useState(false)
   const [showBankDropdown, setShowBankDropdown] = useState(false)
   const [bankSearchTerm, setBankSearchTerm] = useState('')
   const [countrySearchTerm, setCountrySearchTerm] = useState('')
@@ -168,21 +170,11 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
     catalogRevision,
     refresh: refreshCatalog,
   } = useSendDestinations()
-  const restoreWalletFormAfterScanRef = useRef(false)
 
   useFocusEffect(
     useCallback(() => {
       void refreshCatalog()
     }, [refreshCatalog]),
-  )
-
-  useFocusEffect(
-    useCallback(() => {
-      if (!restoreWalletFormAfterScanRef.current) return
-      restoreWalletFormAfterScanRef.current = false
-      setSelectedRecipientType('wallet')
-      setShowBankAccountForm(true)
-    }, []),
   )
 
   const applyWalletAddressInference = useCallback((text: string) => {
@@ -327,7 +319,6 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
 
   // Reset form after create/edit form modal closes (for smooth animation)
   useEffect(() => {
-    if (restoreWalletFormAfterScanRef.current) return
     if (!showBankAccountForm && editingRecipient) {
       // Modal just closed, reset form after animation completes
       const timer = setTimeout(() => {
@@ -836,11 +827,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
   const handleWalletScanPress = () => {
     Keyboard.dismiss()
     closeAllDropdowns()
-    restoreWalletFormAfterScanRef.current = true
-    setShowBankAccountForm(false)
-    setTimeout(() => {
-      navigation.navigate('ScanWalletAddress' as never)
-    }, 220)
+    setShowWalletAddressScanner(true)
   }
 
   const isFormValid = () => {
@@ -960,6 +947,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
     setProviderSearchTerm('')
     setWalletAssetSearchTerm('')
     setWalletNetworkSearchTerm('')
+    setShowWalletAddressScanner(false)
     setTransferType(null)
     setShowRecipientTypeModal(false)
     setShowBankAccountForm(false)
@@ -1464,7 +1452,9 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
           >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                {selectedRecipientType === 'wallet'
+                {showWalletAddressScanner && selectedRecipientType === 'wallet'
+                  ? 'Scan wallet address'
+                  : selectedRecipientType === 'wallet'
                   ? editingRecipient ? 'Edit Wallet Address' : 'Add Wallet Address'
                   : selectedRecipientType === 'mobile'
                     ? editingRecipient ? 'Edit Mobile Money' : 'Add Mobile Money'
@@ -1475,6 +1465,10 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
               <Pressable
                android_ripple={ripple.neutral}
                 onPress={() => {
+                  if (showWalletAddressScanner) {
+                    setShowWalletAddressScanner(false)
+                    return
+                  }
                   setShowBankAccountForm(false)
                   setEditingRecipient(null)
                   resetForm()
@@ -1485,6 +1479,18 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
               </Pressable>
             </View>
 
+            {showWalletAddressScanner && selectedRecipientType === 'wallet' ? (
+              <EmbeddedWalletAddressQrScanner
+                visible
+                showHeader={false}
+                onClose={() => setShowWalletAddressScanner(false)}
+                onScan={(address) => {
+                  setNewRecipient((prev) => ({ ...prev, walletAddress: address }))
+                  applyWalletAddressInference(address)
+                  setShowWalletAddressScanner(false)
+                }}
+              />
+            ) : (
             <KeyboardAwareScrollView
               ref={formScrollRef}
               style={styles.modalScrollView}
@@ -2290,6 +2296,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
               </View>
               </View>
             </KeyboardAwareScrollView>
+            )}
           </View>
           </RecipientFormDropdownHost>
         </View>
