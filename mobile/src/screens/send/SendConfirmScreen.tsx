@@ -293,6 +293,8 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     isEasetag: Boolean(easetagUi),
     isWalletSend: isWalletRecipient,
     processingSeconds: payoutHints?.processing_seconds,
+    countryCode: payoutCountryCode,
+    rail: payoutRail,
   })
   const sendReservedDebitEtid =
     paramTransactionId && isEasnerClientTransactionIdFormat(paramTransactionId)

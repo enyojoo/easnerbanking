@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest"
 import {
   findPayoutFieldsSchema,
   formatPayoutArrivalHint,
+  NG_BANK_ARRIVAL_PROCESSING_SECONDS,
+  resolvePayoutProcessingSeconds,
   resolveSendConfirmArrivalHint,
+  SEND_ARRIVAL_WITHIN_MINUTES,
   SEND_ARRIVAL_WITHIN_SECONDS,
   getSendAmountNoteFieldUi,
   validatePayoutAmountAgainstLimits,
@@ -28,6 +31,39 @@ describe("formatPayoutArrivalHint", () => {
   })
 })
 
+describe("resolvePayoutProcessingSeconds", () => {
+  it("overrides GH and ZA bank corridors to NG-style seconds", () => {
+    expect(resolvePayoutProcessingSeconds({ countryCode: "GH", rail: "bank_transfer", fromNoah: 86400 })).toBe(
+      NG_BANK_ARRIVAL_PROCESSING_SECONDS,
+    )
+    expect(resolvePayoutProcessingSeconds({ countryCode: "ZA", rail: "bank_transfer", fromNoah: 86400 })).toBe(
+      NG_BANK_ARRIVAL_PROCESSING_SECONDS,
+    )
+    expect(resolvePayoutProcessingSeconds({ countryCode: "NG", rail: "bank_transfer", fromNoah: 50 })).toBe(50)
+    expect(resolvePayoutProcessingSeconds({ countryCode: "GH", rail: "mobile_money", fromNoah: 86400 })).toBe(86400)
+  })
+
+  it("applies override via findPayoutFieldsSchema", () => {
+    const corridors = [
+      {
+        id: "za",
+        rail: "bank_transfer" as const,
+        country_code: "ZA",
+        country_name: "South Africa",
+        currency_code: "ZAR",
+        currency_name: "Rand",
+        sort_order: 0,
+        providers: null,
+        fields_schema: { amount_field_mode: "note_optional_only" as const, processing_seconds: 86400 },
+      },
+    ]
+    expect(
+      findPayoutFieldsSchema(corridors, { countryCode: "ZA", currencyCode: "ZAR", rail: "bank_transfer" })
+        ?.processing_seconds,
+    ).toBe(50)
+  })
+})
+
 describe("resolveSendConfirmArrivalHint", () => {
   it("uses Within seconds for Easetag and wallet", () => {
     expect(resolveSendConfirmArrivalHint({ isEasetag: true })).toBe(SEND_ARRIVAL_WITHIN_SECONDS)
@@ -36,6 +72,37 @@ describe("resolveSendConfirmArrivalHint", () => {
 
   it("uses Noah tiers for fiat payout", () => {
     expect(resolveSendConfirmArrivalHint({ processingSeconds: 60 })).toBe("Within a minute")
+  })
+
+  it("shows Within minutes for NG/GH/ZA bank", () => {
+    expect(
+      resolveSendConfirmArrivalHint({
+        countryCode: "NG",
+        rail: "bank_transfer",
+        processingSeconds: 50,
+      }),
+    ).toBe(SEND_ARRIVAL_WITHIN_MINUTES)
+    expect(
+      resolveSendConfirmArrivalHint({
+        countryCode: "GH",
+        rail: "bank_transfer",
+        processingSeconds: 86400,
+      }),
+    ).toBe(SEND_ARRIVAL_WITHIN_MINUTES)
+    expect(
+      resolveSendConfirmArrivalHint({
+        countryCode: "ZA",
+        rail: "bank_transfer",
+        processingSeconds: 50,
+      }),
+    ).toBe(SEND_ARRIVAL_WITHIN_MINUTES)
+    expect(
+      resolveSendConfirmArrivalHint({
+        countryCode: "GH",
+        rail: "mobile_money",
+        processingSeconds: 50,
+      }),
+    ).toBe("Within a minute")
   })
 })
 

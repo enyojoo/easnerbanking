@@ -360,7 +360,7 @@
         "limits": {
           "min": "10"
         },
-        "processing_seconds": 86400,
+        "processing_seconds": 50,
         "amount_field_mode": "note_optional_only"
       }
     },
@@ -1004,7 +1004,7 @@
         "limits": {
           "min": "10"
         },
-        "processing_seconds": 86400,
+        "processing_seconds": 50,
         "amount_field_mode": "note_optional_only"
       }
     }

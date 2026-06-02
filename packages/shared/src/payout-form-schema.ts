@@ -30,6 +30,38 @@ export function resolvePayoutCountryCode(input: {
 
 export { parsePayoutMinAmount } from "./payout-business-limits"
 
+/** Noah `ProcessingSeconds` tier for NG/GH/ZA bank (fast corridors; confirm copy is separate). */
+export const NG_BANK_ARRIVAL_PROCESSING_SECONDS = 50
+
+/** Send confirm + payout review for NG/GH/ZA bank transfers. */
+export const SEND_ARRIVAL_WITHIN_MINUTES = "Within minutes"
+
+const WITHIN_MINUTES_BANK_COUNTRIES = new Set(["NG", "GH", "ZA"])
+
+export function isWithinMinutesBankPayoutCorridor(input: {
+  countryCode?: string | null
+  rail?: PayoutRail
+}): boolean {
+  const cc = String(input.countryCode || "").trim().toUpperCase()
+  return input.rail === "bank_transfer" && WITHIN_MINUTES_BANK_COUNTRIES.has(cc)
+}
+
+/**
+ * Product arrival SLA for bank corridors where Noah reports 86400 but settlement is fast (GH, ZA).
+ * Keeps confirm copy aligned with NG-style corridors.
+ */
+export function resolvePayoutProcessingSeconds(input: {
+  countryCode: string
+  rail: PayoutRail
+  fromNoah?: number
+}): number | undefined {
+  const cc = String(input.countryCode || "").trim().toUpperCase()
+  if (input.rail === "bank_transfer" && (cc === "GH" || cc === "ZA")) {
+    return NG_BANK_ARRIVAL_PROCESSING_SECONDS
+  }
+  return input.fromNoah
+}
+
 /** Find corridor row + fields_schema for country/currency/rail. */
 export function findPayoutFieldsSchema(
   corridors: PayoutCorridorPublic[] | null | undefined,
@@ -43,7 +75,15 @@ export function findPayoutFieldsSchema(
       rail: input.rail,
     }),
   )
-  return row?.fields_schema ?? null
+  const schema = row?.fields_schema ?? null
+  if (!schema) return null
+  const processing_seconds = resolvePayoutProcessingSeconds({
+    countryCode: input.countryCode,
+    rail: input.rail,
+    fromNoah: schema.processing_seconds,
+  })
+  if (processing_seconds === schema.processing_seconds) return schema
+  return { ...schema, processing_seconds }
 }
 
 export type SendAmountFieldValidation = { ok: true } | { ok: false; message: string }
@@ -204,7 +244,10 @@ export function resolveSendConfirmArrivalHint(input: {
   isEasetag?: boolean
   isWalletSend?: boolean
   processingSeconds?: number | null
+  countryCode?: string | null
+  rail?: PayoutRail
 }): string | null {
   if (input.isEasetag || input.isWalletSend) return SEND_ARRIVAL_WITHIN_SECONDS
+  if (isWithinMinutesBankPayoutCorridor(input)) return SEND_ARRIVAL_WITHIN_MINUTES
   return formatPayoutArrivalHint(input.processingSeconds ?? undefined)
 }

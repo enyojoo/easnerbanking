@@ -103,6 +103,8 @@ export type { PayoutCorridorPublic, PayoutFieldsSchemaHint, PayoutRail } from ".
 export { corridorDisplayLabel, corridorMatchesCountryCurrency, flagCodeFromCorridor } from "./payout-corridor"
 export {
   findPayoutFieldsSchema,
+  NG_BANK_ARRIVAL_PROCESSING_SECONDS,
+  resolvePayoutProcessingSeconds,
   getSendAmountNoteFieldUi,
   validateSendAmountFields,
   validatePayoutAmountAgainstLimits,
@@ -110,7 +112,9 @@ export {
   recipientFormNeedsAddress,
   recipientFormNeedsPhone,
   formatPayoutArrivalHint,
+  isWithinMinutesBankPayoutCorridor,
   resolveSendConfirmArrivalHint,
+  SEND_ARRIVAL_WITHIN_MINUTES,
   SEND_ARRIVAL_WITHIN_SECONDS,
   resolvePayoutCountryCode,
   countryCodeForRecipientSave,

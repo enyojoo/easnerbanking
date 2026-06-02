@@ -1,4 +1,5 @@
 import { createHash } from "crypto"
+import { resolvePayoutProcessingSeconds, type PayoutRail } from "@easner/shared"
 import type { ChannelItem } from "./payout-prepare"
 
 /** Normalized hints for recipient UI and send amount screen (from Noah FormSchema). */
@@ -177,8 +178,15 @@ export function normalizeFormSchemaHints(
       limitsRaw?.MinLimit || limitsRaw?.MaxLimit
         ? { min: limitsRaw.MinLimit, max: limitsRaw.MaxLimit }
         : undefined,
-    processing_seconds:
-      typeof channel.ProcessingSeconds === "number" ? channel.ProcessingSeconds : undefined,
+    processing_seconds: resolvePayoutProcessingSeconds({
+      countryCode: country,
+      rail:
+        String(channel.PaymentMethodCategory ?? "").toLowerCase() === "identifier"
+          ? ("mobile_money" as PayoutRail)
+          : ("bank_transfer" as PayoutRail),
+      fromNoah:
+        typeof channel.ProcessingSeconds === "number" ? channel.ProcessingSeconds : undefined,
+    }),
     amount_field_mode,
   }
 }

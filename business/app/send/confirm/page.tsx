@@ -97,6 +97,8 @@ export default function SendConfirmPage() {
         isEasetag: isEasenetRecipient(state.recipient),
         isWalletSend: isWalletRecipient(state.recipient),
         processingSeconds: payoutHints?.processing_seconds,
+        countryCode: state.recipient.countryCode,
+        rail: payoutRail,
       })
     : null
 
