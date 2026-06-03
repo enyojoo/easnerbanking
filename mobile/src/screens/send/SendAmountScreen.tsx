@@ -59,6 +59,9 @@ import {
   resolveEffectivePayoutMin,
   resolvePayoutCountryCode,
   getSendAmountNoteFieldUi,
+  isWideSendAmountSymbol,
+  scaleSendAmountPrefixFontSize,
+  scaleSendAmountPrefixLineHeight,
   validatePayoutAmountAgainstLimits,
   validateSendAmountFields,
   validateWalletSendReceiveAmount,
@@ -476,6 +479,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       : currency === 'NGN' ? '₦' 
       : currency === 'KES' ? 'KSh' 
       : currency === 'GHS' ? '₵' 
+      : currency === 'RWF' ? 'R₣'
       : currency === 'RUB' ? '₽' 
       : currency === 'GBP' ? '£' 
       : ''
@@ -508,9 +512,16 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const amountDisplaySymbol = getSendAmountFieldSymbol(
     amountDisplayCurrency || selectedBalanceCurrency,
   )
+  const wideAmountSymbol = isWideSendAmountSymbol(amountDisplaySymbol)
   const amountTextStyle = {
     ...amountTextBase,
   }
+  const amountPrefixStyle = wideAmountSymbol
+    ? {
+        fontSize: scaleSendAmountPrefixFontSize(dynamicAmountFontSize, amountDisplaySymbol),
+        lineHeight: scaleSendAmountPrefixLineHeight(dynamicAmountLineHeight, amountDisplaySymbol),
+      }
+    : null
   // Keep the amount band fixed so dynamic number-size changes never push/pull the
   // balance/note/keypad/KYC/CTA group vertically. Tall enough for dynamic headline lineHeight on iOS.
   const amountRowHeight = Math.max(
@@ -1116,7 +1127,11 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       accessibilityRole="text"
                       accessibilityLabel={`Amount ${amountDisplaySymbol}${recipient ? sendAmount : '0'}`}
                     >
-                      {amountDisplaySymbol}
+                      {wideAmountSymbol && amountPrefixStyle ? (
+                        <Text style={amountPrefixStyle}>{amountDisplaySymbol}</Text>
+                      ) : (
+                        amountDisplaySymbol
+                      )}
                       {recipient ? sendAmount : '0'}
                     </Text>
                   </View>

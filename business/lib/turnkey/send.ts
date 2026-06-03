@@ -14,6 +14,7 @@ import {
   findEasetagSettlementForChainSuppression,
   patchEasetagP2pChainSettlement,
   updateEasetagSettlementSettled,
+  updateEasetagSettlementSubmitted,
 } from "@/lib/ledger/easetag-settlement"
 import {
   applyGlobalPayoutWalletDebitForEasnerPayoutId,
@@ -585,6 +586,12 @@ export async function createTurnkeySend(
       txHash: parsed.txHash,
       turnkeySendStatus: "pending",
     })
+    await updateEasetagSettlementSubmitted(
+      admin,
+      easetagTransferGroupId,
+      parsed.providerTransactionId,
+      parsed.txHash,
+    ).catch(() => {})
   }
 
   let reconciled: { status: "pending" | "settled" | "failed"; txHash: string | null } = {

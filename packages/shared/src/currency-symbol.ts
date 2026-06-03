@@ -8,6 +8,7 @@ const OVERRIDES: Record<string, string> = {
   NGN: "₦",
   KES: "KSh",
   GHS: "₵",
+  RWF: "R₣",
   ZAR: "R",
   RUB: "₽",
   XOF: "XOF",
@@ -43,4 +44,19 @@ export function getSendAmountFieldSymbol(currency: string): string {
   const trimmed = sym?.trim()
   if (trimmed) return trimmed
   return code
+}
+
+/** Multi-char prefixes (e.g. KSh) need a smaller font on send amount headlines. */
+export function isWideSendAmountSymbol(symbol: string): boolean {
+  return String(symbol ?? "").trim().length > 2
+}
+
+export function scaleSendAmountPrefixFontSize(baseFontSize: number, symbol: string): number {
+  if (!isWideSendAmountSymbol(symbol)) return baseFontSize
+  return Math.max(Math.round(baseFontSize * 0.52), 20)
+}
+
+export function scaleSendAmountPrefixLineHeight(baseLineHeight: number, symbol: string): number {
+  if (!isWideSendAmountSymbol(symbol)) return baseLineHeight
+  return Math.max(Math.round(baseLineHeight * 0.55), 22)
 }

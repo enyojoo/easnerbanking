@@ -30,14 +30,14 @@ export function resolvePayoutCountryCode(input: {
 
 export { parsePayoutMinAmount } from "./payout-business-limits"
 
-/** Noah `ProcessingSeconds` tier for NG/GH/ZA bank (fast corridors; confirm copy is separate). */
+/** Noah `ProcessingSeconds` tier for NG/GH/ZA/RW bank (fast corridors; confirm copy is separate). */
 export const NG_BANK_ARRIVAL_PROCESSING_SECONDS = 50
 
-/** Send confirm + payout review for NG/GH/ZA bank transfers. */
+/** Send confirm + payout review for NG/GH/ZA/RW bank transfers. */
 export const SEND_ARRIVAL_WITHIN_MINUTES = "Within minutes"
 
-const WITHIN_MINUTES_BANK_COUNTRIES = new Set(["NG", "GH", "ZA"])
-const WITHIN_MINUTES_BANK_CURRENCIES = new Set(["NGN", "GHS", "ZAR"])
+const WITHIN_MINUTES_BANK_COUNTRIES = new Set(["NG", "GH", "ZA", "RW"])
+const WITHIN_MINUTES_BANK_CURRENCIES = new Set(["NGN", "GHS", "ZAR", "RWF"])
 
 export function isWithinMinutesBankPayoutCorridor(input: {
   countryCode?: string | null
@@ -52,7 +52,7 @@ export function isWithinMinutesBankPayoutCorridor(input: {
 }
 
 /**
- * Product arrival SLA for bank corridors where Noah reports 86400 but settlement is fast (GH, ZA).
+ * Product arrival SLA for bank corridors where Noah reports 86400 but settlement is fast (GH, ZA, RW).
  * Keeps confirm copy aligned with NG-style corridors.
  */
 export function resolvePayoutProcessingSeconds(input: {
@@ -61,7 +61,7 @@ export function resolvePayoutProcessingSeconds(input: {
   fromNoah?: number
 }): number | undefined {
   const cc = String(input.countryCode || "").trim().toUpperCase()
-  if (input.rail === "bank_transfer" && (cc === "GH" || cc === "ZA")) {
+  if (input.rail === "bank_transfer" && (cc === "GH" || cc === "ZA" || cc === "RW")) {
     return NG_BANK_ARRIVAL_PROCESSING_SECONDS
   }
   return input.fromNoah

@@ -7,6 +7,7 @@ import { shouldDeferBankDepositSettledPush } from "@/lib/notifications/bank-depo
 import {
   isEasetagChainSettlementTransaction,
   isNoahInternalSettlementTransaction,
+  isTurnkeyEasetagP2pChainMirror,
 } from "@/lib/transactions/transaction-feed-filters"
 import { resolveHiddenFromFeed } from "@/lib/transactions/ledger-list-cursor"
 
@@ -169,6 +170,7 @@ export async function upsertLedgerTransaction(
     if (
       becameSettled &&
       !isEasetagChainSettlementTransaction(mergedMetadata) &&
+      !isTurnkeyEasetagP2pChainMirror(mergedMetadata) &&
       !isNoahInternalSettlementTransaction(mergedMetadata) &&
       !shouldDeferBankDepositSettledPush(mergedMetadata)
     ) {
@@ -205,6 +207,7 @@ export async function upsertLedgerTransaction(
   if (
     insertedBecameSettled &&
     !isEasetagChainSettlementTransaction(mergedMetadata) &&
+    !isTurnkeyEasetagP2pChainMirror(mergedMetadata) &&
     !isNoahInternalSettlementTransaction(mergedMetadata) &&
     !shouldDeferBankDepositSettledPush(mergedMetadata)
   ) {

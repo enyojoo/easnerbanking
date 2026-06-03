@@ -15,7 +15,7 @@ export const CURRENCY_CATALOG_DEFAULTS: Record<
   ZAR: { name: "South African Rand", symbol: "R" },
   BWP: { name: "Botswana Pula", symbol: "P" },
   XAF: { name: "Central African CFA franc", symbol: "FCFA" },
-  RWF: { name: "Rwandan Franc", symbol: "FRw" },
+  RWF: { name: "Rwandan Franc", symbol: "R₣" },
   USDC: { name: "USD Coin", symbol: "$" },
   USDT: { name: "Tether USD", symbol: "$" },
 }

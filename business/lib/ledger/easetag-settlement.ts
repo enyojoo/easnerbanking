@@ -37,21 +37,121 @@ export async function updateEasetagSettlementLedgerPtids(
     .eq("transfer_group_id", transferGroupId)
 }
 
+const EASETAG_SETTLEMENT_ACTIVE_STATUSES = ["pending", "submitted", "settled"] as const
+
+function amountsRoughlyEqual(a: number, b: number): boolean {
+  if (!Number.isFinite(a) || !Number.isFinite(b) || a <= 0 || b <= 0) return false
+  return Math.abs(a - b) <= Math.max(0.01, a * 0.001)
+}
+
+async function getEasetagSettlementByTransferGroupId(
+  admin: SupabaseClient,
+  transferGroupId: string,
+): Promise<EasetagSettlementRow | null> {
+  const id = String(transferGroupId || "").trim()
+  if (!id) return null
+  const { data } = await admin.from("easetag_settlements").select("*").eq("transfer_group_id", id).maybeSingle()
+  if (!data) return null
+  return normalizeRow(data as Record<string, unknown>)
+}
+
+/** P2P sender debit leg tagged with on-chain tx before `easetag_settlements.tx_hash` is set. */
+async function findEasetagSettlementViaP2pDebitTxHash(
+  admin: SupabaseClient,
+  txHash: string,
+): Promise<EasetagSettlementRow | null> {
+  const hx = String(txHash || "").trim()
+  if (!hx) return null
+
+  const { data: byColumn } = await admin
+    .from("transactions")
+    .select("metadata")
+    .eq("provider", "easner_internal")
+    .eq("tx_hash", hx)
+    .like("provider_transaction_id", "easetag_p2p:%:debit")
+    .limit(1)
+    .maybeSingle()
+  const fromColumn = transferGroupIdFromEasetagDebitMeta(byColumn?.metadata)
+  if (fromColumn) {
+    const row = await getEasetagSettlementByTransferGroupId(admin, fromColumn)
+    if (row && EASETAG_SETTLEMENT_ACTIVE_STATUSES.includes(row.status)) return row
+  }
+
+  const { data: debits } = await admin
+    .from("transactions")
+    .select("metadata")
+    .eq("provider", "easner_internal")
+    .like("provider_transaction_id", "easetag_p2p:%:debit")
+    .filter("metadata->>turnkey_tx_hash", "eq", hx)
+    .limit(3)
+  for (const debit of debits ?? []) {
+    const tg = transferGroupIdFromEasetagDebitMeta(debit.metadata)
+    if (!tg) continue
+    const row = await getEasetagSettlementByTransferGroupId(admin, tg)
+    if (row && EASETAG_SETTLEMENT_ACTIVE_STATUSES.includes(row.status)) return row
+  }
+  return null
+}
+
+function transferGroupIdFromEasetagDebitMeta(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== "object") return null
+  const tg = String((metadata as Record<string, unknown>).transfer_group_id ?? "").trim()
+  return tg || null
+}
+
+async function findEasetagSettlementByPayeeInbound(
+  admin: SupabaseClient,
+  input: {
+    payeeUserId: string
+    payeeBusinessId: string | null
+    amount: number
+    currency: string
+  },
+): Promise<EasetagSettlementRow | null> {
+  const amount = Number(input.amount)
+  const currency = String(input.currency || "").trim().toUpperCase()
+  if (!Number.isFinite(amount) || amount <= 0 || (currency !== "USD" && currency !== "EUR")) return null
+
+  let q = admin
+    .from("easetag_settlements")
+    .select("*")
+    .eq("payee_user_id", input.payeeUserId)
+    .eq("currency", currency)
+    .in("status", ["pending", "submitted"])
+  if (input.payeeBusinessId) q = q.eq("payee_business_id", input.payeeBusinessId)
+  else q = q.is("payee_business_id", null)
+
+  const { data: rows } = await q.order("updated_at", { ascending: false }).limit(8)
+  for (const row of rows ?? []) {
+    if (amountsRoughlyEqual(amount, Number(row.amount))) return normalizeRow(row as Record<string, unknown>)
+  }
+  return null
+}
+
+export type EasetagSettlementChainSuppressionInput = {
+  turnkeySendStatusId?: string | null
+  txHash?: string | null
+  /** Payee wallet scope for inbound Turnkey balance webhooks (duplicate of easetag_p2p credit). */
+  payeeUserId?: string | null
+  payeeBusinessId?: string | null
+  amount?: number | null
+  currency?: string | null
+}
+
 /** True when ledger delta from Turnkey webhook/RPC should be skipped (already applied in Easetag ledger). */
 export async function findEasetagSettlementForChainSuppression(
   admin: SupabaseClient,
-  input: { turnkeySendStatusId?: string | null; txHash?: string | null },
+  input: EasetagSettlementChainSuppressionInput,
 ): Promise<EasetagSettlementRow | null> {
   const tid = String(input.turnkeySendStatusId || "").trim()
   const hx = String(input.txHash || "").trim()
-  if (!tid && !hx) return null
 
   if (tid) {
     const { data } = await admin
       .from("easetag_settlements")
       .select("*")
       .eq("turnkey_send_status_id", tid)
-      .in("status", ["submitted", "settled"])
+      .in("status", [...EASETAG_SETTLEMENT_ACTIVE_STATUSES])
       .maybeSingle()
     if (data) return normalizeRow(data)
   }
@@ -60,9 +160,22 @@ export async function findEasetagSettlementForChainSuppression(
       .from("easetag_settlements")
       .select("*")
       .eq("tx_hash", hx)
-      .in("status", ["submitted", "settled"])
+      .in("status", [...EASETAG_SETTLEMENT_ACTIVE_STATUSES])
       .maybeSingle()
     if (data) return normalizeRow(data)
+
+    const viaDebit = await findEasetagSettlementViaP2pDebitTxHash(admin, hx)
+    if (viaDebit) return viaDebit
+  }
+
+  const payeeUserId = String(input.payeeUserId || "").trim()
+  if (payeeUserId && input.amount != null && input.currency) {
+    return findEasetagSettlementByPayeeInbound(admin, {
+      payeeUserId,
+      payeeBusinessId: input.payeeBusinessId ?? null,
+      amount: Number(input.amount),
+      currency: String(input.currency),
+    })
   }
   return null
 }

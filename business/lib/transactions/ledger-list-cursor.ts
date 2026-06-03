@@ -69,7 +69,7 @@ export function resolveHiddenFromFeed(metadata: unknown, payload?: unknown): boo
     return false
   }
   const m = metadata as Record<string, unknown>
-  if (m.easetag_settlement_leg === true || m.suppress_in_feed === true) return true
+  if (m.easetag_settlement_leg === true || m.easetag_p2p_chain_mirror === true || m.suppress_in_feed === true) return true
   if (m.global_payout_settlement_leg === true) return true
   if (m.global_payout_orchestration_in_leg === true) return true
   if (m.noah_orchestration_settlement_leg === true) return true

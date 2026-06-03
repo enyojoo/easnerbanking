@@ -171,4 +171,18 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
     expect(mocks.upsertLedger).not.toHaveBeenCalled()
     expect(mocks.updateEasetag).toHaveBeenCalled()
   })
+
+  it("passes payee scope to Easetag suppression for inbound deposits", async () => {
+    mocks.findEasetag.mockResolvedValue({ transfer_group_id: "tg-1", status: "pending" })
+    const admin = { from: vi.fn() }
+    await applyTurnkeyInboundLedgerEvent(admin as never, baseInput)
+    expect(mocks.findEasetag).toHaveBeenCalledWith(admin, {
+      turnkeySendStatusId: "pt-1",
+      txHash: "hash-noah",
+      payeeUserId: "user-1",
+      payeeBusinessId: null,
+      amount: 10,
+      currency: "USD",
+    })
+  })
 })

@@ -10,6 +10,7 @@ import { getWalletAssets } from './recipientCatalog'
 const FALLBACK_OTHER: OtherSendCurrency[] = [
   { code: 'KES', name: 'Kenyan Shilling', symbol: 'KSh' },
   { code: 'GHS', name: 'Ghanaian Cedi', symbol: '₵' },
+  { code: 'RWF', name: 'Rwandan Franc', symbol: 'R₣' },
 ]
 
 const FALLBACK_METHODS: Record<string, CrossBorderPaymentMethod[]> = {

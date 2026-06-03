@@ -18,6 +18,10 @@ describe("isTurnkeyTransactionHiddenFromFeed", () => {
     expect(isTurnkeyTransactionHiddenFromFeed({ easetag_settlement_leg: true })).toBe(true)
   })
 
+  it("returns true when easetag_p2p_chain_mirror is true", () => {
+    expect(isTurnkeyTransactionHiddenFromFeed({ easetag_p2p_chain_mirror: true })).toBe(true)
+  })
+
   it("returns true when suppress_in_feed is true", () => {
     expect(isTurnkeyTransactionHiddenFromFeed({ suppress_in_feed: true })).toBe(true)
   })

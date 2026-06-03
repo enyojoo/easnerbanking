@@ -32,11 +32,14 @@ describe("formatPayoutArrivalHint", () => {
 })
 
 describe("resolvePayoutProcessingSeconds", () => {
-  it("overrides GH and ZA bank corridors to NG-style seconds", () => {
+  it("overrides GH, ZA, and RW bank corridors to NG-style seconds", () => {
     expect(resolvePayoutProcessingSeconds({ countryCode: "GH", rail: "bank_transfer", fromNoah: 86400 })).toBe(
       NG_BANK_ARRIVAL_PROCESSING_SECONDS,
     )
     expect(resolvePayoutProcessingSeconds({ countryCode: "ZA", rail: "bank_transfer", fromNoah: 86400 })).toBe(
+      NG_BANK_ARRIVAL_PROCESSING_SECONDS,
+    )
+    expect(resolvePayoutProcessingSeconds({ countryCode: "RW", rail: "bank_transfer", fromNoah: 86400 })).toBe(
       NG_BANK_ARRIVAL_PROCESSING_SECONDS,
     )
     expect(resolvePayoutProcessingSeconds({ countryCode: "NG", rail: "bank_transfer", fromNoah: 50 })).toBe(50)
@@ -56,9 +59,24 @@ describe("resolvePayoutProcessingSeconds", () => {
         providers: null,
         fields_schema: { amount_field_mode: "note_optional_only" as const, processing_seconds: 86400 },
       },
+      {
+        id: "rw",
+        rail: "bank_transfer" as const,
+        country_code: "RW",
+        country_name: "Rwanda",
+        currency_code: "RWF",
+        currency_name: "Rwandan Franc",
+        sort_order: 0,
+        providers: null,
+        fields_schema: { amount_field_mode: "note_optional_only" as const, processing_seconds: 86400 },
+      },
     ]
     expect(
       findPayoutFieldsSchema(corridors, { countryCode: "ZA", currencyCode: "ZAR", rail: "bank_transfer" })
+        ?.processing_seconds,
+    ).toBe(50)
+    expect(
+      findPayoutFieldsSchema(corridors, { countryCode: "RW", currencyCode: "RWF", rail: "bank_transfer" })
         ?.processing_seconds,
     ).toBe(50)
   })
@@ -74,7 +92,7 @@ describe("resolveSendConfirmArrivalHint", () => {
     expect(resolveSendConfirmArrivalHint({ processingSeconds: 60 })).toBe("Within a minute")
   })
 
-  it("shows Within minutes for NG/GH/ZA bank", () => {
+  it("shows Within minutes for NG/GH/ZA/RW bank", () => {
     expect(
       resolveSendConfirmArrivalHint({
         countryCode: "NG",
@@ -94,6 +112,13 @@ describe("resolveSendConfirmArrivalHint", () => {
         countryCode: "ZA",
         rail: "bank_transfer",
         processingSeconds: 50,
+      }),
+    ).toBe(SEND_ARRIVAL_WITHIN_MINUTES)
+    expect(
+      resolveSendConfirmArrivalHint({
+        countryCode: "RW",
+        rail: "bank_transfer",
+        processingSeconds: 86400,
       }),
     ).toBe(SEND_ARRIVAL_WITHIN_MINUTES)
     expect(
@@ -118,6 +143,13 @@ describe("resolveSendConfirmArrivalHint", () => {
         currencyCode: "NGN",
         rail: "bank_transfer",
         processingSeconds: 60,
+      }),
+    ).toBe(SEND_ARRIVAL_WITHIN_MINUTES)
+    expect(
+      resolveSendConfirmArrivalHint({
+        currencyCode: "RWF",
+        rail: "bank_transfer",
+        processingSeconds: 86400,
       }),
     ).toBe(SEND_ARRIVAL_WITHIN_MINUTES)
   })

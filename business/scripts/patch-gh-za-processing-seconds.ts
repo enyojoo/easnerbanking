@@ -1,5 +1,5 @@
 /**
- * Patch GH/ZA bank_transfer fields_schema.processing_seconds to 50 (NG tier).
+ * Patch GH/ZA/RW bank_transfer fields_schema.processing_seconds to 50 (NG tier).
  * Usage: cd business && npx tsx scripts/patch-gh-za-processing-seconds.ts
  */
 import { readFileSync } from "node:fs"
@@ -29,7 +29,7 @@ function loadEnvLocal() {
 async function main() {
   loadEnvLocal()
   const admin = createSupabaseAdmin()
-  for (const country_code of ["GH", "ZA"]) {
+  for (const country_code of ["GH", "ZA", "RW"]) {
     const { data: rows, error } = await admin
       .from("payout_corridors")
       .select("id, fields_schema, currency_code")

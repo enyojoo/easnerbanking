@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('@easner/shared', () => ({
   getCurrencySymbol: (currency: string) => {
-    const map: Record<string, string> = { USD: '$', ZAR: 'R', KES: 'KSh' }
+    const map: Record<string, string> = { USD: '$', ZAR: 'R', KES: 'KSh', RWF: 'R₣' }
     return map[String(currency || '').toUpperCase()] ?? currency
   },
 }))
@@ -25,5 +25,6 @@ describe('getSendAmountFieldSymbol', () => {
     expect(getSendAmountFieldSymbol('USD')).toBe('$')
     expect(getSendAmountFieldSymbol('ZAR')).toBe('R')
     expect(getSendAmountFieldSymbol('KES')).toBe('KSh')
+    expect(getSendAmountFieldSymbol('RWF')).toBe('R₣')
   })
 })

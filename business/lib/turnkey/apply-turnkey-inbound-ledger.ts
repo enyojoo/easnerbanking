@@ -119,6 +119,14 @@ export async function applyTurnkeyInboundLedgerEvent(
   const easetagSuppressed = await findEasetagSettlementForChainSuppression(admin, {
     turnkeySendStatusId: input.providerTransactionId,
     txHash,
+    ...(direction === "in"
+      ? {
+          payeeUserId: userId,
+          payeeBusinessId: businessId,
+          amount: input.amount,
+          currency: input.currency,
+        }
+      : {}),
   })
   if (easetagSuppressed) {
     if (status === "settled" && txHash) {
