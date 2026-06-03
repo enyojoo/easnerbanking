@@ -30,40 +30,29 @@ export function resolvePayoutCountryCode(input: {
 
 export { parsePayoutMinAmount } from "./payout-business-limits"
 
-/** Noah `ProcessingSeconds` tier for NG/GH/ZA/RW bank (fast corridors; confirm copy is separate). */
+/** @deprecated Use Noah channel `ProcessingSeconds` via `resolvePayoutProcessingSeconds`. */
 export const NG_BANK_ARRIVAL_PROCESSING_SECONDS = 50
 
-/** Send confirm + payout review for NG/GH/ZA/RW bank transfers. */
+/** Fast fiat tier copy when Noah reports ~50s (see `formatPayoutArrivalHint`). */
 export const SEND_ARRIVAL_WITHIN_MINUTES = "Within minutes"
 
-const WITHIN_MINUTES_BANK_COUNTRIES = new Set(["NG", "GH", "ZA", "RW"])
-const WITHIN_MINUTES_BANK_CURRENCIES = new Set(["NGN", "GHS", "ZAR", "RWF"])
-
-export function isWithinMinutesBankPayoutCorridor(input: {
+/** @deprecated Prefer `formatPayoutArrivalHint` from stored `processing_seconds`. */
+export function isWithinMinutesBankPayoutCorridor(_input: {
   countryCode?: string | null
   currencyCode?: string | null
   rail?: PayoutRail
 }): boolean {
-  if (input.rail !== "bank_transfer") return false
-  const cc = String(input.countryCode || "").trim().toUpperCase()
-  if (WITHIN_MINUTES_BANK_COUNTRIES.has(cc)) return true
-  const cur = String(input.currencyCode || "").trim().toUpperCase()
-  return WITHIN_MINUTES_BANK_CURRENCIES.has(cur)
+  return false
 }
 
-/**
- * Product arrival SLA for bank corridors where Noah reports 86400 but settlement is fast (GH, ZA, RW).
- * Keeps confirm copy aligned with NG-style corridors.
- */
+/** Pass through Noah `ProcessingSeconds` — confirm copy comes from `formatPayoutArrivalHint`. */
 export function resolvePayoutProcessingSeconds(input: {
   countryCode: string
   rail: PayoutRail
   fromNoah?: number
 }): number | undefined {
-  const cc = String(input.countryCode || "").trim().toUpperCase()
-  if (input.rail === "bank_transfer" && (cc === "GH" || cc === "ZA" || cc === "RW")) {
-    return NG_BANK_ARRIVAL_PROCESSING_SECONDS
-  }
+  void input.countryCode
+  void input.rail
   return input.fromNoah
 }
 
@@ -238,7 +227,7 @@ export const SEND_ARRIVAL_WITHIN_SECONDS = "Within seconds"
  */
 export function formatPayoutArrivalHint(processingSeconds?: number): string | null {
   if (processingSeconds == null || processingSeconds <= 0) return null
-  if (processingSeconds < 120) return "Within a minute"
+  if (processingSeconds < 120) return SEND_ARRIVAL_WITHIN_MINUTES
   if (processingSeconds < 86400) return "Within a few hours"
   const days = Math.max(1, Math.round(processingSeconds / 86400))
   return days === 1 ? "1 business day" : `${days} business days`
@@ -254,18 +243,5 @@ export function resolveSendConfirmArrivalHint(input: {
   rail?: PayoutRail
 }): string | null {
   if (input.isEasetag || input.isWalletSend) return SEND_ARRIVAL_WITHIN_SECONDS
-  const countryCode = resolvePayoutCountryCode({
-    countryCode: input.countryCode,
-    currencyCode: input.currencyCode ?? "",
-  })
-  if (
-    isWithinMinutesBankPayoutCorridor({
-      countryCode,
-      currencyCode: input.currencyCode,
-      rail: input.rail,
-    })
-  ) {
-    return SEND_ARRIVAL_WITHIN_MINUTES
-  }
   return formatPayoutArrivalHint(input.processingSeconds ?? undefined)
 }

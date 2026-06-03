@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest"
 import {
   findPayoutFieldsSchema,
   formatPayoutArrivalHint,
-  NG_BANK_ARRIVAL_PROCESSING_SECONDS,
   resolvePayoutProcessingSeconds,
   resolveSendConfirmArrivalHint,
   SEND_ARRIVAL_WITHIN_MINUTES,
@@ -15,8 +14,8 @@ import type { PayoutCorridorPublic, PayoutFieldsSchemaHint } from "./payout-corr
 
 describe("formatPayoutArrivalHint", () => {
   it("maps Noah manifest tiers to product copy", () => {
-    expect(formatPayoutArrivalHint(50)).toBe("Within a minute")
-    expect(formatPayoutArrivalHint(60)).toBe("Within a minute")
+    expect(formatPayoutArrivalHint(50)).toBe(SEND_ARRIVAL_WITHIN_MINUTES)
+    expect(formatPayoutArrivalHint(60)).toBe(SEND_ARRIVAL_WITHIN_MINUTES)
     expect(formatPayoutArrivalHint(3600)).toBe("Within a few hours")
     expect(formatPayoutArrivalHint(86400)).toBe("1 business day")
   })
@@ -32,21 +31,13 @@ describe("formatPayoutArrivalHint", () => {
 })
 
 describe("resolvePayoutProcessingSeconds", () => {
-  it("overrides GH, ZA, and RW bank corridors to NG-style seconds", () => {
-    expect(resolvePayoutProcessingSeconds({ countryCode: "GH", rail: "bank_transfer", fromNoah: 86400 })).toBe(
-      NG_BANK_ARRIVAL_PROCESSING_SECONDS,
-    )
-    expect(resolvePayoutProcessingSeconds({ countryCode: "ZA", rail: "bank_transfer", fromNoah: 86400 })).toBe(
-      NG_BANK_ARRIVAL_PROCESSING_SECONDS,
-    )
-    expect(resolvePayoutProcessingSeconds({ countryCode: "RW", rail: "bank_transfer", fromNoah: 86400 })).toBe(
-      NG_BANK_ARRIVAL_PROCESSING_SECONDS,
-    )
+  it("passes through Noah seconds for all corridors", () => {
+    expect(resolvePayoutProcessingSeconds({ countryCode: "ZA", rail: "bank_transfer", fromNoah: 86400 })).toBe(86400)
     expect(resolvePayoutProcessingSeconds({ countryCode: "NG", rail: "bank_transfer", fromNoah: 50 })).toBe(50)
-    expect(resolvePayoutProcessingSeconds({ countryCode: "GH", rail: "mobile_money", fromNoah: 86400 })).toBe(86400)
+    expect(resolvePayoutProcessingSeconds({ countryCode: "RW", rail: "mobile_money", fromNoah: 50 })).toBe(50)
   })
 
-  it("applies override via findPayoutFieldsSchema", () => {
+  it("does not rewrite stored seconds in findPayoutFieldsSchema", () => {
     const corridors = [
       {
         id: "za",
@@ -59,26 +50,11 @@ describe("resolvePayoutProcessingSeconds", () => {
         providers: null,
         fields_schema: { amount_field_mode: "note_optional_only" as const, processing_seconds: 86400 },
       },
-      {
-        id: "rw",
-        rail: "bank_transfer" as const,
-        country_code: "RW",
-        country_name: "Rwanda",
-        currency_code: "RWF",
-        currency_name: "Rwandan Franc",
-        sort_order: 0,
-        providers: null,
-        fields_schema: { amount_field_mode: "note_optional_only" as const, processing_seconds: 86400 },
-      },
     ]
     expect(
       findPayoutFieldsSchema(corridors, { countryCode: "ZA", currencyCode: "ZAR", rail: "bank_transfer" })
         ?.processing_seconds,
-    ).toBe(50)
-    expect(
-      findPayoutFieldsSchema(corridors, { countryCode: "RW", currencyCode: "RWF", rail: "bank_transfer" })
-        ?.processing_seconds,
-    ).toBe(50)
+    ).toBe(86400)
   })
 })
 
@@ -89,10 +65,10 @@ describe("resolveSendConfirmArrivalHint", () => {
   })
 
   it("uses Noah tiers for fiat payout", () => {
-    expect(resolveSendConfirmArrivalHint({ processingSeconds: 60 })).toBe("Within a minute")
+    expect(resolveSendConfirmArrivalHint({ processingSeconds: 60 })).toBe(SEND_ARRIVAL_WITHIN_MINUTES)
   })
 
-  it("shows Within minutes for NG/GH/ZA/RW bank", () => {
+  it("maps Noah processing_seconds to product copy for African corridors", () => {
     expect(
       resolveSendConfirmArrivalHint({
         countryCode: "NG",
@@ -102,56 +78,63 @@ describe("resolveSendConfirmArrivalHint", () => {
     ).toBe(SEND_ARRIVAL_WITHIN_MINUTES)
     expect(
       resolveSendConfirmArrivalHint({
+        countryCode: "ZA",
+        rail: "bank_transfer",
+        processingSeconds: 86400,
+      }),
+    ).toBe("1 business day")
+    expect(
+      resolveSendConfirmArrivalHint({
         countryCode: "GH",
         rail: "bank_transfer",
         processingSeconds: 86400,
       }),
-    ).toBe(SEND_ARRIVAL_WITHIN_MINUTES)
-    expect(
-      resolveSendConfirmArrivalHint({
-        countryCode: "ZA",
-        rail: "bank_transfer",
-        processingSeconds: 50,
-      }),
-    ).toBe(SEND_ARRIVAL_WITHIN_MINUTES)
+    ).toBe("1 business day")
     expect(
       resolveSendConfirmArrivalHint({
         countryCode: "RW",
         rail: "bank_transfer",
         processingSeconds: 86400,
       }),
-    ).toBe(SEND_ARRIVAL_WITHIN_MINUTES)
+    ).toBe("1 business day")
+    expect(
+      resolveSendConfirmArrivalHint({
+        countryCode: "KE",
+        rail: "bank_transfer",
+        processingSeconds: 86400,
+      }),
+    ).toBe("1 business day")
     expect(
       resolveSendConfirmArrivalHint({
         countryCode: "GH",
         rail: "mobile_money",
         processingSeconds: 50,
       }),
-    ).toBe("Within a minute")
-  })
-
-  it("shows Within minutes when only receive currency is set (no country on recipient)", () => {
+    ).toBe(SEND_ARRIVAL_WITHIN_MINUTES)
     expect(
       resolveSendConfirmArrivalHint({
-        currencyCode: "ZAR",
+        countryCode: "KE",
+        rail: "mobile_money",
+        processingSeconds: 86400,
+      }),
+    ).toBe("1 business day")
+  })
+
+  it("uses formatPayoutArrivalHint when only currency is set", () => {
+    expect(
+      resolveSendConfirmArrivalHint({
+        currencyCode: "NGN",
         rail: "bank_transfer",
         processingSeconds: 50,
       }),
     ).toBe(SEND_ARRIVAL_WITHIN_MINUTES)
     expect(
       resolveSendConfirmArrivalHint({
-        currencyCode: "NGN",
-        rail: "bank_transfer",
-        processingSeconds: 60,
-      }),
-    ).toBe(SEND_ARRIVAL_WITHIN_MINUTES)
-    expect(
-      resolveSendConfirmArrivalHint({
-        currencyCode: "RWF",
+        currencyCode: "ZAR",
         rail: "bank_transfer",
         processingSeconds: 86400,
       }),
-    ).toBe(SEND_ARRIVAL_WITHIN_MINUTES)
+    ).toBe("1 business day")
   })
 })
 
