@@ -13,18 +13,6 @@ import { isEasenetRecipientRecord } from './easenetRecipientUi'
 export { formatAccountNumber, formatIBAN, truncateMiddle }
 export { isMobileMoneyPayoutRow as isMobileMoneyRecipient, isWalletPayoutRow as isWalletRecipientDisplay }
 
-export function formatMobilePhoneDisplay(phone: string | undefined | null): string {
-  const t = String(phone || '').trim()
-  if (!t) return ''
-  const compact = t.replace(/[^\d+]/g, '')
-  if (compact.startsWith('+')) {
-    return `+${compact.slice(1).replace(/\D/g, '')}`
-  }
-  const d = compact.replace(/\D/g, '')
-  if (d.length >= 8) return `+${d}`
-  return t
-}
-
 function recipientToSubtitleInput(r: Recipient): PayoutRecipientSubtitleInput {
   return {
     bankName: r.bank_name,

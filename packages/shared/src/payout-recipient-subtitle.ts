@@ -55,16 +55,9 @@ function normalizeProviderLabel(raw: string | undefined): string {
   return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase()
 }
 
-function formatMobilePhoneDisplay(phone: string | undefined | null): string {
-  const t = String(phone || "").trim()
-  if (!t) return ""
-  const compact = t.replace(/[^\d+]/g, "")
-  if (compact.startsWith("+")) {
-    return `+${compact.slice(1).replace(/\D/g, "")}`
-  }
-  const d = compact.replace(/\D/g, "")
-  if (d.length >= 8) return `+${d}`
-  return t
+/** Show phone as stored — Noah E.164 normalization runs only at sell/prepare, not in UI. */
+export function formatMobilePhoneDisplay(phone: string | undefined | null): string {
+  return String(phone || "").trim()
 }
 
 function bankNameLead(bankName: string): string {

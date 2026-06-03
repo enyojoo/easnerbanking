@@ -32,6 +32,22 @@ describe("getPayoutRecipientSubtitleParts", () => {
     expect(parts.left).toBe("MTN MoMo")
   })
 
+  it("shows mobile phone as stored without adding a + prefix", () => {
+    const parts = getPayoutRecipientSubtitleParts({
+      mobileProvider: "MTN MoMo",
+      phone: "039902",
+    })
+    expect(parts.right).toBe("039902")
+  })
+
+  it("preserves + when user entered international format", () => {
+    const parts = getPayoutRecipientSubtitleParts({
+      mobileProvider: "MTN MoMo",
+      phone: "+233241234567",
+    })
+    expect(parts.right).toBe("+233241234567")
+  })
+
   it("formats wallet as network and truncated address", () => {
     const parts = getPayoutRecipientSubtitleParts({
       bankName: "Wallet (USDC/Ethereum)",
