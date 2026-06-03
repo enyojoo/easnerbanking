@@ -64,8 +64,10 @@ import { haptics } from '../../lib/haptics'
 import { useRealtimeHealth } from '../../query/realtime-health-context'
 import { useTransactionListFocusRefresh } from '../../hooks/use-transaction-list-focus-refresh'
 
-const TRANSACTIONS_CACHE_KEY_PREFIX = 'easner_transactions_screen_list_'
-const TRANSACTIONS_CACHE_TTL_MS = 60 * 60 * 1000
+import {
+  TRANSACTIONS_CACHE_KEY_PREFIX,
+  DASHBOARD_RECENT_TX_CACHE_TTL_MS as TRANSACTIONS_CACHE_TTL_MS,
+} from '../../lib/background-feed-cache-keys'
 
 function useCurrencies() {
   const { data: currencies = [] } = useCurrenciesCatalog()

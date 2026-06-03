@@ -17,6 +17,7 @@ import type { Colors } from '../../theme'
 import { CircleCheck, Clock } from 'lucide-react-native'
 import { PlainTwoColumnRowSkeleton } from '../../components/skeletons'
 import { useDeferredLoading } from '../../hooks/useDeferredLoading'
+import { formatMoneyDisplay } from '@easner/shared'
 
 interface ReceiveTransaction {
   id: string
@@ -404,7 +405,7 @@ function ReceiveTransactionDetailsContent({ navigation, route }: NavigationProps
           <View style={[styles.amountCard, styles.fiatCard]}>
             <Text style={styles.amountLabel}>Fiat Amount</Text>
             <Text style={styles.fiatAmount}>
-              {transaction.fiat_amount.toLocaleString()} {transaction.fiat_currency}
+              {formatMoneyDisplay(transaction.fiat_amount, transaction.fiat_currency)}
             </Text>
           </View>
         </View>

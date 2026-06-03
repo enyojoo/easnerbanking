@@ -276,14 +276,6 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     }
   }, [supportsStablecoins])
 
-  const formatCurrency = (amount: number, curr: string): string => {
-    const symbol = curr === 'USD' ? '$' 
-      : curr === 'EUR' ? '€' 
-      : curr === 'NGN' ? '₦' 
-      : ''
-    return `${symbol}${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-  }
-
   const getCurrencyName = (curr: string): string => {
     return curr === 'USD' ? 'US Dollar'
       : curr === 'EUR' ? 'Euro'

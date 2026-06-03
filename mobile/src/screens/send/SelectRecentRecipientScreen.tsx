@@ -94,6 +94,7 @@ import {
 import { RecipientBankNameField } from '../../components/recipients/RecipientBankNameField'
 import { useToast } from '../../components/ToastProvider'
 import { useSendDestinations } from '../../hooks/useSendDestinations'
+import { useFocusRefresh } from '../../hooks/useFocusRefresh'
 import { useFocusEffect } from '@react-navigation/native'
 import { haptics } from '../../lib/haptics'
 
@@ -270,6 +271,16 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     if (!uid || queryRecipients.length === 0) return
     void saveRecipientsListCache(uid, queryRecipients)
   }, [queryRecipients, userProfile?.id, user?.id])
+
+  // Match RecipientsScreen: refetch list when hub gains focus (first visit or stale > 5m).
+  useFocusRefresh(
+    () => {
+      void recipientsQuery.refetch()
+      void txHubQuery.refetch()
+    },
+    5 * 60 * 1000,
+    false,
+  )
 
   useEffect(() => {
     if (!user?.id) {

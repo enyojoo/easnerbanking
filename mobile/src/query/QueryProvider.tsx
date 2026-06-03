@@ -124,6 +124,7 @@ function ForegroundResumeRefresher({ children }: { children: React.ReactNode }) 
 
       void qc.refetchQueries({ queryKey: qk.wallets.root(scope), type: 'active' })
       void qc.refetchQueries({ queryKey: qk.transactions.root(scope), type: 'active' })
+      void qc.refetchQueries({ queryKey: qk.beneficiaries.root(scope), type: 'active' })
       void qc.refetchQueries({ queryKey: ['exchange-rates', 'noah-send'], type: 'active' })
     }, [isReady, scope, user?.id, realtimeHealth])
 

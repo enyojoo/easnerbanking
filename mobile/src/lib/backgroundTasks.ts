@@ -8,11 +8,14 @@ import { NOAH_SCOPE_INDIVIDUAL_HEADERS } from './apiClient'
 
 export const BACKGROUND_TASK_IDENTIFIER = 'background-task'
 
+import {
+  DASHBOARD_RECENT_TX_CACHE_KEY_PREFIX,
+  TRANSACTIONS_CACHE_KEY_PREFIX,
+} from './background-feed-cache-keys'
+import { recipientService } from './recipientService'
+import { saveRecipientsListCache } from './recipientsListCache'
 import { isDefinitiveEmptyBalanceResponse } from './wallet-balance-display'
 import { BALANCE_SNAPSHOT_KEY_PREFIX } from './wallet-balance-snapshot'
-
-const DASHBOARD_RECENT_TX_CACHE_KEY_PREFIX = 'easner_dashboard_recent_tx_'
-const TRANSACTIONS_CACHE_KEY_PREFIX = 'easner_transactions_screen_list_'
 
 type BalanceEnvelope = {
   USD?: string
@@ -30,7 +33,7 @@ async function refreshBackgroundSnapshots(): Promise<boolean> {
   const userId = session?.user?.id
   if (!userId) return false
 
-  const [balancesResult, transactionsResult] = await Promise.allSettled([
+  const [balancesResult, transactionsResult, recipientsResult] = await Promise.allSettled([
     apiFetch<BalanceEnvelope>('/api/wallets/on-chain-balances', {
       headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
     }),
@@ -38,10 +41,12 @@ async function refreshBackgroundSnapshots(): Promise<boolean> {
       query: { limit: 50 },
       headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
     }),
+    recipientService.getByUserId(userId),
   ])
 
   const writes: [string, string][] = []
   const now = Date.now()
+  let updated = false
 
   if (balancesResult.status === 'fulfilled') {
     const body = balancesResult.value
@@ -82,9 +87,17 @@ async function refreshBackgroundSnapshots(): Promise<boolean> {
     ])
   }
 
-  if (writes.length === 0) return false
-  await AsyncStorage.multiSet(writes)
-  return true
+  if (recipientsResult.status === 'fulfilled' && recipientsResult.value.length > 0) {
+    await saveRecipientsListCache(userId, recipientsResult.value)
+    updated = true
+  }
+
+  if (writes.length > 0) {
+    await AsyncStorage.multiSet(writes)
+    updated = true
+  }
+
+  return updated
 }
 
 if (Platform.OS === 'ios' || Platform.OS === 'android') {

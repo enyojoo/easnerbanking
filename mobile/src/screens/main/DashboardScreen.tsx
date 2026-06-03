@@ -72,9 +72,12 @@ import { avatarImageUri, warmAvatarCache } from '../../lib/avatarCache'
 import { buildGroupedActivityItems } from '../../lib/transactionListGrouping'
 import { haptics } from '../../lib/haptics'
 
+import {
+  DASHBOARD_RECENT_TX_CACHE_KEY_PREFIX,
+  DASHBOARD_RECENT_TX_CACHE_TTL_MS,
+} from '../../lib/background-feed-cache-keys'
+
 const DASHBOARD_SELECTED_CURRENCY_KEY_PREFIX = 'easner_dashboard_selected_currency_'
-const DASHBOARD_RECENT_TX_CACHE_KEY_PREFIX = 'easner_dashboard_recent_tx_v2_'
-const DASHBOARD_RECENT_TX_CACHE_TTL_MS = 60 * 60 * 1000
 /** Recent activity rows shown on Home (UI only). Ledger fetch uses {@link TRANSACTIONS_LEDGER_PAGE_SIZE}. */
 const DASHBOARD_RECENT_TX_LIMIT = 4
 /** Hidden-balance + currency picker label (text). */
