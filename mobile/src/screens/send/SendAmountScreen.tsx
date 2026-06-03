@@ -54,6 +54,7 @@ import {
   getNoahSendConversionRate,
   hasNoahSendRateRow,
   findPayoutFieldsSchema,
+  formatMoneyDisplay,
   formatSendRateLabel,
   normalizePayoutReceiveAmountForCurrency,
   resolveEffectivePayoutMin,
@@ -468,26 +469,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     if (raw === '0') raw = value
     else raw += value
     setSendAmount(formatAmount(raw))
-  }
-
-  const formatCurrency = (amount: number, currency: string): string => {
-    const roundedAmount = Math.round((Number.isFinite(amount) ? amount : 0) * 100) / 100
-    const fractionalPart = Math.abs(roundedAmount - Math.trunc(roundedAmount))
-    const showDecimals = fractionalPart >= 0.01
-    const symbol = currency === 'USD' ? '$' 
-      : currency === 'EUR' ? '€' 
-      : currency === 'NGN' ? '₦' 
-      : currency === 'KES' ? 'KSh' 
-      : currency === 'GHS' ? '₵' 
-      : currency === 'RWF' ? 'R₣'
-      : currency === 'RUB' ? '₽' 
-      : currency === 'GBP' ? '£' 
-      : ''
-    const formattedAmount = roundedAmount.toLocaleString("en-US", {
-      minimumFractionDigits: showDecimals ? 2 : 0,
-      maximumFractionDigits: showDecimals ? 2 : 0,
-    })
-    return symbol ? `${symbol}${formattedAmount}` : `${currency} ${formattedAmount}`
   }
 
   const toSwitchInputAmount = (amount: number): string => {
@@ -1153,8 +1134,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                           <ArrowUpDown size={13} color={colors.primary.main} strokeWidth={2.5} />
                           <Text style={styles.exchangeInfoText}>
                             {amountEntryMode === 'receive'
-                              ? `Sending: ${formatCurrency(sendingAmount, sendCurrency)}`
-                              : `Receiving: ${formatCurrency(receiveAmount, receiveCurrency)}`}
+                              ? `Sending: ${formatMoneyDisplay(sendingAmount, sendCurrency)}`
+                              : `Receiving: ${formatMoneyDisplay(receiveAmount, receiveCurrency)}`}
                           </Text>
                         </Pressable>
                         <Text style={styles.exchangeInfoText}>
