@@ -1,3 +1,4 @@
+import { getCurrencySymbol } from "../currency-symbol"
 import { currencyToCountryCode } from "../flags/currency-mapping"
 
 export type CurrencyCatalogEntry = {
@@ -39,22 +40,8 @@ function safeCurrencySymbol(code: string): string | null {
   const upper = code.trim().toUpperCase()
   const manual = NON_ISO_ASSETS.find((a) => a.code === upper)
   if (manual) return manual.symbol
-
-  try {
-    // Use narrow symbol when available. Example: "$", "€", "£"
-    const formatted = new Intl.NumberFormat("en", {
-      style: "currency",
-      currency: upper,
-      currencyDisplay: "narrowSymbol",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(0)
-    // Remove digits/whitespace/punctuation, keep the currency symbol-ish portion.
-    const sym = formatted.replace(/[0-9\s.,]/g, "")
-    return sym || null
-  } catch {
-    return null
-  }
+  const sym = getCurrencySymbol(upper, upper).trim()
+  return sym || null
 }
 
 /**

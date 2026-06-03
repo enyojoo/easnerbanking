@@ -1,6 +1,6 @@
 import type { ExchangeRate } from "./types"
 import { currencyDisplayName } from "./currencies/catalog"
-import { getCurrencySymbol } from "./currency-symbol"
+import { resolveDisplayCurrencySymbol } from "./currency-symbol"
 
 export type ManualSendCurrencyOption = {
   code: string
@@ -77,7 +77,7 @@ export function buildManualSendPayInCurrencyOptions(
       const code = norm(raw)
       const row = byCode.get(code)
       const name = row?.name?.trim() || currencyDisplayName(code)
-      const symbol = row?.symbol?.trim() || getCurrencySymbol(code, code)
+      const symbol = resolveDisplayCurrencySymbol(code, row?.symbol)
       return { code, name, symbol }
     })
     .sort((a, b) => a.name.localeCompare(b.name))

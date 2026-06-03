@@ -1,3 +1,4 @@
+import { resolveDisplayCurrencySymbol } from "@easner/shared"
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireOfficeAdmin } from "@/lib/api/admin-auth"
@@ -56,7 +57,15 @@ export async function GET(request: Request) {
     })
   }
 
-  return NextResponse.json({ currencies })
+  const normalized = currencies.map((row) => {
+    const code = String((row as { code?: string }).code ?? "")
+    return {
+      ...row,
+      symbol: resolveDisplayCurrencySymbol(code, (row as { symbol?: string }).symbol),
+    }
+  })
+
+  return NextResponse.json({ currencies: normalized })
 }
 
 export async function POST(request: Request) {

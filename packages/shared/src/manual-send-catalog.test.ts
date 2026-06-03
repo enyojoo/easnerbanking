@@ -43,6 +43,13 @@ describe("manual-send-catalog", () => {
     expect(options[0]?.code).toBe("KES")
   })
 
+  it("prefers canonical R₣ over Intl RF stored in catalog rows", () => {
+    const options = buildManualSendPayInCurrencyOptions(["RWF"], [
+      { code: "RWF", name: "Rwandan Franc", symbol: "RF" },
+    ])
+    expect(options[0]?.symbol).toBe("R₣")
+  })
+
   it("lists multiple PM options per currency", () => {
     const opts = listManualPayInOptionsForCurrency(
       [

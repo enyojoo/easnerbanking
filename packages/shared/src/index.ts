@@ -28,6 +28,7 @@ export {
   getCurrencySymbol,
   getSendAmountFieldSymbol,
   isWideSendAmountSymbol,
+  resolveDisplayCurrencySymbol,
   scaleSendAmountPrefixFontSize,
   scaleSendAmountPrefixLineHeight,
 } from "./currency-symbol"

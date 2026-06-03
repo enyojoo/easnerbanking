@@ -15,6 +15,19 @@ const OVERRIDES: Record<string, string> = {
   XAF: "XAF",
 }
 
+/** Display symbol for UI: Easner overrides beat stored catalog/DB values. */
+export function resolveDisplayCurrencySymbol(
+  currency: string,
+  storedSymbol?: string | null,
+): string {
+  const code = String(currency || "").trim().toUpperCase()
+  const override = OVERRIDES[code]
+  if (override) return override
+  const stored = storedSymbol?.trim()
+  if (stored) return stored
+  return getCurrencySymbol(code)
+}
+
 export function getCurrencySymbol(currency: string, fallback = "USD"): string {
   const code = String(currency || fallback).trim().toUpperCase()
   const o = OVERRIDES[code]

@@ -19,4 +19,8 @@ describe("formatSendRateLabel", () => {
   it("uses symbols not ISO codes", () => {
     expect(formatSendRateLabel("USD", "NGN", 1342.7546)).toBe("$1 = ₦1,342.75")
   })
+
+  it("uses R₣ for RWF receive legs", () => {
+    expect(formatSendRateLabel("USD", "RWF", 1342.7546)).toBe("$1 = R₣1,342.75")
+  })
 })

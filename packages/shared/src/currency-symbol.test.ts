@@ -3,6 +3,7 @@ import {
   getCurrencySymbol,
   getSendAmountFieldSymbol,
   isWideSendAmountSymbol,
+  resolveDisplayCurrencySymbol,
   scaleSendAmountPrefixFontSize,
 } from "./currency-symbol"
 
@@ -41,5 +42,19 @@ describe("getCurrencySymbol", () => {
   it("returns ISO tickers when no override exists", () => {
     expect(getCurrencySymbol("USDC")).toBe("USDC")
     expect(getCurrencySymbol("USDT")).toBe("USDT")
+  })
+
+  it("uses R₣ for RWF instead of Intl narrow RF", () => {
+    expect(getCurrencySymbol("RWF")).toBe("R₣")
+  })
+})
+
+describe("resolveDisplayCurrencySymbol", () => {
+  it("overrides stored RF for RWF", () => {
+    expect(resolveDisplayCurrencySymbol("RWF", "RF")).toBe("R₣")
+  })
+
+  it("keeps custom stored symbols when no override exists", () => {
+    expect(resolveDisplayCurrencySymbol("ABC", "A$")).toBe("A$")
   })
 })
