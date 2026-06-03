@@ -17,6 +17,13 @@ describe("getBusinessPayoutMin", () => {
     expect(getBusinessPayoutMin("KES", "bank_transfer")).toBe(150)
     expect(getBusinessPayoutMin("KES", "mobile_money")).toBe(150)
   })
+
+  it("uses separate mobile mins for GHS and RWF", () => {
+    expect(getBusinessPayoutMin("GHS", "mobile_money")).toBe(40)
+    expect(getBusinessPayoutMin("GHS", "bank_transfer")).toBe(10)
+    expect(getBusinessPayoutMin("RWF", "mobile_money")).toBe(6000)
+    expect(getBusinessPayoutMin("RWF", "bank_transfer")).toBe(6000)
+  })
 })
 
 describe("resolveEffectivePayoutMin", () => {
@@ -45,11 +52,34 @@ describe("resolveEffectivePayoutMin", () => {
   })
 
   /** Noah manifest mins (docs/noah-payout-manifest.json) — Easner must stay >= Noah. */
+  it("uses GHS 40 mobile min when above Noah channel floor", () => {
+    expect(
+      resolveEffectivePayoutMin({
+        hints: { limits: { min: "36.49" } } as PayoutFieldsSchemaHint,
+        currencyCode: "GHS",
+        rail: "mobile_money",
+      }),
+    ).toBe(40)
+  })
+
+  it("uses RWF 6000 min for bank and mobile when above Noah channel floor", () => {
+    for (const rail of ["bank_transfer", "mobile_money"] as const) {
+      expect(
+        resolveEffectivePayoutMin({
+          hints: { limits: { min: "5752" } } as PayoutFieldsSchemaHint,
+          currencyCode: "RWF",
+          rail,
+        }),
+      ).toBe(6000)
+    }
+  })
+
   it("stays at or above Noah channel mins for African corridors", () => {
     expect(
       resolveEffectivePayoutMin({
         hints: { limits: { min: "10" } } as PayoutFieldsSchemaHint,
         currencyCode: "GHS",
+        rail: "bank_transfer",
       }),
     ).toBe(10)
     expect(
