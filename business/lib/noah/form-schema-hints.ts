@@ -82,16 +82,12 @@ function identifierChannels(items: ChannelItem[]): ChannelItem[] {
   return items.filter((c) => String(c.PaymentMethodCategory ?? "").toLowerCase() === "identifier")
 }
 
-/** Country name for disambiguated MTN labels (e.g. MTN Ghana vs MTN Rwanda). */
-const MTN_COUNTRY_DISPLAY: Record<string, string> = {
-  GH: "Ghana",
-  RW: "Rwanda",
-}
+/** Noah MTN mobile corridors where product copy uses MTN MoMo (GH, RW). */
+const MTN_MOMO_COUNTRIES = new Set(["GH", "RW"])
 
 function mtnProviderLabel(countryCode: string): string {
   const cc = countryCode.toUpperCase()
-  const country = MTN_COUNTRY_DISPLAY[cc]
-  return country ? `MTN ${country}` : "MTN"
+  return MTN_MOMO_COUNTRIES.has(cc) ? "MTN MoMo" : "MTN"
 }
 
 /** Map Noah sell channel Issuer to recipient-form provider label. */

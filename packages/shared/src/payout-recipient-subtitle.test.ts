@@ -24,12 +24,12 @@ describe("getPayoutRecipientSubtitleParts", () => {
     expect(parts.right).toBe("+2348012345678")
   })
 
-  it("keeps disambiguated MTN country labels in subtitle", () => {
+  it("keeps MTN MoMo label in subtitle", () => {
     const parts = getPayoutRecipientSubtitleParts({
-      mobileProvider: "MTN Ghana",
+      mobileProvider: "MTN MoMo",
       phone: "+233201234567",
     })
-    expect(parts.left).toBe("MTN Ghana")
+    expect(parts.left).toBe("MTN MoMo")
   })
 
   it("formats wallet as network and truncated address", () => {

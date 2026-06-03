@@ -11,7 +11,7 @@ PROBE_WRITE_MANIFEST=true node --env-file=.env.local --import tsx scripts/probe-
 
 # Sync FormSchema hints into payout_corridors.fields_schema
 cd business && node --env-file=.env.local --import tsx scripts/apply-payout-corridor-schemas.ts
-# Optional: APPLY_SCHEMAS_ENABLE=true to insert disabled rows for new corridors
+# Schema sync does not change payout_corridors.enabled
 ```
 
 ## Client contract

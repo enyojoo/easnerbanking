@@ -69,7 +69,7 @@ describe("mobileProviderLabelsFromSellItems", () => {
       ],
       "GH",
     )
-    expect(labels).toEqual(["AirtelTigo", "MTN Ghana", "Vodafone"])
+    expect(labels).toEqual(["AirtelTigo", "MTN MoMo", "Vodafone"])
   })
 
   it("maps Rwanda mobile issuers from Noah Issuer field", () => {
@@ -80,15 +80,15 @@ describe("mobileProviderLabelsFromSellItems", () => {
       ],
       "RW",
     )
-    expect(labels).toEqual(["Airtel Money", "MTN Rwanda"])
+    expect(labels).toEqual(["Airtel Money", "MTN MoMo"])
   })
 
   it("resolves prepare substrings from issuer-backed labels", () => {
     expect(mobileProviderPrepareSubstrings("AirtelTigo")).toEqual(["airteltigo", "airtel"])
     expect(mobileProviderPrepareSubstrings("Vodafone")).toEqual(["vodafone"])
-    expect(mobileProviderPrepareSubstrings("MTN Ghana")).toEqual(["mtn", "momo"])
-    expect(labelFromNoahIssuer("MTN", "GH")).toBe("MTN Ghana")
-    expect(labelFromNoahIssuer("MTN", "RW")).toBe("MTN Rwanda")
+    expect(mobileProviderPrepareSubstrings("MTN MoMo")).toEqual(["mtn", "momo"])
+    expect(labelFromNoahIssuer("MTN", "GH")).toBe("MTN MoMo")
+    expect(labelFromNoahIssuer("MTN", "RW")).toBe("MTN MoMo")
     expect(labelFromNoahIssuer("MPS", "RW")).toBe("Airtel Money")
   })
 })
@@ -107,9 +107,9 @@ describe("findIdentifierSellChannel issuer matching", () => {
     expect(picked?.channelId).toBe("vod")
   })
 
-  it("picks MTN Ghana channel from disambiguated label", () => {
+  it("picks MTN MoMo channel from product label", () => {
     const picked = findIdentifierSellChannel(ghMobile, {
-      paymentMethodSubstrings: mobileProviderPrepareSubstrings("MTN Ghana"),
+      paymentMethodSubstrings: mobileProviderPrepareSubstrings("MTN MoMo"),
     })
     expect(picked?.channelId).toBe("mtn")
   })

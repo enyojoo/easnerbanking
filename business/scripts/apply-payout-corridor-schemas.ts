@@ -2,7 +2,7 @@
  * Sync Noah FormSchema hints into payout_corridors.fields_schema.
  * Usage: cd business && node --env-file=.env.local --import tsx scripts/apply-payout-corridor-schemas.ts
  *
- * Optional: APPLY_SCHEMAS_ENABLE=true to enable corridors that gain Noah channels.
+ * Does not change payout_corridors.enabled — only fields_schema and mobile providers.
  */
 import { createSupabaseAdmin } from "../lib/supabase/admin"
 import { noahFetch } from "../lib/noah/http"
@@ -42,7 +42,6 @@ const CURRENCY_NAMES: Record<string, string> = {
 
 async function main() {
   const settlement = getNoahSettlementCryptoCurrency()
-  const enableCorridors = process.env.APPLY_SCHEMAS_ENABLE === "true"
   const admin = createSupabaseAdmin()
 
   const countriesMap = await noahFetch<Record<string, string[]>>({
@@ -106,7 +105,6 @@ async function main() {
               ...(rail === "mobile_money" && mobileLabels.length > 0
                 ? { providers: mobileLabels }
                 : {}),
-              ...(enableCorridors ? { enabled: true } : {}),
               updated_at: new Date().toISOString(),
             })
             .eq("id", existing.id)
@@ -119,7 +117,6 @@ async function main() {
             country_name: COUNTRY_NAMES[cc] ?? cc,
             currency_code: fiat,
             currency_name: CURRENCY_NAMES[fiat] ?? fiat,
-            enabled: enableCorridors,
             provider_routing: [{ provider: "noah", priority: 1, settlement_asset: "USDC" }],
             providers: rail === "mobile_money" ? mobileLabels : null,
           })
@@ -139,7 +136,6 @@ async function main() {
                   ...(rail === "mobile_money" && mobileLabels.length > 0
                     ? { providers: mobileLabels }
                     : {}),
-                  ...(enableCorridors ? { enabled: true } : {}),
                 })
                 .eq("id", row.id)
             }

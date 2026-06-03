@@ -48,10 +48,8 @@ function parseMobileProviderFromBank(bankName: string): string {
 function normalizeProviderLabel(raw: string | undefined): string {
   const s = String(raw || "").trim()
   if (!s) return ""
-  if (/^mtn\s+\S/i.test(s)) {
-    const [, country] = s.split(/\s+/, 2)
-    return country ? `MTN ${country.charAt(0).toUpperCase()}${country.slice(1).toLowerCase()}` : "MTN"
-  }
+  if (/^mtn\s+momo$/i.test(s.replace(/\s+/g, " ").trim())) return "MTN MoMo"
+  if (/^mtn\b/i.test(s)) return "MTN"
   const first = s.split(/\s+/)[0] || s
   if (first.length <= 4 && first === first.toUpperCase()) return first
   return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase()
