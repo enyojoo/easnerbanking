@@ -82,6 +82,18 @@ function identifierChannels(items: ChannelItem[]): ChannelItem[] {
   return items.filter((c) => String(c.PaymentMethodCategory ?? "").toLowerCase() === "identifier")
 }
 
+/** Country name for disambiguated MTN labels (e.g. MTN Ghana vs MTN Rwanda). */
+const MTN_COUNTRY_DISPLAY: Record<string, string> = {
+  GH: "Ghana",
+  RW: "Rwanda",
+}
+
+function mtnProviderLabel(countryCode: string): string {
+  const cc = countryCode.toUpperCase()
+  const country = MTN_COUNTRY_DISPLAY[cc]
+  return country ? `MTN ${country}` : "MTN"
+}
+
 /** Map Noah sell channel Issuer to recipient-form provider label. */
 export function labelFromNoahIssuer(issuer: string, countryCode?: string): string | undefined {
   const i = issuer.trim().toUpperCase()
@@ -93,7 +105,7 @@ export function labelFromNoahIssuer(issuer: string, countryCode?: string): strin
     return undefined
   }
   if (i === "AIRTELTIGO") return "AirtelTigo"
-  if (i === "MTN") return "MTN"
+  if (i === "MTN") return mtnProviderLabel(cc)
   if (i === "VODAFONE") return "Vodafone"
   if (i.includes("AIRTEL")) return "Airtel Money"
   if (i.includes("MPESA") || i === "MOMO") return "M-PESA"
@@ -114,7 +126,7 @@ export function labelForIdentifierChannel(
   const cc = countryCode.toUpperCase()
   if (t.includes("airtel")) return "Airtel Money"
   if (t.includes("mpesa") || t.includes("momo")) return "M-PESA"
-  if (t.includes("mtn")) return "MTN"
+  if (t.includes("mtn")) return mtnProviderLabel(cc)
   if (t.includes("orange")) return "Orange Money"
   if (t.includes("wave")) return "Wave"
   if (cc === "KE") return "M-PESA"

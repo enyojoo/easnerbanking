@@ -8,6 +8,8 @@ import {
 describe("mobile-money-icons", () => {
   it("maps live Noah provider labels to asset keys", () => {
     expect(normalizeMobileMoneyProviderKey("MTN")).toBe("mtn")
+    expect(normalizeMobileMoneyProviderKey("MTN Ghana")).toBe("mtn")
+    expect(normalizeMobileMoneyProviderKey("MTN Rwanda")).toBe("mtn")
     expect(normalizeMobileMoneyProviderKey("M-PESA")).toBe("mpesa")
     expect(normalizeMobileMoneyProviderKey("AirtelTigo")).toBe("airteltigo")
     expect(normalizeMobileMoneyProviderKey("Airtel Money")).toBe("airtel")
