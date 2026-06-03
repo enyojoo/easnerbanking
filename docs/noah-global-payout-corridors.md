@@ -34,6 +34,6 @@ cd business && node --env-file=.env.local --import tsx scripts/apply-payout-corr
 
 ## Priority corridors
 
-US (USD), Eurozone (EUR), KE (KES bank + mobile), NG (NGN bank enum), GH (GHS), ZA (ZAR), CA (CAD), GB (GBP).
+US (USD), Eurozone (EUR), KE (KES bank + mobile), NG (NGN bank enum), GH (GHS bank + mobile), RW (RWF bank + mobile), ZA (ZAR), CA (CAD), GB (GBP).
 
 Schema reference: [noah-labs/public-schemas](https://github.com/noah-labs/public-schemas).

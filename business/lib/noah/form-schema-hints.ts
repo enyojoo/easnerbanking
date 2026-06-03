@@ -1,5 +1,5 @@
 import { createHash } from "crypto"
-import { resolvePayoutProcessingSeconds, type PayoutRail } from "@easner/shared"
+import { resolvePayoutProcessingSeconds, type PayoutRail } from "@easner/shared/payout-form-schema"
 import type { ChannelItem } from "./payout-prepare"
 
 /** Normalized hints for recipient UI and send amount screen (from Noah FormSchema). */
@@ -82,11 +82,34 @@ function identifierChannels(items: ChannelItem[]): ChannelItem[] {
   return items.filter((c) => String(c.PaymentMethodCategory ?? "").toLowerCase() === "identifier")
 }
 
+/** Map Noah sell channel Issuer to recipient-form provider label. */
+export function labelFromNoahIssuer(issuer: string, countryCode?: string): string | undefined {
+  const i = issuer.trim().toUpperCase()
+  const cc = String(countryCode || "").trim().toUpperCase()
+  if (!i) return undefined
+  if (i === "MPS") {
+    if (cc === "KE") return "M-PESA"
+    if (cc === "RW") return "Airtel Money"
+    return undefined
+  }
+  if (i === "AIRTELTIGO") return "AirtelTigo"
+  if (i === "MTN") return "MTN"
+  if (i === "VODAFONE") return "Vodafone"
+  if (i.includes("AIRTEL")) return "Airtel Money"
+  if (i.includes("MPESA") || i === "MOMO") return "M-PESA"
+  if (i.includes("ORANGE")) return "Orange Money"
+  if (i.includes("WAVE")) return "Wave"
+  return undefined
+}
+
 /** User-facing label for a Noah Identifier sell channel. */
 export function labelForIdentifierChannel(
-  channel: Pick<ChannelItem, "PaymentMethodType">,
+  channel: Pick<ChannelItem, "PaymentMethodType" | "Issuer">,
   countryCode: string,
 ): string {
+  const fromIssuer = labelFromNoahIssuer(String(channel.Issuer ?? ""), countryCode)
+  if (fromIssuer) return fromIssuer
+
   const t = String(channel.PaymentMethodType ?? "").toLowerCase()
   const cc = countryCode.toUpperCase()
   if (t.includes("airtel")) return "Airtel Money"
@@ -102,9 +125,11 @@ export function labelForIdentifierChannel(
 export function mobileProviderPrepareSubstrings(label: string | null | undefined): string[] | undefined {
   const p = String(label || "").toLowerCase()
   if (!p) return undefined
-  if (p.includes("airtel")) return ["airtel"]
-  if (p.includes("mpesa") || p.includes("m-pesa")) return ["mpesa", "momo"]
+  if (p.includes("airteltigo")) return ["airteltigo", "airtel"]
+  if (p.includes("airtel")) return ["airtel", "mps"]
+  if (p.includes("mpesa") || p.includes("m-pesa")) return ["mpesa", "momo", "mps"]
   if (p.includes("mtn")) return ["mtn", "momo"]
+  if (p.includes("vodafone")) return ["vodafone"]
   if (p.includes("orange")) return ["orange"]
   if (p.includes("wave")) return ["wave"]
   return [p.replace(/\s+/g, "")]

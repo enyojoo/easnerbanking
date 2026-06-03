@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest"
 import {
   bankEnumFromFormSchema,
   labelForIdentifierChannel,
+  labelFromNoahIssuer,
   mobileProviderLabelsFromSellItems,
+  mobileProviderPrepareSubstrings,
   normalizeFormSchemaHints,
 } from "../form-schema-hints"
+import { findIdentifierSellChannel } from "../payout-prepare"
 
 describe("bankEnumFromFormSchema", () => {
   it("reads Bank enum from standard Noah properties nesting", () => {
@@ -32,6 +35,7 @@ describe("mobileProviderLabelsFromSellItems", () => {
         {
           PaymentMethodCategory: "Identifier",
           PaymentMethodType: "IdentifierMobileMoney",
+          Issuer: "MPS",
           ID: "ch-ke",
         },
         {
@@ -45,10 +49,57 @@ describe("mobileProviderLabelsFromSellItems", () => {
     expect(labels).toEqual(["M-PESA"])
   })
 
-  it("maps Airtel from payment method type", () => {
+  it("maps Kenya MPS issuer to M-PESA", () => {
+    expect(labelFromNoahIssuer("MPS", "KE")).toBe("M-PESA")
+    expect(labelFromNoahIssuer("MPS", "RW")).toBe("Airtel Money")
+  })
     expect(
       labelForIdentifierChannel({ PaymentMethodType: "IdentifierAirtelMoney" }, "KE"),
     ).toBe("Airtel Money")
+  })
+
+  it("maps Ghana mobile issuers from Noah Issuer field", () => {
+    const labels = mobileProviderLabelsFromSellItems(
+      [
+        { PaymentMethodCategory: "Identifier", PaymentMethodType: "IdentifierMobileMoney", Issuer: "MTN" },
+        { PaymentMethodCategory: "Identifier", PaymentMethodType: "IdentifierMobileMoney", Issuer: "VODAFONE" },
+        { PaymentMethodCategory: "Identifier", PaymentMethodType: "IdentifierMobileMoney", Issuer: "AIRTELTIGO" },
+      ],
+      "GH",
+    )
+    expect(labels).toEqual(["AirtelTigo", "MTN", "Vodafone"])
+  })
+
+  it("maps Rwanda mobile issuers from Noah Issuer field", () => {
+    const labels = mobileProviderLabelsFromSellItems(
+      [
+        { PaymentMethodCategory: "Identifier", PaymentMethodType: "IdentifierMobileMoney", Issuer: "MTN" },
+        { PaymentMethodCategory: "Identifier", PaymentMethodType: "IdentifierMobileMoney", Issuer: "MPS" },
+      ],
+      "RW",
+    )
+    expect(labels).toEqual(["Airtel Money", "MTN"])
+  })
+
+  it("resolves prepare substrings from issuer-backed labels", () => {
+    expect(mobileProviderPrepareSubstrings("AirtelTigo")).toEqual(["airteltigo", "airtel"])
+    expect(mobileProviderPrepareSubstrings("Vodafone")).toEqual(["vodafone"])
+    expect(labelFromNoahIssuer("MPS", "RW")).toBe("Airtel Money")
+  })
+})
+
+describe("findIdentifierSellChannel issuer matching", () => {
+  const ghMobile = [
+    { ID: "mtn", PaymentMethodCategory: "Identifier", PaymentMethodType: "IdentifierMobileMoney", Issuer: "MTN" },
+    { ID: "vod", PaymentMethodCategory: "Identifier", PaymentMethodType: "IdentifierMobileMoney", Issuer: "VODAFONE" },
+    { ID: "at", PaymentMethodCategory: "Identifier", PaymentMethodType: "IdentifierMobileMoney", Issuer: "AIRTELTIGO" },
+  ]
+
+  it("picks channel by provider label via Issuer", () => {
+    const picked = findIdentifierSellChannel(ghMobile, {
+      paymentMethodSubstrings: mobileProviderPrepareSubstrings("Vodafone"),
+    })
+    expect(picked?.channelId).toBe("vod")
   })
 })
 

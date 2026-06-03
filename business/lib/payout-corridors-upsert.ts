@@ -23,6 +23,7 @@ export async function upsertPayoutCorridor(
     .select("id")
     .eq("rail", row.rail)
     .eq("country_code", row.country_code)
+    .eq("currency_code", row.currency_code)
     .maybeSingle()
 
   if (findErr) return { ok: false, error: findErr.message }

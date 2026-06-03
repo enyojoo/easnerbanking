@@ -62,6 +62,7 @@ import {
   type RecipientType,
 } from '../../lib/recipientCatalog'
 import { getNetworkIconUrl, getTokenIconUrl } from '../../lib/cryptoIcons'
+import { MobileMoneyProviderIcon } from '@easner/shared'
 import { loadRecipientsListCache, saveRecipientsListCache } from '../../lib/recipientsListCache'
 import { Wallet, Building2, Smartphone, AtSign } from 'lucide-react-native'
 import {
@@ -1661,9 +1662,14 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                       }} disabled={isSubmitting}
                     >
                       <View style={styles.currencySelectorContent}>
-                        <Text style={styles.currencySelectorText}>
-                          {newRecipient.provider || 'Select provider'}
-                        </Text>
+                        {newRecipient.provider ? (
+                          <View style={styles.currencyInfo}>
+                            <MobileMoneyProviderIcon provider={newRecipient.provider} size={22} />
+                            <Text style={styles.currencySelectorText}>{newRecipient.provider}</Text>
+                          </View>
+                        ) : (
+                          <Text style={styles.currencySelectorText}>Select provider</Text>
+                        )}
                         {showProviderDropdown ? (
                           <ChevronUp size={16} color={colors.brand.slate} strokeWidth={2} />
                         ) : (
@@ -1705,6 +1711,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                               }}
                             >
                               <View style={styles.currencyInfo}>
+                                <MobileMoneyProviderIcon provider={provider} size={22} />
                                 <Text style={styles.currencyCode}>{provider}</Text>
                               </View>
                               {newRecipient.provider === provider ? (

@@ -36,6 +36,7 @@ const DEFAULT_COUNTRY_BY_FIAT: Record<string, string> = {
   NGN: "NG",
   KES: "KE",
   GHS: "GH",
+  RWF: "RW",
   ZAR: "ZA",
   XOF: "SN",
   RUB: "RU",

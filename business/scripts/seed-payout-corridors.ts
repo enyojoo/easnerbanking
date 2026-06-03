@@ -17,6 +17,7 @@ const COUNTRY_NAMES: Record<string, string> = {
   NG: "Nigeria",
   KE: "Kenya",
   GH: "Ghana",
+  RW: "Rwanda",
   ZA: "South Africa",
   AT: "Austria",
   BE: "Belgium",
@@ -58,6 +59,7 @@ const CURRENCY_NAMES: Record<string, string> = {
   NGN: "Nigerian Naira",
   KES: "Kenyan Shilling",
   GHS: "Ghanaian Cedi",
+  RWF: "Rwandan Franc",
   ZAR: "South African Rand",
 }
 
@@ -105,13 +107,13 @@ async function main() {
             country_name: COUNTRY_NAMES[cc] ?? cc,
             currency_code: fiat,
             currency_name: CURRENCY_NAMES[fiat] ?? fiat,
-            enabled: enableOnInsert,
+            ...(enableOnInsert ? { enabled: true } : {}),
             provider_routing: DEFAULT_ROUTING,
-            providers: rail === "mobile_money" ? [] : null,
           })
         }
-      } catch {
-        // skip pair
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        console.warn("noah skip", country.toUpperCase(), fiat, msg)
       }
     }
   }

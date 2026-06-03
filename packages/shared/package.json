@@ -40,6 +40,11 @@
       "import": "./src/transactions/bank-deposit-scheme.ts",
       "require": "./src/transactions/bank-deposit-scheme.ts"
     },
+    "./payout-form-schema": {
+      "types": "./src/payout-form-schema.ts",
+      "import": "./src/payout-form-schema.ts",
+      "require": "./src/payout-form-schema.ts"
+    },
     "./warm-flags": {
       "types": "./src/flags/warm-flags.native.ts",
       "import": "./src/flags/warm-flags.native.ts",

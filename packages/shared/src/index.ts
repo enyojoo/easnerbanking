@@ -50,6 +50,13 @@ export {
 } from "./crypto-send-pricing"
 export { getTokenIconUrl, getNetworkIconUrl } from "./crypto-icons"
 export {
+  getMobileMoneyProviderPublicUrl,
+  hasMobileMoneyProviderIcon,
+  normalizeMobileMoneyProviderKey,
+} from "./mobile-money-icons"
+export { MobileMoneyProviderIcon } from "./components/MobileMoneyProviderIcon"
+export type { MobileMoneyProviderIconProps } from "./components/MobileMoneyProviderIcon"
+export {
   pickBestWalletInferenceCandidate,
   resolveInferredWalletAssetNetwork,
   type WalletAddressInferenceCandidate,

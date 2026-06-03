@@ -14,6 +14,7 @@ import {
 } from "@easner/shared"
 import type { Beneficiary } from "@/lib/recipient-types"
 import { CountryFlag } from "@/components/flags"
+import { MobileMoneyProviderIcon } from "@/lib/mobile-money-icons"
 import { useSendDestinations } from "@/lib/use-send-destinations"
 import { PayoutBankCombobox } from "@/components/payout-bank-combobox"
 import { DYNAMIC_COMBOBOX_LIST_CLASS } from "@/lib/combobox-list-class"
@@ -80,8 +81,9 @@ const mobileMoneyProvidersByCurrency: Record<string, string[]> = {
   XOF: ["MTN", "Orange", "Moov Money", "Wave", "Free"],
   XAF: ["MTN", "Orange", "Moov Money"],
   KES: ["Airtel Money", "M-PESA"],
+  GHS: ["AirtelTigo", "MTN", "Vodafone"],
   MWK: ["Airtel Money", "TNM"],
-  RWF: ["MTN"],
+  RWF: ["Airtel Money", "MTN"],
   TZS: ["Airtel Money", "TigoPesa"],
   UGX: ["Airtel Money", "MTN"],
   ZMW: ["Airtel Money", "MTN", "TNM"],
@@ -911,10 +913,17 @@ export function RecipientForm({
                         className={`h-12 w-full justify-between ${errors.mobileProvider ? "border-red-500" : ""}`}
                         type="button"
                       >
-                        <span className={formData.mobileProvider ? "" : "text-xs text-muted-foreground"}>
-                          {formData.mobileProvider || "Select provider"}
+                        <span className="flex min-w-0 items-center gap-2">
+                          {formData.mobileProvider ? (
+                            <>
+                              <MobileMoneyProviderIcon provider={formData.mobileProvider} size={18} />
+                              <span className="truncate">{formData.mobileProvider}</span>
+                            </>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Select provider</span>
+                          )}
                         </span>
-                        <ChevronDown className="h-4 w-4 opacity-60" />
+                        <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent
@@ -945,7 +954,10 @@ export function RecipientForm({
                                   setMobileProviderOpen(false)
                                 }}
                               >
-                                {provider}
+                                <span className="flex min-w-0 items-center gap-2">
+                                  <MobileMoneyProviderIcon provider={provider} size={18} />
+                                  <span>{provider}</span>
+                                </span>
                               </CommandItem>
                             ))}
                           </CommandGroup>

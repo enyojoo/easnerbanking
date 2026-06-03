@@ -12,6 +12,8 @@ export type ChannelItem = {
   ID?: string
   PaymentMethodCategory?: string
   PaymentMethodType?: string
+  /** Mobile money network (e.g. MTN, AIRTELTIGO) — distinct channels share PaymentMethodType. */
+  Issuer?: string
   Country?: string
   FiatCurrency?: string
   FormSchema?: Record<string, unknown>
@@ -114,7 +116,8 @@ export function findIdentifierSellChannel(
   if (subs.length > 0) {
     const matched = ident.filter((c) => {
       const t = String(c.PaymentMethodType ?? "").toLowerCase()
-      return subs.some((s) => t.includes(s))
+      const issuer = String(c.Issuer ?? "").toLowerCase()
+      return subs.some((s) => t.includes(s) || issuer.includes(s))
     })
     if (matched.length) pool = matched
   }

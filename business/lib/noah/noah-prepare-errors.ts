@@ -79,6 +79,12 @@ export function mapNoahPayoutUserError(
     if (msg.includes("cryptoauthorized") || msg.includes("authorized amount")) {
       return "The payout amount changed. Go back, tap Continue for a new quote, then confirm again."
     }
+    if (
+      e.status === 403 &&
+      (msg.includes("channel policy") || msg.includes("implicitdeny"))
+    ) {
+      return "This payout country isn't available for your verification profile. You can send to corridors that match where you completed identity verification (for example, US verification supports US payouts). Contact support if you need access to additional countries."
+    }
     if (e.status === 401 || e.status === 403) {
       return "Transfer authorization failed. Check your account verification status."
     }

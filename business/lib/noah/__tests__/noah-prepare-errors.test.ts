@@ -18,4 +18,17 @@ describe("mapNoahPayoutUserError", () => {
     )
     expect(msg).toContain("reference")
   })
+
+  it("maps Noah channel policy ImplicitDeny to corridor-specific copy", () => {
+    const msg = mapNoahPayoutUserError(
+      new NoahHttpError(
+        "Forbidden",
+        403,
+        "channel policy denied action `Use` for channel `ae1f871a-f2cd-5eab-84bf-5240091d9767` (ImplicitDeny)",
+      ),
+      "prepare",
+    )
+    expect(msg).toContain("verification profile")
+    expect(msg).not.toContain("Check your account verification status")
+  })
 })

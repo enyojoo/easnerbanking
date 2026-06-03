@@ -21,6 +21,7 @@ const COUNTRY_NAMES: Record<string, string> = {
   NG: "Nigeria",
   KE: "Kenya",
   GH: "Ghana",
+  RW: "Rwanda",
   ZA: "South Africa",
   GB: "United Kingdom",
   DE: "Germany",
@@ -35,12 +36,13 @@ const CURRENCY_NAMES: Record<string, string> = {
   NGN: "Nigerian Naira",
   KES: "Kenyan Shilling",
   GHS: "Ghanaian Cedi",
+  RWF: "Rwandan Franc",
   ZAR: "South African Rand",
 }
 
 async function main() {
   const settlement = getNoahSettlementCryptoCurrency()
-  const enableOnInsert = process.env.APPLY_SCHEMAS_ENABLE === "true"
+  const enableCorridors = process.env.APPLY_SCHEMAS_ENABLE === "true"
   const admin = createSupabaseAdmin()
 
   const countriesMap = await noahFetch<Record<string, string[]>>({
@@ -64,7 +66,9 @@ async function main() {
           fiatCurrency: fiat,
           cryptoCurrency: settlement,
         })
-      } catch {
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        console.warn("noah skip", cc, fiat, msg)
         continue
       }
       if (items.length === 0) continue
@@ -102,6 +106,7 @@ async function main() {
               ...(rail === "mobile_money" && mobileLabels.length > 0
                 ? { providers: mobileLabels }
                 : {}),
+              ...(enableCorridors ? { enabled: true } : {}),
               updated_at: new Date().toISOString(),
             })
             .eq("id", existing.id)
@@ -114,9 +119,9 @@ async function main() {
             country_name: COUNTRY_NAMES[cc] ?? cc,
             currency_code: fiat,
             currency_name: CURRENCY_NAMES[fiat] ?? fiat,
-            enabled: enableOnInsert,
+            enabled: enableCorridors,
             provider_routing: [{ provider: "noah", priority: 1, settlement_asset: "USDC" }],
-            providers: rail === "mobile_money" ? [] : null,
+            providers: rail === "mobile_money" ? mobileLabels : null,
           })
           if (res.ok) {
             const { data: row } = await admin
@@ -129,7 +134,13 @@ async function main() {
             if (row?.id) {
               await admin
                 .from("payout_corridors")
-                .update({ fields_schema: fields_schema })
+                .update({
+                  fields_schema: fields_schema,
+                  ...(rail === "mobile_money" && mobileLabels.length > 0
+                    ? { providers: mobileLabels }
+                    : {}),
+                  ...(enableCorridors ? { enabled: true } : {}),
+                })
                 .eq("id", row.id)
             }
             inserted++
