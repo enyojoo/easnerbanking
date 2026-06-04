@@ -11,6 +11,7 @@ import { useAuth } from "@/lib/auth-context"
 import { hasPin, isLoginPinModuleAvailable } from "@/lib/login-pin"
 import {
   getGlobalPayoutTransferMethod,
+  hasWalletSendFxDisplay,
   resolvePayoutCountryCode,
   resolveSendConfirmArrivalHint,
 } from "@easner/shared"
@@ -375,7 +376,9 @@ export default function SendConfirmPage() {
           exchange_fee: wq.channelCost,
           processing_fee: wq.marginAmount,
           network_fee: wq.networkFee,
-          exchange_rate: wq.customerRate,
+          exchange_rate:
+            wq.executionModel === "direct_turnkey" ? 1 : wq.customerRate,
+          execution_model: wq.executionModel,
           send_currency: state.sendCurrency,
           receive_amount: state.amount,
           receive_currency: state.receiveCurrency,
@@ -557,9 +560,13 @@ export default function SendConfirmPage() {
   const transferMethod = corridorTransferMethod(state.recipient, state.receiveCurrency)
   const easenetSend = isEasenetRecipient(state.recipient)
   const walletSend = isWalletRecipient(state.recipient)
-  const hasFx =
-    !easenetSend &&
-    state.receiveCurrency.toUpperCase() !== state.sendCurrency.toUpperCase()
+  const walletNetwork =
+    state.recipient.walletNetwork?.trim() || state.walletQuote?.receiveNetwork?.trim() || ""
+  const hasFx = easenetSend
+    ? false
+    : walletSend
+      ? hasWalletSendFxDisplay(state.sendCurrency, state.receiveCurrency, walletNetwork)
+      : state.receiveCurrency.toUpperCase() !== state.sendCurrency.toUpperCase()
   const pq = state.payoutQuote
   const wq = state.walletQuote
   const quoteReady =
@@ -630,6 +637,7 @@ export default function SendConfirmPage() {
         copiedKey={copiedKey}
         onCopy={handleCopy}
         showFeeBreakdown={!easenetSend && quoteReady}
+        receiveNetwork={walletSend ? walletNetwork : undefined}
       />
 
       {(walletSend ? walletQuoteError : payoutQuoteError) && !easenetSend ? (

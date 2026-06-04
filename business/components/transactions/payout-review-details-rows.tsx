@@ -6,6 +6,7 @@ import {
   formatPayoutRecipientSubtitle,
   formatSendRateLabel,
   hasPayoutCrossCurrencyFx,
+  hasWalletSendFxDisplay,
   shouldShowPayoutExchangeFee,
   shouldShowPayoutNetworkFee,
   shouldShowPayoutProcessingFee,
@@ -31,6 +32,8 @@ type Props = {
   showRecipientGets?: boolean
   /** Dynamic timing (Expected / Started / Arrived). Omit on send confirm. */
   timingRows?: TransactionTimingRow[] | null
+  /** When set, uses wallet-send FX rules (direct Turnkey Solana stables hide rate). */
+  receiveNetwork?: string | null
 }
 
 function recipientSubtitle(snapshot: GlobalPayoutRecipientSnapshot): string {
@@ -55,8 +58,15 @@ export function PayoutReviewDetailsRows({
   showFeeBreakdown = true,
   showRecipientGets = true,
   timingRows,
+  receiveNetwork,
 }: Props) {
-  const hasFx = hasPayoutCrossCurrencyFx(payoutReview.send_currency, payoutReview.receive_currency)
+  const hasFx = receiveNetwork
+    ? hasWalletSendFxDisplay(
+        payoutReview.send_currency,
+        payoutReview.receive_currency,
+        receiveNetwork,
+      )
+    : hasPayoutCrossCurrencyFx(payoutReview.send_currency, payoutReview.receive_currency)
   const showExchangeFee = shouldShowPayoutExchangeFee({
     sendCurrency: payoutReview.send_currency,
     receiveCurrency: payoutReview.receive_currency,

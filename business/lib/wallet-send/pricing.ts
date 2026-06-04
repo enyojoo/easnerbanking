@@ -1,5 +1,11 @@
 import type { LifiQuoteResponse } from "@/lib/lifi/client"
-import { computeCryptoSendPricing, type CryptoSendPricing } from "@easner/shared"
+import {
+  computeCryptoSendPricing,
+  computeDirectTurnkeyWalletSendPricing,
+  parseWalletSendProcessingFeeBpsFromEnv,
+  parseWalletSendProcessingFeeCapFromEnv,
+  type CryptoSendPricing,
+} from "@easner/shared"
 
 export function parseLifiNetworkFeeUsd(quote: LifiQuoteResponse): number {
   const gas = quote.estimate?.gasCosts ?? []
@@ -31,15 +37,10 @@ export function pricingFromLifiQuote(input: {
   })
 }
 
-export function pricingFromDirectTurnkey(input: {
-  receiveAmount: number
-  customerRate: number
-}): CryptoSendPricing {
-  return computeCryptoSendPricing({
+export function pricingFromDirectTurnkey(input: { receiveAmount: number }): CryptoSendPricing {
+  return computeDirectTurnkeyWalletSendPricing({
     receiveAmount: input.receiveAmount,
-    customerRate: input.customerRate,
-    lifiMid: 1,
-    lifiFloor: input.receiveAmount,
-    networkFee: 0,
+    feeBps: parseWalletSendProcessingFeeBpsFromEnv(process.env.WALLET_SEND_PROCESSING_FEE_BPS),
+    feeCap: parseWalletSendProcessingFeeCapFromEnv(process.env.WALLET_SEND_PROCESSING_FEE_CAP),
   })
 }

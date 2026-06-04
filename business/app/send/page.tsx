@@ -51,6 +51,8 @@ import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
 import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
 import {
   exchangeRatesToRateMap,
+  hasWalletSendFxDisplay,
+  isDirectTurnkeyWalletCorridor,
   resolveEffectivePayoutMin,
   resolveEffectiveWalletSendMin,
   getSendAmountNoteFieldUi,
@@ -320,6 +322,10 @@ export default function SendPage() {
     return "USD"
   }, [paymentMethod, sourceAccount, otherCurrency])
 
+  const walletNetwork = (recipient?.walletNetwork || "").trim()
+  const isDirectTurnkeyWallet =
+    isWalletRecipient && isDirectTurnkeyWalletCorridor(receiveCurrency, walletNetwork)
+
   const flowAmounts = useMemo(() => {
     if (!recipient || enteredAmount <= 0) {
       return { sendAmount: 0, receiveAmount: 0, forwardRate: 1 }
@@ -336,7 +342,7 @@ export default function SendPage() {
       // Don't preview Noah/reference rates while the manual quote is in flight.
       return { sendAmount: 0, receiveAmount: 0, forwardRate: 1 }
     }
-    if (isWalletRecipient && crossCurrency) {
+    if (isWalletRecipient && crossCurrency && !isDirectTurnkeyWallet) {
       return convertNoahSendFlowAmounts({
         direction: amountEntryMode,
         amount: enteredAmount,
@@ -344,6 +350,13 @@ export default function SendPage() {
         receiveCurrency,
         rateMap: cryptoFxRates,
       })
+    }
+    if (isDirectTurnkeyWallet && walletQuotePreview) {
+      return {
+        sendAmount: walletQuotePreview.sendAmount,
+        receiveAmount: walletQuotePreview.receiveAmount,
+        forwardRate: 1,
+      }
     }
     return convertNoahSendFlowAmounts({
       direction: amountEntryMode,
@@ -361,6 +374,8 @@ export default function SendPage() {
     noahFxRates,
     cryptoFxRates,
     isWalletRecipient,
+    isDirectTurnkeyWallet,
+    walletQuotePreview,
     otherCurrency,
     manualSend.quote,
   ])
@@ -374,7 +389,11 @@ export default function SendPage() {
     quotedTotalDebited != null && quotedTotalDebited > 0 ? quotedTotalDebited : sendAmount
 
   const hasFx =
-    receiveCurrency !== sendCurrency && receiveAmount > 0 && sendAmount > 0
+    (isWalletRecipient
+      ? hasWalletSendFxDisplay(sendCurrency, receiveCurrency, walletNetwork)
+      : receiveCurrency !== sendCurrency) &&
+    receiveAmount > 0 &&
+    sendAmount > 0
   const forwardRate = flowAmounts.forwardRate
   const rateDisplay = hasFx ? formatSendRateLabel(sendCurrency, receiveCurrency, forwardRate) : null
 
@@ -387,7 +406,8 @@ export default function SendPage() {
   const needsCryptoRateForSend =
     isBalanceSource &&
     isWalletRecipient &&
-    sendCurrency !== receiveCurrency
+    sendCurrency !== receiveCurrency &&
+    !isDirectTurnkeyWallet
 
   const activeCryptoRateRow = useMemo(() => {
     const send = sendCurrency.trim().toUpperCase()

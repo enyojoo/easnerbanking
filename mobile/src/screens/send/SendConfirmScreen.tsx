@@ -11,6 +11,7 @@ import {
   formatSendRateLabel,
   getGlobalPayoutTransferMethod,
   resolveSendConfirmArrivalHint,
+  hasWalletSendFxDisplay,
   shouldShowPayoutExchangeFee,
   shouldShowPayoutNetworkFee,
   shouldShowPayoutProcessingFee,
@@ -310,9 +311,15 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
         ? walletSessionMatchesRecipient(walletSession, recipient?.id)
         : payoutSessionMatchesRecipient(payoutSession, recipient?.id)),
   )
+  const walletNetwork =
+    recipient?.wallet_network?.trim() ||
+    peekSendWalletQuote()?.receiveNetwork?.trim() ||
+    ''
   const hasFx =
     !easetagUi &&
-    selectedBalanceCurrency.toUpperCase() !== receiveCurrency.toUpperCase()
+    (isWalletRecipient
+      ? hasWalletSendFxDisplay(selectedBalanceCurrency, receiveCurrency, walletNetwork)
+      : selectedBalanceCurrency.toUpperCase() !== receiveCurrency.toUpperCase())
   const customerRate = useMemo(() => {
     if (quoteDisplay?.customerRate && quoteDisplay.customerRate > 0) {
       return quoteDisplay.customerRate

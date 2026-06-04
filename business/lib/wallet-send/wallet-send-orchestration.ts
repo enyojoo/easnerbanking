@@ -1,5 +1,4 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { randomUUID } from "crypto"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { createTurnkeySend } from "@/lib/turnkey/send"
@@ -7,10 +6,15 @@ import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 import { generateTransactionId } from "@/lib/transaction-id"
 import { isWalletSendEnabled } from "@/lib/lifi/client"
+import { getTurnkeyDisplayBalancesUsdEur } from "@/lib/wallet/turnkey-chain-balances"
 import { resolveWalletSendExecutionModel } from "./routing"
 import { getWalletSendSession, markWalletSendSessionExecuted } from "./wallet-send-session"
 import { executeLifiWalletSend } from "./lifi-execute"
 import type { WalletRecipientRow } from "./validate-recipient"
+import {
+  assertWalletSendFeeSolanaAddressConfigured,
+  resolveWalletSendFeeSolanaAddress,
+} from "./fee-address"
 
 export type ExecuteWalletSendInput = {
   admin: SupabaseClient
@@ -34,6 +38,21 @@ export type ExecuteWalletSendResult =
     }
   | { ok: false; error: string }
 
+const MARGIN_DUST = 0.000_001
+
+async function readAvailableBalance(
+  admin: SupabaseClient,
+  opts: { businessId: string | null; userId: string | null; currency: "USD" | "EUR" },
+): Promise<{ available: number; err?: string }> {
+  let q = admin.from("wallet_balances").select("available_balance").eq("currency", opts.currency).limit(1)
+  if (opts.businessId) q = q.eq("business_id", opts.businessId)
+  else if (opts.userId) q = q.eq("user_id", opts.userId)
+  else return { available: 0, err: "invalid_scope" }
+  const { data, error } = await q.maybeSingle()
+  if (error) return { available: 0, err: error.message }
+  return { available: Number(data?.available_balance ?? 0) }
+}
+
 async function debitWalletBalance(
   admin: SupabaseClient,
   input: { userId: string; businessId: string | null; currency: "USD" | "EUR"; amount: number },
@@ -44,6 +63,39 @@ async function debitWalletBalance(
     currency: input.currency,
     delta: -Math.abs(input.amount),
   })
+}
+
+async function assertDirectTurnkeyExecuteReady(
+  admin: SupabaseClient,
+  input: {
+    ctx: NoahAccountContext
+    userId: string
+    businessId: string | null
+    balanceCurrency: "USD" | "EUR"
+    totalDebited: number
+    receiveAmount: number
+    marginAmount: number
+  },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  assertWalletSendFeeSolanaAddressConfigured(input.balanceCurrency)
+
+  const { available, err: balErr } = await readAvailableBalance(admin, {
+    businessId: input.businessId,
+    userId: input.businessId ? null : input.userId,
+    currency: input.balanceCurrency,
+  })
+  if (balErr) return { ok: false, error: "insufficient_balance" }
+  if (available < input.totalDebited) return { ok: false, error: "insufficient_balance" }
+
+  const onChain = await getTurnkeyDisplayBalancesUsdEur(admin, input.ctx)
+  const onChainRaw = input.balanceCurrency === "EUR" ? onChain.EUR : onChain.USD
+  const onChainAvailable = Number.parseFloat(String(onChainRaw || "0"))
+  const chainRequired = input.receiveAmount + input.marginAmount
+  if (!Number.isFinite(onChainAvailable) || onChainAvailable < chainRequired - 1e-6) {
+    return { ok: false, error: "insufficient_onchain_balance" }
+  }
+
+  return { ok: true }
 }
 
 export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<ExecuteWalletSendResult> {
@@ -65,6 +117,25 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
 
   if (executionModel === "direct_turnkey") {
     const asset = session.receive_asset === "EURC" ? "EURC" : "USDC"
+    const marginAmount = session.margin_amount
+    const walletSendCtx = { formSessionId: session.form_session_id }
+
+    const ready = await assertDirectTurnkeyExecuteReady(input.admin, {
+      ctx: input.ctx,
+      userId: input.userId,
+      businessId: input.businessId,
+      balanceCurrency,
+      totalDebited: session.total_debited,
+      receiveAmount: session.receive_amount,
+      marginAmount,
+    })
+    if (!ready.ok) return ready
+
+    const feeAddress = resolveWalletSendFeeSolanaAddress({ ledgerCurrency: balanceCurrency })
+    if (!feeAddress) {
+      return { ok: false, error: "wallet_send_fee_address_not_configured" }
+    }
+
     try {
       const send = await createTurnkeySend(input.admin, {
         ctx: input.ctx,
@@ -73,7 +144,34 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
         destinationAddress: session.destination_address,
         amount: session.receive_amount,
         settlementPollTimeoutMs: 120_000,
+        walletSend: walletSendCtx,
       })
+
+      if (send.status === "failed") {
+        const detail =
+          send.chainFailureDetail?.trim() ||
+          "Turnkey Solana broadcast failed. Check wallet balance and try again."
+        return { ok: false, error: detail }
+      }
+
+      let marginTurnkeySendId: string | undefined
+      if (marginAmount > MARGIN_DUST) {
+        const marginSend = await createTurnkeySend(input.admin, {
+          ctx: input.ctx,
+          asset,
+          chain: "solana",
+          destinationAddress: feeAddress,
+          amount: marginAmount,
+          settlementPollTimeoutMs: 0,
+          walletSend: { ...walletSendCtx, marginLeg: true },
+        })
+        marginTurnkeySendId = marginSend.providerTransactionId
+        if (marginSend.status === "failed") {
+          const detail =
+            marginSend.chainFailureDetail?.trim() || "margin_capture_failed"
+          return { ok: false, error: detail || "margin_capture_failed" }
+        }
+      }
 
       await debitWalletBalance(input.admin, {
         userId: input.userId,
@@ -98,11 +196,16 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
         metadata: {
           activity_type: "wallet_send",
           execution_model: "direct_turnkey",
+          margin_capture_mode: "split_debit",
           receive_asset: session.receive_asset,
           receive_network: session.receive_network,
           receive_amount: session.receive_amount,
+          processing_fee: marginAmount,
+          margin_amount: marginAmount,
           form_session_id: session.form_session_id,
           easner_transaction_id: easnerTransactionId,
+          fee_destination_address: feeAddress,
+          ...(marginTurnkeySendId ? { margin_turnkey_send_id: marginTurnkeySendId } : {}),
           ...(input.reviewSnapshot ?? {}),
         },
       })
@@ -117,7 +220,11 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
         txHash: send.txHash,
       }
     } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : "turnkey_send_failed" }
+      const msg = e instanceof Error ? e.message : String(e)
+      if (msg === "wallet_send_fee_address_not_configured") {
+        return { ok: false, error: msg }
+      }
+      return { ok: false, error: msg || "turnkey_send_failed" }
     }
   }
 

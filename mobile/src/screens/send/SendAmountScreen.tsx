@@ -67,6 +67,8 @@ import {
   validateSendAmountFields,
   validateWalletSendReceiveAmount,
   resolveEffectiveWalletSendMin,
+  hasWalletSendFxDisplay,
+  isDirectTurnkeyWalletCorridor,
 } from '@easner/shared'
 import { usePayoutMinEnforcement } from '../../hooks/usePayoutMinEnforcement'
 import { noahService, type WalletSendQuote } from '../../lib/noahService'
@@ -510,8 +512,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     dynamicAmountLineHeight + spacing[2],
   )
 
-  const showCrossCurrencyExchangeUi =
-    String(sendCurrency || '').toUpperCase() !== String(receiveCurrency || '').toUpperCase()
+  const isDirectTurnkeyWallet =
+    isWalletRecipient &&
+    isDirectTurnkeyWalletCorridor(receiveCurrency, resolvedWalletNetwork)
+
+  const showCrossCurrencyExchangeUi = isWalletRecipient
+    ? hasWalletSendFxDisplay(sendCurrency, receiveCurrency, resolvedWalletNetwork)
+    : String(sendCurrency || '').toUpperCase() !== String(receiveCurrency || '').toUpperCase()
 
   const noahRateMap = useMemo(
     () => exchangeRatesToRateMap(exchangeRatesFromContext),
@@ -595,7 +602,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const needsCryptoRateForSend =
     selectedPaymentMethod === 'balance' &&
     isWalletRecipient &&
-    showCrossCurrencyExchangeUi
+    showCrossCurrencyExchangeUi &&
+    !isDirectTurnkeyWallet
 
   const hasValidCryptoRateForPair =
     !needsCryptoRateForSend ||

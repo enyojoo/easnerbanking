@@ -46,6 +46,11 @@ export type TurnkeySendInput = {
     walletDebitAmount?: number
     marginLeg?: boolean
   }
+  /** Direct Turnkey wallet send chain leg (ledger row owned by executeWalletSend). */
+  walletSend?: {
+    formSessionId: string
+    marginLeg?: boolean
+  }
   /**
    * Max ms to poll Turnkey for on-chain terminal status.
    * `0` returns `pending` immediately after broadcast submit (global payout execute path).
@@ -533,6 +538,19 @@ export async function createTurnkeySend(
         }
       : {}
 
+  const walletSendFormSessionId =
+    input.walletSend?.formSessionId != null && String(input.walletSend.formSessionId).trim()
+      ? String(input.walletSend.formSessionId).trim()
+      : null
+  const walletSendMeta = walletSendFormSessionId
+    ? {
+        wallet_send_settlement_leg: true,
+        suppress_in_feed: true,
+        form_session_id: walletSendFormSessionId,
+        ...(input.walletSend?.marginLeg ? { wallet_send_margin_leg: true } : {}),
+      }
+    : {}
+
   const globalPayoutEasnerPayoutId =
     input.globalPayout?.easnerPayoutId != null && String(input.globalPayout.easnerPayoutId).trim()
       ? String(input.globalPayout.easnerPayoutId).trim()
@@ -541,7 +559,9 @@ export async function createTurnkeySend(
     input.easetagSettlement?.transferGroupId != null && String(input.easetagSettlement.transferGroupId).trim()
       ? String(input.easetagSettlement.transferGroupId).trim()
       : null
-  const skipTurnkeyLedgerRow = Boolean(globalPayoutEasnerPayoutId || easetagTransferGroupId)
+  const skipTurnkeyLedgerRow = Boolean(
+    globalPayoutEasnerPayoutId || easetagTransferGroupId || walletSendFormSessionId,
+  )
 
   if (!skipTurnkeyLedgerRow) {
   await upsertLedgerTransaction(admin, {
@@ -562,6 +582,7 @@ export async function createTurnkeySend(
       turnkey_solana_caip2: caip2,
       ...easetagMeta,
       ...globalPayoutMeta,
+      ...walletSendMeta,
     },
     txHash: parsed.txHash,
     walletAddress: sender.sourceAddress,

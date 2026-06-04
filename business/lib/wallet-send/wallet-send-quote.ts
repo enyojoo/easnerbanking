@@ -3,7 +3,10 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { applyCryptoCustomerRate, parseWalletSendMarginFromEnv } from "@easner/rate-sync"
 import {
   normalizeCryptoSendQuoteReceiveAmount,
+  normalizeDirectTurnkeyWalletSendReceiveAmount,
   normalizePayoutReceiveAmountForCurrency,
+  parseWalletSendProcessingFeeBpsFromEnv,
+  parseWalletSendProcessingFeeCapFromEnv,
   resolveEffectiveWalletSendMin,
   validateWalletSendReceiveAmount,
 } from "@easner/shared"
@@ -21,6 +24,7 @@ import {
   type WalletRecipientRow,
 } from "./validate-recipient"
 import { createWalletSendSession, WALLET_SEND_QUOTE_TTL_MS } from "./wallet-send-session"
+import { assertWalletSendFeeSolanaAddressConfigured } from "./fee-address"
 
 export type WalletSendQuoteResult = {
   receiveAmount: number
@@ -73,25 +77,45 @@ export async function buildWalletSendQuote(input: {
   const receiveNetwork = walletReceiveNetwork(recipient)
   const destinationAddress = walletDestinationAddress(recipient)
   const amountEntryMode = input.amountEntryMode === "send" ? "send" : "receive"
+  const executionModel = resolveWalletSendExecutionModel(receiveAsset, receiveNetwork)
 
-  const rates = await listCryptoRates(input.admin, { destinations: [receiveAsset] })
-  const rateRow =
-    findCryptoRate(rates, sourceBalanceCurrency, receiveAsset, receiveNetwork) ??
-    ({
-      lifi_mid: 1,
-      rate: applyCryptoCustomerRate(1, parseWalletSendMarginFromEnv(process.env.WALLET_SEND_MARGIN)),
-    } as { lifi_mid: number; rate: number })
+  const feeBps = parseWalletSendProcessingFeeBpsFromEnv(process.env.WALLET_SEND_PROCESSING_FEE_BPS)
+  const feeCap = parseWalletSendProcessingFeeCapFromEnv(process.env.WALLET_SEND_PROCESSING_FEE_CAP)
 
-  const customerRate = rateRow.rate
-  const lifiMid = rateRow.lifi_mid
+  let customerRate = 1
+  let lifiMid = 1
+  let receiveAmount: number
 
-  let receiveAmount = normalizeCryptoSendQuoteReceiveAmount({
-    amountEntryMode,
-    receiveAmount: Number(input.receiveAmount ?? 0),
-    sendBudget: input.sendAmount,
-    customerRate,
-  })
-  receiveAmount = Math.round(receiveAmount * 1_000_000) / 1_000_000
+  if (executionModel === "direct_turnkey") {
+    assertWalletSendFeeSolanaAddressConfigured(sourceBalanceCurrency as "USD" | "EUR")
+    receiveAmount = normalizeDirectTurnkeyWalletSendReceiveAmount({
+      amountEntryMode,
+      receiveAmount: Number(input.receiveAmount ?? 0),
+      sendBudget: input.sendAmount,
+      feeBps,
+      feeCap,
+    })
+    receiveAmount = roundReceive(receiveAsset, receiveAmount)
+  } else {
+    const rates = await listCryptoRates(input.admin, { destinations: [receiveAsset] })
+    const rateRow =
+      findCryptoRate(rates, sourceBalanceCurrency, receiveAsset, receiveNetwork) ??
+      ({
+        lifi_mid: 1,
+        rate: applyCryptoCustomerRate(1, parseWalletSendMarginFromEnv(process.env.WALLET_SEND_MARGIN)),
+      } as { lifi_mid: number; rate: number })
+
+    customerRate = rateRow.rate
+    lifiMid = rateRow.lifi_mid
+
+    receiveAmount = normalizeCryptoSendQuoteReceiveAmount({
+      amountEntryMode,
+      receiveAmount: Number(input.receiveAmount ?? 0),
+      sendBudget: input.sendAmount,
+      customerRate,
+    })
+    receiveAmount = Math.round(receiveAmount * 1_000_000) / 1_000_000
+  }
 
   if (!Number.isFinite(receiveAmount) || receiveAmount <= 0) {
     throw new Error("Amount must be positive.")
@@ -100,21 +124,20 @@ export async function buildWalletSendQuote(input: {
   const minReceive = resolveEffectiveWalletSendMin({
     receiveCurrency: receiveAsset,
     receiveNetwork,
-    customerRate,
+    customerRate: executionModel === "direct_turnkey" ? 1 : customerRate,
   })
   const minCheck = validateWalletSendReceiveAmount(receiveAmount, receiveAsset, { minReceive })
   if (!minCheck.ok) throw new Error(minCheck.message)
-
-  const executionModel = resolveWalletSendExecutionModel(receiveAsset, receiveNetwork)
-  const margin = parseWalletSendMarginFromEnv(process.env.WALLET_SEND_MARGIN)
 
   let pricing
   let lifiQuoteId: string | undefined
   let lifiFloorStr: string
 
   if (executionModel === "direct_turnkey") {
-    pricing = pricingFromDirectTurnkey({ receiveAmount, customerRate })
+    pricing = pricingFromDirectTurnkey({ receiveAmount })
     lifiFloorStr = pricing.lifiFloor.toFixed(6)
+    customerRate = 1
+    lifiMid = 1
   } else {
     const probeFrom =
       input.probeFromAddress ||

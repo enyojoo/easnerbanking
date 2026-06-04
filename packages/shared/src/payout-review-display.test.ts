@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   hasPayoutCrossCurrencyFx,
+  hasWalletSendFxDisplay,
   isPayoutReviewFeeVisible,
   shouldShowPayoutExchangeFee,
   shouldShowPayoutProcessingFee,
@@ -48,5 +49,12 @@ describe("payout-review-display", () => {
   it("detects cross-currency FX", () => {
     expect(hasPayoutCrossCurrencyFx("USD", "EUR")).toBe(true)
     expect(hasPayoutCrossCurrencyFx("usd", "USD")).toBe(false)
+    expect(hasPayoutCrossCurrencyFx("USD", "USDC")).toBe(true)
+  })
+
+  it("hides wallet send FX for direct Turnkey Solana stables", () => {
+    expect(hasWalletSendFxDisplay("USD", "USDC", "Solana")).toBe(false)
+    expect(hasWalletSendFxDisplay("EUR", "EURC", "Solana")).toBe(false)
+    expect(hasWalletSendFxDisplay("USD", "USDC", "Ethereum")).toBe(true)
   })
 })
