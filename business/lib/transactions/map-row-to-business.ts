@@ -8,6 +8,7 @@ import {
   isVerificationDepositMetadata,
   mapLedgerStatusForUserFeed,
   resolveGlobalPayoutListDisplay,
+  resolveWalletSendListDisplay,
   toEasnerTransactionPrimaryLabel,
 } from "@easner/shared"
 import { isNoahBankOnrampFiatPayIn } from "@/lib/noah/bank-onramp-tx"
@@ -17,6 +18,11 @@ import {
   isWalletSendOutRow,
   resolveWalletSendPayoutReview,
 } from "@/lib/wallet-send/build-wallet-send-payout-review"
+
+function payoutReviewProcessingTiming(processingTime: string | undefined) {
+  const value = String(processingTime ?? "").trim()
+  return value ? [{ label: "Processing time", value }] : undefined
+}
 
 function deriveCounterpartyName(input: {
   metadata?: Record<string, unknown> | null
@@ -75,6 +81,8 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
       ? resolveBankDepositPayInDetail(row)
       : null
   const globalPayoutList = globalPayoutDetail ? null : resolveGlobalPayoutListDisplay(row)
+  const walletSendList =
+    globalPayoutDetail || walletSendPayoutReview ? null : resolveWalletSendListDisplay(row)
   const globalPayout = globalPayoutDetail ?? globalPayoutList
   const bankLabel =
     !isVerification && !globalPayout && (isBankOnrampDepositFlow(meta) || (payload && isNoahBankOnrampFiatPayIn(payload)))
@@ -102,7 +110,17 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
         }),
       }
     : null
-  const displaySource = globalPayout ?? walletSendDisplay
+  const walletSendListDisplay = walletSendList
+    ? {
+        displayAmount: walletSendList.displayAmount,
+        displayCurrency: walletSendList.displayCurrency,
+        ledgerAmount: walletSendList.ledgerAmount,
+        ledgerCurrency: walletSendList.ledgerCurrency,
+        displayDescription: walletSendList.displayDescription,
+        displayHeroTitle: walletSendList.displayHeroTitle,
+      }
+    : null
+  const displaySource = globalPayout ?? walletSendDisplay ?? walletSendListDisplay
   const description =
     displaySource?.displayDescription ??
     bankLabel ??
@@ -211,6 +229,17 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
             ledgerAmount: walletSendPayoutReview.total_debited,
             ledgerCurrency: walletSendPayoutReview.send_currency,
             payoutReview: walletSendPayoutReview,
+            recipientSnapshot:
+              meta?.recipient_snapshot && typeof meta.recipient_snapshot === "object"
+                ? (meta.recipient_snapshot as TransactionWithSource["recipientSnapshot"])
+                : undefined,
+            transactionTiming: payoutReviewProcessingTiming(walletSendPayoutReview.processing_time),
+          }
+      : walletSendList
+        ? {
+            displayHeroTitle: walletSendList.displayHeroTitle,
+            ledgerAmount: walletSendList.ledgerAmount,
+            ledgerCurrency: walletSendList.ledgerCurrency,
           }
       : bankDepositDetail
         ? {

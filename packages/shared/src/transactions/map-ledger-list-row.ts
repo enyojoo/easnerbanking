@@ -184,9 +184,9 @@ export function resolveWalletSendListDisplay(
 
   const recipientName =
     firstTruthy([
-      meta.counterparty_name,
-      meta.recipient_name,
       meta.beneficiary_name,
+      meta.recipient_name,
+      meta.counterparty_name,
       (meta.recipient_snapshot as Record<string, unknown> | null | undefined)?.full_name,
     ]) || "Wallet transfer"
 

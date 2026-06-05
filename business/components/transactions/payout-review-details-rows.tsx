@@ -38,15 +38,35 @@ type Props = {
   /** When set, uses wallet-send FX rules (direct Turnkey Solana stables hide rate). */
   receiveNetwork?: string | null
   walletSendExecutionModel?: "direct_turnkey" | "lifi_bridge" | null
+  /** Wallet send fallback when snapshot is missing (older rows). */
+  recipientDisplayName?: string | null
+  counterpartyAddress?: string | null
 }
 
-function recipientSubtitle(snapshot: GlobalPayoutRecipientSnapshot): string {
+function recipientSubtitle(
+  snapshot: GlobalPayoutRecipientSnapshot,
+  walletNetwork?: string | null,
+): string {
   return formatPayoutRecipientSubtitle({
     bankName: snapshot.bank_name,
     phone: snapshot.phone,
     mobileProvider: snapshot.mobile_provider,
     accountNumber: snapshot.account_number,
     fullAccountNumber: snapshot.account_number,
+    walletNetwork,
+  })
+}
+
+function walletRecipientFallbackSubtitle(input: {
+  bankName?: string | null
+  accountNumber?: string | null
+  walletNetwork?: string | null
+}): string {
+  return formatPayoutRecipientSubtitle({
+    bankName: input.bankName || "Wallet",
+    accountNumber: input.accountNumber,
+    fullAccountNumber: input.accountNumber,
+    walletNetwork: input.walletNetwork,
   })
 }
 
@@ -65,6 +85,8 @@ export function PayoutReviewDetailsRows({
   globalFiatPayout,
   receiveNetwork,
   walletSendExecutionModel,
+  recipientDisplayName,
+  counterpartyAddress,
 }: Props) {
   const hasFx = receiveNetwork
     ? hasWalletSendFxDisplay(
@@ -199,8 +221,29 @@ export function PayoutReviewDetailsRows({
           ) : recipientSnapshot ? (
             <div className="min-w-0 max-w-[70%] shrink-0 text-right">
               <p className="font-medium">{recipientSnapshot.full_name}</p>
-              {recipientSubtitle(recipientSnapshot) ? (
-                <p className="text-sm text-muted-foreground">{recipientSubtitle(recipientSnapshot)}</p>
+              {recipientSubtitle(recipientSnapshot, receiveNetwork) ? (
+                <p className="text-sm text-muted-foreground">
+                  {recipientSubtitle(recipientSnapshot, receiveNetwork)}
+                </p>
+              ) : null}
+            </div>
+          ) : recipientDisplayName || counterpartyAddress ? (
+            <div className="min-w-0 max-w-[70%] shrink-0 text-right">
+              {recipientDisplayName ? (
+                <p className="font-medium">{recipientDisplayName}</p>
+              ) : null}
+              {walletRecipientFallbackSubtitle({
+                bankName: "Wallet",
+                accountNumber: counterpartyAddress,
+                walletNetwork: receiveNetwork,
+              }) ? (
+                <p className="text-sm text-muted-foreground">
+                  {walletRecipientFallbackSubtitle({
+                    bankName: "Wallet",
+                    accountNumber: counterpartyAddress,
+                    walletNetwork: receiveNetwork,
+                  })}
+                </p>
               ) : null}
             </div>
           ) : null}

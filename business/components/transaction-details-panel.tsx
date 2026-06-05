@@ -281,6 +281,16 @@ export function TransactionDetailsPanel({
           globalFiatPayout={isGlobalPayout && !isWalletSendPayout}
           receiveNetwork={walletReceiveNetwork}
           walletSendExecutionModel={walletSendExecutionModel}
+          recipientDisplayName={
+            isWalletSendPayout
+              ? transaction.counterpartyName ?? transaction.description
+              : undefined
+          }
+          counterpartyAddress={
+            isWalletSendPayout
+              ? transaction.counterpartyAddress ?? transaction.walletAddress
+              : undefined
+          }
         />
       ) : (
         <TransactionSummaryDetails

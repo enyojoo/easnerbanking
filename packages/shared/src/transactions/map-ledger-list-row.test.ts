@@ -222,4 +222,31 @@ describe("mapLedgerRowToMobileListItem", () => {
     expect(item.ledger_currency).toBe("USD")
     expect(item.display_description).toBe("Jane Doe")
   })
+
+  it("maps wallet send display fields from metadata", () => {
+    const item = mapLedgerRowToMobileListItem(
+      baseRow({
+        direction: "out",
+        amount: 1.01,
+        currency: "USD",
+        provider: "turnkey",
+        metadata: {
+          activity_type: "wallet_send",
+          receive_amount: 1,
+          receive_asset: "USDC",
+          counterparty_name: "External Wallet",
+          payout_review: {
+            receive_amount: 1,
+            receive_currency: "USDC",
+            total_debited: 1.01,
+            send_currency: "USD",
+          },
+        },
+      }),
+    )
+    expect(item.amount).toBe(1)
+    expect(item.currency).toBe("USDC")
+    expect(item.display_description).toBe("External Wallet")
+    expect(item.display_hero_title).toBe("Transfer to External Wallet")
+  })
 })

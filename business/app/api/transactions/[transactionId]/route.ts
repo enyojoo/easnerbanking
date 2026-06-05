@@ -20,6 +20,7 @@ import {
   isGlobalPayoutOffRampRow,
 } from "@/lib/transactions/global-payout-detail"
 import { attachWalletSendDetailFields } from "@/lib/transactions/wallet-send-detail"
+import { isWalletSendOutRow } from "@/lib/wallet-send/build-wallet-send-payout-review"
 import {
   isNoahGlobalPayoutOrchestrationInHiddenFromFeed,
   isTurnkeyGlobalPayoutRefundMirror,
@@ -417,7 +418,7 @@ export async function GET(request: Request, routeCtx: Props) {
           (transaction.transaction_timing as typeof businessTransaction.transactionTiming) ??
           businessTransaction.transactionTiming,
       }
-    } else if (isGlobalPayoutOffRampRow(rec)) {
+    } else if (isGlobalPayoutOffRampRow(rec) || isWalletSendOutRow(rec)) {
       businessTransaction = {
         ...businessTransaction,
         amount:

@@ -71,8 +71,12 @@ export function resolveOutboundTransactionListLabel(input: {
   const toName = String(input.recipient_full_name ?? apiName).trim()
   if (!toName) return "Sent"
 
-  // Global payout list rows show recipient name only (matches web + inbound deposits).
-  if (String(input.metadata?.payout_type ?? "").toLowerCase() === "global_fiat") {
+  const meta = input.metadata ?? {}
+  // Global fiat + wallet send list rows show recipient name only (matches web + inbound deposits).
+  if (
+    String(meta.payout_type ?? "").toLowerCase() === "global_fiat" ||
+    String(meta.activity_type ?? "").trim().toLowerCase() === "wallet_send"
+  ) {
     return formatDisplayPersonName(toName) || toName
   }
 

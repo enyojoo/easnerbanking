@@ -1,4 +1,5 @@
 import { formatTransactionDetailHeroTitle } from "@easner/shared"
+import type { GlobalPayoutRecipientSnapshot } from "@easner/shared/transactions/global-payout-types"
 import {
   isWalletSendOutRow,
   resolveWalletSendPayoutReview,
@@ -22,7 +23,7 @@ export function attachWalletSendDetailFields(
     row.counterparty_address != null ? String(row.counterparty_address) : undefined
   const recipientSnapshot =
     meta.recipient_snapshot && typeof meta.recipient_snapshot === "object"
-      ? (meta.recipient_snapshot as Record<string, unknown>)
+      ? (meta.recipient_snapshot as GlobalPayoutRecipientSnapshot)
       : undefined
   const recipientName =
     String(
@@ -32,6 +33,15 @@ export function attachWalletSendDetailFields(
         counterpartyAddress ??
         "",
     ).trim() || "Wallet transfer"
+  const sendNote =
+    typeof meta.send_note === "string"
+      ? meta.send_note.trim()
+      : typeof meta.note === "string"
+        ? meta.note.trim()
+        : ""
+  const transactionTiming = payoutReview.processing_time
+    ? [{ label: "Processing time", value: payoutReview.processing_time }]
+    : undefined
 
   return {
     ...transaction,
@@ -49,7 +59,16 @@ export function attachWalletSendDetailFields(
     ledger_currency: payoutReview.send_currency,
     payout_review: payoutReview,
     ...(recipientSnapshot ? { recipient_snapshot: recipientSnapshot } : {}),
+    ...(sendNote ? { send_note: sendNote } : {}),
+    ...(transactionTiming ? { transaction_timing: transactionTiming } : {}),
     description: recipientName,
     name: recipientName,
+    metadata: {
+      ...((transaction.metadata as Record<string, unknown> | undefined) ?? {}),
+      ...meta,
+      counterparty_address: counterpartyAddress ?? meta.counterparty_address ?? null,
+      receive_network:
+        meta.receive_network ?? meta.chain ?? row.chain ?? null,
+    },
   }
 }

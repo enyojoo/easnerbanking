@@ -179,6 +179,9 @@ export function toEasnerTransactionProductCategory(input: {
   if (isStablecoin) {
     return direction === "in" ? "Stablecoin Deposit" : "Stablecoin Transfer"
   }
+  if (isWalletSend) {
+    return "Stablecoin Transfer"
+  }
   if (direction === "in" && isVerificationDepositMetadata(meta)) {
     return VERIFICATION_DEPOSIT_PRODUCT_LABEL
   }
@@ -269,7 +272,8 @@ export function isEasnerProductReceiveTitle(name: string | null | undefined): bo
 /** Outbound titles from {@link toEasnerTransactionPrimaryLabel}. */
 export function isEasnerProductSendTitle(name: string | null | undefined): boolean {
   const n = String(name ?? "").trim()
-  if (n === "Stablecoin Transfer" || n === "Bank Transfer") return true
+  if (n === "Stablecoin Transfer" || n === "Bank Transfer" || n === "Wallet transfer") return true
+  if (/^Transfer to /i.test(n)) return true
   // Easetag P2P: primary label is "Sent to @handle" or fallback "Easetag Send" (see toEasnerTransactionPrimaryLabel).
   if (n === "Easetag Send") return true
   if (/^Sent to @/i.test(n)) return true
