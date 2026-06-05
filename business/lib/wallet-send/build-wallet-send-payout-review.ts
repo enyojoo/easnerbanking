@@ -140,7 +140,6 @@ export function resolveWalletSendPayoutReview(
   if (!Number.isFinite(receiveAmount) || receiveAmount <= 0) return null
 
   const receiveCurrency = String(meta.receive_asset ?? meta.receive_currency ?? "").trim().toUpperCase()
-  const receiveNetwork = String(meta.receive_network ?? meta.chain ?? "").trim()
   if (!receiveCurrency) return null
 
   const totalDebited =
