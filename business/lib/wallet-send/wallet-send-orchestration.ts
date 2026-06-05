@@ -219,7 +219,7 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
         },
       })
 
-      await markWalletSendSessionExecuted(session.form_session_id)
+      await markWalletSendSessionExecuted(input.admin, session.form_session_id)
       return {
         ok: true,
         easnerTransactionId,
@@ -304,7 +304,7 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
     },
   })
 
-  await markWalletSendSessionExecuted(session.form_session_id)
+  await markWalletSendSessionExecuted(input.admin, session.form_session_id)
   return {
     ok: true,
     easnerTransactionId,

@@ -179,22 +179,22 @@ export async function buildWalletSendQuote(input: {
   const expiresAt = new Date(Date.now() + WALLET_SEND_QUOTE_TTL_MS).toISOString()
 
   await createWalletSendSession(input.admin, {
-    formSessionId,
-    userId: recipient.user_id,
-    recipientId: recipient.id,
-    sourceBalanceCurrency,
-    receiveAsset,
-    receiveNetwork,
-    destinationAddress,
-    receiveAmount,
-    customerRate,
-    lifiMid,
-    lifiFloor: pricing.lifiFloor,
-    totalDebited: pricing.totalDebited,
-    marginAmount: pricing.marginAmount,
-    executionModel,
-    lifiQuoteId,
-    expiresAt,
+    form_session_id: formSessionId,
+    user_id: recipient.user_id,
+    recipient_id: recipient.id,
+    source_balance_currency: sourceBalanceCurrency,
+    receive_asset: receiveAsset,
+    receive_network: receiveNetwork,
+    destination_address: destinationAddress,
+    receive_amount: receiveAmount,
+    customer_rate: customerRate,
+    lifi_mid: lifiMid,
+    lifi_floor: pricing.lifiFloor,
+    total_debited: pricing.totalDebited,
+    margin_amount: pricing.marginAmount,
+    execution_model: executionModel,
+    lifi_quote_id: lifiQuoteId,
+    expires_at: expiresAt,
   })
 
   return {
