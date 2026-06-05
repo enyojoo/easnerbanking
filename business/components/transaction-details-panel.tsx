@@ -291,6 +291,11 @@ export function TransactionDetailsPanel({
               ? transaction.counterpartyAddress ?? transaction.walletAddress
               : undefined
           }
+          whenAt={
+            isWalletSendPayout
+              ? transaction.settledAt ?? transaction.date
+              : undefined
+          }
         />
       ) : (
         <TransactionSummaryDetails

@@ -1196,6 +1196,17 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                       <Text style={styles.summaryLabel}>Transfer method</Text>
                       <Text style={styles.summaryValue}>{transaction.payout_review.transfer_method}</Text>
                     </View>
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>When</Text>
+                      <Text style={styles.summaryValue}>
+                        {formatTimestamp(
+                          transaction.completed_at ||
+                            transaction.ledger_created_at ||
+                            transaction.noah_created_at ||
+                            transaction.created_at,
+                        )}
+                      </Text>
+                    </View>
                     {(transaction.transaction_timing?.length
                       ? transaction.transaction_timing
                       : [

@@ -16,6 +16,7 @@ import {
   type TransactionTimingRow,
 } from "@easner/shared"
 import { TransactionTimingRows } from "@/components/transactions/transaction-timing-rows"
+import { formatTransactionRowDateTime } from "@/lib/transaction-row-present"
 import { Card, CardContent } from "@/components/ui/card"
 import { Copy, Check } from "lucide-react"
 
@@ -41,6 +42,8 @@ type Props = {
   /** Wallet send fallback when snapshot is missing (older rows). */
   recipientDisplayName?: string | null
   counterpartyAddress?: string | null
+  /** Settled / occurred timestamp for detail "When" row (wallet send, etc.). */
+  whenAt?: string | null
 }
 
 function recipientSubtitle(
@@ -87,6 +90,7 @@ export function PayoutReviewDetailsRows({
   walletSendExecutionModel,
   recipientDisplayName,
   counterpartyAddress,
+  whenAt,
 }: Props) {
   const hasFx = receiveNetwork
     ? hasWalletSendFxDisplay(
@@ -253,6 +257,13 @@ export function PayoutReviewDetailsRows({
           <span className="text-sm text-muted-foreground">Transfer method</span>
           <span className="font-medium">{payoutReview.transfer_method}</span>
         </div>
+
+        {whenAt ? (
+          <div className="flex items-center justify-between border-b pb-4">
+            <span className="text-sm text-muted-foreground">When</span>
+            <span className="font-medium">{formatTransactionRowDateTime(whenAt)}</span>
+          </div>
+        ) : null}
 
         {timingRows?.length ? (
           <TransactionTimingRows rows={timingRows} />
