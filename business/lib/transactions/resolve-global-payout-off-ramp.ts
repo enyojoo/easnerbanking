@@ -119,21 +119,32 @@ function derivePayoutReview(
         const totalDebited = ledgerAmount
         const sendCurrency = ledgerCurrency
         const hasFx = sendCurrency !== enrichment.receiveCurrency
-        const exchangeRate = hasFx && totalDebited > 0
-          ? Math.round((enrichment.receiveAmount / totalDebited) * 100) / 100
-          : 1
-        const youSendAmount = hasFx && exchangeRate > 0
-          ? roundFiat(enrichment.receiveAmount / exchangeRate) ?? totalDebited
-          : totalDebited
+        const customerRate = roundFiat(Number(meta.customer_rate ?? meta.customerRate)) ?? 0
+        const channelCostMeta =
+          roundFiat(
+            Number(meta.noah_channel_fee ?? meta.channel_cost ?? meta.exchange_fee),
+          ) ?? null
+        const exchangeRate =
+          hasFx && customerRate > 1
+            ? customerRate
+            : hasFx && totalDebited > 0
+              ? Math.round((enrichment.receiveAmount / totalDebited) * 100) / 100
+              : 1
+        const youSendAmount =
+          hasFx && customerRate > 1
+            ? roundFiat(enrichment.receiveAmount / customerRate) ?? totalDebited
+            : hasFx && exchangeRate > 0
+              ? roundFiat(enrichment.receiveAmount / exchangeRate) ?? totalDebited
+              : totalDebited
         const processingFee = 0
+        const exchangeFee =
+          channelCostMeta != null && channelCostMeta > 0
+            ? channelCostMeta
+            : computeBalancePayoutExchangeFee(totalDebited, youSendAmount, processingFee)
         return {
           you_send_amount: youSendAmount,
           total_debited: totalDebited,
-          exchange_fee: computeBalancePayoutExchangeFee(
-            totalDebited,
-            youSendAmount,
-            processingFee,
-          ),
+          exchange_fee: exchangeFee,
           processing_fee: processingFee,
           exchange_rate: exchangeRate,
           send_currency: sendCurrency,
@@ -174,7 +185,7 @@ function derivePayoutReview(
   let exchangeRate =
     fromMeta?.exchange_rate && fromMeta.exchange_rate > 1
       ? fromMeta.exchange_rate
-      : roundFiat(Number(meta.exchange_rate)) ?? 0
+      : roundFiat(Number(meta.exchange_rate ?? meta.customer_rate ?? meta.customerRate)) ?? 0
 
   let youSendAmount =
     roundFiat(fromMeta?.you_send_amount) ??
@@ -200,10 +211,14 @@ function derivePayoutReview(
   }
 
   youSendAmount = youSendAmount ?? totalDebited
+  const channelFromMeta =
+    roundFiat(Number(meta.noah_channel_fee ?? meta.channel_cost)) ?? null
   const exchangeFee =
     fromMeta?.exchange_fee && fromMeta.exchange_fee > 0
       ? fromMeta.exchange_fee
-      : computeBalancePayoutExchangeFee(totalDebited, youSendAmount, processingFee)
+      : channelFromMeta != null && channelFromMeta > 0
+        ? channelFromMeta
+        : computeBalancePayoutExchangeFee(totalDebited, youSendAmount, processingFee)
 
   const transferMethod =
     fromMeta?.transfer_method ||
@@ -217,9 +232,12 @@ function derivePayoutReview(
   return {
     you_send_amount: youSendAmount,
     total_debited: totalDebited,
-    exchange_fee: fromMeta?.exchange_fee && fromMeta.exchange_fee > 0
-      ? fromMeta.exchange_fee
-      : computeBalancePayoutExchangeFee(totalDebited, youSendAmount, processingFee),
+    exchange_fee:
+      fromMeta?.exchange_fee && fromMeta.exchange_fee > 0
+        ? fromMeta.exchange_fee
+        : channelFromMeta != null && channelFromMeta > 0
+          ? channelFromMeta
+          : computeBalancePayoutExchangeFee(totalDebited, youSendAmount, processingFee),
     processing_fee: processingFee,
     exchange_rate: hasFx ? exchangeRate || 1 : 1,
     send_currency: sendCurrency,

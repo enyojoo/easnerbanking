@@ -19,7 +19,9 @@ describe("computeGlobalPayoutPricing", () => {
     expect(p.midNotional).toBeCloseTo(3.687403, 4)
     expect(p.marginAmount).toBeCloseTo(0.056124, 3)
     expect(p.totalDebited).toBeCloseTo(4.576245, 3)
-    expect(p.channelCost).toBeCloseTo(0.832718, 3)
+    expect(p.channelCost).toBeCloseTo(0.776594, 3)
+    expect(p.customerPrincipal + p.channelCost + p.marginAmount).toBeCloseTo(p.totalDebited, 6)
+    expect(p.customerPrincipal + p.channelCost).toBeCloseTo(p.noahFloor, 6)
     expect(p.noahSendAmount).toBeCloseTo(p.totalDebited, 6)
     expect(p.triggerAmount).toBe(4.520121)
   })
@@ -45,5 +47,67 @@ describe("computeGlobalPayoutPricing", () => {
     expect(p2.customerPrincipal).toBe(p.customerPrincipal)
     expect(p2.totalDebited).toBe(p.totalDebited)
     expect(p2.marginAmount).toBe(p.marginAmount)
+  })
+
+  it("uses prepare Breakdown ChannelFee when provided", () => {
+    const p = computeGlobalPayoutPricing({
+      receiveAmount: 5000,
+      customerRate: 1335.6388919029,
+      noahMid: 1355.96793609,
+      noahFloor: 4.520121,
+      prepareChannelFee: 0.788,
+      prepareRemaining: 3.687403,
+    })
+    expect(p.channelCost).toBe(0.788)
+    expect(p.midNotional).toBeCloseTo(3.687403, 4)
+  })
+
+  it("matches settled NGN tx e2fd8401 ChannelFee", () => {
+    const remaining = 0.737512
+    const businessFee = 0.024102
+    const p = computeGlobalPayoutPricing({
+      receiveAmount: 1000,
+      customerRate: 1000 / (remaining + businessFee),
+      noahMid: 1355.9109696,
+      noahFloor: 1.31932,
+      prepareChannelFee: 0.557706,
+      prepareRemaining: remaining,
+    })
+    expect(p.channelCost).toBeCloseTo(0.557706, 4)
+    expect(p.marginAmount).toBeCloseTo(businessFee, 4)
+    expect(p.customerPrincipal + p.channelCost + p.marginAmount).toBeCloseTo(p.totalDebited, 6)
+    expect(p.customerPrincipal + p.channelCost).toBeCloseTo(p.noahFloor, 6)
+  })
+
+  it("matches settled GHS tx 9bf22c53 ChannelFee", () => {
+    const remaining = 3.289403
+    const businessFee = 0.097876
+    const p = computeGlobalPayoutPricing({
+      receiveAmount: 40,
+      customerRate: 40 / (remaining + businessFee),
+      noahMid: 12.16026120725,
+      noahFloor: 4.897937,
+      prepareChannelFee: 1.510658,
+      prepareRemaining: remaining,
+    })
+    expect(p.channelCost).toBeCloseTo(1.510658, 4)
+    expect(p.marginAmount).toBeCloseTo(businessFee, 4)
+    expect(p.customerPrincipal + p.channelCost + p.marginAmount).toBeCloseTo(p.totalDebited, 6)
+  })
+
+  it("matches settled ZAR tx 1b06600d ChannelFee", () => {
+    const remaining = 0.62536
+    const businessFee = 0.025256
+    const p = computeGlobalPayoutPricing({
+      receiveAmount: 10,
+      customerRate: 10 / (remaining + businessFee),
+      noahMid: 15.9907692672,
+      noahFloor: 1.653695,
+      prepareChannelFee: 1.003079,
+      prepareRemaining: remaining,
+    })
+    expect(p.channelCost).toBeCloseTo(1.003079, 4)
+    expect(p.marginAmount).toBeCloseTo(businessFee, 4)
+    expect(p.customerPrincipal + p.channelCost + p.marginAmount).toBeCloseTo(p.totalDebited, 6)
   })
 })

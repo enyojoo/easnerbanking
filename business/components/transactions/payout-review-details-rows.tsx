@@ -8,8 +8,9 @@ import {
   hasPayoutCrossCurrencyFx,
   hasWalletSendFxDisplay,
   shouldShowPayoutExchangeFee,
-  shouldShowPayoutNetworkFee,
-  shouldShowPayoutProcessingFee,
+  shouldShowGlobalPayoutProcessingFee,
+  shouldShowWalletSendNetworkFee,
+  shouldShowWalletSendProcessingFee,
   type GlobalPayoutRecipientSnapshot,
   type GlobalPayoutReviewSnapshot,
   type TransactionTimingRow,
@@ -32,8 +33,11 @@ type Props = {
   showRecipientGets?: boolean
   /** Dynamic timing (Expected / Started / Arrived). Omit on send confirm. */
   timingRows?: TransactionTimingRow[] | null
+  /** When true, Noah global fiat — margin is in customer rate; hide processing fee row. */
+  globalFiatPayout?: boolean
   /** When set, uses wallet-send FX rules (direct Turnkey Solana stables hide rate). */
   receiveNetwork?: string | null
+  walletSendExecutionModel?: "direct_turnkey" | "lifi_bridge" | null
 }
 
 function recipientSubtitle(snapshot: GlobalPayoutRecipientSnapshot): string {
@@ -58,7 +62,9 @@ export function PayoutReviewDetailsRows({
   showFeeBreakdown = true,
   showRecipientGets = true,
   timingRows,
+  globalFiatPayout,
   receiveNetwork,
+  walletSendExecutionModel,
 }: Props) {
   const hasFx = receiveNetwork
     ? hasWalletSendFxDisplay(
@@ -72,8 +78,18 @@ export function PayoutReviewDetailsRows({
     receiveCurrency: payoutReview.receive_currency,
     exchangeFee: payoutReview.exchange_fee,
   })
-  const showProcessingFee = shouldShowPayoutProcessingFee(payoutReview.processing_fee)
-  const showNetworkFee = shouldShowPayoutNetworkFee(payoutReview.network_fee)
+  const showProcessingFee = globalFiatPayout
+    ? shouldShowGlobalPayoutProcessingFee({ processingFee: payoutReview.processing_fee })
+    : shouldShowWalletSendProcessingFee({
+        executionModel:
+          walletSendExecutionModel ?? payoutReview.execution_model ?? null,
+        processingFee: payoutReview.processing_fee,
+      })
+  const showNetworkFee = shouldShowWalletSendNetworkFee({
+    executionModel:
+      walletSendExecutionModel ?? payoutReview.execution_model ?? null,
+    networkFee: payoutReview.network_fee,
+  })
 
   return (
     <Card className="border-border shadow-sm">

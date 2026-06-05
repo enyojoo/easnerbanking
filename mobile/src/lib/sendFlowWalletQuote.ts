@@ -112,6 +112,7 @@ export function walletDisplayAmountsFromQuote(quote: WalletSendQuote): {
   networkFee: number
   totalDebited: number
   customerRate: number
+  executionModel?: WalletSendQuote["executionModel"]
 } {
   return {
     youSendAmount: quote.sendAmount,
@@ -120,5 +121,6 @@ export function walletDisplayAmountsFromQuote(quote: WalletSendQuote): {
     networkFee: quote.networkFee,
     totalDebited: quote.totalDebited,
     customerRate: quote.customerRate,
+    executionModel: quote.executionModel,
   }
 }

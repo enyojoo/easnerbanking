@@ -59,5 +59,15 @@ export function normalizePayoutReviewSnapshot(
       ? { noah_send_amount: Number(o.noah_send_amount) }
       : {}),
     ...(Number.isFinite(Number(o.channel_cost)) ? { channel_cost: Number(o.channel_cost) } : {}),
+    ...(Number.isFinite(Number(o.noah_schedule_fee))
+      ? { noah_schedule_fee: Number(o.noah_schedule_fee) }
+      : {}),
+    ...(Number.isFinite(Number(o.noah_channel_fee))
+      ? { noah_channel_fee: Number(o.noah_channel_fee) }
+      : {}),
+    ...(Number.isFinite(Number(o.quote_noah_mid)) ? { quote_noah_mid: Number(o.quote_noah_mid) } : {}),
+    ...(o.execution_model === "direct_turnkey" || o.execution_model === "lifi_bridge"
+      ? { execution_model: o.execution_model }
+      : {}),
   }
 }

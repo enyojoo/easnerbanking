@@ -451,7 +451,7 @@ export default function SendConfirmPage() {
       const processingTime = arrivalHint ?? undefined
       const reviewYouSend = pq!.customerPrincipal ?? pq!.sendAmount
       const reviewExchangeRate = pq!.midRate && pq!.midRate > 0 ? pq!.midRate : 1
-      const reviewExchangeFee = pq!.channelCost ?? pq!.noahFee ?? 0
+      const reviewExchangeFee = pq!.channelCost ?? 0
       const reviewMargin = pq!.marginAmount ?? pq!.easnerFee ?? 0
       const reviewSnapshot = {
         you_send_amount: reviewYouSend,
@@ -466,6 +466,9 @@ export default function SendConfirmPage() {
         processing_time: processingTime,
         ...(reviewMargin > 0 ? { margin_amount: reviewMargin, easner_fee: reviewMargin } : {}),
         ...(reviewExchangeFee > 0 ? { channel_cost: reviewExchangeFee } : {}),
+        ...(pq!.scheduleFee != null ? { noah_schedule_fee: pq!.scheduleFee } : {}),
+        ...(pq!.prepareChannelFee != null ? { noah_channel_fee: pq!.prepareChannelFee } : {}),
+        ...(pq!.quoteNoahMid != null ? { quote_noah_mid: pq!.quoteNoahMid } : {}),
         ...(pq!.noahFloor ? { noah_floor: Number(pq!.noahFloor) } : {}),
         ...(pq!.noahSendAmount ? { noah_send_amount: Number(pq!.noahSendAmount) } : {}),
       }
@@ -590,7 +593,7 @@ export default function SendConfirmPage() {
         ? wq!.customerRate
         : pq!.midRate!
       : 1
-  const exchangeFee = walletSend ? (wq?.channelCost ?? 0) : (pq?.channelCost ?? pq?.noahFee ?? 0)
+  const exchangeFee = walletSend ? (wq?.channelCost ?? 0) : (pq?.channelCost ?? 0)
   const networkFee = walletSend ? (wq?.networkFee ?? 0) : 0
   const totalDebited = walletSend
     ? (wq?.totalDebited ?? state.sendAmount)
@@ -623,6 +626,9 @@ export default function SendConfirmPage() {
           receive_currency: state.receiveCurrency,
           transfer_method: walletTransferMethod,
           processing_time: arrivalHint ?? "",
+          ...(walletSend && wq?.executionModel
+            ? { execution_model: wq.executionModel }
+            : {}),
         }}
         recipientNode={
           <SendSelectedRecipientSummary
@@ -637,7 +643,9 @@ export default function SendConfirmPage() {
         copiedKey={copiedKey}
         onCopy={handleCopy}
         showFeeBreakdown={!easenetSend && quoteReady}
+        globalFiatPayout={!walletSend && !easenetSend}
         receiveNetwork={walletSend ? walletNetwork : undefined}
+        walletSendExecutionModel={walletSend ? wq?.executionModel : undefined}
       />
 
       {(walletSend ? walletQuoteError : payoutQuoteError) && !easenetSend ? (

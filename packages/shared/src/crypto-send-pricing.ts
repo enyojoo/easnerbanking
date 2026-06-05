@@ -27,8 +27,9 @@ function roundUsdc(n: number): number {
 }
 
 /**
- * Canonical pricing for wallet send quotes and execute (Option A ledger wedge).
- * Wallet debit = lifiFloor + marginAmount; you-send box = customerPrincipal.
+ * LI.FI bridge pricing. Ledger and on-chain out both equal lifiFloor + marginAmount
+ * (= customerPrincipal + routeCost). Margin is in customerRate; execute SPL-sends margin to fee wallet.
+ * Direct Turnkey uses computeDirectTurnkeyWalletSendPricing instead.
  */
 export function computeCryptoSendPricing(input: ComputeCryptoSendPricingInput): CryptoSendPricing {
   const receiveAmount = input.receiveAmount

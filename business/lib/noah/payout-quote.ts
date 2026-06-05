@@ -17,6 +17,13 @@ import { NoProviderForCorridorError, selectProviderForCorridor } from "@/lib/pay
 import { mapNoahPrepareError } from "@/lib/noah/noah-prepare-errors"
 import { logNoahPayoutFailure } from "@/lib/noah/log-noah-payout-failure"
 import { getGlobalPayoutMarginCaptureMode } from "@/lib/noah/margin-capture-mode"
+import { noahImpliedProviderRate } from "@/lib/noah/fx-prices"
+import {
+  computeNoahOfframpScheduleFee,
+  noahOfframpScheduleFeeDelta,
+  NOAH_OFFRAMP_SCHEDULE_FEE_TOLERANCE_USD,
+  resolveNoahOfframpPaymentMethodKey,
+} from "@/lib/noah/noah-offramp-fee-schedule"
 
 /** Easner fee slice on payout quotes (Noah prepare is authoritative; no DB pricing engine). */
 export type EasnerPayoutQuoteSlice = {
@@ -65,6 +72,10 @@ export type PayoutQuoteResult = {
     channelCost: number
     marginAmount: number
     customerPrincipal: number
+    scheduleFee?: number
+    prepareChannelFee?: number
+    prepareRemaining?: number
+    quoteNoahMid?: number
   }
   easner: EasnerPayoutQuoteSlice
   pricingQuoteId: string
@@ -284,6 +295,41 @@ export async function buildPayoutQuote(input: {
   const noahFee = Number.parseFloat(String(prep.totalFee || "0")) || 0
   const marginCaptureMode = getGlobalPayoutMarginCaptureMode()
 
+  let pricingMid = noahMid!
+  if (sourceBalanceCurrency !== receiveCurrency && noahMid != null) {
+    try {
+      const ticketMid = await noahImpliedProviderRate({
+        sourceCurrency: sourceBalanceCurrency,
+        destinationCurrency: receiveCurrency,
+        sourceAmount: noahFloor,
+        country: countryCode ?? undefined,
+      })
+      if (Number.isFinite(ticketMid) && ticketMid > 0) {
+        pricingMid = ticketMid
+      }
+    } catch (e) {
+      console.warn("[noah_payout_quote] ticket_mid_fetch_failed", {
+        receiveCurrency,
+        noahFloor,
+        error: e instanceof Error ? e.message : String(e),
+      })
+    }
+  }
+
+  const paymentMethodKey = resolveNoahOfframpPaymentMethodKey({
+    bankName: row.bank_name,
+    mobileProvider: row.mobile_provider,
+  })
+  const scheduleFee =
+    sourceBalanceCurrency !== receiveCurrency
+      ? computeNoahOfframpScheduleFee({
+          currency: receiveCurrency,
+          countryCode: countryCode ?? undefined,
+          paymentMethodKey,
+          basisAmount: noahFloor,
+        })
+      : null
+
   const pricing =
     sourceBalanceCurrency === receiveCurrency
       ? {
@@ -303,10 +349,56 @@ export async function buildPayoutQuote(input: {
       : computeGlobalPayoutPricing({
           receiveAmount: quoteReceiveAmount,
           customerRate: providerRate,
-          noahMid: noahMid!,
+          noahMid: pricingMid,
           noahFloor,
           marginCaptureMode,
+          ...(prep.channelFee != null ? { prepareChannelFee: prep.channelFee } : {}),
+          ...(prep.remaining != null ? { prepareRemaining: prep.remaining } : {}),
         })
+
+  if (sourceBalanceCurrency !== receiveCurrency && prep.channelFee == null) {
+    const bundledResidual = pricing.noahFloor - pricing.midNotional
+    console.info("[noah_payout_quote] channel_cost_fallback", {
+      receiveCurrency,
+      receiveAmount: quoteReceiveAmount,
+      noahFloor,
+      channelCost: pricing.channelCost,
+      marginAmount: pricing.marginAmount,
+      bundledResidual,
+      pricingMid,
+    })
+    if (
+      scheduleFee != null &&
+      Math.abs(pricing.channelCost - scheduleFee) > NOAH_OFFRAMP_SCHEDULE_FEE_TOLERANCE_USD
+    ) {
+      console.warn("[noah_payout_quote] channel_cost_fallback_vs_schedule", {
+        receiveCurrency,
+        channelCost: pricing.channelCost,
+        scheduleFee,
+        delta: pricing.channelCost - scheduleFee,
+      })
+    }
+  }
+
+  if (
+    scheduleFee != null &&
+    sourceBalanceCurrency !== receiveCurrency
+  ) {
+    const delta = noahOfframpScheduleFeeDelta(pricing.channelCost, scheduleFee)
+    if (delta != null && Math.abs(delta) > NOAH_OFFRAMP_SCHEDULE_FEE_TOLERANCE_USD) {
+      console.info("[noah_payout_quote] channel_cost_vs_schedule", {
+        receiveCurrency,
+        receiveAmount: quoteReceiveAmount,
+        noahFloor,
+        channelCost: pricing.channelCost,
+        scheduleFee,
+        delta,
+        prepareChannelFee: prep.channelFee ?? null,
+        pricingMid,
+        dbNoahMid: noahMid ?? null,
+      })
+    }
+  }
 
   const easner = buildEasnerSlice({
     sourceAmount: pricing.customerPrincipal,
@@ -341,11 +433,15 @@ export async function buildPayoutQuote(input: {
       formSessionId,
       rate: providerRate,
       ...(noahMid != null && noahMid > 0 ? { noahMid } : {}),
+      ...(pricingMid > 0 ? { quoteNoahMid: pricingMid } : {}),
       effectiveRate,
       marginCaptureMode,
       channelCost: pricing.channelCost,
       marginAmount: pricing.marginAmount,
       customerPrincipal: pricing.customerPrincipal,
+      ...(scheduleFee != null ? { scheduleFee } : {}),
+      ...(prep.channelFee != null ? { prepareChannelFee: prep.channelFee } : {}),
+      ...(prep.remaining != null ? { prepareRemaining: prep.remaining } : {}),
     },
     easner,
     pricingQuoteId: "",

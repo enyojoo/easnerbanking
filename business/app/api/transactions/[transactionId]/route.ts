@@ -19,6 +19,7 @@ import {
   attachGlobalPayoutDetailFieldsAsync,
   isGlobalPayoutOffRampRow,
 } from "@/lib/transactions/global-payout-detail"
+import { attachWalletSendDetailFields } from "@/lib/transactions/wallet-send-detail"
 import {
   isNoahGlobalPayoutOrchestrationInHiddenFromFeed,
   isTurnkeyGlobalPayoutRefundMirror,
@@ -344,6 +345,7 @@ export async function GET(request: Request, routeCtx: Props) {
 
   transaction = await attachBankDepositDetailFieldsAsync(admin, rec, transaction)
   transaction = await attachGlobalPayoutDetailFieldsAsync(admin, rec, transaction)
+  transaction = attachWalletSendDetailFields(rec, transaction)
 
   if (scope === "business") {
     const [enrichedRec] = await enrichBankDepositLedgerRows(admin, [rec])

@@ -2,6 +2,7 @@ export type GlobalPayoutReviewSnapshot = {
   you_send_amount: number
   total_debited: number
   exchange_fee: number
+  /** Persisted for metadata/ops; not shown on customer confirm/detail for global fiat (margin in rate). */
   processing_fee: number
   exchange_rate: number
   send_currency: string
@@ -14,7 +15,15 @@ export type GlobalPayoutReviewSnapshot = {
   noah_floor?: number
   noah_send_amount?: number
   channel_cost?: number
+  /** Noah merchant schedule fee at quote (reconciliation). */
+  noah_schedule_fee?: number
+  /** Noah prepare Breakdown ChannelFee when captured at quote. */
+  noah_channel_fee?: number
+  /** Ticket-sized Noah mid at quote time. */
+  quote_noah_mid?: number
   network_fee?: number
+  /** Wallet send: hide processing fee row for `lifi_bridge` (margin is in customer rate). */
+  execution_model?: "direct_turnkey" | "lifi_bridge"
 }
 
 export type GlobalPayoutRecipientSnapshot = {

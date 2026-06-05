@@ -67,6 +67,112 @@ export function buildGlobalPayoutMarginReconciliationPatch(
   }
 }
 
+export type ReconcileGlobalPayoutChannelFeeResult = {
+  patch: Record<string, unknown>
+  quotedChannelCost: number | null
+  noahChannelFee: number | null
+  scheduleFee: number | null
+  deltaQuoted: number | null
+  deltaSchedule: number | null
+}
+
+/** Compare Noah settlement ChannelFee to quoted exchange_fee / channel_cost. */
+export function buildGlobalPayoutChannelFeeReconciliationPatch(
+  input: ReconcileGlobalPayoutMarginInput,
+): ReconcileGlobalPayoutChannelFeeResult {
+  const noahChannelFee = pickNoahBreakdownAmount(input.txData, "ChannelFee")
+  const quotedRaw =
+    input.priorMetadata.channel_cost ??
+    input.priorMetadata.exchange_fee ??
+    (input.priorMetadata.payout_review as Record<string, unknown> | undefined)?.exchange_fee
+  const quotedChannelCost =
+    quotedRaw != null && Number.isFinite(Number(quotedRaw)) ? Number(quotedRaw) : null
+  const scheduleRaw =
+    input.priorMetadata.noah_schedule_fee ??
+    (input.priorMetadata.payout_review as Record<string, unknown> | undefined)?.noah_schedule_fee
+  const scheduleFee =
+    scheduleRaw != null && Number.isFinite(Number(scheduleRaw)) ? Number(scheduleRaw) : null
+
+  if (noahChannelFee == null) {
+    return {
+      patch: {},
+      quotedChannelCost,
+      noahChannelFee: null,
+      scheduleFee,
+      deltaQuoted: null,
+      deltaSchedule: null,
+    }
+  }
+
+  const deltaQuoted =
+    quotedChannelCost != null
+      ? Math.round((noahChannelFee - quotedChannelCost) * 1_000_000) / 1_000_000
+      : null
+  const deltaSchedule =
+    scheduleFee != null
+      ? Math.round((noahChannelFee - scheduleFee) * 1_000_000) / 1_000_000
+      : null
+
+  if (deltaQuoted != null && Math.abs(deltaQuoted) > RECONCILE_WARN_TOLERANCE_USDC) {
+    console.warn("[global_payout_channel_fee_reconcile]", {
+      transactionId: input.transactionId,
+      easnerPayoutId: input.priorMetadata.easner_payout_id,
+      quotedChannelCost,
+      noahChannelFee,
+      deltaQuoted,
+      scheduleFee,
+      deltaSchedule,
+    })
+  }
+
+  const patch: Record<string, unknown> = {
+    channel_fee_reconciled: true,
+    noah_settlement_channel_fee: noahChannelFee,
+    channel_fee_reconciliation_delta: deltaQuoted,
+  }
+
+  const payoutReview = input.priorMetadata.payout_review
+  if (
+    payoutReview &&
+    typeof payoutReview === "object" &&
+    deltaQuoted != null &&
+    Math.abs(deltaQuoted) <= RECONCILE_WARN_TOLERANCE_USDC
+  ) {
+    patch.payout_review = {
+      ...(payoutReview as Record<string, unknown>),
+      exchange_fee: noahChannelFee,
+      channel_cost: noahChannelFee,
+    }
+  }
+
+  return {
+    patch,
+    quotedChannelCost,
+    noahChannelFee,
+    scheduleFee,
+    deltaQuoted,
+    deltaSchedule,
+  }
+}
+
+export async function applyGlobalPayoutChannelFeeReconciliation(
+  admin: SupabaseClient,
+  input: ReconcileGlobalPayoutMarginInput,
+): Promise<void> {
+  const { patch } = buildGlobalPayoutChannelFeeReconciliationPatch(input)
+  if (!Object.keys(patch).length) return
+
+  const { data: row } = await admin
+    .from("transactions")
+    .select("metadata")
+    .eq("id", input.transactionId)
+    .maybeSingle()
+  if (!row?.metadata || typeof row.metadata !== "object") return
+
+  const merged = { ...(row.metadata as Record<string, unknown>), ...patch }
+  await admin.from("transactions").update({ metadata: merged }).eq("id", input.transactionId)
+}
+
 export async function applyGlobalPayoutMarginReconciliation(
   admin: SupabaseClient,
   input: ReconcileGlobalPayoutMarginInput,

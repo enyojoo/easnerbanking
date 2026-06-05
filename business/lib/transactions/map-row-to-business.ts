@@ -13,6 +13,10 @@ import {
 import { isNoahBankOnrampFiatPayIn } from "@/lib/noah/bank-onramp-tx"
 import { resolveBankDepositPayInDetail } from "@/lib/transactions/resolve-bank-deposit-pay-in"
 import { resolveGlobalPayoutOffRampDetail } from "@/lib/transactions/resolve-global-payout-off-ramp"
+import {
+  isWalletSendOutRow,
+  resolveWalletSendPayoutReview,
+} from "@/lib/wallet-send/build-wallet-send-payout-review"
 
 function deriveCounterpartyName(input: {
   metadata?: Record<string, unknown> | null
@@ -57,6 +61,13 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
 
   const isVerification = isVerificationDepositMetadata(meta)
   const globalPayoutDetail = resolveGlobalPayoutOffRampDetail(row)
+  const ledgerAmountForReview =
+    typeof row.amount === "number" ? row.amount : Number(row.amount) || 0
+  const ledgerCurrencyForReview = String(row.currency ?? "USD").toUpperCase()
+  const walletSendPayoutReview =
+    !globalPayoutDetail && meta && isWalletSendOutRow(row)
+      ? resolveWalletSendPayoutReview(meta, ledgerAmountForReview, ledgerCurrencyForReview)
+      : null
   const bankDepositDetail =
     !globalPayoutDetail &&
     !isVerification &&
@@ -69,8 +80,31 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     !isVerification && !globalPayout && (isBankOnrampDepositFlow(meta) || (payload && isNoahBankOnrampFiatPayIn(payload)))
       ? deriveBankDepositInboundDisplayLabel({ metadata: meta, payload: payload ?? undefined })
       : undefined
+  const counterpartyNameRaw = deriveCounterpartyName({ metadata: meta, payload })
+  const walletSendDisplay = walletSendPayoutReview
+    ? {
+        displayAmount: walletSendPayoutReview.receive_amount,
+        displayCurrency: walletSendPayoutReview.receive_currency,
+        ledgerAmount: walletSendPayoutReview.total_debited,
+        ledgerCurrency: walletSendPayoutReview.send_currency,
+        displayDescription:
+          counterpartyNameRaw ||
+          toEasnerTransactionPrimaryLabel({
+            provider,
+            direction: dirRaw === "in" ? "in" : "out",
+            metadata: meta,
+            payload,
+          }),
+        displayHeroTitle: formatTransactionDetailHeroTitle({
+          direction: "out",
+          counterpartyName: counterpartyNameRaw || "Wallet transfer",
+          productFallback: "Transfer",
+        }),
+      }
+    : null
+  const displaySource = globalPayout ?? walletSendDisplay
   const description =
-    globalPayout?.displayDescription ??
+    displaySource?.displayDescription ??
     bankLabel ??
     toEasnerTransactionPrimaryLabel({
       provider,
@@ -86,13 +120,21 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
         ? String(row.created_at)
         : new Date().toISOString()
 
-  const currencyCode = globalPayout
-    ? globalPayout.displayCurrency
+  const currencyCode = displaySource
+    ? displaySource.displayCurrency
     : String(row.currency ?? "USD")
-  const listAmount = globalPayout ? globalPayout.displayAmount : typeof row.amount === "number" ? row.amount : Number(row.amount) || 0
-  const listBaseAmount = globalPayout ? globalPayout.ledgerAmount : typeof row.base_amount === "number" ? row.base_amount : Number(row.base_amount) || undefined
-  const listBaseCurrency = globalPayout
-    ? globalPayout.ledgerCurrency
+  const listAmount = displaySource
+    ? displaySource.displayAmount
+    : typeof row.amount === "number"
+      ? row.amount
+      : Number(row.amount) || 0
+  const listBaseAmount = displaySource
+    ? displaySource.ledgerAmount
+    : typeof row.base_amount === "number"
+      ? row.base_amount
+      : Number(row.base_amount) || undefined
+  const listBaseCurrency = displaySource
+    ? displaySource.ledgerCurrency
     : row.base_currency != null
       ? String(row.base_currency)
       : undefined
@@ -111,13 +153,12 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
         row.chain ??
         "",
     ).trim() || undefined
-  const counterpartyNameRaw = deriveCounterpartyName({ metadata: meta, payload })
   const counterpartyName =
     counterpartyNameRaw && counterpartyNameRaw !== description ? counterpartyNameRaw : undefined
 
   const isEasetagP2p = String(meta?.source ?? "").toLowerCase() === "easetag_p2p"
   const displayHeroTitle =
-    globalPayout?.displayHeroTitle ??
+    displaySource?.displayHeroTitle ??
     (bankLabel && dirRaw === "in"
       ? formatTransactionDetailHeroTitle({
           direction: "in",
@@ -164,6 +205,13 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
           lifecycle: globalPayoutDetail.lifecycle,
           transactionTiming: globalPayoutDetail.transactionTiming,
         }
+      : walletSendPayoutReview
+        ? {
+            displayHeroTitle: walletSendDisplay?.displayHeroTitle,
+            ledgerAmount: walletSendPayoutReview.total_debited,
+            ledgerCurrency: walletSendPayoutReview.send_currency,
+            payoutReview: walletSendPayoutReview,
+          }
       : bankDepositDetail
         ? {
             lifecycle: bankDepositDetail.lifecycle,

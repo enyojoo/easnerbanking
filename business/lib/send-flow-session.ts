@@ -65,6 +65,12 @@ export interface SendFlowState {
     customerPrincipal?: number
     marginCaptureMode?: "surplus_send" | "split_debit"
     noahMid?: number
+    /** Merchant schedule fee at quote time (validation only). */
+    scheduleFee?: number
+    /** Noah prepare Breakdown ChannelFee when present. */
+    prepareChannelFee?: number
+    /** Ticket-sized Noah mid used for pricing at quote time. */
+    quoteNoahMid?: number
   }
   /** Executable wallet send quote from confirm (Turnkey direct or LI.FI). */
   walletQuote?: {

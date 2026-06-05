@@ -229,6 +229,17 @@ export function TransactionDetailsPanel({
   if (!transaction) return null
 
   const isGlobalPayout = Boolean(transaction.payoutReview)
+  const isWalletSendPayout =
+    transaction.payoutReview?.execution_model === "direct_turnkey" ||
+    transaction.payoutReview?.execution_model === "lifi_bridge"
+  const walletSendExecutionModel = transaction.payoutReview?.execution_model
+  const walletReceiveNetwork =
+    transaction.chain?.trim() ||
+    String(
+      (transaction as { metadata?: { receive_network?: string } }).metadata?.receive_network ??
+        "",
+    ).trim() ||
+    undefined
   const showLifecycleTracker = Boolean(transaction.lifecycle?.length)
   const lifecycleTitle = isGlobalPayout ? "Transfer status" : "Deposit status"
 
@@ -267,6 +278,9 @@ export function TransactionDetailsPanel({
           copiedKey={copiedKey}
           onCopy={handleCopy}
           showRecipientGets={false}
+          globalFiatPayout={isGlobalPayout && !isWalletSendPayout}
+          receiveNetwork={walletReceiveNetwork}
+          walletSendExecutionModel={walletSendExecutionModel}
         />
       ) : (
         <TransactionSummaryDetails

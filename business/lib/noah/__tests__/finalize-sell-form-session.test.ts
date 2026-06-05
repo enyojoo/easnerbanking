@@ -62,6 +62,20 @@ describe("parsePrepareSellRaw", () => {
       totalFee: "0.02",
     })
   })
+
+  it("parses Breakdown ChannelFee and Remaining when present", () => {
+    const parsed = parsePrepareSellRaw({
+      FormSessionID: "abc-123",
+      CryptoAuthorizedAmount: "4.52",
+      TotalFee: "0.02",
+      Breakdown: [
+        { Type: "ChannelFee", Amount: "0.788" },
+        { Type: "Remaining", Amount: "3.687403" },
+      ],
+    })
+    expect(parsed.channelFee).toBe(0.788)
+    expect(parsed.remaining).toBeCloseTo(3.687403, 4)
+  })
 })
 
 describe("parseNoahFormNextStep", () => {

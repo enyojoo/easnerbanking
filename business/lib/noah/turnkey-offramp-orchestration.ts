@@ -347,6 +347,13 @@ export async function executeTurnkeyOfframpPayout(
     margin_capture_mode: marginCaptureMode,
     ...(quoted?.customerRate != null ? { customer_rate: quoted.customerRate } : {}),
     ...(quoted?.noahMid != null ? { noah_mid: quoted.noahMid } : {}),
+    ...(payoutReview?.noah_schedule_fee != null
+      ? { noah_schedule_fee: payoutReview.noah_schedule_fee }
+      : {}),
+    ...(payoutReview?.noah_channel_fee != null
+      ? { noah_channel_fee: payoutReview.noah_channel_fee }
+      : {}),
+    ...(payoutReview?.quote_noah_mid != null ? { quote_noah_mid: payoutReview.quote_noah_mid } : {}),
     crypto_asset: cryptoCurrency,
     fiat_currency: fiatCurrency,
     country_code: countryCode,

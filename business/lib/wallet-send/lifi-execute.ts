@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { getTurnkeyApiClientForSubOrganization } from "@/lib/turnkey/client"
 import { getTurnkeySolanaBroadcastCaip2, isTurnkeySolSponsorshipEnabled } from "@/lib/turnkey/config"
-import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
+import { createTurnkeySend } from "@/lib/turnkey/send"
 import { lifiGetStatus } from "@/lib/lifi/client"
 import { resolveWalletSendToken, sourceSolVaultToken } from "@/lib/lifi/token-map"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
@@ -11,14 +11,24 @@ import { quoteLifiWalletBridge } from "./lifi-wallet-quote"
 
 type TurnkeyClientLike = Record<string, (...args: unknown[]) => Promise<unknown>>
 
+const MARGIN_DUST = 0.000_001
+
 export async function executeLifiWalletSend(input: {
   admin: SupabaseClient
   ctx: NoahAccountContext
   session: WalletSendSessionRow
+  feeAddress: string
   easnerTransactionId: string
-  reviewSnapshot?: Record<string, unknown>
 }): Promise<
-  | { ok: true; providerTransactionId: string; status: "pending" | "settled" | "failed"; txHash?: string | null }
+  | {
+      ok: true
+      providerTransactionId: string
+      status: "pending" | "settled" | "failed"
+      txHash?: string | null
+      marginTurnkeySendId?: string
+      lifiTool?: string
+      lifiQuoteId?: string
+    }
   | { ok: false; error: string }
 > {
   const balanceCurrency = input.session.source_balance_currency as "USD" | "EUR"
@@ -57,8 +67,6 @@ export async function executeLifiWalletSend(input: {
     return { ok: false, error: "lifi_floor_exceeded" }
   }
 
-  const owner = fromAddress
-
   const subOrgId = await resolveSubOrgId(input.admin, input.ctx)
   if (!subOrgId) return { ok: false, error: "no_turnkey_suborg" }
 
@@ -80,7 +88,7 @@ export async function executeLifiWalletSend(input: {
       type: "ACTIVITY_TYPE_SIGN_AND_BROADCAST_TRANSACTION",
       organizationId: subOrgId,
       parameters: {
-        signWith: owner,
+        signWith: fromAddress,
         unsignedTransaction: unsigned,
         type: "TRANSACTION_TYPE_SOLANA",
         caip2,
@@ -100,44 +108,56 @@ export async function executeLifiWalletSend(input: {
   const txHash =
     String(sendRes.signature ?? sendRes.txHash ?? sendRes.transactionHash ?? "").trim() || null
 
-  await upsertLedgerTransaction(input.admin, {
-    userId: input.session.user_id,
-    provider: "lifi",
-    providerTransactionId,
-    status: "pending",
-    amount: input.session.total_debited,
-    currency: balanceCurrency,
-    direction: "out",
-    txHash,
-    counterpartyAddress: input.session.destination_address,
-    asset: input.session.receive_asset,
-    chain: input.session.receive_network,
-    metadata: {
-      activity_type: "wallet_send",
-      execution_model: "lifi_bridge",
-      receive_asset: input.session.receive_asset,
-      receive_network: input.session.receive_network,
-      receive_amount: input.session.receive_amount,
-      lifi_tool: quote.tool,
-      lifi_quote_id: quote.id,
-      form_session_id: input.session.form_session_id,
-      easner_transaction_id: input.easnerTransactionId,
-      ...(input.reviewSnapshot ?? {}),
-    },
-  })
+  const marginAmount = input.session.margin_amount
+  const walletSendCtx = { formSessionId: input.session.form_session_id }
+  let marginTurnkeySendId: string | undefined
+
+  if (marginAmount > MARGIN_DUST) {
+    const asset = source.asset === "EURC" ? "EURC" : "USDC"
+    const marginSend = await createTurnkeySend(input.admin, {
+      ctx: input.ctx,
+      asset,
+      chain: "solana",
+      destinationAddress: input.feeAddress,
+      amount: marginAmount,
+      settlementPollTimeoutMs: 0,
+      walletSend: { ...walletSendCtx, marginLeg: true },
+    })
+    marginTurnkeySendId = marginSend.providerTransactionId
+    if (marginSend.status === "failed") {
+      const detail = marginSend.chainFailureDetail?.trim() || "margin_capture_failed"
+      return { ok: false, error: detail || "margin_capture_failed" }
+    }
+  }
 
   if (txHash) {
     try {
       const status = await lifiGetStatus(txHash, quote.tool)
       if (status.status === "DONE") {
-        return { ok: true, providerTransactionId, status: "settled", txHash }
+        return {
+          ok: true,
+          providerTransactionId,
+          status: "settled",
+          txHash,
+          marginTurnkeySendId,
+          lifiTool: quote.tool,
+          lifiQuoteId: quote.id,
+        }
       }
     } catch {
       /* poll later */
     }
   }
 
-  return { ok: true, providerTransactionId, status: "pending", txHash }
+  return {
+    ok: true,
+    providerTransactionId,
+    status: "pending",
+    txHash,
+    marginTurnkeySendId,
+    lifiTool: quote.tool,
+    lifiQuoteId: quote.id,
+  }
 }
 
 async function resolveSubOrgId(admin: SupabaseClient, ctx: NoahAccountContext): Promise<string | null> {

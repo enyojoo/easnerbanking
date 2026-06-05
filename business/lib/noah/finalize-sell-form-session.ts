@@ -7,7 +7,31 @@ export type SellPrepareResult = {
   cryptoAmountEstimate?: string
   paymentMethodId?: string
   totalFee?: string
+  /** Noah prepare/settlement Breakdown ChannelFee when exposed on prepare. */
+  channelFee?: number
+  /** USDC leg sold at mid to deliver fiat (Breakdown Remaining). */
+  remaining?: number
+  prepareRate?: number
   raw: Record<string, unknown>
+}
+
+function pickBreakdownAmount(raw: Record<string, unknown>, type: string): number | undefined {
+  const items = raw.Breakdown ?? raw.breakdown
+  if (!Array.isArray(items)) return undefined
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue
+    const row = item as Record<string, unknown>
+    if (String(row.Type ?? row.type ?? "") !== type) continue
+    const n = Number.parseFloat(String(row.Amount ?? row.amount ?? ""))
+    if (Number.isFinite(n)) return Math.abs(n)
+  }
+  return undefined
+}
+
+function pickPrepareRate(raw: Record<string, unknown>): number | undefined {
+  const rate = Number.parseFloat(String(raw.Rate ?? raw.rate ?? ""))
+  if (Number.isFinite(rate) && rate > 0) return rate
+  return undefined
 }
 
 export type NoahFormNextStep = {
@@ -47,12 +71,18 @@ export function parsePrepareSellRaw(
     raw.CryptoAmountEstimate ?? raw.cryptoAmountEstimate ?? previous?.cryptoAmountEstimate ?? "",
   ).trim()
   const totalFee = String(raw.TotalFee ?? raw.totalFee ?? previous?.totalFee ?? "").trim()
+  const channelFee = pickBreakdownAmount(raw, "ChannelFee") ?? previous?.channelFee
+  const remaining = pickBreakdownAmount(raw, "Remaining") ?? previous?.remaining
+  const prepareRate = pickPrepareRate(raw) ?? previous?.prepareRate
   return {
     formSessionId: formSessionId || undefined,
     cryptoAuthorizedAmount: cryptoAuthorizedAmount || undefined,
     cryptoAmountEstimate: cryptoAmountEstimate || undefined,
     paymentMethodId: pm ?? undefined,
     totalFee: totalFee || undefined,
+    ...(channelFee != null ? { channelFee } : {}),
+    ...(remaining != null ? { remaining } : {}),
+    ...(prepareRate != null ? { prepareRate } : {}),
     raw,
   }
 }

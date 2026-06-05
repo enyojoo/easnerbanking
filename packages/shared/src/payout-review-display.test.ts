@@ -3,8 +3,12 @@ import {
   hasPayoutCrossCurrencyFx,
   hasWalletSendFxDisplay,
   isPayoutReviewFeeVisible,
+  shouldShowGlobalPayoutProcessingFee,
   shouldShowPayoutExchangeFee,
   shouldShowPayoutProcessingFee,
+  shouldShowPayoutReviewProcessingFee,
+  shouldShowWalletSendProcessingFee,
+  shouldShowWalletSendNetworkFee,
   shouldShowPayoutNetworkFee,
 } from "./payout-review-display"
 
@@ -44,6 +48,49 @@ describe("payout-review-display", () => {
     expect(shouldShowPayoutProcessingFee(0)).toBe(false)
     expect(shouldShowPayoutNetworkFee(0.01)).toBe(true)
     expect(shouldShowPayoutNetworkFee(null)).toBe(false)
+  })
+
+  it("hides wallet send processing fee for LI.FI bridge (margin in customer rate)", () => {
+    expect(
+      shouldShowWalletSendProcessingFee({ executionModel: "lifi_bridge", processingFee: 1.5 }),
+    ).toBe(false)
+    expect(
+      shouldShowWalletSendProcessingFee({ executionModel: "direct_turnkey", processingFee: 1 }),
+    ).toBe(true)
+  })
+
+  it("hides global fiat processing fee (margin in noah_rates.rate)", () => {
+    expect(shouldShowGlobalPayoutProcessingFee({ processingFee: 0.056 })).toBe(false)
+    expect(
+      shouldShowPayoutReviewProcessingFee({
+        payoutFlow: "global_fiat",
+        processingFee: 0.056,
+      }),
+    ).toBe(false)
+    expect(
+      shouldShowPayoutReviewProcessingFee({
+        payoutFlow: "wallet_send",
+        executionModel: "direct_turnkey",
+        processingFee: 1,
+      }),
+    ).toBe(true)
+    expect(
+      shouldShowPayoutReviewProcessingFee({
+        payoutFlow: "wallet_send",
+        executionModel: "lifi_bridge",
+        processingFee: 1.5,
+      }),
+    ).toBe(false)
+  })
+
+  it("hides wallet send network fee for both execution models", () => {
+    expect(
+      shouldShowWalletSendNetworkFee({ executionModel: "lifi_bridge", networkFee: 0.5 }),
+    ).toBe(false)
+    expect(
+      shouldShowWalletSendNetworkFee({ executionModel: "direct_turnkey", networkFee: 0.5 }),
+    ).toBe(false)
+    expect(shouldShowWalletSendNetworkFee({ networkFee: 0.5 })).toBe(true)
   })
 
   it("detects cross-currency FX", () => {

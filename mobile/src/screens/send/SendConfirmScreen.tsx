@@ -13,8 +13,10 @@ import {
   resolveSendConfirmArrivalHint,
   hasWalletSendFxDisplay,
   shouldShowPayoutExchangeFee,
+  shouldShowGlobalPayoutProcessingFee,
   shouldShowPayoutNetworkFee,
-  shouldShowPayoutProcessingFee,
+  shouldShowWalletSendNetworkFee,
+  shouldShowWalletSendProcessingFee,
   qk,
   resolvePayoutCountryCode,
 } from '@easner/shared'
@@ -337,8 +339,22 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     receiveCurrency,
     exchangeFee,
   })
-  const showProcessingFee = shouldShowPayoutProcessingFee(processingFee)
-  const showNetworkFee = isWalletRecipient && shouldShowPayoutNetworkFee(networkFee)
+  const walletExecutionModel =
+    (quoteDisplay as { executionModel?: string } | null)?.executionModel ??
+    walletSession?.executionModel ??
+    peekSendWalletQuote()?.executionModel
+  const showProcessingFee = isWalletRecipient
+    ? shouldShowWalletSendProcessingFee({
+        executionModel: walletExecutionModel,
+        processingFee: processingFee,
+      })
+    : shouldShowGlobalPayoutProcessingFee({ processingFee })
+  const showNetworkFee = isWalletRecipient
+    ? shouldShowWalletSendNetworkFee({
+        executionModel: walletExecutionModel,
+        networkFee,
+      })
+    : shouldShowPayoutNetworkFee(networkFee)
   const transferMethod = recipient
     ? getGlobalPayoutTransferMethod({
         currency: receiveCurrency,
@@ -526,6 +542,9 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                   transfer_method: transferMethod,
                   ...(processingTime ? { processing_time: processingTime } : {}),
                   ...(processingFee > 0 ? { margin_amount: processingFee, easner_fee: processingFee } : {}),
+                  ...(isWalletRecipient && walletExecutionModel
+                    ? { execution_model: walletExecutionModel }
+                    : {}),
                   ...(exchangeFee > 0 ? { channel_cost: exchangeFee } : {}),
                   ...(payoutSession?.noahFloor ? { noah_floor: Number(payoutSession.noahFloor) } : {}),
                   ...(payoutSession?.noahSendAmount

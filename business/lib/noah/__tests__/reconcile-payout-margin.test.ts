@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  buildGlobalPayoutChannelFeeReconciliationPatch,
   buildGlobalPayoutMarginReconciliationPatch,
   pickNoahBreakdownAmount,
 } from "@/lib/noah/reconcile-payout-margin"
@@ -43,5 +44,62 @@ describe("buildGlobalPayoutMarginReconciliationPatch", () => {
       },
     })
     expect(result.patch).toEqual({})
+  })
+})
+
+describe("buildGlobalPayoutChannelFeeReconciliationPatch", () => {
+  it("warns and patches when ChannelFee matches quoted exchange_fee", () => {
+    const result = buildGlobalPayoutChannelFeeReconciliationPatch({
+      transactionId: "tx-2",
+      priorMetadata: {
+        exchange_fee: 0.79,
+        channel_cost: 0.79,
+        payout_review: { exchange_fee: 0.79 },
+      },
+      txData: {
+        Breakdown: [{ Type: "ChannelFee", Amount: "0.79" }],
+      },
+    })
+    expect(result.noahChannelFee).toBe(0.79)
+    expect(result.deltaQuoted).toBe(0)
+    expect(result.patch.channel_fee_reconciled).toBe(true)
+    expect(result.patch.payout_review).toBeDefined()
+  })
+
+  it("returns empty patch when Breakdown missing ChannelFee", () => {
+    const result = buildGlobalPayoutChannelFeeReconciliationPatch({
+      transactionId: "tx-3",
+      priorMetadata: { exchange_fee: 0.5 },
+      txData: {},
+    })
+    expect(result.patch).toEqual({})
+  })
+
+  it("matches settled NGN tx e2fd8401 quoted ChannelFee", () => {
+    const result = buildGlobalPayoutChannelFeeReconciliationPatch({
+      transactionId: "e2fd8401",
+      priorMetadata: {
+        exchange_fee: 0.557706,
+        channel_cost: 0.557706,
+        noah_channel_fee: 0.557706,
+        payout_review: { exchange_fee: 0.557706 },
+      },
+      txData: {
+        Breakdown: [{ Type: "ChannelFee", Amount: "0.557706" }],
+      },
+    })
+    expect(result.deltaQuoted).toBe(0)
+    expect(result.patch.channel_fee_reconciled).toBe(true)
+  })
+
+  it("delta when pre-tightening bundled exchange_fee included margin", () => {
+    const result = buildGlobalPayoutChannelFeeReconciliationPatch({
+      transactionId: "e2fd8401-bundled",
+      priorMetadata: { exchange_fee: 0.581808 },
+      txData: {
+        Breakdown: [{ Type: "ChannelFee", Amount: "0.557706" }],
+      },
+    })
+    expect(result.deltaQuoted).toBeCloseTo(-0.024102, 4)
   })
 })

@@ -37,6 +37,9 @@ export function mapPayoutQuoteToFlowState(
       customerPrincipal: q.customerPrincipal,
       marginCaptureMode: q.noah.marginCaptureMode,
       noahMid: q.noah.noahMid,
+      ...(q.noah.scheduleFee != null ? { scheduleFee: q.noah.scheduleFee } : {}),
+      ...(q.noah.prepareChannelFee != null ? { prepareChannelFee: q.noah.prepareChannelFee } : {}),
+      ...(q.noah.quoteNoahMid != null ? { quoteNoahMid: q.noah.quoteNoahMid } : {}),
     },
   }
 }

@@ -69,9 +69,12 @@ import {
   formatPayoutRecipientSubtitle,
   formatTransactionDetailHeroTitle,
   hasPayoutCrossCurrencyFx,
+  hasWalletSendFxDisplay,
   shouldShowPayoutExchangeFee,
+  shouldShowGlobalPayoutProcessingFee,
   shouldShowPayoutNetworkFee,
-  shouldShowPayoutProcessingFee,
+  shouldShowWalletSendNetworkFee,
+  shouldShowWalletSendProcessingFee,
   type GlobalPayoutReviewSnapshot,
   type GlobalPayoutRecipientSnapshot,
 } from '@easner/shared'
@@ -714,7 +717,43 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
       transaction.source_type === 'virtual_account')
   const isGlobalPayoutSend =
     transaction.transaction_type === 'send' &&
-    Boolean(transaction.payout_review || transaction.metadata?.payout_type === 'global_fiat')
+    Boolean(
+      transaction.payout_review ||
+        transaction.metadata?.payout_type === 'global_fiat' ||
+        transaction.metadata?.activity_type === 'wallet_send',
+    )
+  const walletSendReceiveNetwork = String(
+    transaction.metadata?.receive_network ??
+      transaction.metadata?.chain ??
+      transaction.chain ??
+      '',
+  ).trim()
+  const isWalletSendReview =
+    transaction.metadata?.activity_type === 'wallet_send' ||
+    transaction.payout_review?.execution_model === 'direct_turnkey' ||
+    transaction.payout_review?.execution_model === 'lifi_bridge'
+  const payoutReviewHasFx =
+    transaction.payout_review &&
+    (isWalletSendReview
+      ? hasWalletSendFxDisplay(
+          transaction.payout_review.send_currency,
+          transaction.payout_review.receive_currency,
+          walletSendReceiveNetwork,
+        )
+      : hasPayoutCrossCurrencyFx(
+          transaction.payout_review.send_currency,
+          transaction.payout_review.receive_currency,
+        ))
+  const showPayoutProcessingFee =
+    transaction.payout_review &&
+    (isWalletSendReview
+      ? shouldShowWalletSendProcessingFee({
+          executionModel: transaction.payout_review.execution_model,
+          processingFee: transaction.payout_review.processing_fee,
+        })
+      : shouldShowGlobalPayoutProcessingFee({
+          processingFee: transaction.payout_review.processing_fee,
+        }))
   const easetagWhenTs =
     transaction.completed_at ||
     transaction.updated_at ||
@@ -1019,10 +1058,11 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                         )}
                       </Text>
                     </View>
-                    {shouldShowPayoutExchangeFee({
-                      sendCurrency: transaction.payout_review.send_currency,
-                      receiveCurrency: transaction.payout_review.receive_currency,
-                      exchangeFee: transaction.payout_review.exchange_fee,
+                    {payoutReviewHasFx &&
+                    shouldShowPayoutExchangeFee({
+                      sendCurrency: transaction.payout_review!.send_currency,
+                      receiveCurrency: transaction.payout_review!.receive_currency,
+                      exchangeFee: transaction.payout_review!.exchange_fee,
                     }) ? (
                       <View style={styles.summaryRow}>
                         <Text style={styles.summaryLabel}>Exchange fee</Text>
@@ -1034,18 +1074,21 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                         </Text>
                       </View>
                     ) : null}
-                    {shouldShowPayoutProcessingFee(transaction.payout_review.processing_fee) ? (
+                    {showPayoutProcessingFee ? (
                       <View style={styles.summaryRow}>
                         <Text style={styles.summaryLabel}>Processing fee</Text>
                         <Text style={styles.summaryValue}>
                           {formatMoneyDisplay(
-                            transaction.payout_review.processing_fee,
-                            transaction.payout_review.send_currency,
+                            transaction.payout_review!.processing_fee,
+                            transaction.payout_review!.send_currency,
                           )}
                         </Text>
                       </View>
                     ) : null}
-                    {shouldShowPayoutNetworkFee(transaction.payout_review.network_fee) ? (
+                    {shouldShowWalletSendNetworkFee({
+                      executionModel: transaction.payout_review.execution_model,
+                      networkFee: transaction.payout_review.network_fee,
+                    }) ? (
                       <View style={styles.summaryRow}>
                         <Text style={styles.summaryLabel}>Network fee</Text>
                         <Text style={styles.summaryValue}>
@@ -1056,17 +1099,14 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                         </Text>
                       </View>
                     ) : null}
-                    {hasPayoutCrossCurrencyFx(
-                      transaction.payout_review.send_currency,
-                      transaction.payout_review.receive_currency,
-                    ) ? (
+                    {payoutReviewHasFx ? (
                       <View style={styles.summaryRow}>
                         <Text style={styles.summaryLabel}>Exchange rate</Text>
                         <Text style={styles.summaryValue}>
                           {formatSendRateLabel(
-                            transaction.payout_review.send_currency,
-                            transaction.payout_review.receive_currency,
-                            transaction.payout_review.exchange_rate,
+                            transaction.payout_review!.send_currency,
+                            transaction.payout_review!.receive_currency,
+                            transaction.payout_review!.exchange_rate,
                           )}
                         </Text>
                       </View>

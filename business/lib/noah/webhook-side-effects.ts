@@ -45,7 +45,7 @@ import {
 } from "@/lib/noah/credit-bank-onramp-wallet"
 import { provisionNoahAfterVerificationApproved } from "@/lib/noah/provision-after-approval"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
-import { applyGlobalPayoutMarginReconciliation } from "@/lib/noah/reconcile-payout-margin"
+import { applyGlobalPayoutMarginReconciliation, applyGlobalPayoutChannelFeeReconciliation } from "@/lib/noah/reconcile-payout-margin"
 
 function pickWebhookOccurredIso(
   envelope: Record<string, unknown>,
@@ -502,6 +502,11 @@ export async function applyNoahWebhookSideEffects(
 
         if (isGlobalPayoutSell && status === "settled" && upsert.transactionId) {
           await applyGlobalPayoutMarginReconciliation(admin, {
+            txData,
+            priorMetadata: metadata,
+            transactionId: upsert.transactionId,
+          })
+          await applyGlobalPayoutChannelFeeReconciliation(admin, {
             txData,
             priorMetadata: metadata,
             transactionId: upsert.transactionId,

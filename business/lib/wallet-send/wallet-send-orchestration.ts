@@ -15,6 +15,7 @@ import {
   assertWalletSendFeeSolanaAddressConfigured,
   resolveWalletSendFeeSolanaAddress,
 } from "./fee-address"
+import { buildWalletSendPayoutReviewSnapshot } from "./build-wallet-send-payout-review"
 
 export type ExecuteWalletSendInput = {
   admin: SupabaseClient
@@ -65,7 +66,7 @@ async function debitWalletBalance(
   })
 }
 
-async function assertDirectTurnkeyExecuteReady(
+async function assertWalletSendExecuteReady(
   admin: SupabaseClient,
   input: {
     ctx: NoahAccountContext
@@ -73,8 +74,7 @@ async function assertDirectTurnkeyExecuteReady(
     businessId: string | null
     balanceCurrency: "USD" | "EUR"
     totalDebited: number
-    receiveAmount: number
-    marginAmount: number
+    onChainOutTotal: number
   },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   assertWalletSendFeeSolanaAddressConfigured(input.balanceCurrency)
@@ -90,8 +90,7 @@ async function assertDirectTurnkeyExecuteReady(
   const onChain = await getTurnkeyDisplayBalancesUsdEur(admin, input.ctx)
   const onChainRaw = input.balanceCurrency === "EUR" ? onChain.EUR : onChain.USD
   const onChainAvailable = Number.parseFloat(String(onChainRaw || "0"))
-  const chainRequired = input.receiveAmount + input.marginAmount
-  if (!Number.isFinite(onChainAvailable) || onChainAvailable < chainRequired - 1e-6) {
+  if (!Number.isFinite(onChainAvailable) || onChainAvailable < input.onChainOutTotal - 1e-6) {
     return { ok: false, error: "insufficient_onchain_balance" }
   }
 
@@ -115,19 +114,28 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
   const balanceCurrency = session.source_balance_currency as "USD" | "EUR"
   const easnerTransactionId = input.reservedDebitEtid?.trim() || generateTransactionId()
 
+  const channelCost =
+    executionModel === "lifi_bridge"
+      ? Math.max(0, session.lifi_floor - session.receive_amount / session.lifi_mid)
+      : 0
+  const payoutReview = buildWalletSendPayoutReviewSnapshot({
+    session,
+    channelCost: Math.round(channelCost * 1_000_000) / 1_000_000,
+    reviewSnapshot: input.reviewSnapshot,
+  })
+
   if (executionModel === "direct_turnkey") {
     const asset = session.receive_asset === "EURC" ? "EURC" : "USDC"
     const marginAmount = session.margin_amount
     const walletSendCtx = { formSessionId: session.form_session_id }
 
-    const ready = await assertDirectTurnkeyExecuteReady(input.admin, {
+    const ready = await assertWalletSendExecuteReady(input.admin, {
       ctx: input.ctx,
       userId: input.userId,
       businessId: input.businessId,
       balanceCurrency,
       totalDebited: session.total_debited,
-      receiveAmount: session.receive_amount,
-      marginAmount,
+      onChainOutTotal: session.receive_amount + marginAmount,
     })
     if (!ready.ok) return ready
 
@@ -205,6 +213,7 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
           form_session_id: session.form_session_id,
           easner_transaction_id: easnerTransactionId,
           fee_destination_address: feeAddress,
+          payout_review: payoutReview,
           ...(marginTurnkeySendId ? { margin_turnkey_send_id: marginTurnkeySendId } : {}),
           ...(input.reviewSnapshot ?? {}),
         },
@@ -228,12 +237,29 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
     }
   }
 
+  const marginAmount = session.margin_amount
+  const lifiFloor = session.lifi_floor
+  const ready = await assertWalletSendExecuteReady(input.admin, {
+    ctx: input.ctx,
+    userId: input.userId,
+    businessId: input.businessId,
+    balanceCurrency,
+    totalDebited: session.total_debited,
+    onChainOutTotal: lifiFloor + marginAmount,
+  })
+  if (!ready.ok) return ready
+
+  const feeAddress = resolveWalletSendFeeSolanaAddress({ ledgerCurrency: balanceCurrency })
+  if (!feeAddress) {
+    return { ok: false, error: "wallet_send_fee_address_not_configured" }
+  }
+
   const lifi = await executeLifiWalletSend({
     admin: input.admin,
     ctx: input.ctx,
     session,
+    feeAddress,
     easnerTransactionId,
-    reviewSnapshot: input.reviewSnapshot,
   })
   if (!lifi.ok) return lifi
 
@@ -242,6 +268,40 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
     businessId: input.businessId,
     currency: balanceCurrency,
     amount: session.total_debited,
+  })
+
+  await upsertLedgerTransaction(input.admin, {
+    userId: input.userId,
+    businessId: input.businessId,
+    provider: "lifi",
+    providerTransactionId: lifi.providerTransactionId,
+    status: lifi.status,
+    amount: session.total_debited,
+    currency: balanceCurrency,
+    direction: "out",
+    txHash: lifi.txHash,
+    counterpartyAddress: session.destination_address,
+    asset: session.receive_asset,
+    chain: session.receive_network,
+    metadata: {
+      activity_type: "wallet_send",
+      execution_model: "lifi_bridge",
+      margin_capture_mode: "split_debit",
+      receive_asset: session.receive_asset,
+      receive_network: session.receive_network,
+      receive_amount: session.receive_amount,
+      lifi_floor: lifiFloor,
+      margin_amount: marginAmount,
+      processing_fee: marginAmount,
+      fee_destination_address: feeAddress,
+      lifi_tool: lifi.lifiTool,
+      lifi_quote_id: lifi.lifiQuoteId,
+      form_session_id: session.form_session_id,
+      easner_transaction_id: easnerTransactionId,
+      payout_review: payoutReview,
+      ...(lifi.marginTurnkeySendId ? { margin_turnkey_send_id: lifi.marginTurnkeySendId } : {}),
+      ...(input.reviewSnapshot ?? {}),
+    },
   })
 
   await markWalletSendSessionExecuted(session.form_session_id)

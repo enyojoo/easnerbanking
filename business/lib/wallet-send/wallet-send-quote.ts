@@ -78,6 +78,7 @@ export async function buildWalletSendQuote(input: {
   const destinationAddress = walletDestinationAddress(recipient)
   const amountEntryMode = input.amountEntryMode === "send" ? "send" : "receive"
   const executionModel = resolveWalletSendExecutionModel(receiveAsset, receiveNetwork)
+  assertWalletSendFeeSolanaAddressConfigured(sourceBalanceCurrency as "USD" | "EUR")
 
   const feeBps = parseWalletSendProcessingFeeBpsFromEnv(process.env.WALLET_SEND_PROCESSING_FEE_BPS)
   const feeCap = parseWalletSendProcessingFeeCapFromEnv(process.env.WALLET_SEND_PROCESSING_FEE_CAP)
@@ -87,7 +88,6 @@ export async function buildWalletSendQuote(input: {
   let receiveAmount: number
 
   if (executionModel === "direct_turnkey") {
-    assertWalletSendFeeSolanaAddressConfigured(sourceBalanceCurrency as "USD" | "EUR")
     receiveAmount = normalizeDirectTurnkeyWalletSendReceiveAmount({
       amountEntryMode,
       receiveAmount: Number(input.receiveAmount ?? 0),

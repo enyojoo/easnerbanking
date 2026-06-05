@@ -50,10 +50,55 @@ export function shouldShowPayoutExchangeFee(input: {
   )
 }
 
+export type WalletSendExecutionModel = "direct_turnkey" | "lifi_bridge"
+
+/**
+ * LI.FI bridge: margin is in `customerRate` / you-send principal — do not show a separate processing fee.
+ * Direct Turnkey: explicit 1% (cap 20) fee on top of recipient amount.
+ */
+export function shouldShowWalletSendProcessingFee(input: {
+  executionModel?: WalletSendExecutionModel | string | null
+  processingFee?: number | null
+}): boolean {
+  if (input.executionModel === "lifi_bridge") return false
+  return shouldShowPayoutProcessingFee(input.processingFee)
+}
+
 export function shouldShowPayoutProcessingFee(processingFee: number | null | undefined): boolean {
   return isPayoutReviewFeeVisible(processingFee)
 }
 
+/** Noah global fiat: margin is in noah_rates.rate / you-send — never show a separate processing row. */
+export function shouldShowGlobalPayoutProcessingFee(_input?: {
+  processingFee?: number | null
+}): boolean {
+  return false
+}
+
+export function shouldShowPayoutReviewProcessingFee(input: {
+  processingFee?: number | null
+  executionModel?: WalletSendExecutionModel | string | null
+  payoutFlow?: "global_fiat" | "wallet_send"
+}): boolean {
+  if (input.payoutFlow === "global_fiat") return false
+  if (input.executionModel === "lifi_bridge") return false
+  return shouldShowPayoutProcessingFee(input.processingFee)
+}
+
 export function shouldShowPayoutNetworkFee(networkFee: number | null | undefined): boolean {
   return isPayoutReviewFeeVisible(networkFee)
+}
+
+/** Wallet send: Solana gas is Turnkey-sponsored; LI.FI `networkFee` is not a user charge. */
+export function shouldShowWalletSendNetworkFee(input: {
+  executionModel?: WalletSendExecutionModel | string | null
+  networkFee?: number | null
+}): boolean {
+  if (
+    input.executionModel === "direct_turnkey" ||
+    input.executionModel === "lifi_bridge"
+  ) {
+    return false
+  }
+  return shouldShowPayoutNetworkFee(input.networkFee)
 }

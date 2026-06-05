@@ -8,6 +8,10 @@ export type ComputeGlobalPayoutPricingInput = {
   noahMid: number
   noahFloor: number
   marginCaptureMode?: GlobalPayoutMarginCaptureMode
+  /** From Noah prepare Breakdown when present — preferred for channelCost. */
+  prepareChannelFee?: number
+  /** From Noah prepare Breakdown when present — preferred for midNotional. */
+  prepareRemaining?: number
 }
 
 export type GlobalPayoutPricing = {
@@ -56,10 +60,22 @@ export function computeGlobalPayoutPricing(
     throw new Error("noahFloor must be positive")
   }
 
-  const midNotional = roundUsdc(receiveAmount / noahMid)
+  const midNotional = roundUsdc(
+    input.prepareRemaining != null &&
+      Number.isFinite(input.prepareRemaining) &&
+      input.prepareRemaining > 0
+      ? input.prepareRemaining
+      : receiveAmount / noahMid,
+  )
   const customerPrincipal = roundUsdc(receiveAmount / customerRate)
   const marginAmount = roundUsdc(Math.max(0, customerPrincipal - midNotional))
-  const channelCost = roundUsdc(Math.max(0, noahFloor - midNotional))
+  const channelCost = roundUsdc(
+    input.prepareChannelFee != null &&
+      Number.isFinite(input.prepareChannelFee) &&
+      input.prepareChannelFee >= 0
+      ? input.prepareChannelFee
+      : Math.max(0, noahFloor - midNotional - marginAmount),
+  )
   const totalDebited = roundUsdc(noahFloor + marginAmount)
 
   const noahSendAmount =
