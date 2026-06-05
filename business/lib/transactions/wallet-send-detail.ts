@@ -1,4 +1,9 @@
-import { formatTransactionDetailHeroTitle } from "@easner/shared"
+import {
+  buildGlobalPayoutLifecycle,
+  formatTransactionDetailHeroTitle,
+  walletSendListProductLabel,
+  walletSendUserFacingDisplayCurrency,
+} from "@easner/shared"
 import type { GlobalPayoutRecipientSnapshot } from "@easner/shared/transactions/global-payout-types"
 import {
   isWalletSendOutRow,
@@ -43,21 +48,45 @@ export function attachWalletSendDetailFields(
     ? [{ label: "Processing time", value: payoutReview.processing_time }]
     : undefined
 
+  const displayCurrency = walletSendUserFacingDisplayCurrency({
+    receiveCurrency: payoutReview.receive_currency,
+    sendCurrency: payoutReview.send_currency,
+    executionModel: payoutReview.execution_model,
+  })
+  const ledgerStatus = String(row.status ?? "").trim().toLowerCase()
+  // Direct Turnkey (and Easetag-style instant sends) settle during execute — no transfer tracker.
+  // LI.FI bridge may return pending; show Processing → Complete only while still in flight.
+  const lifecycle =
+    payoutReview.execution_model === "lifi_bridge" &&
+    (ledgerStatus === "pending" || ledgerStatus === "processing")
+      ? buildGlobalPayoutLifecycle({
+          status: ledgerStatus,
+          metadata: meta,
+          occurredAt: row.occurred_at != null ? String(row.occurred_at) : null,
+          settledAt: row.settled_at != null ? String(row.settled_at) : null,
+          createdAt: row.created_at != null ? String(row.created_at) : null,
+          payoutReview,
+          recipientName,
+        })
+      : undefined
+
   return {
     ...transaction,
     amount: payoutReview.receive_amount,
-    currency: payoutReview.receive_currency,
+    currency: displayCurrency,
     display_amount: payoutReview.receive_amount,
-    display_currency: payoutReview.receive_currency,
+    display_currency: displayCurrency,
     display_description: recipientName,
     display_hero_title: formatTransactionDetailHeroTitle({
       direction: "out",
       counterpartyName: recipientName,
       productFallback: "Transfer",
     }),
+    transaction_product: walletSendListProductLabel(),
     ledger_amount: payoutReview.total_debited,
     ledger_currency: payoutReview.send_currency,
     payout_review: payoutReview,
+    ...(lifecycle ? { lifecycle } : {}),
     ...(recipientSnapshot ? { recipient_snapshot: recipientSnapshot } : {}),
     ...(sendNote ? { send_note: sendNote } : {}),
     ...(transactionTiming ? { transaction_timing: transactionTiming } : {}),

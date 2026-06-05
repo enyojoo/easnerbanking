@@ -35,3 +35,34 @@ export function formatWalletSendTransferMethod(receiveAsset: string, receiveNetw
   const network = abbreviateBlockchainNetwork(receiveNetwork)
   return network ? `${asset} on ${network}` : asset
 }
+
+const WALLET_SEND_LIST_PRODUCT_LABEL = "Stablecoin Transfer"
+
+export function walletSendListProductLabel(): string {
+  return WALLET_SEND_LIST_PRODUCT_LABEL
+}
+
+/** List/detail hero currency: 1:1 USDC→USD and EURC→EUR use balance currency, not asset ticker. */
+export function walletSendUserFacingDisplayCurrency(input: {
+  receiveCurrency: string
+  sendCurrency: string
+  executionModel?: string | null
+}): string {
+  const receive = String(input.receiveCurrency || "").trim().toUpperCase()
+  const send = String(input.sendCurrency || "USD").trim().toUpperCase()
+  const model = String(input.executionModel ?? "").trim().toLowerCase()
+  if (receive === "USDC" && (send === "USD" || model === "direct_turnkey")) return "USD"
+  if (receive === "EURC" && (send === "EUR" || model === "direct_turnkey")) return "EUR"
+  return receive || send || "USD"
+}
+
+export function resolveWalletSendTransferMethod(
+  stored: string | null | undefined,
+  receiveAsset: string,
+  receiveNetwork: string,
+): string {
+  const candidate = String(stored ?? "").trim()
+  return candidate && !/^bank transfer$/i.test(candidate)
+    ? candidate
+    : formatWalletSendTransferMethod(receiveAsset, receiveNetwork)
+}

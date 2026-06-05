@@ -1,7 +1,7 @@
 import type { GlobalPayoutReviewSnapshot } from "@easner/shared/transactions/global-payout-types"
 import {
-  formatWalletSendTransferMethod,
   isWalletSendOutRow as isWalletSendOutRowShared,
+  resolveWalletSendTransferMethod,
 } from "@easner/shared"
 import { resolveWalletSendExecutionModel, type WalletSendExecutionModel } from "./routing"
 import type { WalletSendSessionRow } from "./wallet-send-session"
@@ -81,10 +81,11 @@ export function buildWalletSendPayoutReviewSnapshot(input: {
 
   const processingTime = String(input.reviewSnapshot?.processing_time ?? "").trim()
   const reviewTransferMethod = String(input.reviewSnapshot?.transfer_method ?? "").trim()
-  const transferMethod =
-    reviewTransferMethod && !/^bank transfer$/i.test(reviewTransferMethod)
-      ? reviewTransferMethod
-      : formatWalletSendTransferMethod(input.session.receive_asset, input.session.receive_network)
+  const transferMethod = resolveWalletSendTransferMethod(
+    reviewTransferMethod,
+    input.session.receive_asset,
+    input.session.receive_network,
+  )
 
   const exchangeRateFromReview = Number(input.reviewSnapshot?.exchange_rate)
   const exchangeRate =
@@ -118,16 +119,21 @@ export function resolveWalletSendPayoutReview(
   ledgerAmount: number,
   ledgerCurrency: string,
 ): GlobalPayoutReviewSnapshot | null {
+  const receiveNetwork = String(meta.receive_network ?? meta.chain ?? "").trim()
   const nested = readNestedPayoutReview(meta.payout_review)
   if (nested) {
-    if (!nested.execution_model) {
-      const inferred = resolveWalletSendExecutionModel(
+    const executionModel =
+      nested.execution_model ??
+      resolveWalletSendExecutionModel(nested.receive_currency, receiveNetwork)
+    return {
+      ...nested,
+      execution_model: executionModel,
+      transfer_method: resolveWalletSendTransferMethod(
+        nested.transfer_method,
         nested.receive_currency,
-        String(meta.receive_network ?? meta.chain ?? ""),
-      )
-      return { ...nested, execution_model: inferred }
+        receiveNetwork,
+      ),
     }
-    return nested
   }
 
   const receiveAmount = Number(meta.receive_amount)
@@ -180,16 +186,15 @@ export function resolveWalletSendPayoutReview(
     send_currency: sendCurrency,
     receive_amount: receiveAmount,
     receive_currency: receiveCurrency,
-    transfer_method: (() => {
-      const stored = String(meta.transfer_method ?? "").trim()
-      const nested = String(
-        (meta.payout_review as Record<string, unknown> | undefined)?.transfer_method ?? "",
-      ).trim()
-      const candidate = nested || stored
-      return candidate && !/^bank transfer$/i.test(candidate)
-        ? candidate
-        : formatWalletSendTransferMethod(receiveCurrency, receiveNetwork)
-    })(),
+    transfer_method: resolveWalletSendTransferMethod(
+      String(
+        (meta.payout_review as Record<string, unknown> | undefined)?.transfer_method ??
+          meta.transfer_method ??
+          "",
+      ),
+      receiveCurrency,
+      receiveNetwork,
+    ),
     processing_time: String(meta.processing_time ?? "").trim(),
     execution_model: executionModel,
     ...(Number.isFinite(marginAmount) && marginAmount > 0

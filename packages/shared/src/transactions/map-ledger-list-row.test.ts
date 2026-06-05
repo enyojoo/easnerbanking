@@ -245,8 +245,11 @@ describe("mapLedgerRowToMobileListItem", () => {
       }),
     )
     expect(item.amount).toBe(1)
-    expect(item.currency).toBe("USDC")
-    expect(item.display_description).toBe("External Wallet")
+    expect(item.currency).toBe("USD")
+    expect(item.display_description).toBe("Stablecoin Transfer")
+    expect(item.transaction_product).toBe("Stablecoin Transfer")
+    expect(item.ledger_amount).toBe(1.01)
+    expect(item.ledger_currency).toBe("USD")
     expect(item.display_hero_title).toBe("Transfer to External Wallet")
   })
 })

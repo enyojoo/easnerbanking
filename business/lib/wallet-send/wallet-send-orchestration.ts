@@ -207,6 +207,7 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
         amount: session.total_debited,
       })
 
+      const occurredAt = new Date().toISOString()
       await upsertLedgerTransaction(input.admin, {
         userId: input.userId,
         businessId: input.businessId,
@@ -216,6 +217,8 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
         amount: session.total_debited,
         currency: balanceCurrency,
         direction: "out",
+        occurredAt,
+        ...(send.status === "settled" ? { settledAt: occurredAt } : {}),
         txHash: send.txHash,
         counterpartyAddress: session.destination_address,
         asset: session.receive_asset,
@@ -291,6 +294,7 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
     amount: session.total_debited,
   })
 
+  const occurredAt = new Date().toISOString()
   await upsertLedgerTransaction(input.admin, {
     userId: input.userId,
     businessId: input.businessId,
@@ -300,6 +304,8 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
     amount: session.total_debited,
     currency: balanceCurrency,
     direction: "out",
+    occurredAt,
+    ...(lifi.status === "settled" ? { settledAt: occurredAt } : {}),
     txHash: lifi.txHash,
     counterpartyAddress: session.destination_address,
     asset: session.receive_asset,

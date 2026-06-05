@@ -3,6 +3,8 @@ import {
   abbreviateBlockchainNetwork,
   formatWalletSendTransferMethod,
   isWalletSendOutRow,
+  walletSendListProductLabel,
+  walletSendUserFacingDisplayCurrency,
 } from "./wallet-send-flow"
 import { resolveWalletSendListDisplay } from "./map-ledger-list-row"
 
@@ -49,9 +51,20 @@ describe("resolveWalletSendListDisplay", () => {
     })
     expect(display).toMatchObject({
       displayAmount: 1,
-      displayCurrency: "USDC",
-      displayDescription: "External Wallet",
+      displayCurrency: "USD",
+      displayDescription: walletSendListProductLabel(),
       displayHeroTitle: "Transfer to External Wallet",
+      transactionProduct: walletSendListProductLabel(),
     })
+  })
+
+  it("maps USDC receive to USD for direct turnkey display", () => {
+    expect(
+      walletSendUserFacingDisplayCurrency({
+        receiveCurrency: "USDC",
+        sendCurrency: "USD",
+        executionModel: "direct_turnkey",
+      }),
+    ).toBe("USD")
   })
 })

@@ -15,7 +15,12 @@
 import { deriveBankDepositInboundDisplayLabel } from "./bank-deposit-inbound-label"
 import { isBankOnrampDepositFlow } from "./bank-deposit-lifecycle"
 import { isGlobalPayoutOffRampOutRow } from "./global-payout-flow"
-import { isWalletSendOutRow } from "./wallet-send-flow"
+import {
+  isWalletSendOutRow,
+  resolveWalletSendTransferMethod,
+  walletSendListProductLabel,
+  walletSendUserFacingDisplayCurrency,
+} from "./wallet-send-flow"
 import {
   isEasnerProductReceiveTitle,
   toEasnerTransactionPrimaryLabel,
@@ -108,6 +113,8 @@ export type GlobalPayoutListDisplay = {
   ledgerCurrency: string
   displayDescription: string
   displayHeroTitle: string
+  transactionProduct?: string
+  transferMethod?: string
 }
 
 /**
@@ -174,13 +181,24 @@ export function resolveWalletSendListDisplay(
         : meta.display_amount != null
           ? Number(meta.display_amount)
           : null) ?? ledgerAmount
-  const displayCurrency = String(
+  const receiveCurrency = String(
     payoutReview?.receive_currency ??
       meta.receive_asset ??
       meta.receive_currency ??
       meta.display_currency ??
       ledgerCurrency,
   ).toUpperCase()
+  const sendCurrency = String(
+    payoutReview?.send_currency ?? meta.send_currency ?? ledgerCurrency,
+  ).toUpperCase()
+  const executionModel = String(
+    payoutReview?.execution_model ?? meta.execution_model ?? "",
+  ).trim()
+  const displayCurrency = walletSendUserFacingDisplayCurrency({
+    receiveCurrency,
+    sendCurrency,
+    executionModel: executionModel || null,
+  })
 
   const recipientName =
     firstTruthy([
@@ -195,8 +213,14 @@ export function resolveWalletSendListDisplay(
     displayCurrency,
     ledgerAmount,
     ledgerCurrency,
-    displayDescription: recipientName,
+    displayDescription: walletSendListProductLabel(),
     displayHeroTitle: `Transfer to ${recipientName}`,
+    transactionProduct: walletSendListProductLabel(),
+    transferMethod: resolveWalletSendTransferMethod(
+      String(payoutReview?.transfer_method ?? meta.transfer_method ?? ""),
+      receiveCurrency,
+      String(meta.receive_network ?? meta.chain ?? ""),
+    ),
   }
 }
 
@@ -306,6 +330,9 @@ export function mapLedgerRowToMobileListItem(row: Record<string, unknown>): Reco
           ledger_amount: payoutDisplay.ledgerAmount,
           ledger_currency: payoutDisplay.ledgerCurrency,
           display_hero_title: payoutDisplay.displayHeroTitle,
+          ...(payoutDisplay.transactionProduct
+            ? { transaction_product: payoutDisplay.transactionProduct }
+            : {}),
         }
       : {}),
     status: st,

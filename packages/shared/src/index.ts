@@ -307,6 +307,9 @@ export {
   abbreviateBlockchainNetwork,
   formatWalletSendTransferMethod,
   isWalletSendOutRow,
+  resolveWalletSendTransferMethod,
+  walletSendListProductLabel,
+  walletSendUserFacingDisplayCurrency,
 } from "./transactions/wallet-send-flow"
 export type { GlobalPayoutListDisplay } from "./transactions/map-ledger-list-row"
 export {
