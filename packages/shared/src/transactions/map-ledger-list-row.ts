@@ -15,6 +15,7 @@
 import { deriveBankDepositInboundDisplayLabel } from "./bank-deposit-inbound-label"
 import { isBankOnrampDepositFlow } from "./bank-deposit-lifecycle"
 import { isGlobalPayoutOffRampOutRow } from "./global-payout-flow"
+import { isWalletSendOutRow } from "./wallet-send-flow"
 import {
   isEasnerProductReceiveTitle,
   toEasnerTransactionPrimaryLabel,
@@ -150,6 +151,55 @@ export function resolveGlobalPayoutListDisplay(
   }
 }
 
+/** Resolved display fields for a wallet send row on the list path. */
+export function resolveWalletSendListDisplay(
+  row: Record<string, unknown>,
+): GlobalPayoutListDisplay | null {
+  if (!isWalletSendOutRow(row)) return null
+
+  const meta = (row.metadata as Record<string, unknown> | null | undefined) ?? {}
+  const ledgerAmount = typeof row.amount === "number" ? row.amount : Number(row.amount) || 0
+  const ledgerCurrency = String(row.currency ?? row.base_currency ?? "USD").toUpperCase()
+
+  const payoutReview =
+    meta.payout_review && typeof meta.payout_review === "object"
+      ? (meta.payout_review as Record<string, unknown>)
+      : null
+
+  const displayAmount =
+    (typeof payoutReview?.receive_amount === "number"
+      ? payoutReview.receive_amount
+      : typeof meta.receive_amount === "number"
+        ? meta.receive_amount
+        : meta.display_amount != null
+          ? Number(meta.display_amount)
+          : null) ?? ledgerAmount
+  const displayCurrency = String(
+    payoutReview?.receive_currency ??
+      meta.receive_asset ??
+      meta.receive_currency ??
+      meta.display_currency ??
+      ledgerCurrency,
+  ).toUpperCase()
+
+  const recipientName =
+    firstTruthy([
+      meta.counterparty_name,
+      meta.recipient_name,
+      meta.beneficiary_name,
+      (meta.recipient_snapshot as Record<string, unknown> | null | undefined)?.full_name,
+    ]) || "Wallet transfer"
+
+  return {
+    displayAmount: Number.isFinite(displayAmount) ? displayAmount : ledgerAmount,
+    displayCurrency,
+    ledgerAmount,
+    ledgerCurrency,
+    displayDescription: recipientName,
+    displayHeroTitle: `Transfer to ${recipientName}`,
+  }
+}
+
 function firstTruthy(values: unknown[]): string | undefined {
   for (const v of values) {
     if (v != null && typeof v === "string" && v.trim()) return v.trim()
@@ -229,9 +279,11 @@ export function mapLedgerRowToMobileListItem(row: Record<string, unknown>): Reco
       })
 
   const globalPayout = resolveGlobalPayoutListDisplay(row)
-  const displayAmount = globalPayout?.displayAmount ?? amount
-  const displayCurrency = globalPayout?.displayCurrency ?? currency
-  const displayName = globalPayout?.displayDescription ?? name
+  const walletSend = globalPayout ? null : resolveWalletSendListDisplay(row)
+  const payoutDisplay = globalPayout ?? walletSend
+  const displayAmount = payoutDisplay?.displayAmount ?? amount
+  const displayCurrency = payoutDisplay?.displayCurrency ?? currency
+  const displayName = payoutDisplay?.displayDescription ?? name
 
   const listSenderName =
     !isVerification && bankLabel && !isEasnerProductReceiveTitle(bankLabel) ? bankLabel : undefined
@@ -249,11 +301,11 @@ export function mapLedgerRowToMobileListItem(row: Record<string, unknown>): Reco
     display_amount: displayAmount,
     display_currency: displayCurrency,
     display_description: displayName,
-    ...(globalPayout
+    ...(payoutDisplay
       ? {
-          ledger_amount: globalPayout.ledgerAmount,
-          ledger_currency: globalPayout.ledgerCurrency,
-          display_hero_title: globalPayout.displayHeroTitle,
+          ledger_amount: payoutDisplay.ledgerAmount,
+          ledger_currency: payoutDisplay.ledgerCurrency,
+          display_hero_title: payoutDisplay.displayHeroTitle,
         }
       : {}),
     status: st,

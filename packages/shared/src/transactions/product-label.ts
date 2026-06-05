@@ -167,11 +167,14 @@ export function toEasnerTransactionProductCategory(input: {
     return direction === "in" ? "Easetag Received" : "Easetag Send"
   }
   const collectionChannel = String(meta?.collection_channel ?? "").toLowerCase()
+  const isWalletSend =
+    direction === "out" && String(meta?.activity_type ?? "").trim().toLowerCase() === "wallet_send"
   const isStablecoin =
-    provider === "turnkey" ||
-    collectionChannel === "autopayout" ||
-    (direction === "in" && String(meta?.source_type ?? "").toLowerCase() === "liquidation_address") ||
-    (direction === "in" && isNoahPayloadCryptoInbound(input.payload ?? undefined))
+    !isWalletSend &&
+    (provider === "turnkey" ||
+      collectionChannel === "autopayout" ||
+      (direction === "in" && String(meta?.source_type ?? "").toLowerCase() === "liquidation_address") ||
+      (direction === "in" && isNoahPayloadCryptoInbound(input.payload ?? undefined)))
 
   if (isStablecoin) {
     return direction === "in" ? "Stablecoin Deposit" : "Stablecoin Transfer"
@@ -206,14 +209,26 @@ export function toEasnerTransactionPrimaryLabel(input: {
     return payeeTag ? `Sent to @${payeeTag}` : "Easetag Send"
   }
   const collectionChannel = String(meta?.collection_channel ?? "").toLowerCase()
+  const isWalletSend =
+    direction === "out" && String(meta?.activity_type ?? "").trim().toLowerCase() === "wallet_send"
   const isStablecoin =
-    provider === "turnkey" ||
-    collectionChannel === "autopayout" ||
-    (direction === "in" && String(meta?.source_type ?? "").toLowerCase() === "liquidation_address") ||
-    (direction === "in" && isNoahPayloadCryptoInbound(input.payload ?? undefined))
+    !isWalletSend &&
+    (provider === "turnkey" ||
+      collectionChannel === "autopayout" ||
+      (direction === "in" && String(meta?.source_type ?? "").toLowerCase() === "liquidation_address") ||
+      (direction === "in" && isNoahPayloadCryptoInbound(input.payload ?? undefined)))
 
   if (isStablecoin) {
     return direction === "in" ? "Stablecoin Deposit" : "Stablecoin Transfer"
+  }
+  if (isWalletSend) {
+    const recipientName = firstNonEmptyString([
+      meta?.counterparty_name,
+      meta?.recipient_name,
+      meta?.beneficiary_name,
+      (meta?.recipient_snapshot as Record<string, unknown> | undefined)?.full_name,
+    ])
+    return recipientName ? `Transfer to ${recipientName}` : "Wallet transfer"
   }
   if (direction === "in" && isVerificationDepositMetadata(meta)) {
     return VERIFICATION_DEPOSIT_LIST_LABEL

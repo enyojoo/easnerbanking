@@ -4,6 +4,7 @@ import {
   deriveVerificationBankName,
   formatDisplayPersonName,
   formatMoneyDisplay,
+  truncateMiddle,
   isBankOnrampDepositFlow,
   isGlobalPayoutOffRampFlow,
   formatVerificationDepositPushBody,
@@ -32,6 +33,41 @@ function firstNonEmptyString(values: readonly unknown[]): string | undefined {
     }
   }
   return undefined
+}
+
+const WALLET_SEND_PUSH_TITLE = "Stablecoin Transfer"
+
+function buildWalletSendPushContent(input: {
+  metadata?: Record<string, unknown> | null
+  payload?: Record<string, unknown> | null
+  amount: number
+  currency: string
+  amountText: string
+}): { title: string; body: string } {
+  const meta = input.metadata ?? null
+  const payoutReview = normalizePayoutReviewSnapshot(meta?.payout_review)
+  const receiveAmount =
+    payoutReview?.receive_amount ??
+    (typeof meta?.receive_amount === "number" ? meta.receive_amount : input.amount)
+  const receiveCurrency = String(
+    payoutReview?.receive_currency ?? meta?.receive_currency ?? meta?.receive_asset ?? input.currency,
+  ).toUpperCase()
+  const walletAddress = firstNonEmptyString([
+    meta?.counterparty_address,
+    meta?.destination_address,
+    (meta?.recipient_snapshot as Record<string, unknown> | undefined)?.account_number,
+  ])
+  const amountDisplay =
+    receiveAmount != null && receiveCurrency
+      ? formatMoneyDisplay(receiveAmount, receiveCurrency)
+      : input.amountText
+  const destinationLabel = walletAddress ? truncateMiddle(walletAddress, 6, 6) : ""
+  return {
+    title: WALLET_SEND_PUSH_TITLE,
+    body: destinationLabel
+      ? `Sent ${amountDisplay} to ${destinationLabel}`
+      : `Sent ${amountDisplay}`,
+  }
 }
 
 function deriveOutboundCounterpartyName(input: {
@@ -114,7 +150,16 @@ export function buildTransactionSettledPushContent(input: TransactionSettledCont
     return { title: "Stablecoin Deposit", body: `Received ${amountText} via address` }
   }
   if (category === "Stablecoin Transfer") {
-    return { title: "Stablecoin Transfer", body: `Sent ${amountText} to wallet address` }
+    if (String(meta?.activity_type ?? "").trim().toLowerCase() === "wallet_send") {
+      return buildWalletSendPushContent({
+        metadata: meta,
+        payload: input.payload ?? null,
+        amount: input.amount,
+        currency: input.currency,
+        amountText,
+      })
+    }
+    return { title: WALLET_SEND_PUSH_TITLE, body: `Sent ${amountText} to wallet address` }
   }
 
   if (category === "Easetag Received") {
@@ -132,6 +177,16 @@ export function buildTransactionSettledPushContent(input: TransactionSettledCont
         ? `Sent ${amountText} to @${outboundEasetag}`
         : `Sent ${amountText}`,
     }
+  }
+
+  if (direction === "out" && String(meta?.activity_type ?? "").trim().toLowerCase() === "wallet_send") {
+    return buildWalletSendPushContent({
+      metadata: meta,
+      payload: input.payload ?? null,
+      amount: input.amount,
+      currency: input.currency,
+      amountText,
+    })
   }
 
   if (direction === "out" && isGlobalPayoutOffRampFlow(meta)) {

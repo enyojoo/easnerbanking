@@ -10,6 +10,7 @@ import { PinChallengeDialog } from "@/components/app-lock/pin-challenge-dialog"
 import { useAuth } from "@/lib/auth-context"
 import { hasPin, isLoginPinModuleAvailable } from "@/lib/login-pin"
 import {
+  formatWalletSendTransferMethod,
   getGlobalPayoutTransferMethod,
   hasWalletSendFxDisplay,
   resolvePayoutCountryCode,
@@ -382,7 +383,7 @@ export default function SendConfirmPage() {
           send_currency: state.sendCurrency,
           receive_amount: state.amount,
           receive_currency: state.receiveCurrency,
-          transfer_method: `${state.receiveCurrency} on ${receiveNetwork}`,
+          transfer_method: formatWalletSendTransferMethod(state.receiveCurrency, receiveNetwork),
           processing_time: arrivalHint ?? undefined,
         }
 

@@ -1,12 +1,10 @@
 import type { GlobalPayoutReviewSnapshot } from "@easner/shared/transactions/global-payout-types"
+import {
+  formatWalletSendTransferMethod,
+  isWalletSendOutRow as isWalletSendOutRowShared,
+} from "@easner/shared"
 import { resolveWalletSendExecutionModel, type WalletSendExecutionModel } from "./routing"
 import type { WalletSendSessionRow } from "./wallet-send-session"
-
-function walletSendTransferMethod(receiveAsset: string, receiveNetwork: string): string {
-  const asset = String(receiveAsset || "").trim().toUpperCase()
-  const network = String(receiveNetwork || "").trim()
-  return network ? `${asset} on ${network}` : asset
-}
 
 function roundMoney(n: number): number {
   return Math.round(n * 1_000_000) / 1_000_000
@@ -82,9 +80,11 @@ export function buildWalletSendPayoutReviewSnapshot(input: {
       : channelCostFromSession
 
   const processingTime = String(input.reviewSnapshot?.processing_time ?? "").trim()
+  const reviewTransferMethod = String(input.reviewSnapshot?.transfer_method ?? "").trim()
   const transferMethod =
-    String(input.reviewSnapshot?.transfer_method ?? "").trim() ||
-    walletSendTransferMethod(input.session.receive_asset, input.session.receive_network)
+    reviewTransferMethod && !/^bank transfer$/i.test(reviewTransferMethod)
+      ? reviewTransferMethod
+      : formatWalletSendTransferMethod(input.session.receive_asset, input.session.receive_network)
 
   const exchangeRateFromReview = Number(input.reviewSnapshot?.exchange_rate)
   const exchangeRate =
@@ -110,16 +110,7 @@ export function buildWalletSendPayoutReviewSnapshot(input: {
   }
 }
 
-export function isWalletSendOutRow(row: {
-  direction?: unknown
-  metadata?: Record<string, unknown> | null
-}): boolean {
-  const dir = String(row.direction ?? "").toLowerCase()
-  if (dir !== "out") return false
-  const meta = row.metadata
-  if (!meta || typeof meta !== "object") return false
-  return String(meta.activity_type ?? "").trim().toLowerCase() === "wallet_send"
-}
+export const isWalletSendOutRow = isWalletSendOutRowShared
 
 /** Resolve payout_review for wallet_send rows (nested snapshot or legacy flat metadata). */
 export function resolveWalletSendPayoutReview(
@@ -189,9 +180,16 @@ export function resolveWalletSendPayoutReview(
     send_currency: sendCurrency,
     receive_amount: receiveAmount,
     receive_currency: receiveCurrency,
-    transfer_method:
-      String(meta.transfer_method ?? "").trim() ||
-      walletSendTransferMethod(receiveCurrency, receiveNetwork),
+    transfer_method: (() => {
+      const stored = String(meta.transfer_method ?? "").trim()
+      const nested = String(
+        (meta.payout_review as Record<string, unknown> | undefined)?.transfer_method ?? "",
+      ).trim()
+      const candidate = nested || stored
+      return candidate && !/^bank transfer$/i.test(candidate)
+        ? candidate
+        : formatWalletSendTransferMethod(receiveCurrency, receiveNetwork)
+    })(),
     processing_time: String(meta.processing_time ?? "").trim(),
     execution_model: executionModel,
     ...(Number.isFinite(marginAmount) && marginAmount > 0

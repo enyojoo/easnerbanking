@@ -15,6 +15,8 @@ import {
   assertWalletSendFeeSolanaAddressConfigured,
   resolveWalletSendFeeSolanaAddress,
 } from "./fee-address"
+import { formatDisplayPersonName } from "@easner/shared"
+import { buildRecipientSnapshotFromRow } from "@/lib/noah/build-payout-execute-snapshot"
 import { buildWalletSendPayoutReviewSnapshot } from "./build-wallet-send-payout-review"
 
 export type ExecuteWalletSendInput = {
@@ -40,6 +42,23 @@ export type ExecuteWalletSendResult =
   | { ok: false; error: string }
 
 const MARGIN_DUST = 0.000_001
+
+function walletSendRecipientMetadata(recipient: WalletRecipientRow) {
+  const recipientSnapshot = buildRecipientSnapshotFromRow({
+    full_name: String(recipient.full_name || "").trim() || "Wallet transfer",
+    account_number: String(recipient.account_number || "").trim(),
+    bank_name: String(recipient.bank_name || "Wallet").trim(),
+    currency: String(recipient.currency || "").trim(),
+  })
+  const counterpartyName =
+    formatDisplayPersonName(recipientSnapshot.full_name) || recipientSnapshot.full_name
+  return {
+    counterparty_name: counterpartyName,
+    recipient_name: counterpartyName,
+    recipient_id: recipient.id,
+    recipient_snapshot: recipientSnapshot,
+  }
+}
 
 async function readAvailableBalance(
   admin: SupabaseClient,
@@ -208,12 +227,14 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
           receive_asset: session.receive_asset,
           receive_network: session.receive_network,
           receive_amount: session.receive_amount,
+          receive_currency: session.receive_asset,
           processing_fee: marginAmount,
           margin_amount: marginAmount,
           form_session_id: session.form_session_id,
           easner_transaction_id: easnerTransactionId,
           fee_destination_address: feeAddress,
           payout_review: payoutReview,
+          ...walletSendRecipientMetadata(input.recipient),
           ...(marginTurnkeySendId ? { margin_turnkey_send_id: marginTurnkeySendId } : {}),
           ...(input.reviewSnapshot ?? {}),
         },
@@ -290,6 +311,7 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
       receive_asset: session.receive_asset,
       receive_network: session.receive_network,
       receive_amount: session.receive_amount,
+      receive_currency: session.receive_asset,
       lifi_floor: lifiFloor,
       margin_amount: marginAmount,
       processing_fee: marginAmount,
@@ -299,6 +321,7 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
       form_session_id: session.form_session_id,
       easner_transaction_id: easnerTransactionId,
       payout_review: payoutReview,
+      ...walletSendRecipientMetadata(input.recipient),
       ...(lifi.marginTurnkeySendId ? { margin_turnkey_send_id: lifi.marginTurnkeySendId } : {}),
       ...(input.reviewSnapshot ?? {}),
     },

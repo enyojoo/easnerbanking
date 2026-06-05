@@ -300,8 +300,14 @@ export {
   mapLedgerRowToMobileListItem,
   mapLedgerStatusForUserFeed,
   resolveGlobalPayoutListDisplay,
+  resolveWalletSendListDisplay,
   shouldIncludeRowInUserFeed,
 } from "./transactions/map-ledger-list-row"
+export {
+  abbreviateBlockchainNetwork,
+  formatWalletSendTransferMethod,
+  isWalletSendOutRow,
+} from "./transactions/wallet-send-flow"
 export type { GlobalPayoutListDisplay } from "./transactions/map-ledger-list-row"
 export {
   buildGlobalPayoutLifecycle,

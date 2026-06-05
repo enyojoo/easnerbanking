@@ -30,6 +30,11 @@ vi.mock("@easner/shared", () => ({
     currency.toUpperCase() === "NGN"
       ? `₦${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
       : `$${amount.toFixed(2)}`,
+  truncateMiddle: (s: string, start = 6, end = 6) => {
+    const t = s.trim()
+    if (t.length <= start + end + 3) return t
+    return `${t.slice(0, start)}...${t.slice(-end)}`
+  },
   toEasnerTransactionProductCategory: () => "Bank Deposit",
 }))
 
@@ -96,6 +101,35 @@ describe("buildTransactionSettledPushContent", () => {
     })
     expect(title).toBe("Bank transfer")
     expect(body).toBe("Sent ₦5,000.00 to Samuel Odiba Enyojo")
+  })
+
+  it("uses Stablecoin Transfer title and receive amount for wallet send", () => {
+    const { title, body } = buildTransactionSettledPushContent({
+      provider: "turnkey",
+      direction: "out",
+      amount: 1.01,
+      currency: "USD",
+      metadata: {
+        activity_type: "wallet_send",
+        receive_amount: 1,
+        receive_asset: "USDC",
+        counterparty_address: "Fjw9otXwdkzbc3feiBzBnFqCr52858YbyZsxxLWfP5Xc",
+        payout_review: {
+          you_send_amount: 1,
+          total_debited: 1.01,
+          exchange_fee: 0,
+          processing_fee: 0.01,
+          exchange_rate: 1,
+          send_currency: "USD",
+          receive_amount: 1,
+          receive_currency: "USDC",
+          transfer_method: "USDC on SOL",
+          processing_time: "Within seconds",
+        },
+      },
+    })
+    expect(title).toBe("Stablecoin Transfer")
+    expect(body).toBe("Sent $1.00 to Fjw9ot...WfP5Xc")
   })
 
   it("falls back to metadata receive amount for pre-snapshot global payout", () => {

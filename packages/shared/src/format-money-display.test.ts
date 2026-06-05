@@ -19,6 +19,11 @@ describe("formatMoneyDisplay", () => {
     expect(formatMoneyDisplay(1500.9, "KES")).toBe("KSh1,501")
   })
 
+  it("uses pegged fiat symbols for stablecoins", () => {
+    expect(formatMoneyDisplay(1, "USDC")).toBe("$1")
+    expect(formatMoneyDisplay(1.5, "EURC")).toBe("€1.50")
+  })
+
   it("respects explicit fraction digit overrides", () => {
     expect(
       formatMoneyDisplay(6000, "RWF", {

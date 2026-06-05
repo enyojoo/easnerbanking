@@ -20,9 +20,18 @@ export function attachWalletSendDetailFields(
 
   const counterpartyAddress =
     row.counterparty_address != null ? String(row.counterparty_address) : undefined
+  const recipientSnapshot =
+    meta.recipient_snapshot && typeof meta.recipient_snapshot === "object"
+      ? (meta.recipient_snapshot as Record<string, unknown>)
+      : undefined
   const recipientName =
-    String(meta.counterparty_name ?? meta.recipient_name ?? counterpartyAddress ?? "").trim() ||
-    "Wallet transfer"
+    String(
+      meta.counterparty_name ??
+        meta.recipient_name ??
+        recipientSnapshot?.full_name ??
+        counterpartyAddress ??
+        "",
+    ).trim() || "Wallet transfer"
 
   return {
     ...transaction,
@@ -39,6 +48,7 @@ export function attachWalletSendDetailFields(
     ledger_amount: payoutReview.total_debited,
     ledger_currency: payoutReview.send_currency,
     payout_review: payoutReview,
+    ...(recipientSnapshot ? { recipient_snapshot: recipientSnapshot } : {}),
     description: recipientName,
     name: recipientName,
   }

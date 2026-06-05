@@ -1,4 +1,4 @@
-import { getCurrencySymbol } from "./currency-symbol"
+import { getSendAmountFieldSymbol } from "./currency-symbol"
 import { isZeroDecimalPayoutCurrency } from "./noah-send-rates"
 
 function resolveFractionDigits(
@@ -43,7 +43,7 @@ export function formatMoneyDisplay(
 ): string {
   const code = String(currency || "USD").trim().toUpperCase()
   const { min, max } = resolveFractionDigits(code, options)
-  const sym = getCurrencySymbol(code)
+  const sym = getSendAmountFieldSymbol(code)
   const value = Number.isFinite(amount) ? amount : 0
   const displayAmount =
     min === 0 && max === 0 && isZeroDecimalPayoutCurrency(code)

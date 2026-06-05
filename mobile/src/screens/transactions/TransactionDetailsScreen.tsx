@@ -1133,6 +1133,10 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                             mobileProvider: transaction.recipient_snapshot.mobile_provider,
                             accountNumber: transaction.recipient_snapshot.account_number,
                             fullAccountNumber: transaction.recipient_snapshot.account_number,
+                            walletNetwork:
+                              walletSendReceiveNetwork ||
+                              transaction.metadata?.receive_network ||
+                              transaction.metadata?.chain,
                           }) ? (
                             <Text style={[styles.summaryValue, { fontSize: 13, color: colors.text.secondary }]}>
                               {formatPayoutRecipientSubtitle({
@@ -1141,6 +1145,47 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                                 mobileProvider: transaction.recipient_snapshot.mobile_provider,
                                 accountNumber: transaction.recipient_snapshot.account_number,
                                 fullAccountNumber: transaction.recipient_snapshot.account_number,
+                                walletNetwork:
+                                  walletSendReceiveNetwork ||
+                                  transaction.metadata?.receive_network ||
+                                  transaction.metadata?.chain,
+                              })}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </View>
+                    ) : isWalletSendReview ? (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Recipient</Text>
+                        <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                          <Text style={styles.summaryValue}>
+                            {String(
+                              transaction.display_description ||
+                                transaction.name ||
+                                transaction.metadata?.counterparty_name ||
+                                'Wallet transfer',
+                            )}
+                          </Text>
+                          {formatPayoutRecipientSubtitle({
+                            bankName: transaction.recipient_snapshot?.bank_name || 'Wallet',
+                            accountNumber:
+                              transaction.metadata?.counterparty_address ||
+                              transaction.metadata?.destination_address,
+                            fullAccountNumber:
+                              transaction.metadata?.counterparty_address ||
+                              transaction.metadata?.destination_address,
+                            walletNetwork: walletSendReceiveNetwork,
+                          }) ? (
+                            <Text style={[styles.summaryValue, { fontSize: 13, color: colors.text.secondary }]}>
+                              {formatPayoutRecipientSubtitle({
+                                bankName: transaction.recipient_snapshot?.bank_name || 'Wallet',
+                                accountNumber:
+                                  transaction.metadata?.counterparty_address ||
+                                  transaction.metadata?.destination_address,
+                                fullAccountNumber:
+                                  transaction.metadata?.counterparty_address ||
+                                  transaction.metadata?.destination_address,
+                                walletNetwork: walletSendReceiveNetwork,
                               })}
                             </Text>
                           ) : null}

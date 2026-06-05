@@ -9,6 +9,7 @@ import {
   findPayoutFieldsSchema,
   formatMoneyDisplay,
   formatSendRateLabel,
+  formatWalletSendTransferMethod,
   getGlobalPayoutTransferMethod,
   resolveSendConfirmArrivalHint,
   hasWalletSendFxDisplay,
@@ -356,13 +357,15 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       })
     : shouldShowPayoutNetworkFee(networkFee)
   const transferMethod = recipient
-    ? getGlobalPayoutTransferMethod({
-        currency: receiveCurrency,
-        countryCode: recipient.country_code,
-        bankName: recipient.bank_name,
-        mobileProvider: recipient.mobile_provider,
-        payeeEasetag: recipient.payee_easetag,
-      })
+    ? isWalletRecipient
+      ? formatWalletSendTransferMethod(receiveCurrency, walletNetwork)
+      : getGlobalPayoutTransferMethod({
+          currency: receiveCurrency,
+          countryCode: recipient.country_code,
+          bankName: recipient.bank_name,
+          mobileProvider: recipient.mobile_provider,
+          payeeEasetag: recipient.payee_easetag,
+        })
     : 'Bank transfer'
   const processingTime = arrivalHint ?? undefined
 
