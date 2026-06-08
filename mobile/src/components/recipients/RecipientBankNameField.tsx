@@ -3,7 +3,17 @@ import { View, Text, TextInput, Pressable, StyleSheet, Platform } from 'react-na
 import { Check, ChevronDown, ChevronUp, Search } from 'lucide-react-native'
 import RecipientFormDropdownList from './RecipientFormDropdownList'
 import { RegisterRecipientDropdownSheet } from './RecipientFormDropdownHost'
-import { colors, spacing, textStyles, borderRadius, fontFamily, surfaceFrameStyle } from '../../theme'
+import {
+  colors,
+  spacing,
+  textStyles,
+  borderRadius,
+  fontFamily,
+  surfaceFrameStyle,
+  dropdownSearchRowStyle,
+  dropdownSearchInputStyle,
+  compactFormInputStyle,
+} from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { haptics } from '../../lib/haptics'
 
@@ -177,17 +187,10 @@ const styles = StyleSheet.create({
     borderColor: colors.frame.border,
     borderRadius: borderRadius.full,
     paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
-    ...textStyles.bodyMedium,
+    ...compactFormInputStyle,
     color: colors.text.primary,
     marginBottom: spacing[2],
     backgroundColor: colors.frame.background,
-    fontFamily: fontFamily.regular,
-    fontSize: 13,
-    minHeight: 48,
-    ...Platform.select({
-      android: { includeFontPadding: false, textAlignVertical: 'center' },
-    }),
   },
   textInputError: {
     borderColor: colors.error.main,
@@ -200,22 +203,13 @@ const styles = StyleSheet.create({
     marginLeft: spacing[1],
   },
   searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
+    ...dropdownSearchRowStyle,
     borderBottomWidth: 1,
     borderBottomColor: colors.border.light,
-    gap: spacing[2],
   },
   searchInput: {
-    flex: 1,
-    ...textStyles.textInputMedium,
+    ...dropdownSearchInputStyle,
     color: colors.text.primary,
-    paddingVertical: 0,
-    ...Platform.select({
-      android: { includeFontPadding: false, textAlignVertical: 'center' },
-    }),
   },
   item: {
     flexDirection: 'row',

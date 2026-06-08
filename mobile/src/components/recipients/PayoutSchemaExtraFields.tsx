@@ -6,7 +6,7 @@ import {
   recipientFormNeedsEmail,
   recipientFormNeedsPhone,
 } from '@easner/shared'
-import { colors, spacing, textStyles } from '../../theme'
+import { colors, spacing, textStyles, compactInputMetrics } from '../../theme'
 
 export type PayoutRecipientExtraValues = {
   email: string
@@ -122,6 +122,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[3],
     color: colors.text.primary,
     backgroundColor: colors.background.primary,
+    minHeight: 48,
+    ...compactInputMetrics,
   },
   row: { flexDirection: 'row', gap: spacing[3] },
   half: { flex: 1 },

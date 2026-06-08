@@ -22,6 +22,7 @@ import {
   borderRadius,
   spacing,
   motion,
+  standardInputMetrics,
 } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
@@ -290,14 +291,7 @@ const styles = StyleSheet.create({
     ...textStyles.bodyMedium,
     color: colors.text.primary,
     textAlignVertical: 'center',
-    ...Platform.select({
-      android: {
-        includeFontPadding: false,
-      },
-      ios: {
-        paddingVertical: 12,
-      },
-    }),
+    ...standardInputMetrics,
   },
   eyeButton: {
     padding: spacing[3],

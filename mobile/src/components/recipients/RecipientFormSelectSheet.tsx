@@ -3,6 +3,7 @@ import { Modal, Platform, Pressable, StyleSheet, View, useWindowDimensions } fro
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { colors, spacing, borderRadius } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
+import { USE_WEB_CENTERED_MODAL, webCenteredModalStyles } from '../../lib/webCenteredModal'
 
 type DropdownAnchor = {
   x: number
@@ -45,6 +46,31 @@ function SheetBody({
   const dropdownMaxHeight = anchor
     ? Math.max(140, Math.min(320, bottomLimit - (dropdownTop ?? 0)))
     : 320
+
+  if (USE_WEB_CENTERED_MODAL) {
+    return (
+      <View style={webCenteredModalStyles.overlay}>
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Close menu"
+        />
+        <Pressable
+          android_ripple={ripple.neutral}
+          style={[
+            webCenteredModalStyles.panel,
+            webCenteredModalStyles.panelCompact,
+            styles.webPickerPanel,
+            { maxHeight: 360, backgroundColor: colors.background.primary, borderColor: colors.frame.border },
+          ]}
+          onPress={(e) => e.stopPropagation()}
+        >
+          {children}
+        </Pressable>
+      </View>
+    )
+  }
 
   return (
     <View style={styles.host}>
@@ -143,5 +169,9 @@ const styles = StyleSheet.create({
       },
       android: { elevation: 24 },
     }),
+  },
+  webPickerPanel: {
+    width: '100%',
+    overflow: 'hidden',
   },
 })

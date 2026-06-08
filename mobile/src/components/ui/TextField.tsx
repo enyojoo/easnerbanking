@@ -5,11 +5,10 @@ import {
   TextInput,
   TextInputProps,
   StyleSheet,
-  Platform,
   StyleProp,
   ViewStyle,
 } from 'react-native'
-import { colors, textStyles, borderRadius, spacing } from '../../theme'
+import { colors, textStyles, borderRadius, spacing, standardInputMetrics } from '../../theme'
 
 export type TextFieldProps = {
   label: string
@@ -93,16 +92,8 @@ const styles = StyleSheet.create({
     ...textStyles.textInputSingleLine,
     color: colors.semantic.foreground,
     backgroundColor: colors.semantic.background,
-    minHeight: FIELD_MIN_H,
     textAlignVertical: 'center',
-    ...Platform.select({
-      android: {
-        includeFontPadding: false,
-      },
-      ios: {
-        paddingVertical: 11,
-      },
-    }),
+    ...standardInputMetrics,
   },
   inputInRow: {
     flex: 1,
@@ -111,17 +102,9 @@ const styles = StyleSheet.create({
     ...textStyles.textInputSingleLine,
     color: colors.semantic.foreground,
     borderWidth: 0,
-    minHeight: FIELD_MIN_H - 2,
     backgroundColor: 'transparent',
     textAlignVertical: 'center',
-    ...Platform.select({
-      android: {
-        includeFontPadding: false,
-      },
-      ios: {
-        paddingVertical: 11,
-      },
-    }),
+    ...standardInputMetrics,
   },
   error: {
     ...textStyles.bodySmall,

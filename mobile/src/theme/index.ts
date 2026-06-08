@@ -69,6 +69,24 @@ export {
 } from './typography'
 export type { Typography } from './typography'
 
+export {
+  searchFieldWrapperStyle,
+  searchFieldInputStyle,
+  dropdownSearchRowStyle,
+  dropdownSearchInputStyle,
+} from './searchFieldStyles'
+
+export {
+  FORM_FIELD_MIN_HEIGHT,
+  COMPACT_FIELD_MIN_HEIGHT,
+  standardInputMetrics,
+  compactInputMetrics,
+  inlinePillInputMetrics,
+  pillRowWrapperStyle,
+  pillNoteInputStyle,
+  compactFormInputStyle,
+} from './textInputStyles'
+
 // Spacing scale (4px base unit)
 export const spacing = {
   0: 0,

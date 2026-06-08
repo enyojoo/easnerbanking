@@ -1222,6 +1222,8 @@ const styles = StyleSheet.create({
     ...Platform.select({
       android: { includeFontPadding: false, textAlignVertical: 'center', paddingVertical: 0 },
       ios: { paddingVertical: 0, marginTop: 0, marginBottom: 0 },
+      web: { outlineStyle: 'none', paddingVertical: 0 },
+      default: { paddingVertical: 0 },
     }),
   },
   fieldBoxInputInRow: {

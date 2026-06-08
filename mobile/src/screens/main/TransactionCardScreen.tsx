@@ -15,7 +15,17 @@ import ScreenWrapper from '../../components/ScreenWrapper'
 import { PlainTwoColumnRowSkeleton } from '../../components/skeletons'
 import EmptyState from '../../components/EmptyState'
 import { NavigationProps } from '../../types'
-import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, fontFamily } from '../../theme'
+import {
+  colors,
+  surfaceFrameStyle,
+  surfaceChromeCircleStyle,
+  textStyles,
+  borderRadius,
+  spacing,
+  fontFamily,
+  searchFieldWrapperStyle,
+  searchFieldInputStyle,
+} from '../../theme'
 import { noahService } from '../../lib/noahService'
 import { haptics } from '../../lib/haptics'
 
@@ -196,24 +206,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.full }),
     paddingHorizontal: spacing[4],
-    ...Platform.select({
-      ios: { paddingVertical: spacing[3] },
-      android: { paddingVertical: spacing[2], minHeight: 44 },
-    }),
+    ...searchFieldWrapperStyle,
     gap: spacing[2],
     marginBottom: spacing[4],
   },
   searchInput: {
-    flex: 1,
-    ...textStyles.textInputMedium,
+    ...searchFieldInputStyle,
     color: colors.text.primary,
-    ...Platform.select({
-      ios: { paddingVertical: 0 },
-      android: {
-        paddingVertical: 0,
-        includeFontPadding: false,
-      },
-    }),
   },
   scrollContent: {
     paddingBottom: spacing[10],

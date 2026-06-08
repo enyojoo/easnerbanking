@@ -47,6 +47,8 @@ import {
   shouldPlayDecorativeMotionEnter,
   scaledFontSize,
   fontFamily,
+  searchFieldWrapperStyle,
+  searchFieldInputStyle,
 } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
@@ -1295,23 +1297,12 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border.default,
     paddingHorizontal: spacing[4],
-    ...Platform.select({
-      ios: { paddingVertical: spacing[3] },
-      android: { paddingVertical: spacing[2], minHeight: 44 },
-    }),
+    ...searchFieldWrapperStyle,
     gap: spacing[2],
   },
   searchInput: {
-    flex: 1,
-    ...textStyles.textInputMedium,
+    ...searchFieldInputStyle,
     color: colors.text.primary,
-    ...Platform.select({
-      ios: { paddingVertical: 0 },
-      android: {
-        paddingVertical: 0,
-        includeFontPadding: false,
-      },
-    }),
   },
   filterRow: {
     flexDirection: 'row',

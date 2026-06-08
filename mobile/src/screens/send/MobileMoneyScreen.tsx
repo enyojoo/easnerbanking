@@ -14,7 +14,19 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { ArrowLeft, Check, Copy, Smartphone } from 'lucide-react-native'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
-import { colors, shadows, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
+import {
+  colors,
+  shadows,
+  surfaceFrameStyle,
+  surfaceChromeCircleStyle,
+  textStyles,
+  borderRadius,
+  spacing,
+  motion,
+  fontFamily,
+  pillRowWrapperStyle,
+  inlinePillInputMetrics,
+} from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
@@ -416,17 +428,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.full }),
     paddingHorizontal: spacing[4],
-    paddingVertical: spacing[2],
+    ...pillRowWrapperStyle,
   },
   phoneIconContainer: {
     marginRight: spacing[3],
   },
   phoneInput: {
     flex: 1,
+    minWidth: 0,
     ...textStyles.bodyLarge,
     color: colors.text.primary,
     fontFamily: fontFamily.medium,
-    paddingVertical: spacing[2],
+    ...inlinePillInputMetrics,
   },
   instructionsContainer: {
     backgroundColor: colors.primary.main + '10',

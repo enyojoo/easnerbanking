@@ -1,13 +1,7 @@
 import React from 'react'
-import { View, TextInput, Pressable, StyleSheet, Platform } from 'react-native'
+import { View, TextInput, Pressable, StyleSheet } from 'react-native'
 import { ScanLine } from 'lucide-react-native'
-import {
-  colors,
-  spacing,
-  textStyles,
-  borderRadius,
-  fontFamily,
-} from '../../theme'
+import { colors, spacing, borderRadius, compactFormInputStyle } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 
 type WalletAddressFieldProps = {
@@ -62,20 +56,9 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.full,
     paddingLeft: spacing[4],
     paddingRight: spacing[12],
-    paddingVertical: spacing[3],
-    ...textStyles.bodyMedium,
+    ...compactFormInputStyle,
     color: colors.text.primary,
     backgroundColor: colors.frame.background,
-    fontFamily: fontFamily.regular,
-    fontSize: 13,
-    minHeight: 48,
-    lineHeight: 18,
-    textAlignVertical: 'center',
-    ...Platform.select({
-      android: {
-        includeFontPadding: false,
-      },
-    }),
   },
   scanButton: {
     position: 'absolute',

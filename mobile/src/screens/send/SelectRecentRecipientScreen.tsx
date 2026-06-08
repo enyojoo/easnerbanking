@@ -48,7 +48,22 @@ import {
 } from '../../lib/recentSendRecipients'
 import { buildDraftEasenetRecipient, isDraftEasenetRecipient } from '../../lib/draftEasenetRecipient'
 import { NavigationProps, Recipient } from '../../types'
-import { colors, shadows, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
+import {
+  colors,
+  shadows,
+  surfaceFrameStyle,
+  surfaceChromeCircleStyle,
+  textStyles,
+  borderRadius,
+  spacing,
+  motion,
+  fontFamily,
+  searchFieldWrapperStyle,
+  searchFieldInputStyle,
+  dropdownSearchRowStyle,
+  dropdownSearchInputStyle,
+  compactFormInputStyle,
+} from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -164,7 +179,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   const [easenetLookupLoading, setEasenetLookupLoading] = useState(false)
   const [easenetLookupError, setEasenetLookupError] = useState<string | null>(null)
 
-  /** Hub search (@mode) live lookup ‚Äî separate from add-recipient modal. */
+  /** Hub search (@mode) live lookup ù separate from add-recipient modal. */
   const [hubSearchEasenet, setHubSearchEasenet] = useState<{
     easetag: string
     fullName: string
@@ -432,7 +447,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       void prefetchNoahSendExchangeRates(qc, recipient.currency)
     }
     // Use navigate (not push) so re-entering amount after "Change recipient" does not stack duplicate
-    // SendAmount screens ‚Äî back should be hub once, then dashboard.
+    // SendAmount screens ù back should be hub once, then dashboard.
     navigation.navigate('SendAmount' as never, {
       recipient,
       fromSelectRecentRecipient: true,
@@ -810,7 +825,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
        android_ripple={ripple.neutral}
         style={[styles.recipientItem, !isLast && styles.recipientItemDivider]}
         onPressIn={() => {
-          // Start the rate fetch the instant the finger touches the row ‚Äî same DB rows as quote.
+          // Start the rate fetch the instant the finger touches the row ù same DB rows as quote.
           if (isWalletSendRecipient(item)) {
             const net = resolveRecipientWalletNetwork(item)
             if (net) void prefetchCryptoSendExchangeRates(qc, item.currency, net)
@@ -2049,23 +2064,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.full }),
     paddingHorizontal: spacing[4],
-    ...Platform.select({
-      ios: { paddingVertical: spacing[3] },
-      android: { paddingVertical: spacing[2], minHeight: 44 },
-    }),
+    ...searchFieldWrapperStyle,
     gap: spacing[2],
   },
   searchInput: {
-    flex: 1,
-    ...textStyles.textInputMedium,
+    ...searchFieldInputStyle,
     color: colors.text.primary,
-    ...Platform.select({
-      ios: { paddingVertical: 0 },
-      android: {
-        paddingVertical: 0,
-        includeFontPadding: false,
-      },
-    }),
   },
   easenetHandleRowMargin: {
     marginBottom: spacing[2],
@@ -2120,7 +2124,7 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     fontFamily: fontFamily.medium,
   },
-  /** White SectionCard frame ‚Äî flat rows with hairline dividers (More-screen parity). */
+  /** White SectionCard frame ù flat rows with hairline dividers (More-screen parity). */
   recipientsTray: {
     ...surfaceFrameStyle(colors),
     marginHorizontal: spacing[5],
@@ -2229,7 +2233,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: borderRadius.sm,
   },
-  /** Draft Easenet row ‚Äî top-trailing corner of the preview block (clear of the chevron). */
+  /** Draft Easenet row ù top-trailing corner of the preview block (clear of the chevron). */
   newRecipientBadgeCorner: {
     position: 'absolute',
     top: 0,
@@ -2377,21 +2381,10 @@ const styles = StyleSheet.create({
     borderColor: colors.frame.border,
     borderRadius: borderRadius.full,
     paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
-    ...textStyles.bodyMedium,
+    ...compactFormInputStyle,
     color: colors.text.primary,
     marginBottom: spacing[4],
     backgroundColor: colors.frame.background,
-    fontFamily: fontFamily.regular,
-    fontSize: 13,
-    minHeight: 48,
-    lineHeight: 18,
-    textAlignVertical: 'center',
-    ...Platform.select({
-      android: {
-        includeFontPadding: false,
-      },
-    }),
   },
   modalButtons: {
     flexDirection: 'row',
@@ -2497,25 +2490,13 @@ const styles = StyleSheet.create({
     elevation: 20,
   },
   currencyDropdownSearch: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
+    ...dropdownSearchRowStyle,
     borderBottomWidth: 1,
     borderBottomColor: colors.border.light,
-    gap: spacing[2],
   },
   currencyDropdownSearchInput: {
-    flex: 1,
-    ...textStyles.textInputMedium,
+    ...dropdownSearchInputStyle,
     color: colors.text.primary,
-    paddingVertical: 0,
-    ...Platform.select({
-      android: {
-        includeFontPadding: false,
-        textAlignVertical: 'center',
-      },
-    }),
   },
   currencyDropdownItem: {
     flexDirection: 'row',

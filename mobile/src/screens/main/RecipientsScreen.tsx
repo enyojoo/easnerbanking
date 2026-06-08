@@ -49,7 +49,22 @@ import { useFocusEffect } from '@react-navigation/native'
 import { getAccountTypeConfigFromCurrency, formatFieldValue } from '../../lib/currencyAccountTypes'
 import { validateRequired, validateAccountNumber, validateIBAN } from '../../utils/validators'
 import { formatIBAN, formatSortCode, formatRoutingNumber, formatAccountNumber } from '../../utils/formatters'
-import { colors, shadows, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
+import {
+  colors,
+  shadows,
+  surfaceFrameStyle,
+  surfaceChromeCircleStyle,
+  textStyles,
+  borderRadius,
+  spacing,
+  motion,
+  fontFamily,
+  searchFieldWrapperStyle,
+  searchFieldInputStyle,
+  dropdownSearchRowStyle,
+  dropdownSearchInputStyle,
+  compactFormInputStyle,
+} from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { getAllCountryCurrencies, searchCountryCurrencies, CountryCurrency } from '../../lib/countryCurrencyMapping'
@@ -2367,23 +2382,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.full }),
     paddingHorizontal: spacing[4],
-    ...Platform.select({
-      ios: { paddingVertical: spacing[3] },
-      android: { paddingVertical: spacing[2], minHeight: 44 },
-    }),
+    ...searchFieldWrapperStyle,
     gap: spacing[2],
   },
   searchInput: {
-    flex: 1,
-    ...textStyles.textInputMedium,
+    ...searchFieldInputStyle,
     color: colors.text.primary,
-    ...Platform.select({
-      ios: { paddingVertical: 0 },
-      android: {
-        paddingVertical: 0,
-        includeFontPadding: false,
-      },
-    }),
   },
   bottomButtonContainer: {
     position: 'absolute',
@@ -2615,21 +2619,10 @@ const styles = StyleSheet.create({
     borderColor: colors.frame.border,
     borderRadius: borderRadius.full,
     paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
-    ...textStyles.bodyMedium,
+    ...compactFormInputStyle,
     color: colors.text.primary,
     marginBottom: spacing[2],
     backgroundColor: colors.frame.background,
-    fontFamily: fontFamily.regular,
-    fontSize: 13,
-    minHeight: 48,
-    lineHeight: 18,
-    textAlignVertical: 'center',
-    ...Platform.select({
-      android: {
-        includeFontPadding: false,
-      },
-    }),
   },
   modalInputError: {
     borderColor: colors.error.main,
@@ -2751,25 +2744,13 @@ const styles = StyleSheet.create({
     elevation: 20,
   },
   currencyDropdownSearch: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
+    ...dropdownSearchRowStyle,
     borderBottomWidth: 1,
     borderBottomColor: colors.border.light,
-    gap: spacing[2],
   },
   currencyDropdownSearchInput: {
-    flex: 1,
-    ...textStyles.textInputMedium,
+    ...dropdownSearchInputStyle,
     color: colors.text.primary,
-    paddingVertical: 0,
-    ...Platform.select({
-      android: {
-        includeFontPadding: false,
-        textAlignVertical: 'center',
-      },
-    }),
   },
   currencyDropdownItem: {
     flexDirection: 'row',

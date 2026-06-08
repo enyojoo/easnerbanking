@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronDown, LogOut, User } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { navigateFromRoot } from '../../navigation/rootNavigationRef'
@@ -11,6 +11,7 @@ import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import { avatarImageUri } from '../../lib/avatarCache'
 import { haptics } from '../../lib/haptics'
 import { ripple } from '../../lib/androidRipple'
+import { USE_WEB_CENTERED_MODAL, webCenteredModalStyles } from '../../lib/webCenteredModal'
 
 export function DesktopHeader() {
   const palette = useThemeColors()
@@ -26,6 +27,34 @@ export function DesktopHeader() {
     setMenuOpen(false)
     navigateFromRoot(route)
   }
+
+  const menuItems = (
+    <>
+      <Pressable
+        style={styles.dropdownItem}
+        onPress={() => {
+          haptics.tap()
+          navigateTo('Profile')
+        }}
+        android_ripple={ripple.neutral}
+      >
+        <User size={18} color={palette.text.primary} strokeWidth={2} />
+        <Text style={styles.dropdownLabel}>Profile</Text>
+      </Pressable>
+      <Pressable
+        style={styles.dropdownItem}
+        onPress={() => {
+          haptics.tap()
+          setMenuOpen(false)
+          void signOut()
+        }}
+        android_ripple={ripple.neutral}
+      >
+        <LogOut size={18} color={palette.error.main} strokeWidth={2} />
+        <Text style={[styles.dropdownLabel, { color: palette.error.main }]}>Sign out</Text>
+      </Pressable>
+    </>
+  )
 
   return (
     <View style={[styles.header, { paddingTop: insets.top > 0 ? 0 : spacing[2] }]}>
@@ -52,33 +81,39 @@ export function DesktopHeader() {
           <ChevronDown size={16} color={palette.text.secondary} strokeWidth={2} />
         </Pressable>
 
-        {menuOpen ? (
-          <View style={styles.dropdown}>
-            <Pressable
-              style={styles.dropdownItem}
-              onPress={() => {
-                haptics.tap()
-                navigateTo('Profile')
-              }}
-              android_ripple={ripple.neutral}
-            >
-              <User size={18} color={palette.text.primary} strokeWidth={2} />
-              <Text style={styles.dropdownLabel}>Profile</Text>
-            </Pressable>
-            <Pressable
-              style={styles.dropdownItem}
-              onPress={() => {
-                haptics.tap()
-                void signOut()
-              }}
-              android_ripple={ripple.neutral}
-            >
-              <LogOut size={18} color={palette.error.main} strokeWidth={2} />
-              <Text style={[styles.dropdownLabel, { color: palette.error.main }]}>Sign out</Text>
-            </Pressable>
-          </View>
+        {menuOpen && !USE_WEB_CENTERED_MODAL ? (
+          <View style={styles.dropdown}>{menuItems}</View>
         ) : null}
       </View>
+      {USE_WEB_CENTERED_MODAL ? (
+        <Modal
+          visible={menuOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setMenuOpen(false)}
+        >
+          <View style={webCenteredModalStyles.anchoredMenuOverlay}>
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={() => setMenuOpen(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Close account menu"
+            />
+            <Pressable
+              style={[
+                webCenteredModalStyles.anchoredMenuPanel,
+                {
+                  backgroundColor: palette.semantic.card,
+                  borderColor: palette.border.default,
+                },
+              ]}
+              onPress={(e) => e.stopPropagation()}
+            >
+              {menuItems}
+            </Pressable>
+          </View>
+        </Modal>
+      ) : null}
     </View>
   )
 }

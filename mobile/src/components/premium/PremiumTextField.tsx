@@ -1,6 +1,6 @@
 import React from 'react'
 import { TextInput, View, StyleSheet, type TextInputProps, type StyleProp, type ViewStyle } from 'react-native'
-import { borderRadius, spacing, textStyles, useThemeColors } from '../../theme'
+import { borderRadius, spacing, textStyles, useThemeColors, inlinePillInputMetrics } from '../../theme'
 
 type PremiumTextFieldProps = TextInputProps & {
   containerStyle?: StyleProp<ViewStyle>
@@ -46,7 +46,7 @@ const styles = StyleSheet.create({
   },
   input: {
     ...textStyles.textInputSingleLine,
-    paddingVertical: 0,
+    ...inlinePillInputMetrics,
   },
 })
 

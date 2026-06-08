@@ -303,6 +303,10 @@ export const walletAddressQrScannerStyles = StyleSheet.create({
     color: colors.text.primary,
     backgroundColor: colors.semantic.card,
     marginBottom: spacing[4],
+    ...Platform.select({
+      web: { outlineStyle: 'none' },
+      default: {},
+    }),
   },
   webPasteButton: {
     backgroundColor: colors.primary.main,

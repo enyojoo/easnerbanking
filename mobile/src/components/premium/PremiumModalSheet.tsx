@@ -2,6 +2,7 @@ import React from 'react'
 import { Modal, View, StyleSheet, Pressable, useWindowDimensions, type ModalProps } from 'react-native'
 import { EaseView } from 'react-native-ease'
 import { borderRadius, spacing, useThemeColors } from '../../theme'
+import { USE_WEB_CENTERED_MODAL, webCenteredModalStyles } from '../../lib/webCenteredModal'
 
 type PremiumModalSheetProps = ModalProps & {
   visible: boolean
@@ -18,6 +19,38 @@ export default function PremiumModalSheet({
   const palette = useThemeColors()
   const { height: screenHeight } = useWindowDimensions()
   const sheetOffset = Math.min(screenHeight * 0.45, 420)
+
+  if (USE_WEB_CENTERED_MODAL) {
+    return (
+      <Modal
+        {...props}
+        visible={visible}
+        transparent
+        animationType="fade"
+        onRequestClose={onRequestClose}
+      >
+        <View style={webCenteredModalStyles.overlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={onRequestClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close dialog"
+          />
+          <View
+            style={[
+              webCenteredModalStyles.panel,
+              {
+                backgroundColor: palette.semantic.card,
+                borderColor: palette.border.default,
+              },
+            ]}
+          >
+            {children}
+          </View>
+        </View>
+      </Modal>
+    )
+  }
 
   return (
     <Modal

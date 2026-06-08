@@ -13,9 +13,10 @@ import {
 import * as Sharing from 'expo-sharing'
 import { X } from 'lucide-react-native'
 import { noahService } from '../lib/noahService'
-import { colors, spacing, borderRadius, textStyles, fontFamily } from '../theme'
+import { colors, spacing, borderRadius, textStyles, fontFamily, compactInputMetrics } from '../theme'
 import { ripple } from '../lib/androidRipple'
 import { useToast } from './ToastProvider'
+import { USE_WEB_CENTERED_MODAL } from '../lib/webCenteredModal'
 
 const ISO_RE = /^\d{4}-\d{2}-\d{2}$/
 
@@ -75,13 +76,18 @@ export function StatementPdfModal({ visible, onClose, accountCurrency }: Props) 
   }
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      animationType={USE_WEB_CENTERED_MODAL ? 'fade' : 'slide'}
+      transparent
+      onRequestClose={onClose}
+    >
       <KeyboardAvoidingView
-        style={styles.backdrop}
+        style={[styles.backdrop, USE_WEB_CENTERED_MODAL && styles.backdropWeb]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={0}
       >
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, USE_WEB_CENTERED_MODAL && styles.sheetWeb]}>
           <View style={styles.sheetHeader}>
             <Text style={styles.sheetTitle}>Download statement</Text>
             <Pressable
@@ -147,12 +153,23 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'flex-end',
   },
+  backdropWeb: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing[6],
+  },
   sheet: {
     backgroundColor: colors.background.primary,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
     padding: spacing[6],
     paddingBottom: spacing[10],
+  },
+  sheetWeb: {
+    width: '100%',
+    maxWidth: 480,
+    borderRadius: borderRadius['2xl'],
+    paddingBottom: spacing[6],
   },
   sheetHeader: {
     flexDirection: 'row',
@@ -194,6 +211,8 @@ const styles = StyleSheet.create({
     padding: spacing[3],
     ...textStyles.titleMedium,
     color: colors.text.primary,
+    minHeight: 48,
+    ...compactInputMetrics,
   },
   primary: {
     marginTop: spacing[6],

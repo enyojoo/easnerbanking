@@ -1,5 +1,6 @@
 import { Platform, StyleSheet } from 'react-native'
 import { colors, textStyles, borderRadius, spacing } from './index'
+import { standardInputMetrics } from './textInputStyles'
 
 /**
  * Shared typography and field styles for auth flows (AuthScreen, RegisterScreen, LoginScreen).
@@ -51,16 +52,8 @@ export const authScreenStyles = StyleSheet.create({
     ...textStyles.textInputSingleLine,
     color: colors.text.primary,
     backgroundColor: colors.semantic.background,
-    minHeight: AUTH_FIELD_MIN_HEIGHT,
     textAlignVertical: 'center',
-    ...Platform.select({
-      android: {
-        includeFontPadding: false,
-      },
-      ios: {
-        paddingVertical: 11,
-      },
-    }),
+    ...standardInputMetrics,
   },
   passwordOuter: {
     flexDirection: 'row',
@@ -81,14 +74,7 @@ export const authScreenStyles = StyleSheet.create({
     borderWidth: 0,
     backgroundColor: 'transparent',
     textAlignVertical: 'center',
-    ...Platform.select({
-      android: {
-        includeFontPadding: false,
-      },
-      ios: {
-        paddingVertical: 11,
-      },
-    }),
+    ...standardInputMetrics,
   },
   termsIntro: {
     ...textStyles.bodySmall,

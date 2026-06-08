@@ -15,6 +15,7 @@ import { Plus, Snowflake, Settings, Eye, CreditCard } from 'lucide-react-native'
 import Svg, { Circle, Path } from 'react-native-svg'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import EmptyState from '../../components/EmptyState'
+import { CardsDesktopSplit } from '../../components/layout/CardsDesktopSplit'
 import { NavigationProps } from '../../types'
 import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
@@ -24,6 +25,7 @@ import { haptics } from '../../lib/haptics'
 import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
 
 const CARD_SPACING = spacing[1]
+const DESKTOP_CARD_MAX_WIDTH = 400
 
 const COMING_SOON_COPY = 'Easner Card is coming soon'
 
@@ -92,14 +94,183 @@ function MastercardMark() {
   )
 }
 
+type CardFaceProps = {
+  card: PreviewCard
+  width: number
+  height: number
+  style?: object
+}
+
+function CardFace({ card, width, height, style }: CardFaceProps) {
+  const gradient = gradientForForm(card.form)
+
+  return (
+    <View style={[styles.cardWrapper, { width, height }, style]}>
+      <LinearGradient
+        colors={gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.card, { width, height }]}
+      >
+        {card.form === 'physical' ? <View style={styles.physicalAccent} /> : null}
+        <View style={styles.patternLayer}>
+          <CardPattern width={width} height={height} />
+        </View>
+
+        <View style={styles.cardInner}>
+          <View style={styles.cardTopRow}>
+            <View style={styles.brandRow}>
+              <Image
+                source={EASNER_CARD_ICON_SOURCE}
+                style={styles.brandIcon}
+                resizeMode="contain"
+                accessibilityIgnoresInvertColors
+              />
+              <View style={styles.formBadge}>
+                <Text style={styles.formBadgeText}>{card.form}</Text>
+              </View>
+            </View>
+            <MastercardMark />
+          </View>
+
+          <View style={styles.panBlock}>
+            <Text style={styles.panText} numberOfLines={1}>
+              •••• •••• •••• {card.last4}
+            </Text>
+          </View>
+
+          <View style={styles.cardBottomMeta}>
+            <View style={styles.metaCol}>
+              <Text style={styles.metaLabel}>Card holder</Text>
+              <Text style={styles.metaValue} numberOfLines={1}>
+                {card.cardholderName.toUpperCase()}
+              </Text>
+            </View>
+            <View style={[styles.metaCol, styles.metaColEnd]}>
+              <Text style={styles.metaLabel}>Expires</Text>
+              <Text style={styles.metaValue}>{card.expiryDate}</Text>
+            </View>
+          </View>
+        </View>
+      </LinearGradient>
+
+      <View style={styles.comingSoonWrap} pointerEvents="none">
+        <View style={styles.comingSoonScrim} />
+        <View style={styles.comingSoonTextCol}>
+          <Text style={styles.comingSoonText}>{COMING_SOON_COPY}</Text>
+        </View>
+      </View>
+    </View>
+  )
+}
+
+function MobileActionButtons({ onPress }: { onPress: () => void }) {
+  return (
+    <View style={styles.actionButtons}>
+      <Pressable android_ripple={ripple.neutral} style={styles.actionButton} onPress={onPress}>
+        <View style={[styles.actionIconContainer, styles.actionIconDisabled]}>
+          <Eye size={20} color={colors.text.tertiary} strokeWidth={2.5} />
+        </View>
+        <Text style={styles.actionButtonTextDisabled}>View</Text>
+      </Pressable>
+
+      <Pressable android_ripple={ripple.neutral} style={styles.actionButton} onPress={onPress}>
+        <View style={[styles.actionIconContainer, styles.actionIconDisabled]}>
+          <Snowflake size={20} color={colors.text.tertiary} strokeWidth={2.5} />
+        </View>
+        <Text style={styles.actionButtonTextDisabled}>Freeze</Text>
+      </Pressable>
+
+      <Pressable android_ripple={ripple.neutral} style={styles.actionButton} onPress={onPress}>
+        <View style={[styles.actionIconContainer, styles.actionIconDisabled]}>
+          <Settings size={20} color={colors.text.tertiary} strokeWidth={2.5} />
+        </View>
+        <Text style={styles.actionButtonTextDisabled}>Settings</Text>
+      </Pressable>
+    </View>
+  )
+}
+
+function DesktopActionButtons({ onPress }: { onPress: () => void }) {
+  const items = [
+    { Icon: Eye, label: 'View Details' },
+    { Icon: Settings, label: 'Card Settings' },
+    { Icon: Snowflake, label: 'Freeze Card' },
+  ] as const
+
+  return (
+    <View style={styles.desktopActions}>
+      {items.map(({ Icon, label }) => (
+        <Pressable
+          key={label}
+          android_ripple={ripple.neutral}
+          style={styles.desktopActionButton}
+          onPress={onPress}
+          accessibilityRole="button"
+          accessibilityLabel={label}
+        >
+          <Icon size={18} color={colors.text.tertiary} strokeWidth={2} />
+          <Text style={styles.desktopActionButtonText}>{label}</Text>
+        </Pressable>
+      ))}
+    </View>
+  )
+}
+
+function CardActivitySection({
+  wide,
+  scrollable,
+}: {
+  wide: boolean
+  scrollable?: boolean
+}) {
+  const content = (
+    <EmptyState
+      icon={CreditCard}
+      title="No card activity yet"
+      message="When you can spend on a card, those movements will show up here."
+    />
+  )
+
+  if (wide) {
+    return (
+      <View style={styles.desktopActivityColumn}>
+        <Text style={styles.desktopActivityTitle}>Card activity</Text>
+        <View style={styles.desktopActivityPanel}>
+          {scrollable ? (
+            <ScrollView
+              style={styles.desktopActivityScroll}
+              contentContainerStyle={styles.desktopActivityScrollContent}
+              showsVerticalScrollIndicator
+            >
+              {content}
+            </ScrollView>
+          ) : (
+            <View style={styles.desktopActivityScrollContent}>{content}</View>
+          )}
+        </View>
+      </View>
+    )
+  }
+
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>Card activity</Text>
+      {content}
+    </View>
+  )
+}
+
 export default function CardScreen({ navigation: _navigation }: NavigationProps) {
-  const { mode } = useResponsiveLayout()
+  const { mode, showSidebarShell } = useResponsiveLayout()
   const { width: windowWidth } = useWindowDimensions()
-  const centerCardLayout = mode === 'tablet' || mode === 'desktop'
-  /** ISO/IEC 7810 ID-1 physical card ratio (85.60mm × 53.98mm). */
+  const wideLayout = showSidebarShell && mode === 'desktop'
+  const centerCardLayout = !wideLayout && (mode === 'tablet' || mode === 'desktop')
+
   const CARD_ASPECT = 85.6 / 53.98
-  /** Full-bleed minus screen padding; cap keeps very wide tablets from oversized carousel cards. */
-  const CARD_WIDTH = Math.min(windowWidth - spacing[5] * 2, 420)
+  const CARD_WIDTH = wideLayout
+    ? DESKTOP_CARD_MAX_WIDTH
+    : Math.min(windowWidth - spacing[5] * 2, 420)
   const CARD_HEIGHT = Math.round(CARD_WIDTH / CARD_ASPECT)
   const cardStride = CARD_WIDTH + CARD_SPACING * 2
 
@@ -117,46 +288,140 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
     useNativeDriver: false,
   })
 
+  const header = (
+    <Animated.View
+      style={[
+        styles.header,
+        wideLayout && styles.headerDesktop,
+        {
+          opacity: headerAnim,
+          transform: [
+            {
+              translateY: headerAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [-motion.screenEnterTranslateY, 0],
+              }),
+            },
+          ],
+        },
+      ]}
+    >
+      <View style={styles.headerContent}>
+        <View style={styles.headerTitleBlock}>
+          <Text style={[styles.title, wideLayout && styles.titleDesktop]}>Cards</Text>
+        </View>
+        <Pressable
+          android_ripple={ripple.neutral}
+          style={wideLayout ? styles.addCardButton : styles.iconBtn}
+          onPress={() => haptics.tap()}
+          accessibilityRole="button"
+          accessibilityLabel="Add card"
+        >
+          <Plus size={wideLayout ? 18 : 22} color={wideLayout ? colors.text.inverse : colors.primary.main} strokeWidth={2} />
+          {wideLayout ? <Text style={styles.addCardButtonText}>Add Card</Text> : null}
+        </Pressable>
+      </View>
+    </Animated.View>
+  )
+
+  const cardCarousel = wideLayout ? (
+    <View style={[styles.desktopCarousel, { height: CARD_HEIGHT }]}>
+      {MOCK_CARDS.map((card) => (
+        <CardFace key={card.id} card={card} width={CARD_WIDTH} height={CARD_HEIGHT} />
+      ))}
+    </View>
+  ) : (
+    <View style={[styles.carouselContainer, { height: CARD_HEIGHT + spacing[8] }]}>
+      <Animated.ScrollView
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onScroll={handleCardScroll}
+        scrollEventThrottle={16}
+        snapToInterval={cardStride}
+        decelerationRate="fast"
+        contentContainerStyle={[
+          styles.carouselContent,
+          { paddingHorizontal: (windowWidth - CARD_WIDTH) / 2, gap: CARD_SPACING * 2 },
+        ]}
+        contentInsetAdjustmentBehavior="never"
+      >
+        {MOCK_CARDS.map((card, index) => {
+          const inputRange = [(index - 1) * cardStride, index * cardStride, (index + 1) * cardStride]
+          const scale = scrollX.interpolate({
+            inputRange,
+            outputRange: [0.96, 1, 0.96],
+            extrapolate: 'clamp',
+          })
+          const opacity = scrollX.interpolate({
+            inputRange,
+            outputRange: [0.8, 1, 0.8],
+            extrapolate: 'clamp',
+          })
+
+          return (
+            <Animated.View
+              key={card.id}
+              style={{
+                width: CARD_WIDTH,
+                marginRight: CARD_SPACING,
+                transform: [{ scale }],
+                height: CARD_HEIGHT,
+                opacity,
+              }}
+            >
+              <CardFace card={card} width={CARD_WIDTH} height={CARD_HEIGHT} />
+            </Animated.View>
+          )
+        })}
+      </Animated.ScrollView>
+    </View>
+  )
+
+  if (wideLayout) {
+    return (
+      <ScreenWrapper>
+        <View style={styles.desktopRoot}>
+          {header}
+          <Animated.View
+            style={[
+              styles.desktopBody,
+              {
+                opacity: contentAnim,
+                transform: [
+                  {
+                    translateY: contentAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [motion.screenEnterTranslateY, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <CardsDesktopSplit
+              sidebar={
+                <View style={styles.desktopSidebarInner}>
+                  {cardCarousel}
+                  <DesktopActionButtons onPress={actionsComingSoon} />
+                </View>
+              }
+              main={<CardActivitySection wide scrollable />}
+            />
+          </Animated.View>
+        </View>
+      </ScreenWrapper>
+    )
+  }
+
   return (
     <ScreenWrapper>
       <View style={[styles.container, centerCardLayout && styles.centeredContainer]}>
-        <Animated.View
-          style={[
-            styles.header,
-            {
-              opacity: headerAnim,
-              transform: [
-                {
-                  translateY: headerAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [-motion.screenEnterTranslateY, 0],
-                  }),
-                },
-              ],
-            },
-          ]}
-        >
-          <View style={styles.headerContent}>
-            <View style={styles.headerTitleBlock}>
-              <Text style={styles.title}>Cards</Text>
-            </View>
-            <Pressable
-             android_ripple={ripple.neutral}
-              style={styles.iconBtn}
-              onPress={() => haptics.tap()} accessibilityRole="button"
-              accessibilityLabel="Add card"
-            >
-              <Plus size={22} color={colors.primary.main} strokeWidth={2} />
-            </Pressable>
-          </View>
-        </Animated.View>
+        {header}
 
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingBottom: spacing[8] },
-          ]}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: spacing[8] }]}
           showsVerticalScrollIndicator={false}
         >
           <Animated.View
@@ -175,140 +440,9 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
               },
             ]}
           >
-          <View style={[styles.carouselContainer, { height: CARD_HEIGHT + spacing[8] }]}>
-            <Animated.ScrollView
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              onScroll={handleCardScroll}
-              scrollEventThrottle={16}
-              snapToInterval={cardStride}
-              decelerationRate="fast"
-              contentContainerStyle={[
-                styles.carouselContent,
-                { paddingHorizontal: (windowWidth - CARD_WIDTH) / 2, gap: CARD_SPACING * 2 },
-              ]}
-              contentInsetAdjustmentBehavior="never"
-            >
-              {MOCK_CARDS.map((card, index) => {
-                const inputRange = [(index - 1) * cardStride, index * cardStride, (index + 1) * cardStride]
-                const scale = scrollX.interpolate({
-                  inputRange,
-                  outputRange: [0.96, 1, 0.96],
-                  extrapolate: 'clamp',
-                })
-                const opacity = scrollX.interpolate({
-                  inputRange,
-                  outputRange: [0.8, 1, 0.8],
-                  extrapolate: 'clamp',
-                })
-                const gradient = gradientForForm(card.form)
-
-                return (
-                  <Animated.View
-                    key={card.id}
-                    style={[
-                      styles.cardWrapper,
-                      {
-                        width: CARD_WIDTH,
-                        marginRight: CARD_SPACING,
-                        transform: [{ scale }],
-                        height: CARD_HEIGHT,
-                        opacity,
-                      },
-                    ]}
-                  >
-                    <LinearGradient
-                      colors={gradient}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={[styles.card, { width: CARD_WIDTH, height: CARD_HEIGHT }]}
-                    >
-                      {card.form === 'physical' ? <View style={styles.physicalAccent} /> : null}
-                      <View style={styles.patternLayer}>
-                        <CardPattern width={CARD_WIDTH} height={CARD_HEIGHT} />
-                      </View>
-
-                      <View style={styles.cardInner}>
-                        <View style={styles.cardTopRow}>
-                          <View style={styles.brandRow}>
-                            <Image
-                              source={EASNER_CARD_ICON_SOURCE}
-                              style={styles.brandIcon}
-                              resizeMode="contain"
-                              accessibilityIgnoresInvertColors
-                            />
-                            <View style={styles.formBadge}>
-                              <Text style={styles.formBadgeText}>{card.form}</Text>
-                            </View>
-                          </View>
-                          <MastercardMark />
-                        </View>
-
-                        <View style={styles.panBlock}>
-                          <Text style={styles.panText} numberOfLines={1}>
-                            •••• •••• •••• {card.last4}
-                          </Text>
-                        </View>
-
-                        <View style={styles.cardBottomMeta}>
-                          <View style={styles.metaCol}>
-                            <Text style={styles.metaLabel}>Card holder</Text>
-                            <Text style={styles.metaValue} numberOfLines={1}>
-                              {card.cardholderName.toUpperCase()}
-                            </Text>
-                          </View>
-                          <View style={[styles.metaCol, styles.metaColEnd]}>
-                            <Text style={styles.metaLabel}>Expires</Text>
-                            <Text style={styles.metaValue}>{card.expiryDate}</Text>
-                          </View>
-                        </View>
-                      </View>
-                    </LinearGradient>
-
-                    <View style={styles.comingSoonWrap} pointerEvents="none">
-                      <View style={styles.comingSoonScrim} />
-                      <View style={styles.comingSoonTextCol}>
-                        <Text style={styles.comingSoonText}>{COMING_SOON_COPY}</Text>
-                      </View>
-                    </View>
-                  </Animated.View>
-                )
-              })}
-            </Animated.ScrollView>
-          </View>
-
-          <View style={styles.actionButtons}>
-            <Pressable android_ripple={ripple.neutral} style={styles.actionButton} onPress={actionsComingSoon} >
-              <View style={[styles.actionIconContainer, styles.actionIconDisabled]}>
-                <Eye size={20} color={colors.text.tertiary} strokeWidth={2.5} />
-              </View>
-              <Text style={styles.actionButtonTextDisabled}>View</Text>
-            </Pressable>
-
-            <Pressable android_ripple={ripple.neutral} style={styles.actionButton} onPress={actionsComingSoon} >
-              <View style={[styles.actionIconContainer, styles.actionIconDisabled]}>
-                <Snowflake size={20} color={colors.text.tertiary} strokeWidth={2.5} />
-              </View>
-              <Text style={styles.actionButtonTextDisabled}>Freeze</Text>
-            </Pressable>
-
-            <Pressable android_ripple={ripple.neutral} style={styles.actionButton} onPress={actionsComingSoon} >
-              <View style={[styles.actionIconContainer, styles.actionIconDisabled]}>
-                <Settings size={20} color={colors.text.tertiary} strokeWidth={2.5} />
-              </View>
-              <Text style={styles.actionButtonTextDisabled}>Settings</Text>
-            </Pressable>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Card activity</Text>
-            <EmptyState
-              icon={CreditCard}
-              title="No card activity yet"
-              message="When you can spend on a card, those movements will show up here."
-            />
-          </View>
+            {cardCarousel}
+            <MobileActionButtons onPress={actionsComingSoon} />
+            <CardActivitySection wide={false} />
           </Animated.View>
         </ScrollView>
       </View>
@@ -326,6 +460,18 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     width: '100%',
   },
+  desktopRoot: {
+    flex: 1,
+    minHeight: 0,
+    backgroundColor: colors.background.primary,
+  },
+  desktopBody: {
+    flex: 1,
+    minHeight: 0,
+  },
+  desktopSidebarInner: {
+    gap: spacing[6],
+  },
   scrollView: {
     flex: 1,
   },
@@ -339,6 +485,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[5],
     paddingTop: spacing[4],
     paddingBottom: spacing[2],
+  },
+  headerDesktop: {
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: spacing[6],
   },
   headerContent: {
     flexDirection: 'row',
@@ -356,15 +507,38 @@ const styles = StyleSheet.create({
     ...textStyles.headlineLarge,
     color: colors.text.primary,
   },
+  titleDesktop: {
+    ...textStyles.headlineSmall,
+    fontFamily: fontFamily.semibold,
+  },
   iconBtn: {
     ...surfaceChromeCircleStyle(colors, 40),
     flexShrink: 0,
+  },
+  addCardButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    backgroundColor: colors.primary.main,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[2],
+    borderRadius: borderRadius.full,
+    flexShrink: 0,
+  },
+  addCardButtonText: {
+    ...textStyles.labelLarge,
+    color: colors.text.inverse,
+    fontFamily: fontFamily.semibold,
   },
   carouselContainer: {
     marginTop: spacing[3],
     marginBottom: 2,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  desktopCarousel: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   carouselContent: {
     alignItems: 'center',
@@ -391,6 +565,9 @@ const styles = StyleSheet.create({
       },
       android: {
         elevation: 8,
+      },
+      web: {
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
       },
     }),
   },
@@ -503,7 +680,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing[5],
   },
-  /** Business-style coming-soon layer: light tint so the card face remains visible. */
   comingSoonScrim: {
     position: 'absolute',
     top: 0,
@@ -549,6 +725,28 @@ const styles = StyleSheet.create({
     color: colors.text.tertiary,
     fontFamily: fontFamily.medium,
   },
+  desktopActions: {
+    gap: spacing[2],
+  },
+  desktopActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    width: '100%',
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[4],
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    backgroundColor: 'transparent',
+    opacity: 0.85,
+  },
+  desktopActionButtonText: {
+    ...textStyles.bodyMedium,
+    color: colors.text.tertiary,
+    fontFamily: fontFamily.medium,
+  },
   section: {
     marginTop: spacing[4],
     paddingHorizontal: spacing[5],
@@ -559,13 +757,32 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.semibold,
     marginBottom: spacing[3],
   },
-  emptyBox: {
-    ...surfaceFrameStyle(colors, { shadow: 'none' }),
-    padding: spacing[5],
+  desktopActivityColumn: {
+    flex: 1,
+    minHeight: 0,
+    minWidth: 0,
   },
-  emptyText: {
-    ...textStyles.bodyMedium,
-    color: colors.text.secondary,
-    lineHeight: 22,
+  desktopActivityTitle: {
+    ...textStyles.headlineSmall,
+    color: colors.text.primary,
+    fontFamily: fontFamily.semibold,
+    marginBottom: spacing[4],
+  },
+  desktopActivityPanel: {
+    flex: 1,
+    minHeight: 300,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.semantic.card,
+    overflow: 'hidden',
+  },
+  desktopActivityScroll: {
+    flex: 1,
+  },
+  desktopActivityScrollContent: {
+    flexGrow: 1,
+    padding: spacing[4],
+    justifyContent: 'center',
   },
 })

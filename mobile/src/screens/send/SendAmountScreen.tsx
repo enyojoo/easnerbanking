@@ -34,6 +34,8 @@ import {
   computeKeypadCellSize,
   getContentWidth,
   fontFamily,
+  pillRowWrapperStyle,
+  pillNoteInputStyle,
 } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
@@ -2191,32 +2193,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.full }),
     paddingHorizontal: spacing[4],
-    ...Platform.select({
-      android: {
-        height: 44,
-        paddingVertical: 0,
-      },
-      ios: {
-        paddingVertical: spacing[3],
-      },
-    }),
+    ...pillRowWrapperStyle,
     gap: spacing[2],
     marginBottom: 20,
   },
   noteInput: {
-    flex: 1,
-    ...textStyles.bodyMedium,
+    ...pillNoteInputStyle,
     color: colors.text.primary,
-    fontFamily: fontFamily.regular,
-    fontSize: 13,
-    lineHeight: 18,
-    textAlignVertical: 'center',
-    ...Platform.select({
-      android: {
-        includeFontPadding: false,
-        paddingVertical: 0,
-      },
-    }),
   },
   amountFieldError: {
     ...textStyles.caption,
