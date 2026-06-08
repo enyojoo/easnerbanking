@@ -1,14 +1,12 @@
 import * as Linking from 'expo-linking'
+import type { NavigationContainerRef } from '@react-navigation/native'
 import { getApiBaseUrl } from '../lib/apiClient'
-
-/** Do not map Supabase / Google OAuth return URLs to in-app "Dashboard" — AuthContext owns that flow. */
-function isSupabaseOauthAppCallback(url: string): boolean {
-  if (url.includes('auth/callback')) return true
-  if (url.includes('access_token=') || url.includes('refresh_token=') || /(^|[?#&])code=/.test(url)) {
-    return /easner|exp\+|exp:\/\//.test(url)
-  }
-  return false
-}
+import {
+  flushPendingDeepLinkNavigation,
+  isSupabaseOauthAppCallback,
+  parseDeepLinkFromUrl,
+  stashPendingDeepLinkFromUrl,
+} from '../lib/pendingDeepLinkNavigation'
 
 export interface DeepLinkData {
   screen: string
@@ -47,7 +45,7 @@ export class DeepLinkService {
   }
 
   /**
-   * Handle incoming deep links
+   * Handle incoming deep links (warm start / app already open).
    */
   private handleDeepLink = (event: { url: string }): void => {
     try {
@@ -55,81 +53,29 @@ export class DeepLinkService {
       if (isSupabaseOauthAppCallback(event.url)) {
         return
       }
-      const { screen, params } = this.parseUrl(event.url)
-      
-      if (screen) {
-        this.navigateToScreen(screen, params)
-      }
+      void this.consumeUrl(event.url)
     } catch (error) {
       console.error('DeepLinkService: Error handling deep link:', error)
     }
   }
 
-  /**
-   * Parse URL to extract screen and parameters
-   */
-  private parseUrl(url: string): DeepLinkData {
-    try {
-      // Remove the scheme and domain
-      const cleanUrl = url.replace(/^https?:\/\/[^\/]+/, '')
-      
-      // Parse the path
-      const segments = cleanUrl.split('/').filter(Boolean)
-      
-      if (segments.length === 0) {
-        return { screen: 'Dashboard' }
-      }
-
-      // Map URL paths to screen names
-      const screenMap: Record<string, string> = {
-        'user': 'Dashboard',
-        'user/dashboard': 'Dashboard',
-        'user/transactions': 'Transactions',
-        'user/send/': 'TransactionDetails',
-        'user/recipients': 'Recipients',
-        'user/send': 'Send',
-        'user/support': 'Support',
-        'user/profile': 'Profile'
-      }
-
-      let screen = screenMap[segments.join('/')]
-      let params: Record<string, string> = {}
-
-      // Handle transaction details with ID
-      if (segments[0] === 'user' && segments[1] === 'transactions' && segments[2]) {
-        screen = 'TransactionDetails'
-        params = { transactionId: segments[2] }
-      }
-
-      // Handle other dynamic routes
-      if (!screen) {
-        screen = 'Dashboard' // Default fallback
-      }
-
-      return { screen, params }
-    } catch (error) {
-      console.error('DeepLinkService: Error parsing URL:', error)
-      return { screen: 'Dashboard' }
-    }
+  /** Stash intent and navigate when MainStack is ready. */
+  async consumeUrl(url: string): Promise<void> {
+    await stashPendingDeepLinkFromUrl(url)
+    flushPendingDeepLinkNavigation(
+      (global as any).rootNavigationRef?.current as NavigationContainerRef<unknown> | null,
+    )
   }
 
   /**
-   * Navigate to the appropriate screen
+   * Parse URL to extract screen and parameters
    */
-  private navigateToScreen(screen: string, params: Record<string, string> = {}): void {
-    try {
-      console.log('DeepLinkService: Navigating to screen:', screen, 'with params:', params)
-      
-      // For React Native, we'll use a different approach
-      // This will be handled by the navigation system through context or props
-      // For now, we'll just log the navigation intent
-      console.log('DeepLinkService: Navigation intent - Screen:', screen, 'Params:', params)
-      
-      // TODO: Implement proper navigation handling for React Native
-      // This could be done through a navigation context or by passing a navigation ref
-    } catch (error) {
-      console.error('DeepLinkService: Error navigating to screen:', error)
+  parseUrl(url: string): DeepLinkData {
+    const pending = parseDeepLinkFromUrl(url)
+    if (!pending) {
+      return { screen: 'Dashboard' }
     }
+    return { screen: pending.screen, params: pending.params }
   }
 
   /**
@@ -138,20 +84,19 @@ export class DeepLinkService {
   createDeepLink(screen: string, params: Record<string, string> = {}): string {
     try {
       const baseUrl = getApiBaseUrl()
-      
+
       const screenMap: Record<string, string> = {
-        'Dashboard': '/user/dashboard',
-        'Transactions': '/user/transactions',
-        'TransactionDetails': '/user/transactions',
-        'Recipients': '/user/recipients',
-        'Send': '/user/send',
-        'Support': '/user/support',
-        'Profile': '/user/profile'
+        Dashboard: '/user/dashboard',
+        Transactions: '/user/transactions',
+        TransactionDetails: '/user/transactions',
+        Recipients: '/user/recipients',
+        SendAmount: '/user/send',
+        Support: '/user/support',
+        Profile: '/user/profile',
       }
 
       let path = screenMap[screen] || '/user/dashboard'
-      
-      // Add transaction ID if provided
+
       if (screen === 'TransactionDetails' && params.transactionId) {
         path += `/${params.transactionId}`
       }

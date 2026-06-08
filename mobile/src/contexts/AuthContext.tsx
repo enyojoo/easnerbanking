@@ -1,5 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react'
 import * as Linking from 'expo-linking'
+import {
+  isUserDeepLinkUrl,
+  stashPendingDeepLinkFromUrl,
+} from '../lib/pendingDeepLinkNavigation'
 import { makeRedirectUri } from 'expo-auth-session'
 import * as WebBrowser from 'expo-web-browser'
 import * as AppleAuthentication from 'expo-apple-authentication'
@@ -637,6 +641,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const initialUrl = await Linking.getInitialURL()
         if (initialUrl) {
           await consumeOAuthCallbackIfPresent(initialUrl)
+          if (isUserDeepLinkUrl(initialUrl)) {
+            await stashPendingDeepLinkFromUrl(initialUrl)
+          }
         }
         await clearInvalidPersistedAuthSession()
         const clearedIncompleteMfa = await clearIncompleteMfaSessionOnColdStart(supabase)

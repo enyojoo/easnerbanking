@@ -16,6 +16,7 @@ import {
   evaluateIdleLock,
   applyColdStartPinLockIfNeeded,
 } from '../lib/pinAuth'
+import { flushPendingDeepLinkNavigation } from '../lib/pendingDeepLinkNavigation'
 import {
   flushPendingPushNavigation,
   setPushNavMainReady,
@@ -735,7 +736,9 @@ export default function AppNavigator() {
     const ready = pinGate === 'main'
     setPushNavMainReady(ready)
     if (ready) {
-      flushPendingPushNavigation((global as any).rootNavigationRef?.current)
+      const navRef = (global as any).rootNavigationRef?.current
+      flushPendingPushNavigation(navRef)
+      flushPendingDeepLinkNavigation(navRef)
       prefetchIntercomModule()
       void prepareIntercomMessenger()
     }
