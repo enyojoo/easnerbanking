@@ -11,6 +11,15 @@ import { TransitionPresets } from '@react-navigation/stack'
 import { USE_NATIVE_DRIVER } from '../lib/animation'
 import { duration } from '../theme'
 
+/** Instant stack transitions on web — avoids broken JS/native-driver card animations and stuck pointer events. */
+export const webStackPreset = () =>
+  Platform.OS === 'web'
+    ? ({
+        animation: 'none' as const,
+        gestureEnabled: false,
+      } as const)
+    : ({} as const)
+
 const timingOpen = (ms: number) =>
   ({
     animation: 'timing' as const,
@@ -25,6 +34,9 @@ const timingClose = (ms: number) =>
 
 /** Main app stack — iOS: SlideFromRight + custom timing; Android: slide up from bottom */
 export function mainStackPreset() {
+  if (Platform.OS === 'web') {
+    return webStackPreset()
+  }
   if (Platform.OS === 'ios') {
     return {
       ...TransitionPresets.SlideFromRightIOS,
@@ -74,6 +86,9 @@ export function mainStackPreset() {
 
 /** Send / pay flow — horizontal on iOS; shallow horizontal on Android */
 export function sendFlowStandardPreset() {
+  if (Platform.OS === 'web') {
+    return webStackPreset()
+  }
   if (Platform.OS === 'ios') {
     return {
       gestureEnabled: true,
@@ -139,9 +154,12 @@ export function sendFlowStandardPreset() {
 }
 
 /** Same header hub — instant transition when pushing/popping between recipient hub and amount */
-export const sendFlowInstantTransitionSpec = {
-  transitionSpec: {
-    open: timingOpen(duration.instant),
-    close: timingClose(duration.instant),
-  },
-} as const
+export const sendFlowInstantTransitionSpec =
+  Platform.OS === 'web'
+    ? webStackPreset()
+    : ({
+        transitionSpec: {
+          open: timingOpen(duration.instant),
+          close: timingClose(duration.instant),
+        },
+      } as const)

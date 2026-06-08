@@ -24,6 +24,8 @@ type ResponsiveLayoutValue = {
   width: number
   height: number
   isWeb: boolean
+  /** True on web tablet/desktop — sidebar + top header shell (business-style). */
+  showSidebarShell: boolean
   contentMaxWidth: number
   sidebarWidth: number
   headerHeight: number
@@ -31,9 +33,14 @@ type ResponsiveLayoutValue = {
 
 const ResponsiveLayoutContext = createContext<ResponsiveLayoutValue | null>(null)
 
-function resolveContentMaxWidth(mode: LayoutMode): number {
-  if (mode === 'desktop') return CONTENT_MAX_WIDTH
-  if (mode === 'tablet') return TABLET_MAX_WIDTH
+function resolveContentMaxWidth(mode: LayoutMode, viewportWidth: number): number {
+  if (mode === 'desktop') {
+    const available = Math.max(0, viewportWidth - SIDEBAR_WIDTH)
+    return Math.min(available, CONTENT_MAX_WIDTH_DESKTOP)
+  }
+  if (mode === 'tablet') {
+    return Math.max(0, viewportWidth - SIDEBAR_WIDTH)
+  }
   return CONTENT_MAX_WIDTH
 }
 
@@ -59,12 +66,16 @@ export function ResponsiveLayoutProvider({ children }: { children: ReactNode }) 
     void resizeTick
     const effective = getEffectiveWindowPoints({ width, height })
     const mode = getLayoutMode(effective.width)
+    const isWeb = Platform.OS === 'web'
+    const showSidebarShell = isWeb && (mode === 'tablet' || mode === 'desktop')
+
     return {
       mode,
       width: effective.width,
       height: effective.height,
-      isWeb: Platform.OS === 'web',
-      contentMaxWidth: resolveContentMaxWidth(mode),
+      isWeb,
+      showSidebarShell,
+      contentMaxWidth: resolveContentMaxWidth(mode, effective.width),
       sidebarWidth: SIDEBAR_WIDTH,
       headerHeight: HEADER_HEIGHT,
     }

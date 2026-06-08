@@ -61,6 +61,7 @@ import { apiPost } from '../../lib/apiClient'
 import { useAuth } from '../../contexts/AuthContext'
 import { haptics } from '../../lib/haptics'
 import { prepareTransactionDetailsNavigation } from '../../navigation/transactionNavParams'
+import { USE_NATIVE_DRIVER } from '../../lib/animation'
 import { useRealtimeHealth } from '../../query/realtime-health-context'
 import { useTransactionListFocusRefresh } from '../../hooks/use-transaction-list-focus-refresh'
 import { useSplitPaneConfig } from '../../components/layout/SplitPane'
@@ -216,7 +217,7 @@ const TransactionItem = React.memo(function TransactionItem({
   const opacityAnim = useRef(new Animated.Value(0)).current
 
   useEffect(() => {
-    if (skipRowEntranceAnim) {
+    if (Platform.OS === 'web' || skipRowEntranceAnim) {
       slideAnim.setValue(0)
       opacityAnim.setValue(1)
       return
@@ -225,29 +226,31 @@ const TransactionItem = React.memo(function TransactionItem({
       Animated.timing(slideAnim, {
         toValue: 0,
         duration: motion.listRowEnterMs,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(opacityAnim, {
         toValue: 1,
         duration: motion.listRowEnterMs,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start()
   }, [slideAnim, opacityAnim, skipRowEntranceAnim])
 
   const handlePressIn = () => {
     onPrefetch?.()
+    if (Platform.OS === 'web') return
     Animated.spring(scaleAnim, {
       toValue: 0.98,
-      useNativeDriver: true,
+      useNativeDriver: USE_NATIVE_DRIVER,
       speed: 50,
     }).start()
   }
 
   const handlePressOut = () => {
+    if (Platform.OS === 'web') return
     Animated.spring(scaleAnim, {
       toValue: 1,
-      useNativeDriver: true,
+      useNativeDriver: USE_NATIVE_DRIVER,
       speed: 50,
     }).start()
   }

@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { navigateFromRoot } from '../../navigation/rootNavigationRef'
 import { useAuth } from '../../contexts/AuthContext'
 import { useThemeColors } from '../../contexts/ThemePaletteContext'
-import { HEADER_HEIGHT, spacing, textStyles, userAvatarStyles } from '../../theme'
+import { HEADER_HEIGHT, SIDEBAR_WIDTH, spacing, textStyles, userAvatarStyles } from '../../theme'
 import { AvatarImage } from '../AvatarImage'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import { avatarImageUri } from '../../lib/avatarCache'
@@ -88,7 +88,7 @@ function createStyles(palette: ReturnType<typeof useThemeColors>) {
     header: {
       position: 'absolute',
       top: 0,
-      left: 0,
+      left: SIDEBAR_WIDTH,
       right: 0,
       height: HEADER_HEIGHT,
       flexDirection: 'row',

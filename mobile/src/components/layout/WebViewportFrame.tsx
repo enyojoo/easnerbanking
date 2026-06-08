@@ -17,7 +17,7 @@ export function WebViewportFrame({ children }: WebViewportFrameProps) {
   const palette = useThemeColors()
   const { mode, isWeb } = useResponsiveLayout()
 
-  if (!isWeb || Platform.OS !== 'web' || mode === 'desktop') {
+  if (!isWeb || Platform.OS !== 'web' || mode === 'desktop' || mode === 'tablet') {
     return <>{children}</>
   }
 

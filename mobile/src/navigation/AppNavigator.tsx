@@ -176,8 +176,8 @@ function AuthStack() {
 function MainTabs() {
   const insets = useSafeAreaInsets()
   const palette = useThemeColors()
-  const { mode, isWeb } = useResponsiveLayout()
-  const hideTabBarOnDesktop = isWeb && mode === 'desktop'
+  const { showSidebarShell } = useResponsiveLayout()
+  const hideTabBarOnWebShell = showSidebarShell
   useConsumerKycNoahSync()
 
   const activeColor = palette.primary.main
@@ -192,7 +192,7 @@ function MainTabs() {
       }}
       screenOptions={{
         headerShown: false,
-        tabBarStyle: hideTabBarOnDesktop
+        tabBarStyle: hideTabBarOnWebShell
           ? { display: 'none', height: 0 }
           : {
               backgroundColor: palette.semantic.card,
@@ -384,7 +384,7 @@ function MainStack() {
         component={ScanWalletAddressScreen}
         options={{
           headerShown: false,
-          animation: 'slide_from_bottom',
+          animation: Platform.OS === 'web' ? 'none' : 'slide_from_bottom',
           contentStyle: { backgroundColor: '#000' },
         }}
       />

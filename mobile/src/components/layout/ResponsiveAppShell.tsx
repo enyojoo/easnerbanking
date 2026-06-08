@@ -7,9 +7,9 @@ type ResponsiveAppShellProps = {
 }
 
 export function ResponsiveAppShell({ children }: ResponsiveAppShellProps) {
-  const { mode, isWeb } = useResponsiveLayout()
+  const { showSidebarShell } = useResponsiveLayout()
 
-  if (!isWeb || mode !== 'desktop') {
+  if (!showSidebarShell) {
     return <>{children}</>
   }
 

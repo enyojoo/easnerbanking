@@ -1,7 +1,8 @@
 import React, { type ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { useThemeColors } from '../../contexts/ThemePaletteContext'
-import { CONTENT_MAX_WIDTH, HEADER_HEIGHT, SIDEBAR_WIDTH, spacing } from '../../theme'
+import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
+import { HEADER_HEIGHT, SIDEBAR_WIDTH, spacing } from '../../theme'
 import { DesktopHeader } from './DesktopHeader'
 import { DesktopNav } from './DesktopNav'
 
@@ -9,8 +10,13 @@ type DesktopShellProps = {
   children: ReactNode
 }
 
+/**
+ * Business-style web shell: fixed sidebar | scrollable content + top header.
+ * Used for tablet and desktop breakpoints on Expo web.
+ */
 export function DesktopShell({ children }: DesktopShellProps) {
   const palette = useThemeColors()
+  const { contentMaxWidth } = useResponsiveLayout()
 
   return (
     <View style={[styles.root, { backgroundColor: palette.background.primary }]}>
@@ -25,7 +31,7 @@ export function DesktopShell({ children }: DesktopShellProps) {
           },
         ]}
       >
-        <View style={styles.mainInner}>
+        <View style={[styles.mainInner, { maxWidth: contentMaxWidth }]}>
           <View style={styles.contentColumn}>{children}</View>
         </View>
       </View>
@@ -42,13 +48,12 @@ const styles = StyleSheet.create({
   main: {
     flex: 1,
     width: '100%',
-    alignItems: 'center',
-    paddingHorizontal: spacing[4],
+    paddingHorizontal: spacing[8],
+    paddingBottom: spacing[10],
   },
   mainInner: {
     flex: 1,
     width: '100%',
-    maxWidth: CONTENT_MAX_WIDTH,
     alignSelf: 'center',
   },
   contentColumn: {

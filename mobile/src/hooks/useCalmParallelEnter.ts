@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { Animated } from 'react-native'
+import { Animated, Platform } from 'react-native'
+import { USE_NATIVE_DRIVER } from '../lib/animation'
 import { motion } from '../theme/motion'
 import { shouldPlayDecorativeMotionEnter } from '../theme/reduceMotion'
 
@@ -16,6 +17,11 @@ export function useCalmParallelEnterWhen(ready: boolean, ...values: Animated.Val
     let cancelled = false
     const vals = valuesRef.current
 
+    if (Platform.OS === 'web') {
+      vals.forEach((v) => v.setValue(1))
+      return
+    }
+
     void (async () => {
       const play = await shouldPlayDecorativeMotionEnter()
       if (cancelled) return
@@ -28,7 +34,7 @@ export function useCalmParallelEnterWhen(ready: boolean, ...values: Animated.Val
           Animated.timing(v, {
             toValue: 1,
             duration: motion.screenEnterMs,
-            useNativeDriver: true,
+            useNativeDriver: USE_NATIVE_DRIVER,
           }),
         ),
       ).start()

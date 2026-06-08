@@ -50,14 +50,12 @@ import { supabaseConfigError } from './src/lib/supabase'
 import { warmBundledFlagCache } from './src/lib/warmBundledFlagCache'
 import { prefetchIntercomModule } from './src/lib/intercom'
 import { USE_NATIVE_DRIVER } from './src/lib/animation'
-import { useWebStackA11yFix } from './src/hooks/useWebStackA11yFix'
 
 // Keep the splash screen visible while we load fonts
 SplashScreen.preventAutoHideAsync()
 
 // Inner app component that has access to AuthContext
 function AppContent() {
-  useWebStackA11yFix()
   const navigationRef = useRef<NavigationContainerRef<any>>(null)
   const routeNameRef = useRef<string>('')
   const { loading: authLoading } = useAuth()

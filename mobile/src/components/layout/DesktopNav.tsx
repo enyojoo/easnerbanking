@@ -1,11 +1,13 @@
 import React, { useMemo } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useThemeColors } from '../../contexts/ThemePaletteContext'
 import { SIDEBAR_WIDTH, spacing, textStyles } from '../../theme'
 import { useActiveRouteNames, navigateFromRoot } from '../../navigation/rootNavigationRef'
 import { DESKTOP_TAB_NAV, type DesktopNavItem } from './desktopNavConfig'
+import { SidebarBrandHeader } from './SidebarBrandHeader'
 import { haptics } from '../../lib/haptics'
+import { blurActiveElementOnWeb } from '../../lib/webFocus'
 import { ripple } from '../../lib/androidRipple'
 
 function isNavItemActive(item: DesktopNavItem, activeNames: string[]): boolean {
@@ -23,6 +25,7 @@ export function DesktopNav() {
   const activeNames = useActiveRouteNames()
 
   const navigateTo = (item: DesktopNavItem) => {
+    blurActiveElementOnWeb()
     haptics.select()
     if (item.tabScreen) {
       navigateFromRoot('MainTabs', { screen: item.tabScreen })
@@ -32,9 +35,13 @@ export function DesktopNav() {
   }
 
   return (
-    <View style={[styles.sidebar, { paddingTop: insets.top + spacing[4], paddingBottom: insets.bottom + spacing[4] }]}>
-      <Text style={styles.brand}>Easner</Text>
-      <View style={styles.section}>
+    <View style={[styles.sidebar, { paddingBottom: insets.bottom }]}>
+      <SidebarBrandHeader />
+      <ScrollView
+        style={styles.navScroll}
+        contentContainerStyle={styles.navScrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         {DESKTOP_TAB_NAV.map((item) => {
           const active = isNavItemActive(item, activeNames)
           const Icon = item.icon
@@ -48,7 +55,7 @@ export function DesktopNav() {
               accessibilityState={{ selected: active }}
             >
               <Icon
-                size={20}
+                size={18}
                 color={active ? palette.primary.main : palette.text.secondary}
                 strokeWidth={active ? 2.25 : 1.75}
               />
@@ -56,7 +63,7 @@ export function DesktopNav() {
             </Pressable>
           )
         })}
-      </View>
+      </ScrollView>
     </View>
   )
 }
@@ -74,27 +81,33 @@ function createStyles(palette: ReturnType<typeof useThemeColors>) {
       borderRightColor: palette.border.default,
       zIndex: 20,
     },
-    brand: {
-      ...textStyles.titleLarge,
-      color: palette.text.primary,
-      fontWeight: '700',
-      paddingHorizontal: spacing[5],
-      marginBottom: spacing[6],
+    navScroll: {
+      flex: 1,
     },
-    section: {
+    navScrollContent: {
       paddingHorizontal: spacing[3],
+      paddingTop: spacing[5],
+      paddingBottom: spacing[4],
       gap: spacing[1],
     },
     navItem: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing[3],
-      paddingVertical: spacing[3],
+      minHeight: 44,
+      paddingVertical: spacing[2],
       paddingHorizontal: spacing[3],
       borderRadius: spacing[3],
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: 'transparent',
     },
     navItemActive: {
-      backgroundColor: palette.semantic.muted,
+      backgroundColor: palette.semantic.card,
+      borderColor: palette.border.default,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.06,
+      shadowRadius: 4,
     },
     navLabel: {
       ...textStyles.bodyMedium,
@@ -102,7 +115,7 @@ function createStyles(palette: ReturnType<typeof useThemeColors>) {
       fontWeight: '500',
     },
     navLabelActive: {
-      color: palette.primary.main,
+      color: palette.text.primary,
       fontWeight: '600',
     },
   })
