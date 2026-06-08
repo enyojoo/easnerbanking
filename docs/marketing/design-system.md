@@ -1,7 +1,10 @@
 # Easner Design System
 
 > Modern private banking for global operators — one design system across web
-> (Easner Business), admin (Easner Office), and mobile (Easner Personal).
+> (Easner Business), admin (Easner Office), and mobile (Easner Mobile).
+
+Product names: [`marketing/NAMING.md`](marketing/NAMING.md) — **Easner Mobile**
+delivers Easner Personal Banking; **Easner Business** delivers Easner Business Banking.
 
 This document is the single source of truth for **tokens**, **primitives**,
 **components**, and **usage patterns** across the monorepo. The canonical
@@ -17,14 +20,14 @@ stay token-driven (§9.1)—do not introduce one-off hex outside the shared syst
 
 ### Customer theme scope (Easner Business + mobile)
 
-**Easner Business** (`business/`) and **Easner Personal** (`mobile/`) ship
+**Easner Business** (`business/`) and **Easner Mobile** (`mobile/`) ship
 **light appearance only**. Design, implement, and QA customer-facing screens
 against light backgrounds and light semantic tokens—no user-facing dark mode,
 no reliance on dark-theme layouts for those apps. (Other packages or apps in
 the monorepo may still define dark tokens for shared CSS or tooling; product
 surfaces for Business and mobile stay light.)
 
-### Easner Business (web) vs Easner Personal (mobile) — customer UI identity
+### Easner Business (web) vs Easner Mobile — customer UI identity
 
 **Easner Business** customer UI **stays on the current web identity** documented
 in this file: Tailwind + `business/app/globals.css` semantic variables (**§2.2**),
@@ -33,7 +36,7 @@ and existing layout/radius conventions for web cards and chrome. **Do not
 retrofit Business screens to the mobile-only patterns below** unless a
 deliberate cross-platform initiative says otherwise.
 
-**Easner Personal (mobile)** ships a **distinct app-kit / neobank identity**
+**Easner Mobile** ships a **distinct app-kit / neobank identity**
 implemented in `mobile/src/theme/*` and shared UI. It reuses the **same brand
 blue and success semantics** as §2.0 / `easnerBrand`, but **page canvas, plates,
 and component shells** are tuned for a cool-gray + white card stack (see
@@ -54,7 +57,7 @@ reference for web.
    **Blur / backdrop frosted effects** are allowed where they improve **system
    chrome**: modal and sheet scrims, sticky web headers, small overlays—always
    **neutral-tinted** (ivory/graphite family via tokens), never primary-filled
-   “glass plates.” **Easner Personal** uses a **solid** main tab bar (white +
+   “glass plates.” **Easner Mobile** uses a **solid** main tab bar (white +
    hairline); reserve blur for sheets and similar overlays. See §4.4. Do **not**
    replace solid card and page surfaces with full-screen frosted panels that hurt
    readability of balances and compliance copy.
@@ -179,7 +182,7 @@ Business layouts against dark tokens.
   "in progress".
 * Neutrals (`muted`, `border`) carry all non-accent chrome.
 
-### 2.3 Mobile palette (`mobile/src/theme/colors.ts`) — **Easner Personal app identity**
+### 2.3 Mobile palette (`mobile/src/theme/colors.ts`) — **Easner Mobile app identity**
 
 The mobile palette is **light-only** for customers: resolve UI with
 `useThemeColors()` even where optional dark keys exist for typings or future
@@ -291,7 +294,7 @@ stock Shadcn. On mobile, cards typically use `spacing[5]` / `spacing[6]`.
 `rounded-3xl`. The **xl = 20 px** column reflects **web** Tailwind-style naming
 in this table.
 
-**Easner Personal (mobile):** `mobile/src/theme/index.ts` exports **`borderRadius`**
+**Easner Mobile (mobile):** `mobile/src/theme/index.ts` exports **`borderRadius`**
 keys that **do not** share the same pixel values as the **web** table above
 (e.g. mobile **`xl` is 16 px**, not 20 px). Use this map when wiring RN styles;
 do not assume Tailwind `rounded-xl` semantics on mobile.
@@ -342,7 +345,7 @@ or compliance-heavy layouts.
 * **Easner Business:** translucent sticky headers (`backdrop-blur` + muted
   background), dialog and alert **scrims** (`backdrop-blur-sm` over graphite),
   chart tooltips and small overlays that keep content readable.
-* **Easner Personal (mobile):** the **main tab bar** is **solid** — white
+* **Easner Mobile:** the **main tab bar** is **solid** — white
   (`semantic.card`) with a **hairline top border** and **no** backdrop blur
   (`AppNavigator` tab chrome). **`BlurView`** / `palette.glass.*` remain for
   **sheets** (`PremiumModalSheet`, alerts) and other **overlay chrome** where
@@ -383,7 +386,7 @@ Ship tokens, motion (§5), and primitives consistently first on:
 
 * **Easner Business (web):** **Dashboard**, **Send money** (amount / key
   confirmation), **Transactions** list and row patterns.
-* **Easner Personal (mobile):** same flows plus **More**, **Profile / edit**,
+* **Easner Mobile:** same flows plus **More**, **Profile / edit**,
   **Auth / MFA / PIN**, and **transaction details** — these screens define the
   **cool-gray canvas + white `SectionCard` + sky hero** kit (**§2.3**, **§6.2**).
 
@@ -558,7 +561,7 @@ const palette = useThemeColors()
 * **Easner Business** (`business/`): ship **light appearance only** for customer
   UI. Do not rely on `dark` class or dark semantic tokens for Business screens,
   even if shared CSS defines dark variables for other packages.
-* **Easner Personal** (`mobile/`): **light only**—no user-facing dark mode;
+* **Easner Mobile** (`mobile/`): **light only**—no user-facing dark mode;
   `ThemePaletteProvider` and navigation chrome target light semantics.
 
 Other apps (e.g. **Easner Office**) may still use `next-themes` or equivalent
@@ -620,7 +623,7 @@ repo references behavior here, not embedded canvas URLs.
 ### Variable parity
 
 * **Color / spacing / radius / elevation** in Figma should mirror **`packages/shared/src/design/tokens.ts`** and web semantic names (§2.2) so designers and engineers share one vocabulary.
-* **Easner Business + Easner Personal (mobile)** frames use **light appearance only** (see **Theme scope** at the top of this document; §9.3)—no requirement to maintain dark-mode variants for customer product mocks.
+* **Easner Business + Easner Mobile** frames use **light appearance only** (see **Theme scope** at the top of this document; §9.3)—no requirement to maintain dark-mode variants for customer product mocks.
 
 ### Workflow
 

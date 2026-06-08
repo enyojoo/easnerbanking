@@ -1,0 +1,219 @@
+# Privacy Policy
+
+Last updated: June 8, 2026
+
+---
+
+## 1. Introduction
+
+This Privacy Policy explains how **Easner Group, Inc.** (“**Easner**,” “**we**,” “**us**,” or “**our**”) collects, uses, shares, and protects information when you use:
+
+- www.easner.com
+- **Easner Mobile** (mobile application for **Easner Personal Banking**)
+- **Easner Business** (web dashboard for **Easner Business Banking**)
+- Public invoice and payment experiences we host for business users
+- Related support and communications channels
+
+Easner is a financial technology company. We work with **licensed partners** to deliver banking and payment services described in our Terms of Service. This policy covers **account holders** and, where noted, **business customers and payers** whose data business users submit through collections tools.
+
+---
+
+## 2. Information We Collect
+
+**You provide:**
+
+- Account and profile details (name, email, phone, country, credentials, **EASETAG** @handle, profile photo)
+- Identity and business verification data (government ID, date of birth, address, tax identifiers, business registration, beneficial ownership, selfies or liveness where required)
+- Financial and transaction data (accounts, payment instructions, amounts, currencies, counterparties, source of funds, payment or transfer notes)
+- Recipients, customers, and collections data (invoice recipients, Terminal and QR Pay payer references, wallet addresses)
+- Support communications (email, phone, in-app live chat, including voice messages you choose to send)
+- Files you upload (for example transfer receipts or compliance documents)
+
+**We collect automatically:**
+
+- Device, app, and usage data (IP address, device model and OS, app version, locale, logs, feature usage, screen and product analytics events, session timestamps, deep links opened in the app)
+- Security and diagnostic data (authentication events, fraud indicators, error and crash reports, performance signals where logged)
+- Approximate location from IP or device region where used for security, fraud prevention, or compliance
+- Account-linked product analytics to understand how the Services are used and to improve them — this may be associated with your user account; we do not use it for cross-app or cross-website advertising
+
+**Mobile app permissions (where you grant them):**
+
+- **Camera** — government ID, selfie/liveness for verification, or photos you choose to capture in-app
+- **Photo library** — profile avatar or attachments you select
+- **Microphone** — voice messages in live chat when you choose to record audio
+- **Push notifications** — device tokens and delivery metadata for account and security alerts you enable
+- **Face ID or biometric unlock** — processed on your device to unlock the app; Easner does not receive or store your biometric templates
+
+**Sign-in services (where you use them):**
+
+- **Sign in with Apple** or **Sign in with Google** — we receive authentication tokens and basic profile fields (such as name and email) as permitted by those providers and your choices. Their privacy policies govern data they collect independently.
+
+**Partners provide:**
+
+- Verification outcomes, account identifiers, settlement data, and compliance screening results from licensed financial and infrastructure partners
+
+**Wallet and blockchain:**
+
+- Deposit addresses, memos, token types, balances, transaction hashes, and related metadata where wallet or stablecoin features are enabled
+
+**Mobile app — data we do not collect:**
+
+The Easner mobile app does not read your device address book, email or SMS inboxes, or precise GPS location, and does not collect browsing or search history for advertising.
+
+---
+
+## 3. How We Use Information
+
+We use information to:
+
+- Provide, operate, and improve the Services
+- Process payments and collections through partners
+- Verify identity and business eligibility
+- Detect, prevent, and investigate fraud and financial crime
+- Meet legal and regulatory obligations (KYC, KYB, AML, sanctions)
+- Communicate about your account and service updates
+- Provide support and enforce our Terms and policies
+- Measure product performance and diagnose errors through analytics and logging tools
+
+We may use aggregated or de-identified data where appropriate. We **do not sell** personal information and **do not use** personal information for cross-context behavioral advertising or tracking you across third-party apps and websites for ads.
+
+---
+
+## 4. How We Share Information
+
+We may share information:
+
+- With your direction or consent
+- With **licensed financial and infrastructure partners** to provide verification, accounts, payments, wallet services, and compliance screening
+- With service providers (hosting, email, analytics, support tools) under contract
+- To comply with law, regulation, legal process, or government request
+- To protect Easner, users, or the public
+- In connection with a merger, acquisition, or asset sale, subject to safeguards
+- With regulators and law enforcement as required
+
+---
+
+## 5. Service Providers and Partners
+
+We engage partners who process data on our behalf or under their own regulatory obligations, including providers of hosted KYC/KYB, virtual accounts, fiat payments, wallet infrastructure, transaction routing, and regional payout services.
+
+When you complete hosted verification, the partner processes documents on our behalf and shares results with Easner. Partner terms and privacy notices may be presented during onboarding. Partners may retain data as required by their regulatory duties.
+
+### Key financial and infrastructure partners
+
+Depending on your product, jurisdiction, and features enabled, we work with partners including:
+
+| Partner | Role |
+|---------|------|
+| **Noah** | Hosted KYC/KYB, virtual accounts, fiat pay-in and pay-out, and related compliance processing |
+| **Turnkey** | Wallet and key-management infrastructure, deposit addresses, and transaction signing |
+| **LI.FI** | Transaction routing and execution for permitted wallet sends (where enabled) |
+| **Yellowcard** | African payout corridors (where Tier 2 banking is launched) |
+
+### Technology and support service providers
+
+We also use service providers under contract, including:
+
+| Provider | Role |
+|----------|------|
+| **Supabase** | Authentication, database, and session storage |
+| **PostHog** | Product analytics, feature usage, and error or diagnostic events |
+| **Intercom** | In-app customer support and live chat |
+
+When you use **Sign in with Apple** or **Sign in with Google**, those companies process authentication data under their own privacy policies.
+
+Additional partners and providers may be disclosed when you enable a specific feature or during onboarding. Partner and provider lists may change as our Services evolve; material changes will be reflected in this policy.
+
+---
+
+## 6. Security
+
+We use technical and organizational measures — including encryption in transit and at rest where appropriate, access controls, and monitoring — designed to protect personal information. No system is perfectly secure. You are responsible for safeguarding your devices and credentials.
+
+---
+
+## 7. Retention
+
+We retain information as long as needed to provide the Services and meet legal obligations. Financial services recordkeeping often requires **5 to 7 years** or longer after account closure or last activity. Partners may retain records under their own obligations after your account closes.
+
+---
+
+## 8. Your Rights
+
+Depending on where you live, you may have rights to access, correct, delete, restrict, or port your information, or object to certain processing. Financial regulations may limit some requests.
+
+Contact **legal@easner.com**, **support@easner.com**, or in-app live chat. If a partner holds verification data, contact us first and we will coordinate where appropriate.
+
+### California residents (CCPA / CPRA)
+
+We collect the categories described in Section 2 for the business purposes in Section 3. **We do not sell personal information** or share it for cross-context behavioral advertising. This includes data processed through product analytics tools that may be linked to your account.
+
+You may have rights to know, access, correct, and delete personal information, and to limit use of sensitive personal information. Submit requests to **legal@easner.com** or **support@easner.com** with “California Privacy Request” in the subject line. We will verify identity as permitted by law.
+
+### EEA, UK, and similar jurisdictions
+
+We process data based on **contract** (providing the Services), **legal obligation** (compliance), **legitimate interests** (security and improvement, balanced against your rights), and **consent** where required.
+
+You may have rights to access, rectify, erase, restrict, object, and port data, and to complain to your supervisory authority. International transfers may rely on safeguards such as Standard Contractual Clauses where required.
+
+For account holder data, **Easner Group, Inc.** is the controller. For invoice or payer data submitted by business users, Easner typically acts as a **processor** on the business user’s behalf.
+
+---
+
+## 9. Cookies
+
+We use cookies and similar technologies on our website and dashboard for authentication, preferences, security, and analytics. You can manage cookies in browser settings; disabling them may affect functionality. Where required by law, we will obtain consent for non-essential cookies.
+
+---
+
+## 10. International Transfers
+
+We are headquartered in the United States. Information may be processed in the U.S. and other countries where we or partners operate, with appropriate safeguards where required.
+
+---
+
+## 11. Children
+
+The Services are not directed to anyone under **18**. We do not knowingly collect children’s personal information.
+
+---
+
+## 12. Digital Assets
+
+Where enabled, we may provision stablecoin capabilities such as **USDC** and **EURC** on supported networks.
+
+Wallet addresses, memos or tags, and transaction hashes may be **publicly visible on blockchain networks**. Easner and our partners do not control public blockchains.
+
+You are responsible for providing correct wallet addresses, memos, and recipient details. Errors may result in permanent loss of funds.
+
+The regulatory treatment of digital assets **varies by jurisdiction**.
+
+Digital assets are **not bank deposits** and are not FDIC insured. Transactions may be irreversible.
+
+---
+
+## 13. Business Customers and Payers
+
+Business users may submit customer or payer information for invoicing and collections. You represent that you have a lawful basis to provide that data. Business users are typically controllers of their customer relationships; Easner processes the data to deliver collections and compliance functions.
+
+---
+
+## 14. Compliance
+
+We and our partners are subject to KYC, KYB, AML, and sanctions requirements. See our **KYC/KYB and AML Policy**.
+
+---
+
+## 15. Changes and Contact
+
+We may update this policy by posting a revised version with an updated “Last updated” date. Material changes may receive additional notice where required.
+
+**Easner Group, Inc.**  
+584 Castro St, Suite 4092  
+San Francisco, CA 94114, United States  
+
+**Email (legal and compliance):** legal@easner.com  
+**Email (support):** support@easner.com  
+**Phone:** +1 628 228 6083  
+**In-app support:** Live chat in the Easner mobile app and Business dashboard  
+**Website:** www.easner.com

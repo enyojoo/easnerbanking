@@ -3,9 +3,9 @@
 This document is the canonical reference for how Easner loads, caches,
 persists, and live-updates data across all three surfaces:
 
-- **Easner Business** (`business/`, Next.js App Router)
+- **Easner Business** (`business/`, Next.js App Router) — Easner Business Banking
 - **Easner Office** (`office/`, Next.js App Router)
-- **Easner Personal** (`mobile/`, Expo + React Native)
+- **Easner Mobile** (`mobile/`, Expo + React Native) — Easner Personal Banking
 
 It summarises the sections of the accompanying plan in
 `.plans/easner_data_architecture_*.plan.md` and links to the concrete code
