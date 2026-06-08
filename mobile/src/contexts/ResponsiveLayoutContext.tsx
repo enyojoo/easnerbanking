@@ -32,7 +32,7 @@ type ResponsiveLayoutValue = {
 const ResponsiveLayoutContext = createContext<ResponsiveLayoutValue | null>(null)
 
 function resolveContentMaxWidth(mode: LayoutMode): number {
-  if (mode === 'desktop') return CONTENT_MAX_WIDTH_DESKTOP
+  if (mode === 'desktop') return CONTENT_MAX_WIDTH
   if (mode === 'tablet') return TABLET_MAX_WIDTH
   return CONTENT_MAX_WIDTH
 }
