@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useRef } from 'react'
 import {
   View,
   Text,
@@ -23,8 +23,6 @@ import { haptics } from '../../lib/haptics'
 
 export default function SupportScreen({ navigation }: NavigationProps) {
   const insets = useSafeAreaInsets()
-  const [expandedFAQ, setExpandedFAQ] = useState<number | null>(null)
-
   // Animation refs
   const headerAnim = useRef(new Animated.Value(0)).current
   const contentAnim = useRef(new Animated.Value(0)).current
@@ -58,47 +56,6 @@ export default function SupportScreen({ navigation }: NavigationProps) {
     const email = 'support@easner.com'
     const subject = 'Support Request'
     Linking.openURL(`mailto:${email}?subject=${encodeURIComponent(subject)}`)
-  }
-
-  const toggleFAQ = async (index: number) => {
-    haptics.tap()
-    setExpandedFAQ(expandedFAQ === index ? null : index)
-  }
-
-
-
-  const faqItems = [
-    {
-      question: 'How do I send money?',
-      answer: 'To send money, tap the "Send Money" button on your dashboard, enter the amount and select currencies, choose a recipient, make payment using the displayed method, and confirm your transaction.'
-    },
-    {
-      question: 'What are the fees?',
-      answer: 'We charge absolutely no fees on any transaction. Send money worldwide completely free with Easner.'
-    },
-    {
-      question: 'How long does it take?',
-      answer: 'All transactions are completed within 5 minutes or less, ensuring your money reaches its destination quickly and efficiently.'
-    }
-  ]
-
-  const renderFAQItem = (item: { question: string; answer: string }, index: number) => {
-    const isLast = index === faqItems.length - 1
-    return (
-      <View key={index} style={[styles.faqItem, isLast && styles.faqItemLast]}>
-        <Pressable 
-         android_ripple={ripple.neutral} 
-          style={styles.faqHeader}
-          onPress={() => toggleFAQ(index)}
-        >
-        <Text style={styles.faqQuestion}>{item.question}</Text>
-          <Text style={styles.faqToggle}>{expandedFAQ === index ? '−' : '+'}</Text>
-        </Pressable>
-        {expandedFAQ === index && (
-        <Text style={styles.faqAnswer}>{item.answer}</Text>
-        )}
-      </View>
-    )
   }
 
   const renderContactButton = (
@@ -186,12 +143,6 @@ export default function SupportScreen({ navigation }: NavigationProps) {
           'Message our team in the app',
         )}
         {renderContactButton('Email Support', handleEmailSupport, '📧', true, 'support@easner.com')}
-            </View>
-
-      {/* FAQ Section */}
-            <View style={styles.sectionCard}>
-        <Text style={styles.sectionTitle}>Frequently Asked Questions</Text>
-        {faqItems.map(renderFAQItem)}
             </View>
 
       {/* Support Hours */}
@@ -327,40 +278,6 @@ const styles = StyleSheet.create({
     color: colors.neutral.white,
     fontSize: 16,
     fontWeight: '600',
-  },
-  faqItem: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.frame.border,
-    paddingHorizontal: spacing[5],
-  },
-  faqItemLast: {
-    borderBottomWidth: 0,
-  },
-  faqHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: spacing[4],
-  },
-  faqQuestion: {
-    ...textStyles.bodyMedium,
-    fontFamily: fontFamily.medium,
-    color: colors.text.primary,
-    flex: 1,
-    paddingRight: spacing[4],
-  },
-  faqToggle: {
-    fontSize: 20,
-    color: colors.text.secondary,
-    fontWeight: '300',
-  },
-  faqAnswer: {
-    ...textStyles.bodySmall,
-    color: colors.text.secondary,
-    lineHeight: 20,
-    paddingBottom: spacing[4],
-    paddingLeft: spacing[5],
-    paddingRight: spacing[5],
   },
   hoursContainer: {
     paddingHorizontal: spacing[5],

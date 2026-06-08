@@ -13,7 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import ExternalLinkModal from '../../components/ExternalLinkModal'
 import { TextField } from '../../components/ui'
 import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
-import { GoogleOutlineButton, OrDivider } from '../../components/auth/AuthChrome'
+import { AppleSignInButton, GoogleOutlineButton, OrDivider } from '../../components/auth/AuthChrome'
 import { useExternalLink } from '../../hooks/useExternalLink'
 import { useAuth } from '../../contexts/AuthContext'
 import { NavigationProps } from '../../types'
@@ -53,7 +53,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
   const [fullName, setFullName] = useState('')
   const [passwordVisible, setPasswordVisible] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const { signIn, signInWithGoogle, resendSignupOtp, signUp, verifySignupOtp } = useAuth()
+  const { signIn, signInWithGoogle, signInWithApple, resendSignupOtp, signUp, verifySignupOtp } = useAuth()
   const { showError, showInfo, showSuccess } = useToast()
   const [signupStep, setSignupStep] = useState<SignupStep>('form')
   const [signupOtp, setSignupOtp] = useState('')
@@ -233,6 +233,18 @@ export default function AuthScreen({ navigation }: NavigationProps) {
     }
   }
 
+  const handleAppleAuth = async () => {
+    setIsLoading(true)
+    try {
+      const { error } = await signInWithApple()
+      if (error) {
+        showError(error.message || 'Unable to continue with Apple.')
+      }
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const handleGoogleAuth = async () => {
     haptics.tap()
     setIsLoading(true)
@@ -349,6 +361,14 @@ export default function AuthScreen({ navigation }: NavigationProps) {
 
             {!isSignupOtp && (
               <>
+                {Platform.OS === 'ios' && (
+                  <AppleSignInButton
+                    mode={isLogin ? 'login' : 'signup'}
+                    onPress={handleAppleAuth}
+                    disabled={isLoading}
+                  />
+                )}
+                {Platform.OS === 'ios' && <View style={styles.oauthSpacer} />}
                 <GoogleOutlineButton
                   label={isLogin ? 'Sign in with Google' : 'Sign up with Google'}
                   onPress={handleGoogleAuth}
@@ -558,6 +578,9 @@ const styles = StyleSheet.create({
     maxWidth: 448,
     width: '100%',
     alignSelf: 'center',
+  },
+  oauthSpacer: {
+    height: spacing[3],
   },
   topBar: {
     flexDirection: 'row',

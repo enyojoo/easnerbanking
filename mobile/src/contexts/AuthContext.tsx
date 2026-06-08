@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import * as Linking from 'expo-linking'
 import { makeRedirectUri } from 'expo-auth-session'
 import * as WebBrowser from 'expo-web-browser'
+import * as AppleAuthentication from 'expo-apple-authentication'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase, clearInvalidPersistedAuthSession } from '../lib/supabase'
 import { getSessionReliable } from '../lib/authSession'
@@ -31,6 +32,63 @@ import { syncIntercomSession } from '../lib/intercom'
 
 // Completes the auth session on web popup flows. Native deep links are handled below.
 WebBrowser.maybeCompleteAuthSession()
+
+async function finalizePostAuthSession(options?: {
+  noSessionMessage?: string
+}): Promise<{ error: Error | null }> {
+  let session = await getSessionReliable()
+
+  if (!session?.access_token) {
+    const started = Date.now()
+    while (Date.now() - started < 20_000) {
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((r) => setTimeout(r, 150))
+      // eslint-disable-next-line no-await-in-loop
+      session = await getSessionReliable()
+      if (session?.access_token) break
+    }
+  }
+  if (!session?.access_token) {
+    return {
+      error: new Error(
+        options?.noSessionMessage ?? 'Sign-in did not create a session in the app.',
+      ),
+    }
+  }
+
+  const boot = await ensureBusinessAppUserBootstrap()
+  if (!boot.ok) {
+    await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
+    return {
+      error: new Error(
+        `Account setup failed (bootstrap). API=${getApiBaseUrl()} status=${boot.status ?? 'n/a'}`,
+      ),
+    }
+  }
+
+  const surfaceGate = await ensureConsumerMobileAccess()
+  if (surfaceGate.error) {
+    const msg = surfaceGate.error.message || 'This account cannot use the Easner mobile app.'
+    await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
+    return { error: new Error(msg) }
+  }
+
+  const { data: userRow, error: userRowErr } = await supabase
+    .from('users')
+    .select('id,role')
+    .eq('id', session.user.id)
+    .maybeSingle()
+  if (userRowErr) {
+    await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
+    return { error: new Error(userRowErr.message || 'Could not load your user profile.') }
+  }
+  if (!userRow?.id) {
+    await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
+    return { error: new Error('Account setup did not create a user profile row. Please try again.') }
+  }
+
+  return { error: null }
+}
 
 function isProbablySupabaseSiteUrlFallbackRedirect(redirectTo: string | null | undefined): boolean {
   if (!redirectTo) return false
@@ -144,6 +202,7 @@ interface AuthContextType {
   mfaGateResolved: boolean
   signIn: (email: string, password: string, rememberMe?: boolean) => Promise<{ error: any }>
   signInWithGoogle: () => Promise<{ error: Error | null }>
+  signInWithApple: () => Promise<{ error: Error | null }>
   resendSignupOtp: (email: string) => Promise<{ error: Error | null }>
   verifySignupOtp: (email: string, otp: string) => Promise<{ error: Error | null }>
   verifyMfa: (code: string) => Promise<{ error: Error | null }>
@@ -903,60 +962,59 @@ export function AuthProvider({ children }: AuthProviderProps) {
         showTitle: true,
       })
 
-      let session = await getSessionReliable()
-
-      // User may return via deep link while the in-app browser is still animating closed; give GoTrue
-      // a short window to persist + hydrate the session from SecureStore/AsyncStorage.
-      if (!session?.access_token) {
-        const started = Date.now()
-        while (Date.now() - started < 20_000) {
-          // eslint-disable-next-line no-await-in-loop
-          await new Promise((r) => setTimeout(r, 150))
-          // eslint-disable-next-line no-await-in-loop
-          session = await getSessionReliable()
-          if (session?.access_token) break
-        }
-      }
-      if (!session?.access_token) {
-        return { error: new Error('Google sign-in did not create a session in the app.') }
-      }
-
-      const boot = await ensureBusinessAppUserBootstrap()
-      if (!boot.ok) {
-        await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
-        return {
-          error: new Error(
-            `Account setup failed (bootstrap). API=${getApiBaseUrl()} status=${boot.status ?? 'n/a'}`,
-          ),
-        }
-      }
-
-      const surfaceGate = await ensureConsumerMobileAccess()
-      if (surfaceGate.error) {
-        const msg = surfaceGate.error.message || 'This account cannot use the Easner mobile app.'
-        await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
-        return { error: new Error(msg) }
-      }
-
-      const { data: userRow, error: userRowErr } = await supabase
-        .from('users')
-        .select('id,role')
-        .eq('id', session.user.id)
-        .maybeSingle()
-      if (userRowErr) {
-        await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
-        return { error: new Error(userRowErr.message || 'Could not load your user profile.') }
-      }
-      if (!userRow?.id) {
-        await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
-        return { error: new Error('Account setup did not create a user profile row. Please try again.') }
-      }
-
-      return { error: null }
+      return finalizePostAuthSession({
+        noSessionMessage: 'Google sign-in did not create a session in the app.',
+      })
     } catch (e) {
       return { error: e instanceof Error ? e : new Error('Unable to continue with Google.') }
     }
   }, [consumeOAuthCallbackIfPresent])
+
+  const signInWithApple = useCallback(async (): Promise<{ error: Error | null }> => {
+    try {
+      const available = await AppleAuthentication.isAvailableAsync()
+      if (!available) {
+        return { error: new Error('Sign in with Apple is not available on this device.') }
+      }
+
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      })
+
+      if (!credential.identityToken) {
+        return { error: new Error('Apple sign-in did not return an identity token.') }
+      }
+
+      const { error: signInError } = await supabase.auth.signInWithIdToken({
+        provider: 'apple',
+        token: credential.identityToken,
+      })
+      if (signInError) {
+        return { error: new Error(signInError.message || 'Unable to continue with Apple.') }
+      }
+
+      if (credential.fullName) {
+        const givenName = credential.fullName.givenName ?? ''
+        const familyName = credential.fullName.familyName ?? ''
+        const name = [givenName, familyName].filter(Boolean).join(' ')
+        if (name) {
+          await supabase.auth.updateUser({ data: { name, full_name: name } })
+        }
+      }
+
+      analytics.trackSignIn('apple')
+      return finalizePostAuthSession()
+    } catch (e: unknown) {
+      const err = e as { code?: string }
+      if (err?.code === 'ERR_REQUEST_CANCELED') {
+        return { error: null }
+      }
+      return { error: e instanceof Error ? e : new Error('Unable to continue with Apple.') }
+    }
+  }, [])
 
   const resendSignupOtp = useCallback(async (email: string): Promise<{ error: Error | null }> => {
     try {
@@ -1088,6 +1146,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     mfaGateResolved,
     signIn,
     signInWithGoogle,
+    signInWithApple,
     resendSignupOtp,
     verifySignupOtp,
     verifyMfa,

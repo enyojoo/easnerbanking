@@ -28,7 +28,13 @@
       },
       "associatedDomains": [
         "applinks:easner.com"
-      ]
+      ],
+      "entitlements": {
+        "aps-environment": "production",
+        "com.apple.developer.applesignin": [
+          "Default"
+        ]
+      }
     },
     "android": {
       "softwareKeyboardLayoutMode": "resize",
@@ -92,6 +98,7 @@
           "imageWidth": 200
         }
       ],
+      "expo-apple-authentication",
       "expo-web-browser",
       "expo-background-task",
       "expo-sharing"

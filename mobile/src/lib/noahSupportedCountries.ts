@@ -1,6 +1,5 @@
-// Noah-supported countries list
-// Based on Noah's supported countries documentation
-// Excludes Prohibited and Controlled countries
+// Partner-aligned country list — excludes Prohibited and Controlled jurisdictions.
+// Legal reference (keep in sync): docs/legal/kyc-kyb-policy.md §3
 
 /**
  * Countries that Noah does NOT support (Prohibited)

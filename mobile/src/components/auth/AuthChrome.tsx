@@ -1,6 +1,7 @@
 import React from 'react'
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native'
 import FontAwesome from '@expo/vector-icons/FontAwesome'
+import * as AppleAuthentication from 'expo-apple-authentication'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { haptics } from '../../lib/haptics'
@@ -20,6 +21,33 @@ type GoogleButtonProps = {
   label: 'Sign in with Google' | 'Sign up with Google'
   onPress: () => void
   disabled?: boolean
+}
+
+type AppleButtonProps = {
+  mode: 'login' | 'signup'
+  onPress: () => void
+  disabled?: boolean
+}
+
+/** Native Sign in with Apple button (iOS only; Apple HIG styling). */
+export function AppleSignInButton({ mode, onPress, disabled }: AppleButtonProps) {
+  return (
+    <AppleAuthentication.AppleAuthenticationButton
+      buttonType={
+        mode === 'login'
+          ? AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN
+          : AppleAuthentication.AppleAuthenticationButtonType.SIGN_UP
+      }
+      buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+      cornerRadius={26}
+      style={[styles.appleBtn, disabled && styles.appleBtnDisabled]}
+      onPress={async () => {
+        if (disabled) return
+        haptics.tap()
+        onPress()
+      }}
+    />
+  )
 }
 
 /** Outline full-width button (pill radius, parity with `TextField`). */
@@ -94,5 +122,12 @@ const styles = StyleSheet.create({
     ...textStyles.titleMedium,
     color: colors.text.primary,
     fontWeight: '500',
+  },
+  appleBtn: {
+    width: '100%',
+    height: 52,
+  },
+  appleBtnDisabled: {
+    opacity: 0.5,
   },
 })
