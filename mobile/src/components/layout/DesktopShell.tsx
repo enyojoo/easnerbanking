@@ -1,7 +1,7 @@
 import React, { type ReactNode, useMemo } from 'react'
 import { StyleSheet, View } from 'react-native'
-import { useNavigationState } from '@react-navigation/native'
 import { useThemeColors } from '../../contexts/ThemePaletteContext'
+import { getRootNavigationState, useRootNavigationRouteTick } from '../../navigation/rootNavigationRef'
 import {
   CONTENT_MAX_WIDTH_DESKTOP,
   CONTENT_MAX_WIDTH_OVERVIEW,
@@ -30,7 +30,13 @@ function getLeafRouteName(state: { routes: { name: string; state?: unknown }[]; 
 
 export function DesktopShell({ children }: DesktopShellProps) {
   const palette = useThemeColors()
-  const leafRoute = useNavigationState((state) => getLeafRouteName(state as any))
+  const routeTick = useRootNavigationRouteTick()
+  const leafRoute = useMemo(() => {
+    void routeTick
+    return getLeafRouteName(
+      getRootNavigationState() as { routes: { name: string; state?: unknown }[]; index: number } | undefined,
+    )
+  }, [routeTick])
 
   const contentMaxWidth = useMemo(() => {
     if (leafRoute && OVERVIEW_ROUTES.has(leafRoute)) {

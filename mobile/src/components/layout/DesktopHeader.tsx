@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronDown, LogOut, User } from 'lucide-react-native'
-import { useNavigation } from '@react-navigation/native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { navigateFromRoot } from '../../navigation/rootNavigationRef'
 import { useAuth } from '../../contexts/AuthContext'
 import { useThemeColors } from '../../contexts/ThemePaletteContext'
 import { HEADER_HEIGHT, spacing, textStyles, userAvatarStyles } from '../../theme'
@@ -15,7 +15,6 @@ import { ripple } from '../../lib/androidRipple'
 export function DesktopHeader() {
   const palette = useThemeColors()
   const insets = useSafeAreaInsets()
-  const navigation = useNavigation()
   const { userProfile, signOut } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -25,12 +24,7 @@ export function DesktopHeader() {
 
   const navigateTo = (route: string) => {
     setMenuOpen(false)
-    const parent = navigation.getParent?.()
-    if (parent?.navigate) {
-      parent.navigate(route as never)
-    } else {
-      navigation.navigate(route as never)
-    }
+    navigateFromRoot(route)
   }
 
   return (

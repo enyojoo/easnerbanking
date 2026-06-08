@@ -28,6 +28,7 @@ import { useConsumerKycNoahSync } from '../hooks/useConsumerKycNoahSync'
 import { haptics } from '../lib/haptics'
 import { useResponsiveLayout } from '../contexts/ResponsiveLayoutContext'
 import { ResponsiveAppShell } from '../components/layout/ResponsiveAppShell'
+import { enterMainAppOnWeb } from './webMainEntry'
 // Stack timing and Android vs iOS card transitions: see `transitionPresets.ts`.
 import {
   mainStackPreset,
@@ -748,6 +749,7 @@ export default function AppNavigator() {
     setPushNavMainReady(ready)
     if (ready) {
       const navRef = (global as any).rootNavigationRef?.current
+      enterMainAppOnWeb()
       flushPendingPushNavigation(navRef)
       flushPendingDeepLinkNavigation(navRef)
       prefetchIntercomModule()

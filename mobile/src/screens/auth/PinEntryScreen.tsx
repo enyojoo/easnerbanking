@@ -131,12 +131,9 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
         await updateSessionActivity()
         emitAppLocked('unlocked')
       }
-      
-      // Haptic feedback (non-blocking, fire and forget)
+
       haptics.success()
-      
-      // Navigation happens immediately via triggerPinCheck
-      // Loading state will clear when screen changes
+      setLoading(false)
     } else {
       haptics.error()
       setError(result.error || appPinStrings.lockIncorrect)

@@ -20,7 +20,6 @@ export const webLinking: LinkingOptions<Record<string, unknown>> = {
       Support: 'user/support',
       Profile: 'user/profile',
       TransactionDetails: 'user/transactions/:transactionId',
-      Auth: '',
     },
   },
 }

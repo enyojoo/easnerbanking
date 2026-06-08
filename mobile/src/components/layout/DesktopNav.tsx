@@ -1,25 +1,14 @@
 import React, { useMemo } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { useNavigation, useNavigationState } from '@react-navigation/native'
 import { LogOut } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '../../contexts/AuthContext'
 import { useThemeColors } from '../../contexts/ThemePaletteContext'
 import { SIDEBAR_WIDTH, spacing, textStyles } from '../../theme'
+import { useActiveRouteNames, navigateFromRoot } from '../../navigation/rootNavigationRef'
 import { DESKTOP_FOOTER_NAV, DESKTOP_PRIMARY_NAV, type DesktopNavItem } from './desktopNavConfig'
 import { haptics } from '../../lib/haptics'
 import { ripple } from '../../lib/androidRipple'
-
-function getActiveRouteNames(state: { routes: { name: string; state?: unknown }[]; index: number } | undefined): string[] {
-  if (!state) return []
-  const route = state.routes[state.index]
-  if (!route) return []
-  const names = [route.name]
-  if (route.state && typeof route.state === 'object' && route.state !== null && 'routes' in route.state) {
-    names.push(...getActiveRouteNames(route.state as { routes: { name: string; state?: unknown }[]; index: number }))
-  }
-  return names
-}
 
 function isNavItemActive(item: DesktopNavItem, activeNames: string[]): boolean {
   if (item.tabScreen) {
@@ -31,20 +20,18 @@ function isNavItemActive(item: DesktopNavItem, activeNames: string[]): boolean {
 export function DesktopNav() {
   const palette = useThemeColors()
   const insets = useSafeAreaInsets()
-  const navigation = useNavigation()
   const { signOut } = useAuth()
   const styles = useMemo(() => createStyles(palette), [palette])
 
-  const activeNames = useNavigationState((state) => getActiveRouteNames(state as any))
+  const activeNames = useActiveRouteNames()
 
   const navigateTo = (item: DesktopNavItem) => {
     haptics.select()
-    const parent = navigation.getParent?.() ?? navigation
     if (item.tabScreen) {
-      parent.navigate('MainTabs' as never, { screen: item.tabScreen } as never)
+      navigateFromRoot('MainTabs', { screen: item.tabScreen })
       return
     }
-    parent.navigate(item.route as never)
+    navigateFromRoot(item.route)
   }
 
   const renderItem = (item: DesktopNavItem) => {
