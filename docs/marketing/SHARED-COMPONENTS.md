@@ -87,11 +87,11 @@ Live constants: `PRODUCT_CARDS` + `SECONDARY_PRODUCT_CARDS` in [`shared-content.
 **Title:** Business Banking  
 **Description:** A web control center for accounts, payouts, invoicing, Terminal, QR Pay, teams, and reporting.
 
-### Developer APIs
-**Link:** `/apis`  
-**Thumb:** `mkt-thumb-apis`  
-**Title:** Developer APIs  
-**Description:** Embed accounts, payouts, wallets, collections, and compliance-ready workflows in your product.
+### Easner for Partners
+**Link:** `/partners`  
+**Thumb:** `mkt-thumb-partners` (interim: `mkt-thumb-apis`)  
+**Title:** Easner for Partners  
+**Description:** Launch branded cross-border products through our Agency Model, or embed global rails via our Developer Model.
 
 **Secondary cards:** Stablecoin · Invoicing · Cards (see `SECONDARY_PRODUCT_CARDS`)
 
@@ -100,6 +100,8 @@ Live constants: `PRODUCT_CARDS` + `SECONDARY_PRODUCT_CARDS` in [`shared-content.
 ## Persona cards (homepage solutions)
 
 Live source: `solutionsPersonas` in [`lib/marketing/content/home.ts`](../lib/marketing/content/home.ts).
+
+**Section headline:** Built for how you move money
 
 ### Freelancers, remote workers, and diaspora
 **Headline:** Get paid globally. Keep more locally.  
@@ -113,11 +115,17 @@ Live source: `solutionsPersonas` in [`lib/marketing/content/home.ts`](../lib/mar
 **Visual:** `mkt-persona-sme`  
 **CTA:** Open Business account
 
+### OTC and money transfer agents
+**Headline:** Compliance-ready transfers under your brand.  
+**Body:** With Easner's Agency Model, move away from undocumented transactions and run every transfer through a built-in compliance system. Get in touch for KYB/KYC and get set up in your customized name.  
+**Visual:** `mkt-persona-otc`  
+**CTA:** Talk to our team → `/partners`
+
 ### Developers and platforms
 **Headline:** Embed global rails without building compliance.  
-**Body:** Build with Easner APIs for verification, accounts, payouts, wallets, and collections, then focus your roadmap on the customer experience.  
+**Body:** Build with Easner for Partners — Developer Model — for verification, accounts, payouts, wallets, and collections, then focus your roadmap on the customer experience.  
 **Visual:** `mkt-persona-dev`  
-**CTA:** Talk to our team → `/contact`
+**CTA:** Explore developers → `/developers`
 
 ---
 
@@ -134,5 +142,5 @@ Live source: `solutionsPersonas` in [`lib/marketing/content/home.ts`](../lib/mar
 Live source: `DEFAULT_CTA_BAND` in [`shared-content.ts`](../lib/marketing/shared-content.ts).
 
 **Headline:** Ready to move money globally?  
-**Subhead:** Open an Easner account, or talk to us about building on Easner APIs.  
+**Subhead:** Open an Easner account, or talk to us about Easner for Partners.  
 **Buttons:** Open Account → `#` (open-account action) | Contact → `/contact`

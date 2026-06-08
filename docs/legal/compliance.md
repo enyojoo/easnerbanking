@@ -40,46 +40,50 @@ Access to Tier 1 global banking — including identity verification, virtual acc
 
 We do not onboard or provide Services to persons or businesses located in, ordinarily resident in, or organized under the laws of:
 
-| Jurisdiction |
-|----------------|
-| Cuba |
-| Iran |
-| Myanmar |
-| North Korea (Democratic People's Republic of Korea) |
-| Syria |
+| Jurisdiction | ISO |
+|----------------|-----|
+| Cuba | CU |
+| Iran | IR |
+| Myanmar | MM |
+| North Korea (Democratic People's Republic of Korea) | KP |
+| Syria | SY |
 
-We also do not provide Services in **Crimea, Sevastopol, Donetsk, Kherson, Luhansk, or Zaporizhzhia**.
+We also do not provide Services in **Crimea, Sevastopol, Donetsk, Kherson, Luhansk, or Zaporizhzhia** (sub-national regions; not selectable as standalone countries in registration).
+
+These jurisdictions are excluded from Easner Business signup and KYB country pickers. Code: `packages/shared/src/jurisdiction-blocked-countries.ts`.
 
 ### Controlled jurisdictions
 
 We do not onboard users or businesses in the following jurisdictions except under specially approved partner programs (not generally available through Easner):
 
-| Jurisdiction |
-|----------------|
-| Afghanistan |
-| Algeria |
-| Bangladesh |
-| Belarus |
-| China |
-| Congo (Democratic Republic of the) |
-| Gaza Strip / West Bank (Palestinian Territories) |
-| Haiti |
-| Iraq |
-| Lebanon |
-| Libya |
-| Morocco |
-| Mozambique |
-| Nepal |
-| Nicaragua |
-| North Macedonia |
-| Qatar |
-| Pakistan |
-| Russia |
-| Somalia |
-| South Sudan |
-| Sudan |
-| Venezuela |
-| Yemen |
+| Jurisdiction | ISO |
+|----------------|-----|
+| Afghanistan | AF |
+| Algeria | DZ |
+| Bangladesh | BD |
+| Belarus | BY |
+| China | CN |
+| Congo (Democratic Republic of the) | CD |
+| Gaza Strip / West Bank (Palestinian Territories) | PS |
+| Haiti | HT |
+| Iraq | IQ |
+| Lebanon | LB |
+| Libya | LY |
+| Morocco | MA |
+| Mozambique | MZ |
+| Nepal | NP |
+| Nicaragua | NI |
+| North Macedonia | MK |
+| Qatar | QA |
+| Pakistan | PK |
+| Russia | RU |
+| Somalia | SO |
+| South Sudan | SS |
+| Sudan | SD |
+| Venezuela | VE |
+| Yemen | YE |
+
+These jurisdictions are excluded from Easner Business signup and KYB country pickers unless explicitly enabled via an internal jurisdiction policy update.
 
 ### Other jurisdictions
 

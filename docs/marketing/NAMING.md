@@ -29,6 +29,8 @@ Source of truth for Easner product names in marketing, legal, and App Store copy
 |---------|-------------|
 | **Easner Personal** | Easner Personal Banking or Easner Mobile (by context) |
 | **Easner tag** | **EASETAG** |
+| **Easner APIs** (primary product name) | Easner for Partners — Developer Model, or Developers page |
+| **/apis** route | `/developers` (301 redirect) |
 
 ---
 
@@ -45,13 +47,26 @@ Source of truth for Easner product names in marketing, legal, and App Store copy
 
 ---
 
+## Easner for Partners
+
+| Name | Surface | Notes |
+|------|---------|-------|
+| **Easner for Partners** | Marketing umbrella | Commercial partner program — nav, product card, body copy |
+| **Agency Model** | `/partners` | Full-stack branded deployment on Easner infrastructure |
+| **Developer Model** | `/developers` | API infrastructure access without full branded deployment |
+
+**Title tags:** `Partners — Easner` and `Developers — Easner` (match Business Banking — Easner pattern). Do not put model names in `<title>` tags.
+
+**Do not confuse with:** "licensed partners" in legal/footer copy — regulated banking and infrastructure providers (see Privacy Policy).
+
+---
+
 ## Other product names (unchanged)
 
 | Name | Surface |
 |------|---------|
 | **Terminal** | Business collections (in-person) |
 | **QR Pay** | Business collections (scan-to-pay) |
-| **Easner APIs** | Developer platform |
 | **Easner Office** | Internal admin |
 
 ---
@@ -77,3 +92,4 @@ Source of truth for Easner product names in marketing, legal, and App Store copy
 |------|--------|
 | 2026-06-08 | Initial naming ladder — retire Easner Personal; EASETAG standard |
 | 2026-06-08 | Legal/footer alignment; doc paths point to live React legal components |
+| 2026-06-08 | Easner for Partners — Agency Model (`/partners`) and Developer Model (`/developers`); retire Easner APIs as primary name |

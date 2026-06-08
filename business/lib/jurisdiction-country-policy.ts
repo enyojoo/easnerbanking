@@ -6,10 +6,13 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import {
   effectiveAllowlistForSurface,
+  isEasnerBlockedJurisdiction,
   parseJurisdictionCountryPolicyJson,
+  resolveJurisdictionAllowlist,
   type JurisdictionCountryPolicyV1,
   type JurisdictionSurface,
 } from "@easner/shared"
+import { countries } from "@/lib/countries"
 
 type SupabaseAdmin = ReturnType<typeof createSupabaseAdmin>
 
@@ -20,8 +23,8 @@ export type { JurisdictionSurface, JurisdictionCountryPolicyV1 }
 export type JurisdictionPolicyResolved = {
   policy: JurisdictionCountryPolicyV1 | null
   policyVersion: number
-  signupAllowlist: string[] | null
-  kybAllowlist: string[] | null
+  signupAllowlist: string[]
+  kybAllowlist: string[]
 }
 
 export async function getJurisdictionPolicyResolved(admin: SupabaseAdmin): Promise<JurisdictionPolicyResolved> {
@@ -31,11 +34,15 @@ export async function getJurisdictionPolicyResolved(admin: SupabaseAdmin): Promi
   const { policy } = parseJurisdictionCountryPolicyJson(raw)
   const policyVersion = policy?.v ?? 0
 
+  const catalogCodes = countries.map((c) => c.code)
+  const signupRaw = effectiveAllowlistForSurface(policy, "signup")
+  const kybRaw = effectiveAllowlistForSurface(policy, "kyb")
+
   return {
     policy,
     policyVersion,
-    signupAllowlist: effectiveAllowlistForSurface(policy, "signup"),
-    kybAllowlist: effectiveAllowlistForSurface(policy, "kyb"),
+    signupAllowlist: resolveJurisdictionAllowlist(signupRaw, catalogCodes),
+    kybAllowlist: resolveJurisdictionAllowlist(kybRaw, catalogCodes),
   }
 }
 
@@ -47,8 +54,8 @@ export async function isCountryAllowedForSurface(
   if (!countryCode) return true
   const code = countryCode.trim().toUpperCase()
   if (!/^[A-Z]{2}$/.test(code)) return false
+  if (isEasnerBlockedJurisdiction(code)) return false
   const resolved = await getJurisdictionPolicyResolved(admin)
   const list = surface === "kyb" ? resolved.kybAllowlist : resolved.signupAllowlist
-  if (list == null) return true
   return list.includes(code)
 }

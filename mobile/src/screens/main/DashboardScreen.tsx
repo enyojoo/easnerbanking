@@ -681,7 +681,12 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
               style={styles.supportHeaderButton}
               onPress={() => {
                 haptics.tap()
-                navigation.navigate('Support' as never)
+                const parent = navigation.getParent?.()
+                if (parent?.navigate) {
+                  parent.navigate('Support' as never)
+                } else {
+                  navigation.navigate('Support' as never)
+                }
               }} accessibilityRole="button"
               accessibilityLabel="Support"
             >

@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   return NextResponse.json({
     surface,
     policyVersion: resolved.policyVersion,
-    unrestricted: codes == null,
-    codes: codes ?? null,
+    unrestricted: false,
+    codes,
   })
 }

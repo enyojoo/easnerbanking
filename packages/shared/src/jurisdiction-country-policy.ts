@@ -1,3 +1,5 @@
+import { filterBlockedJurisdictions, isEasnerBlockedJurisdiction } from "./jurisdiction-blocked-countries"
+
 export type JurisdictionSurface = "signup" | "kyb"
 
 export type JurisdictionCountryPolicyV1 = {
@@ -70,6 +72,24 @@ export function effectiveAllowlistForSurface(
   }
   return normalizeIso2List(kybExplicit)
 }
+
+/**
+ * Resolve picker allowlist: office policy ∩ catalog, minus blocked jurisdictions.
+ * When policy is unrestricted (`rawAllowlist === null`), uses full catalog codes.
+ */
+export function resolveJurisdictionAllowlist(
+  rawAllowlist: string[] | null,
+  catalogCodes: string[],
+): string[] {
+  const catalogSet = new Set(catalogCodes.map((c) => c.toUpperCase()))
+  const base =
+    rawAllowlist == null
+      ? [...catalogSet]
+      : rawAllowlist.map((c) => c.toUpperCase()).filter((c) => catalogSet.has(c))
+  return filterBlockedJurisdictions(base)
+}
+
+export { isEasnerBlockedJurisdiction, filterBlockedJurisdictions }
 
 /** `allowedCodes === null` or `unrestricted === true` keeps full catalog. */
 export function filterCountriesByPolicy<T extends CountryCatalogEntry>(

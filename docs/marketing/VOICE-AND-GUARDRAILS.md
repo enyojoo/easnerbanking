@@ -11,7 +11,7 @@ Marketing copy for easner.com must align with product reality and legal pages un
 | Layer | Approved copy |
 |-------|----------------|
 | **One-liner** | Stablecoin Banking Infrastructure for Global Businesses |
-| **Category** | Global money movement — accounts, payouts, collections, and developer APIs |
+| **Category** | Global money movement — accounts, payouts, collections, and partner programs |
 | **Differentiator** | Stablecoins power settlement behind the scenes; Easner delivers banking-simple UX and built-in compliance |
 
 ---
@@ -26,9 +26,12 @@ Marketing copy for easner.com must align with product reality and legal pages un
 | **Stablecoin** | Stablecoin flows where enabled; invisible infrastructure behind banking screens |
 | **Fiat** | Multi-currency accounts, virtual accounts, bank pay-in and pay-out |
 | **Regulatory** | Easner is a financial technology company, not a bank |
-| **Partners** | Licensed partners provide regulated services (names in Privacy Policy / legal docs only) |
+| **Licensed partners** | Licensed partners provide regulated services (names in Privacy Policy / legal docs only) |
+| **Easner for Partners** | Commercial partner program — Agency Model (`/partners`) and Developer Model (`/developers`) |
+| **Agency Model** | Full-stack branded deployment on Easner infrastructure |
+| **Developer Model** | API infrastructure access without full branded deployment |
 | **Availability** | Where enabled, where supported, where we launch, when available, when approved |
-| **Products** | Easner Personal Banking, Easner Mobile, Easner Business Banking, Easner Business, Terminal, QR Pay |
+| **Products** | Easner Personal Banking, Easner Mobile, Easner Business Banking, Easner Business, Easner for Partners, Terminal, QR Pay |
 | **Tiers** | Tier 1 Global banking, Tier 2 African banking, Tier 3 Cards |
 
 ---
@@ -66,6 +69,11 @@ See [`NAMING.md`](NAMING.md) for the full ladder. Summary:
 | **Terminal** | Easner Business | In-person collections |
 | **QR Pay** | Easner Business | Scan-to-pay |
 | **Stablecoin** | Both | USDC/EURC on supported networks where enabled |
+| **Easner for Partners** | Marketing umbrella | Commercial partner program |
+| **Agency Model** | `/partners` | Branded deployment on Easner infrastructure |
+| **Developer Model** | `/developers` | API access without full branded deployment |
+
+**Naming distinction:** "Easner for Partners" (commercial program) vs "licensed partners" (regulated providers in legal copy). Do not use "licensed partners" in marketing hero copy on `/partners`.
 
 ---
 

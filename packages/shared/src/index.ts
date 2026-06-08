@@ -203,9 +203,16 @@ export {
 export {
   parseJurisdictionCountryPolicyJson,
   effectiveAllowlistForSurface,
+  resolveJurisdictionAllowlist,
   filterCountriesByPolicy,
   serializeJurisdictionPolicy,
+  isEasnerBlockedJurisdiction,
+  filterBlockedJurisdictions,
 } from "./jurisdiction-country-policy"
+export {
+  EASNER_PROHIBITED_JURISDICTION_ISO2,
+  EASNER_CONTROLLED_JURISDICTION_ISO2,
+} from "./jurisdiction-blocked-countries"
 export { EASNER_COUNTRY_PICKER_PRIORITY, sortByEasnerCountryPickerOrder } from "./country-picker-order"
 export type {
   JurisdictionSurface,

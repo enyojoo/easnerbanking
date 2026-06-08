@@ -90,9 +90,9 @@ Art direction, layout patterns, and asset manifest for easner.com marketing page
 ├─────────────────────────────────────────────────────────┤
 │  Why Easner — 4 cards (three_col_cards → 2×2 mobile)  │
 ├─────────────────────────────────────────────────────────┤
-│  Products — Personal | Business | APIs (three_col_cards)│
+│  Products — Personal | Business | Partners (three_col_cards)│
 ├─────────────────────────────────────────────────────────┤
-│  Solutions — 3 tabs (tab_audience + persona photos)     │
+│  Solutions — 4 tabs (tab_audience + persona photos)     │
 ├─────────────────────────────────────────────────────────┤
 │  Corridors — copy | mkt-map-corridors (split_50_50)     │
 ├─────────────────────────────────────────────────────────┤
@@ -108,13 +108,14 @@ Art direction, layout patterns, and asset manifest for easner.com marketing page
 
 | Page | Hero asset | Feature assets |
 |------|------------|----------------|
-| `home.md` | `mkt-hero-home-01` | `mkt-icon-pillar-*` (×4), `mkt-thumb-*` (×3), `mkt-persona-*` (×3), `mkt-map-corridors` |
+| `home.md` | `mkt-hero-home-01` | `mkt-icon-pillar-*` (×4), `mkt-thumb-*` (×3), `mkt-persona-*` (×4), `mkt-map-corridors` |
 | `personal.md` | `mkt-hero-personal-01` | `mkt-ui-personal-send`, `mkt-ui-personal-receive`, `mkt-ui-personal-recipients` |
 | `business.md` | `mkt-hero-business-01` | `mkt-ui-business-dashboard`, `mkt-ui-business-send`, `mkt-ui-business-accounts` |
 | `stablecoin.md` | `mkt-hero-stablecoin-01` | `mkt-ui-stablecoin-receive`, `mkt-ui-terminal`, `mkt-ui-qrpay`, `mkt-diagram-invisible-rails` |
 | `invoicing.md` | `mkt-hero-invoicing-01` | `mkt-ui-invoice-editor`, `mkt-ui-invoice-payin` |
 | `cards.md` | `mkt-hero-cards-01` | `mkt-ui-cards-controls` (future mock) |
-| `apis.md` | `mkt-hero-apis-01` | `mkt-icon-api-banking`, `mkt-icon-api-agency`, `mkt-icon-api-integration`, `mkt-diagram-api-integration-flow`, `mkt-ui-api-dev-panel` |
+| `partners.md` | `mkt-hero-partners-01` | `mkt-icon-api-agency`, `mkt-diagram-partners-onboarding` |
+| `developers.md` | `mkt-hero-developers-01` | `mkt-diagram-api-integration-flow`, `mkt-ui-api-identity`, `mkt-ui-api-payin`, `mkt-ui-api-payouts`, `mkt-ui-api-webhooks`, `mkt-ui-api-dev-panel` |
 
 ---
 
@@ -129,9 +130,10 @@ Art direction, layout patterns, and asset manifest for easner.com marketing page
 | `mkt-icon-pillar-invisible` | home | why | **Needed** | Invisible infra icon |
 | `mkt-thumb-personal` | home | products | **Needed** | Phone mini UI |
 | `mkt-thumb-business` | home | products | **Needed** | Dashboard mini UI |
-| `mkt-thumb-apis` | home | products | **Needed** | Code/API mini visual |
+| `mkt-thumb-partners` | home | products | **Needed** | Partners program mini visual (interim: `mkt-thumb-apis`) |
 | `mkt-persona-diaspora` | home | solutions | **Needed** | Remote worker / travel context |
 | `mkt-persona-sme` | home | solutions | **Needed** | SME owner at desk |
+| `mkt-persona-otc` | home | solutions | **Needed** | Money transfer agent at counter |
 | `mkt-persona-dev` | home | solutions | **Needed** | Developer at workstation |
 | `mkt-map-corridors` | home | corridors | **Needed** | Abstract US/EU ↔ Africa routes |
 | `mkt-icon-compliance` | home | compliance | Interim | Use `security.svg` until designed |
@@ -153,12 +155,12 @@ Art direction, layout patterns, and asset manifest for easner.com marketing page
 | `mkt-ui-invoice-payin` | invoicing | features | **Needed** | VA + stablecoin on invoice |
 | `mkt-hero-cards-01` | cards | hero | **Needed** | Card in hand; no issuer logo |
 | `mkt-ui-cards-controls` | cards | features | **Future** | Spend controls mock |
-| `mkt-hero-apis-01` | apis | hero | **Needed** | Developer + API diagram |
-| `mkt-icon-api-banking` | apis | models | **Needed** | Banking model icon |
-| `mkt-icon-api-agency` | apis | models | **Needed** | Agency model icon |
-| `mkt-icon-api-integration` | apis | models | **Needed** | API integration icon |
-| `mkt-diagram-api-integration-flow` | apis | integration | **Needed** | 4-step Onboard → Verify → Fund → Move money |
-| `mkt-ui-api-dev-panel` | apis | developer | **Needed** | API keys + webhooks + events mock |
+| `mkt-hero-partners-01` | partners | hero | **Needed** | Agent/OTC context + branded UI mock |
+| `mkt-icon-api-agency` | partners | agency | **Needed** | Agency model icon |
+| `mkt-diagram-partners-onboarding` | partners | onboarding | **Needed** | 4-step Talk → KYB → Deploy → Go live |
+| `mkt-hero-developers-01` | developers | hero | **Needed** | Developer + API diagram (interim: `mkt-hero-apis-01`) |
+| `mkt-diagram-api-integration-flow` | developers | integration | **Needed** | 4-step Onboard → Verify → Fund → Move money |
+| `mkt-ui-api-dev-panel` | developers | developer | **Needed** | API keys + webhooks + events mock |
 
 ---
 

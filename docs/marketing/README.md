@@ -16,7 +16,9 @@ Documentation for easner.com marketing copy. **The live website is the source of
 | `/stablecoin` | [`stablecoin.md`](stablecoin.md) | [`lib/marketing/content/stablecoin.ts`](../lib/marketing/content/stablecoin.ts) |
 | `/invoicing` | [`invoicing.md`](invoicing.md) | [`lib/marketing/content/invoicing.ts`](../lib/marketing/content/invoicing.ts) |
 | `/cards` | [`cards.md`](cards.md) | [`lib/marketing/content/cards.ts`](../lib/marketing/content/cards.ts) |
-| `/apis` | [`apis.md`](apis.md) | [`lib/marketing/content/apis.ts`](../lib/marketing/content/apis.ts) |
+| `/partners` | [`partners.md`](partners.md) | [`lib/marketing/content/partners.ts`](../lib/marketing/content/partners.ts) |
+| `/developers` | [`developers.md`](developers.md) | [`lib/marketing/content/developers.ts`](../lib/marketing/content/developers.ts) |
+| `/apis` | *(deprecated)* → 301 → `/developers` | — |
 | `/terms` | — | [`components/legal/terms-content.tsx`](../components/legal/terms-content.tsx) |
 | `/privacy` | — | [`components/legal/privacy-content.tsx`](../components/legal/privacy-content.tsx) |
 | `/compliance` | — | [`components/legal/compliance-content.tsx`](../components/legal/compliance-content.tsx) |
@@ -34,6 +36,7 @@ Documentation for easner.com marketing copy. **The live website is the source of
 | [`MESSAGING-HIERARCHY.md`](MESSAGING-HIERARCHY.md) | One-liner, pillars, audiences, CTAs, SEO (mirrors live site) |
 | [`VISUAL-SPEC.md`](VISUAL-SPEC.md) | Layouts, asset IDs, shot list for design |
 | [`SHARED-COMPONENTS.md`](SHARED-COMPONENTS.md) | Footer, compliance strip, tier ladders, reusable blocks |
+| [`IMPLEMENTATION-PROMPT.md`](IMPLEMENTATION-PROMPT.md) | Copy-paste prompt for implementing Partners + Developers on easner.com |
 
 ---
 
@@ -83,7 +86,8 @@ Full manifest in [`VISUAL-SPEC.md`](VISUAL-SPEC.md). Upload to Supabase `brand/m
 
 - [ ] Personal → App Store / Google Play
 - [ ] Business → external signup URL
-- [ ] APIs → `/contact`
+- [ ] Partners → `/contact` or `/partners`
+- [ ] Developers → `/developers` or `/contact`
 - [ ] No ~$980K volume metric on homepage
 
 ### Visuals
@@ -101,6 +105,13 @@ Full manifest in [`VISUAL-SPEC.md`](VISUAL-SPEC.md). Upload to Supabase `brand/m
 | 2026-06-06 | Initial marketing content pack |
 | 2026-06-07 | Expanded `apis.md` |
 | 2026-06-08 | Added [`NAMING.md`](NAMING.md); legal naming pass; reverse-sync docs from live website |
+| 2026-06-08 | Easner for Partners: [`partners.md`](partners.md), [`developers.md`](developers.md); deprecated [`apis.md`](apis.md); [`IMPLEMENTATION-PROMPT.md`](IMPLEMENTATION-PROMPT.md) |
+
+---
+
+## Implementation prompt
+
+See [`IMPLEMENTATION-PROMPT.md`](IMPLEMENTATION-PROMPT.md) for a copy-paste prompt to implement `/partners`, `/developers`, homepage updates, and `/apis` redirect on easner.com.
 
 ---
 

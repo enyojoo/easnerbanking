@@ -2,7 +2,7 @@
 
 **Route:** `/`  
 **Title:** Easner – Stablecoin Banking for Global Businesses  
-**Meta description:** Stablecoin-powered accounts, payouts, collections, cards, and APIs. Familiar banking screens with compliance built in.  
+**Meta description:** Stablecoin-powered accounts, payouts, collections, cards, and partner programs. Familiar banking screens with compliance built in.  
 **Keywords:** stablecoin banking infrastructure, cross-border payments, global business banking
 
 **Live source:** [`lib/marketing/content/home.ts`](../lib/marketing/content/home.ts)
@@ -17,7 +17,7 @@
 
 **H1:** Global banking, Simplified.
 
-**Subhead:** Stablecoin-powered accounts, payouts, collections, cards, and APIs. Familiar banking screens with compliance built in.
+**Subhead:** Stablecoin-powered accounts, payouts, collections, cards, and partner programs. Familiar banking screens with compliance built in.
 
 **CTA primary:** Open Account → `#` (open-account action)  
 **CTA secondary:** Explore products → `#products`
@@ -52,13 +52,17 @@ Use product cards from [`SHARED-COMPONENTS.md`](SHARED-COMPONENTS.md) (live: [`P
 
 ## Section 5: Solutions by audience
 
+**Layout:** `tab_audience` (4 tabs) or `four_col_cards` (2×2 on desktop)  
+**Section headline:** Built for how you move money
+
 | Audience | Headline | Body | CTAs |
 |----------|----------|------|------|
 | Freelancers, remote workers, and diaspora | Get paid globally. Keep more locally. | Receive in supported global currencies, move money home on faster paths, and keep a clean record of every transfer with Easner Personal Banking. | App Store, Google Play |
 | Cross-border SMEs and trade | Run global operations from one dashboard. | Manage accounts, payouts, invoicing, collections, team access, and reporting for import/export, supplier, and contractor payments with Easner Business Banking. | Open Business account |
-| Developers and platforms | Embed global rails without building compliance. | Build with Easner APIs for verification, accounts, payouts, wallets, and collections, then focus your roadmap on the customer experience. | Talk to our team → `/contact` |
+| OTC and money transfer agents | Compliance-ready transfers under your brand. | With Easner's Agency Model, move away from undocumented transactions and run every transfer through a built-in compliance system. Get in touch for KYB/KYC and get set up in your customized name. | Talk to our team → `/partners` |
+| Developers and platforms | Embed global rails without building compliance. | Build with Easner for Partners — Developer Model — for verification, accounts, payouts, wallets, and collections, then focus your roadmap on the customer experience. | Explore developers → `/developers` |
 
-**Visual slots:** `mkt-persona-diaspora`, `mkt-persona-sme`, `mkt-persona-dev`
+**Visual slots:** `mkt-persona-diaspora`, `mkt-persona-sme`, `mkt-persona-otc`, `mkt-persona-dev`
 
 ---
 
@@ -82,7 +86,7 @@ Use compliance strip from [`SHARED-COMPONENTS.md`](SHARED-COMPONENTS.md).
 
 **Layout:** `cta_band`  
 **Headline:** Ready to move money globally?  
-**Subhead:** Open an Easner account, or talk to us about building on Easner APIs.  
+**Subhead:** Open an Easner account, or talk to us about Easner for Partners.  
 **CTA primary:** Open Account → `#` (open-account action)  
 **CTA secondary:** Contact → `/contact`
 
@@ -94,7 +98,7 @@ Use compliance strip from [`SHARED-COMPONENTS.md`](SHARED-COMPONENTS.md).
 |----------|--------|
 | Is Easner a bank? | No. Easner is a financial technology company. Regulated banking, payment, and verification services are provided by licensed partners. |
 | Do I need to understand crypto to use Easner? | No. Easner is designed around banking-simple screens. Stablecoin infrastructure may power settlement behind the scenes. |
-| What products does Easner offer? | Easner Personal (mobile app for individuals), Easner Business (web dashboard for organizations), and Easner APIs for developers and platforms. |
+| What products does Easner offer? | Easner Personal Banking (Easner Mobile), Easner Business Banking (Easner Business), and Easner for Partners (Agency Model and Developer Model). |
 | Are fees zero? | Fees and exchange rates may apply depending on product and corridor. Applicable fees are shown before you confirm a transaction. |
 | Which countries are supported? | Availability varies by jurisdiction, verification tier, and partner rules. See our KYC/KYB and AML Policy for eligibility details. |
 

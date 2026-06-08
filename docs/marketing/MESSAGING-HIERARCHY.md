@@ -12,7 +12,7 @@ Headlines, pillars, audiences, and CTAs aligned with the **live website** ([`lib
 
 **Home title (live):** Easner – Stablecoin Banking for Global Businesses
 
-**Home description (live):** Stablecoin-powered accounts, payouts, collections, cards, and APIs. Familiar banking screens with compliance built in.
+**Home description (live):** Stablecoin-powered accounts, payouts, collections, cards, and partner programs. Familiar banking screens with compliance built in.
 
 **Elevator (2 sentences):** Easner gives businesses and individuals compliant, banking-simple tools for global money movement. Stablecoin infrastructure powers settlement behind the scenes — users get familiar accounts, payouts, and collections without crypto complexity.
 
@@ -33,13 +33,16 @@ Live source: `whyEasnerPillars` in [`home.ts`](../lib/marketing/content/home.ts)
 
 ---
 
-## Three audiences
+## Four audiences
+
+Live source: `solutionsPersonas` in [`home.ts`](../lib/marketing/content/home.ts). Section headline: **Built for how you move money**
 
 | Audience | One-liner | Primary product | Page |
 |----------|-----------|-----------------|------|
 | **Freelancers, remote workers, diaspora** | Get paid globally. Keep more locally. | Easner Personal Banking · Easner Mobile | `/personal` |
 | **Cross-border SMEs and trade** | Run global operations from one dashboard. | Easner Business Banking · Easner Business | `/business` |
-| **Developers and platforms** | Embed global rails without building compliance. | Easner APIs | `/apis` |
+| **OTC and money transfer agents** | Compliance-ready transfers under your brand. | Easner for Partners · Agency Model | `/partners` |
+| **Developers and platforms** | Embed global rails without building compliance. | Easner for Partners · Developer Model | `/developers` |
 
 ---
 
@@ -53,7 +56,8 @@ Live source: `whyEasnerPillars` in [`home.ts`](../lib/marketing/content/home.ts)
 | Stablecoin Payments | `/stablecoin` | Stablecoin speed |
 | Invoicing | `/invoicing` | Invoice globally and get paid |
 | Cards | `/cards` | Cards for payment |
-| APIs | `/apis` | Compliant rails in your product |
+| Partners | `/partners` | Branded cross-border products on Easner |
+| Developers | `/developers` | Compliant rails in your product |
 
 ---
 
@@ -69,7 +73,12 @@ Live source: `whyEasnerPillars` in [`home.ts`](../lib/marketing/content/home.ts)
 | Stablecoin | Open Business account | `{BUSINESS_SIGNUP_URL}` (external) |
 | Invoicing | Start invoicing | `{BUSINESS_SIGNUP_URL}` (external) |
 | Cards | Open Account | `#` (open-account action) |
-| APIs | Talk to our team | `/contact` |
+| Partners | Talk to our team | `/contact` |
+| Partners (secondary) | Developer Model | `/developers` |
+| Developers | Talk to our team | `/contact` |
+| Developers (secondary) | Agency Model | `/partners` |
+| OTC / money transfer agents (homepage) | Talk to our team | `/partners` |
+| Developers and platforms (homepage) | Explore developers | `/developers` |
 
 ---
 
@@ -92,7 +101,21 @@ Always pair corridor claims with: *Availability depends on verification, jurisdi
 | `/stablecoin` | stablecoin payments infrastructure, USDC business payments, invisible stablecoin |
 | `/invoicing` | international invoicing, invoice stablecoin pay-in, global B2B collections |
 | `/cards` | corporate cards global business, virtual cards SME, spend controls, business expense cards |
-| `/apis` | stablecoin API, embedded payments API, fintech infrastructure API |
+| `/partners` | white-label remittance, OTC money transfer, branded cross-border payments, agency banking infrastructure |
+| `/developers` | stablecoin API, embedded payments API, fintech infrastructure API |
+
+**Redirect:** `/apis` → 301 → `/developers`
+
+---
+
+## Title tag convention
+
+Match existing product pages (`Business Banking — Easner`, `Invoicing — Easner`): short product name + `— Easner`. Model names belong in meta descriptions and on-page copy, not in `<title>` tags.
+
+| Page | `<title>` | Marketing program name |
+|------|-----------|------------------------|
+| `/partners` | Partners — Easner | Easner for Partners |
+| `/developers` | Developers — Easner | Easner for Partners |
 
 ---
 
