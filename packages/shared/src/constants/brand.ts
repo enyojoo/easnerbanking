@@ -3,6 +3,9 @@ export const BRAND = {
   tagline: "Send money globally with ease",
   description: "Fast, secure, and affordable international money transfers",
   logo: "https://seeqjiebmrnolcyydewj.supabase.co/storage/v1/object/public/brand/Easner%20Logo.svg",
+  /** Consumer app wordmark (icon + Easner) for mobile web sidebar, etc. */
+  logoConsumer:
+    "https://kixymrjsupzkxokujmwu.supabase.co/storage/v1/object/public/brand/Easner%20LogoB.png",
   /** Favicon / app icon (not the wordmark `logo`). */
   favicon:
     "https://kixymrjsupzkxokujmwu.supabase.co/storage/v1/object/public/brand/Easner%20favicon.png",

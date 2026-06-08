@@ -71,15 +71,12 @@ export function DesktopNav() {
 function createStyles(palette: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
     sidebar: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      bottom: 0,
       width: SIDEBAR_WIDTH,
+      flexShrink: 0,
+      alignSelf: 'stretch',
       backgroundColor: palette.semantic.card,
       borderRightWidth: StyleSheet.hairlineWidth,
       borderRightColor: palette.border.default,
-      zIndex: 20,
     },
     navScroll: {
       flex: 1,

@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { navigateFromRoot } from '../../navigation/rootNavigationRef'
 import { useAuth } from '../../contexts/AuthContext'
 import { useThemeColors } from '../../contexts/ThemePaletteContext'
-import { HEADER_HEIGHT, SIDEBAR_WIDTH, spacing, textStyles, userAvatarStyles } from '../../theme'
+import { HEADER_HEIGHT, spacing, textStyles, userAvatarStyles } from '../../theme'
 import { AvatarImage } from '../AvatarImage'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import { avatarImageUri } from '../../lib/avatarCache'
@@ -86,18 +86,15 @@ export function DesktopHeader() {
 function createStyles(palette: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
     header: {
-      position: 'absolute',
-      top: 0,
-      left: SIDEBAR_WIDTH,
-      right: 0,
       height: HEADER_HEIGHT,
+      minHeight: HEADER_HEIGHT,
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: spacing[6],
+      paddingHorizontal: spacing[8],
       backgroundColor: palette.semantic.card,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: palette.border.default,
-      zIndex: 30,
+      flexShrink: 0,
     },
     spacer: {
       flex: 1,
