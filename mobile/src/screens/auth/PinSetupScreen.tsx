@@ -28,6 +28,7 @@ import { PinKeypad } from '../../components/pin'
 import { EasnerAlertSheet } from '../../components/premium'
 import { useToast } from '../../components/ToastProvider'
 import { haptics } from '../../lib/haptics'
+import { AuthFlowContainer } from '../../components/layout/AuthFlowContainer'
 
 export default function PinSetupScreen({ navigation, route }: NavigationProps) {
   const palette = useThemeColors()
@@ -170,6 +171,7 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={styles.content}>
+          <AuthFlowContainer>
           <View style={styles.helpRow}>
             <Pressable
               android_ripple={ripple.neutral}
@@ -238,6 +240,7 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
               </Text>
             </Pressable>
           )}
+          </AuthFlowContainer>
         </View>
       </KeyboardAvoidingView>
 

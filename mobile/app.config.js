@@ -206,6 +206,10 @@ module.exports = ({ config }) => {
 
   const merged = {
     ...config,
+    web: {
+      ...(config.web || {}),
+      orientation: 'default',
+    },
     android: {
       ...(config.android || {}),
       ...(googleServicesFile ? { googleServicesFile } : {}),

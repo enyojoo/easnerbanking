@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useRef } from 'react'
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { X } from 'lucide-react-native'
@@ -53,7 +53,41 @@ export function WalletAddressQrScannerContent({
     [onClose, onScan],
   )
 
+  const [pasteValue, setPasteValue] = useState('')
+
   if (!visible) return null
+
+  if (Platform.OS === 'web') {
+    return (
+      <View style={[styles.root, styles.webPasteRoot]}>
+        <Text style={styles.webPasteTitle}>Paste wallet address</Text>
+        <TextInput
+          value={pasteValue}
+          onChangeText={setPasteValue}
+          placeholder="0x… or wallet address"
+          autoCapitalize="none"
+          autoCorrect={false}
+          style={styles.webPasteInput}
+          multiline
+        />
+        <Pressable
+          style={styles.webPasteButton}
+          onPress={() => {
+            const address = extractWalletAddress(pasteValue.trim())
+            if (!address) return
+            onScan(address)
+          }}
+        >
+          <Text style={styles.webPasteButtonText}>Use address</Text>
+        </Pressable>
+        {showHeader ? (
+          <Pressable style={styles.closeButton} onPress={onClose}>
+            <X size={22} color={colors.text.inverse} strokeWidth={2} />
+          </Pressable>
+        ) : null}
+      </View>
+    )
+  }
 
   return (
     <View style={styles.root} collapsable={false}>
@@ -248,6 +282,38 @@ export const walletAddressQrScannerStyles = StyleSheet.create({
     ...textStyles.bodySmall,
     color: colors.text.inverse,
     fontFamily: fontFamily.semibold,
+  },
+  webPasteRoot: {
+    padding: spacing[6],
+    justifyContent: 'center',
+    backgroundColor: colors.background.primary,
+  },
+  webPasteTitle: {
+    ...textStyles.titleMedium,
+    color: colors.text.primary,
+    marginBottom: spacing[3],
+  },
+  webPasteInput: {
+    minHeight: 100,
+    borderWidth: 1,
+    borderColor: colors.semantic.border,
+    borderRadius: spacing[3],
+    padding: spacing[4],
+    ...textStyles.bodyMedium,
+    color: colors.text.primary,
+    backgroundColor: colors.semantic.card,
+    marginBottom: spacing[4],
+  },
+  webPasteButton: {
+    backgroundColor: colors.primary.main,
+    borderRadius: spacing[4],
+    paddingVertical: spacing[4],
+    alignItems: 'center',
+  },
+  webPasteButtonText: {
+    ...textStyles.titleMedium,
+    color: colors.text.inverse,
+    fontWeight: '600',
   },
 })
 

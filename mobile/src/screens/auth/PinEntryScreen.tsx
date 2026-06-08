@@ -26,6 +26,7 @@ import { AvatarImage } from '../../components/AvatarImage'
 import { avatarImageUri, warmAvatarCache } from '../../lib/avatarCache'
 import { haptics } from '../../lib/haptics'
 import EaseEnter from '../../components/EaseEnter'
+import { AuthFlowContainer } from '../../components/layout/AuthFlowContainer'
 
 export default function PinEntryScreen({ navigation: navigationProp }: NavigationProps) {
   const palette = useThemeColors()
@@ -184,6 +185,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={styles.content}>
+          <AuthFlowContainer>
           <EaseEnter>
           <View style={styles.helpRow}>
             <Pressable
@@ -276,6 +278,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
             </Text>
           </Pressable>
           </EaseEnter>
+          </AuthFlowContainer>
         </View>
       </KeyboardAvoidingView>
 

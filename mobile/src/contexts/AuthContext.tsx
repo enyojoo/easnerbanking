@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react'
+import { Platform } from 'react-native'
 import * as Linking from 'expo-linking'
 import {
   isUserDeepLinkUrl,
@@ -978,6 +979,29 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [consumeOAuthCallbackIfPresent])
 
   const signInWithApple = useCallback(async (): Promise<{ error: Error | null }> => {
+    if (Platform.OS === 'web') {
+      try {
+        const redirectTo =
+          typeof window !== 'undefined'
+            ? `${window.location.origin}/auth/callback`
+            : makeRedirectUri({ scheme: 'easner', path: 'auth/callback' })
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'apple',
+          options: { redirectTo, skipBrowserRedirect: true },
+        })
+        if (error) return { error: new Error(error.message || 'Unable to start Apple sign-in.') }
+        const authUrl = data?.url
+        if (!authUrl) return { error: new Error('Unable to start Apple sign-in.') }
+        analytics.trackSignIn('apple')
+        if (typeof window !== 'undefined') {
+          window.location.assign(authUrl)
+        }
+        return { error: null }
+      } catch (e) {
+        return { error: e instanceof Error ? e : new Error('Unable to continue with Apple.') }
+      }
+    }
+
     try {
       const available = await AppleAuthentication.isAvailableAsync()
       if (!available) {
@@ -1114,8 +1138,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       await AsyncStorage.removeItem(AUTH_INITIAL_MODE_KEY)
       
-      // Clear onboarding completion flag so user goes to onboarding screen on logout
-      await AsyncStorage.removeItem('@easner_onboarding_completed')
+      // Clear onboarding completion flag so user goes to onboarding screen on logout (native only)
+      if (Platform.OS !== 'web') {
+        await AsyncStorage.removeItem('@easner_onboarding_completed')
+      }
       
       // Clear user state IMMEDIATELY and synchronously to trigger navigation
       // This must happen FIRST before anything else to ensure AppNavigator responds immediately

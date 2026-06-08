@@ -105,8 +105,11 @@ export function flushPendingPushNavigation(
   })()
 }
 
+import { Platform } from 'react-native'
+
 /** Cold start / resume: Expo may not emit the response listener for the tap that launched the app. */
 export async function bootstrapPushNotificationDeepLink(): Promise<void> {
+  if (Platform.OS === 'web') return
   const response = await pushNotificationService.getLastNotificationResponse()
   if (!response?.notification) return
   const data = response.notification.request.content.data as Record<string, unknown> | undefined

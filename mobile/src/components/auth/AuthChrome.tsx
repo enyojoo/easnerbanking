@@ -29,6 +29,33 @@ type AppleButtonProps = {
   disabled?: boolean
 }
 
+/** Web Sign in with Apple — Supabase OAuth (not expo-apple-authentication). */
+export function WebAppleSignInButton({ mode, onPress, disabled }: AppleButtonProps) {
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.googleBtn,
+        styles.appleWebBtn,
+        disabled && styles.googleBtnDisabled,
+        Platform.OS === 'android' && styles.googleBtnClip,
+        pressed && Platform.OS === 'ios' && !disabled && styles.googleBtnPressedIOS,
+      ]}
+      onPress={async () => {
+        if (disabled) return
+        haptics.tap()
+        onPress()
+      }}
+      disabled={disabled}
+      android_ripple={ripple.neutral}
+    >
+      <FontAwesome name="apple" size={22} color={colors.text.primary} />
+      <Text style={styles.googleBtnText}>
+        {mode === 'login' ? 'Sign in with Apple' : 'Sign up with Apple'}
+      </Text>
+    </Pressable>
+  )
+}
+
 /** Native Sign in with Apple button (iOS only; Apple HIG styling). */
 export function AppleSignInButton({ mode, onPress, disabled }: AppleButtonProps) {
   return (
@@ -129,5 +156,8 @@ const styles = StyleSheet.create({
   },
   appleBtnDisabled: {
     opacity: 0.5,
+  },
+  appleWebBtn: {
+    backgroundColor: colors.semantic.background,
   },
 })

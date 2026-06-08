@@ -16,6 +16,7 @@ import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
 import { useToast } from '../../components/ToastProvider'
 import { haptics } from '../../lib/haptics'
+import { AuthFlowContainer } from '../../components/layout/AuthFlowContainer'
 
 export default function MfaVerifyScreen() {
   const palette = useThemeColors()
@@ -57,6 +58,7 @@ export default function MfaVerifyScreen() {
         keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
       >
         <View style={[styles.scroll, { paddingTop: insets.top + spacing[5], paddingBottom: Math.max(insets.bottom, spacing[6]) }]}>
+          <AuthFlowContainer>
           <Text style={[authScreenStyles.screenTitleCompact, { color: palette.text.primary, marginBottom: spacing[2] }]}>
             Two-factor authentication
           </Text>
@@ -99,6 +101,7 @@ export default function MfaVerifyScreen() {
           >
             <Text style={styles.secondaryText}>Use a different account</Text>
           </Pressable>
+          </AuthFlowContainer>
         </View>
       </KeyboardAvoidingView>
 

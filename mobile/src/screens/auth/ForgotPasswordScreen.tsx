@@ -23,6 +23,7 @@ import { useOtpClipboardAutofill } from '../../hooks/useOtpClipboardAutofill'
 import { useToast } from '../../components/ToastProvider'
 import KeyboardAwareScreen from '../../components/KeyboardAwareScreen'
 import { haptics } from '../../lib/haptics'
+import { AuthFlowContainer } from '../../components/layout/AuthFlowContainer'
 
 export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
   const [step, setStep] = useState<'email' | 'otp'>('email')
@@ -245,6 +246,7 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
         ]}
         showsVerticalScrollIndicator={false}
       >
+        <AuthFlowContainer>
           {/* Header with back and help buttons */}
           <View style={styles.header}>
             <Pressable
@@ -355,6 +357,7 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
               </>
             )}
           </View>
+        </AuthFlowContainer>
         </KeyboardAwareScreen>
     </View>
   )

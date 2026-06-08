@@ -866,7 +866,18 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                       </View>
                     </View>
                 </IframeWebViewModalHeader>
-                {kycLink && (
+                {kycLink && Platform.OS === 'web' ? (
+                  React.createElement('iframe', {
+                    src: buildKycIframeUrl(kycLink),
+                    title: 'Verification for global banking',
+                    style: {
+                      flex: 1,
+                      width: '100%',
+                      height: '100%',
+                      border: 'none',
+                    },
+                  })
+                ) : kycLink ? (
                   <WebView
                     source={{ uri: buildKycIframeUrl(kycLink) }}
                     style={styles.webView}

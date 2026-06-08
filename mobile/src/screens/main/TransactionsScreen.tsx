@@ -45,7 +45,6 @@ import {
   shadows,
   motion,
   shouldPlayDecorativeMotionEnter,
-  isRegularWidth,
   scaledFontSize,
   fontFamily,
 } from '../../theme'
@@ -63,6 +62,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { haptics } from '../../lib/haptics'
 import { useRealtimeHealth } from '../../query/realtime-health-context'
 import { useTransactionListFocusRefresh } from '../../hooks/use-transaction-list-focus-refresh'
+import { useSplitPaneConfig } from '../../components/layout/SplitPane'
 
 import {
   TRANSACTIONS_CACHE_KEY_PREFIX,
@@ -351,46 +351,7 @@ function TransactionsSkeleton() {
 
 function TransactionsContent({ navigation }: NavigationProps) {
   const { width: windowWidth } = useWindowDimensions()
-  const regularWidth = isRegularWidth(windowWidth)
-  const splitConfig = useMemo(() => {
-    if (windowWidth >= 1024) {
-      return {
-        maxWidth: Math.min(windowWidth - spacing[10], 980),
-        listFlex: 1.1,
-        detailFlex: 0.9,
-        gap: spacing[4],
-        detailPadding: spacing[5],
-        titleSize: scaledFontSize(12, windowWidth),
-        nameSize: scaledFontSize(22, windowWidth),
-        metaSize: scaledFontSize(13, windowWidth),
-        amountSize: scaledFontSize(28, windowWidth),
-      }
-    }
-    if (windowWidth >= 768) {
-      return {
-        maxWidth: Math.min(windowWidth - spacing[8], 920),
-        listFlex: 1.16,
-        detailFlex: 0.84,
-        gap: spacing[4],
-        detailPadding: spacing[5],
-        titleSize: scaledFontSize(12, windowWidth),
-        nameSize: scaledFontSize(20, windowWidth),
-        metaSize: scaledFontSize(12, windowWidth),
-        amountSize: scaledFontSize(26, windowWidth),
-      }
-    }
-    return {
-      maxWidth: Math.min(windowWidth - spacing[6], 860),
-      listFlex: 1.28,
-      detailFlex: 0.72,
-      gap: spacing[3],
-      detailPadding: spacing[4],
-      titleSize: scaledFontSize(11, windowWidth),
-      nameSize: scaledFontSize(18, windowWidth),
-      metaSize: scaledFontSize(12, windowWidth),
-      amountSize: scaledFontSize(24, windowWidth),
-    }
-  }, [windowWidth])
+  const { regularWidth, config: splitConfig } = useSplitPaneConfig()
   const { refreshBalances } = useBalance()
   const { user, userProfile } = useAuth()
   const { scope } = useScope()

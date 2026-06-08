@@ -21,6 +21,7 @@ import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { EASNER_CARD_ICON_SOURCE } from '../../lib/easnerBrand'
 import { haptics } from '../../lib/haptics'
+import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
 
 const CARD_SPACING = spacing[1]
 
@@ -92,7 +93,9 @@ function MastercardMark() {
 }
 
 export default function CardScreen({ navigation: _navigation }: NavigationProps) {
+  const { mode } = useResponsiveLayout()
   const { width: windowWidth } = useWindowDimensions()
+  const centerCardLayout = mode === 'tablet' || mode === 'desktop'
   /** ISO/IEC 7810 ID-1 physical card ratio (85.60mm × 53.98mm). */
   const CARD_ASPECT = 85.6 / 53.98
   /** Full-bleed minus screen padding; cap keeps very wide tablets from oversized carousel cards. */
@@ -116,7 +119,7 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
 
   return (
     <ScreenWrapper>
-      <View style={styles.container}>
+      <View style={[styles.container, centerCardLayout && styles.centeredContainer]}>
         <Animated.View
           style={[
             styles.header,
@@ -317,6 +320,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background.primary,
+  },
+  centeredContainer: {
+    maxWidth: 480,
+    alignSelf: 'center',
+    width: '100%',
   },
   scrollView: {
     flex: 1,

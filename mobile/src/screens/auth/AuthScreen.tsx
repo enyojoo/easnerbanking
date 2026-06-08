@@ -13,7 +13,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import ExternalLinkModal from '../../components/ExternalLinkModal'
 import { TextField } from '../../components/ui'
 import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
-import { AppleSignInButton, GoogleOutlineButton, OrDivider } from '../../components/auth/AuthChrome'
+import { AppleSignInButton, GoogleOutlineButton, OrDivider, WebAppleSignInButton } from '../../components/auth/AuthChrome'
+import { AuthFlowContainer } from '../../components/layout/AuthFlowContainer'
 import { useExternalLink } from '../../hooks/useExternalLink'
 import { useAuth } from '../../contexts/AuthContext'
 import { NavigationProps } from '../../types'
@@ -65,6 +66,15 @@ export default function AuthScreen({ navigation }: NavigationProps) {
   const showBackButton = modeStack.length > 1 || fromOnboarding
   const insets = useSafeAreaInsets()
   const termsLink = useExternalLink()
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('mode') === 'signup') {
+        setModeStack(['signup'])
+      }
+    }
+  }, [])
 
   useEffect(() => {
     const checkFromOnboarding = async () => {
@@ -320,6 +330,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
         showsVerticalScrollIndicator={false}
       >
         <EaseEnter>
+          <AuthFlowContainer>
           <View style={styles.topBar}>
             {showBackButton ? (
               <Pressable android_ripple={ripple.neutral} style={styles.backButton} onPress={handleBack} >
@@ -368,7 +379,14 @@ export default function AuthScreen({ navigation }: NavigationProps) {
                     disabled={isLoading}
                   />
                 )}
-                {Platform.OS === 'ios' && <View style={styles.oauthSpacer} />}
+                {Platform.OS === 'web' && (
+                  <WebAppleSignInButton
+                    mode={isLogin ? 'login' : 'signup'}
+                    onPress={handleAppleAuth}
+                    disabled={isLoading}
+                  />
+                )}
+                {(Platform.OS === 'ios' || Platform.OS === 'web') && <View style={styles.oauthSpacer} />}
                 <GoogleOutlineButton
                   label={isLogin ? 'Sign in with Google' : 'Sign up with Google'}
                   onPress={handleGoogleAuth}
@@ -540,7 +558,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
               </View>
             )}
 
-            <View style={styles.footer}>
+            <View style={[styles.footer, { paddingHorizontal: 0 }]}>
               <Text style={authScreenStyles.footerMuted}>
                 {isLogin ? "Don't have an account? " : 'Already have an account? '}
               </Text>
@@ -552,6 +570,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
               </Pressable>
             </View>
           </View>
+          </AuthFlowContainer>
         </EaseEnter>
       </KeyboardAwareScreen>
       <ExternalLinkModal

@@ -71,6 +71,7 @@ import { AvatarImage } from '../../components/AvatarImage'
 import { avatarImageUri, warmAvatarCache } from '../../lib/avatarCache'
 import { buildGroupedActivityItems } from '../../lib/transactionListGrouping'
 import { haptics } from '../../lib/haptics'
+import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
 
 import {
   DASHBOARD_RECENT_TX_CACHE_KEY_PREFIX,
@@ -107,6 +108,8 @@ interface DashboardTransaction {
 
 export default function DashboardScreen({ navigation }: NavigationProps) {
   const palette = useThemeColors()
+  const { mode } = useResponsiveLayout()
+  const isDesktopLayout = mode === 'desktop'
   const insets = useSafeAreaInsets()
   const styles = useMemo(() => createDashboardStyles(palette, spacing[8]), [palette])
   const heroBalanceFontSize = scaledFontSize(56)
@@ -726,11 +729,12 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
           />
         }
       >
+        <View style={isDesktopLayout ? styles.desktopMainRow : undefined}>
         <LinearGradient
           colors={palette.primary.heroGradient as unknown as readonly [string, string]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.heroCard}
+          style={[styles.heroCard, isDesktopLayout && styles.desktopHeroCard]}
         >
           <View style={styles.heroInner}>
           {/* Currency Selector + eye toggle */}
@@ -844,7 +848,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
           </View>
         </LinearGradient>
         
-        <View style={styles.transactionsBlock}>
+        <View style={[styles.transactionsBlock, isDesktopLayout && styles.desktopTransactionsBlock]}>
           <SectionCard style={styles.transactionsSection} flush>
           {!loadingTransactions && recentTransactions.length > 0 && (
             <View style={styles.transactionsHeader}>
@@ -986,6 +990,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
             </View>
           )}
         </SectionCard>
+        </View>
         </View>
     </ScrollView>
     </View>
@@ -1332,6 +1337,21 @@ function createDashboardStyles(c: Colors, scrollBottomPadding: number) {
   },
   heroBtnPressed: {
     opacity: 0.9,
+  },
+  desktopMainRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing[6],
+    paddingHorizontal: spacing[5],
+  },
+  desktopHeroCard: {
+    flex: 1,
+    marginHorizontal: 0,
+  },
+  desktopTransactionsBlock: {
+    flex: 1,
+    marginHorizontal: 0,
+    marginTop: 0,
   },
   transactionsBlock: {
     alignSelf: 'stretch',

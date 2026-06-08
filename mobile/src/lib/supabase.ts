@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import * as SecureStore from 'expo-secure-store'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import Constants from 'expo-constants'
+import { Platform } from 'react-native'
 
 /** SecureStore caps ~2048 bytes; large JWT sessions use AsyncStorage (same device). */
 const AUTH_LARGE_KEY_PREFIX = '@easner-sb-auth-large:'
@@ -55,14 +56,22 @@ const ExpoSecureStoreAdapter = {
   },
 }
 
+/** Expo web: SecureStore is unavailable; AsyncStorage maps to localStorage. */
+const WebAsyncStorageAdapter = {
+  getItem: (key: string) => AsyncStorage.getItem(key),
+  setItem: (key: string, value: string) => AsyncStorage.setItem(key, value),
+  removeItem: (key: string) => AsyncStorage.removeItem(key),
+}
+
+const authStorage = Platform.OS === 'web' ? WebAsyncStorageAdapter : ExpoSecureStoreAdapter
+
 // Client-side Supabase client (singleton pattern)
 export const supabase = createClient(resolvedSupabaseUrl, resolvedSupabasePublishableKey, {
   auth: {
-    storage: ExpoSecureStoreAdapter,
+    storage: authStorage,
     persistSession: true,
     autoRefreshToken: true,
-    /** RN / dev client: avoid treating random deep links as auth redirects (web-only feature). */
-    detectSessionInUrl: false,
+    detectSessionInUrl: Platform.OS === 'web',
   },
   global: {
     headers: {

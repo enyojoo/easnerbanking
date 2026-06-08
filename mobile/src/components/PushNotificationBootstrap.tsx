@@ -15,6 +15,7 @@ export function PushNotificationBootstrap() {
   const inFlight = useRef(false)
 
   useEffect(() => {
+    if (Platform.OS === 'web') return
     if (!user?.id) return
 
     let cancelled = false

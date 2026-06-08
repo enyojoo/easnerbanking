@@ -6,8 +6,11 @@ import { getApiBaseUrl } from './apiClient'
 import { isExpoGo } from './expoGo'
 
 type IntercomModule = typeof import('@intercom/intercom-react-native')
+type WebIntercomModule = typeof import('@intercom/messenger-js-sdk')
 
 let intercomLazy: IntercomModule | null | undefined
+let webIntercomLazy: WebIntercomModule | null | undefined
+let webIntercomBooted = false
 let intercomInitialized = false
 let intercomIdentityReady = false
 let warmIntercomMessengerPromise: Promise<boolean> | null = null
@@ -22,7 +25,7 @@ let cachedMessengerJwt: { token: string; userId: string; fetchedAt: number } | n
 const MESSENGER_JWT_CACHE_MS = 23 * 60 * 60_000
 
 function getIntercom(): IntercomModule | null {
-  if (isExpoGo) return null
+  if (Platform.OS === 'web' || isExpoGo) return null
 
   const extra = intercomExtra()
   if (!extra?.intercomConfigured) return null
@@ -35,6 +38,20 @@ function getIntercom(): IntercomModule | null {
     }
   }
   return intercomLazy
+}
+
+function getWebIntercom(): WebIntercomModule | null {
+  if (Platform.OS !== 'web') return null
+  const extra = intercomExtra()
+  if (!extra?.intercomConfigured || !extra.intercomAppId) return null
+  if (webIntercomLazy === undefined) {
+    try {
+      webIntercomLazy = require('@intercom/messenger-js-sdk') as WebIntercomModule
+    } catch {
+      webIntercomLazy = null
+    }
+  }
+  return webIntercomLazy
 }
 
 type IntercomExtra = {
@@ -56,12 +73,23 @@ function clearIntercomIdentityCache(): void {
 
 export function isIntercomConfiguredInApp(): boolean {
   const extra = intercomExtra()
+  if (Platform.OS === 'web') {
+    return Boolean(extra?.intercomConfigured && extra?.intercomAppId && getWebIntercom())
+  }
   return Boolean(extra?.intercomConfigured && !isExpoGo && getIntercom())
 }
 
 /** Load native module + initialize SDK early so Support → Live Chat can present immediately. */
 export function prefetchIntercomModule(): void {
-  if (!intercomExtra()?.intercomConfigured || isExpoGo) return
+  if (!intercomExtra()?.intercomConfigured) return
+  if (Platform.OS === 'web') {
+    getWebIntercom()
+    if (!warmIntercomMessengerPromise) {
+      void warmIntercomMessenger()
+    }
+    return
+  }
+  if (isExpoGo) return
   getIntercom()
   void ensureIntercomInitialized()
   if (!warmIntercomMessengerPromise) {
@@ -180,9 +208,71 @@ async function applyIntercomIdentity(session: Session | null): Promise<void> {
  * Initialize SDK + identity once (shared by login sync, PIN unlock, Support mount, and present).
  * Returns true when messenger can be presented without another JWT/login pass.
  */
+async function bootWebIntercom(session: Session | null): Promise<boolean> {
+  const mod = getWebIntercom()
+  const extra = intercomExtra()
+  if (!mod || !extra?.intercomAppId) return false
+
+  const Intercom = mod.default
+  if (!session?.user) {
+    webIntercomBooted = false
+    return false
+  }
+
+  const jwt = await resolveMessengerJwt(session.access_token, session.user.id)
+  if (!jwt) return false
+
+  if (!webIntercomBooted) {
+    Intercom({
+      app_id: extra.intercomAppId,
+      intercom_user_jwt: jwt,
+      hide_default_launcher: true,
+      session_duration: 86_400_000,
+    })
+    webIntercomBooted = true
+  } else {
+    mod.update({
+      intercom_user_jwt: jwt,
+      hide_default_launcher: true,
+      session_duration: 86_400_000,
+    })
+  }
+
+  lastIntercomUserId = session.user.id
+  intercomIdentityReady = true
+  intercomInitialized = true
+  return true
+}
+
 async function warmIntercomMessenger(session?: Session | null): Promise<boolean> {
   const extra = intercomExtra()
-  if (!extra?.intercomConfigured || isExpoGo || !getIntercom()) return false
+  if (!extra?.intercomConfigured) return false
+
+  if (Platform.OS === 'web') {
+    if (warmIntercomMessengerPromise) return warmIntercomMessengerPromise
+    warmIntercomMessengerPromise = (async () => {
+      let resolvedSession = session
+      if (resolvedSession === undefined) {
+        const {
+          data: { session: current },
+        } = await supabase.auth.getSession()
+        resolvedSession = current
+      }
+      try {
+        return await bootWebIntercom(resolvedSession)
+      } catch (e) {
+        console.warn('[Intercom] warmWebIntercom failed', e)
+        return false
+      }
+    })()
+    try {
+      return await warmIntercomMessengerPromise
+    } finally {
+      warmIntercomMessengerPromise = null
+    }
+  }
+
+  if (isExpoGo || !getIntercom()) return false
 
   if (intercomIdentityReady && intercomInitialized) {
     const userId = session?.user?.id ?? null
@@ -254,13 +344,26 @@ export async function presentIntercomMessenger(): Promise<void> {
 
   presentIntercomMessengerPromise = (async () => {
     const extra = intercomExtra()
-    if (!extra?.intercomConfigured || isExpoGo || !getIntercom()) {
+    if (!extra?.intercomConfigured) {
       throw new Error('INTERCOM_NOT_CONFIGURED')
     }
 
     const {
       data: { session },
     } = await supabase.auth.getSession()
+
+    if (Platform.OS === 'web') {
+      const webMod = getWebIntercom()
+      if (!webMod) throw new Error('INTERCOM_NOT_CONFIGURED')
+      const ready = await warmIntercomMessenger(session)
+      if (!ready) throw new Error('INTERCOM_JWT_UNAVAILABLE')
+      webMod.show()
+      return
+    }
+
+    if (isExpoGo || !getIntercom()) {
+      throw new Error('INTERCOM_NOT_CONFIGURED')
+    }
 
     const ready = await warmIntercomMessenger(session)
     if (!ready) {

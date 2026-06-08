@@ -32,6 +32,9 @@ import {
   refreshMoneyFeedsForUser,
 } from './src/query/refresh-money-feeds'
 import AppNavigator from './src/navigation/AppNavigator'
+import { webLinking } from './src/navigation/linking'
+import { ResponsiveLayoutProvider } from './src/contexts/ResponsiveLayoutContext'
+import { WebViewportFrame } from './src/components/layout/WebViewportFrame'
 import { PushNotificationBootstrap } from './src/components/PushNotificationBootstrap'
 import {
   ThemePaletteProvider,
@@ -104,7 +107,7 @@ function AppContent() {
 
   // Cold-open from notification: stash intent + flush when main stack is ready (PIN may still be showing).
   useEffect(() => {
-    if (!navReady) return
+    if (!navReady || Platform.OS === 'web') return
     void bootstrapPushNotificationDeepLink()
   }, [navReady])
 
@@ -122,6 +125,7 @@ function AppContent() {
   const nav = (
     <NavigationContainer
       ref={navigationRef}
+      linking={Platform.OS === 'web' ? webLinking : undefined}
       onReady={() => {
         setNavReady(true)
         analytics.setScreenTrackingMode('auto')
@@ -198,6 +202,8 @@ function AppContent() {
             {nav}
           </View>
         </View>
+      ) : Platform.OS === 'web' ? (
+        <WebViewportFrame>{nav}</WebViewportFrame>
       ) : (
         nav
       )}
@@ -240,6 +246,7 @@ export default function App() {
 
   // Foreground/tap listeners only; token registration is gated on user prefs in PushNotificationBootstrap
   useEffect(() => {
+    if (Platform.OS === 'web') return
     try {
       const receivedSubscription = pushNotificationService.addNotificationReceivedListener(
         async (notification) => {
@@ -341,6 +348,7 @@ export default function App() {
       >
         {/* Global safe areas (react-native-safe-area-context). Expo Router not used — React Navigation + stack/tabs. */}
         <SafeAreaProvider>
+          <ResponsiveLayoutProvider>
           <ThemePaletteProvider>
             <PostHogProvider>
               <AuthProvider>
@@ -357,6 +365,7 @@ export default function App() {
               </AuthProvider>
             </PostHogProvider>
           </ThemePaletteProvider>
+          </ResponsiveLayoutProvider>
         </SafeAreaProvider>
       </PressablesConfig>
       </GestureHandlerRootView>

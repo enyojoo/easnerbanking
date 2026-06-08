@@ -25,10 +25,18 @@ export { layout } from './layout'
 export {
   CONTENT_MAX_WIDTH,
   REGULAR_WIDTH_BREAKPOINT,
+  TABLET_MAX_WIDTH,
+  DESKTOP_MIN_WIDTH,
+  SIDEBAR_WIDTH,
+  HEADER_HEIGHT,
+  CONTENT_MAX_WIDTH_DESKTOP,
+  CONTENT_MAX_WIDTH_OVERVIEW,
   getContentWidth,
   isRegularWidth,
+  getLayoutMode,
   computeKeypadCellSize,
 } from './layoutMetrics'
+export type { LayoutMode } from './layoutMetrics'
 export { motion } from './motion'
 export { shouldPlayDecorativeMotionEnter } from './reduceMotion'
 export {

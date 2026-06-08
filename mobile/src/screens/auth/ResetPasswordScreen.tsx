@@ -20,6 +20,7 @@ import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
 import { useToast } from '../../components/ToastProvider'
 import KeyboardAwareScreen from '../../components/KeyboardAwareScreen'
 import { haptics } from '../../lib/haptics'
+import { AuthFlowContainer } from '../../components/layout/AuthFlowContainer'
 
 export default function ResetPasswordScreen({ navigation, route }: NavigationProps) {
   const [password, setPassword] = useState('')
@@ -178,6 +179,7 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
         ]}
         showsVerticalScrollIndicator={false}
       >
+        <AuthFlowContainer>
           {/* Header with back and help buttons */}
           <View style={styles.header}>
             <Pressable
@@ -261,6 +263,7 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
               />
             </View>
           </View>
+        </AuthFlowContainer>
         </KeyboardAwareScreen>
     </View>
   )

@@ -26,6 +26,8 @@ import { prefetchIntercomModule, prepareIntercomMessenger } from '../lib/interco
 import { avatarImageUri, warmAvatarCacheAsync } from '../lib/avatarCache'
 import { useConsumerKycNoahSync } from '../hooks/useConsumerKycNoahSync'
 import { haptics } from '../lib/haptics'
+import { useResponsiveLayout } from '../contexts/ResponsiveLayoutContext'
+import { ResponsiveAppShell } from '../components/layout/ResponsiveAppShell'
 // Stack timing and Android vs iOS card transitions: see `transitionPresets.ts`.
 import {
   mainStackPreset,
@@ -169,6 +171,8 @@ function AuthStack() {
 function MainTabs() {
   const insets = useSafeAreaInsets()
   const palette = useThemeColors()
+  const { mode, isWeb } = useResponsiveLayout()
+  const hideTabBarOnDesktop = isWeb && mode === 'desktop'
   useConsumerKycNoahSync()
 
   const activeColor = palette.primary.main
@@ -183,21 +187,23 @@ function MainTabs() {
       }}
       screenOptions={{
         headerShown: false,
-        tabBarStyle: {
-          backgroundColor: palette.semantic.card,
-          borderTopWidth: StyleSheet.hairlineWidth,
-          borderTopColor: palette.border.default,
-          elevation: 0,
-          shadowOpacity: 0,
-          shadowOffset: { width: 0, height: 0 },
-          shadowRadius: 0,
-          height: layout.tabBarHeight + insets.bottom,
-          paddingBottom: insets.bottom,
-          paddingTop: spacing[1],
-          paddingHorizontal: 0,
-          margin: 0,
-          position: 'relative',
-        },
+        tabBarStyle: hideTabBarOnDesktop
+          ? { display: 'none', height: 0 }
+          : {
+              backgroundColor: palette.semantic.card,
+              borderTopWidth: StyleSheet.hairlineWidth,
+              borderTopColor: palette.border.default,
+              elevation: 0,
+              shadowOpacity: 0,
+              shadowOffset: { width: 0, height: 0 },
+              shadowRadius: 0,
+              height: layout.tabBarHeight + insets.bottom,
+              paddingBottom: insets.bottom,
+              paddingTop: spacing[1],
+              paddingHorizontal: 0,
+              margin: 0,
+              position: 'relative',
+            },
         tabBarShowLabel: true,
         tabBarActiveTintColor: activeColor,
         tabBarInactiveTintColor: inactiveColor,
@@ -698,6 +704,11 @@ export default function AppNavigator() {
   // Check onboarding status on mount - this should happen regardless of user state
   const checkOnboardingState = useCallback(async () => {
     try {
+      if (Platform.OS === 'web') {
+        setOnboardingCompleted(true)
+        setCheckingAuth(false)
+        return
+      }
       // Check onboarding status from AsyncStorage
       const onboardingValue = await AsyncStorage.getItem(ONBOARDING_COMPLETED_KEY)
       setOnboardingCompleted(onboardingValue === 'true')
@@ -957,7 +968,8 @@ export default function AppNavigator() {
 
   // If onboarding not completed, show onboarding screen FIRST (before checking user)
   // This ensures new users see onboarding even if they're not logged in
-  if (!onboardingCompleted) {
+  const skipOnboarding = Platform.OS === 'web'
+  if (!skipOnboarding && !onboardingCompleted) {
     return <OnboardingStack />
   }
 
@@ -1007,11 +1019,19 @@ export default function AppNavigator() {
   }
 
   if (user && pinGate === 'main') {
-    return <MainStack />
+    return (
+      <ResponsiveAppShell>
+        <MainStack />
+      </ResponsiveAppShell>
+    )
   }
 
   if (user) {
-    return <MainStack />
+    return (
+      <ResponsiveAppShell>
+        <MainStack />
+      </ResponsiveAppShell>
+    )
   }
 
   return <AuthStack key="auth-stack-no-user" />
