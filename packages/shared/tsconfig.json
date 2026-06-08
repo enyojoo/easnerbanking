@@ -24,6 +24,7 @@
     "src/**/*.native.ts",
     "src/**/*.native.tsx",
     "src/flags/flag-assets.manifest.ts",
-    "src/flags/flag-assets.web.manifest.ts"
+    "src/flags/flag-assets.web.manifest.ts",
+    "src/mobile-money-assets.manifest.ts"
   ]
 }

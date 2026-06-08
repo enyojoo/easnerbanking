@@ -962,7 +962,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                       })
                     }}
                   />
-                )}
+                ) : null}
               </View>
             </Modal>
           </Animated.View>
