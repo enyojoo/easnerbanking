@@ -6,7 +6,6 @@ import {
   StyleSheet,
   Animated,
   TextInput,
-  Modal,
   Platform,
   Keyboard,
   ActivityIndicator,
@@ -67,6 +66,7 @@ import {
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import ScreenWrapper from '../../components/ScreenWrapper'
+import { WebAwareModal } from '../../components/WebAwareModal'
 import { CachedImage } from '../../components/CachedImage'
 import KeyboardSafeContainer from '../../components/KeyboardSafeContainer'
 import { useQueryClient } from '@tanstack/react-query'
@@ -179,7 +179,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   const [easenetLookupLoading, setEasenetLookupLoading] = useState(false)
   const [easenetLookupError, setEasenetLookupError] = useState<string | null>(null)
 
-  /** Hub search (@mode) live lookup ù separate from add-recipient modal. */
+  /** Hub search (@mode) live lookup ÔøΩ separate from add-recipient modal. */
   const [hubSearchEasenet, setHubSearchEasenet] = useState<{
     easetag: string
     fullName: string
@@ -447,7 +447,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       void prefetchNoahSendExchangeRates(qc, recipient.currency)
     }
     // Use navigate (not push) so re-entering amount after "Change recipient" does not stack duplicate
-    // SendAmount screens ù back should be hub once, then dashboard.
+    // SendAmount screens ÔøΩ back should be hub once, then dashboard.
     navigation.navigate('SendAmount' as never, {
       recipient,
       fromSelectRecentRecipient: true,
@@ -825,7 +825,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
        android_ripple={ripple.neutral}
         style={[styles.recipientItem, !isLast && styles.recipientItemDivider]}
         onPressIn={() => {
-          // Start the rate fetch the instant the finger touches the row ù same DB rows as quote.
+          // Start the rate fetch the instant the finger touches the row ÔøΩ same DB rows as quote.
           if (isWalletSendRecipient(item)) {
             const net = resolveRecipientWalletNetwork(item)
             if (net) void prefetchCryptoSendExchangeRates(qc, item.currency, net)
@@ -1022,30 +1022,19 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       </View>
 
       {/* Step 1: Recipient Type Selection Modal */}
-      <Modal
+      <WebAwareModal
         visible={showRecipientTypeModal}
-        animationType="slide"
-        transparent={true}
+        keyboardAvoiding
+        compact
         onRequestClose={() => {
           setShowRecipientTypeModal(false)
           resetForm()
         }}
+        nativePanelStyle={[
+          styles.recipientTypeModal,
+          { paddingBottom: Math.max(insets.bottom, 20) },
+        ]}
       >
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-        >
-          <Pressable 
-           android_ripple={ripple.neutral} 
-            style={StyleSheet.absoluteFill} onPress={() => {
-              setShowRecipientTypeModal(false)
-              resetForm()
-            }}
-          />
-          <View style={[styles.modalContainer, styles.recipientTypeModal, { 
-            paddingBottom: Math.max(insets.bottom, 20),
-          }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add a new</Text>
               <Pressable
@@ -1172,35 +1161,27 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                 </View>
               </Pressable>
             </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      </WebAwareModal>
 
       {/* Step 2: Bank Account Form Modal */}
-      <Modal
+      <WebAwareModal
         visible={showBankAccountForm}
-        animationType="slide"
-        transparent={true}
         onRequestClose={() => {
+          closeAllDropdowns()
           setShowBankAccountForm(false)
           resetForm()
         }}
+        nativePanelStyle={{
+          height: '92%',
+          paddingBottom: Math.max(insets.bottom, 20),
+        }}
+        webPanelStyle={{
+          maxWidth: 560,
+          maxHeight: '90%',
+        }}
       >
-        <View style={styles.modalOverlay}>
-          <Pressable 
-           android_ripple={ripple.neutral} 
-            style={StyleSheet.absoluteFill} onPress={() => {
-              closeAllDropdowns()
-              setShowBankAccountForm(false)
-              resetForm()
-            }}
-          />
           <RecipientFormDropdownHost>
-          <View 
-            style={[styles.modalContainer, { 
-              height: '92%',
-              paddingBottom: Math.max(insets.bottom, 20),
-            }]}>
+          <View style={styles.modalFormBody}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 {showWalletAddressScanner && selectedRecipientType === 'wallet'
@@ -2008,8 +1989,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
             )}
           </View>
           </RecipientFormDropdownHost>
-        </View>
-      </Modal>
+      </WebAwareModal>
 
     </>
   )
@@ -2124,7 +2104,7 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     fontFamily: fontFamily.medium,
   },
-  /** White SectionCard frame ù flat rows with hairline dividers (More-screen parity). */
+  /** White SectionCard frame ÔøΩ flat rows with hairline dividers (More-screen parity). */
   recipientsTray: {
     ...surfaceFrameStyle(colors),
     marginHorizontal: spacing[5],
@@ -2233,7 +2213,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: borderRadius.sm,
   },
-  /** Draft Easenet row ù top-trailing corner of the preview block (clear of the chevron). */
+  /** Draft Easenet row ÔøΩ top-trailing corner of the preview block (clear of the chevron). */
   newRecipientBadgeCorner: {
     position: 'absolute',
     top: 0,
@@ -2317,21 +2297,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
-  modalContainer: {
-    backgroundColor: colors.background.primary,
-    borderTopLeftRadius: borderRadius['3xl'],
-    borderTopRightRadius: borderRadius['3xl'],
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.neutral.black,
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 16,
-      },
-    }),
+  modalFormBody: {
+    flex: 1,
+    minHeight: 0,
   },
   modalHeader: {
     flexDirection: 'row',

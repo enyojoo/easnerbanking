@@ -5,13 +5,13 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  Modal,
   Platform,
   RefreshControl,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
+import { WebAwareModal } from '../../components/WebAwareModal'
 import ShimmerLoader from '../../components/premium/ShimmerLoader'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
@@ -72,6 +72,7 @@ import { avatarImageUri, warmAvatarCache } from '../../lib/avatarCache'
 import { buildGroupedActivityItems } from '../../lib/transactionListGrouping'
 import { haptics } from '../../lib/haptics'
 import { prepareTransactionDetailsNavigation } from '../../navigation/transactionNavParams'
+import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 
 import {
   DASHBOARD_RECENT_TX_CACHE_KEY_PREFIX,
@@ -109,7 +110,11 @@ interface DashboardTransaction {
 export default function DashboardScreen({ navigation }: NavigationProps) {
   const palette = useThemeColors()
   const insets = useSafeAreaInsets()
-  const styles = useMemo(() => createDashboardStyles(palette, spacing[8]), [palette])
+  const scrollBottomPadding = useScrollBottomPadding(spacing[4])
+  const styles = useMemo(
+    () => createDashboardStyles(palette, scrollBottomPadding),
+    [palette, scrollBottomPadding],
+  )
   const heroBalanceFontSize = scaledFontSize(56)
   const heroBalanceLineHeight =
     Math.round(heroBalanceFontSize * lineHeight.tight) + (Platform.OS === 'android' ? 6 : 4)
@@ -533,22 +538,16 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     const estimatedHeight = headerHeight + (itemHeight * availableCurrencies.length) + padding + insets.bottom
 
   return (
-      <Modal
+      <WebAwareModal
         visible={showCurrencyDropdown}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => {
-          setShowCurrencyDropdown(false)
-      }}
-    >
-      <Pressable 
-         android_ripple={ripple.neutral} 
-          style={styles.modalOverlay} onPress={() => setShowCurrencyDropdown(false)}
-        >
-          <View style={[styles.modalContainer, { 
-            maxHeight: estimatedHeight,
-            paddingBottom: insets.bottom,
-          }]}>
+        onRequestClose={() => setShowCurrencyDropdown(false)}
+        compact
+        nativePanelStyle={{
+          maxHeight: estimatedHeight,
+          paddingBottom: insets.bottom,
+        }}
+        webPanelStyle={{ maxHeight: estimatedHeight }}
+      >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Balance</Text>
               <View style={styles.modalHeaderActions}>
@@ -621,9 +620,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                 )
               })}
           </View>
-        </View>
-      </Pressable>
-      </Modal>
+      </WebAwareModal>
     )
   }
 

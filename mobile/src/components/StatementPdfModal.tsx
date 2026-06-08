@@ -16,7 +16,7 @@ import { noahService } from '../lib/noahService'
 import { colors, spacing, borderRadius, textStyles, fontFamily, compactInputMetrics } from '../theme'
 import { ripple } from '../lib/androidRipple'
 import { useToast } from './ToastProvider'
-import { USE_WEB_CENTERED_MODAL } from '../lib/webCenteredModal'
+import { useWebCenteredModal } from '../lib/webCenteredModal'
 
 const ISO_RE = /^\d{4}-\d{2}-\d{2}$/
 
@@ -36,6 +36,7 @@ function defaultFrom(): string {
 }
 
 export function StatementPdfModal({ visible, onClose, accountCurrency }: Props) {
+  const useCenteredModal = useWebCenteredModal()
   const [fromStr, setFromStr] = useState(() => defaultFrom())
   const [toStr, setToStr] = useState(() => new Date().toISOString().slice(0, 10))
   const [loading, setLoading] = useState(false)
@@ -78,16 +79,16 @@ export function StatementPdfModal({ visible, onClose, accountCurrency }: Props) 
   return (
     <Modal
       visible={visible}
-      animationType={USE_WEB_CENTERED_MODAL ? 'fade' : 'slide'}
+      animationType={useCenteredModal ? 'fade' : 'slide'}
       transparent
       onRequestClose={onClose}
     >
       <KeyboardAvoidingView
-        style={[styles.backdrop, USE_WEB_CENTERED_MODAL && styles.backdropWeb]}
+        style={[styles.backdrop, useCenteredModal && styles.backdropWeb]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={0}
       >
-        <View style={[styles.sheet, USE_WEB_CENTERED_MODAL && styles.sheetWeb]}>
+        <View style={[styles.sheet, useCenteredModal && styles.sheetWeb]}>
           <View style={styles.sheetHeader}>
             <Text style={styles.sheetTitle}>Download statement</Text>
             <Pressable

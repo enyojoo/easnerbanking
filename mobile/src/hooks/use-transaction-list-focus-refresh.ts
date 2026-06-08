@@ -1,5 +1,6 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useRef } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
+import { Platform } from 'react-native'
 import { isChannelHealthy, type RealtimeHealth } from '@easner/shared'
 
 interface UseTransactionListFocusRefreshOptions {
@@ -43,8 +44,15 @@ export function useTransactionListFocusRefresh({
   const onChainSyncRef = React.useRef(onChainSync)
   onChainSyncRef.current = onChainSync
 
+  const lastWebFocusRefreshRef = useRef(0)
+
   useFocusEffect(
     useCallback(() => {
+      if (Platform.OS === 'web') {
+        const now = Date.now()
+        if (now - lastWebFocusRefreshRef.current < 15_000) return
+        lastWebFocusRefreshRef.current = now
+      }
       void (async () => {
         let chainInserted = false
         if (onChainSyncRef.current) {

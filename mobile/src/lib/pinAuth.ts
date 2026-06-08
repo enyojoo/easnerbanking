@@ -57,8 +57,50 @@ function effectiveLastActiveMs(storedRaw: string | null): number {
 /** Per JS process: cold start should require PIN again for users who have a PIN (see `applyColdStartPinLockIfNeeded`). */
 let coldStartPinLockUserId: string | null = null
 
+const WEB_PIN_SESSION_KEY = 'easner_web_pin_unlocked'
+let webRestoredFromBfcache = false
+
 function resetColdStartPinLockState() {
   coldStartPinLockUserId = null
+}
+
+/** Set from App.tsx `pageshow` when the tab is restored from the back/forward cache. */
+export function markWebBfcacheRestore(): void {
+  if (Platform.OS === 'web') webRestoredFromBfcache = true
+}
+
+function consumeWebBfcacheRestore(): boolean {
+  if (!webRestoredFromBfcache) return false
+  webRestoredFromBfcache = false
+  return true
+}
+
+/** Remember PIN unlock for this browser tab session (survives soft reloads, not sign-out). */
+export function markWebPinSessionUnlocked(userId: string): void {
+  if (Platform.OS !== 'web' || typeof sessionStorage === 'undefined') return
+  try {
+    sessionStorage.setItem(WEB_PIN_SESSION_KEY, userId)
+  } catch {
+    // ignore
+  }
+}
+
+export function clearWebPinSession(): void {
+  if (Platform.OS !== 'web' || typeof sessionStorage === 'undefined') return
+  try {
+    sessionStorage.removeItem(WEB_PIN_SESSION_KEY)
+  } catch {
+    // ignore
+  }
+}
+
+function getWebPinSessionUserId(): string | null {
+  if (Platform.OS !== 'web' || typeof sessionStorage === 'undefined') return null
+  try {
+    return sessionStorage.getItem(WEB_PIN_SESSION_KEY)
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -74,6 +116,11 @@ export function skipColdStartPinLockForUser(userId: string): void {
 export async function applyColdStartPinLockIfNeeded(userId: string): Promise<void> {
   if (coldStartPinLockUserId === userId) return
   coldStartPinLockUserId = userId
+  if (Platform.OS === 'web') {
+    if (consumeWebBfcacheRestore() || getWebPinSessionUserId() === userId) {
+      return
+    }
+  }
   if (!(await hasPin(userId))) return
   await setAppLocked(userId, true)
 }
@@ -368,6 +415,7 @@ export async function removePin(userId: string): Promise<void> {
 
 export async function clearPinAuth(): Promise<void> {
   try {
+    clearWebPinSession()
     resetColdStartPinLockState()
     const { supabase } = await import('./supabase')
     const { data } = await supabase.auth.getUser()

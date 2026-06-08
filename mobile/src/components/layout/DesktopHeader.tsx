@@ -11,9 +11,10 @@ import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import { avatarImageUri } from '../../lib/avatarCache'
 import { haptics } from '../../lib/haptics'
 import { ripple } from '../../lib/androidRipple'
-import { USE_WEB_CENTERED_MODAL, webCenteredModalStyles } from '../../lib/webCenteredModal'
+import { useWebCenteredModal, webCenteredModalStyles } from '../../lib/webCenteredModal'
 
 export function DesktopHeader() {
+  const useCenteredModal = useWebCenteredModal()
   const palette = useThemeColors()
   const insets = useSafeAreaInsets()
   const { userProfile, signOut } = useAuth()
@@ -81,11 +82,11 @@ export function DesktopHeader() {
           <ChevronDown size={16} color={palette.text.secondary} strokeWidth={2} />
         </Pressable>
 
-        {menuOpen && !USE_WEB_CENTERED_MODAL ? (
+        {menuOpen && !useCenteredModal ? (
           <View style={styles.dropdown}>{menuItems}</View>
         ) : null}
       </View>
-      {USE_WEB_CENTERED_MODAL ? (
+      {useCenteredModal ? (
         <Modal
           visible={menuOpen}
           transparent

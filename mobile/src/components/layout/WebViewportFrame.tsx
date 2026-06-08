@@ -46,8 +46,9 @@ const styles = StyleSheet.create({
   outer: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     width: '100%',
+    height: '100%',
     minHeight: '100%',
   },
   inner: {
@@ -61,7 +62,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(15, 17, 16, 0.12)',
     borderRadius: spacing[4],
     ...shadows.md,
-    marginVertical: spacing[4],
+    marginTop: spacing[4],
+    marginBottom: spacing[2],
     maxHeight: '100%',
+    flex: 1,
   },
 })

@@ -3,7 +3,7 @@ import { Modal, Platform, Pressable, StyleSheet, View, useWindowDimensions } fro
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { colors, spacing, borderRadius } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
-import { USE_WEB_CENTERED_MODAL, webCenteredModalStyles } from '../../lib/webCenteredModal'
+import { useWebCenteredModal, webCenteredModalStyles } from '../../lib/webCenteredModal'
 
 type DropdownAnchor = {
   x: number
@@ -32,6 +32,7 @@ function SheetBody({
   anchor?: DropdownAnchor | null
   children: React.ReactNode
 }) {
+  const useCenteredModal = useWebCenteredModal()
   const insets = useSafeAreaInsets()
   const { width: windowWidth, height: windowHeight } = useWindowDimensions()
   const horizontalInset = spacing[5]
@@ -47,7 +48,7 @@ function SheetBody({
     ? Math.max(140, Math.min(320, bottomLimit - (dropdownTop ?? 0)))
     : 320
 
-  if (USE_WEB_CENTERED_MODAL) {
+  if (useCenteredModal) {
     return (
       <View style={webCenteredModalStyles.overlay}>
         <Pressable

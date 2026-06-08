@@ -9,7 +9,6 @@ import {
   ScrollView,
   Platform,
   Animated,
-  Modal,
   Keyboard,
   useWindowDimensions,
 } from 'react-native'
@@ -19,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Path } from 'react-native-svg'
 import ScreenWrapper from '../../components/ScreenWrapper'
+import { WebAwareModal } from '../../components/WebAwareModal'
 import SkeletonLoader from '../../components/SkeletonLoader'
 import { CachedImage } from '../../components/CachedImage'
 import { NavigationProps } from '../../types'
@@ -1679,24 +1679,19 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         </View>
 
         {/* Sending Method Modal */}
-        <Modal
+        <WebAwareModal
           visible={showCurrencyPicker}
-          animationType="fade"
-          transparent={true}
-          onRequestClose={() => {
-            setShowCurrencyPicker(false)
+          onRequestClose={() => setShowCurrencyPicker(false)}
+          nativePanelStyle={{
+            height: Math.min(windowHeight * 0.78, 680),
+            minHeight: Math.min(windowHeight * 0.58, 520),
+            paddingBottom: Math.max(insets.bottom, 20),
+          }}
+          webPanelStyle={{
+            maxHeight: Math.min(windowHeight * 0.78, 680),
+            minHeight: Math.min(windowHeight * 0.58, 520),
           }}
         >
-          <View style={styles.modalOverlay}>
-            <Pressable
-             android_ripple={ripple.neutral}
-              style={StyleSheet.absoluteFill} onPress={() => setShowCurrencyPicker(false)}
-            />
-            <View style={[styles.modalContainer, { 
-              height: Math.min(windowHeight * 0.78, 680),
-              minHeight: Math.min(windowHeight * 0.58, 520),
-              paddingBottom: Math.max(insets.bottom, 20),
-            }]} onStartShouldSetResponder={() => true} onResponderGrant={() => {}}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>How would you like to send?</Text>
                 <Pressable
@@ -1897,23 +1892,15 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 ) : null}
               </View>
               </ScrollView>
-            </View>
-          </View>
-        </Modal>
+        </WebAwareModal>
 
-        <Modal
+        <WebAwareModal
           visible={showPurposePicker}
-          animationType="fade"
-          transparent
           onRequestClose={() => setShowPurposePicker(false)}
+          compact
+          nativePanelStyle={{ maxHeight: windowHeight * 0.6, paddingBottom: insets.bottom }}
+          webPanelStyle={{ maxHeight: windowHeight * 0.6 }}
         >
-          <View style={styles.modalOverlay}>
-            <Pressable
-              android_ripple={ripple.neutral}
-              style={StyleSheet.absoluteFill}
-              onPress={() => setShowPurposePicker(false)}
-            />
-            <View style={[styles.modalContainer, { maxHeight: windowHeight * 0.6, paddingBottom: insets.bottom }]}>
               <Text style={styles.modalTitle}>Payment purpose</Text>
               <ScrollView keyboardShouldPersistTaps="handled">
                 {(payoutHints?.payment_purpose_enum ?? []).map((p) => (
@@ -1931,9 +1918,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   </Pressable>
                 ))}
               </ScrollView>
-            </View>
-          </View>
-        </Modal>
+        </WebAwareModal>
       </View>
     </ScreenWrapper>
   )

@@ -1,8 +1,15 @@
-import { Platform, StyleSheet } from 'react-native'
+import { StyleSheet } from 'react-native'
+import { useOptionalResponsiveLayout } from '../contexts/ResponsiveLayoutContext'
 import { borderRadius, shadows, spacing } from '../theme'
 
-/** Expo web uses centered dialogs (business-style); native keeps bottom sheets. */
-export const USE_WEB_CENTERED_MODAL = Platform.OS === 'web'
+/**
+ * Centered dialog on web tablet/desktop shell only (≥600px, sidebar visible).
+ * Mobile web and native keep bottom sheets / anchored pickers.
+ */
+export function useWebCenteredModal(): boolean {
+  const layout = useOptionalResponsiveLayout()
+  return layout?.showSidebarShell ?? false
+}
 
 export const webCenteredModalStyles = StyleSheet.create({
   overlay: {

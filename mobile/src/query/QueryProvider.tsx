@@ -31,6 +31,15 @@ import { recipientService } from '../lib/recipientService'
 // works the same as web. We still keep it OFF by default in the mobile
 // QueryClient (see client.ts) but hooks can opt in per-query.
 focusManager.setEventListener((handleFocus) => {
+  if (Platform.OS === 'web') {
+    if (typeof document === 'undefined') return () => {}
+    const onVisibility = () => {
+      handleFocus(document.visibilityState === 'visible')
+    }
+    handleFocus(document.visibilityState === 'visible')
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }
   const sub = AppState.addEventListener('change', (status: AppStateStatus) => {
     handleFocus(status === 'active')
   })
@@ -129,6 +138,14 @@ function ForegroundResumeRefresher({ children }: { children: React.ReactNode }) 
     }, [isReady, scope, user?.id, realtimeHealth])
 
   React.useEffect(() => {
+    if (Platform.OS === 'web') {
+      if (typeof document === 'undefined') return
+      const onVisibility = () => {
+        if (document.visibilityState === 'visible') refreshNow()
+      }
+      document.addEventListener('visibilitychange', onVisibility)
+      return () => document.removeEventListener('visibilitychange', onVisibility)
+    }
     const sub = AppState.addEventListener('change', (status) => {
       if (status === 'active') {
         refreshNow()

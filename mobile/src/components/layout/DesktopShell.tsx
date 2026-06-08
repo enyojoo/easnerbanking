@@ -1,5 +1,5 @@
 import React, { type ReactNode } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { Platform, StyleSheet, View } from 'react-native'
 import { useThemeColors } from '../../contexts/ThemePaletteContext'
 import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
 import { CONTENT_MAX_WIDTH_DESKTOP, spacing } from '../../theme'
@@ -43,17 +43,20 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     width: '100%',
+    height: Platform.OS === 'web' ? '100%' : undefined,
     minHeight: '100%',
   },
   contentColumn: {
     flex: 1,
     minWidth: 0,
+    minHeight: 0,
   },
   main: {
     flex: 1,
     minWidth: 0,
+    minHeight: 0,
     paddingHorizontal: spacing[8],
-    paddingBottom: spacing[10],
+    paddingBottom: Platform.OS === 'web' ? spacing[4] : spacing[10],
   },
   mainInner: {
     flex: 1,

@@ -33,7 +33,11 @@ import {
 } from './src/query/refresh-money-feeds'
 import AppNavigator from './src/navigation/AppNavigator'
 import { webLinking } from './src/navigation/linking'
+import { formatWebDocumentTitle, setWebDocumentTitle } from './src/navigation/webDocumentTitle'
+import { WebIdleSessionBridge } from './src/components/WebIdleSessionBridge'
+import { markWebBfcacheRestore } from './src/lib/pinAuth'
 import { ResponsiveLayoutProvider } from './src/contexts/ResponsiveLayoutContext'
+import { ShellAwareSafeArea } from './src/components/layout/ShellAwareSafeArea'
 import { WebViewportFrame } from './src/components/layout/WebViewportFrame'
 import { PushNotificationBootstrap } from './src/components/PushNotificationBootstrap'
 import {
@@ -82,6 +86,28 @@ function AppContent() {
     }
   }, [])
 
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return
+    setWebDocumentTitle()
+    const html = document.documentElement
+    const body = document.body
+    const root = document.getElementById('root')
+    html.style.height = '100%'
+    body.style.height = '100%'
+    body.style.margin = '0'
+    if (root) {
+      root.style.height = '100%'
+      root.style.display = 'flex'
+      root.style.flexDirection = 'column'
+      root.style.minHeight = '100%'
+    }
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) markWebBfcacheRestore()
+    }
+    window.addEventListener('pageshow', onPageShow)
+    return () => window.removeEventListener('pageshow', onPageShow)
+  }, [])
+
   // Single native splash (`app.json` + `expo-splash-screen`): keep it visible until:
   // - Supabase session restore has resolved (`authLoading` false)
   // - React Navigation has mounted (`navReady` true)
@@ -127,6 +153,13 @@ function AppContent() {
     <NavigationContainer
       ref={navigationRef}
       linking={Platform.OS === 'web' ? webLinking : undefined}
+      documentTitle={
+        Platform.OS === 'web'
+          ? {
+              formatter: formatWebDocumentTitle,
+            }
+          : undefined
+      }
       onReady={() => {
         setNavReady(true)
         analytics.setScreenTrackingMode('auto')
@@ -183,6 +216,7 @@ function AppContent() {
         }
         backgroundColor={Platform.OS === 'android' ? palette.background.primary : undefined}
       />
+      <WebIdleSessionBridge />
       <AppNavigator />
     </NavigationContainer>
   )
@@ -348,6 +382,7 @@ export default function App() {
         {/* Global safe areas (react-native-safe-area-context). Expo Router not used — React Navigation + stack/tabs. */}
         <SafeAreaProvider>
           <ResponsiveLayoutProvider>
+          <ShellAwareSafeArea>
           <ThemePaletteProvider>
             <PostHogProvider>
               <AuthProvider>
@@ -364,6 +399,7 @@ export default function App() {
               </AuthProvider>
             </PostHogProvider>
           </ThemePaletteProvider>
+          </ShellAwareSafeArea>
           </ResponsiveLayoutProvider>
         </SafeAreaProvider>
       </PressablesConfig>

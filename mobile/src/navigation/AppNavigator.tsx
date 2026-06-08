@@ -15,6 +15,7 @@ import {
   markSessionInteraction,
   evaluateIdleLock,
   applyColdStartPinLockIfNeeded,
+  markWebPinSessionUnlocked,
 } from '../lib/pinAuth'
 import { flushPendingDeepLinkNavigation } from '../lib/pendingDeepLinkNavigation'
 import {
@@ -735,6 +736,9 @@ export default function AppNavigator() {
   useEffect(() => {
     return registerAppLockListener((event) => {
       if (event === 'unlocked') {
+        if (Platform.OS === 'web' && user?.id) {
+          markWebPinSessionUnlocked(user.id)
+        }
         setPinGate('main')
         prefetchIntercomModule()
         void prepareIntercomMessenger()
@@ -747,7 +751,7 @@ export default function AppNavigator() {
       }
       setLockTick((t) => t + 1)
     })
-  }, [userProfile?.profile?.avatar_url])
+  }, [user?.id, userProfile?.profile?.avatar_url])
 
   useEffect(() => {
     const ready = pinGate === 'main'
@@ -819,6 +823,7 @@ export default function AppNavigator() {
   }, [user?.id, pinGate, signOut])
 
   useEffect(() => {
+    if (Platform.OS === 'web') return
     if (!user?.id || pinGate !== 'main') return
     const handleAppStateChange = async (nextAppState: AppStateStatus) => {
       if (nextAppState !== 'active') return
@@ -839,6 +844,7 @@ export default function AppNavigator() {
   
   // Re-check onboarding when app comes to foreground (in case it was changed)
   useEffect(() => {
+    if (Platform.OS === 'web') return
     const handleAppStateChange = async (nextAppState: AppStateStatus) => {
       if (nextAppState === 'active') {
         // Re-check onboarding status when app comes to foreground

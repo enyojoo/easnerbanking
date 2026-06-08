@@ -7,7 +7,6 @@ import {
   StyleSheet,
   TextInput,
   RefreshControl,
-  Modal,
   Animated,
   ActivityIndicator,
   ScrollView,
@@ -31,6 +30,7 @@ import {
   ChevronDown,
 } from 'lucide-react-native'
 import ScreenWrapper from '../../components/ScreenWrapper'
+import { WebAwareModal } from '../../components/WebAwareModal'
 import { CachedImage } from '../../components/CachedImage'
 import KeyboardSafeContainer from '../../components/KeyboardSafeContainer'
 import { useToast } from '../../components/ToastProvider'
@@ -1281,30 +1281,19 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
       </View>
 
       {/* Step 1: Recipient Type Selection Modal */}
-      <Modal
+      <WebAwareModal
         visible={showRecipientTypeModal}
-        animationType="slide"
-        transparent={true}
+        keyboardAvoiding
+        compact
         onRequestClose={() => {
           setShowRecipientTypeModal(false)
           resetForm()
         }}
+        nativePanelStyle={[
+          styles.recipientTypeModal,
+          { paddingBottom: Math.max(insets.bottom, 20) },
+        ]}
       >
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-        >
-          <Pressable 
-           android_ripple={ripple.neutral} 
-            style={StyleSheet.absoluteFill} onPress={() => {
-              setShowRecipientTypeModal(false)
-              resetForm()
-            }}
-          />
-          <View style={[styles.modalContainer, styles.recipientTypeModal, { 
-            paddingBottom: Math.max(insets.bottom, 20),
-          }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add a new</Text>
               <Pressable
@@ -1435,38 +1424,28 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                 </View>
               </Pressable>
             </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      </WebAwareModal>
 
       {/* Step 2: Bank Account Form Modal */}
-      <Modal
+      <WebAwareModal
         visible={showBankAccountForm}
-        animationType="slide"
-        transparent={true}
         onRequestClose={() => {
+          closeAllDropdowns()
           setShowBankAccountForm(false)
           setEditingRecipient(null)
           resetForm()
         }}
+        nativePanelStyle={{
+          height: '92%',
+          paddingBottom: Math.max(insets.bottom, 20),
+        }}
+        webPanelStyle={{
+          maxWidth: 560,
+          maxHeight: '90%',
+        }}
       >
-        <View style={styles.modalOverlay}>
-          <Pressable 
-           android_ripple={ripple.neutral} 
-            style={StyleSheet.absoluteFill} onPress={() => {
-              closeAllDropdowns()
-              setShowBankAccountForm(false)
-              setEditingRecipient(null)
-              resetForm()
-            }}
-          />
           <RecipientFormDropdownHost>
-          <View 
-            style={[styles.modalContainer, { 
-              height: '92%',
-              paddingBottom: Math.max(insets.bottom, 20),
-            }]}
-          >
+          <View style={styles.modalFormBody}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 {showWalletAddressScanner && selectedRecipientType === 'wallet'
@@ -2322,8 +2301,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
             )}
           </View>
           </RecipientFormDropdownHost>
-        </View>
-      </Modal>
+      </WebAwareModal>
 
       <EasnerAlertSheet
         visible={deleteConfirmation !== null}
@@ -2555,21 +2533,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
-  modalContainer: {
-    backgroundColor: colors.background.primary,
-    borderTopLeftRadius: borderRadius['3xl'],
-    borderTopRightRadius: borderRadius['3xl'],
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.neutral.black,
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 16,
-      },
-    }),
+  modalFormBody: {
+    flex: 1,
+    minHeight: 0,
   },
   modalHeader: {
     flexDirection: 'row',

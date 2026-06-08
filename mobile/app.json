@@ -69,7 +69,9 @@
       ]
     },
     "web": {
-      "favicon": "./assets/icons/easner-favicon.png"
+      "favicon": "./assets/icons/easner-favicon.png",
+      "name": "Easner Banking",
+      "shortName": "Easner"
     },
     "extra": {
       "eas": {
