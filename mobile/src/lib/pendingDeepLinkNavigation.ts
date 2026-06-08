@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { NavigationContainerRef } from '@react-navigation/native'
+import { isMobileDeepLinkHost } from '@easner/shared'
 
 const STORAGE_KEY = '@easner_pending_deep_link_v1'
 const MAX_AGE_MS = 24 * 60 * 60 * 1000
@@ -21,9 +22,22 @@ export function isSupabaseOauthAppCallback(url: string): boolean {
 
 export function isUserDeepLinkUrl(url: string): boolean {
   if (isSupabaseOauthAppCallback(url)) return false
-  if (!/easner\.com|easner:\/\//.test(url)) return false
-  const path = url.replace(/^https?:\/\/[^/]+/, '').split('?')[0]?.split('#')[0] ?? ''
-  return path === '/user' || path.startsWith('/user/')
+
+  if (/^easner:\/\//.test(url)) {
+    const rest = url.replace(/^easner:\/\//, '').split('?')[0]?.split('#')[0] ?? ''
+    const path = rest.startsWith('/') ? rest : `/${rest}`
+    return path === '/user' || path.startsWith('/user/')
+  }
+
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false
+    if (!isMobileDeepLinkHost(parsed.hostname)) return false
+    const path = parsed.pathname
+    return path === '/user' || path.startsWith('/user/')
+  } catch {
+    return false
+  }
 }
 
 export function parseDeepLinkFromUrl(url: string): PendingDeepLinkPayload | null {

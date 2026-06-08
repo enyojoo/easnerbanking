@@ -27,7 +27,7 @@
         ]
       },
       "associatedDomains": [
-        "applinks:easner.com"
+        "applinks:app.easner.com"
       ],
       "entitlements": {
         "aps-environment": "production",
@@ -57,7 +57,8 @@
           "data": [
             {
               "scheme": "https",
-              "host": "easner.com"
+              "host": "app.easner.com",
+              "pathPrefix": "/user"
             }
           ],
           "category": [

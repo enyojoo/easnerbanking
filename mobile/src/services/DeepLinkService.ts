@@ -1,6 +1,6 @@
 import * as Linking from 'expo-linking'
 import type { NavigationContainerRef } from '@react-navigation/native'
-import { getApiBaseUrl } from '../lib/apiClient'
+import { APP_URLS, isMobileDeepLinkHost } from '@easner/shared'
 import {
   flushPendingDeepLinkNavigation,
   isSupabaseOauthAppCallback,
@@ -83,7 +83,7 @@ export class DeepLinkService {
    */
   createDeepLink(screen: string, params: Record<string, string> = {}): string {
     try {
-      const baseUrl = getApiBaseUrl()
+      const baseUrl = APP_URLS.app
 
       const screenMap: Record<string, string> = {
         Dashboard: '/user/dashboard',
@@ -104,7 +104,7 @@ export class DeepLinkService {
       return `${baseUrl}${path}`
     } catch (error) {
       console.error('DeepLinkService: Error creating deep link:', error)
-      return `${getApiBaseUrl()}/user/dashboard`
+      return `${APP_URLS.app}/user/dashboard`
     }
   }
 
@@ -113,7 +113,9 @@ export class DeepLinkService {
    */
   canHandleUrl(url: string): boolean {
     try {
-      return url.includes('easner.com') || url.includes('easner://')
+      if (url.includes('easner://')) return true
+      const parsed = new URL(url)
+      return isMobileDeepLinkHost(parsed.hostname)
     } catch (error) {
       console.error('DeepLinkService: Error checking URL:', error)
       return false

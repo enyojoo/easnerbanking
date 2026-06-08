@@ -436,7 +436,7 @@ Expand availability as partner coverage grows.
 ### One-time setup
 
 - [ ] Apple Developer Program enrolled under Easner Group, Inc.
-- [ ] App ID `com.easner.mobile` registered with Push Notifications and Associated Domains (`applinks:easner.com`)
+- [ ] App ID `com.easner.mobile` registered with Push Notifications and Associated Domains (`applinks:app.easner.com`)
 - [ ] App created in App Store Connect (name: Easner, SKU: `easner-ios`)
 
 ### Pre-submit (code / product)
@@ -444,7 +444,7 @@ Expand availability as partner coverage grows.
 - [ ] Demo account created — profile complete, **KYC not verified** (matches App Review credentials)
 - [ ] Optional: separate KYC-approved internal account for App Store screenshots only
 - [ ] EAS production env vars set: `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `EXPO_PUBLIC_API_URL`, PostHog, Intercom keys
-- [ ] `easner.com` apple-app-site-association valid for Universal Links
+- [ ] `app.easner.com` apple-app-site-association and assetlinks.json valid for Universal/App Links (see [`docs/mobile/APP-EASNER-COM.md`](../mobile/APP-EASNER-COM.md))
 
 ### Build and upload
 
