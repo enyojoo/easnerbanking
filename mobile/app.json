@@ -69,7 +69,7 @@
       ]
     },
     "web": {
-      "favicon": "./assets/icons/ios-light.png"
+      "favicon": "./assets/icons/easner-favicon.png"
     },
     "extra": {
       "eas": {
