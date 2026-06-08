@@ -36,6 +36,12 @@ vi.mock("@easner/shared", () => ({
     }
   },
   toEasnerTransactionPrimaryLabel: () => "Bank Deposit",
+  resolveTransactionTimingAnchors: () => ({
+    startedAt: "2025-01-15T12:00:00.000Z",
+    completedAt: null,
+    failedAt: null,
+  }),
+  buildTransactionTimingRows: () => [],
 }))
 
 vi.mock("@/lib/transactions/resolve-global-payout-off-ramp", () => ({

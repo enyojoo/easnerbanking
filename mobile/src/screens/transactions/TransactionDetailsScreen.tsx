@@ -722,6 +722,9 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
         transaction.metadata?.payout_type === 'global_fiat' ||
         transaction.metadata?.activity_type === 'wallet_send',
     )
+  const whenTs =
+    transaction.ledger_created_at ||
+    transaction.created_at
   const walletSendReceiveNetwork = String(
     transaction.metadata?.receive_network ??
       transaction.metadata?.chain ??
@@ -754,11 +757,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
       : shouldShowGlobalPayoutProcessingFee({
           processingFee: transaction.payout_review.processing_fee,
         }))
-  const easetagWhenTs =
-    transaction.completed_at ||
-    transaction.updated_at ||
-    transaction.noah_created_at ||
-    transaction.created_at
+  const easetagWhenTs = whenTs
 
   return (
     <ScreenWrapper>
@@ -930,6 +929,10 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
                 {!isEasetagP2p && isBankOnrampReceive ? (
                   <>
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>When</Text>
+                      <Text style={styles.summaryValue}>{formatTimestamp(whenTs)}</Text>
+                    </View>
                     {transaction.fee_amount != null && transaction.fee_amount > 0 ? (
                       <View style={styles.summaryRow}>
                         <Text style={styles.summaryLabel}>Fee</Text>
@@ -1018,7 +1021,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>When</Text>
                       <Text style={styles.summaryValue}>
-                        {formatTimestamp(transaction.noah_created_at || transaction.created_at)}
+                        {formatTimestamp(whenTs)}
                       </Text>
                     </View>
                   </>
@@ -1039,7 +1042,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>When</Text>
                       <Text style={styles.summaryValue}>
-                        {formatTimestamp(transaction.noah_created_at || transaction.created_at)}
+                        {formatTimestamp(whenTs)}
                       </Text>
                     </View>
 
@@ -1199,23 +1202,10 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>When</Text>
                       <Text style={styles.summaryValue}>
-                        {formatTimestamp(
-                          transaction.completed_at ||
-                            transaction.ledger_created_at ||
-                            transaction.noah_created_at ||
-                            transaction.created_at,
-                        )}
+                        {formatTimestamp(whenTs)}
                       </Text>
                     </View>
-                    {(transaction.transaction_timing?.length
-                      ? transaction.transaction_timing
-                      : [
-                          {
-                            label: 'Processing time',
-                            value: transaction.payout_review.processing_time,
-                          },
-                        ]
-                    ).map((row) => (
+                    {transaction.transaction_timing?.map((row) => (
                       <View key={row.label} style={styles.summaryRow}>
                         <Text style={styles.summaryLabel}>{row.label}</Text>
                         <Text style={styles.summaryValue}>{row.value}</Text>
@@ -1263,7 +1253,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>When</Text>
                       <Text style={styles.summaryValue}>
-                        {formatTimestamp(transaction.noah_created_at || transaction.created_at)}
+                        {formatTimestamp(whenTs)}
                       </Text>
                     </View>
 

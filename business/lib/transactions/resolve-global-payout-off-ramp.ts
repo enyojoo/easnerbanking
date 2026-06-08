@@ -311,11 +311,7 @@ export function resolveGlobalPayoutOffRampDetail(
     productFallback: "Transfer",
   })
 
-  const processingAt = pickIso(
-    webhook?.processingAt,
-    meta.processing_at,
-    pickIso(row.occurred_at, row.created_at),
-  )
+  const processingAt = pickIso(webhook?.processingAt, meta.processing_at)
   const completedAt = pickIso(webhook?.completedAt, meta.completed_at)
   const failedAt = pickIso(webhook?.failedAt, meta.failed_at, meta.noah_payout_failed_at)
 
@@ -367,8 +363,8 @@ export function resolveGlobalPayoutOffRampDetail(
     completedAt: timingAnchors.completedAt,
     failedAt: timingAnchors.failedAt,
     expectedProcessingTime: payoutReview?.processing_time,
-    showExpectedWhileInFlight: true,
-    showStartedWhileInFlight: true,
+    showExpectedWhileInFlight: false,
+    showStartedWhileInFlight: false,
   })
 
   const transactionStartedAt = timingAnchors.startedAt

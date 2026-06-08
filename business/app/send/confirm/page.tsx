@@ -647,6 +647,7 @@ export default function SendConfirmPage() {
         globalFiatPayout={!walletSend && !easenetSend}
         receiveNetwork={walletSend ? walletNetwork : undefined}
         walletSendExecutionModel={walletSend ? wq?.executionModel : undefined}
+        mode="confirm"
       />
 
       {(walletSend ? walletQuoteError : payoutQuoteError) && !easenetSend ? (

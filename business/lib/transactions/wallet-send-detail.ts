@@ -1,6 +1,8 @@
 import {
   buildGlobalPayoutLifecycle,
+  buildTransactionTimingRows,
   formatTransactionDetailHeroTitle,
+  resolveTransactionTimingAnchors,
   walletSendListProductLabel,
   walletSendUserFacingDisplayCurrency,
 } from "@easner/shared"
@@ -44,16 +46,29 @@ export function attachWalletSendDetailFields(
       : typeof meta.note === "string"
         ? meta.note.trim()
         : ""
-  const transactionTiming = payoutReview.processing_time
-    ? [{ label: "Processing time", value: payoutReview.processing_time }]
-    : undefined
+  const ledgerStatus = String(row.status ?? "").trim().toLowerCase()
+  const ledgerCreatedAt = row.created_at != null ? String(row.created_at) : null
+  const timingAnchors = resolveTransactionTimingAnchors({
+    createdAt: ledgerCreatedAt,
+    metadata: meta,
+    webhookCompletedAt: row.settled_at != null ? String(row.settled_at) : null,
+    webhookFailedAt:
+      meta.failed_at != null ? String(meta.failed_at).trim() || null : null,
+  })
+  const transactionTiming = buildTransactionTimingRows({
+    status: ledgerStatus,
+    startedAt: timingAnchors.startedAt,
+    completedAt: timingAnchors.completedAt,
+    failedAt: timingAnchors.failedAt,
+    showExpectedWhileInFlight: false,
+    showStartedWhileInFlight: false,
+  })
 
   const displayCurrency = walletSendUserFacingDisplayCurrency({
     receiveCurrency: payoutReview.receive_currency,
     sendCurrency: payoutReview.send_currency,
     executionModel: payoutReview.execution_model,
   })
-  const ledgerStatus = String(row.status ?? "").trim().toLowerCase()
   // Direct Turnkey (and Easetag-style instant sends) settle during execute — no transfer tracker.
   // LI.FI bridge may return pending; show Processing → Complete only while still in flight.
   const lifecycle =
@@ -89,7 +104,8 @@ export function attachWalletSendDetailFields(
     ...(lifecycle ? { lifecycle } : {}),
     ...(recipientSnapshot ? { recipient_snapshot: recipientSnapshot } : {}),
     ...(sendNote ? { send_note: sendNote } : {}),
-    ...(transactionTiming ? { transaction_timing: transactionTiming } : {}),
+    ...(ledgerCreatedAt ? { ledger_created_at: ledgerCreatedAt } : {}),
+    ...(transactionTiming.length ? { transaction_timing: transactionTiming } : {}),
     description: recipientName,
     name: recipientName,
     metadata: {

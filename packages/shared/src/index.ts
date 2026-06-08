@@ -357,6 +357,7 @@ export {
   buildTransactionTimingRows,
   formatTransactionDurationMs,
   resolveTransactionTimingAnchors,
+  resolveTransactionWhenAt,
   type TransactionTimingStartAnchor,
 } from "./transactions/transaction-timing-display"
 export type {

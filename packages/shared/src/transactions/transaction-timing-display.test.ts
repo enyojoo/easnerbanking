@@ -3,6 +3,7 @@ import {
   buildTransactionTimingRows,
   formatTransactionDurationMs,
   resolveTransactionTimingAnchors,
+  resolveTransactionWhenAt,
 } from "./transaction-timing-display"
 
 describe("formatTransactionDurationMs", () => {
@@ -17,22 +18,31 @@ describe("formatTransactionDurationMs", () => {
   })
 })
 
+describe("resolveTransactionWhenAt", () => {
+  it("prefers ledgerCreatedAt over createdAt", () => {
+    expect(
+      resolveTransactionWhenAt("2026-06-01T14:00:00.000Z", "2026-06-01T15:00:00.000Z"),
+    ).toBe("2026-06-01T15:00:00.000Z")
+  })
+
+  it("falls back to createdAt when ledgerCreatedAt is missing", () => {
+    expect(resolveTransactionWhenAt("2026-06-01T15:00:00.000Z")).toBe("2026-06-01T15:00:00.000Z")
+  })
+})
+
 describe("buildTransactionTimingRows", () => {
   const started = "2026-06-01T15:00:00.000Z"
   const completed = "2026-06-01T15:00:12.000Z"
 
-  it("returns Expected and Started while pending for global payout", () => {
+  it("returns no summary rows while in-flight", () => {
     const rows = buildTransactionTimingRows({
       status: "pending",
       startedAt: started,
       expectedProcessingTime: "Within minutes",
-      showExpectedWhileInFlight: true,
-      showStartedWhileInFlight: true,
+      showExpectedWhileInFlight: false,
+      showStartedWhileInFlight: false,
     })
-    expect(rows).toEqual([
-      { label: "Expected", value: "Within minutes" },
-      { label: "Started", value: expect.stringContaining("Jun") },
-    ])
+    expect(rows).toEqual([])
   })
 
   it("returns no summary rows while deposit is in-flight", () => {
@@ -45,14 +55,14 @@ describe("buildTransactionTimingRows", () => {
     expect(rows).toEqual([])
   })
 
-  it("returns Arrived with actual duration when settled with both timestamps", () => {
+  it("returns Arrived after with actual duration when settled with both timestamps", () => {
     const rows = buildTransactionTimingRows({
       status: "settled",
       startedAt: started,
       completedAt: completed,
       showTerminalDuration: true,
     })
-    expect(rows).toEqual([{ label: "Arrived", value: "12 seconds" }])
+    expect(rows).toEqual([{ label: "Arrived after", value: "12 seconds" }])
   })
 
   it("returns no terminal duration rows when showTerminalDuration is false", () => {
@@ -98,7 +108,7 @@ describe("resolveTransactionTimingAnchors", () => {
       startedAt: anchors.startedAt,
       completedAt: anchors.completedAt,
     })
-    expect(rows[0]).toEqual({ label: "Arrived", value: "12 seconds" })
+    expect(rows[0]).toEqual({ label: "Arrived after", value: "12 seconds" })
   })
 
   it("uses processing_at as deposit duration start", () => {
@@ -116,7 +126,7 @@ describe("resolveTransactionTimingAnchors", () => {
       completedAt: anchors.completedAt,
       showStartedWhileInFlight: false,
     })
-    expect(rows[0]).toEqual({ label: "Arrived", value: "45 seconds" })
+    expect(rows[0]).toEqual({ label: "Arrived after", value: "45 seconds" })
   })
 
   it("prefers webhook failed_at for failed duration", () => {

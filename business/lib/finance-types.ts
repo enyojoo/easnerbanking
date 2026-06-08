@@ -69,6 +69,8 @@ export interface Transaction {
   asset?: string
   chain?: string
   settledAt?: string
+  /** Ledger row creation time — detail "When" (distinct from list `date`). */
+  ledgerCreatedAt?: string
   /** Detail row label — e.g. Easetag P2P shows "Easetag". */
   paymentScheme?: string
   /** User note from send flow (Easetag / payout metadata). */

@@ -4,6 +4,8 @@ import {
   displayEasnerTransactionIdForList,
   formatDisplayPersonName,
   formatTransactionDetailHeroTitle,
+  buildTransactionTimingRows,
+  resolveTransactionTimingAnchors,
   isBankOnrampDepositFlow,
   isVerificationDepositMetadata,
   mapLedgerStatusForUserFeed,
@@ -19,9 +21,29 @@ import {
   resolveWalletSendPayoutReview,
 } from "@/lib/wallet-send/build-wallet-send-payout-review"
 
-function payoutReviewProcessingTiming(processingTime: string | undefined) {
-  const value = String(processingTime ?? "").trim()
-  return value ? [{ label: "Processing time", value }] : undefined
+function resolveWalletSendTransactionTiming(row: Record<string, unknown>) {
+  const meta = (row.metadata as Record<string, unknown> | null | undefined) ?? {}
+  const timingAnchors = resolveTransactionTimingAnchors({
+    createdAt: row.created_at != null ? String(row.created_at) : null,
+    metadata: meta,
+    webhookCompletedAt: row.settled_at != null ? String(row.settled_at) : readMetaIso(meta, "completed_at"),
+    webhookFailedAt: readMetaIso(meta, "failed_at"),
+  })
+  return buildTransactionTimingRows({
+    status: String(row.status ?? ""),
+    startedAt: timingAnchors.startedAt,
+    completedAt: timingAnchors.completedAt,
+    failedAt: timingAnchors.failedAt,
+    showExpectedWhileInFlight: false,
+    showStartedWhileInFlight: false,
+  })
+}
+
+function readMetaIso(meta: Record<string, unknown>, key: string): string | null {
+  const v = meta[key]
+  if (v == null) return null
+  const s = String(v).trim()
+  return s || null
 }
 
 function deriveCounterpartyName(input: {
@@ -131,6 +153,9 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
       payload,
     })
 
+  const ledgerCreatedAt =
+    row.created_at != null ? String(row.created_at) : undefined
+
   const created =
     row.occurred_at != null
       ? String(row.occurred_at)
@@ -222,6 +247,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
           recipientSnapshot: globalPayoutDetail.recipientSnapshot ?? undefined,
           lifecycle: globalPayoutDetail.lifecycle,
           transactionTiming: globalPayoutDetail.transactionTiming,
+          ledgerCreatedAt: globalPayoutDetail.ledgerCreatedAt ?? ledgerCreatedAt,
         }
       : walletSendPayoutReview
         ? {
@@ -233,13 +259,15 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
               meta?.recipient_snapshot && typeof meta.recipient_snapshot === "object"
                 ? (meta.recipient_snapshot as TransactionWithSource["recipientSnapshot"])
                 : undefined,
-            transactionTiming: payoutReviewProcessingTiming(walletSendPayoutReview.processing_time),
+            transactionTiming: resolveWalletSendTransactionTiming(row),
+            ledgerCreatedAt,
           }
       : walletSendList
         ? {
             displayHeroTitle: walletSendList.displayHeroTitle,
             ledgerAmount: walletSendList.ledgerAmount,
             ledgerCurrency: walletSendList.ledgerCurrency,
+            ledgerCreatedAt,
           }
       : bankDepositDetail
         ? {
@@ -250,6 +278,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
             postedCurrency: bankDepositDetail.postedCurrency,
             paymentScheme: bankDepositDetail.depositSchemeLabel,
             narration: bankDepositDetail.narration ?? undefined,
+            ledgerCreatedAt: bankDepositDetail.ledgerCreatedAt ?? ledgerCreatedAt,
           }
         : globalPayoutList
         ? {
@@ -273,6 +302,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     asset: row.asset != null ? String(row.asset) : undefined,
     chain: row.chain != null ? String(row.chain) : undefined,
     settledAt: row.settled_at != null ? String(row.settled_at) : undefined,
+    ledgerCreatedAt,
     ...(sendNote ? { sendNote } : {}),
   }
 }

@@ -32,8 +32,10 @@ type Props = {
   showFeeBreakdown?: boolean
   /** Detail view: hero already shows receive amount. Confirm/review keeps this row. */
   showRecipientGets?: boolean
-  /** Dynamic timing (Expected / Started / Arrived). Omit on send confirm. */
+  /** Dynamic timing (Arrived after / Failed after). Omit on send confirm. */
   timingRows?: TransactionTimingRow[] | null
+  /** Confirm shows Arrival estimate; detail uses whenAt + timingRows only. */
+  mode?: "confirm" | "detail"
   /** When true, Noah global fiat — margin is in customer rate; hide processing fee row. */
   globalFiatPayout?: boolean
   /** When set, uses wallet-send FX rules (direct Turnkey Solana stables hide rate). */
@@ -91,6 +93,7 @@ export function PayoutReviewDetailsRows({
   recipientDisplayName,
   counterpartyAddress,
   whenAt,
+  mode = "detail",
 }: Props) {
   const hasFx = receiveNetwork
     ? hasWalletSendFxDisplay(
@@ -267,7 +270,7 @@ export function PayoutReviewDetailsRows({
 
         {timingRows?.length ? (
           <TransactionTimingRows rows={timingRows} />
-        ) : payoutReview.processing_time ? (
+        ) : mode === "confirm" && payoutReview.processing_time ? (
           <div className="flex items-center justify-between border-b pb-4">
             <span className="text-sm text-muted-foreground">Arrival</span>
             <span className="font-medium">{payoutReview.processing_time}</span>

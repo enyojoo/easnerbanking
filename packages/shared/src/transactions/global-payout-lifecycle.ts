@@ -55,8 +55,7 @@ export function buildGlobalPayoutLifecycle(
 ): GlobalPayoutLifecycleStep[] {
   const meta = input.metadata ?? {}
   const ledgerStatus = normalizeLedgerStatus(input.status)
-  const processingAt =
-    readIso(meta, "processing_at") ?? input.occurredAt ?? input.createdAt ?? null
+  const processingAt = readIso(meta, "processing_at")
   const completedAt = readIso(meta, "completed_at") ?? input.settledAt ?? null
   const failedAt =
     readIso(meta, "failed_at") ?? readIso(meta, "noah_payout_failed_at") ?? null
@@ -80,7 +79,7 @@ export function buildGlobalPayoutLifecycle(
         description:
           "This transfer could not be completed. Please contact support with your transaction reference.",
         state: "current",
-        occurredAt: failedAt ?? processingAt,
+        occurredAt: failedAt,
       },
     ]
   }

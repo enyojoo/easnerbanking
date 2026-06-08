@@ -9,6 +9,7 @@ import {
   deriveVerificationDepositNarrationLabel,
   isBankOnrampDepositFlow,
   isVerificationDepositMetadata,
+  resolveTransactionTimingAnchors,
   type BankDepositLifecycleStep,
   type TransactionTimingRow,
 } from "@easner/shared"
@@ -174,9 +175,7 @@ export function resolveBankDepositPayInDetail(
       }) ?? undefined)
 
   const processingAt =
-    pickIso(meta.processing_at) ??
-    fiatDepositWebhook?.processingAt ??
-    pickIso(payload.Created, row.occurred_at, row.created_at)
+    pickIso(meta.processing_at, fiatDepositWebhook?.processingAt, payload.Created, row.occurred_at)
 
   const ruleExecutionId =
     txEnrichment?.ruleExecutionId ??
@@ -266,12 +265,23 @@ export function resolveBankDepositPayInDetail(
     createdAt: row.created_at != null ? String(row.created_at) : null,
   })
 
+  const timingAnchors = resolveTransactionTimingAnchors({
+    createdAt: row.created_at != null ? String(row.created_at) : null,
+    metadata: effectiveMetadata,
+    webhookProcessingAt: fiatDepositWebhook?.processingAt,
+    webhookCompletedAt: completedAt,
+    webhookFailedAt: failedAt,
+    lifecycle,
+  })
+
   const transactionTiming = buildTransactionTimingRows({
     status: ledgerStatus,
-    startedAt: null,
+    startedAt: timingAnchors.startedAt,
+    completedAt: timingAnchors.completedAt,
+    failedAt: timingAnchors.failedAt,
     showExpectedWhileInFlight: false,
     showStartedWhileInFlight: false,
-    showTerminalDuration: false,
+    showTerminalDuration: true,
   })
 
   return {

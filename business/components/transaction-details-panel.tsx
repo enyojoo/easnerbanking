@@ -133,22 +133,22 @@ function TransactionSummaryDetails({
           </div>
         ) : null}
 
+        <div className="flex justify-between gap-4 text-sm">
+          <span className="shrink-0 text-muted-foreground">When</span>
+          <span className="text-right font-medium">
+            {new Date(transaction.ledgerCreatedAt ?? transaction.date).toLocaleDateString("en-US", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </span>
+        </div>
+
         {timingRows?.length ? (
           <TransactionTimingRows rows={timingRows} className="flex justify-between gap-4 border-b pb-4 text-sm" />
-        ) : (
-          <div className="flex justify-between gap-4 text-sm">
-            <span className="shrink-0 text-muted-foreground">When</span>
-            <span className="text-right font-medium">
-              {new Date(transaction.date).toLocaleDateString("en-US", {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </span>
-          </div>
-        )}
+        ) : null}
 
         {isCard && cardLast4 ? (
           <div className="flex justify-between text-sm">
@@ -291,11 +291,8 @@ export function TransactionDetailsPanel({
               ? transaction.counterpartyAddress ?? transaction.walletAddress
               : undefined
           }
-          whenAt={
-            isWalletSendPayout
-              ? transaction.settledAt ?? transaction.date
-              : undefined
-          }
+          whenAt={transaction.ledgerCreatedAt ?? transaction.date}
+          mode="detail"
         />
       ) : (
         <TransactionSummaryDetails

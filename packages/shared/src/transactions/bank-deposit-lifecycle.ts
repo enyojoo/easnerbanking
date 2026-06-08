@@ -83,8 +83,7 @@ export function buildBankDepositLifecycle(
 ): BankDepositLifecycleStep[] {
   const meta = input.metadata ?? {}
   const ledgerStatus = normalizeLedgerStatus(input.status)
-  const processingAt =
-    readIso(meta, "processing_at") ?? input.occurredAt ?? input.createdAt ?? null
+  const processingAt = readIso(meta, "processing_at")
   const onChainSettledAt = readIso(meta, "on_chain_settled_at")
   const isVerification = isVerificationDepositMetadata(meta)
   const completedAt =
@@ -118,7 +117,7 @@ export function buildBankDepositLifecycle(
         description:
           "This deposit could not be posted to your account. Please contact support with your transaction reference.",
         state: "current",
-        occurredAt: failedAt ?? processingAt,
+        occurredAt: failedAt,
       },
     ]
   }

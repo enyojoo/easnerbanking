@@ -131,8 +131,16 @@ function formatStartedDisplay(iso: string | null): string {
   return `${month} ${day}, ${year} • ${displayHours}:${minutes} ${ampm}`
 }
 
+/** Ledger creation time for detail "When" — never settlement or webhook times. */
+export function resolveTransactionWhenAt(
+  createdAt?: string | null,
+  ledgerCreatedAt?: string | null,
+): string | null {
+  return pickIso(ledgerCreatedAt, createdAt)
+}
+
 /**
- * Detail summary rows for timing (Expected / Started / Arrived / Failed after).
+ * Detail summary rows for timing (Expected / Started / Arrived after / Failed after).
  */
 export function buildTransactionTimingRows(
   input: BuildTransactionTimingRowsInput,
@@ -145,7 +153,7 @@ export function buildTransactionTimingRows(
   if (userStatus === "completed" && showTerminalDuration) {
     const endMs = parseIsoMs(input.completedAt)
     if (startedMs != null && endMs != null && endMs >= startedMs) {
-      return [{ label: "Arrived", value: formatTransactionDurationMs(endMs - startedMs) }]
+      return [{ label: "Arrived after", value: formatTransactionDurationMs(endMs - startedMs) }]
     }
     return []
   }
