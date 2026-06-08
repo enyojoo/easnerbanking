@@ -14,7 +14,7 @@ type NotificationsModule = typeof import('expo-notifications')
 let notificationsLazy: NotificationsModule | null = null
 
 function getNotifications(): NotificationsModule | null {
-  if (isExpoGo) return null
+  if (Platform.OS === 'web' || isExpoGo) return null
   if (!notificationsLazy) {
     // Load only outside Expo Go — avoids SDK 53+ noisy warnings when remote push is unavailable there.
     notificationsLazy = require('expo-notifications') as NotificationsModule

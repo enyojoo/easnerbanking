@@ -60,6 +60,7 @@ import { getTransactionListName } from '../../lib/transactionListLabel'
 import { apiPost } from '../../lib/apiClient'
 import { useAuth } from '../../contexts/AuthContext'
 import { haptics } from '../../lib/haptics'
+import { prepareTransactionDetailsNavigation } from '../../navigation/transactionNavParams'
 import { useRealtimeHealth } from '../../query/realtime-health-context'
 import { useTransactionListFocusRefresh } from '../../hooks/use-transaction-list-focus-refresh'
 import { useSplitPaneConfig } from '../../components/layout/SplitPane'
@@ -868,11 +869,14 @@ function TransactionsContent({ navigation }: NavigationProps) {
                                   setSelectedTransactionId(lookupId)
                                   return
                                 }
-                                navigation.navigate('TransactionDetails' as never, {
-                                  transactionId: lookupId,
-                                  fromScreen: 'Transactions',
-                                  initialTransaction: tx,
-                                } as never)
+                                navigation.navigate(
+                                  'TransactionDetails' as never,
+                                  prepareTransactionDetailsNavigation({
+                                    transactionId: lookupId,
+                                    fromScreen: 'Transactions',
+                                    initialTransaction: tx,
+                                  }) as never,
+                                )
                               }}
                               formatAmount={formatAmount}
                               formatDate={formatDate}
@@ -945,11 +949,14 @@ function TransactionsContent({ navigation }: NavigationProps) {
                         android_ripple={ripple.neutral}
                         style={styles.regularWidthDetailButton}
                         onPress={() =>
-                          navigation.navigate('TransactionDetails' as never, {
-                            transactionId: transactionDetailLookupId(selectedTransaction),
-                            fromScreen: 'Transactions',
-                            initialTransaction: selectedTransaction,
-                          } as never)
+                          navigation.navigate(
+                            'TransactionDetails' as never,
+                            prepareTransactionDetailsNavigation({
+                              transactionId: transactionDetailLookupId(selectedTransaction),
+                              fromScreen: 'Transactions',
+                              initialTransaction: selectedTransaction,
+                            }) as never,
+                          )
                         }
                       >
                         <Text style={styles.regularWidthDetailButtonText}>Open details</Text>

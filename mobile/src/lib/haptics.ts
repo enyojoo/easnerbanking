@@ -1,8 +1,10 @@
 import * as ExpoHaptics from 'expo-haptics'
+import { Platform } from 'react-native'
 
 type HapticKind = 'tap' | 'medium' | 'heavy' | 'select' | 'success' | 'error'
 
 function trigger(kind: HapticKind) {
+  if (Platform.OS === 'web') return
   const map: Record<HapticKind, () => Promise<void>> = {
     tap: () => ExpoHaptics.impactAsync(ExpoHaptics.ImpactFeedbackStyle.Light),
     medium: () => ExpoHaptics.impactAsync(ExpoHaptics.ImpactFeedbackStyle.Medium),

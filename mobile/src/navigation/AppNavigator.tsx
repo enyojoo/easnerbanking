@@ -29,6 +29,7 @@ import { haptics } from '../lib/haptics'
 import { useResponsiveLayout } from '../contexts/ResponsiveLayoutContext'
 import { ResponsiveAppShell } from '../components/layout/ResponsiveAppShell'
 import { enterMainAppOnWeb } from './webMainEntry'
+import { webStackScreenListeners } from './webStackScreenListeners'
 // Stack timing and Android vs iOS card transitions: see `transitionPresets.ts`.
 import {
   mainStackPreset,
@@ -99,6 +100,7 @@ function OnboardingStack() {
         headerShown: false,
         gestureEnabled: false,
       }}
+      screenListeners={webStackScreenListeners}
     >
       <Stack.Screen 
         name="Onboarding" 
@@ -115,6 +117,7 @@ function MfaStack() {
         headerShown: false,
         ...mainStackPreset(),
       }}
+      screenListeners={webStackScreenListeners}
     >
       <Stack.Screen name="MfaVerify" component={MfaVerifyScreen} />
     </Stack.Navigator>
@@ -128,6 +131,7 @@ function AuthStack() {
         headerShown: false,
         ...mainStackPreset()
       }}
+      screenListeners={webStackScreenListeners}
     >
       <Stack.Screen 
         name="Auth" 
@@ -340,6 +344,7 @@ function MainStack() {
         headerShown: false,
         ...mainStackPreset()
       }}
+      screenListeners={webStackScreenListeners}
     >
       <Stack.Screen 
         name="MainTabs" 
@@ -612,7 +617,7 @@ const ONBOARDING_COMPLETED_KEY = '@easner_onboarding_completed'
 
 function PinGateSetupStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ headerShown: false }} screenListeners={webStackScreenListeners}>
       <Stack.Screen
         name="PinSetupGate"
         component={PinSetupScreen}
@@ -624,7 +629,7 @@ function PinGateSetupStack() {
 
 function PinGateEntryStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ headerShown: false }} screenListeners={webStackScreenListeners}>
       <Stack.Screen name="PinEntryGate" component={PinEntryScreen} />
     </Stack.Navigator>
   )

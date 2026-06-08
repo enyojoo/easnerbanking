@@ -1,4 +1,5 @@
 import * as Linking from 'expo-linking'
+import { Platform } from 'react-native'
 import type { NavigationContainerRef } from '@react-navigation/native'
 import { APP_URLS, isMobileDeepLinkHost } from '@easner/shared'
 import {
@@ -32,6 +33,7 @@ export class DeepLinkService {
    * Initialize deep linking
    */
   async initialize(): Promise<void> {
+    if (Platform.OS === 'web') return
     try {
       // Handle deep links when the app is already running.
       // Do NOT call `getInitialURL()` here — that URL is single-flight on some platforms, and
@@ -49,7 +51,9 @@ export class DeepLinkService {
    */
   private handleDeepLink = (event: { url: string }): void => {
     try {
-      console.log('DeepLinkService: Received deep link:', event.url)
+      if (__DEV__) {
+        console.log('DeepLinkService: Received deep link:', event.url)
+      }
       if (isSupabaseOauthAppCallback(event.url)) {
         return
       }

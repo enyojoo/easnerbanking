@@ -71,6 +71,7 @@ import { AvatarImage } from '../../components/AvatarImage'
 import { avatarImageUri, warmAvatarCache } from '../../lib/avatarCache'
 import { buildGroupedActivityItems } from '../../lib/transactionListGrouping'
 import { haptics } from '../../lib/haptics'
+import { prepareTransactionDetailsNavigation } from '../../navigation/transactionNavParams'
 
 import {
   DASHBOARD_RECENT_TX_CACHE_KEY_PREFIX,
@@ -926,12 +927,15 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                     ]}
                     onPress={() => {
                       haptics.tap()
-                      navigation.navigate('TransactionDetails' as never, {
-                        transactionId:
-                          transaction.ledger_row_id?.trim() || transaction.transaction_id,
-                        fromScreen: 'Dashboard',
-                        initialTransaction: transaction,
-                      } as never)
+                      navigation.navigate(
+                        'TransactionDetails' as never,
+                        prepareTransactionDetailsNavigation({
+                          transactionId:
+                            transaction.ledger_row_id?.trim() || transaction.transaction_id,
+                          fromScreen: 'Dashboard',
+                          initialTransaction: transaction,
+                        }) as never,
+                      )
                     }}
                     onPressIn={() => {
                       if (!scope) return

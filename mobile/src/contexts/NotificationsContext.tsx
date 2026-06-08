@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
+import { Platform } from 'react-native'
 import type { Notification as ExpoPushNotification } from 'expo-notifications'
 import { pushNotificationService } from '../lib/pushNotificationService'
 import { colors } from '../theme'
@@ -97,11 +98,13 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
   // Update badge count when unread count changes
   useEffect(() => {
+    if (Platform.OS === 'web') return
     pushNotificationService.setBadgeCount(unreadCount).catch(console.error)
   }, [unreadCount])
 
   // Listen for push notifications
   useEffect(() => {
+    if (Platform.OS === 'web') return
     const subscription = pushNotificationService.addNotificationReceivedListener(
       async (notification) => {
         const appNotification = convertPushNotificationToAppNotification(notification)

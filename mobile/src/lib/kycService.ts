@@ -51,7 +51,14 @@ export const kycService = {
 
     if (error) {
       // Noah KYC is hosted; this legacy table is optional. Missing schema → empty list, no noise.
-      if (error.code === 'PGRST205' || error.message?.includes('kyc_submissions')) {
+      const status = (error as { status?: number }).status
+      if (
+        status === 404 ||
+        error.code === 'PGRST205' ||
+        error.code === '42P01' ||
+        error.message?.includes('kyc_submissions') ||
+        error.message?.includes('schema cache')
+      ) {
         return []
       }
       throw error

@@ -49,12 +49,15 @@ import { isIosOnMac, MAC_INSTALLED_MOBILE_DESIGN_POINTS } from './src/lib/effect
 import { supabaseConfigError } from './src/lib/supabase'
 import { warmBundledFlagCache } from './src/lib/warmBundledFlagCache'
 import { prefetchIntercomModule } from './src/lib/intercom'
+import { USE_NATIVE_DRIVER } from './src/lib/animation'
+import { useWebStackA11yFix } from './src/hooks/useWebStackA11yFix'
 
 // Keep the splash screen visible while we load fonts
 SplashScreen.preventAutoHideAsync()
 
 // Inner app component that has access to AuthContext
 function AppContent() {
+  useWebStackA11yFix()
   const navigationRef = useRef<NavigationContainerRef<any>>(null)
   const routeNameRef = useRef<string>('')
   const { loading: authLoading } = useAuth()
@@ -117,7 +120,7 @@ function AppContent() {
       Animated.timing(appFadeAnim, {
         toValue: 1,
         duration: 300,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }).start()
     }
   }, [splashFinished, appFadeAnim])
@@ -212,8 +215,6 @@ function AppContent() {
 }
 
 export default function App() {
-  console.log('App.tsx: App component rendering')
-  
   const [fontsLoaded] = useFonts({
     'Geist-Regular': require('./assets/fonts/geist-sans/Geist-Regular.ttf'),
     'Geist-Medium': require('./assets/fonts/geist-sans/Geist-Medium.ttf'),

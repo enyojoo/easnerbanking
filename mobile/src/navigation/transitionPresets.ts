@@ -8,18 +8,19 @@
  */
 import { Platform } from 'react-native'
 import { TransitionPresets } from '@react-navigation/stack'
+import { USE_NATIVE_DRIVER } from '../lib/animation'
 import { duration } from '../theme'
 
 const timingOpen = (ms: number) =>
   ({
     animation: 'timing' as const,
-    config: { duration: ms, useNativeDriver: true },
+    config: { duration: ms, useNativeDriver: USE_NATIVE_DRIVER },
   }) as const
 
 const timingClose = (ms: number) =>
   ({
     animation: 'timing' as const,
-    config: { duration: ms, useNativeDriver: true },
+    config: { duration: ms, useNativeDriver: USE_NATIVE_DRIVER },
   }) as const
 
 /** Main app stack — iOS: SlideFromRight + custom timing; Android: slide up from bottom */

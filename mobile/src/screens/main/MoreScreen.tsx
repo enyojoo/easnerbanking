@@ -6,6 +6,7 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
+  Platform,
 } from 'react-native'
 import { haptics } from '../../lib/haptics'
 import type { LucideIcon } from 'lucide-react-native'
@@ -205,7 +206,7 @@ function MoreContent({ navigation }: NavigationProps) {
 
   // Refresh KYC submissions when screen comes into focus
   useEffect(() => {
-    if (!userProfile?.id) return
+    if (Platform.OS === 'web' || !userProfile?.id) return
 
     const fetchSubmissions = async () => {
       try {
